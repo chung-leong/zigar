@@ -12,48 +12,32 @@ import callMarshalingInbound from '../features/call-marshaling-inbound.js';
 import callMarshalingOutbound from '../features/call-marshaling-outbound.js';
 import pointerSynchronization from '../features/pointer-synchronization.js';
 import thunkAllocation from '../features/thunk-allocation.js';
+import environSizesGet from '../syscalls/environ-sizes-get.js';
+import fdAdvise from '../syscalls/fd-advise.js';
+import fdAllocate from '../syscalls/fd-allocate.js';
+import fdClose from '../syscalls/fd-close.js';
+import fdDatasync from '../syscalls/fd-datasync.js';
+import fdFdstatGet from '../syscalls/fd-fdstat-get.js';
+import fdFilestatGet from '../syscalls/fd-filestat-get.js';
+import fdFileStatSetTimes from '../syscalls/fd-filestat-set-times.js';
+import fdPrestatGet from '../syscalls/fd-prestat-get.js';
+import fdRead from '../syscalls/fd-read.js';
+import fdReaddir from '../syscalls/fd-readdir.js';
+import fdSeek from '../syscalls/fd-seek.js';
+import fdSync from '../syscalls/fd-sync.js';
+import fdTell from '../syscalls/fd-tell.js';
+import fdWrite from '../syscalls/fd-write.js';
+import pathCreateDirectory from '../syscalls/path-create-directory.js';
+import pathRemoveDirectory from '../syscalls/path-remove-directory.js';
+import pathUnlinkFile from '../syscalls/path-unlink-file.js';
+import procExit from '../syscalls/proc-exit.js';
+import randomGet from '../syscalls/random-get.js';
 import { adjustAddress, decodeText, findObjects } from '../utils.js';
-import wasiAdvise from '../wasi/advise.js';
-import wasiAll from '../wasi/all.js';
-import wasiAllocate from '../wasi/allocate.js';
-import wasiClose from '../wasi/close.js';
-import wasiDatasync from '../wasi/datasync.js';
-import wasiEnv from '../wasi/env.js';
-import wasiExit from '../wasi/exit.js';
-import wasiFdstat from '../wasi/fdstat.js';
-import wasiFilestat from '../wasi/filestat.js';
-import wasiMkdir from '../wasi/mkdir.js';
-import wasiOpen from '../wasi/open.js';
-import wasiPrestat from '../wasi/prestat.js';
-import wasiRandom from '../wasi/random.js';
-import wasiRead from '../wasi/read.js';
-import wasiReaddir from '../wasi/readdir.js';
-import wasiRmdir from '../wasi/rmdir.js';
-import wasiSeek from '../wasi/seek.js';
-import wasiSetTime from '../wasi/set-times.js';
-import wasiSync from '../wasi/sync.js';
-import wasiTell from '../wasi/tell.js';
-import wasiUnlink from '../wasi/unlink.js';
-import wasiWrite from '../wasi/write.js';
 import baseline from './baseline.js';
 import dataCopying from './data-copying.js';
-import envVariables from './env-variables.js';
-import moduleLoading from './module-loading.js';
 import objectLinkage from './object-linkage.js';
-import streamConversionDir from './stream-conversion-dir.js';
-import streamConversionReader from './stream-conversion-reader.js';
-import streamConversionWriter from './stream-conversion-writer.js';
 import streamLocation from './stream-location.js';
-import streamPosition from './stream-position.js';
 import streamRedirection from './stream-redirection.js';
-import structAbortSignal from './struct-abort-signal.js';
-import structAllocator from './struct-allocator.js';
-import structDir from './struct-dir.js';
-import structFile from './struct-file.js';
-import structGenerator from './struct-generator.js';
-import structPromise from './struct-promise.js';
-import structReader from './struct-reader.js';
-import structWriter from './struct-writer.js';
 import workerSupport from './worker-support.js';
 
 export default mixin({
@@ -139,7 +123,7 @@ export default mixin({
       // copy content into JavaScript memory
       const dv = this.allocateJSMemory(len, 0);
       if (len > 0) {
-        this.copyExternBytes(dv, address);
+        this.moveExternBytes(dv, address, false);
       }
       return dv;
     } else {
@@ -260,30 +244,30 @@ export default mixin({
         this.use(wasiAll);
         switch (name) {
           case 'environ_get':
-          case 'environ_sizes_get': this.use(wasiEnv); break;
-          case 'fd_advise': this.use(wasiAdvise); break;
-          case 'fd_allocate': this.use(wasiAllocate); break;
-          case 'fd_close': this.use(wasiClose); break;
-          case 'fd_datasync': this.use(wasiDatasync); break;
-          case 'fd_fdstat_get': this.use(wasiFdstat); break;
+          case 'environ_sizes_get': this.use(environSizesGet); break;
+          case 'fd_advise': this.use(fdAdvise); break;
+          case 'fd_allocate': this.use(fdAllocate); break;
+          case 'fd_close': this.use(fdClose); break;
+          case 'fd_datasync': this.use(fdDatasync); break;
+          case 'fd_fdstat_get': this.use(fdFdstatGet); break;
           case 'fd_filestat_get':
-          case 'path_filestat_get': this.use(wasiFilestat); break;
+          case 'path_filestat_get': this.use(fdFilestatGet); break;
           case 'fd_filestat_set_times':
-          case 'path_filestat_set_times': this.use(wasiSetTime); break;
+          case 'path_filestat_set_times': this.use(fdFileStatSetTimes); break;
           case 'fd_prestat_get':
-          case 'fd_prestat_dir_name': this.use(wasiPrestat); break;
-          case 'fd_sync': this.use(wasiSync); break;
-          case 'fd_read': this.use(wasiRead); break;
-          case 'fd_readdir': this.use(wasiReaddir); break;
-          case 'fd_seek': this.use(wasiSeek); break;
-          case 'fd_tell': this.use(wasiTell); break;
-          case 'fd_write': this.use(wasiWrite); break;
-          case 'path_create_directory': this.use(wasiMkdir); break;
-          case 'path_remove_directory': this.use(wasiRmdir); break;
-          case 'path_open': this.use(wasiOpen); break;
-          case 'path_unlink': this.use(wasiUnlink); break;
-          case 'proc_exit': this.use(wasiExit); break;
-          case 'random_get': this.use(wasiRandom); break;
+          case 'fd_prestat_dir_name': this.use(fdPrestatGet); break;
+          case 'fd_sync': this.use(fdSync); break;
+          case 'fd_read': this.use(fdRead); break;
+          case 'fd_readdir': this.use(fdReaddir); break;
+          case 'fd_seek': this.use(fdSeek); break;
+          case 'fd_tell': this.use(fdTell); break;
+          case 'fd_write': this.use(fdWrite); break;
+          case 'path_create_directory': this.use(pathCreateDirectory); break;
+          case 'path_remove_directory': this.use(pathRemoveDirectory); break;
+          case 'path_open': this.use(streamOpen); break;
+          case 'path_unlink': this.use(pathUnlinkFile); break;
+          case 'proc_exit': this.use(procExit); break;
+          case 'random_get': this.use(randomGet); break;
         }
         if (name.startsWith('path_') || name.includes('filestat')) {
           this.use(streamLocation);
@@ -291,7 +275,7 @@ export default mixin({
         switch (name) {
           case 'environ_get':
           case 'environ_sizes_get':
-            this.use(envVariables);
+            this.use(environSizesGet);
             break;
           case 'path_open':
             this.use(streamConversionReader);

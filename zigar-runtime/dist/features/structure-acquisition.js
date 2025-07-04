@@ -7,48 +7,32 @@ import './call-marshaling-inbound.js';
 import './call-marshaling-outbound.js';
 import './pointer-synchronization.js';
 import './thunk-allocation.js';
+import '../syscalls/environ-sizes-get.js';
+import '../syscalls/fd-advise.js';
+import '../syscalls/fd-allocate.js';
+import '../syscalls/fd-close.js';
+import '../syscalls/fd-datasync.js';
+import '../syscalls/fd-fdstat-get.js';
+import '../syscalls/fd-filestat-get.js';
+import '../syscalls/fd-filestat-set-times.js';
+import '../syscalls/fd-prestat-get.js';
+import '../syscalls/fd-read.js';
+import '../syscalls/fd-readdir.js';
+import '../syscalls/fd-seek.js';
+import '../syscalls/fd-sync.js';
+import '../syscalls/fd-tell.js';
+import '../syscalls/fd-write.js';
+import '../syscalls/path-create-directory.js';
+import '../syscalls/path-remove-directory.js';
+import '../syscalls/path-unlink-file.js';
+import '../syscalls/proc-exit.js';
+import '../syscalls/random-get.js';
 import { decodeText, findObjects, adjustAddress } from '../utils.js';
-import '../wasi/advise.js';
-import '../wasi/all.js';
-import '../wasi/allocate.js';
-import '../wasi/close.js';
-import '../wasi/datasync.js';
-import '../wasi/env.js';
-import '../wasi/exit.js';
-import '../wasi/fdstat.js';
-import '../wasi/filestat.js';
-import '../wasi/mkdir.js';
-import '../wasi/open.js';
-import '../wasi/prestat.js';
-import '../wasi/random.js';
-import '../wasi/read.js';
-import '../wasi/readdir.js';
-import '../wasi/rmdir.js';
-import '../wasi/seek.js';
-import '../wasi/set-times.js';
-import '../wasi/sync.js';
-import '../wasi/tell.js';
-import '../wasi/unlink.js';
-import '../wasi/write.js';
 import './baseline.js';
 import './data-copying.js';
-import './env-variables.js';
-import './module-loading.js';
 import './object-linkage.js';
-import './stream-conversion-dir.js';
-import './stream-conversion-reader.js';
-import './stream-conversion-writer.js';
 import './stream-location.js';
-import './stream-position.js';
 import './stream-redirection.js';
-import './struct-abort-signal.js';
-import './struct-allocator.js';
-import './struct-dir.js';
-import './struct-file.js';
-import './struct-generator.js';
-import './struct-promise.js';
-import './struct-reader.js';
-import './struct-writer.js';
 import './worker-support.js';
 
 var structureAcquisition = mixin({
@@ -134,7 +118,7 @@ var structureAcquisition = mixin({
       // copy content into JavaScript memory
       const dv = this.allocateJSMemory(len, 0);
       if (len > 0) {
-        this.copyExternBytes(dv, address);
+        this.moveExternBytes(dv, address, false);
       }
       return dv;
     } else {

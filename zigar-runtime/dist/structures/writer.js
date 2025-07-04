@@ -13,7 +13,7 @@ var writer = mixin({
     }
   },
   // create AnyWriter struct for outbound call
-  createWriterStruct(arg) {
+  createWriter(arg) {
     // check if argument isn't already an AnyWriter struct
     if (typeof(arg) === 'object' && arg) {
       if('context' in arg && 'writeFn' in arg) return arg;

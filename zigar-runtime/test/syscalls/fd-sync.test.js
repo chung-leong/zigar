@@ -1,0 +1,52 @@
+import { expect } from 'chai';
+import { PosixError } from '../../src/constants.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
+import { captureError } from '../test-utils.js';
+
+const Env = defineEnvironment();
+
+describe('Syscall: fd-sync', function() {
+  it('should do nothing when stream does not support feature', async function() {
+    const env = new Env();
+    const encoder = new TextEncoder();
+    const array = encoder.encode('Hello world');
+    env.redirectStream(0, array);
+    const result = env.fdSync(0);
+    expect(result).to.equal(PosixError.NONE);
+  })
+  it('should call handler when stream has support', async function() {
+    const env = new Env();
+    let called;
+    const stream = {
+      read() {},
+      sync() {
+        called = true;
+      },
+    }
+    env.redirectStream(0, stream);
+    const result = env.fdSync(0);
+    expect(result).to.equal(PosixError.NONE);
+    expect(called).to.be.true;
+  })
+  it('should return an error code when handle is invalid', async function() {
+    const env = new Env();
+    let result;
+    const [ error ] = await captureError(() => { 
+      result = env.fdSync(4)
+    });
+    expect(result).to.equal(PosixError.EBADF);
+    expect(error).to.contains('file descriptor');
+  })
+  if (process.env.TARGET === 'wasm') {
+    it('should be callable through WASI', async function() {
+      const env = new Env();
+      const encoder = new TextEncoder();
+      const array = encoder.encode('Hello world');
+      const f = env.getWASIHandler('fd_sync');
+      env.redirectStream(0, array);
+      const result = f(0);
+      expect(result).to.equal(PosixError.NONE);
+    })
+  }
+})

@@ -14,7 +14,7 @@ export default mixin({
     }
   },
   // create AnyReader struct for outbound call
-  createReaderStruct(arg) {
+  createReader(arg) {
     // check if argument isn't already an AnyReader struct
     if (typeof(arg) === 'object' && arg) {
       if('context' in arg && 'readFn' in arg) return arg;

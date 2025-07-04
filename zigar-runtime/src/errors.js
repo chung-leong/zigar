@@ -573,6 +573,12 @@ export function catchPosixError(canWait = false, defErrorCode, run, resolve, rej
   }
 }
 
+export function expectBoolean(result, errorCode) {
+  if (result === true) return PosixError.NONE; 
+  if (result === false) return errorCode;
+  throw new TypeMismatch('boolean', result);
+}
+
 export function isErrorJSON(arg) {
   return typeof(arg) === 'object' && typeof(arg.error) === 'string' && Object.keys(arg).length === 1  ;
 }

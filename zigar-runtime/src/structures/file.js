@@ -2,7 +2,7 @@ import { mixin } from '../environment.js';
 
 export default mixin({
   // create File struct for outbound call
-  createFileStruct(arg) {
+  createFile(arg) {
     if (process.env.TARGET === 'node') {
       if (typeof(arg) === 'object' && typeof(arg?.fd) === 'number') {
         return { handle: arg.fd  };

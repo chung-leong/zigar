@@ -1,0 +1,22 @@
+import { PosixError } from '../constants.js';
+import { mixin } from '../environment.js';
+import { catchPosixError } from '../errors.js';
+import './stat-copy.js';
+
+export default mixin({
+  fdFilestatGet(fd, bufAddress, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
+      const stream = this.getStream(fd);
+      const target = stream.valueOf();
+      const loc = this.getStreamLocation?.(fd);
+      try {
+        return this.triggerEvent('stat', { ...loc, target, flags: {} }, PosixError.ENOENT);
+      } catch (err) {        
+        if (err.code !== PosixError.ENOENT) {
+          throw err;
+        }
+      }
+      return { size: stream.size, type: 'file' };
+    }, (stat) => this.copyStat(bufAddress, stat));
+  },
+});

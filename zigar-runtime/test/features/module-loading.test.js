@@ -411,7 +411,7 @@ describe('Feature: module-loading', function() {
           runVariadicThunk: () => {},
           finalizeAsyncCall: () => {},
           getBufferAddress: () => {},
-          copyExternBytes: () => {},
+          moveExternBytes: () => {},
           getFactoryThunk: () => {},
           flushStdout: () => {},
           garbage: () => {},

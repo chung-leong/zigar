@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import {
-  ArgStructFlag, CallResult, MemberFlag, MemberType, PointerFlag, SliceFlag,
-  StructureFlag, StructurePurpose, StructureType
+  ArgStructFlag, MemberFlag, MemberType, PointerFlag, PosixError, SliceFlag, StructureFlag, StructurePurpose,
+  StructureType
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
@@ -337,7 +337,7 @@ describe('Feature: call-marshaling-inbound', function() {
         result = binary({});
       });
       expect(line).to.equal('Error: Doh!');
-      expect(result).to.equal(CallResult.Failure);
+      expect(result).to.equal(PosixError.EFAULT);
     })
     it('should return function that calls the given function', function() {
       const env = new Env();
@@ -368,10 +368,10 @@ describe('Feature: call-marshaling-inbound', function() {
       const binary = env.jsFunctionCallerMap.get(1);
       env.finalizeAsyncCall = function(futexHandle, result) {
         expect(futexHandle).to.equal(usize(0x1234));
-        expect(result).to.equal(CallResult.OK);
+        expect(result).to.equal(PosixError.NONE);
       };
       const result = binary(null, usize(0x1234));
-      expect(result).to.equal(CallResult.OK);
+      expect(result).to.equal(PosixError.NONE);
     })
     it('should pass async result to promise callback function', async function() {
       const env = new Env();
@@ -1565,7 +1565,7 @@ describe('Feature: call-marshaling-inbound', function() {
       const [ line ] = await capture(() => {
         result = env.handleJsCall(funcId, address, len);
       });
-      expect(result).to.equal(CallResult.OK);
+      expect(result).to.equal(PosixError.NONE);
       expect(line).to.equal('123 456');
       expect(argStruct.retval).to.equal(123 + 456);
     })
@@ -1640,7 +1640,7 @@ describe('Feature: call-marshaling-inbound', function() {
       const [ line ] = await captureError(() => {
         result = env.handleJsCall(funcId, address, len);
       });
-      expect(result).to.equal(CallResult.Failure);
+      expect(result).to.equal(PosixError.EFAULT);
       expect(line).to.contain('Boo!');
     })
     it('should return failure code when function is not found', async function() {
@@ -1656,7 +1656,7 @@ describe('Feature: call-marshaling-inbound', function() {
       }
       const address = usize(0x1000);
       const result = env.handleJsCall(1234, address, len);
-      expect(result).to.equal(CallResult.Failure);
+      expect(result).to.equal(PosixError.EFAULT);
     })
     it('should place error into error union when JavaScript function throws one from error set', async function() {
       const env = new Env();
@@ -1785,7 +1785,7 @@ describe('Feature: call-marshaling-inbound', function() {
       argStruct[0] = 123;
       argStruct[1] = 456;
       const result = env.handleJsCall(funcId, address, len);
-      expect(result).to.equal(CallResult.OK);
+      expect(result).to.equal(PosixError.NONE);
       expect(() => argStruct.retval).to.throw(MyError.UnableToCreateObject);
     })
     it('should return failure code when error is not in error set', async function() {
@@ -1918,7 +1918,7 @@ describe('Feature: call-marshaling-inbound', function() {
       const [ line ] = await captureError(() => {
         result = env.handleJsCall(funcId, address, len);
       });
-      expect(result).to.equal(CallResult.Failure);
+      expect(result).to.equal(PosixError.EFAULT);
       expect(line).to.contain('Boo!');
     })
     it('should call finalizeAsyncCall when async function fulfills promise', async function() {
@@ -1999,7 +1999,7 @@ describe('Feature: call-marshaling-inbound', function() {
       await delay(100);
       expect(called).to.be.true;
       expect(futexHandle).to.equal(0x1234);
-      expect(result).to.equal(CallResult.OK);
+      expect(result).to.equal(PosixError.NONE);
       expect(argStruct.retval).to.equal(123 + 456);
     })
     it('should pass failure code to finalizeAsyncCall when async function rejects', async function() {
@@ -2082,7 +2082,7 @@ describe('Feature: call-marshaling-inbound', function() {
       });
       expect(called).to.be.true;
       expect(futexHandle).to.equal(0x1234);
-      expect(result).to.equal(CallResult.Failure);
+      expect(result).to.equal(PosixError.EFAULT);
     })
     it('should return code indicating deadlock when no futex is given', function() {
       const env = new Env();
@@ -2153,7 +2153,7 @@ describe('Feature: call-marshaling-inbound', function() {
       argStruct[0] = 123;
       argStruct[1] = 456;
       const result = env.handleJsCall(funcId, address, len, 0);
-      expect(result).to.equal(CallResult.Deadlock);
+      expect(result).to.equal(PosixError.EDEADLK);
     })
   })
   describe('releaseFunction', function() {

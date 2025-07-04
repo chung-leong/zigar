@@ -792,7 +792,8 @@ describe('Error functions', function() {
       const [ error ] = await captureError(() => {
         result = catchPosixError(false, PosixError.EACCES, async () => {});
       });
-      expect(result).to.equal(PosixError.EDEADLK);
+      const code = (process.env.TARGET === 'wasm') ? PosixError.ENOTSUP : PosixError.EDEADLK
+      expect(result).to.equal(code);
       expect(error).to.contain('promise');
     })
     it('should return 0 when no error occurred', async function() {

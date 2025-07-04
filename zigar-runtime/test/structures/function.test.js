@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { CallResult, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
+import { MemberType, PosixError, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENVIRONMENT, MEMORY, SIZE, ZIG } from '../../src/symbols.js';
@@ -88,7 +88,7 @@ describe('Structure: function', function() {
         return true;
       };
       if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 128 });
+        env.memory = new WebAssembly.Memory({ initial: 1 });
         env.allocateScratchMemory = function(len, align) {
           return usize(0x4000);
         };
@@ -199,7 +199,7 @@ describe('Structure: function', function() {
 
       const len = ArgStruct[SIZE];
       if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 128 });
+        env.memory = new WebAssembly.Memory({ initial: 1 });
       } else {
         const buffer = new ArrayBuffer(len);
         env.obtainExternBuffer = function(address, len) {
@@ -212,7 +212,7 @@ describe('Structure: function', function() {
       argStruct[0] = 123;
       argStruct[1] = 456;
       const result = env.handleJsCall(1, address, len);
-      expect(result).to.equal(CallResult.OK);
+      expect(result).to.equal(PosixError.NONE);
       expect(argStruct.retval).to.equal(123 + 456);
     })
     it('should throw when constructor is given non-function', function() {

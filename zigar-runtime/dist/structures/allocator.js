@@ -16,7 +16,7 @@ var allocator = mixin({
     }
     return allocator;
   },
-  createAllocatorStruct(args, structure, resettable) {
+  createJsAllocator(args, structure, resettable) {
     const { constructor: Allocator } = structure;
     let vtable = this.allocatorVtable;
     if (!vtable) {      

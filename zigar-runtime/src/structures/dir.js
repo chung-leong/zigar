@@ -2,7 +2,7 @@ import { mixin } from '../environment.js';
 
 export default mixin({
   // create Dir struct for outbound call
-  createDirectoryStruct(arg) {
+  createDirectory(arg) {
     if (typeof(arg) === 'object' && typeof(arg?.fd) === 'number') {
       return arg;
     }

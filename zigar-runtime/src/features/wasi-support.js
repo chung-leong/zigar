@@ -12,7 +12,7 @@ export default (process.env.TARGET === 'wasm') ? mixin({
     this.customWASI = wasi;
   },
   getWASIHandler(name) {
-    const nameCamelized = name.replace(/_./, m => m.charAt(1).toUpperCase());
+    const nameCamelized = name.replace(/_./g, m => m.charAt(1).toUpperCase());
     return this.customWASI?.wasiImport?.[name] 
         ?? this[nameCamelized]?.bind?.(this)
         ?? (() => {

@@ -314,4 +314,28 @@ class ObjectCache {
   }
 }
 
-export { ObjectCache, adjustAddress, alignForward, always, createView, decodeBase64, decodeEnum, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, findElements, findObjects, findSortedIndex, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, never, toString, transformIterable, usize, usizeByteSize, usizeInvalid, usizeMax, usizeMin };
+const TimeFlag = {
+  atime: 1 << 0,
+  atime_now: 1 << 1,
+  mtime: 1 << 2,
+  mtime_now: 1 << 3,
+};
+
+const now = () => new Date() * 1000;
+
+function extractTimes(st_atim, st_mtim, fst_flags) {
+  const times = {};
+  if (fst_flags & TimeFlag.atime) {
+    times.atime = st_atim;
+  } else if (fst_flags & TimeFlag.atime_now) {
+    times.atime = now();
+  }
+  if (fst_flags & TimeFlag.mtime) {
+    times.mtime = st_mtim;
+  } else if (fst_flags & TimeFlag.mtime_now) {
+    times.mtime = now();
+  }
+  return times;
+}
+
+export { ObjectCache, adjustAddress, alignForward, always, createView, decodeBase64, decodeEnum, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, extractTimes, findElements, findObjects, findSortedIndex, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, never, toString, transformIterable, usize, usizeByteSize, usizeInvalid, usizeMax, usizeMin };

@@ -187,12 +187,12 @@ describe('Feature: structure-acquisition', function() {
     })
   })
   describe('captureView', function() {
-    it('should allocate new buffer and copy data using copyExternBytes', function() {
+    it('should allocate new buffer and copy data using moveExternBytes', function() {
       const env = new Env();
       env.getBufferAddress = () => 0x10000;
-      env.copyExternBytes = (dv, address, len) => {
+      env.moveExternBytes = (dv, address, to) => {
         dv.setInt32(0, address, true);
-        dv.setInt32(4, len, true);
+        dv.setInt32(4, dv.byteLength, true);
       };
       const dv = env.captureView(1234, 32, true);
       expect(dv).to.be.instanceOf(DataView);
@@ -222,7 +222,7 @@ describe('Feature: structure-acquisition', function() {
     it('should call constructor without the use of the new operator', function() {
       const env = new Env();
       env.getBufferAddress = () => 0x10000;
-      env.copyExternBytes = (dv, address, len) => {};
+      env.moveExternBytes = (dv, address, to) => {};
       let recv, arg;
       const structure = {
         constructor: function(dv) {
@@ -237,7 +237,7 @@ describe('Feature: structure-acquisition', function() {
     it('should try to create targets of pointers', function() {
       const env = new Env();
       env.getBufferAddress = () => 0x10000;
-      env.copyExternBytes = (dv, address, len) => {};
+      env.moveExternBytes = (dv, address, to) => {};
       let visitor;
       const structure = {
         constructor: function(dv) {
@@ -394,7 +394,7 @@ describe('Feature: structure-acquisition', function() {
       env.exportedModules = { env: {}, wasi: {}, wasi_snapshot_preview1: {} };
       env.getViewAddress = (dv) => dv[ZIG].address;
       env.getMemoryOffset = (address) => Number(address);
-      env.copyExternBytes = (dv, address, len) => {};
+      env.moveExternBytes = (dv, address, to) => {};
       const zig = function(address, len) {
         const dv = new DataView(new ArrayBuffer(len));
         dv[ZIG] = { address, len }
@@ -433,7 +433,7 @@ describe('Feature: structure-acquisition', function() {
       env.exportedModules = { env: {}, wasi: {}, wasi_snapshot_preview1: {} };
       env.getViewAddress = (dv) => dv[ZIG].address;
       env.getMemoryOffset = (address) => Number(address);
-      env.copyExternBytes = (dv, address, len) => {};
+      env.moveExternBytes = (dv, address, to) => {};
       const zig = function(address, len, handle) {
         const dv = new DataView(new ArrayBuffer(len));
         dv[ZIG] = { address, len, handle }
@@ -464,7 +464,7 @@ describe('Feature: structure-acquisition', function() {
       const addressMap = new Map();
       env.getViewAddress = (dv) => addressMap.get(dv);
       env.getMemoryOffset = (address) => Number(address);
-      env.copyExternBytes = (dv, address, len) => {};
+      env.moveExternBytes = (dv, address, to) => {};
       const templ1 = {
         [MEMORY]: new DataView(new ArrayBuffer(8))
       };
@@ -502,7 +502,7 @@ describe('Feature: structure-acquisition', function() {
       const addressMap = new Map();
       env.getViewAddress = (dv) => addressMap.get(dv);
       env.getMemoryOffset = (address) => Number(address);
-      env.copyExternBytes = (dv, address, len) => {};
+      env.moveExternBytes = (dv, address, to) => {};
       const templ1 = {
         [MEMORY]: new DataView(new ArrayBuffer(8))
       };

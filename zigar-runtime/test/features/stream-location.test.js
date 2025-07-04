@@ -5,7 +5,7 @@ import { usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
-describe('Feature: stream-location', function() {
+describe('Syscalls: stream-location', function() {
   describe('obtainStreamLocation', function() {
     it('should resolve relative to root', async function() {
       const env = new Env();

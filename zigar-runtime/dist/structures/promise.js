@@ -10,7 +10,7 @@ var promise = mixin({
     this.nextPromiseContextId = usize(0x1000);
   },
   // create promise struct for outbound call
-  createPromiseStruct(structure, args, func) {
+  createPromise(structure, args, func) {
     const { constructor } = structure;
     if (func) {
       if (typeof(func) !== 'function') {

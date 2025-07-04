@@ -1,0 +1,147 @@
+import { expect } from 'chai';
+import { PosixError } from '../../src/constants.js';
+import { defineEnvironment } from '../../src/environment.js';
+import '../../src/mixins.js';
+import { captureError, RootDescriptor } from '../test-utils.js';
+
+const Env = defineEnvironment();
+
+describe('Syscall: fd-readdir', function() {
+  it('should read directory entries from a Map', async function() {
+    const env = new Env();
+    const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+    const map = new Map([
+      [ 'hello.txt', {} ],
+      [ 'hello-world.txt', {} ],
+    ]);
+    const dir = env.convertDirectory(map);
+    const fd = env.createStreamHandle(dir);
+    const bufAddress = 0x1000;
+    const bufLen = 24 + 1 + 24 + 2 + 10;
+    const usedAddress = 0x2000;
+    let cookie = 0n;
+    for (let i = 0; i < 4; i++) {
+      const result = env.fdReaddir(fd, bufAddress, bufLen, cookie, usedAddress);
+      expect(result).to.equal(0);
+      const dv = new DataView(memory.buffer);
+      const used = dv.getUint32(usedAddress, true);
+      const len = dv.getUint32(bufAddress + 16, true);
+      switch (i) {
+        case 0:
+          expect(used).to.equal(24 + 1 + 24 + 2);
+          expect(len).to.equal(1); // .
+          break;
+        case 1:
+          expect(used).to.equal(24 + 9);
+          expect(len).to.equal(9); // hello.txt
+          break;
+        case 2:
+          expect(used).to.equal(24 + 15);
+          expect(len).to.equal(15); // hello-world.txt
+          break;
+        case 3:
+          expect(used).to.equal(0);
+          break;
+      }
+      cookie = dv.getBigUint64(bufAddress + 0, true);
+    }
+  })
+  it('should work with default root directory', async function() {
+    const env = new Env();
+    const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+    const fd = RootDescriptor;
+    const bufAddress = 0x1000;
+    const bufLen = 24 + 1 + 24 + 2 + 10;
+    const usedAddress = 0x2000;
+    const f = env.getWASIHandler('fd_readdir');
+    let cookie = 0n;
+    const result = f(fd, bufAddress, bufLen, cookie, usedAddress);
+    expect(result).to.equal(0);
+    const dv = new DataView(memory.buffer);
+    const used = dv.getUint32(usedAddress, true);
+    const len = dv.getUint32(bufAddress + 16, true);
+    expect(used).to.equal(25);
+    expect(len).to.equal(1);
+  })
+  it('should return EINVAL when entry type is incorrect', async function() {
+    const env = new Env();
+    const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+    const map = new Map([
+      [ 'hello.txt', { type: 'file', ino: 1n } ],
+      [ 'hello-world.txt', { type: 'fil' } ],
+    ]);
+    const dir = env.convertDirectory(map);
+    const fd = env.createStreamHandle(dir);
+    const bufAddress = 0x1000;
+    const bufLen = 24 + 1 + 24 + 2 + 10;
+    const usedAddress = 0x2000;
+    const f = env.getWASIHandler('fd_readdir');
+    let cookie = 0n;
+    for (let i = 0; i < 3; i++) {
+      let result;
+      const [ error ] = await captureError(() => {
+        result = f(fd, bufAddress, bufLen, cookie, usedAddress);
+      });
+      const dv = new DataView(memory.buffer);
+      switch (i) {
+        case 0:
+        case 1:
+          expect(result).to.equal(0);
+          break;
+        case 2:
+          expect(result).to.equal(PosixError.EINVAL);
+          expect(error).to.contain('fil');
+          break;
+      }
+      cookie = dv.getBigUint64(bufAddress + 0, true);
+    }
+  })
+  it('should return error code when buffer is too small', async function() {
+    const env = new Env();
+    const f = env.getWASIHandler('fd_readdir');
+    const result = f(3, 0x1000, 20, 0n, 0x2000);
+    expect(result).to.equal(PosixError.EINVAL);
+  })
+  if (process.env.TARGET === 'wasm') {
+    it('should be callable through WASI', async function() {
+      const env = new Env();
+      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+      const map = new Map([
+        [ 'hello.txt', {} ],
+        [ 'hello-world.txt', {} ],
+      ]);
+      const dir = env.convertDirectory(map);
+      const fd = env.createStreamHandle(dir);
+      const bufAddress = 0x1000;
+      const bufLen = 24 + 1 + 24 + 2 + 10;
+      const usedAddress = 0x2000;
+      const f = env.getWASIHandler('fd_readdir');
+      let cookie = 0n;
+      for (let i = 0; i < 4; i++) {
+        const result = f(fd, bufAddress, bufLen, cookie, usedAddress);
+        expect(result).to.equal(0);
+        const dv = new DataView(memory.buffer);
+        const used = dv.getUint32(usedAddress, true);
+        const len = dv.getUint32(bufAddress + 16, true);
+        switch (i) {
+          case 0:
+            expect(used).to.equal(24 + 1 + 24 + 2);
+            expect(len).to.equal(1); // .
+            break;
+          case 1:
+            expect(used).to.equal(24 + 9);
+            expect(len).to.equal(9); // hello.txt
+            break;
+          case 2:
+            expect(used).to.equal(24 + 15);
+            expect(len).to.equal(15); // hello-world.txt
+            break;
+          case 3:
+            expect(used).to.equal(0);
+            break;
+        }
+        cookie = dv.getBigUint64(bufAddress + 0, true);
+      }
+    })
+  }
+})

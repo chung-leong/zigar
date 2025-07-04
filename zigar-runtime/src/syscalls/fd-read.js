@@ -1,0 +1,52 @@
+import { PosixError } from '../constants.js';
+import { mixin } from '../environment.js';
+import { catchPosixError } from '../errors.js';
+import { createView, usizeByteSize } from '../utils.js';
+
+export default mixin({
+  fdRead(fd, iovsAddress, iovsCount, readAddress, canWait) {
+    const iovsSize = usizeByteSize * 2;
+    let iovs, reader, read = 0, i = 0;
+    const next = () => {
+      return catchPosixError(canWait, PosixError.EIO, () => {
+        if (!iovs) {
+          iovs = createView(iovsSize * iovsCount);
+          this.moveExternBytes(iovs, iovsAddress, false);
+          reader = this.getStream(fd);
+        }
+        const len = iovs.getUint32(i * iovsSize + 4, true);
+        return reader.read(len);
+      }, (chunk) => {
+        const ptr = iovs.getUint32(i * iovsSize, true);
+        this.moveExternBytes(chunk, ptr, true);
+        read += chunk.byteLength;
+        if (++i < iovsCount) {
+          return next();
+        } else {
+          const readDV = createView(4);
+          readDV.setUint32(0, read, this.littleEndian);
+          this.moveExternBytes(readDV, readAddress, true);
+        }
+      });
+    };
+    return next();
+  },
+  ...(process.env.TARGET === 'node' ? {
+    exports: {
+      readBytes: { async: true },
+    },
+
+    readBytes(fd, address, len, readAddress, canWait) {
+      return catchPosixError(canWait, PosixError.EIO, () => {
+        const reader = this.getStream(fd);
+        return reader.read(len);
+      }, (chunk) => {
+        this.moveExternBytes(chunk, address, true);
+        const readDV = createView(4);
+        readDV.setUint32(0, chunk.byteLength, this.littleEndian);
+        this.moveExternBytes(readDV, readAddress, true);
+      });
+    },
+    /* c8 ignore next */
+  } : undefined),
+});
