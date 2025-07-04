@@ -2,26 +2,49 @@ import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { captureError, RootDescriptor } from '../test-utils.js';
+import { captureError, RootDescriptor, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
 describe('Syscall: path-create-directory', function() {
   it('should call listener', async function() {
     const env = new Env();
-    env.memory = new WebAssembly.Memory({ initial: 1 });
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        if (to) {
+          map.set(address, jsDV.buffer);
+        } else {
+          const len = Number(jsDV.byteLength);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const zigDV = this.obtainZigView(address, len);
+          const copy = this.getCopyFunction(len);
+          copy(jsDV, zigDV);
+        }
+      };
+    }   
     let event;
     env.addListener('mkdir', (evt) => {
       if (event) return true;
       event = evt;
       return new Map();
     });
-    const encoder = new TextEncoder();
-    const src = encoder.encode('/world');
-    const pathAddress = 0x1000;
-    const pathLen = src.length;
-    const pathArray = env.obtainZigArray(pathAddress, pathLen);
-    for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
+    const path = new TextEncoder().encode('/world');
+    const pathAddress = usize(0x1000);
+    const pathLen = path.length;
+    env.moveExternBytes(path, pathAddress, pathLen);
     const result1 = env.pathCreateDirectory(RootDescriptor, pathAddress, pathLen);
     expect(result1).to.equal(0);
     expect(event).to.eql({ 
@@ -33,27 +56,73 @@ describe('Syscall: path-create-directory', function() {
   })
   it('should return ENOENT when listener returns false', async function() {
     const env = new Env();
-    env.memory = new WebAssembly.Memory({ initial: 1 });
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        if (to) {
+          map.set(address, jsDV.buffer);
+        } else {
+          const len = Number(jsDV.byteLength);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const zigDV = this.obtainZigView(address, len);
+          const copy = this.getCopyFunction(len);
+          copy(jsDV, zigDV);
+        }
+      };
+    }   
     env.addListener('mkdir', () => false);
-    const encoder = new TextEncoder();
-    const src = encoder.encode('/world');
-    const pathAddress = 0x1000;
-    const pathLen = src.length;
-    const pathArray = env.obtainZigArray(pathAddress, pathLen);
-    for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
+    const path = new TextEncoder().encode('/world');
+    const pathAddress = usize(0x1000);
+    const pathLen = path.length;
+    env.moveExternBytes(path, pathAddress, pathLen);
     const result = env.pathCreateDirectory(RootDescriptor, pathAddress, pathLen);
     expect(result).to.equal(PosixError.ENOENT);
   })
   it('should display error when listener does not return a boolean', async function() {
     const env = new Env();
-    env.memory = new WebAssembly.Memory({ initial: 1 });
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        if (to) {
+          map.set(address, jsDV.buffer);
+        } else {
+          const len = Number(jsDV.byteLength);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const zigDV = this.obtainZigView(address, len);
+          const copy = this.getCopyFunction(len);
+          copy(jsDV, zigDV);
+        }
+      };
+    }   
     env.addListener('mkdir', () => undefined);
-    const encoder = new TextEncoder();
-    const src = encoder.encode('/world');
-    const pathAddress = 0x1000;
-    const pathLen = src.length;
-    const pathArray = env.obtainZigArray(pathAddress, pathLen);
-    for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
+    const path = new TextEncoder().encode('/world');
+    const pathAddress = usize(0x1000);
+    const pathLen = path.length;
+    env.moveExternBytes(path, pathAddress, pathLen);
     let result 
     const [ error ] = await captureError(() => {
       result = env.pathCreateDirectory(RootDescriptor, pathAddress, pathLen);
@@ -71,12 +140,10 @@ describe('Syscall: path-create-directory', function() {
         event = evt;
         return new Map();
       });
-      const encoder = new TextEncoder();
-      const src = encoder.encode('/world');
+      const path = new TextEncoder().encode('/world');
       const pathAddress = 0x1000;
-      const pathLen = src.length;
-      const pathArray = env.obtainZigArray(pathAddress, pathLen);
-      for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
+      const pathLen = path.length;
+      env.moveExternBytes(path, pathAddress, pathLen);
       const f = env.getWASIHandler('path_create_directory');
       const result1 = f(RootDescriptor, pathAddress, pathLen);
       expect(result1).to.equal(0);

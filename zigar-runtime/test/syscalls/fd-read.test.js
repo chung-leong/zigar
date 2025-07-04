@@ -11,7 +11,32 @@ describe('Syscall: fd-read', function() {
     const env = new Env();
     const encoder = new TextEncoder();
     const array = encoder.encode('Hello world');
-    const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        if (to) {
+          map.set(address, jsDV.buffer);
+        } else {
+          const len = Number(jsDV.byteLength);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const zigDV = this.obtainZigView(address, len);
+          const copy = this.getCopyFunction(len);
+          copy(jsDV, zigDV);
+        }
+      };
+    }   
     const bufferAddress = 16;
     const stringAddress = 64;
     const readAddress = 128;
@@ -34,7 +59,32 @@ describe('Syscall: fd-read', function() {
       }
     });
     const reader = stream.getReader();
-    const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        if (to) {
+          map.set(address, jsDV.buffer);
+        } else {
+          const len = Number(jsDV.byteLength);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const zigDV = this.obtainZigView(address, len);
+          const copy = this.getCopyFunction(len);
+          copy(jsDV, zigDV);
+        }
+      };
+    }   
     const bufferAddress = 16;
     const stringAddress = 64;
     const readAddress = 128;

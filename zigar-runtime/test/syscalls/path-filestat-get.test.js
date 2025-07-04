@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { captureError, RootDescriptor } from '../test-utils.js';
+import { captureError, RootDescriptor, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -10,18 +10,41 @@ describe('Syscall: path-filestat-get', function() {
   it('should call listener', async function() {
     const env = new Env();
     let event;
-    env.memory = new WebAssembly.Memory({ initial: 1 });
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        if (to) {
+          map.set(address, jsDV.buffer);
+        } else {
+          const len = Number(jsDV.byteLength);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const zigDV = this.obtainZigView(address, len);
+          const copy = this.getCopyFunction(len);
+          copy(jsDV, zigDV);
+        }
+      };
+    }   
     env.addListener('stat', (evt) => {
       event = evt;
       return { size: 123n };
     });
-    const encoder = new TextEncoder();
-    const src = encoder.encode('/hello.txt');
-    const pathAddress = 0x1000;
-    const pathLen = src.length;
-    const bufAddress = 0x2000;
-    const pathArray = env.obtainZigArray(pathAddress, pathLen);
-    for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
+    const path = new TextEncoder().encode('/hello.txt');
+    const pathAddress = usize(0x1000);
+    const pathLen = path.length;
+    const bufAddress = usize(0x2000);
+    env.moveExternBytes(path, pathAddress, true);
     const flags = 1;
     const result = env.pathFilestatGet(RootDescriptor, flags, pathAddress, pathLen, bufAddress);
     expect(result).to.equal(0);
@@ -33,30 +56,76 @@ describe('Syscall: path-filestat-get', function() {
   })
   it('should return ENOENT when listener returns false', async function() {
     const env = new Env();
-    env.memory = new WebAssembly.Memory({ initial: 1 });
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        if (to) {
+          map.set(address, jsDV.buffer);
+        } else {
+          const len = Number(jsDV.byteLength);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const zigDV = this.obtainZigView(address, len);
+          const copy = this.getCopyFunction(len);
+          copy(jsDV, zigDV);
+        }
+      };
+    }   
     env.addListener('stat', (evt) => false);
-    const encoder = new TextEncoder();
-    const src = encoder.encode('/hello.txt');
-    const pathAddress = 0x1000;
-    const pathLen = src.length;
-    const bufAddress = 0x2000;
-    const pathArray = env.obtainZigArray(pathAddress, pathLen);
-    for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
+    const path = new TextEncoder().encode('/hello.txt');
+    const pathAddress = usize(0x1000);
+    const pathLen = path.length;
+    const bufAddress = usize(0x2000);
+    env.moveExternBytes(path, pathAddress, true);
     const flags = 1;
     const result = env.pathFilestatGet(RootDescriptor, flags, pathAddress, pathLen, bufAddress);
     expect(result).to.equal(PosixError.ENOENT);
   })
   it('should display error when listener returns unexpected type', async function() {
     const env = new Env();
-    env.memory = new WebAssembly.Memory({ initial: 1 });
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        if (to) {
+          map.set(address, jsDV.buffer);
+        } else {
+          const len = Number(jsDV.byteLength);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const zigDV = this.obtainZigView(address, len);
+          const copy = this.getCopyFunction(len);
+          copy(jsDV, zigDV);
+        }
+      };
+    }   
     env.addListener('stat', (evt) => undefined);
-    const encoder = new TextEncoder();
-    const src = encoder.encode('/hello.txt');
-    const pathAddress = 0x1000;
-    const pathLen = src.length;
-    const bufAddress = 0x2000;
-    const pathArray = env.obtainZigArray(pathAddress, pathLen);
-    for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
+    const path = new TextEncoder().encode('/hello.txt');
+    const pathAddress = usize(0x1000);
+    const pathLen = path.length;
+    const bufAddress = usize(0x2000);
+    env.moveExternBytes(path, pathAddress, true);
     const flags = 1;
     let result;
     const [ error ] = await captureError(() => {
@@ -74,13 +143,11 @@ describe('Syscall: path-filestat-get', function() {
         event = evt;
         return { size: 123n };
       });
-      const encoder = new TextEncoder();
-      const src = encoder.encode('/hello.txt');
+      const path = new TextEncoder().encode('/hello.txt');
       const pathAddress = 0x1000;
-      const pathLen = src.length;
+      const pathLen = path.length;
       const bufAddress = 0x2000;
-      const pathArray = env.obtainZigArray(pathAddress, pathLen);
-      for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
+      env.moveExternBytes(path, pathAddress, true);
       const f = env.getWASIHandler('path_filestat_get');
       const flags = 1;
       const result = f(RootDescriptor, flags, pathAddress, pathLen, bufAddress);

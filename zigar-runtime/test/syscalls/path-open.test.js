@@ -2,7 +2,8 @@ import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { RootDescriptor } from '../test-utils.js';
+import { usizeByteSize } from '../../src/utils.js';
+import { RootDescriptor, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -21,24 +22,48 @@ const OpenFlag = {
 describe('Syscall: path-open', function() {
   it('should call listener', async function() {
     const env = new Env();
-    env.memory = new WebAssembly.Memory({ initial: 1 });
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        if (to) {
+          map.set(address, jsDV.buffer);
+        } else {
+          const len = Number(jsDV.byteLength);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const zigDV = this.obtainZigView(address, len);
+          const copy = this.getCopyFunction(len);
+          copy(jsDV, zigDV);
+        }
+      };
+    }   
     let event;
     env.addListener('open', (evt) => {
       event = evt;
       return new Uint8Array(32);
     });
-    const encoder = new TextEncoder();
-    const src = encoder.encode('/hello.txt');
-    const pathAddress = 0x1000;
-    const pathLen = src.length;
-    const fdAddress = 0x2000;
-    const pathArray = env.obtainZigArray(pathAddress, pathLen);
-    for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
+    const path = new TextEncoder().encode('/hello.txt');
+    const pathAddress = usize(0x1000);
+    const pathLen = path.length;
+    const fdAddress = usize(0x2000);
+    env.moveExternBytes(path, pathAddress, true);
     const result = env.pathOpen(RootDescriptor, 0, pathAddress, pathLen, OpenFlag.exclusive, Right.read, 0n, 0, fdAddress);
     expect(result).to.equal(0);
-    const dv = new DataView(env.memory.buffer);
-    const fd = dv.getUint32(fdAddress, true);
-    expect(fd).to.not.equal(0);
+    const fdDV = env.obtainZigView(fdAddress, usizeByteSize);
+    const get = (usizeByteSize === 8) ? fdDV.getBigUint64 : fdDV.getUint32;
+    const fd = get.call(fdDV, 0, env.littleEndian);
+    expect(fd).to.not.equal(usize(0));
     expect(event).to.eql({
       parent: null,
       path: 'hello.txt',
@@ -48,24 +73,48 @@ describe('Syscall: path-open', function() {
   })
   it('should handle writable resource returned by listener', async function() {
     const env = new Env();
-    env.memory = new WebAssembly.Memory({ initial: 1 });
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        if (to) {
+          map.set(address, jsDV.buffer);
+        } else {
+          const len = Number(jsDV.byteLength);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const zigDV = this.obtainZigView(address, len);
+          const copy = this.getCopyFunction(len);
+          copy(jsDV, zigDV);
+        }
+      };
+    }   
     let event;
     env.addListener('open', (evt) => {
       event = evt;
       return [];
     });
-    const encoder = new TextEncoder();
-    const src = encoder.encode('/hello.txt');
-    const pathAddress = 0x1000;
-    const pathLen = src.length;
-    const fdAddress = 0x2000;
-    const pathArray = env.obtainZigArray(pathAddress, pathLen);
-    for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
+    const path = new TextEncoder().encode('/hello.txt');
+    const pathAddress = usize(0x1000);
+    const pathLen = path.length;
+    const fdAddress = usize(0x2000);
+    env.moveExternBytes(path, pathAddress, true);
     const result = env.pathOpen(RootDescriptor, 0, pathAddress, pathLen, OpenFlag.exclusive, Right.write, 0n, 0, fdAddress);
     expect(result).to.equal(0);
-    const dv = new DataView(env.memory.buffer);
-    const fd = dv.getUint32(fdAddress, true);
-    expect(fd).to.not.equal(0);
+    const fdDV = env.obtainZigView(fdAddress, usizeByteSize);
+    const get = (usizeByteSize === 8) ? fdDV.getBigUint64 : fdDV.getUint32;
+    const fd = get.call(fdDV, 0, env.littleEndian);
+    expect(fd).to.not.equal(usize(0));
     expect(event).to.eql({
       parent: null,
       path: 'hello.txt',
@@ -75,15 +124,38 @@ describe('Syscall: path-open', function() {
   })
   it('should return ENOENT when listener returns false', async function() {
     const env = new Env();
-    env.memory = new WebAssembly.Memory({ initial: 1 });
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        if (to) {
+          map.set(address, jsDV.buffer);
+        } else {
+          const len = Number(jsDV.byteLength);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const zigDV = this.obtainZigView(address, len);
+          const copy = this.getCopyFunction(len);
+          copy(jsDV, zigDV);
+        }
+      };
+    }   
     env.addListener('open', (evt) => false);
-    const encoder = new TextEncoder();
-    const src = encoder.encode('/hello.txt');
-    const pathAddress = 0x1000;
-    const pathLen = src.length;
-    const fdAddress = 0x2000;
-    const pathArray = env.obtainZigArray(pathAddress, pathLen);
-    for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
+    const path = new TextEncoder().encode('/hello.txt');
+    const pathAddress = usize(0x1000);
+    const pathLen = path.length;
+    const fdAddress = usize(0x2000);
+    env.moveExternBytes(path, pathAddress, true);
     const result = env.pathOpen(RootDescriptor, 0, pathAddress, pathLen, 0, 1n, 0n, 0, fdAddress);
     expect(result).to.equal(PosixError.ENOENT);
   })
@@ -96,18 +168,16 @@ describe('Syscall: path-open', function() {
         event = evt;
         return new Uint8Array(32);
       });
-      const encoder = new TextEncoder();
-      const src = encoder.encode('/hello.txt');
+      const path = new TextEncoder().encode('/hello.txt');
       const pathAddress = 0x1000;
-      const pathLen = src.length;
+      const pathLen = path.length;
       const fdAddress = 0x2000;
-      const pathArray = env.obtainZigArray(pathAddress, pathLen);
-      for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
+      env.moveExternBytes(path, pathAddress, pathLen);
       const f = env.getWASIHandler('path_open');
       const result = f(RootDescriptor, 0, pathAddress, pathLen, OpenFlag.exclusive, Right.read, 0n, 0, fdAddress);
       expect(result).to.equal(0);
-      const dv = new DataView(env.memory.buffer);
-      const fd = dv.getUint32(fdAddress, true);
+      const fdDV = env.obtainZigView(fdAddress, 4);
+      const fd = fdDV.getUint32(0, env.littleEndian);
       expect(fd).to.not.equal(0);
       expect(event).to.eql({
         parent: null,

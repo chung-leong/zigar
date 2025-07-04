@@ -9,7 +9,32 @@ const Env = defineEnvironment();
 describe('Syscall: fd-readdir', function() {
   it('should read directory entries from a Map', async function() {
     const env = new Env();
-    const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        if (to) {
+          map.set(address, jsDV.buffer);
+        } else {
+          const len = Number(jsDV.byteLength);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const zigDV = this.obtainZigView(address, len);
+          const copy = this.getCopyFunction(len);
+          copy(jsDV, zigDV);
+        }
+      };
+    }   
     const map = new Map([
       [ 'hello.txt', {} ],
       [ 'hello-world.txt', {} ],
@@ -48,7 +73,32 @@ describe('Syscall: fd-readdir', function() {
   })
   it('should work with default root directory', async function() {
     const env = new Env();
-    const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        if (to) {
+          map.set(address, jsDV.buffer);
+        } else {
+          const len = Number(jsDV.byteLength);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const zigDV = this.obtainZigView(address, len);
+          const copy = this.getCopyFunction(len);
+          copy(jsDV, zigDV);
+        }
+      };
+    }   
     const fd = RootDescriptor;
     const bufAddress = 0x1000;
     const bufLen = 24 + 1 + 24 + 2 + 10;
@@ -65,7 +115,32 @@ describe('Syscall: fd-readdir', function() {
   })
   it('should return EINVAL when entry type is incorrect', async function() {
     const env = new Env();
-    const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        if (to) {
+          map.set(address, jsDV.buffer);
+        } else {
+          const len = Number(jsDV.byteLength);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const zigDV = this.obtainZigView(address, len);
+          const copy = this.getCopyFunction(len);
+          copy(jsDV, zigDV);
+        }
+      };
+    }   
     const map = new Map([
       [ 'hello.txt', { type: 'file', ino: 1n } ],
       [ 'hello-world.txt', { type: 'fil' } ],
