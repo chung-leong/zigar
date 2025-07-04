@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
+import { usize } from '../../src/utils.js';
 import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();

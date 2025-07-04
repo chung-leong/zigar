@@ -3,8 +3,7 @@ import { MemberType, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { COPY, FALLBACK, LENGTH, MEMORY, SHAPE, TYPED_ARRAY, ZIG } from '../../src/symbols.js';
-import { defineProperties } from '../../src/utils.js';
-import { usize } from '../test-utils.js';
+import { defineProperties, usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 

@@ -1,4 +1,4 @@
-import { PosixError, PosixFileType, RootDescriptor } from '../constants.js';
+import { Descriptor, PosixError, PosixFileType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, InvalidEnumValue } from '../errors.js';
 import { decodeEnum, encodeText } from '../utils.js';
@@ -32,7 +32,7 @@ export default mixin({
       let remaining = buf_len;
       let p = buf_address;
       let used;
-      const defaultEntryCount = (fd !== RootDescriptor) ? 2 : 1;
+      const defaultEntryCount = (fd !== Descriptor.root) ? 2 : 1;
       if (context) {
         let { iterator, entry } = context;
         if (entry) {

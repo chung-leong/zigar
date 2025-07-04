@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
+import { usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 
@@ -44,20 +45,16 @@ describe('Syscall: fd-filestat-set-times', function() {
       event = evt;
       return true;
     });
-    const encoder = new TextEncoder();
-    const src = encoder.encode('/hello.txt');
-    const pathAddress = 0x1000;
-    const pathLen = src.length;
-    const fdAddress = 0x2000;
-    const pathArray = env.obtainZigArray(pathAddress, pathLen);
-    for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
-    const open = env.getWASIHandler('path_open');
-    const result1 = open(3, 0, pathAddress, pathLen, 0, 2n, 0n, 0, fdAddress);
+    const path = new TextEncoder().encode('/hello.txt');
+    const pathAddress = usize(0x1000);
+    const pathLen = path.length;
+    const fdAddress = usize(0x2000);
+    env.moveExternBytes(path, pathAddress, true);
+    const result1 = env.pathOpen(3, 0, pathAddress, pathLen, 0, 2n, 0n, 0, fdAddress);
     expect(result1).to.equal(0);
-    const dv = new DataView(env.memory.buffer);
-    const fd = dv.getUint32(fdAddress, true);
-    const f = env.getWASIHandler('fd_filestat_set_times');
-    const result2 = f(fd, 123n, 456n, 1 << 0 | 1 << 2);
+    const fdDV = env.obtainZigView(fdAddress, 4);
+    const fd = fdDV.getUint32(0, true);
+    const result2 = env.fdFilestatSetTimes(fd, 123n, 456n, 1 << 0 | 1 << 2);
     expect(result2).to.equal(0);
     expect(event).to.eql({
       parent: null,
@@ -103,8 +100,7 @@ describe('Syscall: fd-filestat-set-times', function() {
     const array = new Uint8Array(32);
     const file = env.convertReader(array);
     const fd = env.createStreamHandle(file);
-    const f = env.getWASIHandler('fd_filestat_set_times');
-    const result = f(fd, 123n, 456n, 1 << 0 | 1 << 2);
+    const result = env.fdFilestatSetTimes(fd, 123n, 456n, 1 << 0 | 1 << 2);
     expect(result).to.equal(PosixError.NONE);
     expect(event).to.eql({
       target: array,

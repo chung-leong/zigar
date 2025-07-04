@@ -2,8 +2,8 @@ import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { CACHE, COPY, MEMORY, RESTORE, SLOTS, VISIT } from '../../src/symbols.js';
-import { defineProperties, ObjectCache } from '../../src/utils.js';
-import { delay, usize } from '../test-utils.js';
+import { defineProperties, ObjectCache, usize } from '../../src/utils.js';
+import { delay } from '../test-utils.js';
 
 const Env = defineEnvironment();
 

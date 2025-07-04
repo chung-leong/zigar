@@ -65,16 +65,6 @@ export const addressByteSize = (process.env.BITS === '64')
 ? 4
 : undefined;
 
-export const usize = (process.env.BITS === '64')
-? function(value) {
-    return BigInt(value);
-  }
-: (process.env.BITS === '32')
-? function(value) {
-    return Number(value);
-  }
-: undefined;
-
 export const getUsize = (process.env.BITS === '64')
 ? DataView.prototype.getBigUint64
 : (process.env.BITS === '32')
@@ -86,5 +76,3 @@ export const setUsize = (process.env.BITS === '64')
 : (process.env.BITS === '32')
 ? DataView.prototype.setUint32
 : undefined;
-
-export const RootDescriptor = 3;

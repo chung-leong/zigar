@@ -5,8 +5,8 @@ import { fileURLToPath } from 'url';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ALIGN, COPY, MEMORY, RESTORE, SIZE, ZIG } from '../../src/symbols.js';
-import { defineProperties } from '../../src/utils.js';
-import { captureError, usize } from '../test-utils.js';
+import { defineProperties, usize } from '../../src/utils.js';
+import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
 

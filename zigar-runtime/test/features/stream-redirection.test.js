@@ -2,8 +2,8 @@ import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { usizeByteSize } from '../../src/utils.js';
-import { capture, captureError, delay, usize } from '../test-utils.js';
+import { usize, usizeByteSize } from '../../src/utils.js';
+import { capture, captureError, delay } from '../test-utils.js';
 
 const Env = defineEnvironment();
 

@@ -1,8 +1,9 @@
 import { expect } from 'chai';
-import { PosixError } from '../../src/constants.js';
+import { Descriptor, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { captureError, RootDescriptor, usize } from '../test-utils.js';
+import { usize } from '../../src/utils.js';
+import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -45,13 +46,13 @@ describe('Syscall: path-create-directory', function() {
     const pathAddress = usize(0x1000);
     const pathLen = path.length;
     env.moveExternBytes(path, pathAddress, pathLen);
-    const result1 = env.pathCreateDirectory(RootDescriptor, pathAddress, pathLen);
+    const result1 = env.pathCreateDirectory(Descriptor.root, pathAddress, pathLen);
     expect(result1).to.equal(0);
     expect(event).to.eql({ 
       parent: null, 
       path: 'world' 
     });
-    const result2 = env.pathCreateDirectory(RootDescriptor, pathAddress, pathLen);
+    const result2 = env.pathCreateDirectory(Descriptor.root, pathAddress, pathLen);
     expect(result2).to.equal(PosixError.EEXIST);
   })
   it('should return ENOENT when listener returns false', async function() {
@@ -87,7 +88,7 @@ describe('Syscall: path-create-directory', function() {
     const pathAddress = usize(0x1000);
     const pathLen = path.length;
     env.moveExternBytes(path, pathAddress, pathLen);
-    const result = env.pathCreateDirectory(RootDescriptor, pathAddress, pathLen);
+    const result = env.pathCreateDirectory(Descriptor.root, pathAddress, pathLen);
     expect(result).to.equal(PosixError.ENOENT);
   })
   it('should display error when listener does not return a boolean', async function() {
@@ -125,7 +126,7 @@ describe('Syscall: path-create-directory', function() {
     env.moveExternBytes(path, pathAddress, pathLen);
     let result 
     const [ error ] = await captureError(() => {
-      result = env.pathCreateDirectory(RootDescriptor, pathAddress, pathLen);
+      result = env.pathCreateDirectory(Descriptor.root, pathAddress, pathLen);
     });
     expect(result).to.equal(PosixError.ENOENT);
     expect(error).to.contain('boolean');
@@ -145,13 +146,13 @@ describe('Syscall: path-create-directory', function() {
       const pathLen = path.length;
       env.moveExternBytes(path, pathAddress, pathLen);
       const f = env.getWASIHandler('path_create_directory');
-      const result1 = f(RootDescriptor, pathAddress, pathLen);
+      const result1 = f(Descriptor.root, pathAddress, pathLen);
       expect(result1).to.equal(0);
       expect(event).to.eql({ 
         parent: null, 
         path: 'world' 
       });
-      const result2 = f(RootDescriptor, pathAddress, pathLen);
+      const result2 = f(Descriptor.root, pathAddress, pathLen);
       expect(result2).to.equal(PosixError.EEXIST);
     })
   }

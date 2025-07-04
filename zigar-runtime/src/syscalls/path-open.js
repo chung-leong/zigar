@@ -39,7 +39,7 @@ export default mixin({
       }
       const fd = this.createStreamHandle(resource);
       this.setStreamLocation?.(fd, loc);
-      this.copyUsize(fdAddress, fd);
+      this.copyUint32(fdAddress, fd);
     });
   }  
 });

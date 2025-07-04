@@ -23,7 +23,7 @@ import {
   ObjectCache,
   toString,
   transformIterable,
-  usize
+  usize,
 } from '../src/utils.js';
 
 describe('Utility functions', function() {

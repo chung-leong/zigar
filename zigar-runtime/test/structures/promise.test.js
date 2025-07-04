@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { FINALIZE, MEMORY, PROMISE, RETURN, STRING_RETVAL, ZIG } from '../../src/symbols.js';
-import { usize } from '../test-utils.js';
+import { usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 

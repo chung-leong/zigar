@@ -8,8 +8,7 @@ import '../../src/mixins.js';
 import {
   ENTRIES, ENVIRONMENT, INITIALIZE, KEYS, MEMORY, SETTERS, SLOTS, VISIT, ZIG,
 } from '../../src/symbols.js';
-import { defineValue, encodeBase64 } from '../../src/utils.js';
-import { usize } from '../test-utils.js';
+import { defineValue, encodeBase64, usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 

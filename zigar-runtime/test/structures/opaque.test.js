@@ -6,7 +6,7 @@ import {
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENVIRONMENT, INITIALIZE, MEMORY, SLOTS, ZIG } from '../../src/symbols.js';
-import { usize } from '../test-utils.js';
+import { usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 

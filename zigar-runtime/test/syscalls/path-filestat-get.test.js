@@ -1,8 +1,9 @@
 import { expect } from 'chai';
-import { PosixError } from '../../src/constants.js';
+import { Descriptor, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { captureError, RootDescriptor, usize } from '../test-utils.js';
+import { usize } from '../../src/utils.js';
+import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -46,7 +47,7 @@ describe('Syscall: path-filestat-get', function() {
     const bufAddress = usize(0x2000);
     env.moveExternBytes(path, pathAddress, true);
     const flags = 1;
-    const result = env.pathFilestatGet(RootDescriptor, flags, pathAddress, pathLen, bufAddress);
+    const result = env.pathFilestatGet(Descriptor.root, flags, pathAddress, pathLen, bufAddress);
     expect(result).to.equal(0);
     expect(event).to.eql({ 
       parent: null,
@@ -89,7 +90,7 @@ describe('Syscall: path-filestat-get', function() {
     const bufAddress = usize(0x2000);
     env.moveExternBytes(path, pathAddress, true);
     const flags = 1;
-    const result = env.pathFilestatGet(RootDescriptor, flags, pathAddress, pathLen, bufAddress);
+    const result = env.pathFilestatGet(Descriptor.root, flags, pathAddress, pathLen, bufAddress);
     expect(result).to.equal(PosixError.ENOENT);
   })
   it('should display error when listener returns unexpected type', async function() {
@@ -129,7 +130,7 @@ describe('Syscall: path-filestat-get', function() {
     const flags = 1;
     let result;
     const [ error ] = await captureError(() => {
-      result = env.pathFilestatGet(RootDescriptor, flags, pathAddress, pathLen, bufAddress);
+      result = env.pathFilestatGet(Descriptor.root, flags, pathAddress, pathLen, bufAddress);
     });
     expect(result).to.equal(PosixError.ENOENT);
     expect(error).to.contain('object');
@@ -150,7 +151,7 @@ describe('Syscall: path-filestat-get', function() {
       env.moveExternBytes(path, pathAddress, true);
       const f = env.getWASIHandler('path_filestat_get');
       const flags = 1;
-      const result = f(RootDescriptor, flags, pathAddress, pathLen, bufAddress);
+      const result = f(Descriptor.root, flags, pathAddress, pathLen, bufAddress);
       expect(result).to.equal(0);
       expect(event).to.eql({ 
         parent: null,

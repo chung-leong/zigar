@@ -3,7 +3,7 @@ import { MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ALIGN, ENVIRONMENT, MEMORY, SIZE, SLOTS, TYPED_ARRAY, ZIG } from '../../src/symbols.js';
-import { usize } from '../test-utils.js';
+import { usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 

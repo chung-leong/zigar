@@ -161,4 +161,12 @@ export const PosixFileType = {
   symbolicLink: 7,
 };
 
-export const RootDescriptor = 3;
+export const Descriptor = {
+  stdin: 0,
+  stdout: 1,
+  stderr: 2,
+  root: 3,
+
+  min: 0x000f_ffff,
+  max: 0x07ff_ffff, 
+}

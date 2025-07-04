@@ -3,7 +3,7 @@ import { MemberType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { AccessorAll } from '../../src/mixins.js';
 import { FALLBACK } from '../../src/symbols.js';
-import { usize } from '../test-utils.js';
+import { usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 

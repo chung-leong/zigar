@@ -1,8 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { decodeText, usizeByteSize } from '../../src/utils.js';
-import { usize } from '../test-utils.js';
+import { decodeText, usize, usizeByteSize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 

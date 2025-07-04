@@ -34,10 +34,9 @@ describe('Syscall: fd-allocate', function() {
   })
   it('should return an error code when handle is invalid', async function() {
     const env = new Env();
-    const f = env.getWASIHandler('fd_allocate');
     let result;
     const [ error ] = await captureError(() => { 
-      result = f(4, 123n, 16)
+      result = env.fdAllocate(4, 123n, 16)
     });
     expect(result).to.equal(PosixError.EBADF);
     expect(error).to.contains('file descriptor');

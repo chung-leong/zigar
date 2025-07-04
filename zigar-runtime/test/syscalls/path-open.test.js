@@ -1,9 +1,8 @@
 import { expect } from 'chai';
-import { PosixError } from '../../src/constants.js';
+import { Descriptor, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { usizeByteSize } from '../../src/utils.js';
-import { RootDescriptor, usize } from '../test-utils.js';
+import { usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 
@@ -58,12 +57,11 @@ describe('Syscall: path-open', function() {
     const pathLen = path.length;
     const fdAddress = usize(0x2000);
     env.moveExternBytes(path, pathAddress, true);
-    const result = env.pathOpen(RootDescriptor, 0, pathAddress, pathLen, OpenFlag.exclusive, Right.read, 0n, 0, fdAddress);
+    const result = env.pathOpen(Descriptor.root, 0, pathAddress, pathLen, OpenFlag.exclusive, Right.read, 0n, 0, fdAddress);
     expect(result).to.equal(0);
-    const fdDV = env.obtainZigView(fdAddress, usizeByteSize);
-    const get = (usizeByteSize === 8) ? fdDV.getBigUint64 : fdDV.getUint32;
-    const fd = get.call(fdDV, 0, env.littleEndian);
-    expect(fd).to.not.equal(usize(0));
+    const fdDV = env.obtainZigView(fdAddress, 4);
+    const fd = fdDV.getUint32(0, env.littleEndian);
+    expect(fd).to.not.equal(0);
     expect(event).to.eql({
       parent: null,
       path: 'hello.txt',
@@ -109,12 +107,11 @@ describe('Syscall: path-open', function() {
     const pathLen = path.length;
     const fdAddress = usize(0x2000);
     env.moveExternBytes(path, pathAddress, true);
-    const result = env.pathOpen(RootDescriptor, 0, pathAddress, pathLen, OpenFlag.exclusive, Right.write, 0n, 0, fdAddress);
+    const result = env.pathOpen(Descriptor.root, 0, pathAddress, pathLen, OpenFlag.exclusive, Right.write, 0n, 0, fdAddress);
     expect(result).to.equal(0);
-    const fdDV = env.obtainZigView(fdAddress, usizeByteSize);
-    const get = (usizeByteSize === 8) ? fdDV.getBigUint64 : fdDV.getUint32;
-    const fd = get.call(fdDV, 0, env.littleEndian);
-    expect(fd).to.not.equal(usize(0));
+    const fdDV = env.obtainZigView(fdAddress, 4);
+    const fd = fdDV.getUint32(0, env.littleEndian);
+    expect(fd).to.not.equal(0);
     expect(event).to.eql({
       parent: null,
       path: 'hello.txt',
@@ -156,7 +153,7 @@ describe('Syscall: path-open', function() {
     const pathLen = path.length;
     const fdAddress = usize(0x2000);
     env.moveExternBytes(path, pathAddress, true);
-    const result = env.pathOpen(RootDescriptor, 0, pathAddress, pathLen, 0, 1n, 0n, 0, fdAddress);
+    const result = env.pathOpen(Descriptor.root, 0, pathAddress, pathLen, 0, 1n, 0n, 0, fdAddress);
     expect(result).to.equal(PosixError.ENOENT);
   })
   if (process.env.TARGET === 'wasm') {
@@ -174,7 +171,7 @@ describe('Syscall: path-open', function() {
       const fdAddress = 0x2000;
       env.moveExternBytes(path, pathAddress, pathLen);
       const f = env.getWASIHandler('path_open');
-      const result = f(RootDescriptor, 0, pathAddress, pathLen, OpenFlag.exclusive, Right.read, 0n, 0, fdAddress);
+      const result = f(Descriptor.root, 0, pathAddress, pathLen, OpenFlag.exclusive, Right.read, 0n, 0, fdAddress);
       expect(result).to.equal(0);
       const fdDV = env.obtainZigView(fdAddress, 4);
       const fd = fdDV.getUint32(0, env.littleEndian);

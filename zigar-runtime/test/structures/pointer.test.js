@@ -9,8 +9,8 @@ import {
   ADDRESS, ENVIRONMENT, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, POINTER, TARGET,
   UPDATE, VISIT, ZIG,
 } from '../../src/symbols.js';
-import { defineValue } from '../../src/utils.js';
-import { addressByteSize, addressSize, getUsize, setUsize, usize } from '../test-utils.js';
+import { defineValue, usize } from '../../src/utils.js';
+import { addressByteSize, addressSize, getUsize, setUsize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 

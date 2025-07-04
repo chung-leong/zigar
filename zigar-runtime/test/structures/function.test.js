@@ -3,8 +3,7 @@ import { MemberType, PosixError, StructureFlag, StructureType } from '../../src/
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ENVIRONMENT, MEMORY, SIZE, ZIG } from '../../src/symbols.js';
-import { defineProperty } from '../../src/utils.js';
-import { usize } from '../test-utils.js';
+import { defineProperty, usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 

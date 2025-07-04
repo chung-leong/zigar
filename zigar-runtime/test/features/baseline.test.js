@@ -3,8 +3,7 @@ import 'mocha-skip-if';
 import { MemberFlag, MemberType, PointerFlag, PosixError, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { usizeByteSize } from '../../src/utils.js';
-import { usize } from '../test-utils.js';
+import { usize, usizeByteSize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 

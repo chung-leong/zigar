@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
+import { usize } from '../../src/utils.js';
 import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -37,16 +38,15 @@ describe('Syscall: fd-tell', function() {
         }
       };
     }   
-    const seek = env.getWASIHandler('fd_seek');
-    const posAddress = 128;
-    const dv = new DataView(memory.buffer);
+    const posAddress = usize(0x1000);
     env.redirectStream(0, array);
-    seek(0, 1n, 1, posAddress)
-    seek(0, 1n, 1, posAddress)
+    env.fdSeek(0, 1n, 1, posAddress)
+    env.fdSeek(0, 1n, 1, posAddress)
     const result = env.fdTell(0);
     expect(result).to.equal(PosixError.NONE);
-    const pos = dv.getUint32(posAddress, true);
-    expect(pos).to.equal(2);
+    const posDV = env.obtainZigView(posAddress, 8);
+    const pos = posDV.getBigUint64(0, env.littleEndian);
+    expect(pos).to.equal(2n);
   })
   it('should return an error code when handle is invalid', async function() {
     const env = new Env();
@@ -76,7 +76,6 @@ describe('Syscall: fd-tell', function() {
         }
       };
     }   
-    const f = env.getWASIHandler('fd_tell');
     let result;
     const [ error ] = await captureError(() => { 
       result = env.fdTell(4)

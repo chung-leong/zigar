@@ -1,8 +1,9 @@
 import { expect } from 'chai';
-import { PosixError } from '../../src/constants.js';
+import { Descriptor, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { captureError, RootDescriptor, usize } from '../test-utils.js';
+import { usize } from '../../src/utils.js';
+import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -42,7 +43,7 @@ describe('Syscall: path-remove-directory', function() {
     env.moveExternBytes(path, pathAddress, pathLen);
     let result 
     const [ error ] = await captureError(() => {
-      result = env.pathRemoveDirectory(RootDescriptor, pathAddress, pathLen);
+      result = env.pathRemoveDirectory(Descriptor.root, pathAddress, pathLen);
     });
     expect(result).to.equal(PosixError.ENOENT);
     expect(error).to.contain('boolean');
@@ -63,13 +64,13 @@ describe('Syscall: path-remove-directory', function() {
       const pathLen = path.length;
       env.moveExternBytes(path, pathAddress, pathLen);
       const f = env.getWASIHandler('path_remove_directory');
-      const result1 = f(RootDescriptor, pathAddress, pathLen);
+      const result1 = f(Descriptor.root, pathAddress, pathLen);
       expect(result1).to.equal(0);
       expect(event).to.eql({ 
         parent: null, 
         path: 'world' 
       });
-      const result2 = f(RootDescriptor, pathAddress, pathLen);
+      const result2 = f(Descriptor.root, pathAddress, pathLen);
       expect(result2).to.equal(PosixError.ENOENT);
     })
   }

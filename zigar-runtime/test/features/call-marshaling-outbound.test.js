@@ -11,8 +11,8 @@ import '../../src/mixins.js';
 import {
   ALIGN, ATTRIBUTES, COPY, FINALIZE, MEMORY, PROMISE, RETURN, SETTERS, SLOTS, VISIT, ZIG,
 } from '../../src/symbols.js';
-import { defineProperties, defineProperty } from '../../src/utils.js';
-import { addressByteSize, addressSize, usize } from '../test-utils.js';
+import { defineProperties, defineProperty, usize } from '../../src/utils.js';
+import { addressByteSize, addressSize } from '../test-utils.js';
 
 use (ChaiAsPromised);
 

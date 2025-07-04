@@ -1,8 +1,8 @@
 import { expect } from 'chai';
-import { PosixError } from '../../src/constants.js';
+import { Descriptor, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { captureError, RootDescriptor } from '../test-utils.js';
+import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -99,7 +99,7 @@ describe('Syscall: fd-readdir', function() {
         }
       };
     }   
-    const fd = RootDescriptor;
+    const fd = Descriptor.root;
     const bufAddress = 0x1000;
     const bufLen = 24 + 1 + 24 + 2 + 10;
     const usedAddress = 0x2000;
