@@ -31,7 +31,7 @@ export default mixin({
         if (++i < iovsCount) {
           return next();
         } else {
-          this.copyUsize(writtenAddress, written);
+          this.copyUint32(writtenAddress, written);
         }
       });
     };

@@ -5,10 +5,8 @@ import { decodeEnum, encodeText } from '../utils.js';
 
 export default mixin({
   init() {
-    if (process.env.TARGET === 'wasm') {
-      this.readdirCookieMap = new Map();
-      this.readdirNextCookie = 1n;
-    }
+    this.readdirCookieMap = new Map();
+    this.readdirNextCookie = 1n;
   },
   fdReaddir(fd, buf_address, buf_len, cookie, bufused_address, canWait) {
     if (buf_len < 24) {

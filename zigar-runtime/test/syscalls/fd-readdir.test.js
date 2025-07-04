@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { Descriptor, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
+import { usize } from '../../src/utils.js';
 import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -41,16 +42,18 @@ describe('Syscall: fd-readdir', function() {
     ]);
     const dir = env.convertDirectory(map);
     const fd = env.createStreamHandle(dir);
-    const bufAddress = 0x1000;
+    const bufAddress = usize(0x1000);
     const bufLen = 24 + 1 + 24 + 2 + 10;
-    const usedAddress = 0x2000;
+    const usedAddress = usize(0x2000);
+    const le = env.littleEndian;
     let cookie = 0n;
     for (let i = 0; i < 4; i++) {
       const result = env.fdReaddir(fd, bufAddress, bufLen, cookie, usedAddress);
       expect(result).to.equal(0);
-      const dv = new DataView(memory.buffer);
-      const used = dv.getUint32(usedAddress, true);
-      const len = dv.getUint32(bufAddress + 16, true);
+      const usedDV = env.obtainZigView(usedAddress, 4);
+      const used = usedDV.getUint32(0, le);
+      const direntDV = env.obtainZigView(bufAddress, 24);
+      const len = direntDV.getUint32(16, le);
       switch (i) {
         case 0:
           expect(used).to.equal(24 + 1 + 24 + 2);
@@ -68,7 +71,7 @@ describe('Syscall: fd-readdir', function() {
           expect(used).to.equal(0);
           break;
       }
-      cookie = dv.getBigUint64(bufAddress + 0, true);
+      cookie = direntDV.getBigUint64(0, le);
     }
   })
   it('should work with default root directory', async function() {
@@ -100,19 +103,20 @@ describe('Syscall: fd-readdir', function() {
       };
     }   
     const fd = Descriptor.root;
-    const bufAddress = 0x1000;
+    const bufAddress = usize(0x1000);
     const bufLen = 24 + 1 + 24 + 2 + 10;
-    const usedAddress = 0x2000;
-    const f = env.getWASIHandler('fd_readdir');
+    const usedAddress = usize(0x2000);
+    const le = env.littleEndian;
     let cookie = 0n;
-    const result = f(fd, bufAddress, bufLen, cookie, usedAddress);
+    const result = env.fdReaddir(fd, bufAddress, bufLen, cookie, usedAddress);
     expect(result).to.equal(0);
-    const dv = new DataView(memory.buffer);
-    const used = dv.getUint32(usedAddress, true);
-    const len = dv.getUint32(bufAddress + 16, true);
+    const usedDV = env.obtainZigView(usedAddress, 4);
+    const used = usedDV.getUint32(0, le);
+    const direntDV = env.obtainZigView(bufAddress, 24);
+    const len = direntDV.getUint32(16, le);
     expect(used).to.equal(25);
     expect(len).to.equal(1);
-  })
+    })
   it('should return EINVAL when entry type is incorrect', async function() {
     const env = new Env();
     if (process.env.TARGET === 'wasm') {
@@ -147,17 +151,16 @@ describe('Syscall: fd-readdir', function() {
     ]);
     const dir = env.convertDirectory(map);
     const fd = env.createStreamHandle(dir);
-    const bufAddress = 0x1000;
+    const bufAddress = usize(0x1000);
     const bufLen = 24 + 1 + 24 + 2 + 10;
-    const usedAddress = 0x2000;
-    const f = env.getWASIHandler('fd_readdir');
+    const usedAddress = usize(0x2000);
     let cookie = 0n;
     for (let i = 0; i < 3; i++) {
       let result;
       const [ error ] = await captureError(() => {
-        result = f(fd, bufAddress, bufLen, cookie, usedAddress);
+        result = env.fdReaddir(fd, bufAddress, bufLen, cookie, usedAddress);
       });
-      const dv = new DataView(memory.buffer);
+      const direntDV = env.obtainZigView(bufAddress, 24);
       switch (i) {
         case 0:
         case 1:
@@ -168,7 +171,7 @@ describe('Syscall: fd-readdir', function() {
           expect(error).to.contain('fil');
           break;
       }
-      cookie = dv.getBigUint64(bufAddress + 0, true);
+      cookie = direntDV.getBigUint64(0, true);
     }
   })
   it('should return error code when buffer is too small', async function() {
@@ -180,7 +183,7 @@ describe('Syscall: fd-readdir', function() {
   if (process.env.TARGET === 'wasm') {
     it('should be callable through WASI', async function() {
       const env = new Env();
-      const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+      env.memory = new WebAssembly.Memory({ initial: 1 });
       const map = new Map([
         [ 'hello.txt', {} ],
         [ 'hello-world.txt', {} ],
@@ -190,14 +193,16 @@ describe('Syscall: fd-readdir', function() {
       const bufAddress = 0x1000;
       const bufLen = 24 + 1 + 24 + 2 + 10;
       const usedAddress = 0x2000;
+      const le = env.littleEndian;
       const f = env.getWASIHandler('fd_readdir');
       let cookie = 0n;
       for (let i = 0; i < 4; i++) {
         const result = f(fd, bufAddress, bufLen, cookie, usedAddress);
         expect(result).to.equal(0);
-        const dv = new DataView(memory.buffer);
-        const used = dv.getUint32(usedAddress, true);
-        const len = dv.getUint32(bufAddress + 16, true);
+        const usedDV = env.obtainZigView(usedAddress, 4);
+        const used = usedDV.getUint32(0, le);
+        const direntDV = env.obtainZigView(bufAddress, 24);
+        const len = direntDV.getUint32(16, le);
         switch (i) {
           case 0:
             expect(used).to.equal(24 + 1 + 24 + 2);
@@ -215,7 +220,7 @@ describe('Syscall: fd-readdir', function() {
             expect(used).to.equal(0);
             break;
         }
-        cookie = dv.getBigUint64(bufAddress + 0, true);
+        cookie = direntDV.getBigUint64(0, true);
       }
     })
   }

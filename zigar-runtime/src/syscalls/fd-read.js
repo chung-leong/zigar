@@ -2,6 +2,7 @@ import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError } from '../errors.js';
 import { createView, usizeByteSize } from '../utils.js';
+import './usize-copy.js';
 
 export default mixin({
   fdRead(fd, iovsAddress, iovsCount, readAddress, canWait) {
@@ -14,7 +15,7 @@ export default mixin({
           this.moveExternBytes(iovs, iovsAddress, false);
           reader = this.getStream(fd);
         }
-        const len = iovs.getUint32(i * iovsSize + 4, true);
+        const len = iovs.getUint32(i * iovsSize + usizeByteSize, true);
         return reader.read(len);
       }, (chunk) => {
         const ptr = iovs.getUint32(i * iovsSize, true);
@@ -23,9 +24,7 @@ export default mixin({
         if (++i < iovsCount) {
           return next();
         } else {
-          const readDV = createView(4);
-          readDV.setUint32(0, read, this.littleEndian);
-          this.moveExternBytes(readDV, readAddress, true);
+          this.copyUint32(readAddress, read);
         }
       });
     };
@@ -41,10 +40,9 @@ export default mixin({
         const reader = this.getStream(fd);
         return reader.read(len);
       }, (chunk) => {
+        const read = chunk.length;
         this.moveExternBytes(chunk, address, true);
-        const readDV = createView(4);
-        readDV.setUint32(0, chunk.byteLength, this.littleEndian);
-        this.moveExternBytes(readDV, readAddress, true);
+        this.copyUint32(readAddress, read);
       });
     },
     /* c8 ignore next */
