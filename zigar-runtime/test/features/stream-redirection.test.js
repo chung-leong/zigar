@@ -1,19 +1,35 @@
 import { expect } from 'chai';
+import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
-import { InvalidFileDescriptor } from '../../src/errors.js';
 import '../../src/mixins.js';
-import { capture, delay, usize } from '../test-utils.js';
+import { usizeByteSize } from '../../src/utils.js';
+import { capture, captureError, delay, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
 describe('Feature: stream-redirection', function() {
-  describe('closeStream', function() {
-    it('should close a stream', async function() {
+  describe('destroyStreamHandle', function() {
+    it('should remove a stream handle', async function() {
       const env = new Env();
-      const array = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ]);
-      env.redirectStream(0, array);
-      env.closeStream(0);
-      expect(() => env.getStreamPointer(0)).to.throw();
+      const stream = {
+        read() {},
+      };
+      env.redirectStream(0, stream);
+      env.destroyStreamHandle(0);
+      expect(() => env.getStream(0)).to.throw();
+    })
+    it('should invoke destroy method', async function() {
+      const env = new Env();
+      let called = false;
+      const stream = {
+        read() {},
+        destroy() {
+          called = true;
+        },
+      };
+      env.redirectStream(0, stream);
+      env.destroyStreamHandle(0);
+      expect(called).to.be.true;
     })
   })
   describe('redirectStream', function() {
@@ -24,7 +40,7 @@ describe('Feature: stream-redirection', function() {
         env.memory = new WebAssembly.Memory({ initial: 1 });
       } else {
         const map = new Map();
-        env.obtainExternBuffer = (address, len) => {
+        env.obtainExternBuffer = function(address, len) {
           let buffer = map.get(address);
           if (!buffer) {
             buffer = new ArrayBuffer(len);
@@ -32,19 +48,42 @@ describe('Feature: stream-redirection', function() {
           }
           return buffer;
         };
+        env.moveExternBytes = function(jsDV, address, to) {
+          if (to) {
+            map.set(address, jsDV.buffer);
+          } else {
+            const len = Number(jsDV.byteLength);
+            if (!(jsDV instanceof DataView)) {
+              jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+            }
+            const zigDV = this.obtainZigView(address, len);
+            const copy = this.getCopyFunction(len);
+            copy(jsDV, zigDV);
+          }
+        };
       }
       const original = env.redirectStream(1, chunks);
-      const address = usize(0x1000);
-      const encoder = new TextEncoder();
-      const array = encoder.encode('Hello world\n');
-      const dv = env.obtainZigView(address, array.length, false);
-      for (let i = 0; i < array.length; i++) dv.setUint8(i, array[i]);
-      env.writeBytes(1, address, dv.byteLength);
+      const bufferAddress = usize(0x1000);
+      const stringAddress = usize(0x2000);
+      const writtenAddress = usize(0x3000);
+      const text = 'Hello world\n';
+      const string = new TextEncoder().encode(text);
+      const stringDV = env.obtainZigView(stringAddress, string.length)
+      for (let i = 0; i < string.length; i++) {
+        stringDV.setUint8(i, string[i]);
+      }
+      const iovsDV = env.obtainZigView(bufferAddress, usizeByteSize * 2, false);
+      const stringLen = usize(string.length);
+      const set = (usizeByteSize === 8) ? iovsDV.setBigUint64 : iovsDV.setUint32;
+      const le = env.littleEndian;
+      set.call(iovsDV, usizeByteSize * 0, stringAddress, le);
+      set.call(iovsDV, usizeByteSize * 1, stringLen, le);
+      env.fdWrite(1, bufferAddress, 1, writtenAddress);
       expect(chunks).to.have.lengthOf(1);
-      expect(chunks[0]).to.eql(array);
+      expect(chunks[0]).to.eql(string);
       env.redirectStream(1, original);
       const [ line ] = await capture(() => {
-        env.writeBytes(1, address, dv.byteLength);
+        env.fdWrite(1, bufferAddress, 1, writtenAddress);
       });
       expect(line).to.equal('Hello world');
     })
@@ -62,14 +101,37 @@ describe('Feature: stream-redirection', function() {
           }
           return buffer;
         };
+        env.moveExternBytes = function(jsDV, address, to) {
+          if (to) {
+            map.set(address, jsDV.buffer);
+          } else {
+            const len = Number(jsDV.byteLength);
+            if (!(jsDV instanceof DataView)) {
+              jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+            }
+            const zigDV = this.obtainZigView(address, len);
+            const copy = this.getCopyFunction(len);
+            copy(jsDV, zigDV);
+          }
+        };
       }
       env.redirectStream(1, null);
-      const address = usize(0x1000);
-      const encoder = new TextEncoder();
-      const array = encoder.encode('Hello world\n');
-      const dv = env.obtainZigView(address, array.length, false);
-      for (let i = 0; i < array.length; i++) dv.setUint8(i, array[i]);
-      const lines = await capture(() => env.writeBytes(1, address, dv.byteLength));
+      const bufferAddress = usize(0x1000);
+      const stringAddress = usize(0x2000);
+      const writtenAddress = usize(0x3000);
+      const text = 'Hello world\n';
+      const string = new TextEncoder().encode(text);
+      const stringDV = env.obtainZigView(stringAddress, string.length)
+      for (let i = 0; i < string.length; i++) {
+        stringDV.setUint8(i, string[i]);
+      }
+      const iovsDV = env.obtainZigView(bufferAddress, usizeByteSize * 2, false);
+      const stringLen = usize(string.length);
+      const set = (usizeByteSize === 8) ? iovsDV.setBigUint64 : iovsDV.setUint32;
+      const le = env.littleEndian;
+      set.call(iovsDV, usizeByteSize * 0, stringAddress, le);
+      set.call(iovsDV, usizeByteSize * 1, stringLen, le);
+      const lines = await capture(() => env.fdWrite(1, bufferAddress, 1, writtenAddress));
       expect(lines).to.have.lengthOf(0);
     })
     it('should redirect root dir to a map', async function() {
@@ -90,7 +152,7 @@ describe('Feature: stream-redirection', function() {
       const map = new Map;
       env.redirectStream(3, map);
     })
-    it('should close a stream when undefined is given', function() {
+    it('should close a stream when undefined is given', async function() {
       const env = new Env();
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
@@ -104,11 +166,29 @@ describe('Feature: stream-redirection', function() {
           }
           return buffer;
         };
+        env.moveExternBytes = function(jsDV, address, to) {
+          if (to) {
+            map.set(address, jsDV.buffer);
+          } else {
+            const len = Number(jsDV.byteLength);
+            if (!(jsDV instanceof DataView)) {
+              jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+            }
+            const zigDV = this.obtainZigView(address, len);
+            const copy = this.getCopyFunction(len);
+            copy(jsDV, zigDV);
+          }
+        };
       }
       env.redirectStream(1, null);
-      const address = usize(0x1000);
+      const bufferAddress = usize(0x1000);
+      const writtenAddress = usize(0x3000);
       env.redirectStream(1, undefined);
-      expect(() => env.writeBytes(1, address, 4)).to.throw(InvalidFileDescriptor);
+      let result;
+      await captureError(() => {
+        result = env.fdWrite(1, bufferAddress, 1, writtenAddress);
+      });
+      expect(result).to.equal(PosixError.EBADF);
     })
     it('should throw when handle is not 0, 1, or 2', async function() {
       const env = new Env();
@@ -127,7 +207,7 @@ describe('Feature: stream-redirection', function() {
       const file = env.convertReader(reader);
       const handle = env.createStreamHandle(file);
       expect(handle).to.be.a('number');
-      env.closeStream(handle);
+      env.destroyStreamHandle(handle);
     })
     it('should create a handle from a writer', async function() {
       const env = new Env();
@@ -138,15 +218,18 @@ describe('Feature: stream-redirection', function() {
       const file = env.convertWriter(writer);
       const handle = env.createStreamHandle(file);
       expect(handle).to.be.a('number');
-      env.closeStream(handle);
+      env.destroyStreamHandle(handle);
     })
     it('should create a handle from null', async function() {
       const env = new Env();
       const file = env.convertWriter(null);
       const handle = env.createStreamHandle(file);
       expect(handle).to.be.a('number');
-      env.closeStream(handle);
+      env.destroyStreamHandle(handle);
     })
+  })
+  describe('destroyStreamHandle', function() {
+    
   })
   describe('flushStreams', function() {
     const encoder = new TextEncoder();
@@ -156,7 +239,7 @@ describe('Feature: stream-redirection', function() {
         env.memory = new WebAssembly.Memory({ initial: 1 });
       } else {
         const map = new Map();
-        env.obtainExternBuffer = (address, len) => {
+        env.obtainExternBuffer = function(address, len) {
           let buffer = map.get(address);
           if (!buffer) {
             buffer = new ArrayBuffer(len);
@@ -164,19 +247,41 @@ describe('Feature: stream-redirection', function() {
           }
           return buffer;
         };
+        env.moveExternBytes = function(jsDV, address, to) {
+          if (to) {
+            map.set(address, jsDV.buffer);
+          } else {
+            const len = Number(jsDV.byteLength);
+            if (!(jsDV instanceof DataView)) {
+              jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+            }
+            const zigDV = this.obtainZigView(address, len);
+            const copy = this.getCopyFunction(len);
+            copy(jsDV, zigDV);
+          }
+        };
       }
-      const address1 = usize(0x1000);
-      const array1 = encoder.encode('Hello world');
-      const dv1 = env.obtainZigView(address1, array1.length, false);
-      for (let i = 0; i < array1.length; i++) dv1.setUint8(i, array1[i]);
-      const address2 = usize(0x2000);
-      const array2 = encoder.encode('!');
-      const dv2 = env.obtainZigView(address2, array2.length, false);
-      for (let i = 0; i < array2.length; i++) dv2.setUint8(i, array2[i]);
+      const bufferAddress = usize(0x1000);
+      const stringAddress = usize(0x2000);
+      const writtenAddress = usize(0x3000);
+      const text = 'Hello world';
+      const string = new TextEncoder().encode(text);
+      const stringDV = env.obtainZigView(stringAddress, string.length)
+      for (let i = 0; i < string.length; i++) {
+        stringDV.setUint8(i, string[i]);
+      }
+      const iovsDV = env.obtainZigView(bufferAddress, usizeByteSize * 2, false);
+      const stringLen = usize(string.length);
+      const set = (usizeByteSize === 8) ? iovsDV.setBigUint64 : iovsDV.setUint32;
+      const le = env.littleEndian;
       const lines = await capture(async () => {
-        env.writeBytes(1, address1, dv1.byteLength);
+        set.call(iovsDV, usizeByteSize * 0, stringAddress, le);
+        set.call(iovsDV, usizeByteSize * 1, stringLen, le);
+        env.fdWrite(1, bufferAddress, 1, writtenAddress);
         await delay(10);
-        env.writeBytes(1, address2, dv2.byteLength);
+        stringDV.setUint8(0, '!'.charCodeAt(0));
+        set.call(iovsDV, usizeByteSize * 1, usize(1), le);
+        env.fdWrite(1, bufferAddress, 1, writtenAddress);
         env.flushStreams();
       });
       expect(lines).to.eql([ 'Hello world!' ]);

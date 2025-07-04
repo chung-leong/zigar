@@ -3,7 +3,7 @@ import { createView } from "../utils.js";
 
 export default mixin({
   copyUsize(bufAddress, value) {
-    if (process.env.BITS === '64') {
+    if (process.env.BITS == 64) {
       this.copyUint64(bufAddress, value);
     } else {
       this.copyUint32(bufAddress, value);

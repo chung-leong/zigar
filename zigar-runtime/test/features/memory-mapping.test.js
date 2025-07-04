@@ -540,24 +540,26 @@ describe('Feature: memory-mapping', function() {
       })
     })
     describe('moveExternBytes', function() {
-      it('should copy bytes from specified address', function() {
-        const env = new Env();
-        const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-        const src = new DataView(memory.buffer, 128, 4);
-        src.setUint32(0, 1234);
-        const dest = new DataView(new ArrayBuffer(4));
-        env.moveExternBytes(dest, 128, false);
-        expect(dest.getUint32(0)).to.equal(1234);
-      })
-      it('should copy bytes to specified address', function() {
-        const env = new Env();
-        const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-        const src = new DataView(new ArrayBuffer(4));
-        src.setUint32(0, 1234);
-        const dest = new DataView(memory.buffer, 128, 4);
-        env.moveExternBytes(dest, 128, true);
-        expect(dest.getUint32(0)).to.equal(1234);
-      })
+      if (process.env.TARGET === 'wasm') {
+        it('should copy bytes from specified address', function() {
+          const env = new Env();
+          const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+          const src = new DataView(memory.buffer, 128, 4);
+          src.setUint32(0, 1234);
+          const dest = new DataView(new ArrayBuffer(4));
+          env.moveExternBytes(dest, 128, false);
+          expect(dest.getUint32(0)).to.equal(1234);
+        })
+        it('should copy bytes to specified address', function() {
+          const env = new Env();
+          const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
+          const src = new DataView(new ArrayBuffer(4));
+          src.setUint32(0, 1234);
+          const dest = new DataView(memory.buffer, 128, 4);
+          env.moveExternBytes(src, 128, true);
+          expect(dest.getUint32(0)).to.equal(1234);
+        })
+      }
     })
     describe('getTargetAddress', function() {
       it('should return zero when object has no bytes', function() {

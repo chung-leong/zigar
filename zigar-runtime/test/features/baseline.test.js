@@ -3,7 +3,8 @@ import 'mocha-skip-if';
 import { MemberFlag, MemberType, PointerFlag, PosixError, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { capture, usize } from '../test-utils.js';
+import { usizeByteSize } from '../../src/utils.js';
+import { usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -307,7 +308,7 @@ describe('Feature: baseline', function() {
         env.memory = new WebAssembly.Memory({ initial: 1 });
       } else {
         const map = new Map();
-        env.obtainExternBuffer = (address, len) => {
+        env.obtainExternBuffer = function (address, len) {
           let buffer = map.get(address);
           if (!buffer) {
             buffer = new ArrayBuffer(len);
@@ -315,15 +316,38 @@ describe('Feature: baseline', function() {
           }
           return buffer;
         };
+        env.moveExternBytes = function(jsDV, address, to) {
+          if (to) {
+            map.set(address, jsDV.buffer);
+          } else {
+            const len = Number(jsDV.byteLength);
+            if (!(jsDV instanceof DataView)) {
+              jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+            }
+            const zigDV = this.obtainZigView(address, len);
+            const copy = this.getCopyFunction(len);
+            copy(jsDV, zigDV);
+          }
+        };
       }
-      const address = usize(0x1000);
-      const encoder = new TextEncoder();
-      const array = encoder.encode('Hello world\n');
-      const dv = env.obtainZigView(address, array.length, false);
-      for (let i = 0; i < array.length; i++) dv.setUint8(i, array[i]);
+      const iovsAddress = usize(0x1000);
+      const stringAddress = usize(0x2000);
+      const writtenAddress = usize(0x3000);
+      const text = 'Hello world\n';
+      const string = new TextEncoder().encode(text);
+      const stringDV = env.obtainZigView(stringAddress, string.length)
+      for (let i = 0; i < string.length; i++) {
+        stringDV.setUint8(i, string[i]);
+      }
+      const iovsDV = env.obtainZigView(iovsAddress, usizeByteSize * 4, false);
+      const stringLen = usize(string.length);
+      const set = (usizeByteSize === 8) ? iovsDV.setBigUint64 : iovsDV.setUint32;
+      const le = env.littleEndian;
+      set.call(iovsDV, usizeByteSize * 0, stringAddress, le);
+      set.call(iovsDV, usizeByteSize * 1, stringLen, le);
       let event;
       env.addListener('log', (evt) => event = evt);
-      env.writeBytes(1, address, dv.byteLength);
+      env.fdWrite(1, iovsAddress, 1, writtenAddress);
       expect(event).to.eql({ handle: 1, message: 'Hello world' });
     })
   })
@@ -364,13 +388,11 @@ describe('Feature: baseline', function() {
     })
     it('should allow redirection of console output', async function() {
       const env = new Env();
-      const address = usize(0x1000);
-      const len = 2;
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
       } else {
         const map = new Map();
-        env.obtainExternBuffer = (address, len) => {
+        env.obtainExternBuffer = function (address, len) {
           let buffer = map.get(address);
           if (!buffer) {
             buffer = new ArrayBuffer(len);
@@ -378,23 +400,40 @@ describe('Feature: baseline', function() {
           }
           return buffer;
         };
+        env.moveExternBytes = function(jsDV, address, to) {
+          if (to) {
+            map.set(address, jsDV.buffer);
+          } else {
+            const len = Number(jsDV.byteLength);
+            if (!(jsDV instanceof DataView)) {
+              jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+            }
+            const zigDV = this.obtainZigView(address, len);
+            const copy = this.getCopyFunction(len);
+            copy(jsDV, zigDV);
+          }
+        };
       }
-      const dv = env.obtainZigView(address, len, false);
-      dv.setUint8(0, '?'.charCodeAt(0));
-      dv.setUint8(1, '\n'.charCodeAt(0));
-      const [ before ] = await capture(() => env.writeBytes(1, address, len));
-      expect(before).to.equal('?');
+      const iovsAddress = usize(0x1000);
+      const stringAddress = usize(0x2000);
+      const writtenAddress = usize(0x3000);
+      const text = 'Hello world\n';
+      const string = new TextEncoder().encode(text);
+      const stringDV = env.obtainZigView(stringAddress, string.length)
+      for (let i = 0; i < string.length; i++) {
+        stringDV.setUint8(i, string[i]);
+      }
+      const iovsDV = env.obtainZigView(iovsAddress, usizeByteSize * 4, false);
+      const stringLen = usize(string.length);
+      const set = (usizeByteSize === 8) ? iovsDV.setBigUint64 : iovsDV.setUint32;
+      const le = env.littleEndian;
+      set.call(iovsDV, usizeByteSize * 0, stringAddress, le);
+      set.call(iovsDV, usizeByteSize * 1, stringLen, le);
       const object = env.getSpecialExports();
-      const chunks = [];
-      const original = object.redirect(1, chunks);
-      const [ after ] = await capture(() => env.writeBytes(1, address, len));
-      expect(after).to.be.undefined;
-      expect(chunks).to.have.lengthOf(1);
-      object.redirect(1, original);
       let event;
       object.on('log', (evt) => event = evt);
-      env.writeBytes(1, address, len);
-      expect(event).to.eql({ handle: 1, message: '?' });
+      env.fdWrite(1, iovsAddress, 1, writtenAddress);
+      expect(event).to.eql({ handle: 1, message: 'Hello world' });
     })
     it('should provide functions for obtaining type info', async function() {
       const env = new Env();

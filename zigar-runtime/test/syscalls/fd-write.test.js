@@ -2,40 +2,73 @@ import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { capture, captureError } from '../test-utils.js';
+import { usizeByteSize } from '../../src/utils.js';
+import { capture, captureError, delay, usize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
 describe('Syscall: fd-write', function() {
   it('should write to console', async function() {
     const env = new Env();
-    const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-    const bufferAddress = 16;
-    const stringAddress = 64;
-    const writtenAddress = 128;
-    const dv = new DataView(memory.buffer);
-    const text = 'ABC\n';
-    for (let i = 0; i < text.length; i++) {
-      dv.setUint8(stringAddress + i, text.charCodeAt(i));
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function (address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        if (to) {
+          map.set(address, jsDV.buffer);
+        } else {
+          const len = Number(jsDV.byteLength);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const zigDV = this.obtainZigView(address, len);
+          const copy = this.getCopyFunction(len);
+          copy(jsDV, zigDV);
+        }
+      };
     }
-    dv.setUint32(bufferAddress, stringAddress, true);
-    dv.setUint32(bufferAddress + 4, text.length, true);
-    dv.setUint32(bufferAddress + 8, stringAddress, true);
-    dv.setUint32(bufferAddress + 12, text.length, true);
+    const iovsAddress = usize(0x1000);
+    const stringAddress = usize(0x2000);
+    const writtenAddress = usize(0x3000);
+    const text = 'ABCDEFG\n'
+    const string = new TextEncoder().encode(text);
+    const stringDV = env.obtainZigView(stringAddress, string.length)
+    for (let i = 0; i < string.length; i++) {
+      stringDV.setUint8(i, string[i]);
+    }
+    const iovsDV = env.obtainZigView(iovsAddress, usizeByteSize * 4, false);
+    const stringLen = usize(string.length);
+    const set = (usizeByteSize === 8) ? iovsDV.setBigUint64 : iovsDV.setUint32;
+    const le = env.littleEndian;
+    set.call(iovsDV, usizeByteSize * 0, stringAddress, le);
+    set.call(iovsDV, usizeByteSize * 1, stringLen, le);
+    set.call(iovsDV, usizeByteSize * 2, stringAddress, le);
+    set.call(iovsDV, usizeByteSize * 3, stringLen, le);
     let result;
     const [ line1, line2 ] = await capture(() => {
-      result = env.fdWrite(1, bufferAddress, 2, writtenAddress);
+      result = env.fdWrite(1, iovsAddress, 2, writtenAddress);
     });
     expect(result).to.equal(PosixError.NONE);
     expect(line1).to.equal(text.trim());
     expect(line2).to.equal(text.trim());
-    const written = dv.getUint32(writtenAddress, true);
-    expect(written).to.equal(8);
+    const writtenDV = env.obtainZigView(writtenAddress, usizeByteSize);
+    const get = (usizeByteSize === 8) ? writtenDV.getBigUint64 : writtenDV.getUint32;
+    const written = get.call(writtenDV, 0, le);
+    expect(written).to.equal(stringLen + stringLen);
   })
   it('should write to console when call to fd_write is directed at stderr', async function() {
     const env = new Env();
     const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-    const bufferAddress = 16;
+    const iovsAddress = 16;
     const stringAddress = 64;
     const writtenAddress = 128;
     const dv = new DataView(memory.buffer);
@@ -43,11 +76,11 @@ describe('Syscall: fd-write', function() {
     for (let i = 0; i < text.length; i++) {
       dv.setUint8(stringAddress + i, text.charCodeAt(i));
     }
-    dv.setUint32(bufferAddress, stringAddress, true);
-    dv.setUint32(bufferAddress + 4, text.length, true);
+    dv.setUint32(iovsAddress, stringAddress, true);
+    dv.setUint32(iovsAddress + 4, text.length, true);
     let result;
     const [ line ] = await capture(() => {
-      result = env.fdWrite(2, bufferAddress, 1, writtenAddress);
+      result = env.fdWrite(2, iovsAddress, 1, writtenAddress);
     });
     expect(result).to.equal(PosixError.NONE);
     expect(line).to.equal(text.trim());
@@ -58,7 +91,7 @@ describe('Syscall: fd-write', function() {
     const env = new Env();
     const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
     const f = env.getWASIHandler('fd_write');
-    const bufferAddress = 16;
+    const iovsAddress = 16;
     const stringAddress = 64;
     const writtenAddress = 128;
     const dv = new DataView(memory.buffer);
@@ -66,12 +99,12 @@ describe('Syscall: fd-write', function() {
     for (let i = 0; i < text.length; i++) {
       dv.setUint8(stringAddress + i, text.charCodeAt(i));
     }
-    dv.setUint32(bufferAddress, stringAddress, true);
-    dv.setUint32(bufferAddress + 4, text.length, true);
+    dv.setUint32(iovsAddress, stringAddress, true);
+    dv.setUint32(iovsAddress + 4, text.length, true);
     let result;
     const [ line ] = await capture(async () => {
       const [ error ] = await captureError(async () => {
-        result = f(5, bufferAddress, 1, writtenAddress);
+        result = f(5, iovsAddress, 1, writtenAddress);
       })
     });
     expect(result).to.equal(PosixError.EBADF);
@@ -82,7 +115,7 @@ describe('Syscall: fd-write', function() {
       const env = new Env();
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       const f = env.getWASIHandler('fd_write');
-      const bufferAddress = 16;
+      const iovsAddress = 16;
       const stringAddress = 64;
       const writtenAddress = 128;
       const dv = new DataView(memory.buffer);
@@ -90,13 +123,13 @@ describe('Syscall: fd-write', function() {
       for (let i = 0; i < text.length; i++) {
         dv.setUint8(stringAddress + i, text.charCodeAt(i));
       }
-      dv.setUint32(bufferAddress, stringAddress, true);
-      dv.setUint32(bufferAddress + 4, text.length, true);
-      dv.setUint32(bufferAddress + 8, stringAddress, true);
-      dv.setUint32(bufferAddress + 12, text.length, true);
+      dv.setUint32(iovsAddress, stringAddress, true);
+      dv.setUint32(iovsAddress + 4, text.length, true);
+      dv.setUint32(iovsAddress + 8, stringAddress, true);
+      dv.setUint32(iovsAddress + 12, text.length, true);
       let result;
       const [ line1, line2 ] = await capture(() => {
-        result = f(1, bufferAddress, 2, writtenAddress);
+        result = f(1, iovsAddress, 2, writtenAddress);
       });
       expect(result).to.equal(PosixError.NONE);
       expect(line1).to.equal(text.trim());

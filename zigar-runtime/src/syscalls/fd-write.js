@@ -7,7 +7,8 @@ import './usize-copy.js';
 export default mixin({
   fdWrite(fd, iovsAddress, iovsCount, writtenAddress, canWait) {
     const iovsSize = usizeByteSize * 2;
-    let iovs, writer, written = 0, i = 0;
+    let iovs, writer, i = 0;
+    let written = (process.env.BITS === 64) ? 0n : 0;
     const next = () => {
       return catchPosixError(canWait, PosixError.EIO, () => {
         if (!iovs) {
@@ -15,8 +16,13 @@ export default mixin({
           this.moveExternBytes(iovs, iovsAddress, false);
           writer = this.getStream(fd, 'write');
         }
-        const ptr = iovs.getUint32(i * iovsSize, true);
-        const len = iovs.getUint32(i * iovsSize + 4, true);
+        const le = this.littleEndian;
+        const ptr = (process.env.BITS == 64) 
+                  ? iovs.getBigUint64(i * iovsSize, le) 
+                  : iovs.getUint32(i * iovsSize, le);
+        const len = (process.env.BITS == 64) 
+                  ? Number(iovs.getBigUint64(i * iovsSize + 8, le))
+                  : iovs.getUint32(i * iovsSize + 4, le);
         const chunk = new Uint8Array(len);
         this.moveExternBytes(chunk, ptr, false);
         written += len;

@@ -150,7 +150,7 @@ export function findSortedIndex(array, value, cb) {
   return high;
 }
 
-export const isMisaligned = (process.env.BITS === '64')
+export const isMisaligned = (process.env.BITS == 64)
 ? function(address, align) {
     return (align) ? !!(address & BigInt(align - 1)) : false;
   }
@@ -159,7 +159,7 @@ export const isMisaligned = (process.env.BITS === '64')
   }
 ;
 
-export const alignForward = (process.env.BITS === '64')
+export const alignForward = (process.env.BITS == 64)
 ? function(address, align) {
     return (address + BigInt(align - 1)) & ~BigInt(align - 1);
   }
@@ -168,11 +168,11 @@ export const alignForward = (process.env.BITS === '64')
   }
 ;
 
-export const usizeMin = (process.env.BITS === '64') ? 0n : 0;
-export const usizeMax = (process.env.BITS === '64') ? 0xFFFF_FFFF_FFFF_FFFFn : 0xFFFF_FFFF;
-export const usizeInvalid = (process.env.BITS === '64') ? -1n : -1;
+export const usizeMin = (process.env.BITS == 64) ? 0n : 0;
+export const usizeMax = (process.env.BITS == 64) ? 0xFFFF_FFFF_FFFF_FFFFn : 0xFFFF_FFFF;
+export const usizeInvalid = (process.env.BITS == 64) ? -1n : -1;
 
-export const usize = (process.env.BITS === '64')
+export const usize = (process.env.BITS == 64)
 ? function(arg) {
     return BigInt(arg);
   }
@@ -181,9 +181,9 @@ export const usize = (process.env.BITS === '64')
   }
 ;
 
-export const usizeByteSize = (process.env.BITS === '64') ? 8 : 4;
+export const usizeByteSize = (process.env.BITS == 64) ? 8 : 4;
 
-export const isInvalidAddress = (process.env.BITS === '64')
+export const isInvalidAddress = (process.env.BITS == 64)
 ? function(address) {
     return address === 0xaaaa_aaaa_aaaa_aaaan;
   }
@@ -194,7 +194,7 @@ export const isInvalidAddress = (process.env.BITS === '64')
   /* c8 ignore next */
 : undefined;
 
-export const adjustAddress = (process.env.BITS === '64')
+export const adjustAddress = (process.env.BITS == 64)
 ? function(address, addend) {
     return address + BigInt(addend);
   }
