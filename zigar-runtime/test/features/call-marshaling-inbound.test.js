@@ -1920,7 +1920,7 @@ describe('Feature: call-marshaling-inbound', function() {
       expect(result).to.equal(PosixError.EFAULT);
       expect(line).to.contain('Boo!');
     })
-    it('should call finalizeAsyncCall when async function fulfills promise', async function() {
+    it('should return code indicating deadlock when waiting is not possible', async function() {
       const env = new Env();
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -1988,171 +1988,10 @@ describe('Feature: call-marshaling-inbound', function() {
       const argStruct = ArgStruct(dv);
       argStruct[0] = 123;
       argStruct[1] = 456;
-      let called = false, futexHandle, result;
-      env.finalizeAsyncCall = (...args) => {
-        called = true;
-        futexHandle = args[0];
-        result = args[1];
-      };
-      env.handleJsCall(funcId, address, len, 0x1234);
-      await delay(100);
-      expect(called).to.be.true;
-      expect(futexHandle).to.equal(0x1234);
-      expect(result).to.equal(PosixError.NONE);
-      expect(argStruct.retval).to.equal(123 + 456);
-    })
-    it('should pass failure code to finalizeAsyncCall when async function rejects', async function() {
-      const env = new Env();
-      const intStructure = env.beginStructure({
-        type: StructureType.Primitive,
-        name: 'Int32',
-        byteSize: 4,
-        flags: StructureFlag.HasValue,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
-      env.endStructure(intStructure);
-      const structure = env.beginStructure({
-        type: StructureType.ArgStruct,
-        byteSize: 4 * 3,
-        length: 2,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '0',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '1',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 64,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const ArgStruct = env.defineStructure(structure);
-      env.endStructure(structure);
-      const fn = async (arg1, arg2) => {
-        await delay(50);
-        throw new Error('Boo!');
-      };
-      env.createInboundCaller(fn, ArgStruct)
-      const funcId = env.getFunctionId(fn);
-      const len = ArgStruct[SIZE];
-      if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 128 });
-      } else {
-        const buffer = new ArrayBuffer(len);
-        env.obtainExternBuffer = function(address, len) {
-          return buffer;
-        };
-      }
-      const address = usize(0x1000);
-      const dv = env.obtainZigView(address, len);
-      const argStruct = ArgStruct(dv);
-      argStruct[0] = 123;
-      argStruct[1] = 456;
-      let called = false, futexHandle, result;
-      env.finalizeAsyncCall = (...args) => {
-        called = true;
-        futexHandle = args[0];
-        result = args[1];
-      };
-      await captureError(async () => {
-        env.handleJsCall(funcId, address, len, 0x1234);
-        await delay(100);
-      });
-      expect(called).to.be.true;
-      expect(futexHandle).to.equal(0x1234);
-      expect(result).to.equal(PosixError.EFAULT);
-    })
-    it('should return code indicating deadlock when no futex is given', function() {
-      const env = new Env();
-      const intStructure = env.beginStructure({
-        type: StructureType.Primitive,
-        name: 'Int32',
-        byteSize: 4,
-        flags: StructureFlag.HasValue,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
-      env.endStructure(intStructure);
-      const structure = env.beginStructure({
-        type: StructureType.ArgStruct,
-        byteSize: 4 * 3,
-        length: 2,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '0',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '1',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 64,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const ArgStruct = env.defineStructure(structure);
-      env.endStructure(structure);
-      const fn = async (arg1, arg2) => {
-        await delay(50);
-        return arg1 + arg2;
-      };
-      env.createInboundCaller(fn, ArgStruct)
-      const funcId = env.getFunctionId(fn);
-      const len = ArgStruct[SIZE];
-      if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 128 });
-      } else {
-        const buffer = new ArrayBuffer(len);
-        env.obtainExternBuffer = function(address, len) {
-          return buffer;
-        };
-      }
-      const address = usize(0x1000);
-      const dv = env.obtainZigView(address, len);
-      const argStruct = ArgStruct(dv);
-      argStruct[0] = 123;
-      argStruct[1] = 456;
-      const result = env.handleJsCall(funcId, address, len, 0);
-      expect(result).to.equal(PosixError.EDEADLK);
+      const [ error ] = await captureError(() => {
+        const result = env.handleJsCall(funcId, address, len);
+        expect(result).to.equal(PosixError.EDEADLK);
+      })
     })
   })
   describe('releaseFunction', function() {

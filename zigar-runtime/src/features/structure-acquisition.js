@@ -10,8 +10,21 @@ import {
 import { mixin } from '../environment.js';
 import callMarshalingInbound from '../features/call-marshaling-inbound.js';
 import callMarshalingOutbound from '../features/call-marshaling-outbound.js';
+import dirConversion from '../features/dir-conversion.js';
+import moduleLoading from '../features/module-loading.js';
 import pointerSynchronization from '../features/pointer-synchronization.js';
+import readerConversion from '../features/reader-conversion.js';
 import thunkAllocation from '../features/thunk-allocation.js';
+import writerConversion from '../features/writer-conversion.js';
+import abortSignal from '../structures/abort-signal.js';
+import allocator from '../structures/allocator.js';
+import dir from '../structures/dir.js';
+import file from '../structures/file.js';
+import generator from '../structures/generator.js';
+import promise from '../structures/promise.js';
+import reader from '../structures/reader.js';
+import writer from '../structures/writer.js';
+import environGet from '../syscalls/environ-get.js';
 import environSizesGet from '../syscalls/environ-sizes-get.js';
 import fdAdvise from '../syscalls/fd-advise.js';
 import fdAllocate from '../syscalls/fd-allocate.js';
@@ -20,6 +33,7 @@ import fdDatasync from '../syscalls/fd-datasync.js';
 import fdFdstatGet from '../syscalls/fd-fdstat-get.js';
 import fdFilestatGet from '../syscalls/fd-filestat-get.js';
 import fdFileStatSetTimes from '../syscalls/fd-filestat-set-times.js';
+import fdPrestatDirName from '../syscalls/fd-prestat-dir-name.js';
 import fdPrestatGet from '../syscalls/fd-prestat-get.js';
 import fdRead from '../syscalls/fd-read.js';
 import fdReaddir from '../syscalls/fd-readdir.js';
@@ -28,6 +42,9 @@ import fdSync from '../syscalls/fd-sync.js';
 import fdTell from '../syscalls/fd-tell.js';
 import fdWrite from '../syscalls/fd-write.js';
 import pathCreateDirectory from '../syscalls/path-create-directory.js';
+import pathFilestatGet from '../syscalls/path-filestat-get.js';
+import pathFilestatSetTimes from '../syscalls/path-filestat-set-times.js';
+import pathOpen from '../syscalls/path-open.js';
 import pathRemoveDirectory from '../syscalls/path-remove-directory.js';
 import pathUnlinkFile from '../syscalls/path-unlink-file.js';
 import procExit from '../syscalls/proc-exit.js';
@@ -38,6 +55,7 @@ import dataCopying from './data-copying.js';
 import objectLinkage from './object-linkage.js';
 import streamLocation from './stream-location.js';
 import streamRedirection from './stream-redirection.js';
+import wasiSupport from './wasi-support.js';
 import workerSupport from './worker-support.js';
 
 export default mixin({
@@ -241,58 +259,43 @@ export default mixin({
         }
       }
       for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
-        this.use(wasiAll);
+        this.use(wasiSupport);
         switch (name) {
-          case 'environ_get':
+          case 'environ_get': this.use(environGet); break;
           case 'environ_sizes_get': this.use(environSizesGet); break;
           case 'fd_advise': this.use(fdAdvise); break;
           case 'fd_allocate': this.use(fdAllocate); break;
           case 'fd_close': this.use(fdClose); break;
           case 'fd_datasync': this.use(fdDatasync); break;
           case 'fd_fdstat_get': this.use(fdFdstatGet); break;
-          case 'fd_filestat_get':
-          case 'path_filestat_get': this.use(fdFilestatGet); break;
-          case 'fd_filestat_set_times':
-          case 'path_filestat_set_times': this.use(fdFileStatSetTimes); break;
-          case 'fd_prestat_get':
-          case 'fd_prestat_dir_name': this.use(fdPrestatGet); break;
-          case 'fd_sync': this.use(fdSync); break;
+          case 'fd_filestat_get':this.use(fdFilestatGet); break;
+          case 'fd_filestat_set_times': this.use(fdFileStatSetTimes); break;
+          case 'fd_prestat_get': this.use(fdPrestatGet); break;
+          case 'fd_prestat_dir_name': this.use(fdPrestatDirName); break;
           case 'fd_read': this.use(fdRead); break;
           case 'fd_readdir': this.use(fdReaddir); break;
           case 'fd_seek': this.use(fdSeek); break;
+          case 'fd_sync': this.use(fdSync); break;
           case 'fd_tell': this.use(fdTell); break;
           case 'fd_write': this.use(fdWrite); break;
           case 'path_create_directory': this.use(pathCreateDirectory); break;
+          case 'path_filestat_get': this.use(pathFilestatGet); break;
           case 'path_remove_directory': this.use(pathRemoveDirectory); break;
-          case 'path_open': this.use(streamOpen); break;
+          case 'path_filestat_set_times': this.use(pathFilestatSetTimes); break;
+          case 'path_open': 
+            this.use(pathOpen); 
+            this.use(readerConversion);
+            this.use(writerConversion);
+            break;
           case 'path_unlink': this.use(pathUnlinkFile); break;
           case 'proc_exit': this.use(procExit); break;
           case 'random_get': this.use(randomGet); break;
         }
-        if (name.startsWith('path_') || name.includes('filestat')) {
+        if (name.startsWith('path_')) {
           this.use(streamLocation);
         }
-        switch (name) {
-          case 'environ_get':
-          case 'environ_sizes_get':
-            this.use(environSizesGet);
-            break;
-          case 'path_open':
-            this.use(streamConversionReader);
-            this.use(streamConversionWriter);
-            break;
-          case 'fd_close':
-            this.use(streamRedirection);
-            break;
-          case 'fd_seek':
-          case 'fd_tell':
-            this.use(streamRedirection);
-            this.use(streamPosition);
-            break;
-          case 'fd_write':
-          case 'fd_read':
-            this.use(streamRedirection);
-            break;
+        if (name.startsWith('fd_')) {
+          this.use(streamRedirection);
         }
       }
       for (const structure of this.structures) {
@@ -300,35 +303,34 @@ export default mixin({
           for (const { structure: { purpose } } of structure.instance.members) {
             switch (purpose) {
               case StructurePurpose.Allocator:
-                this.use(structAllocator);
+                this.use(allocator);
                 break;
               case StructurePurpose.Promise:
-                this.use(structPromise);
+                this.use(promise);
                 break;
               case StructurePurpose.Generator:
-                this.use(structGenerator);
+                this.use(generator);
                 break;
               case StructurePurpose.AbortSignal:
-                this.use(structAbortSignal);
+                this.use(abortSignal);
                 break;
               case StructurePurpose.Reader:
-                this.use(structReader);
-                this.use(streamConversionReader);
+                this.use(reader);
+                this.use(readerConversion);
                 break;
               case StructurePurpose.Writer:
-                this.use(structWriter);
-                this.use(streamConversionWriter);
+                this.use(writer);
+                this.use(writerConversion);
                 break;
               case StructurePurpose.File:
-                this.use(structFile);
+                this.use(file);
                 this.use(streamRedirection);
-                this.use(streamPosition);
-                this.use(streamConversionReader);
-                this.use(streamConversionWriter);
+                this.use(readerConversion);
+                this.use(writerConversion);
                 break;
               case StructurePurpose.Directory:
-                this.use(structDir);
-                this.use(streamConversionDir);
+                this.use(dir);
+                this.use(dirConversion);
                 this.use(streamRedirection);
                 this.use(streamLocation);
                 break;
@@ -531,20 +533,20 @@ export default mixin({
     },
   } : process.env.TARGET === 'node' ? {
     exports: {
-      captureView: null,
-      castView: null,
-      readSlot: null,
-      writeSlot: null,
-      beginStructure: null,
-      attachMember: null,
-      createTemplate: null,
-      attachTemplate: null,
-      defineStructure: null,
-      endStructure: null,
+      captureView: {},
+      castView: {},
+      readSlot: {},
+      writeSlot: {},
+      beginStructure: {},
+      attachMember: {},
+      createTemplate: {},
+      attachTemplate: {},
+      defineStructure: {},
+      endStructure: {},
     },
     imports: {
-      getFactoryThunk: null,
-      getModuleAttributes: null,
+      getFactoryThunk: {},
+      getModuleAttributes: {},
     },
     /* c8 ignore next */
   } : undefined),

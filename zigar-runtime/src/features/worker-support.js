@@ -29,6 +29,7 @@ export default mixin({
       if (msg.type === 'call') {
         const { module, name, args, array } = msg;        
         const fn = this.exportedModules[module]?.[name];
+        // add a true argument to indicate that waiting is possible
         const result = fn?.(...args, true);
         const finish = (value) => {
           if (array) {
@@ -152,21 +153,13 @@ function workerMain() {
   }
 
   function createRouter(module, name) {
-    if (name === '_handleJsCall') {
-      // waiting occurs in on Zig side
-      return function(...args) {
-        postMessage({ type: 'call', module, name, args });
-        return 0;
-      };
-    } else {
-      const array = new Int32Array(new SharedArrayBuffer(8));
-      return function(...args) {
-        array[0] = 0;
-        postMessage({ type: 'call', module, name, args, array });
-        Atomics.wait(array, 0, 0);
-        return array[1];
-      };
-    }
+    const array = new Int32Array(new SharedArrayBuffer(8));
+    return function(...args) {
+      array[0] = 0;
+      postMessage({ type: 'call', module, name, args, array });
+      Atomics.wait(array, 0, 0);
+      return array[1];
+    };
   }
 }
 /* c8 ignore end */

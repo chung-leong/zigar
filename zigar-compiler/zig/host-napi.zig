@@ -237,7 +237,7 @@ pub fn createMessage(err: anyerror) ?Value {
 pub fn handleJsCall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
     const md: *ModuleData = @ptrCast(ptr);
     const in_main_thread = main_thread != null;
-    const call: JsCall = .{
+    var call: JsCall = .{
         .fn_id = fn_id,
         .arg_address = @intFromPtr(arg_ptr),
         .arg_size = arg_size,

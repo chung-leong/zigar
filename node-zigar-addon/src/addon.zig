@@ -57,17 +57,23 @@ const ModuleHost = struct {
 
     fn createEnvironment(env: Env) !Value {
         // compile embedded JavaScript
+        std.debug.print("compileJavaScript\n", .{});
         const js_module = try compileJavaScript(env);
         // look for the Environment class
+        std.debug.print("getNamedProperty\n", .{});
         const create_env = try env.getNamedProperty(js_module, "createEnvironment");
         // create the environment
+        std.debug.print("callFunction\n", .{});
         const js_env = try env.callFunction(try env.getNull(), create_env, &.{});
+        std.debug.print("createSelf\n", .{});
         const self = try createSelf(env);
         defer self.release();
         // import functions from the environment
+        std.debug.print("importFunctionsFromJavaScript\n", .{});
         try self.importFunctionsFromJavaScript(js_env);
         // export functions to it; exported functions will keep self alive until they're all
         // garbage collected
+        std.debug.print("exportFunctionsToJavaScript\n", .{});
         try self.exportFunctionsToJavaScript(js_env);
         return js_env;
     }
@@ -134,6 +140,7 @@ const ModuleHost = struct {
         const exports = try env.callFunction(js_env, export_fn, &.{});
         inline for (comptime std.meta.fields(@FieldType(@This(), "js"))) |field| {
             const name = camelize(field.name);
+            std.debug.print("importing: {s}\n", .{name});
             const func = try env.getNamedProperty(exports, name);
             @field(self.js, field.name) = try env.createReference(func, 1);
         }
@@ -277,14 +284,14 @@ const ModuleHost = struct {
 
     fn moveExternBytes(self: *@This(), view: Value, address: Value, to: Value) !void {
         const env = self.env;
-        const len, const js_opaque, _, _ = try env.getDataviewInfo(view) catch ta: {
+        const len, const js_opaque, _, _ = env.getDataviewInfo(view) catch ta: {
             _, const len, const ptr, const ab, const offset = try env.getTypedarrayInfo(view);
             break :ta .{ len, ptr, ab, offset };
         };
         if (len > 0) {
             const zig_bytes: [*]u8 = @ptrFromInt(try env.getValueUsize(address));
             const js_bytes: [*]u8 = @ptrCast(js_opaque);
-            const zig_to_js = try env.getBoolean(to);
+            const zig_to_js = try env.getValueBool(to);
             const src = if (zig_to_js) zig_bytes else js_bytes;
             const dst = if (zig_to_js) js_bytes else zig_bytes;
             @memcpy(dst[0..len], src[0..len]);

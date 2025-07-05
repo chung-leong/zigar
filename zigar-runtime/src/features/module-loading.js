@@ -167,22 +167,50 @@ export default mixin({
     },
   } : process.env.TARGET === 'node' ? {
     imports: {
-      loadModule: null,
+      loadModule: {},
     },
 
     exportFunctions() {
       const imports = {};
-      for (const [ name, alias ] of Object.entries(this.exports)) {
-        const fn = this[alias ?? name];
+      for (const [ name, attributes ] of Object.entries(this.exports)) {
+        const { 
+          alias: jsFnName = name, 
+          async: canReturnPromise = false,
+        } = attributes;
+        const fn = this[jsFnName];
         if (fn) {
+          if (canReturnPromise) {
+            fn = this.addPromiseHandling(fn);
+          }
           imports[name] = fn.bind(this);
         }
       }
       return imports;
     },
+    addPromiseHandling(fn) {
+      const { length } = fn;
+      return function(...args) {
+        if (args.length === length) {
+          const futexHandle = args[length - 1];
+          // replace futex handle with canWait = true in the argument list
+          args[length - 1] = true;
+          const result = fn(...args);
+          if (isPromise(result)) {
+            result.then(r => this.finalizeAsyncCall(futexHandle, r));
+          } else {
+            return result;
+          }
+        } else {
+          return fn(...args);
+        }
+      }
+    },
     importFunctions(exports) {
-      for (const [ name, alias ] of Object.entries(this.imports)) {
-        const fn = exports[alias ?? /* c8 ignore next */ name];
+      for (const [ name, attributes ] of Object.entries(this.imports)) {
+        const { 
+          alias: nativeFnName = name, 
+        } = attributes;
+        const fn = exports[nativeFnName];
         if (fn) {
           defineProperty(this, name, defineValue(fn));
           this.destructors.push(() => this[name] = throwError);

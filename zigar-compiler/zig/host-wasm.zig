@@ -44,7 +44,7 @@ extern fn _endStructure(structure: Value) void;
 extern fn _createTemplate(buffer: ?Value) ?Value;
 extern fn _allocateJsThunk(controller_id: usize, fn_id: usize) usize;
 extern fn _freeJsThunk(controller_id: usize, thunk_address: usize) usize;
-extern fn _handleJsCall(id: usize, arg_ptr: ?*anyopaque, arg_size: usize, futex_handle: usize) E;
+extern fn _handleJsCall(id: usize, arg_ptr: ?*anyopaque, arg_size: usize) E;
 extern fn _releaseFunction(id: usize) void;
 extern fn _displayPanic(bytes: ?[*]const u8, len: usize) void;
 
@@ -142,26 +142,6 @@ export fn flushStdout() void {
             @cInclude("stdio.h");
         });
         _ = c.fflush(c.stdout);
-    }
-}
-
-const Futex = struct {
-    value: std.atomic.Value(u32),
-    handle: usize = undefined,
-};
-
-fn finalizeAsyncCall(futex_handle: usize, value: u32) callconv(.C) void {
-    // make sure futex address is valid
-    const ptr: *Futex = @ptrFromInt(futex_handle);
-    if (ptr.handle == futex_handle) {
-        ptr.value.store(value, .release);
-        std.Thread.Futex.wake(&ptr.value, 1);
-    }
-}
-
-comptime {
-    if (!builtin.single_threaded) {
-        @export(&finalizeAsyncCall, .{ .name = "finalizeAsyncCall", .linkage = .weak });
     }
 }
 
@@ -297,24 +277,7 @@ pub fn createMessage(err: anyerror) ?Value {
 }
 
 pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
-    const initial_value = 0xffff_ffff;
-    var futex: Futex = undefined;
-    const futex_handle = switch (in_main_thread) {
-        true => 0,
-        false => init: {
-            futex.value = std.atomic.Value(u32).init(initial_value);
-            futex.handle = @intFromPtr(&futex);
-            break :init futex.handle;
-        },
-    };
-    var result = _handleJsCall(fn_id, arg_ptr, arg_size, futex_handle);
-    if (!in_main_thread and result == .SUCCESS) {
-        if (comptime builtin.single_threaded) unreachable;
-        // inlining of wait() causes problem in ReleaseFast when target is WASM
-        @call(.never_inline, std.Thread.Futex.wait, .{ &futex.value, initial_value });
-        result = @enumFromInt(futex.value.load(.acquire));
-    }
-    return result;
+    return _handleJsCall(fn_id, arg_ptr, arg_size);
 }
 
 pub fn releaseFunction(fn_ptr: anytype) void {

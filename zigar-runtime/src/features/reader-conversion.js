@@ -35,8 +35,15 @@ class WebStreamReader {
   async read(len) {
     // keep reading until there's enough bytes to cover the request length
     while ((!this.bytes || this.bytes.length < len) && !this.done) {
-      const { value } = await this.reader.read();
+      let { value } = await this.reader.read();
       if (value) {
+        if (!(value instanceof Uint8Array)) {
+          if (value instanceof ArrayBuffer) {
+            value = new Uint8Array(value);
+          } else if (value.buffer instanceof ArrayBuffer) {
+            value = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+          }
+        }
         if (!this.bytes) {
           this.bytes = value;
         } else {

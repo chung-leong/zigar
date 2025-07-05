@@ -273,11 +273,11 @@ export default mixin({
     },
   } : process.env.TARGET === 'node' ? {
     imports: {
-      getBufferAddress: null,
-      obtainExternBuffer: null,
+      getBufferAddress: {},
+      obtainExternBuffer: {},
     },
     exports: {
-      getViewAddress: null,
+      getViewAddress: {},
     },
 
     allocateShadowMemory(len, align) {

@@ -544,15 +544,8 @@ export function deanimalizeErrorName(name) {
 
 export function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
   const fail = (err) => {
-    const result = (reject) ? reject() : console.error(err);
-    let { code } = err;
-    if (process.env.TARGET === 'wasm') {
-      // EDEADLK is usually not expected
-      if (code === PosixError.EDEADLK) {
-        code = PosixError.ENOTSUP;
-      }
-    }
-    return result ?? code ?? defErrorCode;
+    const result = (reject) ? reject(err) : console.error(err);
+    return result ?? err.code ?? defErrorCode;
   };
   const done = (value) => {
     const result = resolve?.(value);
@@ -564,7 +557,7 @@ export function catchPosixError(canWait = false, defErrorCode, run, resolve, rej
       if (!canWait) {
         throw new Deadlock();
       }
-      return result.then(done, fail);
+      return result.then(done).catch(fail);
     } else {
       return done(result);
     }
