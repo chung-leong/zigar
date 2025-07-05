@@ -1,7 +1,7 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError } from '../errors.js';
-import './stat-copy.js';
+import './copy-stat.js';
 
 export default mixin({
   fdFilestatGet(fd, bufAddress, canWait) {

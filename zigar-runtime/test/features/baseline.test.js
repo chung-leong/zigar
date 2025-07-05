@@ -347,7 +347,7 @@ describe('Feature: baseline', function() {
       let event;
       env.addListener('log', (evt) => event = evt);
       env.fdWrite(1, iovsAddress, 1, writtenAddress);
-      expect(event).to.eql({ handle: 1, message: 'Hello world' });
+      expect(event).to.eql({ source: 'stdout', message: 'Hello world' });
     })
   })
   describe('triggerEvent', function() {
@@ -432,7 +432,7 @@ describe('Feature: baseline', function() {
       let event;
       object.on('log', (evt) => event = evt);
       env.fdWrite(1, iovsAddress, 1, writtenAddress);
-      expect(event).to.eql({ handle: 1, message: 'Hello world' });
+      expect(event).to.eql({ source: 'stdout', message: 'Hello world' });
     })
     it('should provide functions for obtaining type info', async function() {
       const env = new Env();

@@ -2,7 +2,7 @@ import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError } from '../errors.js';
 import { createView, usizeByteSize } from '../utils.js';
-import './usize-copy.js';
+import './copy-usize.js';
 
 export default mixin({
   fdRead(fd, iovsAddress, iovsCount, readAddress, canWait) {

@@ -50,9 +50,9 @@ describe('Syscall: fd-readdir', function() {
     for (let i = 0; i < 4; i++) {
       const result = env.fdReaddir(fd, bufAddress, bufLen, cookie, usedAddress);
       expect(result).to.equal(0);
-      const usedDV = env.obtainZigView(usedAddress, 4);
+      const usedDV = env.obtainZigView(usedAddress, 4, false);
       const used = usedDV.getUint32(0, le);
-      const direntDV = env.obtainZigView(bufAddress, 24);
+      const direntDV = env.obtainZigView(bufAddress, 24, false);
       const len = direntDV.getUint32(16, le);
       switch (i) {
         case 0:
@@ -176,8 +176,7 @@ describe('Syscall: fd-readdir', function() {
   })
   it('should return error code when buffer is too small', async function() {
     const env = new Env();
-    const f = env.getWASIHandler('fd_readdir');
-    const result = f(3, 0x1000, 20, 0n, 0x2000);
+    const result = env.fdReaddir(3, 0x1000, 20, 0n, 0x2000);
     expect(result).to.equal(PosixError.EINVAL);
   })
   if (process.env.TARGET === 'wasm') {

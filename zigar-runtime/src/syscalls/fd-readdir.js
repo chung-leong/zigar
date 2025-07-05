@@ -1,15 +1,16 @@
 import { Descriptor, PosixError, PosixFileType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, InvalidEnumValue } from '../errors.js';
-import { decodeEnum, encodeText } from '../utils.js';
+import { createView, decodeEnum, encodeText } from '../utils.js';
+import './copy-usize.js';
 
 export default mixin({
   init() {
     this.readdirCookieMap = new Map();
     this.readdirNextCookie = 1n;
   },
-  fdReaddir(fd, buf_address, buf_len, cookie, bufused_address, canWait) {
-    if (buf_len < 24) {
+  fdReaddir(fd, bufAddress, bufLen, cookie, bufusedAddress, canWait) {
+    if (bufLen < 24) {
       return PosixError.EINVAL;
     }
     return catchPosixError(canWait, PosixError.EBADF, () => {
@@ -26,10 +27,9 @@ export default mixin({
       } else {
         context = this.readdirCookieMap.get(cookie);
       }
-      let dv = new DataView(this.memory.buffer);
-      let remaining = buf_len;
-      let p = buf_address;
-      let used;
+      const dv = createView(bufLen);
+      let remaining = bufLen;
+      let p = 0;
       const defaultEntryCount = (fd !== Descriptor.root) ? 2 : 1;
       if (context) {
         let { iterator, entry } = context;
@@ -74,9 +74,9 @@ export default mixin({
           entry = null;
         }
       }
-      used = p - buf_address;
-      dv.setUint32(bufused_address, used, true);
-      if (used === 0) {
+      this.moveExternBytes(dv, bufAddress, true);
+      this.copyUint32(bufusedAddress, p);
+      if (p === 0) {
         this.readdirCookieMap.delete(cookie);
       }
     })

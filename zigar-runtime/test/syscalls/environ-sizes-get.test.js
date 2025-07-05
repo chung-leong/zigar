@@ -62,6 +62,7 @@ describe('Syscall: environ-sizes-get', function() {
         };
       });
       env.memory = new WebAssembly.Memory({ initial: 1 });
+      const le = env.littleEndian;
       const f = env.getWASIHandler('environ_sizes_get');
       const countAddress = 0x1000;
       const sizeAddress = 0x2000;

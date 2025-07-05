@@ -164,28 +164,29 @@ describe('Syscall: fd-write', function() {
     it('should be callable through WASI', async function() {
       const env = new Env();
       env.memory = new WebAssembly.Memory({ initial: 1 });
-      const f = env.getWASIHandler('fd_write');
-      const iovsAddress = 16;
-      const stringAddress = 64;
-      const writtenAddress = 128;
-      const dv = new DataView(memory.buffer);
-      const text = 'ABC\n';
-      for (let i = 0; i < text.length; i++) {
-        dv.setUint8(stringAddress + i, text.charCodeAt(i));
-      }
-      dv.setUint32(iovsAddress, stringAddress, true);
-      dv.setUint32(iovsAddress + 4, text.length, true);
-      dv.setUint32(iovsAddress + 8, stringAddress, true);
-      dv.setUint32(iovsAddress + 12, text.length, true);
+      const iovsAddress = 0x1000;
+      const stringAddress = 0x2000;
+      const writtenAddress = 0x3000;
+      const text = 'ABCDEFG\n'
+      const string = new TextEncoder().encode(text);
+      env.moveExternBytes(string, stringAddress, true);
+      const iovsDV = env.obtainZigView(iovsAddress, 4 * 4, false);
+      const stringLen = string.length;
+      const le = env.littleEndian;
+      iovsDV.setUint32(4 * 0, stringAddress, le);
+      iovsDV.setUint32(4 * 1, stringLen, le);
+      iovsDV.setUint32(4 * 2, stringAddress, le);
+      iovsDV.setUint32(4 * 3, stringLen, le);
       let result;
       const [ line1, line2 ] = await capture(() => {
-        result = f(1, iovsAddress, 2, writtenAddress);
+        result = env.fdWrite(1, iovsAddress, 2, writtenAddress);
       });
       expect(result).to.equal(PosixError.NONE);
       expect(line1).to.equal(text.trim());
       expect(line2).to.equal(text.trim());
-      const written = dv.getUint32(writtenAddress, true);
-      expect(written).to.equal(8);
+      const writtenDV = env.obtainZigView(writtenAddress, 4);
+      const written = writtenDV.getUint32(0, le);
+      expect(written).to.equal(string.length * 2);
     })
   }
   if (process.env.TARGET === 'node') {

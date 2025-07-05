@@ -58,7 +58,6 @@ describe('Syscall: path-remove-directory', function() {
         event = evt;
         return true;
       });
-      env.addListener('rmdir', () => undefined);
       const path = new TextEncoder().encode('/world');
       const pathAddress = usize(0x1000);
       const pathLen = path.length;
