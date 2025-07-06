@@ -190,88 +190,11 @@ describe('Syscall: fd-write', function() {
     })
   }
   if (process.env.TARGET === 'node') {
-    describe('writeBytes', function() {
-      it('should output text to console', async function() {
-        const env = new Env();
-        if (process.env.TARGET === 'wasm') {
-          env.memory = new WebAssembly.Memory({ initial: 1 });
-        } else {
-          const map = new Map();
-          env.obtainExternBuffer = function (address, len) {
-            let buffer = map.get(address);
-            if (!buffer) {
-              buffer = new ArrayBuffer(len);
-              map.set(address, buffer);
-            }
-            return buffer;
-          };
-          env.moveExternBytes = function(jsDV, address, to) {
-            if (to) {
-              map.set(address, jsDV.buffer);
-            } else {
-              const len = Number(jsDV.byteLength);
-              if (!(jsDV instanceof DataView)) {
-                jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
-              }
-              const zigDV = this.obtainZigView(address, len);
-              const copy = this.getCopyFunction(len);
-              copy(jsDV, zigDV);
-            }
-          };
-        }
-        const address = usize(0x1000);
-        const array = new TextEncoder().encode('Hello world\n');
-        const dv = env.obtainZigView(address, array.length, false);
-        for (let i = 0; i < array.length; i++) dv.setUint8(i, array[i]);
-        const lines = await capture(() => env.writeBytes(1, address, dv.byteLength));
-        expect(lines).to.eql([ 'Hello world' ]);
-      })
-      it('should allow addition text to be append to current line', async function() {
-        const env = new Env();
-        if (process.env.TARGET === 'wasm') {
-          env.memory = new WebAssembly.Memory({ initial: 1 });
-        } else {
-          const map = new Map();
-          env.obtainExternBuffer = function (address, len) {
-            let buffer = map.get(address);
-            if (!buffer) {
-              buffer = new ArrayBuffer(len);
-              map.set(address, buffer);
-            }
-            return buffer;
-          };
-          env.moveExternBytes = function(jsDV, address, to) {
-            if (to) {
-              map.set(address, jsDV.buffer);
-            } else {
-              const len = Number(jsDV.byteLength);
-              if (!(jsDV instanceof DataView)) {
-                jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
-              }
-              const zigDV = this.obtainZigView(address, len);
-              const copy = this.getCopyFunction(len);
-              copy(jsDV, zigDV);
-            }
-          };
-        }
-        const address1 = usize(0x1000);
-        const array1 = new TextEncoder().encode('Hello world!');
-        const dv1 = env.obtainZigView(address1, array1.length, false);
-        for (let i = 0; i < array1.length; i++) dv1.setUint8(i, array1[i]);
-        const address2 = usize(0x2000);
-        const array2 = new TextEncoder().encode('\n');
-        const dv2 = env.obtainZigView(address2, array2.length, false);
-        for (let i = 0; i < array2.length; i++) dv2.setUint8(i, array2[i]);
-        const lines = await capture(async () => {
-          env.writeBytes(2, address1, dv1.byteLength);
-          await delay(10);
-          env.writeBytes(2, address2, dv2.byteLength);
-        });
-        expect(lines).to.eql([ 'Hello world!' ]);
-        env.flushStreams();
-      })
-      it('should eventually output text not ending with newline', async function() {
-        const env = new Env();
+    it('should output text to console using a different function', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
         const map = new Map();
         env.obtainExternBuffer = function (address, len) {
           let buffer = map.get(address);
@@ -294,22 +217,97 @@ describe('Syscall: fd-write', function() {
             copy(jsDV, zigDV);
           }
         };
-        const address1 = usize(0x1000);
-        const array1 = new TextEncoder().encode('Hi!\nHello world');
-        const dv1 = env.obtainZigView(address1, array1.length, false);
-        for (let i = 0; i < array1.length; i++) dv1.setUint8(i, array1[i]);
-        const address2 = usize(0x2000);
-        const array2 = new TextEncoder().encode('!');
-        const dv2 = env.obtainZigView(address2, array2.length, false);
-        for (let i = 0; i < array2.length; i++) dv2.setUint8(i, array2[i]);
-        const lines = await capture(async () => {
-          env.writeBytes(1, address1, dv1.byteLength);
-          await delay(10);
-          env.writeBytes(1, address2, dv2.byteLength);
-          await delay(300);
-        });
-        expect(lines).to.eql([ 'Hi!', 'Hello world!' ]);
-      })
+      }
+      const address = usize(0x1000);
+      const array = new TextEncoder().encode('Hello world\n');
+      const dv = env.obtainZigView(address, array.length, false);
+      for (let i = 0; i < array.length; i++) dv.setUint8(i, array[i]);
+      const lines = await capture(() => env.fdWrite1(1, address, dv.byteLength));
+      expect(lines).to.eql([ 'Hello world' ]);
+    })
+    it('should allow addition text to be append to current line', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = function (address, len) {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+        env.moveExternBytes = function(jsDV, address, to) {
+          if (to) {
+            map.set(address, jsDV.buffer);
+          } else {
+            const len = Number(jsDV.byteLength);
+            if (!(jsDV instanceof DataView)) {
+              jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+            }
+            const zigDV = this.obtainZigView(address, len);
+            const copy = this.getCopyFunction(len);
+            copy(jsDV, zigDV);
+          }
+        };
+      }
+      const address1 = usize(0x1000);
+      const array1 = new TextEncoder().encode('Hello world!');
+      const dv1 = env.obtainZigView(address1, array1.length, false);
+      for (let i = 0; i < array1.length; i++) dv1.setUint8(i, array1[i]);
+      const address2 = usize(0x2000);
+      const array2 = new TextEncoder().encode('\n');
+      const dv2 = env.obtainZigView(address2, array2.length, false);
+      for (let i = 0; i < array2.length; i++) dv2.setUint8(i, array2[i]);
+      const lines = await capture(async () => {
+        env.fdWrite1(2, address1, dv1.byteLength);
+        await delay(10);
+        env.fdWrite1(2, address2, dv2.byteLength);
+      });
+      expect(lines).to.eql([ 'Hello world!' ]);
+      env.flushStreams();
+    })
+    it('should eventually output text not ending with newline', async function() {
+      const env = new Env();
+      const map = new Map();
+      env.obtainExternBuffer = function (address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        if (to) {
+          map.set(address, jsDV.buffer);
+        } else {
+          const len = Number(jsDV.byteLength);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const zigDV = this.obtainZigView(address, len);
+          const copy = this.getCopyFunction(len);
+          copy(jsDV, zigDV);
+        }
+      };
+      const address1 = usize(0x1000);
+      const array1 = new TextEncoder().encode('Hi!\nHello world');
+      const dv1 = env.obtainZigView(address1, array1.length, false);
+      for (let i = 0; i < array1.length; i++) dv1.setUint8(i, array1[i]);
+      const address2 = usize(0x2000);
+      const array2 = new TextEncoder().encode('!');
+      const dv2 = env.obtainZigView(address2, array2.length, false);
+      for (let i = 0; i < array2.length; i++) dv2.setUint8(i, array2[i]);
+      const lines = await capture(async () => {
+        env.fdWrite1(1, address1, dv1.byteLength);
+        await delay(10);
+        env.fdWrite1(1, address2, dv2.byteLength);
+        await delay(300);
+      });
+      expect(lines).to.eql([ 'Hi!', 'Hello world!' ]);
     })
   }
 })

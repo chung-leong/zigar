@@ -2,7 +2,7 @@ import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError } from '../errors.js';
 import { decodeFlags } from '../utils.js';
-import './stat-copy.js';
+import './copy-stat.js';
 
 const LookupFlag = {
   symlinkFollow: 1 << 0,

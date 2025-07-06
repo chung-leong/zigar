@@ -7,9 +7,10 @@ typedef enum {
 } syscall_command;
 
 typedef struct {
-    size_t fd;
+    uint32_t fd;
     const unsigned char *bytes;
     size_t len;
+    size_t written;
 } syscall_write;
 
 typedef union  {

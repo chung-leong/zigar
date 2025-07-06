@@ -1,17 +1,27 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
-import { usize } from '../utils.js';
-import './usize-copy.js';
+import { createView, usizeByteSize } from '../utils.js';
 
 var environGet = mixin({
   environGet(environAddress, environBufAddress) {
-    let p = environAddress, b = environBufAddress;
+    let size = 0, count = 0;
     for (const array of this.envVariables) {
-      this.copyUsize(p, b);
-      this.moveExternBytes(array, b, true);
-      b += usize(array.length);
-      p += usize(4);
+      size += array.length;
+      count++;
     }
+    const ptrDV = createView(usizeByteSize * count);
+    const bytes = new Uint8Array(size);
+    let p = 0, b = 0, le = this.littleEndian;
+    for (const array of this.envVariables) {
+      {
+        ptrDV.setUint32(p, environBufAddress + b, le);
+        p += 4;
+      }
+      bytes.set(array, b);
+      b += array.length;
+    }
+    this.moveExternBytes(ptrDV, environAddress, true);
+    this.moveExternBytes(bytes, environBufAddress, true);
     return PosixError.NONE;
   },
 });

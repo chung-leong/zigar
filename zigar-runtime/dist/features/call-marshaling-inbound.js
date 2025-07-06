@@ -1,7 +1,7 @@
 import { PosixError, StructureType, StructurePurpose, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { UnexpectedGenerator } from '../errors.js';
-import { MEMORY, ZIG, ALLOCATOR, VISIT, THROWING, RETURN, YIELD } from '../symbols.js';
+import { catchPosixError, UnexpectedGenerator } from '../errors.js';
+import { MEMORY, ZIG, ALLOCATOR, VISIT, RETURN, YIELD, THROWING } from '../symbols.js';
 
 var callMarshalingInbound = mixin({
   init() {
@@ -35,9 +35,7 @@ var callMarshalingInbound = mixin({
     return dv;
   },
   createInboundCaller(fn, ArgStruct) {
-    const handler = (dv, futexHandle) => {
-      let result = PosixError.NONE;
-      let awaiting = false;
+    const handler = (dv, canWait) => {
       try {
         const argStruct = ArgStruct(dv);
         if (VISIT in argStruct) {
@@ -49,67 +47,42 @@ var callMarshalingInbound = mixin({
           this.updateShadowTargets(context);
           this.endContext();
         }
-        const onError = function(err) {
-          try {
-            // if the error is not part of the error set returned by the function,
-            // the following will throw
-            if (ArgStruct[THROWING] && err instanceof Error) {
-              argStruct[RETURN](err);
-            } else {
-              throw err;
-            }
-          } catch (_) {
-            result = PosixError.EFAULT;
-            console.error(err);
-          }
-        };
-        const onReturn = function(value) {
-          try {
-            // [RETURN] defaults to the setter of retval; if the function accepts a promise,
-            // it'd invoke the callback
-            argStruct[RETURN](value);
-          } catch (err) {
-            result = PosixError.EFAULT;
-            console.error(err);
-          }
-        };
-        try {
-          const retval = fn(...argStruct);
-          const hasCallback = argStruct.hasOwnProperty(RETURN);
-          if (retval?.[Symbol.toStringTag] === 'Promise') {
-            // we can handle a promise when the Zig caller is able to wait or
-            // it's receiving the result through a callback
-            if (futexHandle || hasCallback) {
-              const promise = retval.then(onReturn, onError);
-              if (futexHandle) {
-                promise.then(() => this.finalizeAsyncCall(futexHandle, result));
+        const hasCallback = argStruct.hasOwnProperty(RETURN);
+        // promise is acceptable when we can wait for it or its result is sent to a callback
+        const result = catchPosixError(canWait || hasCallback, PosixError.EFAULT, () => {
+          return fn(...argStruct);
+        }, (retval) => {
+            if (retval?.[Symbol.asyncIterator]) {
+              // send contents through [YIELD]
+              if (!argStruct.hasOwnProperty(YIELD)) {
+                throw new UnexpectedGenerator();
               }
-              awaiting = true;
-              result = PosixError.NONE;
-            } else {
-              result = PosixError.EDEADLK;
-            }
-          } else if (retval?.[Symbol.asyncIterator]) {
-            if (argStruct.hasOwnProperty(YIELD)) {
               this.pipeContents(retval, argStruct);
-              result = PosixError.NONE;
             } else {
-              throw new UnexpectedGenerator();
+              // [RETURN] defaults to the setter of retval; if the function accepts a promise,
+              // it'd invoke the callback
+              argStruct[RETURN](retval);
             }
-          } else if (retval != undefined || !hasCallback) {
-            onReturn(retval);
-          }
-        } catch (err) {
-          onError(err);
-        }
-      } catch(err) {
+        }, (err) => {
+            try {
+              // if the error is not part of the error set returned by the function,
+              // the following will throw
+              if (ArgStruct[THROWING] && err instanceof Error) {                
+                argStruct[RETURN](err);
+                return PosixError.NONE;
+              } else {
+                throw err;
+              }
+            } catch (_) {
+              console.error(err);
+            }
+        });
+        // don't return promise when a callback is used
+        return (hasCallback) ? PosixError.NONE : result;
+      } catch (err) {
         console.error(err);
-        result = PosixError.EFAULT;
-      }
-      if (futexHandle && !awaiting) {
-        this.finalizeAsyncCall(futexHandle, result);
-      }
-      return result;
+        return PosixError.EFAULT;
+      }     
     };
     const id = this.getFunctionId(fn);
     this.jsFunctionCallerMap.set(id, handler);
@@ -182,10 +155,10 @@ var callMarshalingInbound = mixin({
       }
     };
   },
-  handleJsCall(id, argAddress, argSize, futexHandle = 0) {
+  handleJsCall(id, argAddress, argSize, canWait) {
     const dv = this.obtainZigView(argAddress, argSize, false);
     const caller = this.jsFunctionCallerMap.get(id);
-    return (caller) ? caller(dv, futexHandle) : PosixError.EFAULT;
+    return (caller) ? caller(dv, canWait) : PosixError.EFAULT;
   },
   releaseFunction(id) {
     const thunk = this.jsFunctionThunkMap.get(id);
@@ -207,7 +180,7 @@ var callMarshalingInbound = mixin({
   },
   ...({
     exports: {
-      handleJsCall: { argType: 'iiii', returnType: 'i' },
+      handleJsCall: { argType: 'iiib', returnType: 'i' },
       releaseFunction: { argType: 'i' },
     },
     imports: {

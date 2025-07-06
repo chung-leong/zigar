@@ -1,7 +1,7 @@
 import { mixin } from '../environment.js';
 import { createView } from '../utils.js';
 
-var usizeCopy = mixin({
+var copyUsize = mixin({
   copyUsize(bufAddress, value) {
     {
       this.copyUint32(bufAddress, value);
@@ -19,4 +19,4 @@ var usizeCopy = mixin({
   },
 });
 
-export { usizeCopy as default };
+export { copyUsize as default };

@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { decodeText, defineProperty, defineValue, empty } from '../utils.js';
+import { decodeText, defineProperty, defineValue, empty, isPromise } from '../utils.js';
 
 export default mixin({
   init() {
@@ -174,10 +174,9 @@ export default mixin({
       const imports = {};
       for (const [ name, attributes ] of Object.entries(this.exports)) {
         const { 
-          alias: jsFnName = name, 
           async: canReturnPromise = false,
         } = attributes;
-        const fn = this[jsFnName];
+        let fn = this[name];
         if (fn) {
           if (canReturnPromise) {
             fn = this.addPromiseHandling(fn);
@@ -188,29 +187,27 @@ export default mixin({
       return imports;
     },
     addPromiseHandling(fn) {
-      const { length } = fn;
+      const futexIndex = fn.length - 1;
       return function(...args) {
-        if (args.length === length) {
-          const futexHandle = args[length - 1];
-          // replace futex handle with canWait = true in the argument list
-          args[length - 1] = true;
-          const result = fn(...args);
-          if (isPromise(result)) {
-            result.then(r => this.finalizeAsyncCall(futexHandle, r));
+        try {
+          const futexHandle = args[futexIndex];
+          const canWait = !!futexHandle;
+          // replace futexHandle with canWait in the argument list
+          args[futexIndex] = canWait;
+          const result = fn.call(this, ...args);
+          if (canWait && isPromise(result)) {
+            result.then(res => this.finalizeAsyncCall(futexHandle, res));
           } else {
             return result;
           }
-        } else {
-          return fn(...args);
+        } catch (err) {
+          console.error(err);
         }
       }
     },
     importFunctions(exports) {
-      for (const [ name, attributes ] of Object.entries(this.imports)) {
-        const { 
-          alias: nativeFnName = name, 
-        } = attributes;
-        const fn = exports[nativeFnName];
+      for (const [ name ] of Object.entries(this.imports)) {
+        const fn = exports[name];
         if (fn) {
           defineProperty(this, name, defineValue(fn));
           this.destructors.push(() => this[name] = throwError);

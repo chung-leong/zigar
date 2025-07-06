@@ -1,10 +1,10 @@
-import { RootDescriptor } from '../constants.js';
+import { Descriptor } from '../constants.js';
 import { mixin } from '../environment.js';
 import { decodeText } from '../utils.js';
 
 var streamLocation = mixin({
   init() {
-    this.streamLocationMap = new Map([ [ RootDescriptor, '' ]]);
+    this.streamLocationMap = new Map([ [ Descriptor.root, '' ]]);
   },
   obtainStreamLocation(dirfd, pathAddress, pathLen) {
     const pathArray = this.obtainZigArray(pathAddress, pathLen);

@@ -13,7 +13,7 @@
 #endif
 #include <redirect.h>
 
-typedef uint32_t (*override_callback)(syscall_struct*);
+typedef uint16_t (*override_callback)(syscall_struct*);
 
 override_callback override = NULL;
 
@@ -26,6 +26,7 @@ bool override_write(size_t fd,
                     size_t len) {
     syscall_struct call;
     call.cmd = sc_write;
+    call.futex_handle = 0;
     call.u.write.fd = fd;
     call.u.write.bytes = buffer;
     call.u.write.len = len;

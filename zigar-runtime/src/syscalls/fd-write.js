@@ -39,10 +39,11 @@ export default mixin({
   },
   ...(process.env.TARGET === 'node' ? {
     exports: {
-      writeBytes: { async: true },
+      fdWrite: { async: true },
+      fdWrite1: { async: true },
     },
 
-    writeBytes(fd, address, len, writtenAddress, canWait) {
+    fdWrite1(fd, address, len, writtenAddress, canWait) {
       return catchPosixError(canWait, PosixError.EIO, () => {
         const writer = this.getStream(fd);
         const chunk = new Uint8Array(len);

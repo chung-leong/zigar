@@ -1,12 +1,10 @@
-import { RootDescriptor } from '../constants.js';
+import { Descriptor } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidFileDescriptor } from '../errors.js';
 import { decodeText, hasMethod } from '../utils.js';
 
 var streamRedirection = mixin({
   init() {
-    const w1 = this.createLogWriter(1);
-    const w2 = this.createLogWriter(2);
     const root = {
       *readdir() {        
       },
@@ -14,10 +12,13 @@ var streamRedirection = mixin({
         return null;
       }
     };
-    this.logWriters = { 1: w1, 2: w2 };
-    this.streamMap = new Map([ [ 1, w1 ], [ 2, w2 ], [ RootDescriptor, root ] ]);
+    this.streamMap = new Map([ 
+      [ Descriptor.stdout, this.createLogWriter('stdout') ], 
+      [ Descriptor.stderr, this.createLogWriter('stderr') ], 
+      [ Descriptor.root, root ] 
+    ]);
     this.flushRequestMap = new Map();
-    this.nextStreamHandle = 0xffff;
+    this.nextStreamHandle = Descriptor.min;
   },
   getStream(fd, method) {
     const stream = this.streamMap.get(fd);
@@ -37,25 +38,28 @@ var streamRedirection = mixin({
     stream?.destroy?.();
     this.streamMap.delete(fd);
   },
-  redirectStream(fd, arg) {
+  redirectStream(num, arg) {
     const map = this.streamMap;
+    const fd = (num === 3) ? Descriptor.root : num;
     const previous = map.get(fd);
     if (arg !== undefined) {
-      if (fd === 0) {
-        map.set(fd, this.convertReader(arg));
-      } else if (fd === 1 || fd === 2) {
-        map.set(fd, this.convertWriter(arg));
-      } else if (fd === 3) {
-        map.set(RootDescriptor, this.convertDirectory(arg));
+      let stream;
+      if (num === 0) {
+        stream = this.convertReader(arg);
+      } else if (num === 1 || num === 2) {
+        stream = this.convertWriter(arg);
+      } else if (num === 3) {
+        stream = this.convertDirectory(arg);
       } else {
         throw new Error(`Expecting 0, 1, 2, or 3, received ${fd}`);
       }
+      map.set(fd, stream);
     } else {
       map.delete(fd);
     }
     return previous;
   },
-  createLogWriter(handle) {
+  createLogWriter(source) {
     const env = this;
     return {
       pending: [],
@@ -78,7 +82,7 @@ var streamRedirection = mixin({
       },
       dispatch(array) {
         const message = decodeText(array);
-        env.triggerEvent('log', { handle, message });
+        env.triggerEvent('log', { source, message });
       },
       flush() {
         if (this.pending.length > 0) {

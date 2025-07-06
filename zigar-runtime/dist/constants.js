@@ -161,6 +161,14 @@ const PosixFileType = {
   symbolicLink: 7,
 };
 
-const RootDescriptor = 3;
+const Descriptor = {
+  stdin: 0,
+  stdout: 1,
+  stderr: 2,
+  root: 3,
 
-export { ArgStructFlag, ArrayFlag, EnumFlag, ErrorSetFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PosixError, PosixFileType, PrimitiveFlag, RootDescriptor, SliceFlag, StructFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };
+  min: 0x000f_ffff,
+  max: 0x07ff_ffff, 
+};
+
+export { ArgStructFlag, ArrayFlag, Descriptor, EnumFlag, ErrorSetFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PosixError, PosixFileType, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };

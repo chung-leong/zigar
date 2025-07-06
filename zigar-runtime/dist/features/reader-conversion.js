@@ -24,7 +24,7 @@ var readerConversion = mixin({
 
 class WebStreamReader {
   done = false;  
-  leftover = null;
+  bytes = null;
   onClose = null;
 
   constructor(reader) {
@@ -32,30 +32,49 @@ class WebStreamReader {
     reader.close = () => this.onClose?.();
   }
 
-  async read(dest) {
-    let read = 0;
-    while (read < dest.length && !this.done) {
-      if (!this.leftover) {
-        const { done, value } = await this.reader.read();
-        this.done = done;
-        this.leftover = new Uint8Array(value);
-      } 
-      const len = Math.min(this.leftover.length, dest.length - read);
-      for (let i = 0; i < len; i++) dest[read + i] = this.leftover[i]; 
-      read += len;
-      if (this.leftover.length > len) {
-        this.leftover = this.leftover.slice(len);
+  async read(len) {
+    // keep reading until there's enough bytes to cover the request length
+    while ((!this.bytes || this.bytes.length < len) && !this.done) {
+      let { value } = await this.reader.read();
+      if (value) {
+        if (!(value instanceof Uint8Array)) {
+          if (value instanceof ArrayBuffer) {
+            value = new Uint8Array(value);
+          } else if (value.buffer instanceof ArrayBuffer) {
+            value = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+          }
+        }
+        if (!this.bytes) {
+          this.bytes = value;
+        } else {
+          const len1 = this.bytes.length, len2 = value.length;
+          const array = new Uint8Array(len1 + len2);
+          array.set(this.bytes);
+          array.set(value, len1);
+          this.bytes = array;
+        }
       } else {
-        this.leftover = null;
+        this.done = true;
       }
     }
-    return read;
+    let chunk;
+    if (this.bytes) {
+      if (this.bytes.length > len) {
+        chunk = this.bytes.subarray(0, len);
+        this.bytes = this.bytes.subarray(len);
+      } else {
+        chunk = this.bytes;
+        this.bytes = null;
+      }
+    }
+    return chunk ?? new Uint8Array(0);
   }
 
   destroy() {
     if (!this.done) {
       this.reader.cancel();
     }
+    this.bytes = null;
   }
 
   valueOf() {
@@ -64,14 +83,22 @@ class WebStreamReader {
 }
 
 class WebStreamReaderBYOB extends WebStreamReader {
-  async read(dest) {
-    let read = 0;
-    if (!this.done) {
-      const { done, value } = await this.reader.read(dest);
-      this.done = done;
-      read = value.byteLength;
+  bytes = null;
+
+  async read(len) {
+    if (!this.bytes || this.bytes.length < len) {
+      this.bytes = new Uint8Array(len);
     }
-    return read;
+    let chunk;
+    if (!this.done) {
+      const { value } = await this.reader.read(this.bytes);
+      if (value) {
+        chunk = value;
+      } else {
+        this.done = true;
+      }
+    }
+    return chunk ?? new Uint8Array(0);
   }
 }
 
@@ -85,20 +112,14 @@ class BlobReader {
     blob.close = () => this.onClose?.();
   }
 
-  async read(dest) {
-    const len = dest.length;
-    const pos = Number(this.pos);
-    const slice = this.blob.slice(pos, pos + len);
+  async read(len) {
+    const start = Number(this.pos);
+    const end = start + len;
+    const slice = this.blob.slice(start, end);
     const response = new Response(slice);
     const buffer = await response.arrayBuffer();
-    return this.copy(dest, new Uint8Array(buffer));
-  }
-
-  copy(dest, src) {
-    const read = src.length;
-    for (let i = 0; i < read; i++) dest[i] = src[i];
-    this.pos += BigInt(read);
-    return read;
+    this.pos = BigInt(end);
+    return new Uint8Array(buffer);
   }
 
   tell() {
@@ -123,9 +144,11 @@ class BlobReader {
 }
 
 class Uint8ArrayReader extends BlobReader {
-  read(dest) {
-    const pos = Number(this.pos);
-    return this.copy(dest, this.blob.slice(pos, pos + dest.length));
+  read(len) {
+    const start = Number(this.pos);
+    const end = start + len;
+    this.pos = BigInt(end);
+    return this.blob.subarray(start, end);
   }
 }
 

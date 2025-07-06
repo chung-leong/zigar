@@ -121,13 +121,6 @@ const MemberFlag = {
   IsString:         0x0080,
 };
 
-const CallResult = {
-  OK: 0,
-  Failure: 1,
-  Deadlock: 2,
-  Disabled: 3,
-};
-
 const ModuleAttribute = {
   LittleEndian:     0x0001,
   RuntimeSafety:    0x0002,
@@ -151,6 +144,7 @@ const PosixError = {
   EBADF: 8,
   EDEADLK: 16,
   EEXIST: 20,
+  EFAULT: 21,
   EINVAL: 28,
   EIO: 29,
   ENOENT: 44,
@@ -169,7 +163,12 @@ const PosixFileType = {
   symbolicLink: 7,
 };
 
-const RootDescriptor = 3;
+const Descriptor = {
+  stdout: 1,
+  stderr: 2,
+  root: 3,
+
+  min: 0x000f_ffff};
 
 const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
 
@@ -392,6 +391,8 @@ const usize = function(arg) {
   }
 ;
 
+const usizeByteSize = 4;
+
 const isInvalidAddress = function(address) {
     return address === 0xaaaa_aaaa || address === -1431655766;
   }
@@ -503,6 +504,10 @@ function markAsSpecial({ get, set }) {
   return { get, set };
 }
 
+function createView(size) {
+  return new DataView(new ArrayBuffer(size));
+}
+
 function getSelf() {
   return this;
 }
@@ -528,6 +533,30 @@ class ObjectCache {
     this.map.set(dv, object);
     return object;
   }
+}
+
+const TimeFlag = {
+  atime: 1 << 0,
+  atime_now: 1 << 1,
+  mtime: 1 << 2,
+  mtime_now: 1 << 3,
+};
+
+const now = () => new Date() * 1000;
+
+function extractTimes(st_atim, st_mtim, fst_flags) {
+  const times = {};
+  if (fst_flags & TimeFlag.atime) {
+    times.atime = st_atim;
+  } else if (fst_flags & TimeFlag.atime_now) {
+    times.atime = now();
+  }
+  if (fst_flags & TimeFlag.mtime) {
+    times.mtime = st_mtim;
+  } else if (fst_flags & TimeFlag.mtime_now) {
+    times.mtime = now();
+  }
+  return times;
 }
 
 const require = createRequire(import.meta.url);
@@ -2017,7 +2046,7 @@ var bool$1 = mixin({
 var float128 = mixin({
   getAccessorFloat128(access, member) {
     const { byteSize } = member;
-    const buf = new DataView(new ArrayBuffer(8));
+    const buf = createView(8);
     const get = function(offset, littleEndian) {
       const w1 = BigInt(this.getUint32(offset + (littleEndian ? 0 : byteSize - 4), littleEndian));
       const w2 = BigInt(this.getUint32(offset + (littleEndian ? 4 : byteSize - 8), littleEndian));
@@ -2085,7 +2114,7 @@ var float128 = mixin({
 
 var float16 = mixin({
   getAccessorFloat16(access, member) {
-    const buf = new DataView(new ArrayBuffer(4));
+    const buf = createView(4);
     const set = DataView.prototype.setUint16;
     const get = DataView.prototype.getUint16;
     if (access === 'get') {
@@ -2136,7 +2165,7 @@ var float16 = mixin({
 var float80 = mixin({
   getAccessorFloat80(access, member) {
     const { byteSize } = member;
-    const buf = new DataView(new ArrayBuffer(8));
+    const buf = createView(8);
     const get = function(offset, littleEndian) {
       const w1 = BigInt(this.getUint32(offset + (littleEndian ? 0 : byteSize - 4), littleEndian));
       const w2 = BigInt(this.getUint32(offset + (littleEndian ? 4 : byteSize - 8), littleEndian));
@@ -2411,7 +2440,7 @@ var unaligned = mixin({
     const { bitSize, bitOffset } = member;
     const bitPos = bitOffset & 0x07;
     const byteSize = [ 1, 2, 4, 8 ].find(b => b * 8 >= bitSize) ?? Math.ceil(bitSize / 64) * 64;
-    const buf = new DataView(new ArrayBuffer(byteSize));
+    const buf = createView(byteSize);
     if (access === 'get') {
       const getAligned = this.getAccessor('get', { ...member, byteSize });
       const copyBits = getBitAlignFunction(bitPos, bitSize, true);
@@ -2509,44 +2538,6 @@ function getBitAlignFunction(bitPos, bitSize, toAligned) {
     }
   }
 }
-
-var abortSignal = mixin({
-  createSignal(structure, signal) {
-    const { constructor: { child: Int32 } } = structure.instance.members[0].structure;
-    const ta = new Int32Array([ signal?.aborted ? 1 : 0 ]);
-    const int32 = Int32(ta);
-    if (signal) {
-      signal.addEventListener('abort', () => {
-        {
-          // WASM doesn't directly access JavaScript memory, we need to find the
-          // shadow memory that's been assigned to the object and store the value there
-          const shadowDV = this.findShadowView(int32[MEMORY]);
-          if (shadowDV) {
-            // we'd only find the shadow before the function return
-            // nothing happens if the controller's fired afterward
-            const shadowTA = new Int32Array(shadowDV.buffer, shadowDV.byteOffset, 1);
-            Atomics.store(shadowTA, 0, 1);
-          }
-        }
-      }, { once: true });
-    }
-    return { ptr: int32 };
-  },
-  createInboundSignal(signal) {
-    const controller = new AbortController();
-    if (signal.ptr['*']) {
-      controller.abort();
-    } else {
-      const interval = setInterval(() => {
-        if (signal.ptr['*']) {
-          controller.abort();
-          clearInterval(interval);
-        }
-      }, 50);
-    }
-    return controller.signal;
-  },
-});
 
 class InvalidIntConversion extends SyntaxError {
   constructor(arg) {
@@ -2824,12 +2815,12 @@ class AlignmentConflict extends TypeError {
   }
 }
 
-class TypeMismatch extends TypeError {
+let TypeMismatch$1 = class TypeMismatch extends TypeError {
   constructor(expected, arg) {
     const received = getDescription(arg);
     super(`Expected ${addArticle(expected)}, received ${received}`);
   }
-}
+};
 
 class InaccessiblePointer extends TypeError {
   constructor() {
@@ -2955,14 +2946,6 @@ class InvalidArgument extends Error {
   }
 }
 
-class IllegalSeek extends Error {
-  code = PosixError.ESPIPE;
-
-  constructor() {
-    super(`Illegal seek`);
-  }
-}
-
 class Deadlock extends Error {
   code = PosixError.EDEADLK;
 
@@ -3068,15 +3051,8 @@ function deanimalizeErrorName(name) {
 
 function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
   const fail = (err) => {
-    const result = console.error(err);
-    let { code } = err;
-    {
-      // EDEADLK is usually not expected
-      if (code === PosixError.EDEADLK) {
-        code = PosixError.ENOTSUP;
-      }
-    }
-    return result ?? code ?? defErrorCode;
+    const result = (reject) ? reject(err) : console.error(err);
+    return result ?? err.code ?? defErrorCode;
   };
   const done = (value) => {
     const result = resolve?.(value);
@@ -3088,13 +3064,19 @@ function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
       if (!canWait) {
         throw new Deadlock();
       }
-      return result.then(done, fail);
+      return result.then(done).catch(fail);
     } else {
       return done(result);
     }
   } catch (err) {
     return fail(err);
   }
+}
+
+function expectBoolean(result, errorCode) {
+  if (result === true) return PosixError.NONE; 
+  if (result === false) return errorCode;
+  throw new TypeMismatch$1('boolean', result);
 }
 
 function isErrorJSON(arg) {
@@ -3159,7 +3141,7 @@ var allocatorMethods = mixin({
         const { dv, align } = getMemory(arg);
         const zig = dv?.[ZIG];
         if (!zig) {
-          throw new TypeMismatch('object containing allocated Zig memory', arg);
+          throw new TypeMismatch$1('object containing allocated Zig memory', arg);
         }
         const { address } = zig;
         if (address === usizeInvalid) {
@@ -3178,7 +3160,7 @@ var allocatorMethods = mixin({
       value(arg) {
         const { dv: src, align, constructor } = getMemory(arg);
         if (!src) {
-          throw new TypeMismatch('string, DataView, typed array, or Zig object', arg);
+          throw new TypeMismatch$1('string, DataView, typed array, or Zig object', arg);
         }
         const dest = this.alloc(src.byteLength, align);
         copy(dest, src);
@@ -3362,9 +3344,7 @@ var callMarshalingInbound = mixin({
     return dv;
   },
   createInboundCaller(fn, ArgStruct) {
-    const handler = (dv, futexHandle) => {
-      let result = CallResult.OK;
-      let awaiting = false;
+    const handler = (dv, canWait) => {
       try {
         const argStruct = ArgStruct(dv);
         if (VISIT in argStruct) {
@@ -3376,67 +3356,42 @@ var callMarshalingInbound = mixin({
           this.updateShadowTargets(context);
           this.endContext();
         }
-        const onError = function(err) {
-          try {
-            // if the error is not part of the error set returned by the function,
-            // the following will throw
-            if (ArgStruct[THROWING] && err instanceof Error) {
-              argStruct[RETURN](err);
-            } else {
-              throw err;
-            }
-          } catch (_) {
-            result = CallResult.Failure;
-            console.error(err);
-          }
-        };
-        const onReturn = function(value) {
-          try {
-            // [RETURN] defaults to the setter of retval; if the function accepts a promise,
-            // it'd invoke the callback
-            argStruct[RETURN](value);
-          } catch (err) {
-            result = CallResult.Failure;
-            console.error(err);
-          }
-        };
-        try {
-          const retval = fn(...argStruct);
-          const hasCallback = argStruct.hasOwnProperty(RETURN);
-          if (retval?.[Symbol.toStringTag] === 'Promise') {
-            // we can handle a promise when the Zig caller is able to wait or
-            // it's receiving the result through a callback
-            if (futexHandle || hasCallback) {
-              const promise = retval.then(onReturn, onError);
-              if (futexHandle) {
-                promise.then(() => this.finalizeAsyncCall(futexHandle, result));
+        const hasCallback = argStruct.hasOwnProperty(RETURN);
+        // promise is acceptable when we can wait for it or its result is sent to a callback
+        const result = catchPosixError(canWait || hasCallback, PosixError.EFAULT, () => {
+          return fn(...argStruct);
+        }, (retval) => {
+            if (retval?.[Symbol.asyncIterator]) {
+              // send contents through [YIELD]
+              if (!argStruct.hasOwnProperty(YIELD)) {
+                throw new UnexpectedGenerator();
               }
-              awaiting = true;
-              result = CallResult.OK;
-            } else {
-              result = CallResult.Deadlock;
-            }
-          } else if (retval?.[Symbol.asyncIterator]) {
-            if (argStruct.hasOwnProperty(YIELD)) {
               this.pipeContents(retval, argStruct);
-              result = CallResult.OK;
             } else {
-              throw new UnexpectedGenerator();
+              // [RETURN] defaults to the setter of retval; if the function accepts a promise,
+              // it'd invoke the callback
+              argStruct[RETURN](retval);
             }
-          } else if (retval != undefined || !hasCallback) {
-            onReturn(retval);
-          }
-        } catch (err) {
-          onError(err);
-        }
-      } catch(err) {
+        }, (err) => {
+            try {
+              // if the error is not part of the error set returned by the function,
+              // the following will throw
+              if (ArgStruct[THROWING] && err instanceof Error) {                
+                argStruct[RETURN](err);
+                return PosixError.NONE;
+              } else {
+                throw err;
+              }
+            } catch (_) {
+              console.error(err);
+            }
+        });
+        // don't return promise when a callback is used
+        return (hasCallback) ? PosixError.NONE : result;
+      } catch (err) {
         console.error(err);
-        result = CallResult.Failure;
-      }
-      if (futexHandle && !awaiting) {
-        this.finalizeAsyncCall(futexHandle, result);
-      }
-      return result;
+        return PosixError.EFAULT;
+      }     
     };
     const id = this.getFunctionId(fn);
     this.jsFunctionCallerMap.set(id, handler);
@@ -3509,10 +3464,10 @@ var callMarshalingInbound = mixin({
       }
     };
   },
-  handleJsCall(id, argAddress, argSize, futexHandle = 0) {
+  handleJsCall(id, argAddress, argSize, canWait) {
     const dv = this.obtainZigView(argAddress, argSize, false);
     const caller = this.jsFunctionCallerMap.get(id);
-    return (caller) ? caller(dv, futexHandle) : CallResult.Failure;
+    return (caller) ? caller(dv, canWait) : PosixError.EFAULT;
   },
   releaseFunction(id) {
     const thunk = this.jsFunctionThunkMap.get(id);
@@ -3534,7 +3489,7 @@ var callMarshalingInbound = mixin({
   },
   ...({
     exports: {
-      handleJsCall: { argType: 'iiii', returnType: 'i' },
+      handleJsCall: { argType: 'iiib', returnType: 'i' },
       releaseFunction: { argType: 'i' },
     },
     imports: {
@@ -3844,11 +3799,17 @@ var dataCopying = mixin({
         };
       }
     },
-    copyExternBytes(dst, address, len) {
+    moveExternBytes(jsDV, address, to) {
       const { memory } = this;
-      const src = new DataView(memory.buffer, address, len);
+      const len = jsDV.byteLength;
+      if (len === 0) return;
+      const zigDV = new DataView(memory.buffer, address, len);
+      if (!(jsDV instanceof DataView)) {
+        // assume it's a typed array
+        jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+      }
       const copy = this.getCopyFunction(len);
-      copy(dst, src);
+      copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
     },
   } )
 });
@@ -3860,7 +3821,7 @@ var dirConversion = mixin({
     } else if (hasMethod(arg, 'readdir')) {
       return arg;
     } else {
-      throw new TypeMismatch('map or object with directory interface', arg);
+      throw new TypeMismatch$1('map or object with directory interface', arg);
     }
   }
 });
@@ -3882,237 +3843,6 @@ class MapDirectory {
   valueOf() {
     return this.map;
   }
-}
-
-var dir = mixin({
-  // create Dir struct for outbound call
-  createDirectory(arg) {
-    if (typeof(arg) === 'object' && typeof(arg?.fd) === 'number') {
-      return arg;
-    }
-    const dir = this.convertDirectory(arg);
-    const fd = this.createStreamHandle(dir);
-    return { fd };
-  },
-});
-
-var envVariables = mixin({
-  getEnvVariables() {
-    let env = this.envVariables;
-    if (!env) {
-      const listener = this.listenerMap.get('env');
-      const result = listener?.() ?? {};
-      if (typeof(result) !== 'object') {
-        throw new TypeMismatch('object', result);
-      }
-      env = this.envVariables = [];
-      for (const [ name, value ] of Object.entries(result)) {
-        const array = encodeText(`${name}=${value}`);
-        env.push(array);
-      }
-    }
-    return env;
-  },
-});
-
-var file = mixin({
-  // create File struct for outbound call
-  createFile(arg) {
-    if (typeof(arg) === 'object' && typeof(arg?.handle) === 'number') {
-      return arg;
-    }
-    let file;
-    try {
-      file = this.convertReader(arg);
-    } catch (err) {
-      try {
-        file = this.convertWriter(arg);
-      } catch {
-        throw err;
-      }
-    }
-    const handle = this.createStreamHandle(file);
-    return { handle };
-  },
-});
-
-var generator = mixin({
-  init() {
-    this.generatorCallbackMap = new Map();
-    this.generatorContextMap = new Map();
-    this.nextGeneratorContextId = usize(0x2000);
-  },
-  createGenerator(structure, args, func) {
-    const { constructor, instance: { members } } = structure;
-    if (func) {
-      if (typeof(func) !== 'function') {
-        throw new TypeMismatch('function', func);
-      }
-    } else {
-      const generator = args[GENERATOR] = new AsyncGenerator();
-      func = generator.push.bind(generator);
-    }
-    // create a handle referencing the function 
-    const contextId = this.nextGeneratorContextId++;
-    const ptr = this.obtainZigView(contextId, 0, false);
-    this.generatorContextMap.set(contextId, { func, args });
-    // use the same callback for all generators of a given type
-    let callback = this.generatorCallbackMap.get(constructor);
-    if (!callback) {
-      callback = async (ptr, result) => {
-        // the function assigned to args[RETURN] down below calls this function
-        // with a DataView instead of an actual pointer
-        const dv = (ptr instanceof DataView) ? ptr : ptr['*'][MEMORY];
-        const contextId = this.getViewAddress(dv);
-        const instance = this.generatorContextMap.get(contextId);
-        if (instance) {
-          const { func, args } = instance;
-          const isError = result instanceof Error;
-          if (!isError && args[STRING_RETVAL] && result) {
-            result = result.string;
-          }
-          const retval = await ((func.length === 2)
-          ? func(isError ? result : null, isError ? null : result)
-          : func(result));
-          const done = retval === false || isError || result === null;
-          // reset allocator
-          args[RESET]?.(done);
-          if (!done) return true;
-          args[FINALIZE]();
-          this.generatorContextMap.delete(contextId);
-        }
-        return false
-      };
-      this.generatorCallbackMap.set(constructor, callback);
-      this.destructors.push(() => this.freeFunction(callback));
-    }
-    args[RETURN] = result => callback(ptr, result);
-    const generator = { ptr, callback };
-    const allocatorMember = members.find(m => m.name === 'allocator');
-    if (allocatorMember) {
-      const { structure } = allocatorMember;     
-      generator.allocator = this.createJsAllocator(args, structure, true);
-    }
-    return generator;
-  },
-  createGeneratorCallback(args, generator) {
-    const { ptr, callback } = generator;
-    const f = callback['*'];
-    args[YIELD] = result => f.call(args, ptr, result);
-    return (...argList) => {
-      const result = (argList.length === 2) ? argList[0] ?? argList[1] : argList[0];
-      return args[YIELD](result);
-    };
-  },
-  async pipeContents(generator, args) {
-    try {
-      try {
-        const iter = generator[Symbol.asyncIterator]();
-        for await (const elem of iter) {
-          if (elem !== null) {
-            if (!args[YIELD](elem)) {
-              break;
-            }
-          }
-        }
-        args[YIELD](null);
-      } catch (err) {
-        if (args.constructor[THROWING]) {
-          args[YIELD](err);
-        } else {
-          throw err;
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  },
-});
-
-class AsyncGenerator {
-  result = null;
-  stopped = false;
-  finished = false;
-  promises = {};
-
-  async next() {
-    if (this.stopped) {
-      return { done: true };
-    }
-    while (true) {
-      const value = this.result;
-      if (value !== null) {
-        this.result = null;
-        this.wake('space');
-        return { value, done: false };
-      } else if (this.error) {
-        throw this.error;
-      } else if (this.finished) {
-        return { done: true };
-      }
-      // wait for more content
-      await this.sleep('content');
-    }
-  }
-
-  async return(retval) {
-    await this.break();
-    return { value: retval, done: true };
-  }
-
-  async throw(error) {
-    await this.break();
-    throw error;
-  }
-
-  async break() {
-    if (!this.finished) {
-      this.stopped = true;
-      // wait for a push() to ensure that the Zig side has stopped generating
-      await this.sleep('break');
-    }
-  }
-
-  async push(result) {
-    if (this.stopped) {
-      this.wake('break');
-      return false;
-    }
-    if (result instanceof Error) {
-      this.error = result;
-      this.finished = true;
-    } else if (result === null) {
-      this.finished = true;
-    } else {
-      if (this.result !== null) {
-        await this.sleep('space');
-      }
-      this.result = result;
-    }
-    this.wake('content');
-    return !this.finished;
-  }
-
-  sleep(name) {
-    let resolve;
-    const promise = this.promises[name] ||= new Promise(f => resolve = f);
-    if (resolve) promise.resolve = resolve;
-    return promise;
-  }
-
-  wake(name) {
-    const promise = this.promises[name];
-    if (promise) {
-      this.promises[name] = null;
-      {
-        // on the WebAssembly side we the main thread can't wait for worker threads
-        // so we don't have this problem
-        promise.resolve();
-      }
-    }
-  }
-
-  [Symbol.asyncIterator]() { return this }
 }
 
 var intConversion = mixin({
@@ -4145,92 +3875,6 @@ var intConversion = mixin({
       }
       return accessor;
     };
-  },
-});
-
-var jsAllocator = mixin({
-  init() {
-    this.defaultAllocator = null;
-    this.allocatorVtable =  null;
-    this.allocatorContextMap = new Map();
-    this.nextAllocatorContextId = usize(0x1000);
-  },
-  createDefaultAllocator(args, structure) {
-    let allocator = this.defaultAllocator;
-    if (!allocator) {
-      allocator = this.defaultAllocator = this.createJsAllocator(args, structure, false);
-    }
-    return allocator;
-  },
-  createJsAllocator(args, structure, resettable) {
-    const { constructor: Allocator } = structure;
-    let vtable = this.allocatorVtable;
-    if (!vtable) {      
-      const { noResize, noRemap } = Allocator;
-      vtable = this.allocatorVtable = {
-        alloc: this.allocateHostMemory.bind(this),
-        free: this.freeHostMemory.bind(this),
-        resize: noResize,
-      };
-      if (noRemap) {
-        vtable.remap = noRemap;
-      }
-      this.destructors.push(() => this.freeFunction(vtable.alloc));
-      this.destructors.push(() => this.freeFunction(vtable.free));
-    }
-    let contextId = usizeMax;
-    if (resettable) {
-      // create list used to clean memory allocated for generator
-      const list = [];
-      contextId = this.nextAllocatorContextId++;
-      this.allocatorContextMap.set(contextId, list);
-      args[RESET] = (done) => {
-        for (const { address, len } of list) {
-          const entry = this.unregisterMemory(address, len);
-          {
-            if (entry) {
-              this.freeShadowMemory(entry.shadowDV);
-            }
-          }
-          if (done) {
-            this.allocatorContextMap.delete(contextId);
-          }
-        }
-        list.splice(0);
-      };
-    }
-    const ptr = this.obtainZigView(contextId, 0);
-    return new Allocator({ ptr, vtable });
-  },
-  allocateHostMemory(ptr, len, ptrAlign) {
-    // see if we're dealing with a resettable allocator
-    const contextId = this.getViewAddress(ptr['*'][MEMORY]);
-    const list = (contextId != usizeMax) ? this.allocatorContextMap.get(contextId) : null;
-    const align = 1 << ptrAlign;
-    const targetDV = this.allocateJSMemory(len, align);
-    {
-      try {
-        const shadowDV = this.allocateShadowMemory(len, align);
-        const address = this.getViewAddress(shadowDV);
-        this.registerMemory(address, len, align, true, targetDV, shadowDV);
-        // save address and len if resettable
-        list?.push({ address, len });
-        return shadowDV;
-      } catch (err) {
-        return null;
-      }
-    }
-  },
-  freeHostMemory(ptr, buf, ptrAlign) {
-    const dv = buf['*'][MEMORY];
-    const address = this.getViewAddress(dv);
-    const len = dv.byteLength;
-    const entry = this.unregisterMemory(address, len);
-    {
-      if (entry) {
-        this.freeShadowMemory(entry.shadowDV);
-      }
-    }
   },
 });
 
@@ -4856,80 +4500,6 @@ var pointerSynchronization = mixin({
   },
 });
 
-var promise = mixin({
-  init() {
-    this.promiseCallbackMap = new Map();
-    this.promiseContextMap = new Map();
-    this.nextPromiseContextId = usize(0x1000);
-  },
-  // create promise struct for outbound call
-  createPromise(structure, args, func) {
-    const { constructor } = structure;
-    if (func) {
-      if (typeof(func) !== 'function') {
-        throw new TypeMismatch('function', func);
-      }
-    } else {
-      args[PROMISE] = new Promise((resolve, reject) => {
-        func = (result) => {
-          if (result?.[MEMORY]?.[ZIG]) {
-            // the memory in the result object is stack memory, which will go bad after the function
-            // returns; we need to copy the content into JavaScript memory
-            result = new result.constructor(result);
-          }
-          if (result instanceof Error) {
-            reject(result);
-          } else {
-            if (args[STRING_RETVAL] && result) {
-              result = result.string;
-            }
-            resolve(result);
-          }        };
-      });
-    }
-    // create a handle referencing the function 
-    const contextId = this.nextPromiseContextId++;
-    const ptr = this.obtainZigView(contextId, 0, false);
-    this.promiseContextMap.set(contextId, { func, args });
-    // use the same callback for all promises of a given type
-    let callback = this.promiseCallbackMap.get(constructor);
-    if (!callback) {
-      callback = (ptr, result) => {
-        // the function assigned to args[RETURN] down below calls this function
-        // with a DataView instead of an actual pointer
-        const dv = (ptr instanceof DataView) ? ptr : ptr['*'][MEMORY];
-        const contextId = this.getViewAddress(dv);
-        const instance = this.promiseContextMap.get(contextId);
-        if (instance) {
-          const { func, args } = instance;
-          if (func.length === 2) {
-            const isError = result instanceof Error;
-            func(isError ? result : null, isError ? null : result);
-          } else {
-            func(result);
-          }
-          args[FINALIZE]();
-          this.promiseContextMap.delete(contextId);  
-        }
-      };
-      this.promiseCallbackMap.set(constructor, callback);
-      this.destructors.push(() => this.freeFunction(callback));
-    }
-    args[RETURN] = result => callback(ptr, result);
-    return { ptr, callback };
-  },
-  // create callback for inbound call
-  createPromiseCallback(args, promise) {
-    const { ptr, callback } = promise;
-    const f = callback['*'];
-    args[RETURN] = result => f.call(args, ptr, result);
-    return (...argList) => {
-      const result = (argList.length === 2) ? argList[0] ?? argList[1] : argList[0];
-      return args[RETURN](result);
-    };
-  },
-});
-
 var readerConversion = mixin({
   convertReader(arg) {
     if (arg instanceof ReadableStreamDefaultReader) {
@@ -4945,14 +4515,14 @@ var readerConversion = mixin({
     } else if (hasMethod(arg, 'read')) {
       return arg;
     } else {
-      throw new TypeMismatch('ReadableStreamDefaultReader, ReadableStreamBYOBReader, Blob, Uint8Array, or object with reader interface', arg);
+      throw new TypeMismatch$1('ReadableStreamDefaultReader, ReadableStreamBYOBReader, Blob, Uint8Array, or object with reader interface', arg);
     }
   }
 });
 
 class WebStreamReader {
   done = false;  
-  leftover = null;
+  bytes = null;
   onClose = null;
 
   constructor(reader) {
@@ -4960,42 +4530,73 @@ class WebStreamReader {
     reader.close = () => this.onClose?.();
   }
 
-  async read(dest) {
-    let read = 0;
-    while (read < dest.length && !this.done) {
-      if (!this.leftover) {
-        const { done, value } = await this.reader.read();
-        this.done = done;
-        this.leftover = new Uint8Array(value);
-      } 
-      const len = Math.min(this.leftover.length, dest.length - read);
-      for (let i = 0; i < len; i++) dest[read + i] = this.leftover[i]; 
-      read += len;
-      if (this.leftover.length > len) {
-        this.leftover = this.leftover.slice(len);
+  async read(len) {
+    // keep reading until there's enough bytes to cover the request length
+    while ((!this.bytes || this.bytes.length < len) && !this.done) {
+      let { value } = await this.reader.read();
+      if (value) {
+        if (!(value instanceof Uint8Array)) {
+          if (value instanceof ArrayBuffer) {
+            value = new Uint8Array(value);
+          } else if (value.buffer instanceof ArrayBuffer) {
+            value = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+          }
+        }
+        if (!this.bytes) {
+          this.bytes = value;
+        } else {
+          const len1 = this.bytes.length, len2 = value.length;
+          const array = new Uint8Array(len1 + len2);
+          array.set(this.bytes);
+          array.set(value, len1);
+          this.bytes = array;
+        }
       } else {
-        this.leftover = null;
+        this.done = true;
       }
     }
-    return read;
+    let chunk;
+    if (this.bytes) {
+      if (this.bytes.length > len) {
+        chunk = this.bytes.subarray(0, len);
+        this.bytes = this.bytes.subarray(len);
+      } else {
+        chunk = this.bytes;
+        this.bytes = null;
+      }
+    }
+    return chunk ?? new Uint8Array(0);
   }
 
   destroy() {
     if (!this.done) {
       this.reader.cancel();
     }
+    this.bytes = null;
+  }
+
+  valueOf() {
+    return this.reader;
   }
 }
 
 class WebStreamReaderBYOB extends WebStreamReader {
-  async read(dest) {
-    let read = 0;
-    if (!this.done) {
-      const { done, value } = await this.reader.read(dest);
-      this.done = done;
-      read = value.byteLength;
+  bytes = null;
+
+  async read(len) {
+    if (!this.bytes || this.bytes.length < len) {
+      this.bytes = new Uint8Array(len);
     }
-    return read;
+    let chunk;
+    if (!this.done) {
+      const { value } = await this.reader.read(this.bytes);
+      if (value) {
+        chunk = value;
+      } else {
+        this.done = true;
+      }
+    }
+    return chunk ?? new Uint8Array(0);
   }
 }
 
@@ -5009,20 +4610,14 @@ class BlobReader {
     blob.close = () => this.onClose?.();
   }
 
-  async read(dest) {
-    const len = dest.length;
-    const pos = Number(this.pos);
-    const slice = this.blob.slice(pos, pos + len);
+  async read(len) {
+    const start = Number(this.pos);
+    const end = start + len;
+    const slice = this.blob.slice(start, end);
     const response = new Response(slice);
     const buffer = await response.arrayBuffer();
-    return this.copy(dest, new Uint8Array(buffer));
-  }
-
-  copy(dest, src) {
-    const read = src.length;
-    for (let i = 0; i < read; i++) dest[i] = src[i];
-    this.pos += BigInt(read);
-    return read;
+    this.pos = BigInt(end);
+    return new Uint8Array(buffer);
   }
 
   tell() {
@@ -5040,12 +4635,18 @@ class BlobReader {
     if (!(pos >= 0n && pos <= size)) throw new InvalidArgument();
     return this.pos = pos;
   }
+
+  valueOf() {
+    return this.blob;
+  }
 }
 
 class Uint8ArrayReader extends BlobReader {
-  read(dest) {
-    const pos = Number(this.pos);
-    return this.copy(dest, this.blob.slice(pos, pos + dest.length));
+  read(len) {
+    const start = Number(this.pos);
+    const end = start + len;
+    this.pos = BigInt(end);
+    return this.blob.subarray(start, end);
   }
 }
 
@@ -5056,66 +4657,6 @@ class NullStream {
 
   write() {}
 }
-
-var reader = mixin({
-  init() {
-    this.readerCallback = null;
-    this.readerMap = new Map();
-    this.nextReaderId = usize(0x1000);
-    if (import.meta.env?.PROD !== true) {
-      this.readerProgressMap = new Map();
-    }
-  },
-  // create AnyReader struct for outbound call
-  createReader(arg) {
-    // check if argument isn't already an AnyReader struct
-    if (typeof(arg) === 'object' && arg) {
-      if('context' in arg && 'readFn' in arg) return arg;
-    }
-    const reader = this.convertReader(arg);
-    // create a handle referencing the reader 
-    const readerId = this.nextReaderId++;
-    const context = this.obtainZigView(readerId, 0, false);
-    const onClose = reader.onClose = () => {
-      this.readerMap.delete(readerId);
-      if (import.meta.env?.PROD !== true) {
-        this.readerProgressMap.delete(readerId);
-      }
-    };
-    this.readerMap.set(readerId, reader);
-    if (import.meta.env?.PROD !== true) {
-      this.readerProgressMap.set(readerId, { bytes: 0, calls: 0 });
-    }
-    // use the same callback for all readers
-    let readFn = this.readerCallback;
-    if (!readFn) {
-      const onError = (err) => {
-        console.error(err);
-        onClose();
-        throw err;
-      };
-      readFn = this.readerCallback = (context, buffer) => {
-        const readerId = this.getViewAddress(context['*'][MEMORY]);
-        const reader = this.readerMap.get(readerId);
-        if (!reader) return 0;    
-        try {
-          const dv = buffer['*'][MEMORY];
-          const dest = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
-          if (import.meta.env?.PROD !== true) {
-            const progress = this.readerProgressMap.get(readerId);
-            checkInefficientAccess(progress, 'read', dest.length);
-          }
-          const result = reader.read(dest);
-          return isPromise(result) ? result.catch(onError) : result;
-        } catch (err) {
-          onError(err);
-        }
-      };
-      this.destructors.push(() => this.freeFunction(readFn));
-    }
-    return { context, readFn };
-  },
-});
 
 var runtimeSafety = mixin({
   addRuntimeCheck(getAccessor) {
@@ -5153,7 +4694,7 @@ function getIntRange(member) {
 
 var streamLocation = mixin({
   init() {
-    this.streamLocationMap = new Map([ [ RootDescriptor, '' ]]);
+    this.streamLocationMap = new Map([ [ Descriptor.root, '' ]]);
   },
   obtainStreamLocation(dirfd, pathAddress, pathLen) {
     const pathArray = this.obtainZigArray(pathAddress, pathLen);
@@ -5190,27 +4731,8 @@ var streamLocation = mixin({
   },
 });
 
-var streamPosition = mixin({
-  changeStreamPointer(fd, offset, whence) {
-    const reader = this.getStream(fd);
-    if (typeof(reader.seek) !== 'function') {
-      throw new IllegalSeek();
-    }
-    return reader.seek(offset, whence);
-  },
-  getStreamPointer(fd) {
-    const reader = this.getStream(fd);
-    if (typeof(reader.tell) !== 'function') {
-      throw new IllegalSeek();
-    }
-    return reader.tell();
-  },
-});
-
 var streamRedirection = mixin({
   init() {
-    const w1 = this.createLogWriter(1);
-    const w2 = this.createLogWriter(2);
     const root = {
       *readdir() {        
       },
@@ -5218,14 +4740,17 @@ var streamRedirection = mixin({
         return null;
       }
     };
-    this.logWriters = { 1: w1, 2: w2 };
-    this.streamMap = new Map([ [ 1, w1 ], [ 2, w2 ], [ RootDescriptor, root ] ]);
+    this.streamMap = new Map([ 
+      [ Descriptor.stdout, this.createLogWriter('stdout') ], 
+      [ Descriptor.stderr, this.createLogWriter('stderr') ], 
+      [ Descriptor.root, root ] 
+    ]);
     this.flushRequestMap = new Map();
-    this.nextStreamHandle = 0xffff;
+    this.nextStreamHandle = Descriptor.min;
   },
-  getStream(fd) {
+  getStream(fd, method) {
     const stream = this.streamMap.get(fd);
-    if (!stream) {
+    if (!stream || (method && !hasMethod(stream, method))) {
       throw new InvalidFileDescriptor();
     }
     return stream;
@@ -5236,41 +4761,33 @@ var streamRedirection = mixin({
     stream.onClose = () => this.closeStream(fd);
     return fd;
   },
-  writeBytes(fd, address, len) {
-    const array = this.obtainZigArray(address, len, false);
-    const copy = new Uint8Array(array);
-    const writer = this.getStream(fd);
-    return writer.write(copy);
-  },
-  readBytes(fd, address, len) {
-    const array = this.obtainZigArray(address, len, false);
-    const reader = this.getStream(fd);
-    return reader.read(array);
-  },
-  closeStream(fd) {
+  destroyStreamHandle(fd) {
     const stream = this.streamMap.get(fd);
     stream?.destroy?.();
     this.streamMap.delete(fd);
   },
-  redirectStream(fd, arg) {
+  redirectStream(num, arg) {
     const map = this.streamMap;
+    const fd = (num === 3) ? Descriptor.root : num;
     const previous = map.get(fd);
     if (arg !== undefined) {
-      if (fd === 0) {
-        map.set(fd, this.convertReader(arg));
-      } else if (fd === 1 || fd === 2) {
-        map.set(fd, this.convertWriter(arg));
-      } else if (fd === 3) {
-        map.set(RootDescriptor, this.convertDirectory(arg));
+      let stream;
+      if (num === 0) {
+        stream = this.convertReader(arg);
+      } else if (num === 1 || num === 2) {
+        stream = this.convertWriter(arg);
+      } else if (num === 3) {
+        stream = this.convertDirectory(arg);
       } else {
         throw new Error(`Expecting 0, 1, 2, or 3, received ${fd}`);
       }
+      map.set(fd, stream);
     } else {
       map.delete(fd);
     }
     return previous;
   },
-  createLogWriter(handle) {
+  createLogWriter(source) {
     const env = this;
     return {
       pending: [],
@@ -5293,7 +4810,7 @@ var streamRedirection = mixin({
       },
       dispatch(array) {
         const message = decodeText(array);
-        env.triggerEvent('log', { handle, message });
+        env.triggerEvent('log', { source, message });
       },
       flush() {
         if (this.pending.length > 0) {
@@ -5438,6 +4955,659 @@ var thunkAllocation = mixin({
   } ),
 });
 
+var writerConversion = mixin({
+  convertWriter(arg) {
+    if (arg instanceof WritableStreamDefaultWriter) {
+      return new WebStreamWriter(arg);
+    } else if (Array.isArray(arg)) {
+      return new ArrayWriter(arg);
+    } else if (arg === null) {
+      return new NullStream();
+    } else if (typeof(arg?.write) === 'function') {
+      return arg;
+    } else {
+      throw new TypeMismatch$1('WritableStreamDefaultWriter, array, null, or object with writer interface', arg);
+    }
+  },
+});
+
+class WebStreamWriter {
+  onClose = null;
+  done = false;
+
+  constructor(writer) {
+    this.writer = writer;
+    writer.closed.catch(empty).then(() => {
+      this.done = true;
+      this.onClose?.();
+    });
+  }
+
+  async write(bytes) {
+    await this.writer.write(bytes);
+  }
+
+  destroy() {
+    if (!this.done) {
+      this.writer.close();
+    }
+  }
+}
+
+class ArrayWriter {
+  constructor(array) {
+    this.array = array;
+    this.closeCB = null;
+    array.close = () => this.onClose?.();
+  }
+
+  write(bytes) {
+    this.array.push(bytes);
+  }
+}
+
+var abortSignal = mixin({
+  createSignal(structure, signal) {
+    const { constructor: { child: Int32 } } = structure.instance.members[0].structure;
+    const ta = new Int32Array([ signal?.aborted ? 1 : 0 ]);
+    const int32 = Int32(ta);
+    if (signal) {
+      signal.addEventListener('abort', () => {
+        {
+          // WASM doesn't directly access JavaScript memory, we need to find the
+          // shadow memory that's been assigned to the object and store the value there
+          const shadowDV = this.findShadowView(int32[MEMORY]);
+          if (shadowDV) {
+            // we'd only find the shadow before the function return
+            // nothing happens if the controller's fired afterward
+            const shadowTA = new Int32Array(shadowDV.buffer, shadowDV.byteOffset, 1);
+            Atomics.store(shadowTA, 0, 1);
+          }
+        }
+      }, { once: true });
+    }
+    return { ptr: int32 };
+  },
+  createInboundSignal(signal) {
+    const controller = new AbortController();
+    if (signal.ptr['*']) {
+      controller.abort();
+    } else {
+      const interval = setInterval(() => {
+        if (signal.ptr['*']) {
+          controller.abort();
+          clearInterval(interval);
+        }
+      }, 50);
+    }
+    return controller.signal;
+  },
+});
+
+var allocator = mixin({
+  init() {
+    this.defaultAllocator = null;
+    this.allocatorVtable =  null;
+    this.allocatorContextMap = new Map();
+    this.nextAllocatorContextId = usize(0x1000);
+  },
+  createDefaultAllocator(args, structure) {
+    let allocator = this.defaultAllocator;
+    if (!allocator) {
+      allocator = this.defaultAllocator = this.createJsAllocator(args, structure, false);
+    }
+    return allocator;
+  },
+  createJsAllocator(args, structure, resettable) {
+    const { constructor: Allocator } = structure;
+    let vtable = this.allocatorVtable;
+    if (!vtable) {      
+      const { noResize, noRemap } = Allocator;
+      vtable = this.allocatorVtable = {
+        alloc: this.allocateHostMemory.bind(this),
+        free: this.freeHostMemory.bind(this),
+        resize: noResize,
+      };
+      if (noRemap) {
+        vtable.remap = noRemap;
+      }
+      this.destructors.push(() => this.freeFunction(vtable.alloc));
+      this.destructors.push(() => this.freeFunction(vtable.free));
+    }
+    let contextId = usizeMax;
+    if (resettable) {
+      // create list used to clean memory allocated for generator
+      const list = [];
+      contextId = this.nextAllocatorContextId++;
+      this.allocatorContextMap.set(contextId, list);
+      args[RESET] = (done) => {
+        for (const { address, len } of list) {
+          const entry = this.unregisterMemory(address, len);
+          {
+            if (entry) {
+              this.freeShadowMemory(entry.shadowDV);
+            }
+          }
+          if (done) {
+            this.allocatorContextMap.delete(contextId);
+          }
+        }
+        list.splice(0);
+      };
+    }
+    const ptr = this.obtainZigView(contextId, 0);
+    return new Allocator({ ptr, vtable });
+  },
+  allocateHostMemory(ptr, len, ptrAlign) {
+    // see if we're dealing with a resettable allocator
+    const contextId = this.getViewAddress(ptr['*'][MEMORY]);
+    const list = (contextId != usizeMax) ? this.allocatorContextMap.get(contextId) : null;
+    const align = 1 << ptrAlign;
+    const targetDV = this.allocateJSMemory(len, align);
+    {
+      try {
+        const shadowDV = this.allocateShadowMemory(len, align);
+        const address = this.getViewAddress(shadowDV);
+        this.registerMemory(address, len, align, true, targetDV, shadowDV);
+        // save address and len if resettable
+        list?.push({ address, len });
+        return shadowDV;
+      } catch (err) {
+        return null;
+      }
+    }
+  },
+  freeHostMemory(ptr, buf, ptrAlign) {
+    const dv = buf['*'][MEMORY];
+    const address = this.getViewAddress(dv);
+    const len = dv.byteLength;
+    const entry = this.unregisterMemory(address, len);
+    {
+      if (entry) {
+        this.freeShadowMemory(entry.shadowDV);
+      }
+    }
+  },
+});
+
+var dir = mixin({
+  // create Dir struct for outbound call
+  createDirectory(arg) {
+    if (typeof(arg) === 'object' && typeof(arg?.fd) === 'number') {
+      return arg;
+    }
+    const dir = this.convertDirectory(arg);
+    const fd = this.createStreamHandle(dir);
+    return { fd };
+  },
+});
+
+var file = mixin({
+  // create File struct for outbound call
+  createFile(arg) {
+    if (typeof(arg) === 'object' && typeof(arg?.handle) === 'number') {
+      return arg;
+    }
+    let file;
+    try {
+      file = this.convertReader(arg);
+    } catch (err) {
+      try {
+        file = this.convertWriter(arg);
+      } catch {
+        throw err;
+      }
+    }
+    const handle = this.createStreamHandle(file);
+    return { handle };
+  },
+});
+
+var generator = mixin({
+  init() {
+    this.generatorCallbackMap = new Map();
+    this.generatorContextMap = new Map();
+    this.nextGeneratorContextId = usize(0x2000);
+  },
+  createGenerator(structure, args, func) {
+    const { constructor, instance: { members } } = structure;
+    if (func) {
+      if (typeof(func) !== 'function') {
+        throw new TypeMismatch$1('function', func);
+      }
+    } else {
+      const generator = args[GENERATOR] = new AsyncGenerator();
+      func = generator.push.bind(generator);
+    }
+    // create a handle referencing the function 
+    const contextId = this.nextGeneratorContextId++;
+    const ptr = this.obtainZigView(contextId, 0, false);
+    this.generatorContextMap.set(contextId, { func, args });
+    // use the same callback for all generators of a given type
+    let callback = this.generatorCallbackMap.get(constructor);
+    if (!callback) {
+      callback = async (ptr, result) => {
+        // the function assigned to args[RETURN] down below calls this function
+        // with a DataView instead of an actual pointer
+        const dv = (ptr instanceof DataView) ? ptr : ptr['*'][MEMORY];
+        const contextId = this.getViewAddress(dv);
+        const instance = this.generatorContextMap.get(contextId);
+        if (instance) {
+          const { func, args } = instance;
+          const isError = result instanceof Error;
+          if (!isError && args[STRING_RETVAL] && result) {
+            result = result.string;
+          }
+          const retval = await ((func.length === 2)
+          ? func(isError ? result : null, isError ? null : result)
+          : func(result));
+          const done = retval === false || isError || result === null;
+          // reset allocator
+          args[RESET]?.(done);
+          if (!done) return true;
+          args[FINALIZE]();
+          this.generatorContextMap.delete(contextId);
+        }
+        return false
+      };
+      this.generatorCallbackMap.set(constructor, callback);
+      this.destructors.push(() => this.freeFunction(callback));
+    }
+    args[RETURN] = result => callback(ptr, result);
+    const generator = { ptr, callback };
+    const allocatorMember = members.find(m => m.name === 'allocator');
+    if (allocatorMember) {
+      const { structure } = allocatorMember;     
+      generator.allocator = this.createJsAllocator(args, structure, true);
+    }
+    return generator;
+  },
+  createGeneratorCallback(args, generator) {
+    const { ptr, callback } = generator;
+    const f = callback['*'];
+    args[YIELD] = result => f.call(args, ptr, result);
+    return (...argList) => {
+      const result = (argList.length === 2) ? argList[0] ?? argList[1] : argList[0];
+      return args[YIELD](result);
+    };
+  },
+  async pipeContents(generator, args) {
+    try {
+      try {
+        const iter = generator[Symbol.asyncIterator]();
+        for await (const elem of iter) {
+          if (elem !== null) {
+            if (!args[YIELD](elem)) {
+              break;
+            }
+          }
+        }
+        args[YIELD](null);
+      } catch (err) {
+        if (args.constructor[THROWING]) {
+          args[YIELD](err);
+        } else {
+          throw err;
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  },
+});
+
+class AsyncGenerator {
+  result = null;
+  stopped = false;
+  finished = false;
+  promises = {};
+
+  async next() {
+    if (this.stopped) {
+      return { done: true };
+    }
+    while (true) {
+      const value = this.result;
+      if (value !== null) {
+        this.result = null;
+        this.wake('space');
+        return { value, done: false };
+      } else if (this.error) {
+        throw this.error;
+      } else if (this.finished) {
+        return { done: true };
+      }
+      // wait for more content
+      await this.sleep('content');
+    }
+  }
+
+  async return(retval) {
+    await this.break();
+    return { value: retval, done: true };
+  }
+
+  async throw(error) {
+    await this.break();
+    throw error;
+  }
+
+  async break() {
+    if (!this.finished) {
+      this.stopped = true;
+      // wait for a push() to ensure that the Zig side has stopped generating
+      await this.sleep('break');
+    }
+  }
+
+  async push(result) {
+    if (this.stopped) {
+      this.wake('break');
+      return false;
+    }
+    if (result instanceof Error) {
+      this.error = result;
+      this.finished = true;
+    } else if (result === null) {
+      this.finished = true;
+    } else {
+      if (this.result !== null) {
+        await this.sleep('space');
+      }
+      this.result = result;
+    }
+    this.wake('content');
+    return !this.finished;
+  }
+
+  sleep(name) {
+    let resolve;
+    const promise = this.promises[name] ||= new Promise(f => resolve = f);
+    if (resolve) promise.resolve = resolve;
+    return promise;
+  }
+
+  wake(name) {
+    const promise = this.promises[name];
+    if (promise) {
+      this.promises[name] = null;
+      {
+        // on the WebAssembly side we the main thread can't wait for worker threads
+        // so we don't have this problem
+        promise.resolve();
+      }
+    }
+  }
+
+  [Symbol.asyncIterator]() { return this }
+}
+
+var promise = mixin({
+  init() {
+    this.promiseCallbackMap = new Map();
+    this.promiseContextMap = new Map();
+    this.nextPromiseContextId = usize(0x1000);
+  },
+  // create promise struct for outbound call
+  createPromise(structure, args, func) {
+    const { constructor } = structure;
+    if (func) {
+      if (typeof(func) !== 'function') {
+        throw new TypeMismatch$1('function', func);
+      }
+    } else {
+      args[PROMISE] = new Promise((resolve, reject) => {
+        func = (result) => {
+          if (result?.[MEMORY]?.[ZIG]) {
+            // the memory in the result object is stack memory, which will go bad after the function
+            // returns; we need to copy the content into JavaScript memory
+            result = new result.constructor(result);
+          }
+          if (result instanceof Error) {
+            reject(result);
+          } else {
+            if (args[STRING_RETVAL] && result) {
+              result = result.string;
+            }
+            resolve(result);
+          }        };
+      });
+    }
+    // create a handle referencing the function 
+    const contextId = this.nextPromiseContextId++;
+    const ptr = this.obtainZigView(contextId, 0, false);
+    this.promiseContextMap.set(contextId, { func, args });
+    // use the same callback for all promises of a given type
+    let callback = this.promiseCallbackMap.get(constructor);
+    if (!callback) {
+      callback = (ptr, result) => {
+        // the function assigned to args[RETURN] down below calls this function
+        // with a DataView instead of an actual pointer
+        const dv = (ptr instanceof DataView) ? ptr : ptr['*'][MEMORY];
+        const contextId = this.getViewAddress(dv);
+        const instance = this.promiseContextMap.get(contextId);
+        if (instance) {
+          const { func, args } = instance;
+          if (func.length === 2) {
+            const isError = result instanceof Error;
+            func(isError ? result : null, isError ? null : result);
+          } else {
+            func(result);
+          }
+          args[FINALIZE]();
+          this.promiseContextMap.delete(contextId);  
+        }
+      };
+      this.promiseCallbackMap.set(constructor, callback);
+      this.destructors.push(() => this.freeFunction(callback));
+    }
+    args[RETURN] = result => callback(ptr, result);
+    return { ptr, callback };
+  },
+  // create callback for inbound call
+  createPromiseCallback(args, promise) {
+    const { ptr, callback } = promise;
+    const f = callback['*'];
+    args[RETURN] = result => f.call(args, ptr, result);
+    return (...argList) => {
+      const result = (argList.length === 2) ? argList[0] ?? argList[1] : argList[0];
+      return args[RETURN](result);
+    };
+  },
+});
+
+var reader = mixin({
+  init() {
+    this.readerCallback = null;
+    this.readerMap = new Map();
+    this.nextReaderId = usize(0x1000);
+    if (import.meta.env?.PROD !== true) {
+      this.readerProgressMap = new Map();
+    }
+  },
+  // create AnyReader struct for outbound call
+  createReader(arg) {
+    // check if argument isn't already an AnyReader struct
+    if (typeof(arg) === 'object' && arg) {
+      if('context' in arg && 'readFn' in arg) return arg;
+    }
+    const reader = this.convertReader(arg);
+    // create a handle referencing the reader 
+    const readerId = this.nextReaderId++;
+    const context = this.obtainZigView(readerId, 0, false);
+    const onClose = reader.onClose = () => {
+      this.readerMap.delete(readerId);
+      if (import.meta.env?.PROD !== true) {
+        this.readerProgressMap.delete(readerId);
+      }
+    };
+    this.readerMap.set(readerId, reader);
+    if (import.meta.env?.PROD !== true) {
+      this.readerProgressMap.set(readerId, { bytes: 0, calls: 0 });
+    }
+    // use the same callback for all readers
+    let readFn = this.readerCallback;
+    if (!readFn) {
+      const onError = (err) => {
+        console.error(err);
+        onClose();
+        throw err;
+      };
+      readFn = this.readerCallback = (context, buffer) => {
+        const readerId = this.getViewAddress(context['*'][MEMORY]);
+        const reader = this.readerMap.get(readerId);
+        if (!reader) return 0;    
+        try {
+          const dv = buffer['*'][MEMORY];
+          const len = dv.byteLength;
+          const onResult = (chunk) => {
+            const len = chunk.length;
+            const address = this.getViewAddress(buffer['*'][MEMORY]);
+            this.moveExternBytes(chunk, address, true);
+            return len;
+          };
+          if (import.meta.env?.PROD !== true) {
+            const progress = this.readerProgressMap.get(readerId);
+            checkInefficientAccess(progress, 'read', len);
+          }
+          const result = reader.read(len);          
+          return isPromise(result) ? result.then(onResult).catch(onError) : onResult(result);
+        } catch (err) {
+          onError(err);
+        }
+      };
+      this.destructors.push(() => this.freeFunction(readFn));
+    }
+    return { context, readFn };
+  },
+});
+
+var writer = mixin({
+  init() {
+    this.writerCallback = null;
+    this.writerMap = new Map();
+    this.nextWriterContextId = usize(0x2000);
+    if (import.meta.env?.PROD !== true) {
+      this.writerProgressMap = new Map();
+    }
+  },
+  // create AnyWriter struct for outbound call
+  createWriter(arg) {
+    // check if argument isn't already an AnyWriter struct
+    if (typeof(arg) === 'object' && arg) {
+      if('context' in arg && 'writeFn' in arg) return arg;
+    }
+    const writer = this.convertWriter(arg);
+    // create a handle referencing the writer 
+    const writerId = this.nextWriterContextId++;
+    const context = this.obtainZigView(writerId, 0, false);
+    const onClose = writer.onClose = () => {
+      this.writerMap.delete(writerId);
+      if (import.meta.env?.PROD !== true) {
+        this.writerProgressMap.delete(writerId);
+      }
+    };
+    this.writerMap.set(writerId, writer);
+    if (import.meta.env?.PROD !== true) {
+      this.writerProgressMap.set(writerId, { bytes: 0, calls: 0 });
+    }
+    // use the same callback for all writers
+    let writeFn = this.writerCallback;
+    if (!writeFn) {
+      const onError = (err) => {
+        console.error(err);
+        onClose();
+        throw err;
+      };
+      writeFn = this.writerCallback = (context, buffer) => {
+        const writerId = this.getViewAddress(context['*'][MEMORY]);
+        const writer = this.writerMap.get(writerId);
+        if (!writer) return 0;
+        try {
+          const dv = buffer['*'][MEMORY];
+          if (import.meta.env?.PROD !== true) {
+            const progress = this.writerProgressMap.get(writerId);
+            checkInefficientAccess(progress, 'write', dv.byteLength);
+          }
+          const len = dv.byteLength;
+          const src = new Uint8Array(dv.buffer, dv.byteOffset, len);
+          const copy = new Uint8Array(src);
+          const result = writer.write(copy);
+          return isPromise(result) ? result.then(() => len, onError) : len;
+        } catch (err) {
+          onError(err);
+        }
+      };
+      this.destructors.push(() => this.freeFunction(writeFn));
+    }
+    return { context, writeFn };
+  },
+});
+
+var environGet = mixin({
+  environGet(environAddress, environBufAddress) {
+    let size = 0, count = 0;
+    for (const array of this.envVariables) {
+      size += array.length;
+      count++;
+    }
+    const ptrDV = createView(usizeByteSize * count);
+    const bytes = new Uint8Array(size);
+    let p = 0, b = 0, le = this.littleEndian;
+    for (const array of this.envVariables) {
+      {
+        ptrDV.setUint32(p, environBufAddress + b, le);
+        p += 4;
+      }
+      bytes.set(array, b);
+      b += array.length;
+    }
+    this.moveExternBytes(ptrDV, environAddress, true);
+    this.moveExternBytes(bytes, environBufAddress, true);
+    return PosixError.NONE;
+  },
+});
+
+var copyUsize = mixin({
+  copyUsize(bufAddress, value) {
+    {
+      this.copyUint32(bufAddress, value);
+    }
+  },
+  copyUint64(bufAddress, value) {
+    const buf = createView(8);    
+    buf.setBigUint64(0, BigInt(value), this.littleEndian);
+    this.moveExternBytes(buf, bufAddress, true);
+  },
+  copyUint32(bufAddress, value) {
+    const buf = createView(4);    
+    buf.setUint32(0, value, this.littleEndian);
+    this.moveExternBytes(buf, bufAddress, true);
+  },
+});
+
+var environSizesGet = mixin({
+  environSizesGet(environCountAddress, environBufSizeAddress) {
+    const listener = this.listenerMap.get('env');
+    const result = listener?.() ?? {};
+    if (typeof(result) !== 'object') {
+      throw new TypeMismatch('object', result);
+    }
+    const env = this.envVariables = [];
+    for (const [ name, value ] of Object.entries(result)) {
+      const array = encodeText(`${name}=${value}\0`);
+      env.push(array);
+    }
+    let size = 0;
+    for (const array of env) {
+      size += array.length;
+    }
+    this.copyUsize(environCountAddress, env.length);
+    this.copyUsize(environBufSizeAddress, size);
+    return PosixError.NONE;
+  },
+});
+
 const Advice = {
   normal: 0,
   sequential: 1,
@@ -5447,8 +5617,8 @@ const Advice = {
   noReuse: 5,
 };
 
-var wasiAdvise = mixin({
-  wasi_fd_advise(fd, offset, len, advice, canWait) {
+var fdAdvise = mixin({
+  fdAdvise(fd, offset, len, advice, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const stream = this.getStream(fd);
       const adviceKeys = Object.keys(Advice);
@@ -5457,28 +5627,8 @@ var wasiAdvise = mixin({
   }
 });
 
-var wasiAll = mixin({
-  init() {
-    this.customWASI = null;
-  },
-  setCustomWASI(wasi) {
-    if (wasi && this.executable) {
-      throw new Error('Cannot set WASI interface after compilation has already begun');
-    }
-    this.customWASI = wasi;
-  },
-  getWASIHandler(name) {
-    return this.customWASI?.wasiImport?.[name] 
-        ?? this[`wasi_${name}`]?.bind?.(this)
-        ?? (() => {
-          console.error(`Not implemented: ${name}`);
-          return PosixError.ENOTSUP;
-        });
-  },
-});
-
-var wasiAllocate = mixin({
-  wasi_fd_allocate(fd, offset, len, canWait) {
+var fdAllocate = mixin({
+  fdAllocate(fd, offset, len, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const stream = this.getStream(fd);
       return stream.allocate(offset, len);
@@ -5486,55 +5636,21 @@ var wasiAllocate = mixin({
   }
 });
 
-var wasiClose = mixin({
-  wasi_fd_close(fd, canWait) {
+var fdClose = mixin({
+  fdClose(fd, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      this.setStreamLocation(fd); 
-      return this.closeStream(fd);
+      this.setStreamLocation?.(fd); 
+      return this.destroyStreamHandle(fd);
     });
   }
 });
 
-var wasiDatasync = mixin({
-  wasi_fd_datasync(fd, canWait) {
+var fdDatasync = mixin({
+  fdDatasync(fd, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const stream = this.getStream(fd);
       return stream.datasync?.();
     });
-  }
-});
-
-var wasiEnv = mixin({
-  wasi_environ_get(environ_address, environ_buf_address) {
-    const dv = new DataView(this.memory.buffer);
-    const env = this.getEnvVariables();
-    let p = environ_address, b = environ_buf_address;
-    for (const array of env) {
-      dv.setUint32(p, b, true);
-      for (let i = 0; i < array.length; i++) {
-        dv.setUint8(b++, array[i]);
-      }
-      dv.setUint8(b++, 0);
-      p += 4;
-    }
-    return PosixError.NONE;
-  },
-  wasi_environ_sizes_get(environ_count_address, environ_buf_size_address) {
-    const dv = new DataView(this.memory.buffer);
-    const env = this.getEnvVariables();
-    let size = 0;
-    for (const array of env) {
-      size += array.length + 1;
-    }
-    dv.setUint32(environ_count_address, env.length, true);
-    dv.setUint32(environ_buf_size_address, size, true);
-    return PosixError.NONE;
-  },
-});
-
-var wasiExit = mixin({
-  wasi_proc_exit(code) {
-    throw new Exit(code);
   }
 });
 
@@ -5571,10 +5687,9 @@ const Right$1 = {
     sock_accept: 1 << 29,
 };
 
-var wasiFdstat = mixin({
-  wasi_fd_fdstat_get(fd, buf_address, canWait) {
+var fdFdstatGet = mixin({
+  fdFdstatGet(fd, bufAddress, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      const dv = new DataView(this.memory.buffer);
       const stream = this.getStream(fd);
       let rights = 0, flags = 0, type;
       rights = Right$1.fd_filestat_get;
@@ -5601,119 +5716,83 @@ var wasiFdstat = mixin({
       if (type === PosixFileType.directory) {
         rights |= Right$1.path_open | Right$1.path_filestat_get;
       }
-      dv.setUint8(buf_address + 0, type);
-      dv.setUint16(buf_address + 2, flags, true);
-      dv.setBigUint64(buf_address + 8, BigInt(rights), true);
-      dv.setBigUint64(buf_address + 16, 0n, true);
+      const dv = createView(24);
+      dv.setUint8(0, type);
+      dv.setUint16(2, flags, true);
+      dv.setBigUint64(8, BigInt(rights), true);
+      dv.setBigUint64(16, 0n, true);
+      this.moveExternBytes(dv, bufAddress, true);
     });
   },
 });
 
-const LookupFlag = {
-  symlinkFollow: 1 << 0,
-};
-
-var wasiFilestat = mixin({
-  wasi_fd_filestat_get(fd, buf_address, canWait) {
-    return catchPosixError(canWait, PosixError.EBADF, () => {
-      const loc = this.getStreamLocation?.(fd);
-      if (loc) {
-        try {
-          return this.triggerEvent('stat', { ...loc, flags: {} }, PosixError.ENOENT);
-        } catch (err) {        
-          if (err.code !== PosixError.ENOENT) {
-            throw err;
-          }
-        }
-      }
-      const stream = this.getStream(fd);
-      return { size: stream.size };
-    }, (stat) => this.wasiCopyStat(stat, buf_address));
-  },
-  wasi_path_filestat_get(dirfd, lookup_flags, path_address, path_len, buf_address, canWait) {
-    return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
-      const flags = decodeFlags(lookup_flags, LookupFlag);
-      return this.triggerEvent('stat', { ...loc, flags }, PosixError.ENOENT);
-    }, (stat) => this.wasiCopyStat(stat, buf_address));
-  },
-  wasiCopyStat(stat, buf_address) {
+var copyStat = mixin({
+  copyStat(bufAddress, stat) {
     if (stat === false) {
       return PosixError.ENOENT;
     }
     if (typeof(stat) !== 'object' || !stat) {
-      throw new TypeMismatch('object or false', stat);
+      throw new TypeMismatch$1('object or false', stat);
     }
-    const type = PosixFileType[stat.type] ?? PosixFileType.file;
-    const dv = new DataView(this.memory.buffer);
-    dv.setBigUint64(buf_address + 0, 0n, true);  // dev
-    dv.setBigUint64(buf_address + 8, 0n, true);  // ino
-    dv.setUint8(buf_address + 16, type); // filetype
-    dv.setBigUint64(buf_address + 24, 0n, true);  // nlink
-    dv.setBigUint64(buf_address + 32, BigInt(stat.size ?? 0), true);
-    dv.setBigUint64(buf_address + 40, BigInt(stat.atime ?? 0), true);
-    dv.setBigUint64(buf_address + 48, BigInt(stat.mtime ?? 0), true);
-    dv.setBigUint64(buf_address + 56, BigInt(stat.ctime ?? 0), true);
+    let type = decodeEnum(stat.type, PosixFileType);
+    if (type === undefined) {
+      if (stat.type) {
+        throw new InvalidEnumValue(PosixFileType, stat.type);
+      }
+      type = PosixFileType.unknown;
+    }
+    const le = this.littleEndian;
+    const buf = createView(64);
+    buf.setBigUint64(0, 0n, le);  // dev
+    buf.setBigUint64(8, 0n, le);  // ino
+    buf.setUint8(16, type); // filetype
+    buf.setBigUint64(24, 0n, le);  // nlink
+    buf.setBigUint64(32, BigInt(stat.size ?? 0), le);
+    buf.setBigUint64(40, BigInt(stat.atime ?? 0), le);
+    buf.setBigUint64(48, BigInt(stat.mtime ?? 0), le);
+    buf.setBigUint64(56, BigInt(stat.ctime ?? 0), le);
+    this.moveExternBytes(buf, bufAddress, le);
   }
 });
 
-var wasiMkdir = mixin({
-  wasi_path_create_directory(dirfd, path_address, path_len, canWait) {
-    return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
-      return this.triggerEvent('mkdir', loc, PosixError.ENOENT);
-    }, (result) => {
-      if (result instanceof Map) return;
-      if (result === true) return PosixError.EEXIST;
-      if (result === false) return PosixError.ENOENT;
-      throw new TypeMismatch('map or boolean', result);
-    });
-  }
-});
-
-const OpenFlag = {
-  create: 1 << 0,
-  directory: 1 << 1,
-  exclusive: 1 << 2,
-  truncate: 1 << 3,
-};
-
-const Right = {
-  read: 1n << 1n,
-  write: 1n << 6n,
-  readdir: 1n << 14n,
-};
-
-var wasiOpen = mixin({
-  wasi_path_open(dirfd, dirflags, path_address, path_len, oflags, fs_rights_base, fs_rights_inheriting, fs_flags, fd_address, canWait) {
-    const fs_rights = fs_rights_base | fs_rights_inheriting;
-    const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
-    const rights = decodeFlags(fs_rights, Right);
-    return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const flags = decodeFlags(oflags, OpenFlag);
-      return this.triggerEvent('open', { ...loc, rights, flags }, PosixError.ENOENT);
-    }, (arg) => {
-      if (arg === false) {
-        return PosixError.ENOENT;
+var fdFilestatGet = mixin({
+  fdFilestatGet(fd, bufAddress, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
+      const stream = this.getStream(fd);
+      const target = stream.valueOf();
+      const loc = this.getStreamLocation?.(fd);
+      try {
+        return this.triggerEvent('stat', { ...loc, target, flags: {} }, PosixError.ENOENT);
+      } catch (err) {        
+        if (err.code !== PosixError.ENOENT) {
+          throw err;
+        }
       }
-      let resource;
-      if (rights.read || fs_rights === 0) {
-        resource = this.convertReader(arg);
-      } else if (rights.write) {
-        resource = this.convertWriter(arg);
-      } else if (rights.readdir) {
-        resource = this.convertDirectory(arg);
-      }
-      const handle = this.createStreamHandle(resource);
-      this.setStreamLocation?.(handle, loc);
-      const dv = new DataView(this.memory.buffer);
-      dv.setUint32(fd_address, handle, true);
-    });
+      return { size: stream.size, type: 'file' };
+    }, (stat) => this.copyStat(bufAddress, stat));
   },
 });
 
-var wasiPrestat = mixin({
-  wasi_fd_prestat_get(fd, buf_address) {
+var fdFileStatSetTimes = mixin({
+  fdFilestatSetTimes(fd, st_atim, st_mtim, fst_flags, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
+      const stream = this.getStream(fd);
+      const target = stream.valueOf();
+      const loc = this.getStreamLocation?.(fd);
+      const times = extractTimes(st_atim, st_mtim, fst_flags);
+      return this.triggerEvent('set_times', { ...loc, target, times }, PosixError.EBADF);
+    }, (result) => expectBoolean(result, PosixError.EBADF));
+  },
+});
+
+var fdPrestatDirName = mixin({
+  fdPrestatDirName(fd, path_address, path_len) {
+    return PosixError.NONE;
+  }
+}) ;
+
+var fdPrestatGet = mixin({
+  fdPrestatGet(fd, buf_address) {
     if (fd === 3) {
       // descriptor 3 is the root directory, I think
       const dv = new DataView(this.memory.buffer);
@@ -5724,52 +5803,46 @@ var wasiPrestat = mixin({
       return PosixError.EBADF;
     }
   },
-  wasi_fd_prestat_dir_name(fd, path_address, path_len) {
+  fdPrestatDirName(fd, path_address, path_len) {
     return PosixError.NONE;
   }
-});
+}) ;
 
-var wasiRandom = mixin({
-  wasi_random_get(buf_address, buf_len) {
-    const dv = new DataView(this.memory.buffer);
-    for (let i = 0; i < buf_len; i++) {
-      dv.setUint8(buf_address + i, Math.floor(256 * Math.random()));
-    }
-    return PosixError.NONE;
-  }
-});
-
-var wasiRead = mixin({
-  wasi_fd_read(fd, iovs_ptr, iovs_count, read_ptr, canWait) {
-    const dv = new DataView(this.memory.buffer);
-    let read = 0, i = 0, p = iovs_ptr;
-    const next = (len) => {
+var fdRead = mixin({
+  fdRead(fd, iovsAddress, iovsCount, readAddress, canWait) {
+    const iovsSize = usizeByteSize * 2;
+    let iovs, reader, read = 0, i = 0;
+    const next = () => {
       return catchPosixError(canWait, PosixError.EIO, () => {
-        const ptr = dv.getUint32(p, true);
-        const len = dv.getUint32(p + 4, true);
-        p += 8;
-        i++;
-        return this.readBytes(fd, ptr, len);
-      }, (len) => {
-        read += len;
-        if (i < iovs_count) {
-          next();
+        if (!iovs) {
+          iovs = createView(iovsSize * iovsCount);
+          this.moveExternBytes(iovs, iovsAddress, false);
+          reader = this.getStream(fd);
+        }
+        const len = iovs.getUint32(i * iovsSize + usizeByteSize, true);
+        return reader.read(len);
+      }, (chunk) => {
+        const ptr = iovs.getUint32(i * iovsSize, true);
+        this.moveExternBytes(chunk, ptr, true);
+        read += chunk.byteLength;
+        if (++i < iovsCount) {
+          return next();
         } else {
-          dv.setUint32(read_ptr, read, true);
+          this.copyUint32(readAddress, read);
         }
       });
     };
     return next();
-  }
+  },
 });
 
-var wasiReaddir = mixin({
+var fdReaddir = mixin({
   init() {
-    this.wasiCookieMap = new Map();
-    this.wasiNextCookie = 1n;
+    this.readdirCookieMap = new Map();
+    this.readdirNextCookie = 1n;
   },
-  wasi_fd_readdir(fd, buf_address, buf_len, cookie, bufused_address, canWait) {
-    if (buf_len < 24) {
+  fdReaddir(fd, bufAddress, bufLen, cookie, bufusedAddress, canWait) {
+    if (bufLen < 24) {
       return PosixError.EINVAL;
     }
     return catchPosixError(canWait, PosixError.EBADF, () => {
@@ -5781,16 +5854,15 @@ var wasiReaddir = mixin({
       if (cookie === 0n) {
         const iterator = generator[Symbol.iterator]();
         context = { iterator, count: 0, entry: null };
-        cookie = this.wasiNextCookie++;
-        this.wasiCookieMap.set(cookie, context);
+        cookie = this.readdirNextCookie++;
+        this.readdirCookieMap.set(cookie, context);
       } else {
-        context = this.wasiCookieMap.get(cookie);
+        context = this.readdirCookieMap.get(cookie);
       }
-      let dv = new DataView(this.memory.buffer);
-      let remaining = buf_len;
-      let p = buf_address;
-      let used;
-      const defaultEntryCount = (fd !== RootDescriptor) ? 2 : 1;
+      const dv = createView(bufLen);
+      let remaining = bufLen;
+      let p = 0;
+      const defaultEntryCount = (fd !== Descriptor.root) ? 2 : 1;
       if (context) {
         let { iterator, entry } = context;
         if (entry) {
@@ -5834,83 +5906,30 @@ var wasiReaddir = mixin({
           entry = null;
         }
       }
-      used = p - buf_address;
-      dv.setUint32(bufused_address, used, true);
-      if (used === 0) {
-        this.wasiCookieMap.delete(cookie);
+      this.moveExternBytes(dv, bufAddress, true);
+      this.copyUint32(bufusedAddress, p);
+      if (p === 0) {
+        this.readdirCookieMap.delete(cookie);
       }
     })
-  }
-});
-
-var wasiRmdir = mixin({
-  wasi_path_remove_directory(dirfd, path_address, path_len, canWait) {
-    return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
-      return this.triggerEvent('rmdir', loc, PosixError.ENOENT);
-    }, (result) => {
-      if (result === true) return PosixError.NONE 
-      if (result === false) return PosixError.ENOENT;
-      throw new TypeMismatch('boolean', result);
-    });
-  }
-});
-
-var wasiSeek = mixin({
-  wasi_fd_seek(fd, offset, whence, newoffset_ptr, canWait) {
-    return catchPosixError(canWait, PosixError.EBADF, () => this.changeStreamPointer(fd, offset, whence), (pos) => {
-      const dv = new DataView(this.memory.buffer);
-      dv.setBigUint64(newoffset_ptr, pos, true);
-    });
   },
 });
 
-const TimeFlag = {
-  atime: 1 << 0,
-  atime_now: 1 << 1,
-  mtime: 1 << 2,
-  mtime_now: 1 << 3,
-};
-
-const now = () => new Date() * 1000;
-
-function extractTimes(st_atim, st_mtim, fst_flags) {
-  const times = {};
-  if (fst_flags & TimeFlag.atime) {
-    times.atime = st_atim;
-  } else if (fst_flags & TimeFlag.atime_now) {
-    times.atime = now();
-  }
-  if (fst_flags & TimeFlag.mtime) {
-    times.mtime = st_mtim;
-  } else if (fst_flags & TimeFlag.mtime_now) {
-    times.mtime = now();
-  }
-  return times;
-}
-
-var wasiSetTime = mixin({
-  wasi_fd_filestat_set_times(fd, st_atim, st_mtim, fst_flags, canWait) {
+var fdSeek = mixin({
+  fdSeek(fd, offset, whence, newOffsetAddress, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      const loc = this.getStreamLocation?.(fd);
-      if (!loc) {
-        return false;
-      }
-      const times = extractTimes(st_atim, st_mtim, fst_flags);
-      return this.triggerEvent('set_times', { ...loc, times }, PosixError.EBADF);
-    }, (success) => (success) ? PosixError.NONE : PosixError.EBADF);
-  },
-  wasi_path_filestat_set_times(dirfd, path_address, path_len, st_atim, st_mtim, fst_flags, canWait) {
-    return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
-      const times = extractTimes(st_atim, st_mtim, fst_flags);
-      return this.triggerEvent('set_times', { ...loc, times }, PosixError.ENOENT);
-    }, (success) => (success) ? PosixError.NONE : PosixError.ENOENT);
+      const reader = this.getStream(fd, 'seek');
+      return reader.seek(offset, whence);
+    }, (pos) => {
+      const offsetDV = createView(8);
+      offsetDV.setBigUint64(0, BigInt(pos), this.littleEndian);
+      this.moveExternBytes(offsetDV, newOffsetAddress, true); 
+    });
   },
 });
 
-var wasiSync = mixin({
-  wasi_fd_sync(fd, canWait) {
+var fdSync = mixin({
+  fdSync(fd, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const stream = this.getStream(fd);
       return stream.sync?.();
@@ -5918,51 +5937,187 @@ var wasiSync = mixin({
   }
 });
 
-var wasiTell = mixin({
-  wasi_fd_tell(fd, newoffset_ptr, canWait) {
-    return catchPosixError(canWait, PosixError.EBADF, () => this.getStreamPointer(fd), (pos) => {
-      const dv = new DataView(this.memory.buffer);
-      dv.setBigUint64(newoffset_ptr, pos, true);
+var fdTell = mixin({
+  fdTell(fd, newOffsetAddress, canWait) {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
+      const reader = this.getStream(fd, 'tell');
+      return reader.tell();
+    }, (pos) => {
+      const offsetDV = createView(8);
+      offsetDV.setBigUint64(0, BigInt(pos), this.littleEndian);
+      this.moveExternBytes(offsetDV, newOffsetAddress, true); 
     });
-  }
+  },
 });
 
-var wasiUnlink = mixin({
-  wasi_path_unlink_file(dirfd, path_address, path_len, canWait) {
-    return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
-      return this.triggerEvent('unlink', loc, PosixError.ENOENT);
-    }, (result) => {
-      if (result === true) return PosixError.NONE 
-      if (result === false) return PosixError.ENOENT;
-      throw new TypeMismatch('boolean', result);
-    });
-  }
-});
-
-var wasiWrite = mixin({
-  wasi_fd_write(fd, iovs_ptr, iovs_count, written_ptr, canWait) {
-    const dv = new DataView(this.memory.buffer);
-    let written = 0, i = 0, p = iovs_ptr;
+var fdWrite = mixin({
+  fdWrite(fd, iovsAddress, iovsCount, writtenAddress, canWait) {
+    const iovsSize = usizeByteSize * 2;
+    let iovs, writer, i = 0;
+    let written = 0;
     const next = () => {
       return catchPosixError(canWait, PosixError.EIO, () => {
-        const ptr = dv.getUint32(p, true);
-        const len = dv.getUint32(p + 4, true);
-        p += 8;
-        i++;
+        if (!iovs) {
+          iovs = createView(iovsSize * iovsCount);
+          this.moveExternBytes(iovs, iovsAddress, false);
+          writer = this.getStream(fd, 'write');
+        }
+        const le = this.littleEndian;
+        const ptr = ("32" == 64) 
+                  ? iovs.getBigUint64(i * iovsSize, le) 
+                  : iovs.getUint32(i * iovsSize, le);
+        const len = ("32" == 64) 
+                  ? Number(iovs.getBigUint64(i * iovsSize + 8, le))
+                  : iovs.getUint32(i * iovsSize + 4, le);
+        const chunk = new Uint8Array(len);
+        this.moveExternBytes(chunk, ptr, false);
         written += len;
-        return this.writeBytes(fd, ptr, len);
+        return writer.write(chunk);
       }, () => {
-        if (i < iovs_count) {
-          next(); 
+        if (++i < iovsCount) {
+          return next();
         } else {
-          dv.setUint32(written_ptr, written, true);
+          this.copyUint32(writtenAddress, written);
         }
       });
     };
     return next();
-  }
+  },
 });
+
+var pathCreateDirectory = mixin({
+  pathCreateDirectory(dirfd, path_address, path_len, canWait) {
+    return catchPosixError(canWait, PosixError.ENOENT, () => {
+      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
+      return this.triggerEvent('mkdir', loc, PosixError.ENOENT);
+    }, (result) => {
+      if (result instanceof Map) return;
+      if (result === true) return PosixError.EEXIST; 
+      if (result === false) return PosixError.ENOENT;
+      throw new TypeMismatch$1('boolean', result);
+    });
+  },
+});
+
+const LookupFlag = {
+  symlinkFollow: 1 << 0,
+};
+
+var pathFilestatGet = mixin({
+  pathFilestatGet(dirfd, lookupFlags, pathAddress, pathLen, bufAddress, canWait) {
+    return catchPosixError(canWait, PosixError.ENOENT, () => {
+      const loc = this.obtainStreamLocation(dirfd, pathAddress, pathLen);
+      const flags = decodeFlags(lookupFlags, LookupFlag);
+      return this.triggerEvent('stat', { ...loc, flags }, PosixError.ENOENT);
+    }, (stat) => this.copyStat(bufAddress, stat));
+  },
+});
+
+var pathFilestatSetTimes = mixin({
+  pathFilestatSetTimes(dirfd, path_address, path_len, st_atim, st_mtim, fst_flags, canWait) {
+    return catchPosixError(canWait, PosixError.ENOENT, () => {
+      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
+      const times = extractTimes(st_atim, st_mtim, fst_flags);
+      return this.triggerEvent('set_times', { ...loc, times }, PosixError.ENOENT);
+    }, (result) => expectBoolean(result, PosixError.ENOENT));
+  },
+});
+
+const OpenFlag = {
+  create: 1 << 0,
+  directory: 1 << 1,
+  exclusive: 1 << 2,
+  truncate: 1 << 3,
+};
+
+const Right = {
+  read: 1n << 1n,
+  write: 1n << 6n,
+  readdir: 1n << 14n,
+};
+
+var pathOpen = mixin({
+  pathOpen(dirfd, dirflags, pathAddress, pathLen, oflags, rightsBase, rightsInheriting, fsFlags, fdAddress, canWait) {
+    const rights = decodeFlags(rightsBase | rightsInheriting, Right);
+    const flags = decodeFlags(oflags, OpenFlag);
+    let loc;
+    return catchPosixError(canWait, PosixError.ENOENT, () => {
+      loc = this.obtainStreamLocation(dirfd, pathAddress, pathLen);
+      return this.triggerEvent('open', { ...loc, rights, flags }, PosixError.ENOENT);
+    }, (arg) => {
+      if (arg === false) {
+        return PosixError.ENOENT;
+      }
+      let resource;
+      if (rights.read || Object.values(rights).length === 0) {
+        resource = this.convertReader(arg);
+      } else if (rights.write) {
+        resource = this.convertWriter(arg);
+      } else if (rights.readdir) {
+        resource = this.convertDirectory(arg);
+      }
+      const fd = this.createStreamHandle(resource);
+      this.setStreamLocation?.(fd, loc);
+      this.copyUint32(fdAddress, fd);
+    });
+  }  
+});
+
+var pathRemoveDirectory = mixin({
+  pathRemoveDirectory(dirfd, path_address, path_len, canWait) {
+    return catchPosixError(canWait, PosixError.ENOENT, () => {
+      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
+      return this.triggerEvent('rmdir', loc, PosixError.ENOENT);
+    }, (result) => expectBoolean(result, PosixError.ENOENT));
+  },
+});
+
+var pathUnlinkFile = mixin({
+  pathUnlinkFile(dirfd, path_address, path_len, canWait) {
+    return catchPosixError(canWait, PosixError.ENOENT, () => {
+      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
+      return this.triggerEvent('unlink', loc, PosixError.ENOENT);
+    }, (result) => expectBoolean(result, PosixError.ENOENT));
+  },
+});
+
+var procExit = mixin({
+  procExit(code) {
+    throw new Exit(code);
+  }
+}) ;
+
+var randomGet = mixin({
+  randomGet(bufAddress, bufLen) {
+    const dv = createView(bufLen);
+    for (let i = 0; i < bufLen; i++) {
+      dv.setUint8(i, Math.floor(256 * Math.random()));
+    }
+    this.moveExternBytes(dv, bufAddress, true);
+    return PosixError.NONE;
+  }
+}) ;
+
+var wasiSupport = mixin({
+  init() {
+    this.customWASI = null;
+  },
+  setCustomWASI(wasi) {
+    if (wasi && this.executable) {
+      throw new Error('Cannot set WASI interface after compilation has already begun');
+    }
+    this.customWASI = wasi;
+  },
+  getWASIHandler(name) {
+    const nameCamelized = name.replace(/_./g, m => m.charAt(1).toUpperCase());
+    return this.customWASI?.wasiImport?.[name] 
+        ?? this[nameCamelized]?.bind?.(this)
+        ?? (() => {
+          console.error(`Not implemented: ${name}`);
+          return PosixError.ENOTSUP;
+        });
+  },
+}) ;
 
 var workerSupport = mixin({
   init() {
@@ -5990,6 +6145,7 @@ var workerSupport = mixin({
       if (msg.type === 'call') {
         const { module, name, args, array } = msg;        
         const fn = this.exportedModules[module]?.[name];
+        // add a true argument to indicate that waiting is possible
         const result = fn?.(...args, true);
         const finish = (value) => {
           if (array) {
@@ -6082,136 +6238,15 @@ function workerMain() {
   }
 
   function createRouter(module, name) {
-    if (name === '_handleJsCall') {
-      // waiting occurs in on Zig side
-      return function(...args) {
-        postMessage({ type: 'call', module, name, args });
-        return 0;
-      };
-    } else {
-      const array = new Int32Array(new SharedArrayBuffer(8));
-      return function(...args) {
-        array[0] = 0;
-        postMessage({ type: 'call', module, name, args, array });
-        Atomics.wait(array, 0, 0);
-        return array[1];
-      };
-    }
-  }
-}
-
-var writerConversion = mixin({
-  convertWriter(arg) {
-    if (arg instanceof WritableStreamDefaultWriter) {
-      return new WebStreamWriter(arg);
-    } else if (Array.isArray(arg)) {
-      return new ArrayWriter(arg);
-    } else if (arg === null) {
-      return new NullStream();
-    } else if (typeof(arg?.write) === 'function') {
-      return arg;
-    } else {
-      throw new TypeMismatch('WritableStreamDefaultWriter, array, null, or object with writer interface', arg);
-    }
-  },
-});
-
-class WebStreamWriter {
-  onClose = null;
-  done = false;
-
-  constructor(writer) {
-    this.writer = writer;
-    writer.closed.catch(empty).then(() => {
-      this.done = true;
-      this.onClose?.();
-    });
-  }
-
-  async write(bytes) {
-    await this.writer.write(bytes);
-  }
-
-  destroy() {
-    if (!this.done) {
-      this.writer.close();
-    }
-  }
-}
-
-class ArrayWriter {
-  constructor(array) {
-    this.array = array;
-    this.closeCB = null;
-    array.close = () => this.onClose?.();
-  }
-
-  write(bytes) {
-    this.array.push(bytes);
-  }
-}
-
-var writer = mixin({
-  init() {
-    this.writerCallback = null;
-    this.writerMap = new Map();
-    this.nextWriterContextId = usize(0x2000);
-    if (import.meta.env?.PROD !== true) {
-      this.writerProgressMap = new Map();
-    }
-  },
-  // create AnyWriter struct for outbound call
-  createWriter(arg) {
-    // check if argument isn't already an AnyWriter struct
-    if (typeof(arg) === 'object' && arg) {
-      if('context' in arg && 'writeFn' in arg) return arg;
-    }
-    const writer = this.convertWriter(arg);
-    // create a handle referencing the writer 
-    const writerId = this.nextWriterContextId++;
-    const context = this.obtainZigView(writerId, 0, false);
-    const onClose = writer.onClose = () => {
-      this.writerMap.delete(writerId);
-      if (import.meta.env?.PROD !== true) {
-        this.writerProgressMap.delete(writerId);
-      }
+    const array = new Int32Array(new SharedArrayBuffer(8));
+    return function(...args) {
+      array[0] = 0;
+      postMessage({ type: 'call', module, name, args, array });
+      Atomics.wait(array, 0, 0);
+      return array[1];
     };
-    this.writerMap.set(writerId, writer);
-    if (import.meta.env?.PROD !== true) {
-      this.writerProgressMap.set(writerId, { bytes: 0, calls: 0 });
-    }
-    // use the same callback for all writers
-    let writeFn = this.writerCallback;
-    if (!writeFn) {
-      const onError = (err) => {
-        console.error(err);
-        onClose();
-        throw err;
-      };
-      writeFn = this.writerCallback = (context, buffer) => {
-        const writerId = this.getViewAddress(context['*'][MEMORY]);
-        const writer = this.writerMap.get(writerId);
-        if (!writer) return 0;
-        try {
-          const dv = buffer['*'][MEMORY];
-          if (import.meta.env?.PROD !== true) {
-            const progress = this.writerProgressMap.get(writerId);
-            checkInefficientAccess(progress, 'write', dv.byteLength);
-          }
-          const len = dv.byteLength;
-          const src = new Uint8Array(dv.buffer, dv.byteOffset, len);
-          const copy = new Uint8Array(src);
-          const result = writer.write(copy);
-          return isPromise(result) ? result.then(() => len, onError) : len;
-        } catch (err) {
-          onError(err);
-        }
-      };
-      this.destructors.push(() => this.freeFunction(writeFn));
-    }
-    return { context, writeFn };
-  },
-});
+  }
+}
 
 var structureAcquisition = mixin({
   init() {
@@ -6296,7 +6331,7 @@ var structureAcquisition = mixin({
       // copy content into JavaScript memory
       const dv = this.allocateJSMemory(len, 0);
       if (len > 0) {
-        this.copyExternBytes(dv, address, len);
+        this.moveExternBytes(dv, address, false);
       }
       return dv;
     } else {
@@ -6411,58 +6446,43 @@ var structureAcquisition = mixin({
         }
       }
       for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
-        this.use(wasiAll);
+        this.use(wasiSupport);
         switch (name) {
-          case 'environ_get':
-          case 'environ_sizes_get': this.use(wasiEnv); break;
-          case 'fd_advise': this.use(wasiAdvise); break;
-          case 'fd_allocate': this.use(wasiAllocate); break;
-          case 'fd_close': this.use(wasiClose); break;
-          case 'fd_datasync': this.use(wasiDatasync); break;
-          case 'fd_fdstat_get': this.use(wasiFdstat); break;
-          case 'fd_filestat_get':
-          case 'path_filestat_get': this.use(wasiFilestat); break;
-          case 'fd_filestat_set_times':
-          case 'path_filestat_set_times': this.use(wasiSetTime); break;
-          case 'fd_prestat_get':
-          case 'fd_prestat_dir_name': this.use(wasiPrestat); break;
-          case 'fd_sync': this.use(wasiSync); break;
-          case 'fd_read': this.use(wasiRead); break;
-          case 'fd_readdir': this.use(wasiReaddir); break;
-          case 'fd_seek': this.use(wasiSeek); break;
-          case 'fd_tell': this.use(wasiTell); break;
-          case 'fd_write': this.use(wasiWrite); break;
-          case 'path_create_directory': this.use(wasiMkdir); break;
-          case 'path_remove_directory': this.use(wasiRmdir); break;
-          case 'path_open': this.use(wasiOpen); break;
-          case 'path_unlink': this.use(wasiUnlink); break;
-          case 'proc_exit': this.use(wasiExit); break;
-          case 'random_get': this.use(wasiRandom); break;
-        }
-        if (name.startsWith('path_') || name.includes('filestat')) {
-          this.use(streamLocation);
-        }
-        switch (name) {
-          case 'environ_get':
-          case 'environ_sizes_get':
-            this.use(envVariables);
-            break;
-          case 'path_open':
+          case 'environ_get': this.use(environGet); break;
+          case 'environ_sizes_get': this.use(environSizesGet); break;
+          case 'fd_advise': this.use(fdAdvise); break;
+          case 'fd_allocate': this.use(fdAllocate); break;
+          case 'fd_close': this.use(fdClose); break;
+          case 'fd_datasync': this.use(fdDatasync); break;
+          case 'fd_fdstat_get': this.use(fdFdstatGet); break;
+          case 'fd_filestat_get':this.use(fdFilestatGet); break;
+          case 'fd_filestat_set_times': this.use(fdFileStatSetTimes); break;
+          case 'fd_prestat_get': this.use(fdPrestatGet); break;
+          case 'fd_prestat_dir_name': this.use(fdPrestatDirName); break;
+          case 'fd_read': this.use(fdRead); break;
+          case 'fd_readdir': this.use(fdReaddir); break;
+          case 'fd_seek': this.use(fdSeek); break;
+          case 'fd_sync': this.use(fdSync); break;
+          case 'fd_tell': this.use(fdTell); break;
+          case 'fd_write': this.use(fdWrite); break;
+          case 'path_create_directory': this.use(pathCreateDirectory); break;
+          case 'path_filestat_get': this.use(pathFilestatGet); break;
+          case 'path_remove_directory': this.use(pathRemoveDirectory); break;
+          case 'path_filestat_set_times': this.use(pathFilestatSetTimes); break;
+          case 'path_open': 
+            this.use(pathOpen); 
             this.use(readerConversion);
             this.use(writerConversion);
             break;
-          case 'fd_close':
-            this.use(streamRedirection);
-            break;
-          case 'fd_seek':
-          case 'fd_tell':
-            this.use(streamRedirection);
-            this.use(streamPosition);
-            break;
-          case 'fd_write':
-          case 'fd_read':
-            this.use(streamRedirection);
-            break;
+          case 'path_unlink': this.use(pathUnlinkFile); break;
+          case 'proc_exit': this.use(procExit); break;
+          case 'random_get': this.use(randomGet); break;
+        }
+        if (name.startsWith('path_')) {
+          this.use(streamLocation);
+        }
+        if (name.startsWith('fd_')) {
+          this.use(streamRedirection);
         }
       }
       for (const structure of this.structures) {
@@ -6470,7 +6490,7 @@ var structureAcquisition = mixin({
           for (const { structure: { purpose } } of structure.instance.members) {
             switch (purpose) {
               case StructurePurpose.Allocator:
-                this.use(jsAllocator);
+                this.use(allocator);
                 break;
               case StructurePurpose.Promise:
                 this.use(promise);
@@ -6492,7 +6512,6 @@ var structureAcquisition = mixin({
               case StructurePurpose.File:
                 this.use(file);
                 this.use(streamRedirection);
-                this.use(streamPosition);
                 this.use(readerConversion);
                 this.use(writerConversion);
                 break;
@@ -7213,7 +7232,7 @@ var base64 = mixin({
       },
       set(str, allocator) {
         if (typeof(str) !== 'string') {
-          throw new TypeMismatch('string', str);
+          throw new TypeMismatch$1('string', str);
         }
         const dv = decodeBase64(str);
         thisEnv.assignView(this, dv, structure, false, allocator);
@@ -7239,7 +7258,7 @@ var clampedArray = mixin({
       },
       set(ta, allocator) {
         if (ta?.[Symbol.toStringTag] !== ClampedArray.name) {
-          throw new TypeMismatch(ClampedArray.name, ta);
+          throw new TypeMismatch$1(ClampedArray.name, ta);
         }
         const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
         thisEnv.assignView(this, dv, structure, true, allocator);
@@ -7261,7 +7280,7 @@ var dataView = mixin({
       },
       set(dv, allocator) {
         if (dv?.[Symbol.toStringTag] !== 'DataView') {
-          throw new TypeMismatch('DataView', dv);
+          throw new TypeMismatch$1('DataView', dv);
         }
         thisEnv.assignView(this, dv, structure, true, allocator);
       },
@@ -7491,7 +7510,7 @@ var string = mixin({
       },
       set(str, allocator) {
         if (typeof(str) !== 'string') {
-          throw new TypeMismatch('string', str);
+          throw new TypeMismatch$1('string', str);
         }
         const sentinelValue = this.constructor[SENTINEL]?.value;
         if (sentinelValue !== undefined && str.charCodeAt(str.length - 1) !== sentinelValue) {
@@ -7618,7 +7637,7 @@ var typedArray = mixin({
       },
       set(ta, allocator) {
         if (ta?.[Symbol.toStringTag] !== TypedArray.name) {
-          throw new TypeMismatch(TypedArray.name, ta);
+          throw new TypeMismatch$1(TypedArray.name, ta);
         }
         const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
         thisEnv.assignView(this, dv, structure, true, allocator);
@@ -8637,7 +8656,7 @@ var _function = mixin({
           throw new NoInitializer(structure);
         }
         if (typeof(arg) !== 'function') {
-          throw new TypeMismatch('function', arg);
+          throw new TypeMismatch$1('function', arg);
         }
         if (ArgStruct[TYPE] === StructureType.VariadicStruct || !jsThunkController) {
           throw new Unsupported();
@@ -10077,36 +10096,27 @@ var mixins = /*#__PURE__*/Object.freeze({
   AccessorUnalignedBool1: unalignedBool1,
   AccessorUnalignedInt: unalignedInt,
   AccessorUnalignedUint: unalignedUint,
-  FeatureAbortSignal: abortSignal,
   FeatureAllocatorMethods: allocatorMethods,
   FeatureBaseline: baseline,
   FeatureCallMarshalingInbound: callMarshalingInbound,
   FeatureCallMarshalingOutbound: callMarshalingOutbound,
   FeatureDataCopying: dataCopying,
-  FeatureDir: dir,
   FeatureDirConversion: dirConversion,
-  FeatureEnvVariables: envVariables,
-  FeatureFile: file,
-  FeatureGenerator: generator,
   FeatureIntConversion: intConversion,
-  FeatureJsAllocator: jsAllocator,
   FeatureMemoryMapping: memoryMapping,
   FeatureModuleLoading: moduleLoading,
   FeatureObjectLinkage: objectLinkage,
   FeaturePointerSynchronization: pointerSynchronization,
-  FeaturePromise: promise,
-  FeatureReader: reader,
   FeatureReaderConversion: readerConversion,
   FeatureRuntimeSafety: runtimeSafety,
   FeatureStreamLocation: streamLocation,
-  FeatureStreamPosition: streamPosition,
   FeatureStreamRedirection: streamRedirection,
   FeatureStructureAcquisition: structureAcquisition,
   FeatureThunkAllocation: thunkAllocation,
   FeatureViewManagement: viewManagement,
+  FeatureWasiSupport: wasiSupport,
   FeatureWorkerSupport: workerSupport,
   FeatureWriteProtection: writeProtection,
-  FeatureWriter: writer,
   FeatureWriterConversion: writerConversion,
   IteratorForArray: forArray,
   IteratorForStruct: forStruct,
@@ -10134,24 +10144,59 @@ var mixins = /*#__PURE__*/Object.freeze({
   MemberUnsupported: unsupported,
   MemberValueOf: valueOf,
   MemberVoid: _void,
+  StructureAbortSignal: abortSignal,
   StructureAll: all$1,
+  StructureAllocator: allocator,
   StructureArgStruct: argStruct,
   StructureArray: array,
   StructureArrayLike: arrayLike,
+  StructureDir: dir,
   StructureEnum: _enum,
   StructureErrorSet: errorSet,
   StructureErrorUnion: errorUnion,
+  StructureFile: file,
   StructureFunction: _function,
+  StructureGenerator: generator,
   StructureOpaque: opaque,
   StructureOptional: optional,
   StructurePointer: pointer,
   StructurePrimitive: primitive,
+  StructurePromise: promise,
+  StructureReader: reader,
   StructureSlice: slice,
   StructureStruct: struct,
   StructureStructLike: structLike,
   StructureUnion: union,
   StructureVariadicStruct: variadicStruct,
   StructureVector: vector,
+  StructureWriter: writer,
+  SyscallCopyStat: copyStat,
+  SyscallCopyUsize: copyUsize,
+  SyscallEnvironGet: environGet,
+  SyscallEnvironSizesGet: environSizesGet,
+  SyscallFdAdvise: fdAdvise,
+  SyscallFdAllocate: fdAllocate,
+  SyscallFdClose: fdClose,
+  SyscallFdDatasync: fdDatasync,
+  SyscallFdFdstatGet: fdFdstatGet,
+  SyscallFdFilestatGet: fdFilestatGet,
+  SyscallFdFilestatSetTimes: fdFileStatSetTimes,
+  SyscallFdPrestatDirName: fdPrestatDirName,
+  SyscallFdPrestatGet: fdPrestatGet,
+  SyscallFdRead: fdRead,
+  SyscallFdReaddir: fdReaddir,
+  SyscallFdSeek: fdSeek,
+  SyscallFdSync: fdSync,
+  SyscallFdTell: fdTell,
+  SyscallFdWrite: fdWrite,
+  SyscallPathCreateDirectory: pathCreateDirectory,
+  SyscallPathFilestatGet: pathFilestatGet,
+  SyscallPathFilestatSetTimes: pathFilestatSetTimes,
+  SyscallPathOpen: pathOpen,
+  SyscallPathRemoveDirectory: pathRemoveDirectory,
+  SyscallPathUnlinkFile: pathUnlinkFile,
+  SyscallProcExit: procExit,
+  SyscallRandomGet: randomGet,
   VisitorAll: all,
   VisitorInArgStruct: inArgStruct,
   VisitorInArray: inArray,
@@ -10159,29 +10204,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   VisitorInOptional: inOptional,
   VisitorInStruct: inStruct,
   VisitorInUnion: inUnion,
-  VisitorInVariadicStruct: inVariadicStruct,
-  WasiAdvise: wasiAdvise,
-  WasiAll: wasiAll,
-  WasiAllocate: wasiAllocate,
-  WasiClose: wasiClose,
-  WasiDatasync: wasiDatasync,
-  WasiEnv: wasiEnv,
-  WasiExit: wasiExit,
-  WasiFdstat: wasiFdstat,
-  WasiFilestat: wasiFilestat,
-  WasiMkdir: wasiMkdir,
-  WasiOpen: wasiOpen,
-  WasiPrestat: wasiPrestat,
-  WasiRandom: wasiRandom,
-  WasiRead: wasiRead,
-  WasiReaddir: wasiReaddir,
-  WasiRmdir: wasiRmdir,
-  WasiSeek: wasiSeek,
-  WasiSetTimes: wasiSetTime,
-  WasiSync: wasiSync,
-  WasiTell: wasiTell,
-  WasiUnlink: wasiUnlink,
-  WasiWrite: wasiWrite
+  VisitorInVariadicStruct: inVariadicStruct
 });
 
 const MagicNumber = 0x6d736100;

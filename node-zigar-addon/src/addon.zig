@@ -35,7 +35,8 @@ const ModuleHost = struct {
         create_template: ?Ref = null,
         handle_js_call: ?Ref = null,
         release_function: ?Ref = null,
-        write_bytes: ?Ref = null,
+
+        fd_write1: ?Ref = null,
     } = .{},
     ts: struct {
         disable_multithread: ?ThreadsafeFunction = null,
@@ -57,23 +58,17 @@ const ModuleHost = struct {
 
     fn createEnvironment(env: Env) !Value {
         // compile embedded JavaScript
-        std.debug.print("compileJavaScript\n", .{});
         const js_module = try compileJavaScript(env);
         // look for the Environment class
-        std.debug.print("getNamedProperty\n", .{});
         const create_env = try env.getNamedProperty(js_module, "createEnvironment");
         // create the environment
-        std.debug.print("callFunction\n", .{});
         const js_env = try env.callFunction(try env.getNull(), create_env, &.{});
-        std.debug.print("createSelf\n", .{});
         const self = try createSelf(env);
         defer self.release();
         // import functions from the environment
-        std.debug.print("importFunctionsFromJavaScript\n", .{});
         try self.importFunctionsFromJavaScript(js_env);
         // export functions to it; exported functions will keep self alive until they're all
         // garbage collected
-        std.debug.print("exportFunctionsToJavaScript\n", .{});
         try self.exportFunctionsToJavaScript(js_env);
         return js_env;
     }
@@ -140,7 +135,6 @@ const ModuleHost = struct {
         const exports = try env.callFunction(js_env, export_fn, &.{});
         inline for (comptime std.meta.fields(@FieldType(@This(), "js"))) |field| {
             const name = camelize(field.name);
-            std.debug.print("importing: {s}\n", .{name});
             const func = try env.getNamedProperty(exports, name);
             @field(self.js, field.name) = try env.createReference(func, 1);
         }
@@ -291,9 +285,9 @@ const ModuleHost = struct {
         if (len > 0) {
             const zig_bytes: [*]u8 = @ptrFromInt(try env.getValueUsize(address));
             const js_bytes: [*]u8 = @ptrCast(js_opaque);
-            const zig_to_js = try env.getValueBool(to);
-            const src = if (zig_to_js) zig_bytes else js_bytes;
-            const dst = if (zig_to_js) js_bytes else zig_bytes;
+            const js_to_zig = try env.getValueBool(to);
+            const src = if (js_to_zig) js_bytes else zig_bytes;
+            const dst = if (js_to_zig) zig_bytes else js_bytes;
             @memcpy(dst[0..len], src[0..len]);
         }
     }
@@ -762,9 +756,8 @@ const ModuleHost = struct {
 
     fn handleSysCall(self: *@This(), call: *SysCall, in_main_thread: bool) !void {
         if (in_main_thread) {
-            call.futex_handle = 0;
             switch (call.cmd) {
-                .write => try self.handleWrite(call),
+                .write => self.handleWrite(call) catch |err| @panic(@errorName(err)),
             }
         } else {
             const func = self.ts.handle_sys_call orelse return error.Disabled;
@@ -780,11 +773,12 @@ const ModuleHost = struct {
         const u = &call.u.write;
         _ = try env.callFunction(
             try env.getNull(),
-            try env.getReferenceValue(self.js.write_bytes orelse return error.Unexpected),
+            try env.getReferenceValue(self.js.fd_write1 orelse return error.Unexpected),
             &.{
                 try env.createUint32(@as(u32, @truncate(u.fd))),
                 try env.createUsize(@intFromPtr(u.bytes)),
                 try env.createUint32(@as(u32, @truncate(u.len))),
+                try env.createUsize(@intFromPtr(&u.written)),
                 try env.createUsize(call.futex_handle),
             },
         );
@@ -938,7 +932,6 @@ const Exports = extern struct {
     create_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
     destroy_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
     override_sys_call: *const fn (*const SysCall) callconv(.C) E,
-    wake_caller: *const fn (usize, u32) callconv(.C) E,
 };
 const Module = extern struct {
     version: u32,

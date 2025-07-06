@@ -158,8 +158,6 @@ export default mixin({
       }
     };
   },
-  // canWait will be undefined when called from WASM; when a call is relayed from 
-  // another thread, an extra true gets added to the argument list
   handleJsCall(id, argAddress, argSize, canWait) {
     const dv = this.obtainZigView(argAddress, argSize, false);
     const caller = this.jsFunctionCallerMap.get(id);
@@ -185,7 +183,7 @@ export default mixin({
   },
   ...(process.env.TARGET === 'wasm' ? {
     exports: {
-      handleJsCall: { argType: 'iii', returnType: 'i' },
+      handleJsCall: { argType: 'iiib', returnType: 'i' },
       releaseFunction: { argType: 'i' },
     },
     imports: {

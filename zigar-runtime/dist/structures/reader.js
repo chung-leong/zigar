@@ -46,13 +46,19 @@ var reader = mixin({
         if (!reader) return 0;    
         try {
           const dv = buffer['*'][MEMORY];
-          const dest = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+          const len = dv.byteLength;
+          const onResult = (chunk) => {
+            const len = chunk.length;
+            const address = this.getViewAddress(buffer['*'][MEMORY]);
+            this.moveExternBytes(chunk, address, true);
+            return len;
+          };
           if (import.meta.env?.PROD !== true) {
             const progress = this.readerProgressMap.get(readerId);
-            checkInefficientAccess(progress, 'read', dest.length);
+            checkInefficientAccess(progress, 'read', len);
           }
-          const result = reader.read(dest);
-          return isPromise(result) ? result.catch(onError) : result;
+          const result = reader.read(len);          
+          return isPromise(result) ? result.then(onResult).catch(onError) : onResult(result);
         } catch (err) {
           onError(err);
         }

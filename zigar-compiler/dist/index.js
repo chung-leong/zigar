@@ -32,44 +32,40 @@ const MEMORY = symbol('memory');
 const SLOTS = symbol('slots');
 const CONST_TARGET = symbol('const target');
 
-(process.env.BITS === '64')
+(process.env.BITS == 64)
 ? function(address, align) {
     return (align) ? !!(address & BigInt(align - 1)) : false;
   }
-: (process.env.BITS === '32')
-? function(address, align) {
+: function(address, align) {
     return (align) ? !!(address & (align - 1)) : false;
   }
-  /* c8 ignore next */
-: undefined;
+;
 
-(process.env.BITS === '64')
+(process.env.BITS == 64)
 ? function(address, align) {
     return (address + BigInt(align - 1)) & ~BigInt(align - 1);
   }
-: (process.env.BITS === '32')
-? function(address, align) {
+: function(address, align) {
     return (address + (align - 1)) & ~(align - 1);
   }
-  /* c8 ignore next */
-: undefined;
+;
 
-(process.env.BITS === '64') ? 0n : 0;
-(process.env.BITS === '64') ? 0xFFFF_FFFF_FFFF_FFFFn : 0xFFFF_FFFF;
-(process.env.BITS === '64') ? -1n : -1;
+(process.env.BITS == 64) ? 0n : 0;
+(process.env.BITS == 64) ? 0xFFFF_FFFF_FFFF_FFFFn : 0xFFFF_FFFF;
+(process.env.BITS == 64) ? -1n : -1;
 
-(process.env.BITS === '64')
+(process.env.BITS == 64)
 ? function(arg) {
     return BigInt(arg);
   }
-: (process.env.BITS === '32')
-? function(arg) {
+: function(arg) {
     return Number(arg);
   }
-  /* c8 ignore next */
-: undefined;
+;
 
-(process.env.BITS === '64')
+(process.env.BITS == 64) ? 8 : 4;
+
+(process.env.BITS == 64)
 ? function(address) {
     return address === 0xaaaa_aaaa_aaaa_aaaan;
   }
@@ -80,7 +76,7 @@ const CONST_TARGET = symbol('const target');
   /* c8 ignore next */
 : undefined;
 
-(process.env.BITS === '64')
+(process.env.BITS == 64)
 ? function(address, addend) {
     return address + BigInt(addend);
   }

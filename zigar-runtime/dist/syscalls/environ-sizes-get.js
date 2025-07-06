@@ -1,7 +1,7 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { encodeText } from '../utils.js';
-import './usize-copy.js';
+import './copy-usize.js';
 
 var environSizesGet = mixin({
   environSizesGet(environCountAddress, environBufSizeAddress) {

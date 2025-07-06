@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import { TypeMismatch, InvalidEnumValue } from '../errors.js';
 import { decodeEnum, createView } from '../utils.js';
 
-var statCopy = mixin({
+var copyStat = mixin({
   copyStat(bufAddress, stat) {
     if (stat === false) {
       return PosixError.ENOENT;
@@ -32,4 +32,4 @@ var statCopy = mixin({
   }
 });
 
-export { statCopy as default };
+export { copyStat as default };

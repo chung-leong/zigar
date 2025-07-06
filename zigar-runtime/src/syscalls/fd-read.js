@@ -32,10 +32,11 @@ export default mixin({
   },
   ...(process.env.TARGET === 'node' ? {
     exports: {
-      readBytes: { async: true },
+      fdRead: { async: true },
+      fdRead1: { async: true },
     },
 
-    readBytes(fd, address, len, readAddress, canWait) {
+    fdRead1(fd, address, len, readAddress, canWait) {
       return catchPosixError(canWait, PosixError.EIO, () => {
         const reader = this.getStream(fd);
         return reader.read(len);

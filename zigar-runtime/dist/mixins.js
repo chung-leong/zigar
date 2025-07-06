@@ -88,6 +88,8 @@ export { default as StructureUnion } from './structures/union.js';
 export { default as StructureVariadicStruct } from './structures/variadic-struct.js';
 export { default as StructureVector } from './structures/vector.js';
 export { default as StructureWriter } from './structures/writer.js';
+export { default as SyscallCopyStat } from './syscalls/copy-stat.js';
+export { default as SyscallCopyUsize } from './syscalls/copy-usize.js';
 export { default as SyscallEnvironGet } from './syscalls/environ-get.js';
 export { default as SyscallEnvironSizesGet } from './syscalls/environ-sizes-get.js';
 export { default as SyscallFdAdvise } from './syscalls/fd-advise.js';
@@ -113,8 +115,6 @@ export { default as SyscallPathRemoveDirectory } from './syscalls/path-remove-di
 export { default as SyscallPathUnlinkFile } from './syscalls/path-unlink-file.js';
 export { default as SyscallProcExit } from './syscalls/proc-exit.js';
 export { default as SyscallRandomGet } from './syscalls/random-get.js';
-export { default as SyscallStatCopy } from './syscalls/stat-copy.js';
-export { default as SyscallUsizeCopy } from './syscalls/usize-copy.js';
 export { default as VisitorAll } from './visitors/all.js';
 export { default as VisitorInArgStruct } from './visitors/in-arg-struct.js';
 export { default as VisitorInArray } from './visitors/in-array.js';

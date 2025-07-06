@@ -105,8 +105,7 @@ describe('Syscall: fd-read', function() {
     const [ error ] = await captureError(() => {
       result = env.fdRead(0, iovsAddress, 1, readAddress);
     });
-    const code = (process.env.TARGET === 'wasm') ? PosixError.ENOTSUP : PosixError.EDEADLK;
-    expect(result).to.equal(code);
+    expect(result).to.equal(PosixError.EDEADLK);
     expect(error).to.contains('promise');
   })
   if (process.env.TARGET === 'wasm') {
@@ -133,45 +132,43 @@ describe('Syscall: fd-read', function() {
     })
   }
   if (process.env.TARGET === 'node') {
-    describe('readBytes', function() {
-      it('should read data from Uint8Array', async function() {
-        const env = new Env();
-        const map = new Map();
-        env.obtainExternBuffer = function (address, len) {
-          let buffer = map.get(address);
-          if (!buffer) {
-            buffer = new ArrayBuffer(len);
-            map.set(address, buffer);
+    it('should read data from Uint8Array using a different function', async function() {
+      const env = new Env();
+      const map = new Map();
+      env.obtainExternBuffer = function (address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        if (to) {
+          map.set(address, jsDV.buffer);
+        } else {
+          const len = Number(jsDV.byteLength);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
           }
-          return buffer;
-        };
-        env.moveExternBytes = function(jsDV, address, to) {
-          if (to) {
-            map.set(address, jsDV.buffer);
-          } else {
-            const len = Number(jsDV.byteLength);
-            if (!(jsDV instanceof DataView)) {
-              jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
-            }
-            const zigDV = this.obtainZigView(address, len);
-            const copy = this.getCopyFunction(len);
-            copy(jsDV, zigDV);
-          }
-        };
-        const array = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ]);
-        const reader = env.convertReader(array);
-        env.redirectStream(0, reader);
-        const bufAddress = usize(0x1000);
-        const readAddress = usize(0x2000);
-        const len = 4;
-        const res = env.readBytes(0, bufAddress, len, readAddress);
-        expect(res).to.equal(PosixError.NONE);
-        const dv = env.obtainZigView(bufAddress, len, false);
-        const read = env.obtainZigView(readAddress, 4).getUint32(0, env.littleEndian);
-        expect(read).to.equal(4);
-        expect(dv.getUint8(0)).to.equal(0);
-        expect(dv.getUint8(3)).to.equal(3);
-      })
+          const zigDV = this.obtainZigView(address, len);
+          const copy = this.getCopyFunction(len);
+          copy(jsDV, zigDV);
+        }
+      };
+      const array = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ]);
+      const reader = env.convertReader(array);
+      env.redirectStream(0, reader);
+      const bufAddress = usize(0x1000);
+      const readAddress = usize(0x2000);
+      const len = 4;
+      const res = env.fdRead1(0, bufAddress, len, readAddress);
+      expect(res).to.equal(PosixError.NONE);
+      const dv = env.obtainZigView(bufAddress, len, false);
+      const read = env.obtainZigView(readAddress, 4).getUint32(0, env.littleEndian);
+      expect(read).to.equal(4);
+      expect(dv.getUint8(0)).to.equal(0);
+      expect(dv.getUint8(3)).to.equal(3);
     })
   }
 })
