@@ -14,4 +14,10 @@ export default mixin({
       this.moveExternBytes(offsetDV, newOffsetAddress, true); 
     });
   },
+  ...(process.env.TARGET === 'node' ? {
+    exports: {
+      fdSeek: { async: true },
+    },
+    /* c8 ignore next */
+  } : undefined),
 });

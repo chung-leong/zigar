@@ -1,3 +1,4 @@
+#define _LARGEFILE64_SOURCE
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -5,6 +6,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <stdarg.h>
 #if defined(_WIN32)
     #include <windows.h>
     #include <io.h>
@@ -17,15 +20,66 @@ typedef uint16_t (*override_callback)(syscall_struct*);
 
 override_callback override = NULL;
 
+#define fd_min  0xfffff
+
 bool is_applicable_handle(size_t fd) {
     return fd >= fd_min || fd == 0 || fd == 1 || fd == 2;
 }
 
-bool override_write(size_t fd,
+bool override_open(int dirfd, 
+                   const char* path, 
+                   int oflag, 
+                   mode_t mode,
+                   bool directory, 
+                   bool follow_symlink,
+                   int* fd_ptr) {
+    if (dirfd == -100) {
+        dirfd = -1;
+    }
+    syscall_struct call;
+    call.cmd = path_open;
+    call.futex_handle = 0;
+    call.u.open.dirfd = dirfd;
+    call.u.open.path = path;
+    call.u.open.path_len = strlen(path);
+    call.u.open.oflag = oflag;
+    call.u.open.mode = mode;
+    call.u.open.directory = directory;
+    call.u.open.follow_symlink = follow_symlink;
+    if (!override || override(&call) != 0) return false;
+    *fd_ptr = call.u.open.fd;
+    return true;
+}
+
+bool override_close(int fd) {
+    syscall_struct call;
+    call.cmd = fd_close;
+    call.futex_handle = 0;
+    call.u.close.fd = fd;
+    if (!override || override(&call) != 0) return false;
+    return true;
+}
+
+bool override_read(int fd,
+                   unsigned char* buffer,
+                   size_t len,
+                   uint32_t* read_ptr) {
+    syscall_struct call;
+    call.cmd = fd_read;
+    call.futex_handle = 0;
+    call.u.read.fd = fd;
+    call.u.read.bytes = buffer;
+    call.u.read.len = len;
+    if (!override || override(&call) != 0) return false;
+    *read_ptr = call.u.read.read;
+    return true;
+}
+
+bool override_write(int fd,
                     const unsigned char* buffer,
                     size_t len) {
     syscall_struct call;
-    call.cmd = sc_write;
+    call.cmd = fd_write;
     call.futex_handle = 0;
     call.u.write.fd = fd;
     call.u.write.bytes = buffer;
@@ -35,18 +89,23 @@ bool override_write(size_t fd,
     return true;
 }
 
-bool override_read(size_t fd,
-                   unsigned char* buffer,
-                   size_t len,
-                   uint32_t* read_ptr) {
+bool override_seek(int fd, 
+                   off_t offset, 
+                   int whence,
+                   uint64_t* pos_ptr) {
     syscall_struct call;
-    call.cmd = sc_read;
     call.futex_handle = 0;
-    call.u.read.fd = fd;
-    call.u.read.bytes = buffer;
-    call.u.read.len = len;
+    if (offset == 0 && whence == SEEK_CUR) {
+        call.cmd = fd_tell;
+        call.u.tell.fd = fd;
+    } else {
+        call.cmd = fd_seek;
+        call.u.seek.fd = fd;
+        call.u.seek.offset = offset;
+        call.u.seek.whence = whence;
+    }
     if (!override || override(&call) != 0) return false;
-    *read_ptr = call.u.read.read;
+    *pos_ptr = call.u.seek.position;
     return true;
 }
 
@@ -80,25 +139,84 @@ bool override_vfprintf(FILE* s,
     return false;
 }
 
-#if defined(_WIN32)
-BOOL WINAPI write_file_hook(HANDLE handle,
-                            LPCVOID buffer,
-                            DWORD len,
-                            LPDWORD written,
-                            LPOVERLAPPED overlapped) {
-    // return value of zero means success
-    if (is_applicable_handle(handle)) {
-        if (override_write(handle, buffer, len)) {
-            *written = len;
-            if (overlapped) {
-                SetEvent(overlapped->hEvent);
-            }
-            return TRUE;
+int open_hook(const char *path, 
+              int oflag, 
+              ...) {
+    mode_t mode = 0;
+    if (oflag | O_CREAT) {
+        va_list args;
+        va_start(args, oflag);
+        mode = va_arg(args, mode_t);
+        va_end(args);
+    }
+    int fd;
+    if (override_open(-1, path, oflag, mode, false, true, &fd)) {
+        return fd;
+    }
+    return (oflag | O_CREAT) ? open(path, oflag, mode) : open(path, oflag);
+}
+
+int open64_hook(const char *path, 
+                int oflag, 
+                ...) {
+    mode_t mode = 0;
+    if (oflag | O_CREAT) {
+        va_list args;
+        va_start(args, oflag);
+        mode = va_arg(args, mode_t);
+        va_end(args);
+    }
+    int fd;
+    if (override_open(-1, path, oflag, mode, false, true, &fd)) {
+        return fd;
+    }
+    return (oflag | O_CREAT) ? open64(path, oflag, mode) : open64(path, oflag);
+}
+
+int openat_hook(int dirfd, 
+                const char *path, 
+                int oflag,
+                ...) {
+    mode_t mode = 0;
+    if (oflag | O_CREAT) {
+        va_list args;
+        va_start(args, oflag);
+        mode = va_arg(args, mode_t);
+        va_end(args);
+    }
+    int fd;
+    if (override_open(dirfd, path, oflag, mode, false, true, &fd)) {
+        return fd;
+    }
+    return (oflag | O_CREAT) ? openat(dirfd, path, oflag, mode) : openat(dirfd, path, oflag);
+}
+
+int openat64_hook(int dirfd, 
+                  const char *path, 
+                  int oflag,
+                  ...) {
+    mode_t mode = 0;
+    if (oflag | O_CREAT) {
+        va_list args;
+        va_start(args, oflag);
+        mode = va_arg(args, mode_t);
+        va_end(args);
+    }
+    int fd;
+    if (override_open(dirfd, path, oflag, mode, false, true, &fd)) {
+        return fd;
+    }
+    return (oflag | O_CREAT) ? openat64(dirfd, path, oflag, mode) : openat64(dirfd, path, oflag);
+}
+
+int close_hook(int fd) {
+    if (is_applicable_handle(fd)) {
+        if (override_close(fd)) {
+            return 0;
         }
     }
-    return WriteFile(handle, buffer, len, written, overlapped);
+    return close(fd);
 }
-#endif
 
 ssize_t read_hook(int fd, 
                   void* buffer, 
@@ -123,20 +241,82 @@ ssize_t write_hook(int fd,
     return write(fd, buffer, len);
 }
 
-size_t fwrite_hook(const void *ptr,
+off_t lseek_hook(int fd, 
+                 off_t offset, 
+                 int whence) {
+    if (is_applicable_handle(fd)) {
+        uint64_t pos;
+        if (override_seek(fd, offset, whence, &pos)) {
+            return pos;
+        }
+    }
+    return lseek(fd, offset, whence);
+}
+
+off64_t lseek64_hook(int fd, 
+                     off64_t offset, 
+                     int whence) {
+    if (is_applicable_handle(fd)) {
+        uint64_t pos;
+        if (override_seek(fd, offset, whence, &pos)) {
+            return pos;
+        }
+    }
+    return lseek64(fd, offset, whence);
+}
+
+int fseek_hook(FILE* s, 
+               long offset, 
+               int whence) {
+    const int fd = fileno(s);
+    if (is_applicable_handle(fd)) {
+        uint64_t pos;
+        if (override_seek(fd, offset, whence, &pos)) {
+            return pos;
+        }
+    }
+    return fseek(s, offset, whence);
+}
+
+int ftell_hook(FILE* s) {
+    const int fd = fileno(s);
+    if (is_applicable_handle(fd)) {
+        uint64_t pos;
+        if (override_seek(fd, 0, SEEK_CUR, &pos)) {
+            return pos;
+        }
+    }
+    return ftell(s);
+}
+
+size_t fread_hook(void* buffer, 
+                  size_t size, 
+                  size_t n,
+                  FILE* s) {
+    const int fd = fileno(s);
+    if (is_applicable_handle(fd)) {
+        uint32_t read;
+        if (override_read(fd, buffer, size * n, &read)) {
+            return read / size;
+        }
+    }
+    return fread(buffer, size, n, s);
+}
+
+size_t fwrite_hook(const void* buffer,
                    size_t size,
 		           size_t n,
                    FILE* s) {
     const int fd = fileno(s);
     if (is_applicable_handle(fd)) {
-        if (override_write(fd, ptr, size * n)) {
+        if (override_write(fd, buffer, size * n)) {
             return n;
         }
     }
-    return fwrite(ptr, size, n, s);
+    return fwrite(buffer, size, n, s);
 }
 
-int fputs_hook(const char *t,
+int fputs_hook(const char* t,
                FILE* s) {
     const int fd = fileno(s);
     if (is_applicable_handle(fd)) {
@@ -148,7 +328,7 @@ int fputs_hook(const char *t,
     return fputs(t, s);
 }
 
-int puts_hook(const char *t) {
+int puts_hook(const char* t) {
     size_t len = strlen(t);
     if (override_write(1, t, len)) {
         override_write(1, "\n", 1);
@@ -207,11 +387,29 @@ int printf_hook(const char* f,
     return n;
 }
 
-void perror_hook(const char *s) {
+void perror_hook(const char* s) {
     printf_hook("%s: %s", s, strerror(errno));
 }
 
 #if defined(_WIN32)
+BOOL WINAPI write_file_hook(HANDLE handle,
+                            LPCVOID buffer,
+                            DWORD len,
+                            LPDWORD written,
+                            LPOVERLAPPED overlapped) {
+    // return value of zero means success
+    if (is_applicable_handle(handle)) {
+        if (override_write(handle, buffer, len)) {
+            *written = len;
+            if (overlapped) {
+                SetEvent(overlapped->hEvent);
+            }
+            return TRUE;
+        }
+    }
+    return WriteFile(handle, buffer, len, written, overlapped);
+}
+
 int stdio_common_vfprintf_hook(unsigned __int64 options,
                                FILE* s,
                                char const* f,
@@ -269,15 +467,25 @@ hook hooks[] = {
     { "WriteFile",                  write_file_hook },
     { "_write",                     write_hook },
 #else
+    { "open",                       open_hook },
+    { "open64",                     open64_hook },
+    { "openat",                     openat_hook },
+    { "openat64",                   openat64_hook },
+    { "close",                      close_hook },
     { "read",                       read_hook },
     { "write",                      write_hook },
+    { "lseek",                      lseek_hook },
+    { "lseek64",                    lseek64_hook },
 #endif
+    { "fread",                      fread_hook },
+    { "fwrite",                     fwrite_hook },
+    { "fseek",                      fseek_hook },
+    { "ftell",                      ftell_hook },
     { "fputs",                      fputs_hook },
     { "puts",                       puts_hook },
     { "fputc",                      fputc_hook },
     { "putc",                       fputc_hook },
     { "putchar",                    putchar_hook },
-    { "fwrite",                     fwrite_hook },
     { "vfprintf",                   vfprintf_hook },
     { "vprintf",                    vprintf_hook },
     { "fprintf",                    fprintf_hook },

@@ -8,5 +8,11 @@ export default mixin({
       const stream = this.getStream(fd);
       return stream.datasync?.();
     });
-  }
+  },
+  ...(process.env.TARGET === 'node' ? {
+    exports: {
+      fdDatasync: { async: true },
+    },
+    /* c8 ignore next */
+  } : undefined),
 });

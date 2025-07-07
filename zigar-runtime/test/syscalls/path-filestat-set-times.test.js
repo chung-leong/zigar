@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { Descriptor, PosixError } from '../../src/constants.js';
+import { PosixDescriptor, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { usize } from '../../src/utils.js';
@@ -45,14 +45,14 @@ describe('Syscall: path-filestat-set-times', function() {
     const pathAddress = usize(0x1000);
     const pathLen = path.length;
     env.moveExternBytes(path, pathAddress, true);
-    const result1 = env.pathFilestatSetTimes(Descriptor.root, pathAddress, pathLen, 123n, 456n, 1 << 0 | 1 << 2);
+    const result1 = env.pathFilestatSetTimes(PosixDescriptor.root, pathAddress, pathLen, 123n, 456n, 1 << 0 | 1 << 2);
     expect(result1).to.equal(0);
     expect(event).to.eql({ 
       parent: null,
       path: 'world', 
       times: { atime: 123n, mtime: 456n } 
     });
-    const result2 = env.pathFilestatSetTimes(Descriptor.root, pathAddress, pathLen, 123n, 456n, 1 << 0 | 1 << 2);
+    const result2 = env.pathFilestatSetTimes(PosixDescriptor.root, pathAddress, pathLen, 123n, 456n, 1 << 0 | 1 << 2);
     expect(result2).to.equal(PosixError.ENOENT);
   })
   it('should use current time when flags call for it', async function() {
@@ -93,7 +93,7 @@ describe('Syscall: path-filestat-set-times', function() {
     const pathAddress = usize(0x1000);
     const pathLen = path.length;
     env.moveExternBytes(path, pathAddress, true);
-    const result = env.pathFilestatSetTimes(Descriptor.root, pathAddress, pathLen, 0n, 0n, 1 << 1 | 1 << 3);
+    const result = env.pathFilestatSetTimes(PosixDescriptor.root, pathAddress, pathLen, 0n, 0n, 1 << 1 | 1 << 3);
     expect(result).to.equal(0);
     expect(event.times.atime).to.be.at.least(10000n);
     expect(event.times.mtime).to.be.at.least(10000n);
@@ -115,14 +115,14 @@ describe('Syscall: path-filestat-set-times', function() {
       const pathArray = env.obtainZigArray(pathAddress, pathLen);
       for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
       const f = env.getWASIHandler('path_filestat_set_times');
-      const result1 = f(Descriptor.root, pathAddress, pathLen, 123n, 456n, 1 << 0 | 1 << 2);
+      const result1 = f(PosixDescriptor.root, pathAddress, pathLen, 123n, 456n, 1 << 0 | 1 << 2);
       expect(result1).to.equal(0);
       expect(event).to.eql({ 
         parent: null,
         path: 'world', 
         times: { atime: 123n, mtime: 456n } 
       });
-      const result2 = f(Descriptor.root, pathAddress, pathLen, 123n, 456n, 1 << 0 | 1 << 2);
+      const result2 = f(PosixDescriptor.root, pathAddress, pathLen, 123n, 456n, 1 << 0 | 1 << 2);
       expect(result2).to.equal(PosixError.ENOENT);
     })
   }

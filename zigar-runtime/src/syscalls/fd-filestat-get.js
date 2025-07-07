@@ -19,4 +19,10 @@ export default mixin({
       return { size: stream.size, type: 'file' };
     }, (stat) => this.copyStat(bufAddress, stat));
   },
+  ...(process.env.TARGET === 'node' ? {
+    exports: {
+      fdFilestatGet: { async: true },
+    },
+    /* c8 ignore next */
+  } : undefined),
 });

@@ -5,6 +5,10 @@ const h = @cImport({
     @cInclude("redirect.h");
 });
 
+pub const posix = @cImport({
+    @cInclude("fcntl.h");
+});
+
 pub const SysCall = extern struct {
     cmd: SysCallCommand,
     u: h.syscall_union,
@@ -14,18 +18,37 @@ pub const SysCallCommand: type = define: {
     // derive Zig enum from C enum
     @setEvalBranchQuota(100000);
     var count: usize = 0;
+    var in_enum = false;
     for (std.meta.declarations(h)) |decl| {
-        if (std.mem.startsWith(u8, decl.name, "sc_")) count += 1;
+        if (in_enum) {
+            if (std.mem.startsWith(u8, decl.name, "syscall_command")) {
+                in_enum = false;
+            } else {
+                count += 1;
+            }
+        } else {
+            if (std.mem.startsWith(u8, decl.name, "invalid_command")) {
+                in_enum = true;
+            }
+        }
     }
     var fields: [count]std.builtin.Type.EnumField = undefined;
     var i: usize = 0;
     for (std.meta.declarations(h)) |decl| {
-        if (std.mem.startsWith(u8, decl.name, "sc_")) {
-            fields[i] = .{
-                .name = decl.name[3..],
-                .value = @field(h, decl.name),
-            };
-            i += 1;
+        if (in_enum) {
+            if (std.mem.startsWith(u8, decl.name, "syscall_command")) {
+                in_enum = false;
+            } else {
+                fields[i] = .{
+                    .name = decl.name,
+                    .value = @field(h, decl.name),
+                };
+                i += 1;
+            }
+        } else {
+            if (std.mem.startsWith(u8, decl.name, "invalid_command")) {
+                in_enum = true;
+            }
         }
     }
     break :define @Type(.{

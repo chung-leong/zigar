@@ -27,4 +27,10 @@ export default mixin({
     this.moveExternBytes(bytes, environBufAddress, true);
     return PosixError.NONE;
   },
+  ...(process.env.TARGET === 'node' ? {
+    exports: {
+      environGet: { async: true },
+    },
+    /* c8 ignore next */
+  } : undefined),
 });

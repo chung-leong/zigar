@@ -18,5 +18,11 @@ export default mixin({
       const adviceKeys = Object.keys(Advice);
       return stream.advise?.(offset, len, adviceKeys[advice]);
     });
-  }
+  },
+  ...(process.env.TARGET === 'node' ? {
+    exports: {
+      fdAdvise: { async: true },
+    },
+    /* c8 ignore next */
+  } : undefined),
 });

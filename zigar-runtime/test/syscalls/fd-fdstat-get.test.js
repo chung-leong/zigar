@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { Descriptor, PosixError } from '../../src/constants.js';
+import { PosixDescriptor, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { captureError } from '../test-utils.js';
@@ -66,7 +66,7 @@ describe('Syscall: fd-fdstat-get', function() {
       const pathArray = env.obtainZigArray(pathAddress, pathLen);
       for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
       const open = env.getWASIHandler('path_open');
-      const result1 = open(Descriptor.root, 0, pathAddress, pathLen, 0, BigInt(Right.fd_read), 0n, 0, fdAddress);
+      const result1 = open(PosixDescriptor.root, 0, pathAddress, pathLen, 0, BigInt(Right.fd_read), 0n, 0, fdAddress);
       expect(result1).to.equal(0);
       const dv = new DataView(env.memory.buffer);
       const fd = dv.getUint32(fdAddress, true);
@@ -91,7 +91,7 @@ describe('Syscall: fd-fdstat-get', function() {
       const pathArray = env.obtainZigArray(pathAddress, pathLen);
       for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
       const open = env.getWASIHandler('path_open');
-      const result1 = open(Descriptor.root, 0, pathAddress, pathLen, 0, BigInt(Right.fd_readdir), 0n, 0, fdAddress);
+      const result1 = open(PosixDescriptor.root, 0, pathAddress, pathLen, 0, BigInt(Right.fd_readdir), 0n, 0, fdAddress);
       expect(result1).to.equal(0);
       const dv = new DataView(env.memory.buffer);
       const fd = dv.getUint32(fdAddress, true);
@@ -119,7 +119,7 @@ describe('Syscall: fd-fdstat-get', function() {
       const pathArray = env.obtainZigArray(pathAddress, pathLen);
       for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
       const open = env.getWASIHandler('path_open');
-      const result1 = open(Descriptor.root, 0, pathAddress, pathLen, 0, BigInt(Right.fd_readdir), 0n, 0, fdAddress);
+      const result1 = open(PosixDescriptor.root, 0, pathAddress, pathLen, 0, BigInt(Right.fd_readdir), 0n, 0, fdAddress);
       expect(result1).to.equal(0);
       const dv = new DataView(env.memory.buffer);
       const fd = dv.getUint32(fdAddress, true);
@@ -147,7 +147,7 @@ describe('Syscall: fd-fdstat-get', function() {
       const pathArray = env.obtainZigArray(pathAddress, pathLen);
       for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
       const open = env.getWASIHandler('path_open');
-      const result1 = open(Descriptor.root, 0, pathAddress, pathLen, 0, BigInt(Right.fd_readdir), 0n, 0, fdAddress);
+      const result1 = open(PosixDescriptor.root, 0, pathAddress, pathLen, 0, BigInt(Right.fd_readdir), 0n, 0, fdAddress);
       expect(result1).to.equal(0);
       const dv = new DataView(env.memory.buffer);
       const fd = dv.getUint32(fdAddress, true);
@@ -175,7 +175,7 @@ describe('Syscall: fd-fdstat-get', function() {
       const pathArray = env.obtainZigArray(pathAddress, pathLen);
       for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
       const open = env.getWASIHandler('path_open');
-      const result1 = open(Descriptor.root, 0, pathAddress, pathLen, 0, BigInt(Right.fd_read), 0n, 0, fdAddress);
+      const result1 = open(PosixDescriptor.root, 0, pathAddress, pathLen, 0, BigInt(Right.fd_read), 0n, 0, fdAddress);
       expect(result1).to.equal(0);
       const dv = new DataView(env.memory.buffer);
       const fd = dv.getUint32(fdAddress, true);

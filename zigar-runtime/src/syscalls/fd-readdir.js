@@ -1,4 +1,4 @@
-import { Descriptor, PosixError, PosixFileType } from '../constants.js';
+import { PosixDescriptor, PosixError, PosixFileType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, InvalidEnumValue } from '../errors.js';
 import { createView, decodeEnum, encodeText } from '../utils.js';
@@ -30,7 +30,7 @@ export default mixin({
       const dv = createView(bufLen);
       let remaining = bufLen;
       let p = 0;
-      const defaultEntryCount = (fd !== Descriptor.root) ? 2 : 1;
+      const defaultEntryCount = (fd !== PosixDescriptor.root) ? 2 : 1;
       if (context) {
         let { iterator, entry } = context;
         if (entry) {
@@ -81,4 +81,10 @@ export default mixin({
       }
     })
   },
+  ...(process.env.TARGET === 'node' ? {
+    exports: {
+      fdReaddir: { async: true },
+    },
+    /* c8 ignore next */
+  } : undefined),
 });

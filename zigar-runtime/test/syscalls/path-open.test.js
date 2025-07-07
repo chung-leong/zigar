@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { Descriptor, PosixError } from '../../src/constants.js';
+import { PosixDescriptor, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { usize } from '../../src/utils.js';
@@ -57,7 +57,7 @@ describe('Syscall: path-open', function() {
     const pathLen = path.length;
     const fdAddress = usize(0x2000);
     env.moveExternBytes(path, pathAddress, true);
-    const result = env.pathOpen(Descriptor.root, 0, pathAddress, pathLen, OpenFlag.exclusive, Right.read, 0n, 0, fdAddress);
+    const result = env.pathOpen(PosixDescriptor.root, 0, pathAddress, pathLen, OpenFlag.exclusive, Right.read, 0n, 0, fdAddress);
     expect(result).to.equal(0);
     const fdDV = env.obtainZigView(fdAddress, 4);
     const fd = fdDV.getUint32(0, env.littleEndian);
@@ -107,7 +107,7 @@ describe('Syscall: path-open', function() {
     const pathLen = path.length;
     const fdAddress = usize(0x2000);
     env.moveExternBytes(path, pathAddress, true);
-    const result = env.pathOpen(Descriptor.root, 0, pathAddress, pathLen, OpenFlag.exclusive, Right.write, 0n, 0, fdAddress);
+    const result = env.pathOpen(PosixDescriptor.root, 0, pathAddress, pathLen, OpenFlag.exclusive, Right.write, 0n, 0, fdAddress);
     expect(result).to.equal(0);
     const fdDV = env.obtainZigView(fdAddress, 4);
     const fd = fdDV.getUint32(0, env.littleEndian);
@@ -153,7 +153,7 @@ describe('Syscall: path-open', function() {
     const pathLen = path.length;
     const fdAddress = usize(0x2000);
     env.moveExternBytes(path, pathAddress, true);
-    const result = env.pathOpen(Descriptor.root, 0, pathAddress, pathLen, 0, 1n, 0n, 0, fdAddress);
+    const result = env.pathOpen(PosixDescriptor.root, 0, pathAddress, pathLen, 0, 1n, 0n, 0, fdAddress);
     expect(result).to.equal(PosixError.ENOENT);
   })
   if (process.env.TARGET === 'wasm') {
@@ -171,7 +171,7 @@ describe('Syscall: path-open', function() {
       const fdAddress = 0x2000;
       env.moveExternBytes(path, pathAddress, pathLen);
       const f = env.getWASIHandler('path_open');
-      const result = f(Descriptor.root, 0, pathAddress, pathLen, OpenFlag.exclusive, Right.read, 0n, 0, fdAddress);
+      const result = f(PosixDescriptor.root, 0, pathAddress, pathLen, OpenFlag.exclusive, Right.read, 0n, 0, fdAddress);
       expect(result).to.equal(0);
       const fdDV = env.obtainZigView(fdAddress, 4);
       const fd = fdDV.getUint32(0, env.littleEndian);

@@ -1,4 +1,4 @@
-import { Descriptor } from '../constants.js';
+import { PosixDescriptor } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidFileDescriptor } from '../errors.js';
 import { decodeText, hasMethod } from '../utils.js';
@@ -13,12 +13,12 @@ export default mixin({
       }
     };
     this.streamMap = new Map([ 
-      [ Descriptor.stdout, this.createLogWriter('stdout') ], 
-      [ Descriptor.stderr, this.createLogWriter('stderr') ], 
-      [ Descriptor.root, root ] 
+      [ PosixDescriptor.stdout, this.createLogWriter('stdout') ], 
+      [ PosixDescriptor.stderr, this.createLogWriter('stderr') ], 
+      [ PosixDescriptor.root, root ] 
     ]);
     this.flushRequestMap = new Map();
-    this.nextStreamHandle = Descriptor.min;
+    this.nextStreamHandle = PosixDescriptor.min;
   },
   getStream(fd, method) {
     const stream = this.streamMap.get(fd);
@@ -40,7 +40,7 @@ export default mixin({
   },
   redirectStream(num, arg) {
     const map = this.streamMap;
-    const fd = (num === 3) ? Descriptor.root : num;
+    const fd = (num === 3) ? PosixDescriptor.root : num;
     const previous = map.get(fd);
     if (arg !== undefined) {
       let stream;

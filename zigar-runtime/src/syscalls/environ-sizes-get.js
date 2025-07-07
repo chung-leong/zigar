@@ -23,4 +23,10 @@ export default mixin({
     this.copyUsize(environBufSizeAddress, size);
     return PosixError.NONE;
   },
+  ...(process.env.TARGET === 'node' ? {
+    exports: {
+      environSizesGet: { async: true },
+    },
+    /* c8 ignore next */
+  } : undefined),
 });

@@ -36,8 +36,25 @@ const ModuleHost = struct {
         handle_js_call: ?Ref = null,
         release_function: ?Ref = null,
 
-        fd_write1: ?Ref = null,
+        fd_advise: ?Ref = null,
+        fd_allocate: ?Ref = null,
+        fd_close: ?Ref = null,
+        fd_datasync: ?Ref = null,
+        fd_filestat_get: ?Ref = null,
+        fd_filestat_set_times: ?Ref = null,
+        fd_read: ?Ref = null,
         fd_read1: ?Ref = null,
+        fd_seek: ?Ref = null,
+        fd_sync: ?Ref = null,
+        fd_tell: ?Ref = null,
+        fd_write: ?Ref = null,
+        fd_write1: ?Ref = null,
+        path_create_directory: ?Ref = null,
+        path_filestat_get: ?Ref = null,
+        path_filestat_set_times: ?Ref = null,
+        path_open: ?Ref = null,
+        path_remove_directory: ?Ref = null,
+        path_unlink_file: ?Ref = null,
     } = .{},
     ts: struct {
         disable_multithread: ?ThreadsafeFunction = null,
@@ -761,8 +778,13 @@ const ModuleHost = struct {
     fn handleSysCall(self: *@This(), call: *SysCall, in_main_thread: bool) !void {
         if (in_main_thread) {
             switch (call.cmd) {
-                .write => try self.handleWrite(call),
-                .read => try self.handleRead(call),
+                .fd_close => try self.handleClose(call),
+                .fd_read => try self.handleRead(call),
+                .fd_seek => try self.handleSeek(call),
+                .fd_tell => try self.handleTell(call),
+                .fd_write => try self.handleWrite(call),
+                .path_open => try self.handleOpen(call),
+                else => unreachable,
             }
         } else {
             const func = self.ts.handle_sys_call orelse return error.Disabled;
@@ -773,22 +795,6 @@ const ModuleHost = struct {
         }
     }
 
-    fn handleWrite(self: *@This(), call: *SysCall) !void {
-        const env = self.env;
-        const u = &call.u.write;
-        _ = try env.callFunction(
-            try env.getNull(),
-            try env.getReferenceValue(self.js.fd_write1 orelse return error.Unexpected),
-            &.{
-                try env.createUint32(@as(u32, @truncate(u.fd))),
-                try env.createUsize(@intFromPtr(u.bytes)),
-                try env.createUint32(@as(u32, @truncate(u.len))),
-                try env.createUsize(@intFromPtr(&u.written)),
-                try env.createUsize(call.futex_handle),
-            },
-        );
-    }
-
     fn handleRead(self: *@This(), call: *SysCall) !void {
         const env = self.env;
         const u = &call.u.read;
@@ -796,10 +802,123 @@ const ModuleHost = struct {
             try env.getNull(),
             try env.getReferenceValue(self.js.fd_read1 orelse return error.Unexpected),
             &.{
-                try env.createUint32(@as(u32, @truncate(u.fd))),
+                try env.createInt32(u.fd),
                 try env.createUsize(@intFromPtr(u.bytes)),
-                try env.createUint32(@as(u32, @truncate(u.len))),
+                try env.createUint32(u.len),
                 try env.createUsize(@intFromPtr(&u.read)),
+                try env.createUsize(call.futex_handle),
+            },
+        );
+    }
+
+    fn handleWrite(self: *@This(), call: *SysCall) !void {
+        const env = self.env;
+        const u = &call.u.write;
+        _ = try env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.fd_write1 orelse return error.Unexpected),
+            &.{
+                try env.createInt32(u.fd),
+                try env.createUsize(@intFromPtr(u.bytes)),
+                try env.createUint32(u.len),
+                try env.createUsize(@intFromPtr(&u.written)),
+                try env.createUsize(call.futex_handle),
+            },
+        );
+    }
+
+    fn handleSeek(self: *@This(), call: *SysCall) !void {
+        const env = self.env;
+        const u = &call.u.seek;
+        _ = try env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.fd_seek orelse return error.Unexpected),
+            &.{
+                try env.createInt32(u.fd),
+                try env.createBigintInt64(u.offset),
+                try env.createUint32(u.whence),
+                try env.createUsize(@intFromPtr(&u.position)),
+                try env.createUsize(call.futex_handle),
+            },
+        );
+    }
+
+    fn handleTell(self: *@This(), call: *SysCall) !void {
+        const env = self.env;
+        const u = &call.u.tell;
+        _ = try env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.fd_tell orelse return error.Unexpected),
+            &.{
+                try env.createInt32(u.fd),
+                try env.createUsize(@intFromPtr(&u.position)),
+                try env.createUsize(call.futex_handle),
+            },
+        );
+    }
+
+    fn handleOpen(self: *@This(), call: *SysCall) !void {
+        const env = self.env;
+        const u = &call.u.open;
+        const posix = redirect.posix;
+        const lflags: std.os.wasi.lookupflags_t = .{
+            .SYMLINK_FOLLOW = u.follow_symlink,
+        };
+        const oflags: std.os.wasi.oflags_t = .{
+            .CREAT = u.oflag & posix.O_CREAT != 0,
+            .DIRECTORY = u.directory,
+            .EXCL = u.oflag & posix.O_EXCL != 0,
+            .TRUNC = u.oflag & posix.O_TRUNC != 0,
+        };
+        const rights: std.os.wasi.rights_t = set: {
+            var r: std.os.wasi.rights_t = .{};
+            if (u.directory) {
+                r.FD_READDIR = true;
+            } else {
+                if (u.oflag & posix.O_RDWR != 0) {
+                    r.FD_READ = true;
+                    r.FD_WRITE = true;
+                } else if (u.oflag & posix.O_WRONLY != 0) {
+                    r.FD_WRITE = true;
+                } else {
+                    r.FD_READ = true;
+                }
+            }
+            break :set r;
+        };
+        const fdflags: std.os.wasi.fdflags_t = .{
+            .APPEND = u.oflag & (posix.O_APPEND) != 0,
+            .DSYNC = u.oflag & (posix.O_DSYNC) != 0,
+            .NONBLOCK = u.oflag & (posix.O_NONBLOCK) != 0,
+            .RSYNC = u.oflag & (posix.O_RSYNC) != 0,
+            .SYNC = u.oflag & (posix.O_SYNC) != 0,
+        };
+        _ = try env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.path_open orelse return error.Unexpected),
+            &.{
+                try env.createInt32(u.dirfd),
+                try env.createUint32(@as(u32, @bitCast(lflags))),
+                try env.createUsize(@intFromPtr(u.path)),
+                try env.createUint32(u.path_len),
+                try env.createUint32(@as(u16, @bitCast(oflags))),
+                try env.createBigintUint64(@as(u64, @bitCast(rights))),
+                try env.createBigintUint64(0),
+                try env.createUint32(@as(u16, @bitCast(fdflags))),
+                try env.createUsize(@intFromPtr(&u.fd)),
+                try env.createUsize(call.futex_handle),
+            },
+        );
+    }
+
+    fn handleClose(self: *@This(), call: *SysCall) !void {
+        const env = self.env;
+        const u = &call.u.close;
+        _ = try env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.fd_close orelse return error.Unexpected),
+            &.{
+                try env.createInt32(u.fd),
                 try env.createUsize(call.futex_handle),
             },
         );

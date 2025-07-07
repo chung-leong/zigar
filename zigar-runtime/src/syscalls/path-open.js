@@ -1,29 +1,26 @@
-import { PosixError } from '../constants.js';
+import { PosixDescriptorFlag, PosixDescriptorRight, PosixError, PosixLookupFlag, PosixOpenFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError } from '../errors.js';
 import { decodeFlags } from '../utils.js';
 import './copy-usize.js';
 
-const OpenFlag = {
-  create: 1 << 0,
-  directory: 1 << 1,
-  exclusive: 1 << 2,
-  truncate: 1 << 3,
-};
-
 const Right = {
-  read: 1n << 1n,
-  write: 1n << 6n,
-  readdir: 1n << 14n,
+  read: BigInt(PosixDescriptorRight.fd_read),
+  write: BigInt(PosixDescriptorRight.fd_write),
+  readdir: BigInt(PosixDescriptorRight.fd_readdir),
 };
 
 export default mixin({
-  pathOpen(dirfd, dirflags, pathAddress, pathLen, oflags, rightsBase, rightsInheriting, fsFlags, fdAddress, canWait) {
+  pathOpen(dirFd, lFlags, pathAddress, pathLen, oFlags, rightsBase, rightsInheriting, fdFlags, fdAddress, canWait) {
     const rights = decodeFlags(rightsBase | rightsInheriting, Right);
-    const flags = decodeFlags(oflags, OpenFlag);
+    const flags = {
+      ...decodeFlags(lFlags, PosixLookupFlag),
+      ...decodeFlags(oFlags, PosixOpenFlag),
+      ...decodeFlags(fdFlags, PosixDescriptorFlag),
+    };
     let loc;
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      loc = this.obtainStreamLocation(dirfd, pathAddress, pathLen);
+      loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
       return this.triggerEvent('open', { ...loc, rights, flags }, PosixError.ENOENT);
     }, (arg) => {
       if (arg === false) {
@@ -41,5 +38,11 @@ export default mixin({
       this.setStreamLocation?.(fd, loc);
       this.copyUint32(fdAddress, fd);
     });
-  }  
+  },
+  ...(process.env.TARGET === 'node' ? {
+    exports: {
+      pathOpen: { async: true },
+    },
+    /* c8 ignore next */
+  } : undefined),
 });

@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { Descriptor, PosixError } from '../../src/constants.js';
+import { PosixDescriptor, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { usize } from '../../src/utils.js';
@@ -46,13 +46,13 @@ describe('Syscall: path-unlink-file', function() {
     const pathAddress = usize(0x1000);
     const pathLen = path.length;
     env.moveExternBytes(path, pathAddress, true);
-    const result1 = env.pathUnlinkFile(Descriptor.root, pathAddress, pathLen);
+    const result1 = env.pathUnlinkFile(PosixDescriptor.root, pathAddress, pathLen);
     expect(result1).to.equal(0);
     expect(event).to.eql({ 
       parent: null,
       path: 'hello.txt' 
     });
-    const result2 = env.pathUnlinkFile(Descriptor.root, pathAddress, pathLen);
+    const result2 = env.pathUnlinkFile(PosixDescriptor.root, pathAddress, pathLen);
     expect(result2).to.equal(PosixError.ENOENT);
   })
   it('should display error when listener does not return a boolean', async function() {
@@ -91,7 +91,7 @@ describe('Syscall: path-unlink-file', function() {
     env.moveExternBytes(path, pathAddress, true);
     let result 
     const [ error ] = await captureError(() => {
-      result = env.pathUnlinkFile(Descriptor.root, pathAddress, pathLen);
+      result = env.pathUnlinkFile(PosixDescriptor.root, pathAddress, pathLen);
     });
     expect(result).to.equal(PosixError.ENOENT);
     expect(error).to.contain('boolean');
@@ -111,13 +111,13 @@ describe('Syscall: path-unlink-file', function() {
       const pathLen = path.length;
       env.moveExternBytes(path, pathAddress, true);
       const f = env.getWASIHandler('path_unlink_file');
-      const result1 = f(Descriptor.root, pathAddress, pathLen);
+      const result1 = f(PosixDescriptor.root, pathAddress, pathLen);
       expect(result1).to.equal(0);
       expect(event).to.eql({ 
         parent: null,
         path: 'hello.txt' 
       });
-      const result2 = f(Descriptor.root, pathAddress, pathLen);
+      const result2 = f(PosixDescriptor.root, pathAddress, pathLen);
       expect(result2).to.equal(PosixError.ENOENT);
     })
   }

@@ -8,5 +8,11 @@ export default mixin({
       this.setStreamLocation?.(fd); 
       return this.destroyStreamHandle(fd);
     });
-  }
+  },
+  ...(process.env.TARGET === 'node' ? {
+    exports: {
+      fdClose: { async: true },
+    },
+    /* c8 ignore next */
+  } : undefined),
 });

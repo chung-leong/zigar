@@ -117,7 +117,7 @@ export function addTests(importModule, options) {
         parent: null,
         path: 'hello/world', 
         rights: { read: true }, 
-        flags: {} 
+        flags: { symlinkFollow: true }, 
       });
     })
     it('should write to writer', async function() {
@@ -219,7 +219,7 @@ export function addTests(importModule, options) {
         parent: null,
         path: 'hello/world', 
         rights: { write: true }, 
-        flags: { create: true, truncate: true } 
+        flags: { create: true, truncate: true, symlinkFollow: true },
       });
     })
     it('should decompress xz file', async function() {

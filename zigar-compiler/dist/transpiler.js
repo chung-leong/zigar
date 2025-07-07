@@ -163,10 +163,62 @@ const PosixFileType = {
   symbolicLink: 7,
 };
 
-const Descriptor = {
+const PosixOpenFlag = {
+  create: 1 << 0,
+  directory: 1 << 1,
+  exclusive: 1 << 2,
+  truncate: 1 << 3,
+};
+
+const PosixLookupFlag = {
+  symlinkFollow: 1 << 0,
+};
+
+const PosixDescriptorRight = {
+  fd_datasync: 1 << 0,
+  fd_read: 1 << 1,
+  fd_seek: 1 << 2,
+  fd_fdstat_set_flags: 1 << 3,
+  fd_sync: 1 << 4,
+  fd_tell: 1 << 5,
+  fd_write: 1 << 6,
+  fd_advise: 1 << 7,
+  fd_allocate: 1 << 8,
+  path_create_directory: 1 << 9,
+  path_create_file: 1 << 10,
+  path_link_source: 1 << 11,
+  path_link_target: 1 << 12,
+  path_open: 1 << 13,
+  fd_readdir: 1 << 14,
+  path_readlink: 1 << 15,
+  path_rename_source: 1 << 16,
+  path_rename_target: 1 << 17,
+  path_filestat_get: 1 << 18,
+  path_filestat_set_size: 1 << 19,
+  path_filestat_set_times: 1 << 20,
+  fd_filestat_get: 1 << 21,
+  fd_filestat_set_size: 1 << 22,
+  fd_filestat_set_times: 1 << 23,
+  path_symlink: 1 << 24,
+  path_remove_directory: 1 << 25,
+  path_unlink_file: 1 << 26,
+  poll_fd_readwrite: 1 << 27,
+  sock_shutdown: 1 << 28,
+  sock_accept: 1 << 29,
+};
+
+const PosixDescriptorFlag = {
+  append: 1 << 0,
+  dsync: 1 << 1,
+  nonblock: 1 << 2,
+  rsync: 1 << 3,
+  sync: 1 << 4,
+};
+
+const PosixDescriptor = {
   stdout: 1,
   stderr: 2,
-  root: 3,
+  root: 3 ,
 
   min: 0x000f_ffff};
 
@@ -4694,9 +4746,9 @@ function getIntRange(member) {
 
 var streamLocation = mixin({
   init() {
-    this.streamLocationMap = new Map([ [ Descriptor.root, '' ]]);
+    this.streamLocationMap = new Map([ [ PosixDescriptor.root, '' ]]);
   },
-  obtainStreamLocation(dirfd, pathAddress, pathLen) {
+  obtainStreamLocation(dirFd, pathAddress, pathLen) {
     const pathArray = this.obtainZigArray(pathAddress, pathLen);
     let path = decodeText(pathArray).trim();
     if (path.endsWith('/')) {
@@ -4711,7 +4763,7 @@ var streamLocation = mixin({
         list.push(part);
       }
     }
-    const stream = this.getStream(dirfd);
+    const stream = this.getStream(dirFd);
     return { parent: stream.valueOf(), path: list.join('/') };
   },
   getStreamLocation(fd) {
@@ -4741,12 +4793,12 @@ var streamRedirection = mixin({
       }
     };
     this.streamMap = new Map([ 
-      [ Descriptor.stdout, this.createLogWriter('stdout') ], 
-      [ Descriptor.stderr, this.createLogWriter('stderr') ], 
-      [ Descriptor.root, root ] 
+      [ PosixDescriptor.stdout, this.createLogWriter('stdout') ], 
+      [ PosixDescriptor.stderr, this.createLogWriter('stderr') ], 
+      [ PosixDescriptor.root, root ] 
     ]);
     this.flushRequestMap = new Map();
-    this.nextStreamHandle = Descriptor.min;
+    this.nextStreamHandle = PosixDescriptor.min;
   },
   getStream(fd, method) {
     const stream = this.streamMap.get(fd);
@@ -4758,7 +4810,7 @@ var streamRedirection = mixin({
   createStreamHandle(stream) {
     const fd = this.nextStreamHandle++;
     this.streamMap.set(fd, stream);
-    stream.onClose = () => this.closeStream(fd);
+    stream.onClose = () => this.destroyStreamHandle(fd);
     return fd;
   },
   destroyStreamHandle(fd) {
@@ -4768,7 +4820,7 @@ var streamRedirection = mixin({
   },
   redirectStream(num, arg) {
     const map = this.streamMap;
-    const fd = (num === 3) ? Descriptor.root : num;
+    const fd = (num === 3) ? PosixDescriptor.root : num;
     const previous = map.get(fd);
     if (arg !== undefined) {
       let stream;
@@ -5624,7 +5676,7 @@ var fdAdvise = mixin({
       const adviceKeys = Object.keys(Advice);
       return stream.advise?.(offset, len, adviceKeys[advice]);
     });
-  }
+  },
 });
 
 var fdAllocate = mixin({
@@ -5633,7 +5685,7 @@ var fdAllocate = mixin({
       const stream = this.getStream(fd);
       return stream.allocate(offset, len);
     });
-  }
+  },
 });
 
 var fdClose = mixin({
@@ -5642,7 +5694,7 @@ var fdClose = mixin({
       this.setStreamLocation?.(fd); 
       return this.destroyStreamHandle(fd);
     });
-  }
+  },
 });
 
 var fdDatasync = mixin({
@@ -5651,54 +5703,21 @@ var fdDatasync = mixin({
       const stream = this.getStream(fd);
       return stream.datasync?.();
     });
-  }
+  },
 });
-
-const Right$1 = {
-    fd_datasync: 1 << 0,
-    fd_read: 1 << 1,
-    fd_seek: 1 << 2,
-    fd_fdstat_set_flags: 1 << 3,
-    fd_sync: 1 << 4,
-    fd_tell: 1 << 5,
-    fd_write: 1 << 6,
-    fd_advise: 1 << 7,
-    fd_allocate: 1 << 8,
-    path_create_directory: 1 << 9,
-    path_create_file: 1 << 10,
-    path_link_source: 1 << 11,
-    path_link_target: 1 << 12,
-    path_open: 1 << 13,
-    fd_readdir: 1 << 14,
-    path_readlink: 1 << 15,
-    path_rename_source: 1 << 16,
-    path_rename_target: 1 << 17,
-    path_filestat_get: 1 << 18,
-    path_filestat_set_size: 1 << 19,
-    path_filestat_set_times: 1 << 20,
-    fd_filestat_get: 1 << 21,
-    fd_filestat_set_size: 1 << 22,
-    fd_filestat_set_times: 1 << 23,
-    path_symlink: 1 << 24,
-    path_remove_directory: 1 << 25,
-    path_unlink_file: 1 << 26,
-    poll_fd_readwrite: 1 << 27,
-    sock_shutdown: 1 << 28,
-    sock_accept: 1 << 29,
-};
 
 var fdFdstatGet = mixin({
   fdFdstatGet(fd, bufAddress, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const stream = this.getStream(fd);
       let rights = 0, flags = 0, type;
-      rights = Right$1.fd_filestat_get;
+      rights = PosixDescriptorRight.fd_filestat_get;
       if (this.listenerMap.get('set_times') && this.getStreamLocation?.(fd)) {
-        rights |= Right$1.fd_filestat_set_times;
+        rights |= PosixDescriptorRight.fd_filestat_set_times;
       }
       for (const name of [ 'read', 'write', 'seek', 'tell', 'advise', 'allocate', 'datasync', 'sync', 'readdir' ]) {
         if (hasMethod(stream, name)) {
-          rights |= Right$1[`fd_${name}`];
+          rights |= PosixDescriptorRight[`fd_${name}`];
         }
       }
       if (stream.type) {
@@ -5707,14 +5726,14 @@ var fdFdstatGet = mixin({
           throw new InvalidEnumValue(PosixFileType, stream.type);
         }
       } else {
-        if (rights & (Right$1.fd_read | Right$1.fd_write)) {
+        if (rights & (PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write)) {
           type = PosixFileType.file;
         } else {
           type = PosixFileType.directory;
         }
       }
       if (type === PosixFileType.directory) {
-        rights |= Right$1.path_open | Right$1.path_filestat_get;
+        rights |= PosixDescriptorRight.path_open | PosixDescriptorRight.path_filestat_get;
       }
       const dv = createView(24);
       dv.setUint8(0, type);
@@ -5774,30 +5793,31 @@ var fdFilestatGet = mixin({
 });
 
 var fdFileStatSetTimes = mixin({
-  fdFilestatSetTimes(fd, st_atim, st_mtim, fst_flags, canWait) {
+  fdFilestatSetTimes(fd, atime, mtime, flags, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const stream = this.getStream(fd);
       const target = stream.valueOf();
       const loc = this.getStreamLocation?.(fd);
-      const times = extractTimes(st_atim, st_mtim, fst_flags);
+      const times = extractTimes(atime, mtime, flags);
       return this.triggerEvent('set_times', { ...loc, target, times }, PosixError.EBADF);
     }, (result) => expectBoolean(result, PosixError.EBADF));
   },
 });
 
 var fdPrestatDirName = mixin({
-  fdPrestatDirName(fd, path_address, path_len) {
+  fdPrestatDirName(fd, pathAddress, pathLen) {
     return PosixError.NONE;
   }
 }) ;
 
 var fdPrestatGet = mixin({
-  fdPrestatGet(fd, buf_address) {
+  fdPrestatGet(fd, bufAddress) {
     if (fd === 3) {
       // descriptor 3 is the root directory, I think
-      const dv = new DataView(this.memory.buffer);
-      dv.setUint8(buf_address, 0);
-      dv.setUint32(buf_address + 4, 0, true);
+      const dv = createView(8);      
+      dv.setUint8(0, 0);
+      dv.setUint32(4, 0, this.littleEndian);
+      this.moveExternBytes(dv, bufAddress, true);
       return PosixError.NONE;
     } else {
       return PosixError.EBADF;
@@ -5862,7 +5882,7 @@ var fdReaddir = mixin({
       const dv = createView(bufLen);
       let remaining = bufLen;
       let p = 0;
-      const defaultEntryCount = (fd !== Descriptor.root) ? 2 : 1;
+      const defaultEntryCount = (fd !== PosixDescriptor.root) ? 2 : 1;
       if (context) {
         let { iterator, entry } = context;
         if (entry) {
@@ -5934,7 +5954,7 @@ var fdSync = mixin({
       const stream = this.getStream(fd);
       return stream.sync?.();
     });
-  }
+  },
 });
 
 var fdTell = mixin({
@@ -5986,9 +6006,9 @@ var fdWrite = mixin({
 });
 
 var pathCreateDirectory = mixin({
-  pathCreateDirectory(dirfd, path_address, path_len, canWait) {
+  pathCreateDirectory(dirFd, pathAddress, pathLen, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
+      const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
       return this.triggerEvent('mkdir', loc, PosixError.ENOENT);
     }, (result) => {
       if (result instanceof Map) return;
@@ -5999,50 +6019,43 @@ var pathCreateDirectory = mixin({
   },
 });
 
-const LookupFlag = {
-  symlinkFollow: 1 << 0,
-};
-
 var pathFilestatGet = mixin({
-  pathFilestatGet(dirfd, lookupFlags, pathAddress, pathLen, bufAddress, canWait) {
+  pathFilestatGet(dirFd, lFlags, pathAddress, pathLen, bufAddress, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const loc = this.obtainStreamLocation(dirfd, pathAddress, pathLen);
-      const flags = decodeFlags(lookupFlags, LookupFlag);
+      const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
+      const flags = decodeFlags(lFlags, PosixLookupFlag);
       return this.triggerEvent('stat', { ...loc, flags }, PosixError.ENOENT);
     }, (stat) => this.copyStat(bufAddress, stat));
   },
 });
 
 var pathFilestatSetTimes = mixin({
-  pathFilestatSetTimes(dirfd, path_address, path_len, st_atim, st_mtim, fst_flags, canWait) {
+  pathFilestatSetTimes(dirFd, pathAddress, pathLen, atime, mtime, flags, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
-      const times = extractTimes(st_atim, st_mtim, fst_flags);
+      const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
+      const times = extractTimes(atime, mtime, flags);
       return this.triggerEvent('set_times', { ...loc, times }, PosixError.ENOENT);
     }, (result) => expectBoolean(result, PosixError.ENOENT));
   },
 });
 
-const OpenFlag = {
-  create: 1 << 0,
-  directory: 1 << 1,
-  exclusive: 1 << 2,
-  truncate: 1 << 3,
-};
-
 const Right = {
-  read: 1n << 1n,
-  write: 1n << 6n,
-  readdir: 1n << 14n,
+  read: BigInt(PosixDescriptorRight.fd_read),
+  write: BigInt(PosixDescriptorRight.fd_write),
+  readdir: BigInt(PosixDescriptorRight.fd_readdir),
 };
 
 var pathOpen = mixin({
-  pathOpen(dirfd, dirflags, pathAddress, pathLen, oflags, rightsBase, rightsInheriting, fsFlags, fdAddress, canWait) {
+  pathOpen(dirFd, lFlags, pathAddress, pathLen, oFlags, rightsBase, rightsInheriting, fdFlags, fdAddress, canWait) {
     const rights = decodeFlags(rightsBase | rightsInheriting, Right);
-    const flags = decodeFlags(oflags, OpenFlag);
+    const flags = {
+      ...decodeFlags(lFlags, PosixLookupFlag),
+      ...decodeFlags(oFlags, PosixOpenFlag),
+      ...decodeFlags(fdFlags, PosixDescriptorFlag),
+    };
     let loc;
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      loc = this.obtainStreamLocation(dirfd, pathAddress, pathLen);
+      loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
       return this.triggerEvent('open', { ...loc, rights, flags }, PosixError.ENOENT);
     }, (arg) => {
       if (arg === false) {
@@ -6060,22 +6073,22 @@ var pathOpen = mixin({
       this.setStreamLocation?.(fd, loc);
       this.copyUint32(fdAddress, fd);
     });
-  }  
+  },
 });
 
 var pathRemoveDirectory = mixin({
-  pathRemoveDirectory(dirfd, path_address, path_len, canWait) {
+  pathRemoveDirectory(dirFd, pathAddress, pathLen, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
+      const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
       return this.triggerEvent('rmdir', loc, PosixError.ENOENT);
     }, (result) => expectBoolean(result, PosixError.ENOENT));
   },
 });
 
 var pathUnlinkFile = mixin({
-  pathUnlinkFile(dirfd, path_address, path_len, canWait) {
+  pathUnlinkFile(dirFd, pathAddress, pathLen, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const loc = this.obtainStreamLocation(dirfd, path_address, path_len);
+      const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
       return this.triggerEvent('unlink', loc, PosixError.ENOENT);
     }, (result) => expectBoolean(result, PosixError.ENOENT));
   },

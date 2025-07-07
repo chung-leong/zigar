@@ -8,5 +8,11 @@ export default mixin({
       const stream = this.getStream(fd);
       return stream.allocate(offset, len);
     });
-  }
+  },
+  ...(process.env.TARGET === 'node' ? {
+    exports: {
+      fdAllocate: { async: true },
+    },
+    /* c8 ignore next */
+  } : undefined),
 });

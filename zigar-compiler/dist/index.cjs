@@ -21,6 +21,9 @@ const MemberType = {
 const MemberFlag = {
   IsReadOnly:       0x0002};
 
+({
+  root: (process.env.TARGET === 'wasm') ? 3 : -1});
+
 const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
 
 function __symbol(name) {

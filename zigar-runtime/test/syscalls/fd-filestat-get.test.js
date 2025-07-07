@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { Descriptor, PosixError } from '../../src/constants.js';
+import { PosixDescriptor, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { usize } from '../../src/utils.js';
@@ -50,7 +50,7 @@ describe('Syscall: fd-filestat-get', function() {
     const pathLen = path.length;
     const fdAddress = usize(0x2000);
     env.moveExternBytes(path, pathAddress, true);
-    const result1 = env.pathOpen(Descriptor.root, 0, pathAddress, pathLen, 0, 2n, 0n, 0, fdAddress);
+    const result1 = env.pathOpen(PosixDescriptor.root, 0, pathAddress, pathLen, 0, 2n, 0n, 0, fdAddress);
     expect(result1).to.equal(0);
     const fdDV = env.obtainZigView(fdAddress, 4);
     const fd = fdDV.getUint32(0, env.littleEndian);
@@ -222,7 +222,7 @@ describe('Syscall: fd-filestat-get', function() {
       const pathArray = env.obtainZigArray(pathAddress, pathLen);
       for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
       const open = env.getWASIHandler('path_open');
-      const result1 = open(Descriptor.root, 0, pathAddress, pathLen, 0, 2n, 0n, 0, fdAddress);
+      const result1 = open(PosixDescriptor.root, 0, pathAddress, pathLen, 0, 2n, 0n, 0, fdAddress);
       expect(result1).to.equal(0);
       const dv = new DataView(env.memory.buffer);
       const fd = dv.getUint32(fdAddress, true);

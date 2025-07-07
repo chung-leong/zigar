@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { Descriptor, PosixError } from '../../src/constants.js';
+import { PosixDescriptor, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { usize } from '../../src/utils.js';
@@ -102,7 +102,7 @@ describe('Syscall: fd-readdir', function() {
         }
       };
     }   
-    const fd = Descriptor.root;
+    const fd = PosixDescriptor.root;
     const bufAddress = usize(0x1000);
     const bufLen = 24 + 1 + 24 + 2 + 10;
     const usedAddress = usize(0x2000);
