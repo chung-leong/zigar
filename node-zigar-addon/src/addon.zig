@@ -546,7 +546,7 @@ const ModuleHost = struct {
             };
             const NewArgs = comptime define: {
                 const fields = std.meta.fields(Args);
-                const extra = if (Payload == void) 0 else 1;
+                const extra = if (Payload == void or Payload == E) 0 else 1;
                 var new_fields: [fields.len + extra]std.builtin.Type.StructField = undefined;
                 var new_args_info = @typeInfo(Args);
                 new_args_info.@"struct".fields = &new_fields;
@@ -569,8 +569,12 @@ const ModuleHost = struct {
                     }
                     const retval = @call(.auto, func, args);
                     if (retval) |payload| {
-                        if (new_args.len > args.len) new_args[args.len].* = payload;
-                        return .SUCCESS;
+                        if (Payload == E) {
+                            return payload;
+                        } else {
+                            if (new_args.len > args.len) new_args[args.len].* = payload;
+                            return .SUCCESS;
+                        }
                     } else |_| {
                         return .FAULT;
                     }
@@ -775,110 +779,66 @@ const ModuleHost = struct {
         }
     }
 
-    fn handleSysCall(self: *@This(), call: *SysCall, in_main_thread: bool) !void {
+    fn handleSysCall(self: *@This(), call: *SysCall, in_main_thread: bool) !E {
         if (in_main_thread) {
-            switch (call.cmd) {
-                .fd_close => try self.handleClose(call),
-                .fd_read => try self.handleRead(call),
-                .fd_seek => try self.handleSeek(call),
-                .fd_tell => try self.handleTell(call),
-                .fd_write => try self.handleWrite(call),
-                .path_open => try self.handleOpen(call),
+            const env = self.env;
+            const futex = switch (call.futex_handle) {
+                0 => try env.getUndefined(),
+                else => |handle| try env.createUsize(handle),
+            };
+            return switch (call.cmd) {
+                .fd_close => try self.handleClose(futex, &call.u.close),
+                .fd_read => try self.handleRead(futex, &call.u.read),
+                .fd_seek => try self.handleSeek(futex, &call.u.seek),
+                .fd_tell => try self.handleTell(futex, &call.u.tell),
+                .fd_write => try self.handleWrite(futex, &call.u.write),
+                .fd_filestat_get => try self.handleStat(futex, &call.u.fstat),
+                .path_open => try self.handleOpen(futex, &call.u.open),
+                .path_filestat_get => try self.handleStat(futex, &call.u.stat),
                 else => unreachable,
-            }
+            };
         } else {
             const func = self.ts.handle_sys_call orelse return error.Disabled;
             var futex: Futex = undefined;
             call.futex_handle = futex.init();
             try napi.callThreadsafeFunction(func, @ptrCast(call), .nonblocking);
             try futex.wait();
+            return .SUCCESS;
         }
     }
 
-    fn handleRead(self: *@This(), call: *SysCall) !void {
+    fn callPosixFunction(self: *@This(), fn_ref: ?Ref, args: []const Value) !E {
         const env = self.env;
-        const u = &call.u.read;
-        _ = try env.callFunction(
+        const result = try env.callFunction(
             try env.getNull(),
-            try env.getReferenceValue(self.js.fd_read1 orelse return error.Unexpected),
-            &.{
-                try env.createInt32(u.fd),
-                try env.createUsize(@intFromPtr(u.bytes)),
-                try env.createUint32(u.len),
-                try env.createUsize(@intFromPtr(&u.read)),
-                try env.createUsize(call.futex_handle),
-            },
+            try env.getReferenceValue(fn_ref orelse return error.Unexpected),
+            args,
         );
+        const error_code = try env.getValueUint32(result);
+        return try std.meta.intToEnum(E, error_code);
     }
 
-    fn handleWrite(self: *@This(), call: *SysCall) !void {
+    fn handleOpen(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        const u = &call.u.write;
-        _ = try env.callFunction(
-            try env.getNull(),
-            try env.getReferenceValue(self.js.fd_write1 orelse return error.Unexpected),
-            &.{
-                try env.createInt32(u.fd),
-                try env.createUsize(@intFromPtr(u.bytes)),
-                try env.createUint32(u.len),
-                try env.createUsize(@intFromPtr(&u.written)),
-                try env.createUsize(call.futex_handle),
-            },
-        );
-    }
-
-    fn handleSeek(self: *@This(), call: *SysCall) !void {
-        const env = self.env;
-        const u = &call.u.seek;
-        _ = try env.callFunction(
-            try env.getNull(),
-            try env.getReferenceValue(self.js.fd_seek orelse return error.Unexpected),
-            &.{
-                try env.createInt32(u.fd),
-                try env.createBigintInt64(u.offset),
-                try env.createUint32(u.whence),
-                try env.createUsize(@intFromPtr(&u.position)),
-                try env.createUsize(call.futex_handle),
-            },
-        );
-    }
-
-    fn handleTell(self: *@This(), call: *SysCall) !void {
-        const env = self.env;
-        const u = &call.u.tell;
-        _ = try env.callFunction(
-            try env.getNull(),
-            try env.getReferenceValue(self.js.fd_tell orelse return error.Unexpected),
-            &.{
-                try env.createInt32(u.fd),
-                try env.createUsize(@intFromPtr(&u.position)),
-                try env.createUsize(call.futex_handle),
-            },
-        );
-    }
-
-    fn handleOpen(self: *@This(), call: *SysCall) !void {
-        const env = self.env;
-        const u = &call.u.open;
         const posix = redirect.posix;
         const lflags: std.os.wasi.lookupflags_t = .{
-            .SYMLINK_FOLLOW = u.follow_symlink,
+            .SYMLINK_FOLLOW = args.follow_symlink,
         };
         const oflags: std.os.wasi.oflags_t = .{
-            .CREAT = u.oflag & posix.O_CREAT != 0,
-            .DIRECTORY = u.directory,
-            .EXCL = u.oflag & posix.O_EXCL != 0,
-            .TRUNC = u.oflag & posix.O_TRUNC != 0,
+            .CREAT = args.oflag & posix.O_CREAT != 0,
+            .DIRECTORY = args.directory,
+            .EXCL = args.oflag & posix.O_EXCL != 0,
+            .TRUNC = args.oflag & posix.O_TRUNC != 0,
         };
         const rights: std.os.wasi.rights_t = set: {
             var r: std.os.wasi.rights_t = .{};
-            if (u.directory) {
+            if (args.directory) {
                 r.FD_READDIR = true;
             } else {
-                if (u.oflag & posix.O_RDWR != 0) {
+                if (args.oflag & posix.O_RDWR != 0) {
                     r.FD_READ = true;
                     r.FD_WRITE = true;
-                } else if (u.oflag & posix.O_WRONLY != 0) {
+                } else if (args.oflag & posix.O_WRONLY != 0) {
                     r.FD_WRITE = true;
                 } else {
                     r.FD_READ = true;
@@ -887,41 +847,118 @@ const ModuleHost = struct {
             break :set r;
         };
         const fdflags: std.os.wasi.fdflags_t = .{
-            .APPEND = u.oflag & (posix.O_APPEND) != 0,
-            .DSYNC = u.oflag & (posix.O_DSYNC) != 0,
-            .NONBLOCK = u.oflag & (posix.O_NONBLOCK) != 0,
-            .RSYNC = u.oflag & (posix.O_RSYNC) != 0,
-            .SYNC = u.oflag & (posix.O_SYNC) != 0,
+            .APPEND = args.oflag & (posix.O_APPEND) != 0,
+            .DSYNC = args.oflag & (posix.O_DSYNC) != 0,
+            .NONBLOCK = args.oflag & (posix.O_NONBLOCK) != 0,
+            .RSYNC = args.oflag & (posix.O_RSYNC) != 0,
+            .SYNC = args.oflag & (posix.O_SYNC) != 0,
         };
-        _ = try env.callFunction(
-            try env.getNull(),
-            try env.getReferenceValue(self.js.path_open orelse return error.Unexpected),
-            &.{
-                try env.createInt32(u.dirfd),
-                try env.createUint32(@as(u32, @bitCast(lflags))),
-                try env.createUsize(@intFromPtr(u.path)),
-                try env.createUint32(u.path_len),
-                try env.createUint32(@as(u16, @bitCast(oflags))),
-                try env.createBigintUint64(@as(u64, @bitCast(rights))),
-                try env.createBigintUint64(0),
-                try env.createUint32(@as(u16, @bitCast(fdflags))),
-                try env.createUsize(@intFromPtr(&u.fd)),
-                try env.createUsize(call.futex_handle),
-            },
-        );
+        return try self.callPosixFunction(self.js.path_open, &.{
+            try env.createInt32(args.dirfd),
+            try env.createUint32(@as(u32, @bitCast(lflags))),
+            try env.createUsize(@intFromPtr(args.path)),
+            try env.createUint32(args.path_len),
+            try env.createUint32(@as(u16, @bitCast(oflags))),
+            try env.createBigintUint64(@as(u64, @bitCast(rights))),
+            try env.createBigintUint64(0),
+            try env.createUint32(@as(u16, @bitCast(fdflags))),
+            try env.createUsize(@intFromPtr(&args.fd)),
+            futex,
+        });
     }
 
-    fn handleClose(self: *@This(), call: *SysCall) !void {
+    fn handleClose(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        const u = &call.u.close;
-        _ = try env.callFunction(
-            try env.getNull(),
-            try env.getReferenceValue(self.js.fd_close orelse return error.Unexpected),
-            &.{
-                try env.createInt32(u.fd),
-                try env.createUsize(call.futex_handle),
-            },
-        );
+        return try self.callPosixFunction(self.js.fd_close, &.{
+            try env.createInt32(args.fd),
+            futex,
+        });
+    }
+
+    fn handleRead(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        return try self.callPosixFunction(self.js.fd_read1, &.{
+            try env.createInt32(args.fd),
+            try env.createUsize(@intFromPtr(args.bytes)),
+            try env.createUint32(args.len),
+            try env.createUsize(@intFromPtr(&args.read)),
+            futex,
+        });
+    }
+
+    fn handleWrite(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        return try self.callPosixFunction(self.js.fd_write1, &.{
+            try env.createInt32(args.fd),
+            try env.createUsize(@intFromPtr(args.bytes)),
+            try env.createUint32(args.len),
+            try env.createUsize(@intFromPtr(&args.written)),
+            futex,
+        });
+    }
+
+    fn handleSeek(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        return try self.callPosixFunction(self.js.fd_seek, &.{
+            try env.createInt32(args.fd),
+            try env.createBigintInt64(args.offset),
+            try env.createUint32(args.whence),
+            try env.createUsize(@intFromPtr(&args.position)),
+            futex,
+        });
+    }
+
+    fn handleTell(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        return try self.callPosixFunction(self.js.fd_tell, &.{
+            try env.createInt32(args.fd),
+            try env.createUsize(@intFromPtr(&args.position)),
+            futex,
+        });
+    }
+
+    fn handleStat(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        var stat: std.os.wasi.filestat_t = undefined;
+        var result: E = undefined;
+        if (@hasField(@TypeOf(args.*), "fd")) {
+            std.debug.print("handleStat fd = {d}\n", .{args.fd});
+            result = try self.callPosixFunction(self.js.fd_filestat_get, &.{
+                try env.createInt32(args.fd),
+                try env.createUsize(@intFromPtr(&stat)),
+                futex,
+            });
+        } else {
+            const lflags: std.os.wasi.lookupflags_t = .{
+                .SYMLINK_FOLLOW = args.follow_symlink,
+            };
+            result = try self.callPosixFunction(self.js.path_filestat_get, &.{
+                try env.createInt32(args.dirfd),
+                try env.createUint32(@as(u32, @bitCast(lflags))),
+                try env.createUsize(@intFromPtr(args.path)),
+                try env.createUint32(args.path_len),
+                try env.createUsize(@intFromPtr(&stat)),
+                futex,
+            });
+        }
+        if (result == .SUCCESS) {
+            std.debug.print("stat {}\n", .{stat});
+            const c_ptr = args.stat.?;
+            const Stat = @TypeOf(c_ptr.*);
+            const ptr: *Stat = @ptrCast(c_ptr);
+            ptr.* = std.mem.zeroes(Stat);
+            ptr.st_ino = stat.ino;
+            ptr.st_size = @truncate(@as(i64, @intCast(stat.size)));
+            ptr.st_mode = @intFromEnum(stat.filetype);
+            inline for (.{ "atim", "mtim", "ctim" }) |field_name| {
+                const ns = @field(stat, field_name);
+                @field(ptr, "st_" ++ field_name) = .{
+                    .tv_sec = @truncate(@as(i64, @intCast(ns / 1_000_000_000))),
+                    .tv_nsec = @truncate(@as(i64, @intCast(ns % 1_000_000_000))),
+                };
+            }
+        }
+        return result;
     }
 
     fn releaseFunction(self: *@This(), fn_id: usize, in_main_thread: bool) !void {
@@ -967,7 +1004,7 @@ const ModuleHost = struct {
         fn handle_sys_call(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
             const call: *SysCall = @ptrCast(@alignCast(data));
-            handleSysCall(self, call, true) catch {
+            _ = handleSysCall(self, call, true) catch {
                 Futex.wake(call.futex_handle, .FAULT) catch {};
             };
         }

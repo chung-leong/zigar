@@ -1,6 +1,21 @@
-#include <stddef.h>
-#include <stdint.h>
+#define _LARGEFILE64_SOURCE
+#define __USE_POSIX
+#include <stdlib.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <stdint.h>
+#include <string.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <stdarg.h>
+#if defined(_WIN32)
+    #include <windows.h>
+    #include <io.h>
+#else
+    #include <unistd.h>
+    #include <sys/stat.h>
+#endif
 
 typedef enum {
     invalid_command = -1,
@@ -11,6 +26,7 @@ typedef enum {
     fd_close,
     fd_datasync,
     fd_fdstat_get,
+    fd_filestat_get,
     fd_filestat_set_times,
     fd_prestat_get,
     fd_prestat_dirname,
@@ -32,10 +48,9 @@ typedef enum {
 
 typedef struct {
     int32_t dirfd;
-    const unsigned char *path;
+    const char *path;
     uint32_t path_len;
     uint32_t oflag;
-    uint32_t mode;
     bool directory;
     bool follow_symlink;
     int32_t fd;
@@ -47,14 +62,14 @@ typedef struct {
 
 typedef struct {
     int32_t fd;
-    unsigned char *bytes;
+    char *bytes;
     uint32_t len;
     uint32_t read;
 } syscall_read;
 
 typedef struct {
     int32_t fd;
-    const unsigned char *bytes;
+    const char *bytes;
     uint32_t len;
     uint32_t written;
 } syscall_write;
@@ -71,6 +86,19 @@ typedef struct {
     uint64_t position;
 } syscall_tell;
 
+typedef struct {
+    int32_t fd;
+    struct stat* stat;
+} syscall_fstat;
+
+typedef struct {
+    int32_t dirfd;
+    const char *path;
+    uint32_t path_len;
+    bool follow_symlink;
+    struct stat* stat;
+} syscall_stat;
+
 typedef union  {
     syscall_open open;
     syscall_close close;
@@ -78,6 +106,8 @@ typedef union  {
     syscall_write write;
     syscall_seek seek;
     syscall_tell tell;
+    syscall_fstat fstat;
+    syscall_stat stat;
 } syscall_union;
 
 typedef struct {
