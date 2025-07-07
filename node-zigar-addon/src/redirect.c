@@ -31,7 +31,23 @@ bool override_write(size_t fd,
     call.u.write.bytes = buffer;
     call.u.write.len = len;
     // return value of zero means success
-    return (override && override(&call) == 0) ? true : false;
+    if (!override || override(&call) != 0) return false;
+    return true;
+}
+
+bool override_read(size_t fd,
+                   unsigned char* buffer,
+                   size_t len,
+                   uint32_t* read_ptr) {
+    syscall_struct call;
+    call.cmd = sc_read;
+    call.futex_handle = 0;
+    call.u.read.fd = fd;
+    call.u.read.bytes = buffer;
+    call.u.read.len = len;
+    if (!override || override(&call) != 0) return false;
+    *read_ptr = call.u.read.read;
+    return true;
 }
 
 bool override_vfprintf(FILE* s,
@@ -83,6 +99,18 @@ BOOL WINAPI write_file_hook(HANDLE handle,
     return WriteFile(handle, buffer, len, written, overlapped);
 }
 #endif
+
+ssize_t read_hook(int fd, 
+                  void* buffer, 
+                  size_t len) {
+    if (is_applicable_handle(fd)) {
+        uint32_t read;
+        if (override_read(fd, buffer, len, &read)) {
+            return read;
+        }
+    }
+    return read(fd, buffer, len);
+}
 
 ssize_t write_hook(int fd,
                    const void* buffer,
@@ -241,6 +269,7 @@ hook hooks[] = {
     { "WriteFile",                  write_file_hook },
     { "_write",                     write_hook },
 #else
+    { "read",                       read_hook },
     { "write",                      write_hook },
 #endif
     { "fputs",                      fputs_hook },

@@ -30,7 +30,7 @@ export default mixin({
   createStreamHandle(stream) {
     const fd = this.nextStreamHandle++;
     this.streamMap.set(fd, stream);
-    stream.onClose = () => this.closeStream(fd);
+    stream.onClose = () => this.destroyStreamHandle(fd);
     return fd;
   },
   destroyStreamHandle(fd) {

@@ -44,12 +44,12 @@ export default mixin({
     },
 
     fdWrite1(fd, address, len, writtenAddress, canWait) {
-      return catchPosixError(canWait, PosixError.EIO, () => {
+      return catchPosixError(canWait, PosixError.EIO, () => {        
         const writer = this.getStream(fd);
         const chunk = new Uint8Array(len);
         this.moveExternBytes(chunk, address, false);
         return writer.write(chunk);
-      }, () => this.copyUsize(writtenAddress, len));
+      }, () => this.copyUint32(writtenAddress, len));
     },
     /* c8 ignore next */
   } : undefined),

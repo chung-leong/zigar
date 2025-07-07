@@ -37,6 +37,7 @@ const ModuleHost = struct {
         release_function: ?Ref = null,
 
         fd_write1: ?Ref = null,
+        fd_read1: ?Ref = null,
     } = .{},
     ts: struct {
         disable_multithread: ?ThreadsafeFunction = null,
@@ -729,6 +730,9 @@ const ModuleHost = struct {
 
     fn handleJsCall(self: *@This(), call: *JsCall, in_main_thread: bool) !void {
         if (in_main_thread) {
+            if (call.futex_handle != 0) {
+                errdefer Futex.wake(call.futex_handle, E.FAULT) catch {};
+            }
             const env = self.env;
             const status = try env.callFunction(
                 try env.getNull(),
@@ -757,7 +761,8 @@ const ModuleHost = struct {
     fn handleSysCall(self: *@This(), call: *SysCall, in_main_thread: bool) !void {
         if (in_main_thread) {
             switch (call.cmd) {
-                .write => self.handleWrite(call) catch |err| @panic(@errorName(err)),
+                .write => try self.handleWrite(call),
+                .read => try self.handleRead(call),
             }
         } else {
             const func = self.ts.handle_sys_call orelse return error.Disabled;
@@ -779,6 +784,22 @@ const ModuleHost = struct {
                 try env.createUsize(@intFromPtr(u.bytes)),
                 try env.createUint32(@as(u32, @truncate(u.len))),
                 try env.createUsize(@intFromPtr(&u.written)),
+                try env.createUsize(call.futex_handle),
+            },
+        );
+    }
+
+    fn handleRead(self: *@This(), call: *SysCall) !void {
+        const env = self.env;
+        const u = &call.u.read;
+        _ = try env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.fd_read1 orelse return error.Unexpected),
+            &.{
+                try env.createUint32(@as(u32, @truncate(u.fd))),
+                try env.createUsize(@intFromPtr(u.bytes)),
+                try env.createUint32(@as(u32, @truncate(u.len))),
+                try env.createUsize(@intFromPtr(&u.read)),
                 try env.createUsize(call.futex_handle),
             },
         );

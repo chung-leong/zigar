@@ -1,3 +1,4 @@
+import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { decodeText, defineProperty, defineValue, empty, isPromise } from '../utils.js';
 
@@ -189,20 +190,21 @@ export default mixin({
     addPromiseHandling(fn) {
       const futexIndex = fn.length - 1;
       return function(...args) {
-        try {
-          const futexHandle = args[futexIndex];
-          const canWait = !!futexHandle;
-          // replace futexHandle with canWait in the argument list
-          args[futexIndex] = canWait;
-          const result = fn.call(this, ...args);
-          if (canWait && isPromise(result)) {
-            result.then(res => this.finalizeAsyncCall(futexHandle, res));
+        const futexHandle = args[futexIndex];
+        const canWait = !!futexHandle;
+        // replace futexHandle with canWait in the argument list
+        args[futexIndex] = canWait;
+        const result = fn.call(this, ...args);
+        if (canWait) {
+          if (isPromise(result)) {
+            result.then(result => this.finalizeAsyncCall(futexHandle, result));
           } else {
-            return result;
+            this.finalizeAsyncCall(futexHandle, result);
           }
-        } catch (err) {
-          console.error(err);
+        } else {
+          return result;
         }
+        return PosixError.NONE;
       }
     },
     importFunctions(exports) {

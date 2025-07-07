@@ -193,7 +193,7 @@ export default mixin({
     },
   } : process.env.TARGET === 'node' ? {
     exports: {
-      handleJsCall: {},
+      handleJsCall: { async: true },
       releaseFunction: {},
     },
     imports: {

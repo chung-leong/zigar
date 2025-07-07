@@ -23,7 +23,6 @@ export function addTests(importModule, options) {
         shutdown,
         hash,
       } = await importTest('read-from-reader', { multithreaded: true });
-      console.error('startup');
       startup(1);
       try {
         const correct = (platform() === 'win32') 
@@ -32,9 +31,7 @@ export function addTests(importModule, options) {
         const path = absolute('./data/test.txt');
         const fd = await open(path);
         const stream = fd.readableWebStream();
-        console.error('hash start');
         const digest1 = await hash(stream.getReader());
-        console.error('hash end');
         expect(digest1.string).to.equal(correct);
         // Uint8Array as input
         const content = await readFile(path);
@@ -77,6 +74,7 @@ export function addTests(importModule, options) {
         const reader = stream.getReader();
         const digest1 = await hash(reader);
         expect(digest1.string).to.equal(correct);
+        reader.close();
         // Uint8Array as input
         const content = await readFile(path);
         const digest2 = await hash(content);
@@ -85,7 +83,6 @@ export function addTests(importModule, options) {
         const blob = new Blob([ content ]);
         const digest3 = await hash(content);
         expect(digest3.string).to.equal(correct);
-        // reader.close();
       } finally {
         await shutdown();
       }
