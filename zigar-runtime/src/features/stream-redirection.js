@@ -126,6 +126,7 @@ export default mixin({
   } : process.env.TARGET === 'node' ? {
     imports: {
       flushStdout: {},
+      setRedirectionMask: {},
     },
     /* c8 ignore next */
   } : undefined),

@@ -18,7 +18,6 @@
 #endif
 
 typedef enum {
-    invalid_command = -1,
     environ_get,
     environ_sizes_get,
     fd_advise,
@@ -46,6 +45,15 @@ typedef enum {
     random_get,
 } syscall_command;
 
+typedef enum {
+    mask_mkdir = 1 << 0,
+    mask_stat = 1 << 1,
+    mask_set_times = 1 << 2,
+    mask_open = 1 << 3,
+    mask_rmdir = 1 << 4,
+    mask_unlink = 1 << 5,
+} syscall_mask;
+
 typedef struct {
     int32_t dirfd;
     const char *path;
@@ -58,7 +66,7 @@ typedef struct {
 
 typedef struct {
     int32_t fd;
-} syscall_close;
+} syscall_close, syscall_sync, syscall_datasync;
 
 typedef struct {
     int32_t fd;
@@ -99,6 +107,18 @@ typedef struct {
     struct stat* stat;
 } syscall_stat;
 
+typedef struct {
+    int32_t fd;
+    uint64_t offset;
+    uint64_t size;
+} syscall_allocate;
+
+typedef struct {
+    int32_t dirfd;
+    const char *path;
+    uint32_t path_len;
+} syscall_mkdir, syscall_rmdir, syscall_unlink;
+
 typedef union  {
     syscall_open open;
     syscall_close close;
@@ -108,6 +128,12 @@ typedef union  {
     syscall_tell tell;
     syscall_fstat fstat;
     syscall_stat stat;
+    syscall_allocate allocate;
+    syscall_sync sync;
+    syscall_datasync datasync;
+    syscall_mkdir mkdir;
+    syscall_rmdir rmdir;
+    syscall_unlink unlink;
 } syscall_union;
 
 typedef struct {

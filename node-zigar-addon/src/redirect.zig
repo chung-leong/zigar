@@ -10,60 +10,18 @@ pub const posix = @cImport({
 });
 
 pub const SysCall = extern struct {
-    cmd: SysCallCommand,
+    cmd: Command,
     u: h.syscall_union,
     futex_handle: usize,
+
+    pub const Command: type = deriveZigEnum(h, "environ_get", "random_get");
 };
-pub const SysCallCommand: type = define: {
-    // derive Zig enum from C enum
-    @setEvalBranchQuota(100000);
-    var count: usize = 0;
-    var in_enum = false;
-    for (std.meta.declarations(h)) |decl| {
-        if (in_enum) {
-            if (std.mem.startsWith(u8, decl.name, "syscall_command")) {
-                in_enum = false;
-            } else {
-                count += 1;
-            }
-        } else {
-            if (std.mem.startsWith(u8, decl.name, "invalid_command")) {
-                in_enum = true;
-            }
-        }
-    }
-    var fields: [count]std.builtin.Type.EnumField = undefined;
-    var i: usize = 0;
-    for (std.meta.declarations(h)) |decl| {
-        if (in_enum) {
-            if (std.mem.startsWith(u8, decl.name, "syscall_command")) {
-                in_enum = false;
-            } else {
-                fields[i] = .{
-                    .name = decl.name,
-                    .value = @field(h, decl.name),
-                };
-                i += 1;
-            }
-        } else {
-            if (std.mem.startsWith(u8, decl.name, "invalid_command")) {
-                in_enum = true;
-            }
-        }
-    }
-    break :define @Type(.{
-        .@"enum" = .{
-            .tag_type = c_int,
-            .fields = &fields,
-            .decls = &.{},
-            .is_exhaustive = true,
-        },
-    });
-};
+pub const Mask: type = deriveZigEnum(h, "mask_mkdir", "mask_unlink");
 pub const Callback = *const fn (*SysCall) callconv(.c) u32;
 
-extern fn find_hook([*:0]const u8) callconv(.c) ?*const anyopaque;
+extern fn find_hook([*:0]const u8) ?*const anyopaque;
 extern fn set_override(?Callback) void;
+extern fn set_override_mask(c_int, bool) void;
 
 const ns = switch (builtin.target.os.tag) {
     .linux => linux,
@@ -75,6 +33,10 @@ pub const redirectIO = ns.redirectIO;
 
 pub fn stop() void {
     set_override(null);
+}
+
+pub fn setMask(mask: Mask, set: bool) void {
+    set_override_mask(@intFromEnum(mask), set);
 }
 
 const linux = struct {
@@ -449,4 +411,37 @@ fn readStruct(comptime T: type, file: std.fs.File) !T {
     const bytes: [*]u8 = @ptrCast(&buffer);
     if (try file.read(bytes[0..len]) != len) return error.Unexpected;
     return buffer;
+}
+
+fn deriveZigEnum(comptime c_ns: type, comptime first_item: []const u8, comptime last_item: []const u8) type {
+    // derive Zig enum from C enum
+    @setEvalBranchQuota(100000);
+    var count: usize = 0;
+    var in_enum = false;
+    for (std.meta.declarations(c_ns)) |decl| {
+        if (!in_enum and std.mem.startsWith(u8, decl.name, first_item)) in_enum = true;
+        if (in_enum) count += 1;
+        if (in_enum and std.mem.startsWith(u8, decl.name, last_item)) in_enum = false;
+    }
+    var fields: [count]std.builtin.Type.EnumField = undefined;
+    var i: usize = 0;
+    for (std.meta.declarations(c_ns)) |decl| {
+        if (!in_enum and std.mem.startsWith(u8, decl.name, first_item)) in_enum = true;
+        if (in_enum) {
+            fields[i] = .{
+                .name = decl.name,
+                .value = @field(h, decl.name),
+            };
+            i += 1;
+        }
+        if (in_enum and std.mem.startsWith(u8, decl.name, last_item)) in_enum = false;
+    }
+    return @Type(.{
+        .@"enum" = .{
+            .tag_type = c_int,
+            .fields = &fields,
+            .decls = &.{},
+            .is_exhaustive = true,
+        },
+    });
 }

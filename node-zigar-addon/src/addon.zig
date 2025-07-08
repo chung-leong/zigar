@@ -179,6 +179,7 @@ const ModuleHost = struct {
             "setNumericValue",
             "requireBufferFallback",
             "syncExternalBuffer",
+            "setRedirectionMask",
         };
         inline for (names) |name| {
             const cb = @field(@This(), name);
@@ -515,6 +516,21 @@ const ModuleHost = struct {
             @memcpy(bytes1[0..len], bytes2[0..len]);
     }
 
+    fn setRedirectionMask(self: *@This(), event: Value, listening: Value) !void {
+        const env = self.env;
+        const event_len = try env.getValueStringUtf8(event, null);
+        const event_bytes = try allocator.alloc(u8, event_len + 1);
+        const event_name = event_bytes[0..event_len];
+        const set = try env.getValueBool(listening);
+        defer allocator.free(event_bytes);
+        _ = try env.getValueStringUtf8(event, event_bytes);
+        inline for (.{ "mkdir", "stat", "set_times", "open", "rmdir", "unlink" }) |name| {
+            if (std.mem.eql(u8, name, event_name)) {
+                redirect.setMask(@field(redirect.Mask, "mask_" ++ name), set);
+            }
+        }
+    }
+
     fn exportFunctionsToModule(self: *@This()) !void {
         const names = .{
             "capture_string",
@@ -546,7 +562,7 @@ const ModuleHost = struct {
             };
             const NewArgs = comptime define: {
                 const fields = std.meta.fields(Args);
-                const extra = if (Payload == void or Payload == E) 0 else 1;
+                const extra = if (Payload == void or Payload == std.c.E) 0 else 1;
                 var new_fields: [fields.len + extra]std.builtin.Type.StructField = undefined;
                 var new_args_info = @typeInfo(Args);
                 new_args_info.@"struct".fields = &new_fields;
@@ -561,15 +577,16 @@ const ModuleHost = struct {
                 }
                 break :define @Type(new_args_info);
             };
+            const NewRT = if (Payload == std.c.E) std.c.E else E;
             const ns = struct {
-                fn call(new_args: NewArgs) E {
+                fn call(new_args: NewArgs) NewRT {
                     var args: Args = undefined;
                     inline for (&args, 0..) |*arg_ptr, i| {
                         arg_ptr.* = new_args[i];
                     }
                     const retval = @call(.auto, func, args);
                     if (retval) |payload| {
-                        if (Payload == E) {
+                        if (Payload == std.c.E) {
                             return payload;
                         } else {
                             if (new_args.len > args.len) new_args[args.len].* = payload;
@@ -779,14 +796,14 @@ const ModuleHost = struct {
         }
     }
 
-    fn handleSysCall(self: *@This(), call: *SysCall, in_main_thread: bool) !E {
+    fn handleSysCall(self: *@This(), call: *SysCall, in_main_thread: bool) !std.c.E {
         if (in_main_thread) {
             const env = self.env;
             const futex = switch (call.futex_handle) {
                 0 => try env.getUndefined(),
                 else => |handle| try env.createUsize(handle),
             };
-            return switch (call.cmd) {
+            const result: E = switch (call.cmd) {
                 .fd_close => try self.handleClose(futex, &call.u.close),
                 .fd_read => try self.handleRead(futex, &call.u.read),
                 .fd_seek => try self.handleSeek(futex, &call.u.seek),
@@ -797,6 +814,16 @@ const ModuleHost = struct {
                 .path_filestat_get => try self.handleStat(futex, &call.u.stat),
                 else => unreachable,
             };
+            // translate from WASI enum to the current system's
+            return inline for (std.meta.fields(E)) |field| {
+                const wasi_enum = @field(E, field.name);
+                if (wasi_enum == result) {
+                    break switch (@hasField(std.c.E, field.name)) {
+                        true => @field(std.c.E, field.name),
+                        false => .FAULT,
+                    };
+                }
+            } else .FAULT;
         } else {
             const func = self.ts.handle_sys_call orelse return error.Disabled;
             var futex: Futex = undefined;
@@ -1096,7 +1123,7 @@ const Imports = extern struct {
     enable_multithread: *const fn (*ModuleHost, bool) callconv(.C) E,
     disable_multithread: *const fn (*ModuleHost, bool) callconv(.C) E,
     handle_js_call: *const fn (*ModuleHost, *JsCall, bool) callconv(.C) E,
-    handle_sys_call: *const fn (*ModuleHost, *SysCall, bool) callconv(.C) E,
+    handle_sys_call: *const fn (*ModuleHost, *SysCall, bool) callconv(.C) std.c.E,
     release_function: *const fn (*ModuleHost, usize, bool) callconv(.C) E,
 };
 const Exports = extern struct {
