@@ -125,6 +125,68 @@ const linux = struct {
         }
         set_override(cb);
     }
+
+    const dlfcn = @cImport({
+        @cDefine("_GNU_SOURCE", {});
+        @cInclude("dlfcn.h");
+    });
+
+    const prctl = @cImport({
+        @cInclude("sys/prctl.h");
+    });
+
+    var trapping_syscalls: bool = false;
+
+    fn handleSigsysSignal(sig: i32, info: *const std.c.siginfo_t, ucontext: ?*anyopaque) callconv(.c) void {
+        _ = sig;
+        // _ = info;
+        _ = ucontext;
+        trapping_syscalls = false;
+        std.debug.print("Caught syscall with number 0x{x}\n", .{info.fields.sigsys.syscall});
+        trapping_syscalls = true;
+    }
+
+    pub fn enableSyscallUserDispatch() !void {
+        // look for libc's path and base address
+        var dl_info: dlfcn.Dl_info = undefined;
+        const dladdr_res = dlfcn.dladdr(&std.c.sigaction, &dl_info);
+        if (dladdr_res == 0) return error.Unexpected;
+        const libc_path = dl_info.dli_fname[0..std.mem.len(dl_info.dli_fname)];
+        const libc_address = @intFromPtr(dl_info.dli_fbase.?);
+        // scan the .so to determine its extent in memory
+        var sfb = std.heap.stackFallback(4096, std.heap.c_allocator);
+        const allocator = sfb.get();
+        const file = try std.fs.openFileAbsolute(libc_path, .{});
+        defer file.close();
+        const header = try readStruct(Elf_Ehdr, file);
+        try file.seekTo(header.e_phoff);
+        const segments = try readStructs(Elf_Phdr, allocator, file, header.e_phnum);
+        defer allocator.free(segments);
+        var max_vaddr: ?usize = null;
+        for (segments) |segment| {
+            const end = segment.p_vaddr + segment.p_memsz;
+            if (max_vaddr == null or end > max_vaddr.?) max_vaddr = end;
+        }
+        const libc_len = max_vaddr.?;
+        // enable syscall user dispatch, excluding the memory region where libc sits
+        // the signal trampoline is also inside this range, allowing us to reenable trapping from within
+        // the signal handler (otherwise sigreturn() would trigger SIGSYS inside a SIGSYS)
+        if (std.c.prctl(
+            prctl.PR_SET_SYSCALL_USER_DISPATCH,
+            prctl.PR_SYS_DISPATCH_ON,
+            libc_address,
+            libc_len,
+            @intFromPtr(&trapping_syscalls),
+        ) != 0) return error.SyscallUserDispatchFailure;
+        // set up syscall signal handler
+        const act = std.c.Sigaction{
+            .handler = .{ .sigaction = handleSigsysSignal },
+            .mask = std.mem.zeroes(std.c.sigset_t),
+            .flags = std.c.SA.SIGINFO,
+        };
+        if (std.c.sigaction(std.c.SIG.SYS, &act, null) != 0)
+            return error.SignalHandlingFailure;
+    }
 };
 
 const darwin = struct {
