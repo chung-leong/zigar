@@ -126,30 +126,42 @@ const linux = struct {
         set_override(cb);
     }
 
-    const dlfcn = @cImport({
+    const syscall = @import("./syscall.zig");
+    const lh = @cImport({
         @cDefine("_GNU_SOURCE", {});
         @cInclude("dlfcn.h");
-    });
-
-    const prctl = @cImport({
         @cInclude("sys/prctl.h");
     });
 
     var trapping_syscalls: bool = false;
 
-    fn handleSigsysSignal(sig: i32, info: *const std.c.siginfo_t, ucontext: ?*anyopaque) callconv(.c) void {
-        _ = sig;
-        // _ = info;
-        _ = ucontext;
+    fn handleSigsysSignal(_: i32, info: *const std.c.siginfo_t, ucontext: ?*anyopaque) callconv(.c) void {
+        @setEvalBranchQuota(100000);
         trapping_syscalls = false;
-        std.debug.print("Caught syscall with number 0x{x}\n", .{info.fields.sigsys.syscall});
-        trapping_syscalls = true;
+        defer trapping_syscalls = true;
+        inline for (syscall.table, 0..) |sc, index| {
+            if (@hasField(sc, "args")) {
+                const num: i32 = @intCast(index);
+                if (num == info.fields.sigsys.syscall) {
+                    const fn_name = std.fmt.comptimePrint("syscall{d}", .{sc.args});
+                    const syscaller = @field(std.os.linux, fn_name);
+                    var args: std.meta.ArgsTuple(@TypeOf(syscaller)) = undefined;
+                    args[0] = @enumFromInt(info.fields.sigsys.syscall);
+                    const arg_array = syscall.getArguments(ucontext, 3);
+                    inline for (arg_array, 0..) |arg_value, arg_index| {
+                        args[arg_index + 1] = arg_value;
+                    }
+                    const retval = @call(.auto, syscaller, args);
+                    syscall.setRetval(ucontext, retval);
+                }
+            }
+        }
     }
 
     pub fn enableSyscallUserDispatch() !void {
         // look for libc's path and base address
-        var dl_info: dlfcn.Dl_info = undefined;
-        const dladdr_res = dlfcn.dladdr(&std.c.sigaction, &dl_info);
+        var dl_info: lh.Dl_info = undefined;
+        const dladdr_res = lh.dladdr(&std.c.sigaction, &dl_info);
         if (dladdr_res == 0) return error.Unexpected;
         const libc_path = dl_info.dli_fname[0..std.mem.len(dl_info.dli_fname)];
         const libc_address = @intFromPtr(dl_info.dli_fbase.?);
@@ -172,8 +184,8 @@ const linux = struct {
         // the signal trampoline is also inside this range, allowing us to reenable trapping from within
         // the signal handler (otherwise sigreturn() would trigger SIGSYS inside a SIGSYS)
         if (std.c.prctl(
-            prctl.PR_SET_SYSCALL_USER_DISPATCH,
-            prctl.PR_SYS_DISPATCH_ON,
+            lh.PR_SET_SYSCALL_USER_DISPATCH,
+            lh.PR_SYS_DISPATCH_ON,
             libc_address,
             libc_len,
             @intFromPtr(&trapping_syscalls),
