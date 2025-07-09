@@ -120,6 +120,50 @@ export function addTests(importModule, options) {
         flags: { symlinkFollow: true }, 
       });
     })
+    it('should open and read from file using posix functions', async function() {
+      this.timeout(0);
+      const { __zigar, hash } = await importTest('open-and-read-file-with-posix-functions');
+      const correct = (platform() === 'win32') 
+      ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
+      : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+      const path = absolute('./data/test.txt');
+      const content = await readFile(path);
+      let event;
+      __zigar.on('open', (evt) => {
+        event = evt;
+        return content;
+      });
+      const digest = hash('/hello/world');
+      expect(digest.string).to.equal(correct);
+      expect(event).to.eql({ 
+        parent: null,
+        path: 'hello/world', 
+        rights: { read: true }, 
+        flags: { symlinkFollow: true }, 
+      });
+    })
+    it('should open and read from file using libc functions', async function() {
+      this.timeout(0);
+      const { __zigar, hash } = await importTest('open-and-read-file-with-libc-functions');
+      const correct = (platform() === 'win32') 
+      ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
+      : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+      const path = absolute('./data/test.txt');
+      const content = await readFile(path);
+      let event;
+      __zigar.on('open', (evt) => {
+        event = evt;
+        return content;
+      });
+      const digest = hash('/hello/world');
+      expect(digest.string).to.equal(correct);
+      expect(event).to.eql({ 
+        parent: null,
+        path: 'hello/world', 
+        rights: { read: true }, 
+        flags: { symlinkFollow: true }, 
+      });
+    })
     it('should write to writer', async function() {
       this.timeout(0);
       const {
@@ -203,6 +247,50 @@ export function addTests(importModule, options) {
     it('should open and write to file in main thread', async function() {
       this.timeout(0);
       const { __zigar, save } = await importTest('open-and-write-to-file-in-main-thread');
+      const chunks = [];
+      let event;
+      __zigar.on('open', (evt) => {
+        event = evt;
+        return chunks;
+      });
+      const len = save('/hello/world', 'This is a test');
+      expect(len).to.equal(14);
+      expect(chunks).to.have.lengthOf(1);
+      const blob = new Blob(chunks);
+      const string = await blob.text();
+      expect(string).to.equal('This is a test');
+      expect(event).to.eql({ 
+        parent: null,
+        path: 'hello/world', 
+        rights: { write: true }, 
+        flags: { create: true, truncate: true, symlinkFollow: true },
+      });
+    })
+    it('should open and write to file using posix functions', async function() {
+      this.timeout(0);
+      const { __zigar, save } = await importTest('open-and-write-to-file-with-posix-functions');
+      const chunks = [];
+      let event;
+      __zigar.on('open', (evt) => {
+        event = evt;
+        return chunks;
+      });
+      const len = save('/hello/world', 'This is a test');
+      expect(len).to.equal(14);
+      expect(chunks).to.have.lengthOf(1);
+      const blob = new Blob(chunks);
+      const string = await blob.text();
+      expect(string).to.equal('This is a test');
+      expect(event).to.eql({ 
+        parent: null,
+        path: 'hello/world', 
+        rights: { write: true }, 
+        flags: { create: true, truncate: true, symlinkFollow: true },
+      });
+    })
+    it('should open and write to file using libc functions', async function() {
+      this.timeout(0);
+      const { __zigar, save } = await importTest('open-and-write-to-file-with-libc-functions');
       const chunks = [];
       let event;
       __zigar.on('open', (evt) => {

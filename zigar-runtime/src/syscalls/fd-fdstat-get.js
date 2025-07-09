@@ -40,4 +40,10 @@ export default mixin({
       this.moveExternBytes(dv, bufAddress, true)
     });
   },
+  ...(process.env.TARGET === 'node' ? {
+    exports: {
+      fdFdstatGet: { async: true },
+    },
+    /* c8 ignore next */
+  } : undefined),
 });

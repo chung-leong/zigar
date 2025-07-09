@@ -41,6 +41,7 @@ const ModuleHost = struct {
         fd_allocate: ?Ref = null,
         fd_close: ?Ref = null,
         fd_datasync: ?Ref = null,
+        fd_fdstat_get: ?Ref = null,
         fd_filestat_get: ?Ref = null,
         fd_filestat_set_times: ?Ref = null,
         fd_read: ?Ref = null,
@@ -825,6 +826,7 @@ const ModuleHost = struct {
                 .fd_seek => try self.handleSeek(futex, &call.u.seek),
                 .fd_tell => try self.handleTell(futex, &call.u.tell),
                 .fd_write => try self.handleWrite(futex, &call.u.write),
+                .fd_fdstat_get => try self.handleFdstatGet(futex, &call.u.fdstat_get),
                 .fd_filestat_get => try self.handleStat(futex, &call.u.fstat),
                 .path_open => try self.handleOpen(futex, &call.u.open),
                 .path_filestat_get => try self.handleStat(futex, &call.u.stat),
@@ -863,25 +865,25 @@ const ModuleHost = struct {
 
     fn handleOpen(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        const posix = redirect.posix;
         const lflags: std.os.wasi.lookupflags_t = .{
             .SYMLINK_FOLLOW = args.follow_symlink,
         };
+        const oflags_posix: std.posix.O = @bitCast(args.oflags);
         const oflags: std.os.wasi.oflags_t = .{
-            .CREAT = args.oflag & posix.O_CREAT != 0,
+            .CREAT = oflags_posix.CREAT,
             .DIRECTORY = args.directory,
-            .EXCL = args.oflag & posix.O_EXCL != 0,
-            .TRUNC = args.oflag & posix.O_TRUNC != 0,
+            .EXCL = oflags_posix.EXCL,
+            .TRUNC = oflags_posix.TRUNC,
         };
         const rights: std.os.wasi.rights_t = set: {
             var r: std.os.wasi.rights_t = .{};
             if (args.directory) {
                 r.FD_READDIR = true;
             } else {
-                if (args.oflag & posix.O_RDWR != 0) {
+                if (oflags_posix.ACCMODE == .RDWR) {
                     r.FD_READ = true;
                     r.FD_WRITE = true;
-                } else if (args.oflag & posix.O_WRONLY != 0) {
+                } else if (oflags_posix.ACCMODE == .WRONLY) {
                     r.FD_WRITE = true;
                 } else {
                     r.FD_READ = true;
@@ -890,11 +892,10 @@ const ModuleHost = struct {
             break :set r;
         };
         const fdflags: std.os.wasi.fdflags_t = .{
-            .APPEND = args.oflag & (posix.O_APPEND) != 0,
-            .DSYNC = args.oflag & (posix.O_DSYNC) != 0,
-            .NONBLOCK = args.oflag & (posix.O_NONBLOCK) != 0,
-            .RSYNC = args.oflag & (posix.O_RSYNC) != 0,
-            .SYNC = args.oflag & (posix.O_SYNC) != 0,
+            .APPEND = oflags_posix.APPEND,
+            .DSYNC = oflags_posix.DSYNC,
+            .NONBLOCK = oflags_posix.NONBLOCK,
+            .SYNC = oflags_posix.SYNC,
         };
         return try self.callPosixFunction(self.js.path_open, &.{
             try env.createInt32(args.dirfd),
@@ -1000,6 +1001,32 @@ const ModuleHost = struct {
                     .tv_nsec = @truncate(@as(i64, @intCast(ns % 1_000_000_000))),
                 };
             }
+        }
+        return result;
+    }
+
+    fn handleFdstatGet(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        var fdstat: std.os.wasi.fdstat_t = undefined;
+        const result = try self.callPosixFunction(self.js.fd_fdstat_get, &.{
+            try env.createInt32(args.fd),
+            try env.createUsize(@intFromPtr(&fdstat)),
+            futex,
+        });
+        if (result == .SUCCESS) {
+            var oflags_posix: std.posix.O = .{};
+            if (fdstat.fs_rights_base.FD_READ) {
+                if (fdstat.fs_rights_base.FD_WRITE) {
+                    oflags_posix.ACCMODE = .RDWR;
+                } else {
+                    oflags_posix.ACCMODE = .RDONLY;
+                }
+            } else if (fdstat.fs_rights_base.FD_WRITE) {
+                oflags_posix.ACCMODE = .WRONLY;
+            } else if (fdstat.fs_rights_base.FD_READDIR) {
+                oflags_posix.DIRECTORY = true;
+            }
+            args.flags = @bitCast(oflags_posix);
         }
         return result;
     }

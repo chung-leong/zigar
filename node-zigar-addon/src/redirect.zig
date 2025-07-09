@@ -5,10 +5,6 @@ const h = @cImport({
     @cInclude("syscall-hooks.h");
 });
 
-pub const posix = @cImport({
-    @cInclude("fcntl.h");
-});
-
 pub const Syscall = extern struct {
     cmd: Command,
     u: h.syscall_union,

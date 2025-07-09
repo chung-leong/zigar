@@ -58,7 +58,7 @@ typedef struct {
     int32_t dirfd;
     const char *path;
     uint32_t path_len;
-    uint32_t oflag;
+    uint32_t oflags;
     bool directory;
     bool follow_symlink;
     int32_t fd;
@@ -109,6 +109,11 @@ typedef struct {
 
 typedef struct {
     int32_t fd;
+    uint32_t flags;
+} syscall_fdstat_get;
+
+typedef struct {
+    int32_t fd;
     uint64_t offset;
     uint64_t size;
 } syscall_allocate;
@@ -128,6 +133,7 @@ typedef union  {
     syscall_tell tell;
     syscall_fstat fstat;
     syscall_stat stat;
+    syscall_fdstat_get fdstat_get;
     syscall_allocate allocate;
     syscall_sync sync;
     syscall_datasync datasync;

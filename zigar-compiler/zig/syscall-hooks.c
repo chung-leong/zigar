@@ -14,7 +14,7 @@ bool is_applicable_handle(size_t fd) {
     return fd >= fd_min || fd == 0 || fd == 1 || fd == 2;
 }
 
-static int redirect_open(int dirfd, const char* path, int oflag, bool directory, bool follow_symlink, error_callback error_cb) {
+static int redirect_open(int dirfd, const char* path, int oflags, bool directory, bool follow_symlink, error_callback error_cb) {
     if (dirfd == -100) {
         dirfd = -1;
     }
@@ -24,7 +24,7 @@ static int redirect_open(int dirfd, const char* path, int oflag, bool directory,
     call.u.open.dirfd = dirfd;
     call.u.open.path = path;
     call.u.open.path_len = strlen(path);
-    call.u.open.oflag = oflag;
+    call.u.open.oflags = oflags;
     call.u.open.directory = directory;
     call.u.open.follow_symlink = follow_symlink;
     int err = redirect_syscall(&call);
@@ -149,6 +149,28 @@ static int redirect_stat(int dirfd, const char* path, bool follow_symlink, struc
     return 0;
 }
 
+static int redirect_fcntl(int fd, int op, int arg, error_callback error_cb) {
+    printf("redirect_fcntl\n");
+    syscall_struct call;
+    call.futex_handle = 0;
+    int err = ENOTSUP;
+    int result = 0;
+    switch (op) {
+        case F_GETFL:
+            call.cmd = fd_fdstat_get;
+            call.u.fdstat_get.fd = fd;
+            err = redirect_syscall(&call);
+            result = call.u.fdstat_get.flags;
+            break;
+    }
+    if (err) {
+        printf("err\n");
+        error_cb(err);
+        return -1;
+    }   
+    return result;
+}
+
 static int redirect_allocate(int fd, uint64_t offset, uint64_t size, error_callback error_cb) {
     syscall_struct call;
     call.cmd = fd_allocate;
@@ -168,7 +190,7 @@ static int redirect_sync(int fd, error_callback error_cb) {
     syscall_struct call;
     call.cmd = fd_sync;
     call.futex_handle = 0;
-    call.u.allocate.fd = fd;
+    call.u.sync.fd = fd;
     int err = redirect_syscall(&call);
     if (err) {
         error_cb(err);
@@ -181,7 +203,7 @@ static int redirect_datasync(int fd, error_callback error_cb) {
     syscall_struct call;
     call.cmd = fd_sync;
     call.futex_handle = 0;
-    call.u.allocate.fd = fd;
+    call.u.datasync.fd = fd;
     int err = redirect_syscall(&call);
     if (err) {
         error_cb(err);
@@ -248,21 +270,31 @@ static int openat64_hook(int dirfd, const char *path, int oflag, ...) {
 
 static FILE* fopen_hook(const char *path, const char *mode) {
     if (is_redirecting(mask_open)) {
-        int oflag = 0;
+        int oflags = 0;
+        int template_fd = 0;
         if (mode[0] == 'r') {
-            oflag |= (mode[1] == '+') ? O_RDWR : O_RDONLY;
+            oflags |= (mode[1] == '+') ? O_RDWR : O_RDONLY;
         } else if (mode[0] == 'w') {
-            oflag |= (mode[1] == '+') ? O_RDWR : O_WRONLY;
-            oflag |= O_TRUNC | O_CREAT;
+            oflags |= (mode[1] == '+') ? O_RDWR : O_WRONLY;
+            oflags |= O_TRUNC | O_CREAT;
+            template_fd = 1;
         } else if (mode[0] == 'a') {
-            oflag |= (mode[1] == '+') ? O_RDWR : O_WRONLY;
-            oflag |= O_APPEND | O_CREAT;
+            oflags |= (mode[1] == '+') ? O_RDWR : O_WRONLY;
+            oflags |= O_APPEND | O_CREAT;
+            template_fd = 1;
         } else {
             return NULL;
         }
-        int fd = redirect_open(-1, path, oflag, false, true, set_errno);
+        int fd = redirect_open(-1, path, oflags, false, true, set_errno);
         if (fd == -1) return NULL;
-        return fdopen(fd, mode);
+        // fdopen() will do a syscall to obtain the descriptor's flags; there's no way we can 
+        // trap this; that's why we're using stdin/stdout as a template to create the struct 
+        // then change its descriptor
+        FILE* file = fdopen(template_fd, mode);
+        if (file) {
+            file->_fileno = fd;
+        }
+        return file;
     }
     return fopen(path, mode);
 }
@@ -433,6 +465,13 @@ static int lstat_hook(const char *path, struct stat *buf) {
     return stat(path, buf);
 }
 
+static int fcntl_hook(int fd, int op, int arg) {
+    if (is_applicable_handle(fd)) {
+        return redirect_fcntl(fd, op, arg, set_errno);
+    }
+    return fcntl(fd, op, arg);
+}
+
 static int fallocate_hook(int fd, int mode, off_t offset, off_t size) {
     // TODO
     return 0;
@@ -508,6 +547,7 @@ hook hooks[] = {
     { "fstat",                      fstat_hook },
     { "stat",                       stat_hook },
     { "lstat",                      lstat_hook },
+    { "fcntl",                      fcntl_hook },
 #endif
     { "fopen",                      fopen_hook },
     { "fclose",                     fclose_hook },
