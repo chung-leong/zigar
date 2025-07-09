@@ -158,7 +158,7 @@ export default mixin({
       }
     };
   },
-  handleJsCall(id, argAddress, argSize, canWait) {
+  handleJscall(id, argAddress, argSize, canWait) {
     const dv = this.obtainZigView(argAddress, argSize, false);
     const caller = this.jsFunctionCallerMap.get(id);
     return (caller) ? caller(dv, canWait) : PosixError.EFAULT;
@@ -183,7 +183,7 @@ export default mixin({
   },
   ...(process.env.TARGET === 'wasm' ? {
     exports: {
-      handleJsCall: { argType: 'iiib', returnType: 'i' },
+      handleJscall: { argType: 'iiib', returnType: 'i' },
       releaseFunction: { argType: 'i' },
     },
     imports: {
@@ -193,7 +193,7 @@ export default mixin({
     },
   } : process.env.TARGET === 'node' ? {
     exports: {
-      handleJsCall: { async: true },
+      handleJscall: { async: true },
       releaseFunction: {},
     },
     imports: {

@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+
 const cfg = @import("build-cfg.zig");
 
 pub fn build(b: *std.Build) void {
@@ -42,6 +43,8 @@ pub fn build(b: *std.Build) void {
         lib.import_table = true;
         lib.stack_size = cfg.stack_size;
         lib.max_memory = cfg.max_memory;
+    } else {
+        lib.addCSourceFile(.{ .file = .{ .cwd_relative = cfg.zigar_src_path ++ "syscall-hooks.c" } });
     }
     const options = b.addOptions();
     options.addOption(comptime_int, "eval_branch_quota", cfg.eval_branch_quota);

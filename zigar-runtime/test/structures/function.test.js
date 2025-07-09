@@ -210,7 +210,7 @@ describe('Structure: function', function() {
       const argStruct = ArgStruct(dv);
       argStruct[0] = 123;
       argStruct[1] = 456;
-      const result = env.handleJsCall(1, address, len);
+      const result = env.handle(1, address, len);
       expect(result).to.equal(PosixError.NONE);
       expect(argStruct.retval).to.equal(123 + 456);
     })

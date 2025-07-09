@@ -1491,7 +1491,7 @@ describe('Feature: call-marshaling-inbound', function() {
       expect(signal.aborted).to.be.true;
     })
   })
-  describe('handleJsCall', function() {
+  describe('handle', function() {
     it('should run JavaScript function registered to function id', async function() {
       const env = new Env();
       const intStructure = env.beginStructure({
@@ -1562,7 +1562,7 @@ describe('Feature: call-marshaling-inbound', function() {
       argStruct[1] = 456;
       let result;
       const [ line ] = await capture(() => {
-        result = env.handleJsCall(funcId, address, len);
+        result = env.handle(funcId, address, len);
       });
       expect(result).to.equal(PosixError.NONE);
       expect(line).to.equal('123 456');
@@ -1637,7 +1637,7 @@ describe('Feature: call-marshaling-inbound', function() {
       argStruct[1] = 456;
       let result;
       const [ line ] = await captureError(() => {
-        result = env.handleJsCall(funcId, address, len);
+        result = env.handle(funcId, address, len);
       });
       expect(result).to.equal(PosixError.EFAULT);
       expect(line).to.contain('Boo!');
@@ -1654,7 +1654,7 @@ describe('Feature: call-marshaling-inbound', function() {
         };
       }
       const address = usize(0x1000);
-      const result = env.handleJsCall(1234, address, len);
+      const result = env.handle(1234, address, len);
       expect(result).to.equal(PosixError.EFAULT);
     })
     it('should place error into error union when JavaScript function throws one from error set', async function() {
@@ -1783,7 +1783,7 @@ describe('Feature: call-marshaling-inbound', function() {
       const argStruct = ArgStruct(dv);
       argStruct[0] = 123;
       argStruct[1] = 456;
-      const result = env.handleJsCall(funcId, address, len);
+      const result = env.handle(funcId, address, len);
       expect(result).to.equal(PosixError.NONE);
       expect(() => argStruct.retval).to.throw(MyError.UnableToCreateObject);
     })
@@ -1915,7 +1915,7 @@ describe('Feature: call-marshaling-inbound', function() {
       argStruct[1] = 456;
       let result;
       const [ line ] = await captureError(() => {
-        result = env.handleJsCall(funcId, address, len);
+        result = env.handle(funcId, address, len);
       });
       expect(result).to.equal(PosixError.EFAULT);
       expect(line).to.contain('Boo!');
@@ -1989,7 +1989,7 @@ describe('Feature: call-marshaling-inbound', function() {
       argStruct[0] = 123;
       argStruct[1] = 456;
       const [ error ] = await captureError(() => {
-        const result = env.handleJsCall(funcId, address, len);
+        const result = env.handle(funcId, address, len);
         expect(result).to.equal(PosixError.EDEADLK);
       })
     })

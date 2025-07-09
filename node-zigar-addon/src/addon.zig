@@ -10,7 +10,7 @@ const Value = napi.Value;
 const Ref = napi.Ref;
 const ThreadsafeFunction = napi.ThreadsafeFunction;
 const redirect = @import("redirect.zig");
-const SysCall = redirect.SysCall;
+const Syscall = redirect.Syscall;
 
 comptime {
     napi.createAddon(ModuleHost.attachExports);
@@ -18,6 +18,7 @@ comptime {
 
 const ModuleHost = struct {
     ref_count: isize = 1,
+    redirecting_io: bool = false,
     module: ?*Module = null,
     library: ?std.DynLib = null,
     base_address: usize = 0,
@@ -33,7 +34,7 @@ const ModuleHost = struct {
         define_structure: ?Ref = null,
         end_structure: ?Ref = null,
         create_template: ?Ref = null,
-        handle_js_call: ?Ref = null,
+        handle_jscall: ?Ref = null,
         release_function: ?Ref = null,
 
         fd_advise: ?Ref = null,
@@ -58,8 +59,8 @@ const ModuleHost = struct {
     } = .{},
     ts: struct {
         disable_multithread: ?ThreadsafeFunction = null,
-        handle_js_call: ?ThreadsafeFunction = null,
-        handle_sys_call: ?ThreadsafeFunction = null,
+        handle_jscall: ?ThreadsafeFunction = null,
+        handle_syscall: ?ThreadsafeFunction = null,
         release_function: ?ThreadsafeFunction = null,
     } = .{},
 
@@ -142,6 +143,7 @@ const ModuleHost = struct {
                 }
             }
             if (self.library) |*lib| lib.close();
+            if (self.redirecting_io) redirect.stop();
             allocator.destroy(self);
             module_count -= 1;
         }
@@ -199,7 +201,7 @@ const ModuleHost = struct {
         function_count -= 1;
     }
 
-    fn loadModule(self: *@This(), path: Value) !void {
+    fn loadModule(self: *@This(), path: Value, redirectIO: Value) !void {
         const env = self.env;
         const path_len = try env.getValueStringUtf8(path, null);
         const path_bytes = try allocator.alloc(u8, path_len + 1);
@@ -232,8 +234,18 @@ const ModuleHost = struct {
         };
         try self.exportFunctionsToModule();
         if (module.exports.initialize(self) != .SUCCESS) return error.Unexpected;
-        try redirect.redirectIO(&lib, path_bytes, @ptrCast(module.exports.override_sys_call));
+        if (env.getValueBool(redirectIO) catch true) {
+            try redirect.redirectIO(&lib, path_bytes, self);
+            self.redirecting_io = true;
+        }
         self.library = lib;
+    }
+
+    pub fn getSyscallHook(self: *@This(), name: [*:0]const u8) ?*const anyopaque {
+        const module = self.module.?;
+        var ptr: *const anyopaque = undefined;
+        if (module.exports.get_syscall_hook(name, &ptr) != .SUCCESS) return null;
+        return ptr;
     }
 
     fn getModuleAttributes(self: *@This()) !Value {
@@ -520,14 +532,18 @@ const ModuleHost = struct {
         const env = self.env;
         const event_len = try env.getValueStringUtf8(event, null);
         const event_bytes = try allocator.alloc(u8, event_len + 1);
+        _ = try env.getValueStringUtf8(event, event_bytes);
         const event_name = event_bytes[0..event_len];
         const set = try env.getValueBool(listening);
         defer allocator.free(event_bytes);
-        _ = try env.getValueStringUtf8(event, event_bytes);
-        inline for (.{ "mkdir", "stat", "set_times", "open", "rmdir", "unlink" }) |name| {
-            if (std.mem.eql(u8, name, event_name)) {
-                redirect.setMask(@field(redirect.Mask, "mask_" ++ name), set);
+        const event_mask = inline for (std.meta.fields(redirect.Mask)) |field| {
+            if (std.mem.eql(u8, event_name, field.name[5..])) {
+                break @field(redirect.Mask, field.name);
             }
+        } else return error.UnknownEvent;
+        const module = self.module orelse return error.NoLoadedModule;
+        if (module.exports.set_syscall_mask(@intFromEnum(event_mask), set) != .SUCCESS) {
+            return error.Unexpected;
         }
     }
 
@@ -546,8 +562,8 @@ const ModuleHost = struct {
             "create_template",
             "enable_multithread",
             "disable_multithread",
-            "handle_js_call",
-            "handle_sys_call",
+            "handle_jscall",
+            "handle_syscall",
             "release_function",
         };
         const module = self.module orelse return error.NoLoadedModule;
@@ -766,7 +782,7 @@ const ModuleHost = struct {
         );
     }
 
-    fn handleJsCall(self: *@This(), call: *JsCall, in_main_thread: bool) !void {
+    fn handleJscall(self: *@This(), call: *Jscall, in_main_thread: bool) !void {
         if (in_main_thread) {
             if (call.futex_handle != 0) {
                 errdefer Futex.wake(call.futex_handle, E.FAULT) catch {};
@@ -774,7 +790,7 @@ const ModuleHost = struct {
             const env = self.env;
             const status = try env.callFunction(
                 try env.getNull(),
-                try env.getReferenceValue(self.js.handle_js_call orelse return error.Unexpected),
+                try env.getReferenceValue(self.js.handle_jscall orelse return error.Unexpected),
                 &.{
                     try env.createUint32(@as(u32, @truncate(call.fn_id))),
                     try env.createUsize(call.arg_address),
@@ -788,7 +804,7 @@ const ModuleHost = struct {
                 else => error.Unexpected,
             };
         } else {
-            const func = self.ts.handle_js_call orelse return error.Disabled;
+            const func = self.ts.handle_jscall orelse return error.Disabled;
             var futex: Futex = undefined;
             call.futex_handle = futex.init();
             try napi.callThreadsafeFunction(func, @ptrCast(@constCast(call)), .nonblocking);
@@ -796,7 +812,7 @@ const ModuleHost = struct {
         }
     }
 
-    fn handleSysCall(self: *@This(), call: *SysCall, in_main_thread: bool) !std.c.E {
+    fn handleSyscall(self: *@This(), call: *Syscall, in_main_thread: bool) !std.c.E {
         if (in_main_thread) {
             const env = self.env;
             const futex = switch (call.futex_handle) {
@@ -825,7 +841,7 @@ const ModuleHost = struct {
                 }
             } else .FAULT;
         } else {
-            const func = self.ts.handle_sys_call orelse return error.Disabled;
+            const func = self.ts.handle_syscall orelse return error.Disabled;
             var futex: Futex = undefined;
             call.futex_handle = futex.init();
             try napi.callThreadsafeFunction(func, @ptrCast(call), .nonblocking);
@@ -1019,19 +1035,19 @@ const ModuleHost = struct {
     }
 
     const threadsafe_callback = struct {
-        fn handle_js_call(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
+        fn handle_jscall(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
-            const call: *JsCall = @ptrCast(@alignCast(data));
-            handleJsCall(self, call, true) catch {
+            const call: *Jscall = @ptrCast(@alignCast(data));
+            handleJscall(self, call, true) catch {
                 // wake caller if call fails since JavaScript isn't going to do it
                 Futex.wake(call.futex_handle, .FAULT) catch {};
             };
         }
 
-        fn handle_sys_call(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
+        fn handle_syscall(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
-            const call: *SysCall = @ptrCast(@alignCast(data));
-            _ = handleSysCall(self, call, true) catch {
+            const call: *Syscall = @ptrCast(@alignCast(data));
+            _ = handleSyscall(self, call, true) catch {
                 Futex.wake(call.futex_handle, .FAULT) catch {};
             };
         }
@@ -1102,7 +1118,7 @@ const MemberType = enum(u32) {
     undefined,
     unsupported,
 };
-const JsCall = extern struct {
+const Jscall = extern struct {
     fn_id: usize,
     arg_address: usize,
     arg_size: usize,
@@ -1122,8 +1138,8 @@ const Imports = extern struct {
     create_template: *const fn (*ModuleHost, ?Value, *Value) callconv(.C) E,
     enable_multithread: *const fn (*ModuleHost, bool) callconv(.C) E,
     disable_multithread: *const fn (*ModuleHost, bool) callconv(.C) E,
-    handle_js_call: *const fn (*ModuleHost, *JsCall, bool) callconv(.C) E,
-    handle_sys_call: *const fn (*ModuleHost, *SysCall, bool) callconv(.C) std.c.E,
+    handle_jscall: *const fn (*ModuleHost, *Jscall, bool) callconv(.C) E,
+    handle_syscall: *const fn (*ModuleHost, *Syscall, bool) callconv(.C) std.c.E,
     release_function: *const fn (*ModuleHost, usize, bool) callconv(.C) E,
 };
 const Exports = extern struct {
@@ -1135,7 +1151,8 @@ const Exports = extern struct {
     run_variadic_thunk: *const fn (usize, usize, usize, usize, usize) callconv(.C) E,
     create_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
     destroy_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
-    override_sys_call: *const fn (*const SysCall) callconv(.C) E,
+    get_syscall_hook: *const fn ([*:0]const u8, **const anyopaque) callconv(.C) E,
+    set_syscall_mask: *const fn (u32, bool) callconv(.C) E,
 };
 const Module = extern struct {
     version: u32,

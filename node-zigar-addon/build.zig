@@ -17,7 +17,6 @@ pub fn build(b: *std.Build) !void {
     lib.addIncludePath(b.path("./src"));
     lib.addIncludePath(b.path("../node-api-headers/include"));
     lib.addIncludePath(b.path("./node_modules/node-api-headers/include"));
-    lib.addCSourceFile(.{ .file = b.path("./src/redirect.c") });
     switch (os) {
         .windows => lib.linkSystemLibrary("dbghelp"),
         .macos => lib.linker_allow_shlib_undefined = true,

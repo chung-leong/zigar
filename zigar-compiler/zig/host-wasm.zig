@@ -44,7 +44,7 @@ extern fn _endStructure(structure: Value) void;
 extern fn _createTemplate(buffer: ?Value) ?Value;
 extern fn _allocateJsThunk(controller_id: usize, fn_id: usize) usize;
 extern fn _freeJsThunk(controller_id: usize, thunk_address: usize) usize;
-extern fn _handleJsCall(id: usize, arg_ptr: ?*anyopaque, arg_size: usize) E;
+extern fn _handleJscall(id: usize, arg_ptr: ?*anyopaque, arg_size: usize) E;
 extern fn _releaseFunction(id: usize) void;
 extern fn _displayPanic(bytes: ?[*]const u8, len: usize) void;
 
@@ -276,8 +276,8 @@ pub fn createMessage(err: anyerror) ?Value {
     return captureString(memory) catch null;
 }
 
-pub fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
-    return _handleJsCall(fn_id, arg_ptr, arg_size);
+pub fn handleJscall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
+    return _handleJscall(fn_id, arg_ptr, arg_size);
 }
 
 pub fn releaseFunction(fn_ptr: anytype) void {

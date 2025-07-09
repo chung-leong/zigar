@@ -30,7 +30,7 @@ pub fn WorkQueue(ns: type) type {
     });
 }
 
-const ModuleData = opaque {};
+const ModuleHost = opaque {};
 
 // struct for C
 const StructureC = extern struct {
@@ -58,19 +58,20 @@ fn missing(comptime T: type) comptime_int {
     return std.math.maxInt(T);
 }
 
-const JsCall = extern struct {
+const Jscall = extern struct {
     fn_id: usize,
     arg_address: usize,
     arg_size: usize,
     futex_handle: usize = 0,
 };
 
-const SysCall = opaque {};
+const Syscall = opaque {};
 
 const MainThread = struct {
     thread_id: std.Thread.Id,
-    module_data: *ModuleData,
+    module_data: *ModuleHost,
     multithread_count: std.atomic.Value(usize),
+    redirection_mask: u32 = 0,
 };
 
 var gpa = std.heap.DebugAllocator(.{}).init;
@@ -85,7 +86,7 @@ pub fn setParentThreadId(id: std.Thread.Id) void {
     parent_thread_id = id;
 }
 
-fn getModuleData() !*ModuleData {
+fn getModuleData() !*ModuleHost {
     return if (main_thread) |mt| mt.module_data else Error.NotInMainThread;
 }
 
@@ -234,15 +235,15 @@ pub fn createMessage(err: anyerror) ?Value {
     return captureString(memory) catch null;
 }
 
-pub fn handleJsCall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
-    const md: *ModuleData = @ptrCast(ptr);
+pub fn handleJscall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
+    const md: *ModuleHost = @ptrCast(ptr);
     const in_main_thread = main_thread != null;
-    var call: JsCall = .{
+    var call: Jscall = .{
         .fn_id = fn_id,
         .arg_address = @intFromPtr(arg_ptr),
         .arg_size = arg_size,
     };
-    return imports.handle_js_call(md, &call, in_main_thread);
+    return imports.handle_jscall(md, &call, in_main_thread);
 }
 
 pub fn releaseFunction(fn_ptr: anytype) void {
@@ -251,7 +252,7 @@ pub fn releaseFunction(fn_ptr: anytype) void {
     const control = thunk_js.createThunkController(@This(), FT);
     const fn_id = control(null, .get_id, thunk_address) catch return;
     const ptr_address = control(null, .get_ptr, thunk_address) catch return;
-    const md: *ModuleData = @ptrFromInt(ptr_address);
+    const md: *ModuleHost = @ptrFromInt(ptr_address);
     const in_main_thread = main_thread != null;
     _ = imports.release_function(md, fn_id, in_main_thread);
 }
@@ -275,7 +276,7 @@ pub fn stopMultithread() void {
     }
 }
 
-fn initialize(md: *ModuleData) callconv(.C) E {
+fn initialize(md: *ModuleHost) callconv(.C) E {
     main_thread = .{
         .thread_id = std.Thread.getCurrentId(),
         .module_data = md,
@@ -294,12 +295,6 @@ fn deinitialize() callconv(.C) E {
     }
     main_thread = null;
     return .NOENT;
-}
-
-fn overrideSysCall(call: *SysCall) callconv(.C) E {
-    const mt, const in_main_thread = getMainThread() catch return .FAULT;
-    const md = mt.module_data;
-    return imports.handle_sys_call(md, call, in_main_thread);
 }
 
 pub fn getExportAddress(handle: usize, dest: *usize) callconv(.C) E {
@@ -359,29 +354,62 @@ fn destroyJsThunk(
     return .SUCCESS;
 }
 
+fn redirectSyscall(call: *Syscall) callconv(.C) E {
+    const mt, const in_main_thread = getMainThread() catch return .FAULT;
+    const md = mt.module_data;
+    return imports.handle_syscall(md, call, in_main_thread);
+}
+
+fn isRedirecting(op: u32) callconv(.C) bool {
+    const mt, _ = getMainThread() catch return false;
+    return (mt.redirection_mask & op) != 0;
+}
+
+fn setSyscallMask(mask: u32, set: bool) callconv(.C) E {
+    const mt, _ = getMainThread() catch return .FAULT;
+    if (set) {
+        mt.redirection_mask |= mask;
+    } else {
+        mt.redirection_mask &= ~mask;
+    }
+    return .SUCCESS;
+}
+
+fn getSyscallHook(name: [*:0]const u8, dest: **const anyopaque) callconv(.C) E {
+    const fn_ptr = findHook(name) orelse return .NOENT;
+    dest.* = fn_ptr;
+    return .SUCCESS;
+}
+
+const findHook = @extern(*const fn ([*:0]const u8) callconv(.C) ?*const anyopaque, .{ .name = "find_hook" });
+comptime {
+    @export(&redirectSyscall, .{ .name = "redirect_syscall" });
+    @export(&isRedirecting, .{ .name = "is_redirecting" });
+}
+
 // pointer table that's filled on the C side
 const Imports = extern struct {
-    capture_string: *const fn (*ModuleData, *const Memory, *Value) callconv(.C) E,
-    capture_view: *const fn (*ModuleData, *const Memory, usize, *Value) callconv(.C) E,
-    cast_view: *const fn (*ModuleData, *const Memory, Value, usize, *Value) callconv(.C) E,
-    read_slot: *const fn (*ModuleData, ?Value, usize, *Value) callconv(.C) E,
-    write_slot: *const fn (*ModuleData, ?Value, usize, ?Value) callconv(.C) E,
-    begin_structure: *const fn (*ModuleData, *const StructureC, *Value) callconv(.C) E,
-    attach_member: *const fn (*ModuleData, Value, *const MemberC, bool) callconv(.C) E,
-    attach_template: *const fn (*ModuleData, Value, Value, bool) callconv(.C) E,
-    define_structure: *const fn (*ModuleData, Value, *Value) callconv(.C) E,
-    end_structure: *const fn (*ModuleData, Value) callconv(.C) E,
-    create_template: *const fn (*ModuleData, ?Value, *Value) callconv(.C) E,
-    enable_multithread: *const fn (*ModuleData, bool) callconv(.C) E,
-    disable_multithread: *const fn (*ModuleData, bool) callconv(.C) E,
-    handle_js_call: *const fn (*ModuleData, *JsCall, bool) callconv(.C) E,
-    handle_sys_call: *const fn (*ModuleData, *SysCall, bool) callconv(.C) E,
-    release_function: *const fn (*ModuleData, usize, bool) callconv(.C) E,
+    capture_string: *const fn (*ModuleHost, *const Memory, *Value) callconv(.C) E,
+    capture_view: *const fn (*ModuleHost, *const Memory, usize, *Value) callconv(.C) E,
+    cast_view: *const fn (*ModuleHost, *const Memory, Value, usize, *Value) callconv(.C) E,
+    read_slot: *const fn (*ModuleHost, ?Value, usize, *Value) callconv(.C) E,
+    write_slot: *const fn (*ModuleHost, ?Value, usize, ?Value) callconv(.C) E,
+    begin_structure: *const fn (*ModuleHost, *const StructureC, *Value) callconv(.C) E,
+    attach_member: *const fn (*ModuleHost, Value, *const MemberC, bool) callconv(.C) E,
+    attach_template: *const fn (*ModuleHost, Value, Value, bool) callconv(.C) E,
+    define_structure: *const fn (*ModuleHost, Value, *Value) callconv(.C) E,
+    end_structure: *const fn (*ModuleHost, Value) callconv(.C) E,
+    create_template: *const fn (*ModuleHost, ?Value, *Value) callconv(.C) E,
+    enable_multithread: *const fn (*ModuleHost, bool) callconv(.C) E,
+    disable_multithread: *const fn (*ModuleHost, bool) callconv(.C) E,
+    handle_jscall: *const fn (*ModuleHost, *Jscall, bool) callconv(.C) E,
+    handle_syscall: *const fn (*ModuleHost, *Syscall, bool) callconv(.C) E,
+    release_function: *const fn (*ModuleHost, usize, bool) callconv(.C) E,
 };
 
 // pointer table that's used on the C side
 const Exports = extern struct {
-    initialize: *const fn (*ModuleData) callconv(.C) E,
+    initialize: *const fn (*ModuleHost) callconv(.C) E,
     deinitialize: *const fn () callconv(.C) E,
     get_export_address: *const fn (usize, *usize) callconv(.C) E,
     get_factory_thunk: *const fn (*usize) callconv(.C) E,
@@ -389,7 +417,8 @@ const Exports = extern struct {
     run_variadic_thunk: *const fn (usize, usize, usize, usize, usize) callconv(.C) E,
     create_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
     destroy_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
-    override_sys_call: *const fn (*SysCall) callconv(.C) E,
+    get_syscall_hook: *const fn ([*:0]const u8, **const anyopaque) callconv(.C) E,
+    set_syscall_mask: *const fn (u32, bool) callconv(.C) E,
 };
 
 const Module = extern struct {
@@ -420,7 +449,8 @@ pub fn createModule(comptime module: type) Module {
             .run_variadic_thunk = runVariadicThunk,
             .create_js_thunk = createJsThunk,
             .destroy_js_thunk = destroyJsThunk,
-            .override_sys_call = overrideSysCall,
+            .get_syscall_hook = getSyscallHook,
+            .set_syscall_mask = setSyscallMask,
         },
     };
 }

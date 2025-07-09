@@ -2,14 +2,14 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const h = @cImport({
-    @cInclude("redirect.h");
+    @cInclude("syscall-hooks.h");
 });
 
 pub const posix = @cImport({
     @cInclude("fcntl.h");
 });
 
-pub const SysCall = extern struct {
+pub const Syscall = extern struct {
     cmd: Command,
     u: h.syscall_union,
     futex_handle: usize,
@@ -17,11 +17,6 @@ pub const SysCall = extern struct {
     pub const Command: type = deriveZigEnum(h, "environ_get", "random_get");
 };
 pub const Mask: type = deriveZigEnum(h, "mask_mkdir", "mask_unlink");
-pub const Callback = *const fn (*SysCall) callconv(.c) u32;
-
-extern fn find_hook([*:0]const u8) ?*const anyopaque;
-extern fn set_override(?Callback) void;
-extern fn set_override_mask(c_int, bool) void;
 
 const ns = switch (builtin.target.os.tag) {
     .linux => linux,
@@ -29,14 +24,21 @@ const ns = switch (builtin.target.os.tag) {
     .windows => windows,
     else => unknown,
 };
+
 pub const redirectIO = ns.redirectIO;
 
-pub fn stop() void {
-    set_override(null);
+pub fn stop() void {}
+
+pub fn installSyscallTrap() void {
+    if (@hasDecl(ns, "installSyscallTrap")) {
+        ns.installSyscallTrap() catch {};
+    }
 }
 
-pub fn setMask(mask: Mask, set: bool) void {
-    set_override_mask(@intFromEnum(mask), set);
+pub fn uninstallSyscallTrap() void {
+    if (@hasDecl(ns, "uninstallSyscallTrap")) {
+        ns.uninstallSyscallTrap() catch {};
+    }
 }
 
 const linux = struct {
@@ -48,7 +50,7 @@ const linux = struct {
     const Elf_Sym = if (bits == 64) elf.Elf64_Sym else elf.Elf32_Sym;
     const Elf_Rel = if (bits == 64) elf.Elf64_Rela else elf.Elf32_Rel;
 
-    fn redirectIO(lib: *std.DynLib, path: []const u8, cb: Callback) !void {
+    pub fn redirectIO(lib: *std.DynLib, path: []const u8, host: anytype) !void {
         var sfb = std.heap.stackFallback(4096, std.heap.c_allocator);
         const allocator = sfb.get();
         const page_size = std.heap.pageSize();
@@ -99,7 +101,7 @@ const linux = struct {
                 if (symbol_index == 0) continue;
                 const symbol = symbols[symbol_index];
                 const symbol_name: [*:0]u8 = @ptrCast(&symbol_strs[symbol.st_name]);
-                const hook = find_hook(symbol_name) orelse continue;
+                const hook = host.getSyscallHook(symbol_name) orelse continue;
                 const address = base_address + r.r_offset;
                 const ptr: **const anyopaque = @ptrFromInt(address);
                 if (ptr.* != hook) {
@@ -123,7 +125,6 @@ const linux = struct {
                 }
             }
         }
-        set_override(cb);
     }
 
     const syscall = @import("./syscall.zig");
@@ -133,32 +134,23 @@ const linux = struct {
         @cInclude("sys/prctl.h");
     });
 
+    var syscall_trap_installed: bool = false;
     var trapping_syscalls: bool = false;
 
-    fn handleSigsysSignal(_: i32, info: *const std.c.siginfo_t, ucontext: ?*anyopaque) callconv(.c) void {
-        @setEvalBranchQuota(100000);
-        trapping_syscalls = false;
-        defer trapping_syscalls = true;
-        inline for (syscall.table, 0..) |sc, index| {
-            if (@hasField(sc, "args")) {
-                const num: i32 = @intCast(index);
-                if (num == info.fields.sigsys.syscall) {
-                    const fn_name = std.fmt.comptimePrint("syscall{d}", .{sc.args});
-                    const syscaller = @field(std.os.linux, fn_name);
-                    var args: std.meta.ArgsTuple(@TypeOf(syscaller)) = undefined;
-                    args[0] = @enumFromInt(info.fields.sigsys.syscall);
-                    const arg_array = syscall.getArguments(ucontext, 3);
-                    inline for (arg_array, 0..) |arg_value, arg_index| {
-                        args[arg_index + 1] = arg_value;
-                    }
-                    const retval = @call(.auto, syscaller, args);
-                    syscall.setRetval(ucontext, retval);
-                }
-            }
+    pub fn installSyscallTrap() !void {
+        // set up syscall signal handler
+        const act: std.c.Sigaction = .{
+            .handler = .{ .sigaction = handleSigsysSignal },
+            .mask = std.mem.zeroes(std.c.sigset_t),
+            .flags = std.c.SA.SIGINFO,
+        };
+        var prev_act: std.c.Sigaction = undefined;
+        if (std.c.sigaction(std.c.SIG.SYS, &act, &prev_act) != 0)
+            return error.SignalHandlingFailure;
+        if (prev_act.flags != 0) {
+            _ = std.c.sigaction(std.c.SIG.SYS, &prev_act, null);
+            return;
         }
-    }
-
-    pub fn enableSyscallUserDispatch() !void {
         // look for libc's path and base address
         var dl_info: lh.Dl_info = undefined;
         const dladdr_res = lh.dladdr(&std.c.sigaction, &dl_info);
@@ -180,8 +172,8 @@ const linux = struct {
             if (max_vaddr == null or end > max_vaddr.?) max_vaddr = end;
         }
         const libc_len = max_vaddr.?;
-        // enable syscall user dispatch, excluding the memory region where libc sits
-        // the signal trampoline is also inside this range, allowing us to reenable trapping from within
+        // enable syscall user dispatch, excluding the memory region where libc sits; the signal
+        // trampoline is also inside this range, allowing us to reenable trapping from within
         // the signal handler (otherwise sigreturn() would trigger SIGSYS inside a SIGSYS)
         if (std.c.prctl(
             lh.PR_SET_SYSCALL_USER_DISPATCH,
@@ -190,14 +182,42 @@ const linux = struct {
             libc_len,
             @intFromPtr(&trapping_syscalls),
         ) != 0) return error.SyscallUserDispatchFailure;
-        // set up syscall signal handler
-        const act = std.c.Sigaction{
-            .handler = .{ .sigaction = handleSigsysSignal },
-            .mask = std.mem.zeroes(std.c.sigset_t),
-            .flags = std.c.SA.SIGINFO,
-        };
-        if (std.c.sigaction(std.c.SIG.SYS, &act, null) != 0)
-            return error.SignalHandlingFailure;
+        syscall_trap_installed = true;
+    }
+
+    pub fn uninstallSyscallTrap() void {
+        if (!syscall_trap_installed) return;
+        _ = std.c.prctl(
+            lh.PR_SET_SYSCALL_USER_DISPATCH,
+            lh.PR_SYS_DISPATCH_OFF,
+            @as(usize, 0),
+            @as(usize, 0),
+            @as(usize, 0),
+        );
+        syscall_trap_installed = false;
+    }
+
+    fn handleSigsysSignal(_: i32, info: *const std.c.siginfo_t, ucontext: ?*anyopaque) callconv(.c) void {
+        @setEvalBranchQuota(100000);
+        trapping_syscalls = false;
+        defer trapping_syscalls = true;
+        inline for (syscall.table, 0..) |sc, index| {
+            if (@hasField(@TypeOf(sc), "args")) {
+                const num: i32 = @intCast(index);
+                if (num == info.fields.sigsys.syscall) {
+                    const fn_name = std.fmt.comptimePrint("syscall{d}", .{sc.args});
+                    const syscaller = @field(std.os.linux, fn_name);
+                    var args: std.meta.ArgsTuple(@TypeOf(syscaller)) = undefined;
+                    args[0] = @enumFromInt(info.fields.sigsys.syscall);
+                    const arg_array = syscall.getArguments(ucontext, 3);
+                    inline for (arg_array, 0..) |arg_value, arg_index| {
+                        args[arg_index + 1] = arg_value;
+                    }
+                    const retval = @call(.auto, syscaller, args);
+                    syscall.setRetval(ucontext, retval);
+                }
+            }
+        }
     }
 };
 
@@ -211,7 +231,7 @@ const darwin = struct {
     const SegmentCommand = if (bits == 64) macho.segment_command_64 else macho.segment_command;
     const NList = if (bits == 64) macho.nlist_64 else macho.nlist;
 
-    fn redirectIO(lib: *std.DynLib, path: []const u8, cb: Callback) !void {
+    pub fn redirectIO(lib: *std.DynLib, path: []const u8, host: anytype) !void {
         var sfb = std.heap.stackFallback(4096, std.heap.c_allocator);
         const allocator = sfb.get();
         const page_size = std.heap.pageSize();
@@ -357,7 +377,7 @@ const darwin = struct {
                         // here's where we do the lookup
                         const name = symbol_name orelse continue;
                         defer symbol_name = null;
-                        const hook = find_hook(name[1..]) orelse continue;
+                        const hook = host.getSyscallHook(name[1..]) orelse continue;
                         const ds = for (data_segments) |ds| {
                             if (ds.index == segment_index) break ds;
                         } else continue;
@@ -381,7 +401,6 @@ const darwin = struct {
                 }
             }
         }
-        set_override(cb);
     }
 
     fn extractString(bytes: []const u8, index: usize) ![:0]const u8 {
@@ -428,7 +447,7 @@ const windows = struct {
     const directory_entry_import = c.IMAGE_DIRECTORY_ENTRY_IMPORT;
     const TRUE = c.TRUE;
 
-    fn redirectIO(lib: *std.DynLib, _: []const u8, cb: Callback) !void {
+    pub fn redirectIO(lib: *std.DynLib, _: []const u8, host: anytype) !void {
         const hmodule = lib.inner.dll;
         const bytes: [*]u8 = @ptrCast(hmodule);
         var size: c_ulong = undefined;
@@ -448,7 +467,7 @@ const windows = struct {
                 if (snapByOrdinal(int_ptr.u1.Ordinal)) continue;
                 const ibm_ptr: *ImportByName = @ptrCast(@alignCast(&bytes[int_ptr.u1.AddressOfData]));
                 const name: [*:0]const u8 = @ptrCast(&ibm_ptr.Name);
-                const hook = find_hook(name) orelse continue;
+                const hook = host.getSyscallHook(name) orelse continue;
                 const ptr: **const anyopaque = @ptrCast(&iat_ptr.u1.Function);
                 if (ptr.* != hook) {
                     // make page writable
@@ -462,12 +481,11 @@ const windows = struct {
                 }
             }
         }
-        set_override(cb);
     }
 };
 
 const unknown = struct {
-    fn redirectIO(_: *std.DynLib, _: []const u8, _: Callback) !void {}
+    fn redirectIO(_: *std.DynLib, _: []const u8, _: anytype) !void {}
 };
 
 fn readStructs(comptime T: type, allocator: std.mem.Allocator, file: std.fs.File, count: usize) ![]T {
@@ -512,7 +530,7 @@ fn deriveZigEnum(comptime c_ns: type, comptime first_item: []const u8, comptime 
     }
     return @Type(.{
         .@"enum" = .{
-            .tag_type = c_int,
+            .tag_type = u32,
             .fields = &fields,
             .decls = &.{},
             .is_exhaustive = true,

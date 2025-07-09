@@ -35,7 +35,7 @@ const native = struct {
                     .@"-1" = arg,
                 };
                 const CT = @TypeOf(vars);
-                const caller = getJsCallHandler(host, BFT);
+                const caller = getJscallHandler(host, BFT);
                 switch (action) {
                     .create => {
                         if (fn_binding.bind(caller, vars)) |thunk| {
@@ -79,7 +79,7 @@ const native = struct {
         const BFT = fn (i32, f64) usize;
         const ArgStruct = types.ArgumentStruct(BFT);
         const host = struct {
-            fn handleJsCall(module_ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
+            fn handleJscall(module_ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
                 if (@intFromPtr(module_ptr) == 0xdead_beef and arg_size == @sizeOf(ArgStruct)) {
                     @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = fn_id;
                     return .SUCCESS;
@@ -115,7 +115,7 @@ const wasm = struct {
                 const CHT = CallHandler(BFT);
                 const ch = @typeInfo(CHT).@"fn";
                 const RT = ch.return_type.?;
-                const handler = getJsCallHandler(host, BFT);
+                const handler = getJscallHandler(host, BFT);
                 var array: [count]*const BFT = undefined;
                 for (&array, 0..) |*ptr, index| {
                     const ns = struct {
@@ -165,7 +165,7 @@ const wasm = struct {
         const BFT = fn (i32, f64) usize;
         const ArgStruct = types.ArgumentStruct(BFT);
         const host = struct {
-            fn handleJsCall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
+            fn handleJscall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
                 if (arg_size == @sizeOf(ArgStruct)) {
                     @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = fn_id;
                     return .SUCCESS;
@@ -207,7 +207,7 @@ fn CallHandler(comptime BFT: type) type {
     return @Type(.{ .@"fn" = new_f });
 }
 
-fn getJsCallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
+fn getJscallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
     const CHT = CallHandler(BFT);
     const ch = @typeInfo(CHT).@"fn";
     const RT = ch.return_type.?;
@@ -223,7 +223,7 @@ fn getJsCallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
             // the last two arguments are the context pointer and the function id
             const ctx = args[ch.params.len - 2];
             const fn_id = args[ch.params.len - 1];
-            const result = host.handleJsCall(ctx, fn_id, &arg_struct, @sizeOf(ArgStruct));
+            const result = host.handleJscall(ctx, fn_id, &arg_struct, @sizeOf(ArgStruct));
             switch (result) {
                 .SUCCESS => {},
                 .DEADLK => {
@@ -248,11 +248,11 @@ fn getJsCallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
     return fn_transform.spreadArgs(ns.call, ch.calling_convention);
 }
 
-test "getJsCallHandler" {
+test "getJscallHandler" {
     const BFT = fn (i32, f64) usize;
     const ArgStruct = types.ArgumentStruct(BFT);
     const host = struct {
-        fn handleJsCall(_: ?*anyopaque, _: usize, arg_ptr: *anyopaque, arg_size: usize) E {
+        fn handleJscall(_: ?*anyopaque, _: usize, arg_ptr: *anyopaque, arg_size: usize) E {
             if (arg_size == @sizeOf(ArgStruct)) {
                 @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = 1234;
                 return .SUCCESS;
@@ -261,33 +261,33 @@ test "getJsCallHandler" {
             }
         }
     };
-    const ch = getJsCallHandler(host, BFT);
+    const ch = getJscallHandler(host, BFT);
     const result = ch(777, 3.14, null, 1);
     try expectEqual(1234, result);
 }
 
-test "getJsCallHandler (error handling)" {
+test "getJscallHandler (error handling)" {
     const host = struct {
         fn init(_: ?*const anyopaque) @This() {
             return .{};
         }
 
-        fn handleJsCall(_: ?*anyopaque, _: usize, _: *anyopaque, _: usize) E {
+        fn handleJscall(_: ?*anyopaque, _: usize, _: *anyopaque, _: usize) E {
             return .FAULT;
         }
     };
     const ES1 = error{ Unexpected, Cow };
     const BFT1 = fn (i32, f64) ES1!usize;
-    const ch1 = getJsCallHandler(host, BFT1);
+    const ch1 = getJscallHandler(host, BFT1);
     const result1 = ch1(777, 3.14, null, 1);
     try expectError(ES1.Unexpected, result1);
     const ES2 = error{ Unexpected, cow };
     const BFT2 = fn (i32, f64) ES2!usize;
-    const ch2 = getJsCallHandler(host, BFT2);
+    const ch2 = getJscallHandler(host, BFT2);
     const result2 = ch2(777, 3.14, null, 2);
     try expectError(ES2.Unexpected, result2);
     const BFT3 = fn (i32, f64) anyerror!usize;
-    const ch3 = getJsCallHandler(host, BFT3);
+    const ch3 = getJscallHandler(host, BFT3);
     const result3 = ch3(777, 3.14, null, 3);
     try expectError(ES2.Unexpected, result3);
 }

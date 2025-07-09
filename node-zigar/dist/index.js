@@ -75,7 +75,7 @@ export async function load(url, context, nextLoad) {
   const { outputPath } = await compile(srcPath, modPath, options);
   process.env.ADDON_PATH = addonPath;
   const env = createEnvironment();
-  env.loadModule(outputPath);
+  env.loadModule(outputPath, false);
   env.acquireStructures(options);
   const definition = env.exportStructures();
   // get the absolute path to node-zigar-addon so the transpiled code can find it
