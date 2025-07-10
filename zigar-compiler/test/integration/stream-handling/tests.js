@@ -495,6 +495,33 @@ export function addTests(importModule, options) {
       save('/hello/world', 'This is a test');
       expect(called).to.be.true;
     })
+    it('should perform allocate operation using posix function', async function() {
+      this.timeout(0);
+      const { __zigar, save } = await importTest('perform-allocate-with-posix-function');
+      const chunks = [];
+      __zigar.on('open', (evt) => {
+        return chunks;
+      });
+      // should fail when stream does not implement allocate()
+      const [ error ] = await captureError(() => {
+        expect(() => save('/hello/world', 'This is a test')).to.throw(Error)
+          .with.property('message', 'Allocation failed');
+      })
+      expect(error).to.contain('allocate is not a function');
+      let called = false, args;
+      __zigar.on('open', (evt) => {
+        return {
+          write() {
+          },
+          allocate(...a) {
+            called = true;
+            args = a;
+          },
+        };
+      });
+      save('/hello/world', 'This is a test');
+      expect(called).to.be.true;
+    })
     it('should print contents of files in directory', async function() {
       this.timeout(0);
       const { __zigar, print } = await importTest('open-file-from-directory');

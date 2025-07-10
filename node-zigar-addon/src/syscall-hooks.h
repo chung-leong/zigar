@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #define _LARGEFILE64_SOURCE
 #define __USE_POSIX
 #include <stdlib.h>

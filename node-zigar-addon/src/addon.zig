@@ -821,6 +821,7 @@ const ModuleHost = struct {
                 else => |handle| try env.createUsize(handle),
             };
             const result: E = switch (call.cmd) {
+                .fd_allocate => try self.handleAllocate(futex, &call.u.allocate),
                 .fd_close => try self.handleClose(futex, &call.u.close),
                 .fd_datasync => try self.handleDatasync(futex, &call.u.datasync),
                 .fd_read => try self.handleRead(futex, &call.u.read),
@@ -1031,6 +1032,16 @@ const ModuleHost = struct {
             args.flags = @bitCast(oflags_posix);
         }
         return result;
+    }
+
+    fn handleAllocate(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        return try self.callPosixFunction(self.js.fd_allocate, &.{
+            try env.createInt32(args.fd),
+            try env.createBigintUint64(args.offset),
+            try env.createBigintUint64(args.size),
+            futex,
+        });
     }
 
     fn handleSync(self: *@This(), futex: Value, args: anytype) !E {

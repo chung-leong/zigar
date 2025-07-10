@@ -177,7 +177,7 @@ static int redirect_allocate(int fd, uint64_t offset, uint64_t size, error_callb
     call.futex_handle = 0;
     call.u.allocate.fd = fd;
     call.u.allocate.offset = offset;
-    call.u.allocate.offset = size;
+    call.u.allocate.size = size;
     int err = redirect_syscall(&call);
     if (err) {
         error_cb(err);
@@ -487,8 +487,10 @@ static int fdatasync_hook(int fd) {
 }
 
 static int fallocate_hook(int fd, int mode, off_t offset, off_t size) {
-    // TODO
-    return 0;
+    if (is_applicable_handle(fd)) {
+        return redirect_allocate(fd, offset, size, set_errno);
+    }
+    return fallocate(fd, mode, offset, size);
 }
 
 #if defined(_WIN32)
@@ -562,6 +564,7 @@ hook hooks[] = {
     { "stat",                       stat_hook },
     { "lstat",                      lstat_hook },
     { "fcntl",                      fcntl_hook },
+    { "fallocate",                  fallocate_hook },
     { "fsync",                      fsync_hook },
     { "fdatasync",                  fdatasync_hook },
 #endif
