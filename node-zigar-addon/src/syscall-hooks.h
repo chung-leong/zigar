@@ -117,6 +117,13 @@ typedef struct {
     int32_t fd;
     uint64_t offset;
     uint64_t size;
+    int32_t advice;
+} syscall_advise;
+
+typedef struct {
+    int32_t fd;
+    uint64_t offset;
+    uint64_t size;
 } syscall_allocate;
 
 typedef struct {
@@ -135,6 +142,7 @@ typedef union  {
     syscall_fstat fstat;
     syscall_stat stat;
     syscall_fdstat_get fdstat_get;
+    syscall_advise advise;
     syscall_allocate allocate;
     syscall_sync sync;
     syscall_datasync datasync;

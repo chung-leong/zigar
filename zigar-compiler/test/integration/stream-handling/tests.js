@@ -495,6 +495,33 @@ export function addTests(importModule, options) {
       save('/hello/world', 'This is a test');
       expect(called).to.be.true;
     })
+    it('should perform advise operation using posix function', async function() {
+      this.timeout(0);
+      const { __zigar, save } = await importTest('perform-advise-with-posix-function');
+      const chunks = [];
+      __zigar.on('open', (evt) => {
+        return chunks;
+      });
+      // should work when stream does not implement sync()
+      save('/hello/world', 'This is a test');
+      const blob = new Blob(chunks);
+      const string = await blob.text();
+      expect(string).to.equal('This is a test');
+      let called = false, args;
+      __zigar.on('open', (evt) => {
+        return {
+          write() {
+          },
+          advise(...a) {
+            called = true;
+            args = a;
+          },
+        };
+      });
+      save('/hello/world', 'This is a test');
+      expect(called).to.be.true;
+      expect(args).to.eql([ 5n, 1000n, 'random' ]);
+    })
     it('should perform allocate operation using posix function', async function() {
       this.timeout(0);
       const { __zigar, save } = await importTest('perform-allocate-with-posix-function');
@@ -521,6 +548,7 @@ export function addTests(importModule, options) {
       });
       save('/hello/world', 'This is a test');
       expect(called).to.be.true;
+      expect(args).to.eql([ 0n, 1000n ]);
     })
     it('should print contents of files in directory', async function() {
       this.timeout(0);

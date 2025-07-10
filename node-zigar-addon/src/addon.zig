@@ -821,6 +821,7 @@ const ModuleHost = struct {
                 else => |handle| try env.createUsize(handle),
             };
             const result: E = switch (call.cmd) {
+                .fd_advise => try self.handleAdvise(futex, &call.u.advise),
                 .fd_allocate => try self.handleAllocate(futex, &call.u.allocate),
                 .fd_close => try self.handleClose(futex, &call.u.close),
                 .fd_datasync => try self.handleDatasync(futex, &call.u.datasync),
@@ -1032,6 +1033,28 @@ const ModuleHost = struct {
             args.flags = @bitCast(oflags_posix);
         }
         return result;
+    }
+
+    fn handleAdvise(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        // the POSIX enum is different from the WASI one; using a switch here because using
+        // std.posix.POSIX_FADV here would somehow pull in Solaris code leading to an assert
+        const advice: std.os.wasi.advice_t = switch (args.advice) {
+            0 => .NORMAL,
+            1 => .RANDOM,
+            2 => .SEQUENTIAL,
+            3 => .WILLNEED,
+            4 => .DONTNEED,
+            5 => .NOREUSE,
+            else => .NORMAL,
+        };
+        return try self.callPosixFunction(self.js.fd_advise, &.{
+            try env.createInt32(args.fd),
+            try env.createBigintUint64(args.offset),
+            try env.createBigintUint64(args.size),
+            try env.createInt32(@intFromEnum(advice)),
+            futex,
+        });
     }
 
     fn handleAllocate(self: *@This(), futex: Value, args: anytype) !E {

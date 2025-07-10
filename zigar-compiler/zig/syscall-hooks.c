@@ -171,6 +171,22 @@ static int redirect_fcntl(int fd, int op, int arg, error_callback error_cb) {
     return result;
 }
 
+static int redirect_advise(int fd, uint64_t offset, uint64_t size, int advice, error_callback error_cb) {
+    syscall_struct call;
+    call.cmd = fd_advise;
+    call.futex_handle = 0;
+    call.u.advise.fd = fd;
+    call.u.advise.offset = offset;
+    call.u.advise.size = size;
+    call.u.advise.advice = advice;
+    int err = redirect_syscall(&call);
+    if (err) {
+        error_cb(err);
+        return -1;
+    }   
+    return 0;
+}
+
 static int redirect_allocate(int fd, uint64_t offset, uint64_t size, error_callback error_cb) {
     syscall_struct call;
     call.cmd = fd_allocate;
@@ -486,6 +502,13 @@ static int fdatasync_hook(int fd) {
     return fdatasync(fd);
 }
 
+static int posix_fadvise_hook(int fd, off_t offset, off_t size, int advice) {
+    if (is_applicable_handle(fd)) {
+        return redirect_advise(fd, offset, size, advice, set_errno);
+    }
+    return posix_fadvise(fd, offset, size, advice);
+}
+
 static int fallocate_hook(int fd, int mode, off_t offset, off_t size) {
     if (is_applicable_handle(fd)) {
         return redirect_allocate(fd, offset, size, set_errno);
@@ -564,6 +587,7 @@ hook hooks[] = {
     { "stat",                       stat_hook },
     { "lstat",                      lstat_hook },
     { "fcntl",                      fcntl_hook },
+    { "posix_fadvise",              posix_fadvise_hook },
     { "fallocate",                  fallocate_hook },
     { "fsync",                      fsync_hook },
     { "fdatasync",                  fdatasync_hook },
