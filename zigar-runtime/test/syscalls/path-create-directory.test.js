@@ -38,9 +38,9 @@ describe('Syscall: path-create-directory', function() {
     }   
     let event;
     env.addListener('mkdir', (evt) => {
-      if (event) return true;
+      if (event) return new Map();
       event = evt;
-      return new Map();
+      return true;
     });
     const path = new TextEncoder().encode('/world');
     const pathAddress = usize(0x1000);
@@ -137,9 +137,9 @@ describe('Syscall: path-create-directory', function() {
       env.memory = new WebAssembly.Memory({ initial: 1 });
       let event;
       env.addListener('mkdir', (evt) => {
-        if (event) return true;
+        if (event) return new Map();
         event = evt;
-        return new Map();
+        return true;
       });
       const path = new TextEncoder().encode('/world');
       const pathAddress = 0x1000;
