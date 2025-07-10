@@ -445,6 +445,56 @@ export function addTests(importModule, options) {
       const lines2 = await capture(() => print(map2));
       expect(lines2).to.have.lengthOf(100);
     })
+    it('should perform sync operation using posix function', async function() {
+      this.timeout(0);
+      const { __zigar, save } = await importTest('perform-sync-with-posix-function');
+      const chunks = [];
+      __zigar.on('open', (evt) => {
+        return chunks;
+      });
+      // should work when stream does not implement sync()
+      save('/hello/world', 'This is a test');
+      const blob = new Blob(chunks);
+      const string = await blob.text();
+      expect(string).to.equal('This is a test');
+      let called = false;
+      __zigar.on('open', (evt) => {
+        return {
+          write() {
+          },
+          sync() {
+            called = true;
+          },
+        };
+      });
+      save('/hello/world', 'This is a test');
+      expect(called).to.be.true;
+    })
+    it('should perform datasync operation using posix function', async function() {
+      this.timeout(0);
+      const { __zigar, save } = await importTest('perform-datasync-with-posix-function');
+      const chunks = [];
+      __zigar.on('open', (evt) => {
+        return chunks;
+      });
+      // should work when stream does not implement datasync()
+      save('/hello/world', 'This is a test');
+      const blob = new Blob(chunks);
+      const string = await blob.text();
+      expect(string).to.equal('This is a test');
+      let called = false;
+      __zigar.on('open', (evt) => {
+        return {
+          write() {
+          },
+          datasync() {
+            called = true;
+          },
+        };
+      });
+      save('/hello/world', 'This is a test');
+      expect(called).to.be.true;
+    })
     it('should print contents of files in directory', async function() {
       this.timeout(0);
       const { __zigar, print } = await importTest('open-file-from-directory');

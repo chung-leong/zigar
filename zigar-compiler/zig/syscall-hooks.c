@@ -201,7 +201,7 @@ static int redirect_sync(int fd, error_callback error_cb) {
 
 static int redirect_datasync(int fd, error_callback error_cb) {
     syscall_struct call;
-    call.cmd = fd_sync;
+    call.cmd = fd_datasync;
     call.futex_handle = 0;
     call.u.datasync.fd = fd;
     int err = redirect_syscall(&call);
@@ -472,6 +472,20 @@ static int fcntl_hook(int fd, int op, int arg) {
     return fcntl(fd, op, arg);
 }
 
+static int fsync_hook(int fd) {
+    if (is_applicable_handle(fd)) {
+        return redirect_sync(fd, set_errno);
+    }
+    return fsync(fd);
+}
+
+static int fdatasync_hook(int fd) {
+    if (is_applicable_handle(fd)) {
+        return redirect_datasync(fd, set_errno);
+    }
+    return fdatasync(fd);
+}
+
 static int fallocate_hook(int fd, int mode, off_t offset, off_t size) {
     // TODO
     return 0;
@@ -548,6 +562,8 @@ hook hooks[] = {
     { "stat",                       stat_hook },
     { "lstat",                      lstat_hook },
     { "fcntl",                      fcntl_hook },
+    { "fsync",                      fsync_hook },
+    { "fdatasync",                  fdatasync_hook },
 #endif
     { "fopen",                      fopen_hook },
     { "fclose",                     fclose_hook },

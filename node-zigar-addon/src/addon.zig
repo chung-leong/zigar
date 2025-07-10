@@ -822,15 +822,17 @@ const ModuleHost = struct {
             };
             const result: E = switch (call.cmd) {
                 .fd_close => try self.handleClose(futex, &call.u.close),
+                .fd_datasync => try self.handleDatasync(futex, &call.u.datasync),
                 .fd_read => try self.handleRead(futex, &call.u.read),
                 .fd_seek => try self.handleSeek(futex, &call.u.seek),
+                .fd_sync => try self.handleSync(futex, &call.u.sync),
                 .fd_tell => try self.handleTell(futex, &call.u.tell),
                 .fd_write => try self.handleWrite(futex, &call.u.write),
                 .fd_fdstat_get => try self.handleFdstatGet(futex, &call.u.fdstat_get),
                 .fd_filestat_get => try self.handleStat(futex, &call.u.fstat),
                 .path_open => try self.handleOpen(futex, &call.u.open),
                 .path_filestat_get => try self.handleStat(futex, &call.u.stat),
-                else => unreachable,
+                else => @panic("Missing not implementation"),
             };
             // translate from WASI enum to the current system's
             return inline for (std.meta.fields(E)) |field| {
@@ -1029,6 +1031,22 @@ const ModuleHost = struct {
             args.flags = @bitCast(oflags_posix);
         }
         return result;
+    }
+
+    fn handleSync(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        return try self.callPosixFunction(self.js.fd_sync, &.{
+            try env.createInt32(args.fd),
+            futex,
+        });
+    }
+
+    fn handleDatasync(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        return try self.callPosixFunction(self.js.fd_datasync, &.{
+            try env.createInt32(args.fd),
+            futex,
+        });
     }
 
     fn releaseFunction(self: *@This(), fn_id: usize, in_main_thread: bool) !void {

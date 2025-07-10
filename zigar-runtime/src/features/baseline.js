@@ -28,7 +28,9 @@ export default mixin({
   addListener(name, cb) {
     this.listenerMap.set(name, cb);
     if (process.env.TARGET === 'node') {
-      this.setRedirectionMask(name, !!cb);
+      if ([ 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink' ].includes(name)) {
+        this.setRedirectionMask(name, !!cb);
+      }
     }
   },
   triggerEvent(name, event, errorCode) {
