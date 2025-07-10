@@ -164,6 +164,42 @@ export function addTests(importModule, options) {
         flags: { symlinkFollow: true }, 
       });
     })
+    it('should open a file and seek to a particular position using posix functions', async function() {
+      this.timeout(0);
+      const { __zigar, read } = await importTest('seek-file-with-posix-functions');
+      const path = absolute('./data/test.txt');
+      const content = await readFile(path);
+      __zigar.on('open', () => content);
+      const chunk = read('/hello/world', 32, 16);
+      expect(chunk).to.have.lengthOf(16);
+      expect(chunk.string).to.equal('ur fathers broug');
+    })
+    it('should open a file and seek to a particular position using libc functions', async function() {
+      this.timeout(0);
+      const { __zigar, read } = await importTest('seek-file-with-libc-functions');
+      const path = absolute('./data/test.txt');
+      const content = await readFile(path);
+      __zigar.on('open', () => content);
+      const chunk = read('/hello/world', 32, 16);
+      expect(chunk).to.have.lengthOf(16);
+      expect(chunk.string).to.equal('ur fathers broug');
+    })
+    it('should obtain the expected position after a seek operation using posix function', async function() {
+      this.timeout(0);
+      const { __zigar, seek } = await importTest('return-file-position-with-posix-functions');
+      const content = new TextEncoder().encode('Hello world!');
+      __zigar.on('open', () => content);
+      const pos = seek('/hello/world', -2);
+      expect(pos).to.equal(BigInt(content.length - 2));
+    })
+    it('should obtain the expected position after a seek operation using libc function', async function() {
+      this.timeout(0);
+      const { __zigar, seek } = await importTest('return-file-position-with-libc-functions');
+      const content = new TextEncoder().encode('Hello world!');
+      __zigar.on('open', () => content);
+      const pos = seek('/hello/world', -2);
+      expect(pos).to.equal(BigInt(content.length - 2));
+    })
     it('should write to writer', async function() {
       this.timeout(0);
       const {

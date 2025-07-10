@@ -115,7 +115,7 @@ static off64_t redirect_seek(int fd, off_t offset, int whence, error_callback er
         error_cb(err);
         return -1;
     }   
-    return call.u.seek.position;
+    return (call.cmd == fd_tell) ? call.u.tell.position : call.u.seek.position;
 }
 
 static int redirect_fstat(int fd, struct stat *buf, error_callback error_cb) {
