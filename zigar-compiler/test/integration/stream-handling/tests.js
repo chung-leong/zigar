@@ -572,6 +572,38 @@ export function addTests(importModule, options) {
         'This is a test and this is only a test',        
       ])
     })
+    it('should print names of files in directory using posix functions', async function() {
+      this.timeout(0);
+      const { __zigar, print } = await importTest('scan-directory-with-posix-functions');
+      const map = new Map([
+        [ 'hello.txt', { type: 'file', content: 'Hello world' } ],
+        [ 'test.txt', { type: 'file', content: 'This is a test and this is only a test' } ],
+        [ 'world', { type: 'directory' } ],
+      ]);
+      let event;
+      __zigar.on('open', (evt) => {
+        if (evt.path === 'somewhere/directory') {
+          event = evt;
+          return map;
+        } else {
+          return false;
+        }
+      });
+      const lines = await capture(() => print('/somewhere/directory'));
+      expect(lines).to.eql([
+        '. (dir)',
+        '.. (dir)',
+        'hello.txt (file)',
+        'test.txt (file)',
+        'world (dir)',
+      ]);
+      expect(event).to.eql({
+        parent: null,
+        path: 'somewhere/directory',
+        rights: { readdir: true },
+        flags: { symlinkFollow: true, directory: true }
+      });
+    })
     it('should create a directory using posix function', async function() {
       this.timeout(0);
       const { __zigar, create } = await importTest('create-directory-with-posix-function');

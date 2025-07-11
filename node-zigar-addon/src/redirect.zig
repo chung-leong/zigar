@@ -10,9 +10,10 @@ pub const Syscall = extern struct {
     u: h.syscall_union,
     futex_handle: usize,
 
-    pub const Command: type = deriveZigEnum(h, "environ_get", "random_get");
+    pub const Command: type = deriveZigEnum(u8, h, "environ_get", "random_get");
 };
-pub const Mask: type = deriveZigEnum(h, "mask_mkdir", "mask_unlink");
+pub const Mask: type = deriveZigEnum(u8, h, "mask_mkdir", "mask_unlink");
+pub const DT: type = deriveZigEnum(u8, h, "DT_UNKNOWN", "DT_WHT");
 
 const ns = switch (builtin.target.os.tag) {
     .linux => linux,
@@ -501,7 +502,7 @@ fn readStruct(comptime T: type, file: std.fs.File) !T {
     return buffer;
 }
 
-fn deriveZigEnum(comptime c_ns: type, comptime first_item: []const u8, comptime last_item: []const u8) type {
+fn deriveZigEnum(comptime T: type, comptime c_ns: type, comptime first_item: []const u8, comptime last_item: []const u8) type {
     // derive Zig enum from C enum
     @setEvalBranchQuota(100000);
     var count: usize = 0;
@@ -526,7 +527,7 @@ fn deriveZigEnum(comptime c_ns: type, comptime first_item: []const u8, comptime 
     }
     return @Type(.{
         .@"enum" = .{
-            .tag_type = u32,
+            .tag_type = T,
             .fields = &fields,
             .decls = &.{},
             .is_exhaustive = true,

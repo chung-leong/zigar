@@ -46,6 +46,7 @@ const ModuleHost = struct {
         fd_filestat_set_times: ?Ref = null,
         fd_read: ?Ref = null,
         fd_read1: ?Ref = null,
+        fd_readdir: ?Ref = null,
         fd_seek: ?Ref = null,
         fd_sync: ?Ref = null,
         fd_tell: ?Ref = null,
@@ -826,6 +827,7 @@ const ModuleHost = struct {
                 .fd_close => try self.handleClose(futex, &call.u.close),
                 .fd_datasync => try self.handleDatasync(futex, &call.u.datasync),
                 .fd_read => try self.handleRead(futex, &call.u.read),
+                .fd_readdir => try self.handleReaddir(futex, &call.u.readdir),
                 .fd_seek => try self.handleSeek(futex, &call.u.seek),
                 .fd_sync => try self.handleSync(futex, &call.u.sync),
                 .fd_tell => try self.handleTell(futex, &call.u.tell),
@@ -1114,6 +1116,49 @@ const ModuleHost = struct {
             try env.createUint32(args.path_len),
             futex,
         });
+    }
+
+    fn handleReaddir(self: *@This(), futex: Value, args: anytype) !E {
+        // convert C pointer to regular single pointer
+        const Dir = @TypeOf(args.dir.*);
+        const dir: *Dir = @ptrCast(args.dir);
+        const DirEnt = std.os.wasi.dirent_t;
+        if (dir.data_len - dir.data_next < @sizeOf(DirEnt)) {
+            const env = self.env;
+            const result = try self.callPosixFunction(self.js.fd_readdir, &.{
+                try env.createInt32(dir.fd),
+                try env.createUsize(@intFromPtr(&dir.buffer)),
+                try env.createUint32(dir.buffer.len),
+                try env.createBigintUint64(dir.cookie),
+                try env.createBigintUint64(@intFromPtr(&dir.data_len)),
+                futex,
+            });
+            if (result != .SUCCESS) return result;
+            dir.data_next = 0;
+        }
+        if (dir.data_len > 0) {
+            const entry: *align(1) DirEnt = @ptrCast(&dir.buffer[dir.data_next]);
+            const offset = dir.data_next + @sizeOf(DirEnt);
+            const type_posix: redirect.DT = switch (entry.type) {
+                .UNKNOWN => .DT_UNKNOWN,
+                .BLOCK_DEVICE => .DT_BLK,
+                .CHARACTER_DEVICE => .DT_CHR,
+                .DIRECTORY => .DT_DIR,
+                .REGULAR_FILE => .DT_REG,
+                .SOCKET_DGRAM, .SOCKET_STREAM => .DT_SOCK,
+                .SYMBOLIC_LINK => .DT_LNK,
+                else => .DT_UNKNOWN,
+            };
+            const name = dir.buffer[offset .. offset + entry.namlen];
+            const name_len = @min(name.len, @sizeOf(@TypeOf(dir.entry.d_name)) - 1);
+            @memcpy(dir.entry.d_name[0..name_len], name[0..name_len]);
+            dir.entry.d_name[name_len] = 0;
+            dir.entry.d_ino = entry.ino;
+            dir.entry.d_type = @intFromEnum(type_posix);
+            dir.cookie = entry.next;
+            dir.data_next += @sizeOf(DirEnt) + entry.namlen;
+        }
+        return .SUCCESS;
     }
 
     fn releaseFunction(self: *@This(), fn_id: usize, in_main_thread: bool) !void {

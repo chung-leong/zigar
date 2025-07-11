@@ -8,7 +8,6 @@
 #include <stdint.h>
 #include <string.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <stdarg.h>
 #if defined(_WIN32)
     #include <windows.h>
@@ -16,7 +15,26 @@
 #else
     #include <unistd.h>
     #include <sys/stat.h>
+    #include <dirent.h>
+    #include <fcntl.h>
 #endif
+
+#define REDIRECTED_OBJECT_SIGNATURE     0x4A424F524147495A
+
+typedef struct {
+    uint64_t signature;
+    int32_t  fd;
+} redirected_FILE;
+
+typedef struct {
+    uint64_t signature;
+    int32_t  fd;
+    uint64_t cookie;
+    uint32_t data_len;
+    uint32_t data_next;    
+    char buffer[4096];
+    struct dirent entry;
+} redirected_DIR;
 
 typedef enum {
     environ_get,
@@ -132,6 +150,10 @@ typedef struct {
     uint32_t path_len;
 } syscall_mkdir, syscall_rmdir, syscall_unlink;
 
+typedef struct {
+    redirected_DIR *dir;
+} syscall_readdir;
+
 typedef union  {
     syscall_open open;
     syscall_close close;
@@ -149,6 +171,7 @@ typedef union  {
     syscall_mkdir mkdir;
     syscall_rmdir rmdir;
     syscall_unlink unlink;
+    syscall_readdir readdir;
 } syscall_union;
 
 typedef struct {

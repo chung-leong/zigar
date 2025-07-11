@@ -6,6 +6,12 @@ typedef void (*error_callback)(uint16_t);
 extern uint16_t redirect_syscall(syscall_struct*);
 extern bool is_redirecting(uint32_t);
 
+static bool is_redirected_object(void* ptr) {
+    if (!ptr) return false;
+    uint64_t* sig_ptr = (uint64_t*) ptr;
+    return *sig_ptr == REDIRECTED_OBJECT_SIGNATURE;
+}
+
 void set_errno(uint16_t err) {
     errno = err;
 }
@@ -273,6 +279,19 @@ static int redirect_unlink(int dirfd, const char* path, error_callback error_cb)
     return 0;
 }
 
+static struct dirent* redirect_readdir(redirected_DIR* d, error_callback error_cb) {
+    syscall_struct call;
+    call.cmd = fd_readdir;
+    call.futex_handle = 0;
+    call.u.readdir.dir = d;
+    int err = redirect_syscall(&call);
+    if (err) {
+        error_cb(err);
+        return NULL;
+    }
+    return (d->data_len != 0) ? &d->entry : NULL;
+}
+
 static int open_hook(const char *path, int oflag, ...) {
     mode_t mode = 0;
     if (oflag | O_CREAT) {
@@ -335,30 +354,25 @@ static int openat64_hook(int dirfd, const char *path, int oflag, ...) {
 static FILE* fopen_hook(const char *path, const char *mode) {
     if (is_redirecting(mask_open)) {
         int oflags = 0;
-        int template_fd = 0;
         if (mode[0] == 'r') {
             oflags |= (mode[1] == '+') ? O_RDWR : O_RDONLY;
         } else if (mode[0] == 'w') {
             oflags |= (mode[1] == '+') ? O_RDWR : O_WRONLY;
             oflags |= O_TRUNC | O_CREAT;
-            template_fd = 1;
         } else if (mode[0] == 'a') {
             oflags |= (mode[1] == '+') ? O_RDWR : O_WRONLY;
             oflags |= O_APPEND | O_CREAT;
-            template_fd = 1;
         } else {
             return NULL;
         }
         int fd = redirect_open(-1, path, oflags, false, true, set_errno);
         if (fd == -1) return NULL;
-        // fdopen() will do a syscall to obtain the descriptor's flags; there's no way we can 
-        // trap this; that's why we're using stdin/stdout as a template to create the struct 
-        // then change its descriptor
-        FILE* file = fdopen(template_fd, mode);
+        redirected_FILE* file = malloc(sizeof(redirected_FILE));
         if (file) {
-            file->_fileno = fd;
+            file->signature = REDIRECTED_OBJECT_SIGNATURE;
+            file->fd = fd;
         }
-        return file;
+        return (FILE*) file;
     }
     return fopen(path, mode);
 }
@@ -371,8 +385,10 @@ static int close_hook(int fd) {
 }
 
 static int fclose_hook(FILE *s) {
-    int fd = fileno(s);
-    if (is_applicable_handle(fd)) {
+    if (is_redirected_object(s)) {
+        redirected_FILE* file = (redirected_FILE*) s;
+        int fd = file->fd;
+        free(file);
         return redirect_close(fd, set_errno);
     }
     return fclose(s);
@@ -386,9 +402,9 @@ static ssize_t read_hook(int fd, void* buffer, size_t len) {
 }
 
 static size_t fread_hook(void* buffer, size_t size, size_t n, FILE* s) {
-    int fd = fileno(s);
-    if (is_applicable_handle(fd)) {
-        ssize_t read = redirect_read(fd, buffer, size * n, set_errno);
+    if (is_redirected_object(s)) {
+        redirected_FILE* file = (redirected_FILE*) s;
+        ssize_t read = redirect_read(file->fd, buffer, size * n, set_errno);
         if (read == -1) return 0;
         if (read == size * n) return n;
         return read / size;
@@ -404,9 +420,9 @@ static ssize_t write_hook(int fd, const void* buffer, size_t len) {
 }
 
 static size_t fwrite_hook(const void* buffer, size_t size, size_t n, FILE* s) {
-    int fd = fileno(s);
-    if (is_applicable_handle(fd)) {
-        ssize_t written = redirect_write(fd, buffer, size * n, set_errno);
+    if (is_redirected_object(s)) {
+        redirected_FILE* file = (redirected_FILE*) s;
+        ssize_t written = redirect_write(file->fd, buffer, size * n, set_errno);
         if (written == -1) return 0;
         if (written == size * n) return n;
         return written / size;
@@ -415,10 +431,10 @@ static size_t fwrite_hook(const void* buffer, size_t size, size_t n, FILE* s) {
 }
 
 static int fputs_hook(const char* t, FILE* s) {
-    int fd = fileno(s);
-    if (is_applicable_handle(fd)) {
+    if (is_redirected_object(s)) {
+        redirected_FILE* file = (redirected_FILE*) s;
         size_t len = strlen(t);
-        return redirect_write(fd, t, len, set_errno);
+        return redirect_write(file->fd, t, len, set_errno);
     }
     return fputs(t, s);
 }
@@ -434,10 +450,10 @@ static int puts_hook(const char* t) {
 }
 
 static int fputc_hook(int c, FILE* s) {
-    int fd = fileno(s);
-    if (is_applicable_handle(fd)) {
+    if (is_redirected_object(s)) {
+        redirected_FILE* file = (redirected_FILE*) s;
         char b = c;
-        return redirect_write(fd, &b, 1, set_errno);
+        return redirect_write(file->fd, &b, 1, set_errno);
     }
     return fputc(c, s);
 }
@@ -447,9 +463,9 @@ static int putchar_hook(int c) {
 }
 
 static int vfprintf_hook(FILE* s, const char* f, va_list arg) {
-    int fd = fileno(s);
-    if (is_applicable_handle(fd)) {
-        return redirect_vfprintf(fd, f, arg, set_errno);
+    if (is_redirected_object(s)) {
+        redirected_FILE* file = (redirected_FILE*) s;
+        return redirect_vfprintf(file->fd, f, arg, set_errno);
     }
     return vfprintf(s, f, arg);
 }
@@ -493,17 +509,17 @@ static off64_t lseek64_hook(int fd, off64_t offset, int whence) {
 }
 
 static int fseek_hook(FILE* s, long offset, int whence) {
-    int fd = fileno(s);
-    if (is_applicable_handle(fd)) {
-        return redirect_seek(fd, offset, whence, set_errno);
+    if (is_redirected_object(s)) {
+        redirected_FILE* file = (redirected_FILE*) s;
+        return redirect_seek(file->fd, offset, whence, set_errno);
     }
     return fseek(s, offset, whence);
 }
 
 static int ftell_hook(FILE* s) {
-    int fd = fileno(s);
-    if (is_applicable_handle(fd)) {
-        return redirect_seek(fd, 0, SEEK_CUR, set_errno);
+    if (is_redirected_object(s)) {
+        redirected_FILE* file = (redirected_FILE*) s;
+        return redirect_seek(file->fd, 0, SEEK_CUR, set_errno);
     }
     return ftell(s);
 }
@@ -616,6 +632,41 @@ static int unlinkat_hook(int dirfd, const char *pathname, int flags) {
     return unlinkat(dirfd, pathname, flags);
 }
 
+static DIR* opendir_hook(const char *name) {
+    if (is_redirecting(mask_open)) {
+        int fd = redirect_open(-1, name, 0, true, true, set_errno);
+        if (fd != -1) {
+            redirected_DIR* dir = malloc(sizeof(redirected_DIR));
+            dir->signature = REDIRECTED_OBJECT_SIGNATURE;
+            dir->fd = fd;
+            dir->cookie = 0;
+            dir->data_len = 0;
+            dir->data_next = 0;
+            memset(&dir->entry, 0, sizeof(struct dirent));
+            return dir;
+        }
+    }
+    return opendir(name);
+}
+
+static struct dirent* readdir_hook(DIR *d) {
+    if (is_redirected_object(d)) {
+        redirected_DIR* dir = (redirected_DIR*) d;
+        return redirect_readdir(d, set_errno);
+    }
+    return readdir(d);
+}
+
+static int closedir_hook(DIR* d) {
+    if (is_redirected_object(d)) {
+        redirected_DIR* dir = (redirected_DIR*) d;
+        int fd = dir->fd;
+        free(dir);
+        return redirect_close(fd, set_errno);
+    }
+    return closedir(d);
+}
+
 #if defined(_WIN32)
 static BOOL WINAPI write_file_hook(HANDLE handle, LPCVOID buffer, DWORD len, LPDWORD written, LPOVERLAPPED overlapped) {
     // return value of zero means success
@@ -632,9 +683,9 @@ static BOOL WINAPI write_file_hook(HANDLE handle, LPCVOID buffer, DWORD len, LPD
 }
 
 static int stdio_common_vfprintf_hook(unsigned __int64 options, FILE* s, char const* f, _locale_t locale, va_list arg) {
-    int fd = fileno(s);
-    if (is_applicable_handle(fd)) {
-        return redirect_vfprintf(fd, f, arg, set_errno);
+    if (is_redirected_object(s)) {
+        redirected_FILE* file = (redirected_FILE*) s;
+        return redirect_vfprintf(file->fd, f, arg, set_errno);
     }
     return __stdio_common_vfprintf(options, s, f, locale, arg);
 }
@@ -696,6 +747,9 @@ hook hooks[] = {
     { "rmdir",                      rmdir_hook },
     { "unlink",                     unlink_hook },
     { "unlinkat",                   unlinkat_hook },
+    { "opendir",                    opendir_hook },
+    { "readdir",                    readdir_hook },
+    { "closedir",                   closedir_hook },
 #endif
     { "fopen",                      fopen_hook },
     { "fclose",                     fclose_hook },
