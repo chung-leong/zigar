@@ -15,9 +15,7 @@ bool is_applicable_handle(size_t fd) {
 }
 
 static int redirect_open(int dirfd, const char* path, int oflags, bool directory, bool follow_symlink, error_callback error_cb) {
-    if (dirfd == -100) {
-        dirfd = -1;
-    }
+    if (dirfd == -100) dirfd = -1;
     syscall_struct call;
     call.cmd = path_open;
     call.futex_handle = 0;
@@ -150,7 +148,6 @@ static int redirect_stat(int dirfd, const char* path, bool follow_symlink, struc
 }
 
 static int redirect_fcntl(int fd, int op, int arg, error_callback error_cb) {
-    printf("redirect_fcntl\n");
     syscall_struct call;
     call.futex_handle = 0;
     int err = ENOTSUP;
@@ -228,6 +225,54 @@ static int redirect_datasync(int fd, error_callback error_cb) {
     return 0;
 }
 
+static int redirect_mkdir(int dirfd, const char* path, error_callback error_cb) {
+    if (dirfd == -100) dirfd = -1;
+    syscall_struct call;
+    call.cmd = path_create_directory;
+    call.futex_handle = 0;
+    call.u.mkdir.dirfd = dirfd;
+    call.u.mkdir.path = path;
+    call.u.mkdir.path_len = strlen(path);
+    int err = redirect_syscall(&call);
+    if (err) {
+        error_cb(err);
+        return -1;
+    }
+    return 0;
+}
+
+static int redirect_rmdir(int dirfd, const char* path, error_callback error_cb) {
+    if (dirfd == -100) dirfd = -1;
+    syscall_struct call;
+    call.cmd = path_remove_directory;
+    call.futex_handle = 0;
+    call.u.rmdir.dirfd = dirfd;
+    call.u.rmdir.path = path;
+    call.u.rmdir.path_len = strlen(path);
+    int err = redirect_syscall(&call);
+    if (err) {
+        error_cb(err);
+        return -1;
+    }
+    return 0;
+}
+
+static int redirect_unlink(int dirfd, const char* path, error_callback error_cb) {
+    if (dirfd == -100) dirfd = -1;
+    syscall_struct call;
+    call.cmd = path_unlink_file;
+    call.futex_handle = 0;
+    call.u.unlink.dirfd = dirfd;
+    call.u.unlink.path = path;
+    call.u.unlink.path_len = strlen(path);
+    int err = redirect_syscall(&call);
+    if (err) {
+        error_cb(err);
+        return -1;
+    }
+    return 0;
+}
+
 static int open_hook(const char *path, int oflag, ...) {
     mode_t mode = 0;
     if (oflag | O_CREAT) {
@@ -237,7 +282,10 @@ static int open_hook(const char *path, int oflag, ...) {
         va_end(args);
     }
     if (is_redirecting(mask_open)) {
-        return redirect_open(-1, path, oflag, false, true, set_errno);
+        int result = redirect_open(-1, path, oflag, false, true, set_errno);
+        if (!result || result == EEXIST) {
+            return result;
+        }
     }
     return (oflag | O_CREAT) ? open(path, oflag, mode) : open(path, oflag);
 }
@@ -516,6 +564,58 @@ static int fallocate_hook(int fd, int mode, off_t offset, off_t size) {
     return fallocate(fd, mode, offset, size);
 }
 
+static int mkdir_hook(const char *pathname, mode_t mode) {
+    if (is_redirecting(mask_mkdir)) {
+        int result = redirect_mkdir(-1, pathname, set_errno);
+        if (!result || result == EEXIST) {
+            return result;
+        }
+    }
+    return mkdir(pathname, mode);
+}
+
+static int mkdirat_hook(int dirfd, const char *pathname, mode_t mode) {
+    if (is_redirecting(mask_mkdir)) {
+        int result = redirect_mkdir(dirfd, pathname, set_errno);
+        if (!result || result == EEXIST) {
+            return result;
+        }
+    }
+    return mkdirat(dirfd, pathname, mode);
+}
+
+static int rmdir_hook(const char *pathname) {
+    if (is_redirecting(mask_rmdir)) {
+        int result = redirect_rmdir(-1, pathname, set_errno);
+        if (!result) {
+            return result;
+        }
+    }
+    return rmdir(pathname);
+}
+
+static int unlink_hook(const char *pathname) {
+    if (is_redirecting(mask_unlink)) {
+        int result = redirect_unlink(-1, pathname, set_errno);
+        if (!result) {
+            return result;
+        }
+    }
+    return unlink(pathname);
+}
+
+static int unlinkat_hook(int dirfd, const char *pathname, int flags) {
+    if (is_redirecting(mask_unlink)) {
+        int result = (flags & AT_REMOVEDIR) 
+            ? redirect_rmdir(dirfd, pathname, set_errno)
+            : redirect_unlink(dirfd, pathname, set_errno);
+        if (!result) {
+            return result;
+        }
+    }
+    return unlinkat(dirfd, pathname, flags);
+}
+
 #if defined(_WIN32)
 static BOOL WINAPI write_file_hook(HANDLE handle, LPCVOID buffer, DWORD len, LPDWORD written, LPOVERLAPPED overlapped) {
     // return value of zero means success
@@ -591,6 +691,11 @@ hook hooks[] = {
     { "fallocate",                  fallocate_hook },
     { "fsync",                      fsync_hook },
     { "fdatasync",                  fdatasync_hook },
+    { "mkdir",                      mkdir_hook },
+    { "mkdirat",                    mkdirat_hook },
+    { "rmdir",                      rmdir_hook },
+    { "unlink",                     unlink_hook },
+    { "unlinkat",                   unlinkat_hook },
 #endif
     { "fopen",                      fopen_hook },
     { "fclose",                     fclose_hook },

@@ -832,8 +832,11 @@ const ModuleHost = struct {
                 .fd_write => try self.handleWrite(futex, &call.u.write),
                 .fd_fdstat_get => try self.handleFdstatGet(futex, &call.u.fdstat_get),
                 .fd_filestat_get => try self.handleStat(futex, &call.u.fstat),
+                .path_create_directory => try self.handleMkdir(futex, &call.u.mkdir),
                 .path_open => try self.handleOpen(futex, &call.u.open),
                 .path_filestat_get => try self.handleStat(futex, &call.u.stat),
+                .path_remove_directory => try self.handleRmdir(futex, &call.u.rmdir),
+                .path_unlink_file => try self.handleUnlink(futex, &call.u.unlink),
                 else => @panic("Missing not implementation"),
             };
             // translate from WASI enum to the current system's
@@ -1079,6 +1082,36 @@ const ModuleHost = struct {
         const env = self.env;
         return try self.callPosixFunction(self.js.fd_datasync, &.{
             try env.createInt32(args.fd),
+            futex,
+        });
+    }
+
+    fn handleMkdir(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        return try self.callPosixFunction(self.js.path_create_directory, &.{
+            try env.createInt32(args.dirfd),
+            try env.createUsize(@intFromPtr(args.path)),
+            try env.createUint32(args.path_len),
+            futex,
+        });
+    }
+
+    fn handleRmdir(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        return try self.callPosixFunction(self.js.path_remove_directory, &.{
+            try env.createInt32(args.dirfd),
+            try env.createUsize(@intFromPtr(args.path)),
+            try env.createUint32(args.path_len),
+            futex,
+        });
+    }
+
+    fn handleUnlink(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        return try self.callPosixFunction(self.js.path_unlink_file, &.{
+            try env.createInt32(args.dirfd),
+            try env.createUsize(@intFromPtr(args.path)),
+            try env.createUint32(args.path_len),
             futex,
         });
     }

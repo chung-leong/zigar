@@ -558,7 +558,7 @@ export function addTests(importModule, options) {
         const text = entry.content;
         const encoder = new TextEncoder();
         return encoder.encode(text);
-      })
+      });
       const map = new Map([
         [ 'hello.txt', { type: 'file', content: 'Hello world' } ],
         [ 'test.txt', { type: 'file', content: 'This is a test and this is only a test' } ],
@@ -571,6 +571,39 @@ export function addTests(importModule, options) {
         'test.txt:',
         'This is a test and this is only a test',        
       ])
+    })
+    it('should create a directory using posix function', async function() {
+      this.timeout(0);
+      const { __zigar, create } = await importTest('create-directory-with-posix-function');
+      let event;
+      __zigar.on('mkdir', (evt) => {
+        event = evt;
+        return true;
+      });
+      create('/hello/world');
+      expect(event).to.eql({ parent: null, path: 'hello/world' });
+    })
+    it('should remove a directory using posix function', async function() {
+      this.timeout(0);
+      const { __zigar, remove } = await importTest('remove-directory-with-posix-function');
+      let event;
+      __zigar.on('rmdir', (evt) => {
+        event = evt;
+        return true;
+      });
+      remove('/hello/world');
+      expect(event).to.eql({ parent: null, path: 'hello/world' });
+    })
+    it('should remove a file using posix function', async function() {
+      this.timeout(0);
+      const { __zigar, remove } = await importTest('remove-file-with-posix-function');
+      let event;
+      __zigar.on('unlink', (evt) => {
+        event = evt;
+        return true;
+      });
+      remove('/hello/world.txt');
+      expect(event).to.eql({ parent: null, path: 'hello/world.txt' });
     })
   })
 }
