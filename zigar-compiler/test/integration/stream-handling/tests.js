@@ -390,13 +390,51 @@ export function addTests(importModule, options) {
         'atime = 0',
       ]);
     })
-    it('should print stats of file referenced by path', async function() {
+    it('should print stats of an opened file using posix function', async function() {
       this.timeout(0);
-      const { __zigar, print } = await importTest('stat-file-by-path');
-      const path = '/hello.txt';
-      let received;
+      const { __zigar, print } = await importTest('stat-opened-file-with-posix-function');
+      const array = new Uint8Array(17);
+      __zigar.on('open', () => {
+        return array;
+      });
+      const lines1 = await capture(() => print('/hello.txt'));
+      expect(lines1).to.eql([
+        'size = 17',
+        'ctime = 0,0',
+        'mtime = 0,0',
+        'atime = 0,0',
+      ]);
+      let event;
       __zigar.on('stat', (evt) => {
-        received = evt;
+        event = evt;
+        return {
+          size: 17n,
+          ctime: 2_500_000_000n,
+          mtime: 123_000_000_001n,
+          atime: 1_000_000_000n,
+        };
+      });
+      const lines2 = await capture(() => print('/hello.txt'));
+      expect(event).to.eql({
+        parent: null,
+        path: 'hello.txt',
+        target: array,
+        flags: {},
+      });
+      expect(lines2).to.eql([
+        'size = 17',
+        'ctime = 2,500000000',
+        'mtime = 123,1',
+        'atime = 1,0',
+      ]);
+    })
+    it('should print stats of file referenced by path using posix function', async function() {
+      this.timeout(0);
+      const { __zigar, print, printLink } = await importTest('stat-file-by-path-with-posix-function');
+      const path = '/hello.txt';
+      let event;
+      __zigar.on('stat', (evt) => {
+        event = evt;
         return {
           size: 34,
           ctime: 1234,
@@ -405,27 +443,48 @@ export function addTests(importModule, options) {
         }
       });
       const lines1 = await capture(() => print(path));
-      expect(received).to.eql({ 
+      expect(event).to.eql({ 
         parent: null,
         path: 'hello.txt', 
         flags: { symlinkFollow: true } 
       });
       expect(lines1).to.eql([
         'size = 34',
-        'ctime = 1234',
-        'mtime = 4567',
-        'atime = 9999',
+        'ctime = 0,1234',
+        'mtime = 0,4567',
+        'atime = 0,9999',
       ]);
       __zigar.on('stat', () => false);
-      const lines2 = await capture(() => print(path));
-      expect(lines2).to.eql([ 'error = error.FileNotFound' ])
+      expect(() => print(path)).to.throw(Error)
+        .with.property('message', 'Unable to get stat');
       __zigar.on('stat', () => {
         throw new Error('Doh!');
       });
       const [ error ] = await captureError(async () => {
-        const lines3 = await capture(() => print(path));
+        expect(() => print(path)).to.throw(Error)
       });
       expect(error).to.equal('Error: Doh!');
+      __zigar.on('stat', (evt) => {
+        event = evt;
+        return {
+          size: 4,
+          ctime: 123_000_000_000n,
+          mtime: 456_000_000_000n,
+          atime: 999_000_000_000n,
+        }
+      });
+      const lines2 = await capture(() => printLink(path));
+      expect(event).to.eql({ 
+        parent: null,
+        path: 'hello.txt', 
+        flags: {} 
+      });
+      expect(lines2).to.eql([
+        'size = 4',
+        'ctime = 123,0',
+        'mtime = 456,0',
+        'atime = 999,0',
+      ]);
     })
     it('should print directory contents', async function() {
       this.timeout(0);

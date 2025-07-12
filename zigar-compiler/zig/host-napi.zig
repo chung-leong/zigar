@@ -376,15 +376,15 @@ fn setSyscallMask(mask: u32, set: bool) callconv(.C) E {
 }
 
 fn getSyscallHook(name: [*:0]const u8, dest: **const anyopaque) callconv(.C) E {
-    const fn_ptr = findHook(name) orelse return .NOENT;
+    const fn_ptr = find_hook(name) orelse return .NOENT;
     dest.* = fn_ptr;
     return .SUCCESS;
 }
 
-const findHook = @extern(*const fn ([*:0]const u8) callconv(.C) ?*const anyopaque, .{ .name = "find_hook" });
+extern fn find_hook([*:0]const u8) callconv(.C) ?*const anyopaque;
 comptime {
-    @export(&redirectSyscall, .{ .name = "redirect_syscall" });
-    @export(&isRedirecting, .{ .name = "is_redirecting" });
+    @export(&redirectSyscall, .{ .name = "redirect_syscall", .visibility = .hidden });
+    @export(&isRedirecting, .{ .name = "is_redirecting", .visibility = .hidden });
 }
 
 // pointer table that's filled on the C side

@@ -3,8 +3,8 @@
 
 typedef void (*error_callback)(uint16_t);
 
-extern uint16_t redirect_syscall(syscall_struct*);
-extern bool is_redirecting(uint32_t);
+uint16_t redirect_syscall(syscall_struct*);
+bool is_redirecting(uint32_t);
 
 static bool is_redirected_object(void* ptr) {
     if (!ptr) return false;
@@ -12,11 +12,11 @@ static bool is_redirected_object(void* ptr) {
     return *sig_ptr == REDIRECTED_OBJECT_SIGNATURE;
 }
 
-void set_errno(uint16_t err) {
+static void set_errno(uint16_t err) {
     errno = err;
 }
 
-bool is_applicable_handle(size_t fd) {
+static bool is_applicable_handle(size_t fd) {
     return fd >= fd_min || fd == 0 || fd == 1 || fd == 2;
 }
 
@@ -125,7 +125,7 @@ static off64_t redirect_seek(int fd, off_t offset, int whence, error_callback er
 static int redirect_fstat(int fd, struct stat *buf, error_callback error_cb) {
     syscall_struct call;
     call.futex_handle = 0;
-    call.cmd = fd_fdstat_get;
+    call.cmd = fd_filestat_get;
     call.u.fstat.fd = fd;
     call.u.fstat.stat = buf;
     int err = redirect_syscall(&call);
@@ -139,7 +139,7 @@ static int redirect_fstat(int fd, struct stat *buf, error_callback error_cb) {
 static int redirect_stat(int dirfd, const char* path, bool follow_symlink, struct stat *buf, error_callback error_cb) {
     syscall_struct call;
     call.futex_handle = 0;
-    call.cmd = fd_fdstat_get;
+    call.cmd = path_filestat_get;
     call.u.stat.dirfd = dirfd;
     call.u.stat.path = path;
     call.u.stat.path_len = strlen(path);
@@ -167,7 +167,6 @@ static int redirect_fcntl(int fd, int op, int arg, error_callback error_cb) {
             break;
     }
     if (err) {
-        printf("err\n");
         error_cb(err);
         return -1;
     }   
@@ -531,7 +530,21 @@ static int fstat_hook(int fd, struct stat *buf) {
     return fstat(fd, buf);
 }
 
+static int fxstat_hook(int ver, int fd, struct stat *buf) {
+    if (is_applicable_handle(fd)) {
+        return redirect_fstat(fd, buf, set_errno);
+    }
+    return fstat(fd, buf);
+}
+
 static int stat_hook(const char *path, struct stat *buf) {
+    if (is_redirecting(mask_stat)) {
+        return redirect_stat(-1, path, true, buf, set_errno);
+    }
+    return stat(path, buf);
+}
+
+static int xstat_hook(int ver, const char *path, struct stat *buf) {
     if (is_redirecting(mask_stat)) {
         return redirect_stat(-1, path, true, buf, set_errno);
     }
@@ -543,6 +556,13 @@ static int lstat_hook(const char *path, struct stat *buf) {
         return redirect_stat(-1, path, false, buf, set_errno);
     }
     return stat(path, buf);
+}
+
+static int lxstat_hook(int ver, const char *path, struct stat *buf) {
+    if (is_redirecting(mask_stat)) {
+        return redirect_stat(-1, path, false, buf, set_errno);
+    }
+    return lstat(path, buf);
 }
 
 static int fcntl_hook(int fd, int op, int arg) {
@@ -735,8 +755,11 @@ hook hooks[] = {
     { "lseek",                      lseek_hook },
     { "lseek64",                    lseek64_hook },
     { "fstat",                      fstat_hook },
+    { "__fxstat",                   fxstat_hook },
     { "stat",                       stat_hook },
+    { "__xstat",                    xstat_hook },
     { "lstat",                      lstat_hook },
+    { "__lxstat",                   lxstat_hook },
     { "fcntl",                      fcntl_hook },
     { "posix_fadvise",              posix_fadvise_hook },
     { "fallocate",                  fallocate_hook },
@@ -779,6 +802,7 @@ hook hooks[] = {
 #define HOOK_COUNT (sizeof(hooks) / sizeof(hook))
 
 const const void* find_hook(const char* name) {
+    // printf("%s\n", name);
     for (int i = 0; i < HOOK_COUNT; i++) {
         if (strcmp(name, hooks[i].name) == 0) {
             return hooks[i].function;

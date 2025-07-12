@@ -975,7 +975,6 @@ const ModuleHost = struct {
         var stat: std.os.wasi.filestat_t = undefined;
         var result: E = undefined;
         if (@hasField(@TypeOf(args.*), "fd")) {
-            std.debug.print("handleStat fd = {d}\n", .{args.fd});
             result = try self.callPosixFunction(self.js.fd_filestat_get, &.{
                 try env.createInt32(args.fd),
                 try env.createUsize(@intFromPtr(&stat)),
@@ -995,7 +994,6 @@ const ModuleHost = struct {
             });
         }
         if (result == .SUCCESS) {
-            std.debug.print("stat {}\n", .{stat});
             const c_ptr = args.stat.?;
             const Stat = @TypeOf(c_ptr.*);
             const ptr: *Stat = @ptrCast(c_ptr);
