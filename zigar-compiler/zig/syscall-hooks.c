@@ -20,12 +20,16 @@ static bool is_applicable_handle(size_t fd) {
     return fd >= fd_min || fd == 0 || fd == 1 || fd == 2;
 }
 
-static int redirect_open(int dirfd, const char* path, int oflags, bool directory, bool follow_symlink, error_callback error_cb) {
+static int check_dirfd(int dirfd) {
     if (dirfd == -100) dirfd = -1;
+    return dirfd;
+}
+
+static int redirect_open(int dirfd, const char* path, int oflags, bool directory, bool follow_symlink, error_callback error_cb) {
     syscall_struct call;
-    call.cmd = path_open;
+    call.cmd = cmd_open;
     call.futex_handle = 0;
-    call.u.open.dirfd = dirfd;
+    call.u.open.dirfd = check_dirfd(dirfd);
     call.u.open.path = path;
     call.u.open.path_len = strlen(path);
     call.u.open.oflags = oflags;
@@ -41,7 +45,7 @@ static int redirect_open(int dirfd, const char* path, int oflags, bool directory
 
 static int redirect_close(int fd, error_callback error_cb) {
     syscall_struct call;
-    call.cmd = fd_close;
+    call.cmd = cmd_close;
     call.futex_handle = 0;
     call.u.close.fd = fd;
     int err = redirect_syscall(&call);
@@ -54,7 +58,7 @@ static int redirect_close(int fd, error_callback error_cb) {
 
 static ssize_t redirect_read(int fd, char* buffer, size_t len, error_callback error_cb) {
     syscall_struct call;
-    call.cmd = fd_read;
+    call.cmd = cmd_read;
     call.futex_handle = 0;
     call.u.read.fd = fd;
     call.u.read.bytes = buffer;
@@ -69,7 +73,7 @@ static ssize_t redirect_read(int fd, char* buffer, size_t len, error_callback er
 
 static ssize_t redirect_write(int fd, const char* buffer, size_t len, error_callback error_cb) {
     syscall_struct call;
-    call.cmd = fd_write;
+    call.cmd = cmd_write;
     call.futex_handle = 0;
     call.u.write.fd = fd;
     call.u.write.bytes = buffer;
@@ -106,10 +110,10 @@ static off64_t redirect_seek(int fd, off_t offset, int whence, error_callback er
     syscall_struct call;
     call.futex_handle = 0;
     if (offset == 0 && whence == SEEK_CUR) {
-        call.cmd = fd_tell;
+        call.cmd = cmd_tell;
         call.u.tell.fd = fd;
     } else {
-        call.cmd = fd_seek;
+        call.cmd = cmd_seek;
         call.u.seek.fd = fd;
         call.u.seek.offset = offset;
         call.u.seek.whence = whence;
@@ -119,13 +123,41 @@ static off64_t redirect_seek(int fd, off_t offset, int whence, error_callback er
         error_cb(err);
         return -1;
     }   
-    return (call.cmd == fd_tell) ? call.u.tell.position : call.u.seek.position;
+    return (call.cmd == cmd_tell) ? call.u.tell.position : call.u.seek.position;
+}
+
+static int redirect_getpos(int fd, fpos_t *pos, error_callback error_cb) {
+    syscall_struct call;
+    call.futex_handle = 0;
+    call.cmd = cmd_getpos;
+    call.u.getpos.fd = fd;
+    call.u.getpos.pos = pos;
+    int err = redirect_syscall(&call);
+    if (err) {
+        error_cb(err);
+        return -1;
+    }   
+    return 0;
+}
+
+static int redirect_setpos(int fd, const fpos_t *pos, error_callback error_cb) {
+    syscall_struct call;
+    call.futex_handle = 0;
+    call.cmd = cmd_setpos;
+    call.u.setpos.fd = fd;
+    call.u.setpos.pos = pos;
+    int err = redirect_syscall(&call);
+    if (err) {
+        error_cb(err);
+        return -1;
+    }   
+    return 0;
 }
 
 static int redirect_fstat(int fd, struct stat *buf, error_callback error_cb) {
     syscall_struct call;
     call.futex_handle = 0;
-    call.cmd = fd_filestat_get;
+    call.cmd = cmd_fstat;
     call.u.fstat.fd = fd;
     call.u.fstat.stat = buf;
     int err = redirect_syscall(&call);
@@ -139,8 +171,8 @@ static int redirect_fstat(int fd, struct stat *buf, error_callback error_cb) {
 static int redirect_stat(int dirfd, const char* path, bool follow_symlink, struct stat *buf, error_callback error_cb) {
     syscall_struct call;
     call.futex_handle = 0;
-    call.cmd = path_filestat_get;
-    call.u.stat.dirfd = dirfd;
+    call.cmd = cmd_stat;
+    call.u.stat.dirfd = check_dirfd(dirfd);
     call.u.stat.path = path;
     call.u.stat.path_len = strlen(path);
     call.u.stat.follow_symlink = follow_symlink;
@@ -156,7 +188,7 @@ static int redirect_stat(int dirfd, const char* path, bool follow_symlink, struc
 static int redirect_futimes(int fd, const struct timeval tv[2], error_callback error_cb) {
     syscall_struct call;
     call.futex_handle = 0;
-    call.cmd = fd_filestat_set_times;
+    call.cmd = cmd_futimes;
     call.u.futimes.fd = fd;
     memcpy(&call.u.futimes.tv, tv, sizeof(struct timeval) * 2);
     int err = redirect_syscall(&call);
@@ -170,8 +202,8 @@ static int redirect_futimes(int fd, const struct timeval tv[2], error_callback e
 static int redirect_utimes(int dirfd, const char* path, bool follow_symlink, const struct timeval tv[2], error_callback error_cb) {
     syscall_struct call;
     call.futex_handle = 0;
-    call.cmd = path_filestat_set_times;
-    call.u.utimes.dirfd = dirfd;
+    call.cmd = cmd_utimes;
+    call.u.utimes.dirfd = check_dirfd(dirfd);
     call.u.utimes.path = path;
     call.u.utimes.path_len = strlen(path);
     call.u.utimes.follow_symlink = follow_symlink;
@@ -187,26 +219,19 @@ static int redirect_utimes(int dirfd, const char* path, bool follow_symlink, con
 static int redirect_fcntl(int fd, int op, int arg, error_callback error_cb) {
     syscall_struct call;
     call.futex_handle = 0;
-    int err = ENOTSUP;
-    int result = 0;
-    switch (op) {
-        case F_GETFL:
-            call.cmd = fd_fdstat_get;
-            call.u.fdstat_get.fd = fd;
-            err = redirect_syscall(&call);
-            result = call.u.fdstat_get.flags;
-            break;
-    }
+    call.cmd = cmd_fcntl;
+    call.u.fcntl.fd = fd;
+    int err = redirect_syscall(&call);
     if (err) {
         error_cb(err);
         return -1;
     }   
-    return result;
+    return call.u.fcntl.result;
 }
 
 static int redirect_advise(int fd, uint64_t offset, uint64_t size, int advice, error_callback error_cb) {
     syscall_struct call;
-    call.cmd = fd_advise;
+    call.cmd = cmd_advise;
     call.futex_handle = 0;
     call.u.advise.fd = fd;
     call.u.advise.offset = offset;
@@ -222,7 +247,7 @@ static int redirect_advise(int fd, uint64_t offset, uint64_t size, int advice, e
 
 static int redirect_allocate(int fd, uint64_t offset, uint64_t size, error_callback error_cb) {
     syscall_struct call;
-    call.cmd = fd_allocate;
+    call.cmd = cmd_allocate;
     call.futex_handle = 0;
     call.u.allocate.fd = fd;
     call.u.allocate.offset = offset;
@@ -237,7 +262,7 @@ static int redirect_allocate(int fd, uint64_t offset, uint64_t size, error_callb
 
 static int redirect_sync(int fd, error_callback error_cb) {
     syscall_struct call;
-    call.cmd = fd_sync;
+    call.cmd = cmd_sync;
     call.futex_handle = 0;
     call.u.sync.fd = fd;
     int err = redirect_syscall(&call);
@@ -250,7 +275,7 @@ static int redirect_sync(int fd, error_callback error_cb) {
 
 static int redirect_datasync(int fd, error_callback error_cb) {
     syscall_struct call;
-    call.cmd = fd_datasync;
+    call.cmd = cmd_datasync;
     call.futex_handle = 0;
     call.u.datasync.fd = fd;
     int err = redirect_syscall(&call);
@@ -262,11 +287,10 @@ static int redirect_datasync(int fd, error_callback error_cb) {
 }
 
 static int redirect_mkdir(int dirfd, const char* path, error_callback error_cb) {
-    if (dirfd == -100) dirfd = -1;
     syscall_struct call;
-    call.cmd = path_create_directory;
+    call.cmd = cmd_mkdir;
     call.futex_handle = 0;
-    call.u.mkdir.dirfd = dirfd;
+    call.u.mkdir.dirfd = check_dirfd(dirfd);
     call.u.mkdir.path = path;
     call.u.mkdir.path_len = strlen(path);
     int err = redirect_syscall(&call);
@@ -278,11 +302,10 @@ static int redirect_mkdir(int dirfd, const char* path, error_callback error_cb) 
 }
 
 static int redirect_rmdir(int dirfd, const char* path, error_callback error_cb) {
-    if (dirfd == -100) dirfd = -1;
     syscall_struct call;
-    call.cmd = path_remove_directory;
+    call.cmd = cmd_rmdir;
     call.futex_handle = 0;
-    call.u.rmdir.dirfd = dirfd;
+    call.u.rmdir.dirfd = check_dirfd(dirfd);
     call.u.rmdir.path = path;
     call.u.rmdir.path_len = strlen(path);
     int err = redirect_syscall(&call);
@@ -294,11 +317,10 @@ static int redirect_rmdir(int dirfd, const char* path, error_callback error_cb) 
 }
 
 static int redirect_unlink(int dirfd, const char* path, error_callback error_cb) {
-    if (dirfd == -100) dirfd = -1;
     syscall_struct call;
-    call.cmd = path_unlink_file;
+    call.cmd = cmd_unlink;
     call.futex_handle = 0;
-    call.u.unlink.dirfd = dirfd;
+    call.u.unlink.dirfd = check_dirfd(dirfd);
     call.u.unlink.path = path;
     call.u.unlink.path_len = strlen(path);
     int err = redirect_syscall(&call);
@@ -311,7 +333,7 @@ static int redirect_unlink(int dirfd, const char* path, error_callback error_cb)
 
 static struct dirent* redirect_readdir(redirected_DIR* d, error_callback error_cb) {
     syscall_struct call;
-    call.cmd = fd_readdir;
+    call.cmd = cmd_readdir;
     call.futex_handle = 0;
     call.u.readdir.dir = d;
     int err = redirect_syscall(&call);
@@ -552,6 +574,22 @@ static int ftell_hook(FILE* s) {
         return redirect_seek(file->fd, 0, SEEK_CUR, set_errno);
     }
     return ftell(s);
+}
+
+static int fgetpos_hook(FILE* s, const fpos_t* pos) {
+    if (is_redirected_object(s)) {
+        redirected_FILE* file = (redirected_FILE*) s;
+        return redirect_getpos(file->fd, pos, set_errno);
+    }
+    return fsetpos(s, pos);
+}
+
+static int fsetpos_hook(FILE* s, const fpos_t* pos) {
+    if (is_redirected_object(s)) {
+        redirected_FILE* file = (redirected_FILE*) s;
+        return redirect_setpos(file->fd, pos, set_errno);
+    }
+    return fsetpos(s, pos);
 }
 
 static int fstat_hook(int fd, struct stat *buf) {
@@ -835,6 +873,8 @@ hook hooks[] = {
     { "fwrite",                     fwrite_hook },
     { "fseek",                      fseek_hook },
     { "ftell",                      ftell_hook },
+    { "fgetpos",                    fgetpos_hook },
+    { "fsetpos",                    fsetpos_hook },
     { "fputs",                      fputs_hook },
     { "puts",                       puts_hook },
     { "fputc",                      fputc_hook },

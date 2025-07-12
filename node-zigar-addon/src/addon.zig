@@ -822,26 +822,27 @@ const ModuleHost = struct {
                 else => |handle| try env.createUsize(handle),
             };
             const result: E = switch (call.cmd) {
-                .fd_advise => try self.handleAdvise(futex, &call.u.advise),
-                .fd_allocate => try self.handleAllocate(futex, &call.u.allocate),
-                .fd_close => try self.handleClose(futex, &call.u.close),
-                .fd_datasync => try self.handleDatasync(futex, &call.u.datasync),
-                .fd_read => try self.handleRead(futex, &call.u.read),
-                .fd_readdir => try self.handleReaddir(futex, &call.u.readdir),
-                .fd_seek => try self.handleSeek(futex, &call.u.seek),
-                .fd_sync => try self.handleSync(futex, &call.u.sync),
-                .fd_tell => try self.handleTell(futex, &call.u.tell),
-                .fd_write => try self.handleWrite(futex, &call.u.write),
-                .fd_fdstat_get => try self.handleFdstatGet(futex, &call.u.fdstat_get),
-                .fd_filestat_get => try self.handleStat(futex, &call.u.fstat),
-                .fd_filestat_set_times => try self.handleSetTimes(futex, &call.u.futimes),
-                .path_create_directory => try self.handleMkdir(futex, &call.u.mkdir),
-                .path_open => try self.handleOpen(futex, &call.u.open),
-                .path_filestat_get => try self.handleStat(futex, &call.u.stat),
-                .path_filestat_set_times => try self.handleSetTimes(futex, &call.u.utimes),
-                .path_remove_directory => try self.handleRmdir(futex, &call.u.rmdir),
-                .path_unlink_file => try self.handleUnlink(futex, &call.u.unlink),
-                else => @panic("Missing not implementation"),
+                .cmd_open => try self.handleOpen(futex, &call.u.open),
+                .cmd_close => try self.handleClose(futex, &call.u.close),
+                .cmd_read => try self.handleRead(futex, &call.u.read),
+                .cmd_write => try self.handleWrite(futex, &call.u.write),
+                .cmd_seek => try self.handleSeek(futex, &call.u.seek),
+                .cmd_tell => try self.handleTell(futex, &call.u.tell),
+                .cmd_getpos => try self.handleGetpos(futex, &call.u.getpos),
+                .cmd_setpos => try self.handleSetpos(futex, &call.u.setpos),
+                .cmd_fcntl => try self.handleFcntl(futex, &call.u.fcntl),
+                .cmd_fstat => try self.handleStat(futex, &call.u.fstat),
+                .cmd_stat => try self.handleStat(futex, &call.u.stat),
+                .cmd_futimes => try self.handleSetTimes(futex, &call.u.futimes),
+                .cmd_utimes => try self.handleSetTimes(futex, &call.u.utimes),
+                .cmd_advise => try self.handleAdvise(futex, &call.u.advise),
+                .cmd_allocate => try self.handleAllocate(futex, &call.u.allocate),
+                .cmd_sync => try self.handleSync(futex, &call.u.sync),
+                .cmd_datasync => try self.handleDatasync(futex, &call.u.datasync),
+                .cmd_readdir => try self.handleReaddir(futex, &call.u.readdir),
+                .cmd_mkdir => try self.handleMkdir(futex, &call.u.mkdir),
+                .cmd_rmdir => try self.handleRmdir(futex, &call.u.rmdir),
+                .cmd_unlink => try self.handleUnlink(futex, &call.u.unlink),
             };
             // translate from WASI enum to the current system's
             return inline for (std.meta.fields(E)) |field| {
@@ -972,6 +973,46 @@ const ModuleHost = struct {
         });
     }
 
+    fn handleGetpos(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        var position: u64 = undefined;
+        const result = try self.callPosixFunction(self.js.fd_tell, &.{
+            try env.createInt32(args.fd),
+            try env.createUsize(@intFromPtr(&position)),
+            futex,
+        });
+        if (result == .SUCCESS) {
+            const Pos = @TypeOf(args.pos.*);
+            args.pos.* = std.mem.zeroes(Pos);
+            inline for (std.meta.fields(Pos)) |field| {
+                if (comptime std.mem.containsAtLeast(u8, field.name, 1, "pos")) {
+                    @field(args.pos.*, field.name) = @intCast(position);
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    fn handleSetpos(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        var position: u64 = undefined;
+        const Pos = @TypeOf(args.pos.*);
+        inline for (std.meta.fields(Pos)) |field| {
+            if (comptime std.mem.containsAtLeast(u8, field.name, 1, "pos")) {
+                position = @intCast(@field(args.pos.*, field.name));
+                break;
+            }
+        }
+        return try self.callPosixFunction(self.js.fd_seek, &.{
+            try env.createInt32(args.fd),
+            try env.createBigintUint64(position),
+            try env.createUint32(@intFromEnum(std.os.wasi.whence_t.SET)),
+            try env.createUsize(@intFromPtr(&position)),
+            futex,
+        });
+    }
+
     fn handleSetTimes(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
         const flags: std.os.wasi.fstflags_t = .{ .ATIM = true, .MTIM = true };
@@ -1046,28 +1087,35 @@ const ModuleHost = struct {
         return result;
     }
 
-    fn handleFdstatGet(self: *@This(), futex: Value, args: anytype) !E {
+    fn handleFcntl(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        var fdstat: std.os.wasi.fdstat_t = undefined;
-        const result = try self.callPosixFunction(self.js.fd_fdstat_get, &.{
-            try env.createInt32(args.fd),
-            try env.createUsize(@intFromPtr(&fdstat)),
-            futex,
-        });
-        if (result == .SUCCESS) {
-            var oflags_posix: std.posix.O = .{};
-            if (fdstat.fs_rights_base.FD_READ) {
-                if (fdstat.fs_rights_base.FD_WRITE) {
-                    oflags_posix.ACCMODE = .RDWR;
-                } else {
-                    oflags_posix.ACCMODE = .RDONLY;
+        const op: redirect.FCNTL = @enumFromInt(args.op);
+        var result: E = undefined;
+        switch (op) {
+            .F_GETFL => {
+                var fdstat: std.os.wasi.fdstat_t = undefined;
+                result = try self.callPosixFunction(self.js.fd_fdstat_get, &.{
+                    try env.createInt32(args.fd),
+                    try env.createUsize(@intFromPtr(&fdstat)),
+                    futex,
+                });
+                if (result == .SUCCESS) {
+                    var oflags_posix: std.posix.O = .{};
+                    if (fdstat.fs_rights_base.FD_READ) {
+                        if (fdstat.fs_rights_base.FD_WRITE) {
+                            oflags_posix.ACCMODE = .RDWR;
+                        } else {
+                            oflags_posix.ACCMODE = .RDONLY;
+                        }
+                    } else if (fdstat.fs_rights_base.FD_WRITE) {
+                        oflags_posix.ACCMODE = .WRONLY;
+                    } else if (fdstat.fs_rights_base.FD_READDIR) {
+                        oflags_posix.DIRECTORY = true;
+                    }
+                    args.result = @bitCast(oflags_posix);
                 }
-            } else if (fdstat.fs_rights_base.FD_WRITE) {
-                oflags_posix.ACCMODE = .WRONLY;
-            } else if (fdstat.fs_rights_base.FD_READDIR) {
-                oflags_posix.DIRECTORY = true;
-            }
-            args.flags = @bitCast(oflags_posix);
+            },
+            else => result = E.INVAL,
         }
         return result;
     }

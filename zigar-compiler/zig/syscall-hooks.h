@@ -38,39 +38,35 @@ typedef struct {
 } redirected_DIR;
 
 typedef enum {
-    environ_get,
-    environ_sizes_get,
-    fd_advise,
-    fd_allocate,
-    fd_close,
-    fd_datasync,
-    fd_fdstat_get,
-    fd_filestat_get,
-    fd_filestat_set_times,
-    fd_prestat_get,
-    fd_prestat_dirname,
-    fd_read,
-    fd_readdir,
-    fd_seek,
-    fd_sync,
-    fd_tell,
-    fd_write,
-    path_create_directory,
-    path_filestat_get,
-    path_filestat_set_times,
-    path_open,
-    path_remove_directory,
-    path_unlink_file,
-    proc_exit,
-    random_get,
+    cmd_advise,
+    cmd_allocate,
+    cmd_close,
+    cmd_datasync,
+    cmd_fcntl,
+    cmd_fstat,
+    cmd_futimes,
+    cmd_getpos,
+    cmd_mkdir,
+    cmd_open,
+    cmd_read,
+    cmd_readdir,
+    cmd_rmdir,
+    cmd_seek,
+    cmd_setpos,
+    cmd_stat,
+    cmd_sync,
+    cmd_tell,
+    cmd_unlink,
+    cmd_utimes,
+    cmd_write,
 } syscall_command;
 
 typedef enum {
     mask_mkdir = 1 << 0,
-    mask_stat = 1 << 1,
-    mask_set_times = 1 << 2,
-    mask_open = 1 << 3,
-    mask_rmdir = 1 << 4,
+    mask_open = 1 << 1,
+    mask_rmdir = 1 << 2,
+    mask_set_times = 1 << 3,
+    mask_stat = 1 << 4,
     mask_unlink = 1 << 5,
 } syscall_mask;
 
@@ -116,6 +112,16 @@ typedef struct {
 
 typedef struct {
     int32_t fd;
+    fpos_t* pos;
+} syscall_getpos;
+
+typedef struct {
+    int32_t fd;
+    const fpos_t* pos;
+} syscall_setpos;
+
+typedef struct {
+    int32_t fd;
     struct stat* stat;
 } syscall_fstat;
 
@@ -142,8 +148,10 @@ typedef struct {
 
 typedef struct {
     int32_t fd;
-    uint32_t flags;
-} syscall_fdstat_get;
+    uint8_t op;
+    int64_t arg;
+    uint32_t result;
+} syscall_fcntl;
 
 typedef struct {
     int32_t fd;
@@ -169,25 +177,27 @@ typedef struct {
 } syscall_readdir;
 
 typedef union  {
-    syscall_open open;
-    syscall_close close;
-    syscall_read read;
-    syscall_write write;
-    syscall_seek seek;
-    syscall_tell tell;
-    syscall_fstat fstat;
-    syscall_stat stat;
-    syscall_futimes futimes;
-    syscall_utimes utimes;
-    syscall_fdstat_get fdstat_get;
     syscall_advise advise;
     syscall_allocate allocate;
-    syscall_sync sync;
+    syscall_close close;
     syscall_datasync datasync;
+    syscall_fcntl fcntl;
+    syscall_fstat fstat;
+    syscall_futimes futimes;
+    syscall_getpos getpos;
     syscall_mkdir mkdir;
-    syscall_rmdir rmdir;
-    syscall_unlink unlink;
+    syscall_open open;
+    syscall_read read;
     syscall_readdir readdir;
+    syscall_rmdir rmdir;
+    syscall_seek seek;
+    syscall_setpos setpos;
+    syscall_stat stat;
+    syscall_sync sync;
+    syscall_tell tell;
+    syscall_unlink unlink;
+    syscall_utimes utimes;
+    syscall_write write;
 } syscall_union;
 
 typedef struct {

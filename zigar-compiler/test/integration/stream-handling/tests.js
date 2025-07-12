@@ -200,6 +200,18 @@ export function addTests(importModule, options) {
       const pos = seek('/hello/world', -2);
       expect(pos).to.equal(BigInt(content.length - 2));
     })
+    it('should save and restore file position using using libc functions', async function() {
+      this.timeout(0);
+      const { __zigar, printTwice } = await importTest('save-and-restore-file-position-with-libc-functions');
+      const path = absolute('./data/test.txt');
+      const content = await readFile(path);
+      __zigar.on('open', () => content);
+      const lines = await capture(() => printTwice('/hello/world', 32, 16));
+      expect(lines).to.eql([
+        'ur fathers broug',
+        'ur fathers broug',
+      ]);
+    })
     it('should write to writer', async function() {
       this.timeout(0);
       const {

@@ -10,10 +10,11 @@ pub const Syscall = extern struct {
     u: h.syscall_union,
     futex_handle: usize,
 
-    pub const Command: type = deriveZigEnum(u8, h, "environ_get", "random_get");
+    pub const Command: type = deriveZigEnum(u8, h, "cmd_advise", "cmd_write");
 };
 pub const Mask: type = deriveZigEnum(u8, h, "mask_mkdir", "mask_unlink");
 pub const DT: type = deriveZigEnum(u8, h, "DT_UNKNOWN", "DT_WHT");
+pub const FCNTL: type = deriveZigEnum(u8, h, "F_DUPFD", "F_SETFL");
 
 const ns = switch (builtin.target.os.tag) {
     .linux => linux,
@@ -508,14 +509,14 @@ fn deriveZigEnum(comptime T: type, comptime c_ns: type, comptime first_item: []c
     var count: usize = 0;
     var in_enum = false;
     for (std.meta.declarations(c_ns)) |decl| {
-        if (!in_enum and std.mem.startsWith(u8, decl.name, first_item)) in_enum = true;
+        if (!in_enum and std.mem.eql(u8, decl.name, first_item)) in_enum = true;
         if (in_enum) count += 1;
-        if (in_enum and std.mem.startsWith(u8, decl.name, last_item)) in_enum = false;
+        if (in_enum and std.mem.eql(u8, decl.name, last_item)) in_enum = false;
     }
     var fields: [count]std.builtin.Type.EnumField = undefined;
     var i: usize = 0;
     for (std.meta.declarations(c_ns)) |decl| {
-        if (!in_enum and std.mem.startsWith(u8, decl.name, first_item)) in_enum = true;
+        if (!in_enum and std.mem.eql(u8, decl.name, first_item)) in_enum = true;
         if (in_enum) {
             fields[i] = .{
                 .name = decl.name,
@@ -523,7 +524,7 @@ fn deriveZigEnum(comptime T: type, comptime c_ns: type, comptime first_item: []c
             };
             i += 1;
         }
-        if (in_enum and std.mem.startsWith(u8, decl.name, last_item)) in_enum = false;
+        if (in_enum and std.mem.eql(u8, decl.name, last_item)) in_enum = false;
     }
     return @Type(.{
         .@"enum" = .{
