@@ -15,6 +15,7 @@
 #else
     #include <unistd.h>
     #include <sys/stat.h>
+    #include <sys/time.h>
     #include <dirent.h>
     #include <fcntl.h>
 #endif
@@ -128,6 +129,19 @@ typedef struct {
 
 typedef struct {
     int32_t fd;
+    struct timeval tv[2];
+} syscall_futimes;
+
+typedef struct {
+    int32_t dirfd;
+    const char *path;
+    uint32_t path_len;
+    bool follow_symlink;
+    struct timeval tv[2];
+} syscall_utimes;
+
+typedef struct {
+    int32_t fd;
     uint32_t flags;
 } syscall_fdstat_get;
 
@@ -163,6 +177,8 @@ typedef union  {
     syscall_tell tell;
     syscall_fstat fstat;
     syscall_stat stat;
+    syscall_futimes futimes;
+    syscall_utimes utimes;
     syscall_fdstat_get fdstat_get;
     syscall_advise advise;
     syscall_allocate allocate;

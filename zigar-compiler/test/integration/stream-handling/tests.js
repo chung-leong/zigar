@@ -486,6 +486,64 @@ export function addTests(importModule, options) {
         'atime = 999,0',
       ]);
     })
+    it('should set access and last modified time of an opened file using posix function', async function() {
+      this.timeout(0);
+      const { __zigar, setTimes } = await importTest('set-times-of-opened-file-with-posix-function');
+      const array = new Uint8Array(17);
+      __zigar.on('open', () => {
+        return array;
+      });
+      let event;
+      __zigar.on('set_times', (evt) => {
+        event = evt;
+        return true;
+      })
+      setTimes('/world/hello.txt', 123, 456);
+      expect(event).to.eql({
+        parent: null,
+        path: 'world/hello.txt',
+        target: array,
+        times: { atime: 123000025000n, mtime: 456000055000n },
+        flags: {},
+      });
+      __zigar.on('set_times', (evt) => {
+        return false;
+      })
+      expect(() => setTimes('/world/hello.txt', 123, 456)).to.throw(Error)
+        .with.property('message', 'Unable to set times');
+    })
+    it('should set access and last modified time of a file by using posix function', async function() {
+      this.timeout(0);
+      const { __zigar, setTimes, setLinkTimes } = await importTest('set-times-of-file-by-path-with-posix-function');
+      let event;
+      __zigar.on('set_times', (evt) => {
+        event = evt;
+        return true;
+      });
+      setTimes('/world/hello.txt', 123, 456);
+      expect(event).to.eql({
+        parent: null,
+        path: 'world/hello.txt',
+        times: { atime: 123000025000n, mtime: 456000055000n },
+        flags: { symlinkFollow: true }
+      });
+      __zigar.on('set_times', (evt) => {
+        return false;
+      })
+      expect(() => setTimes('/world/hello.txt', 123, 456)).to.throw(Error)
+        .with.property('message', 'Unable to set times');
+      __zigar.on('set_times', (evt) => {
+        event = evt;
+        return true;
+      });
+      setLinkTimes('/world/hello.txt', 123, 456);
+      expect(event).to.eql({
+        parent: null,
+        path: 'world/hello.txt',
+        times: { atime: 123000025000n, mtime: 456000055000n },
+        flags: {}
+      });
+    })
     it('should print directory contents', async function() {
       this.timeout(0);
       const { print } = await importTest('read-directory');

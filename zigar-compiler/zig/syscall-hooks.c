@@ -153,6 +153,37 @@ static int redirect_stat(int dirfd, const char* path, bool follow_symlink, struc
     return 0;
 }
 
+static int redirect_futimes(int fd, const struct timeval tv[2], error_callback error_cb) {
+    syscall_struct call;
+    call.futex_handle = 0;
+    call.cmd = fd_filestat_set_times;
+    call.u.futimes.fd = fd;
+    memcpy(&call.u.futimes.tv, tv, sizeof(struct timeval) * 2);
+    int err = redirect_syscall(&call);
+    if (err) {
+        error_cb(err);
+        return -1;
+    }   
+    return 0;
+}
+
+static int redirect_utimes(int dirfd, const char* path, bool follow_symlink, const struct timeval tv[2], error_callback error_cb) {
+    syscall_struct call;
+    call.futex_handle = 0;
+    call.cmd = path_filestat_set_times;
+    call.u.utimes.dirfd = dirfd;
+    call.u.utimes.path = path;
+    call.u.utimes.path_len = strlen(path);
+    call.u.utimes.follow_symlink = follow_symlink;
+    memcpy(&call.u.utimes.tv, tv, sizeof(struct timeval) * 2);
+    int err = redirect_syscall(&call);
+    if (err) {
+        error_cb(err);
+        return -1;
+    }   
+    return 0;
+}
+
 static int redirect_fcntl(int fd, int op, int arg, error_callback error_cb) {
     syscall_struct call;
     call.futex_handle = 0;
@@ -565,6 +596,27 @@ static int lxstat_hook(int ver, const char *path, struct stat *buf) {
     return lstat(path, buf);
 }
 
+static int futimes_hook(int fd, const struct timeval tv[2]) {
+    if (is_applicable_handle(fd)) {
+        return redirect_futimes(fd, tv, set_errno);
+    }
+    return futimes(fd, tv);
+}
+
+static int utimes_hook(const char *path, const struct timeval tv[2]) {
+    if (is_redirecting(mask_set_times)) {
+        return redirect_utimes(-1, path, true, tv, set_errno);
+    }
+    return utimes(path, tv);
+}
+
+static int lutimes_hook(const char *path, const struct timeval tv[2]) {
+    if (is_redirecting(mask_set_times)) {
+        return redirect_utimes(-1, path, false, tv, set_errno);
+    }
+    return utimes(path, tv);
+}
+
 static int fcntl_hook(int fd, int op, int arg) {
     if (is_applicable_handle(fd)) {
         return redirect_fcntl(fd, op, arg, set_errno);
@@ -760,6 +812,9 @@ hook hooks[] = {
     { "__xstat",                    xstat_hook },
     { "lstat",                      lstat_hook },
     { "__lxstat",                   lxstat_hook },
+    { "futimes",                    futimes_hook },
+    { "utimes",                     utimes_hook },
+    { "lutimes",                    lutimes_hook },
     { "fcntl",                      fcntl_hook },
     { "posix_fadvise",              posix_fadvise_hook },
     { "fallocate",                  fallocate_hook },
