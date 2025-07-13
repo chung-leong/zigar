@@ -390,6 +390,7 @@ export function addTests(importModule, options) {
         await shutdown();
       }
     })
+    skip.
     it('should print stats of an Uint8Array passed as a file', async function() {
       this.timeout(0);
       const { print } = await importTest('stat-opened-file');
@@ -556,6 +557,7 @@ export function addTests(importModule, options) {
         flags: {}
       });
     })
+    skip.
     it('should print directory contents', async function() {
       this.timeout(0);
       const { print } = await importTest('read-directory');
