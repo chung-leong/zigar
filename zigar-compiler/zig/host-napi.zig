@@ -354,7 +354,7 @@ fn destroyJsThunk(
     return .SUCCESS;
 }
 
-fn redirectSyscall(call: *Syscall) callconv(.C) E {
+fn redirectSyscall(call: *Syscall) callconv(.C) std.posix.E {
     const mt, const in_main_thread = getMainThread() catch return .FAULT;
     const md = mt.module_data;
     return imports.handle_syscall(md, call, in_main_thread);
@@ -403,7 +403,7 @@ const Imports = extern struct {
     enable_multithread: *const fn (*ModuleHost, bool) callconv(.C) E,
     disable_multithread: *const fn (*ModuleHost, bool) callconv(.C) E,
     handle_jscall: *const fn (*ModuleHost, *Jscall, bool) callconv(.C) E,
-    handle_syscall: *const fn (*ModuleHost, *Syscall, bool) callconv(.C) E,
+    handle_syscall: *const fn (*ModuleHost, *Syscall, bool) callconv(.C) std.posix.E,
     release_function: *const fn (*ModuleHost, usize, bool) callconv(.C) E,
 };
 

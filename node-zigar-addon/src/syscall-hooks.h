@@ -25,6 +25,7 @@
 typedef struct {
     uint64_t signature;
     int32_t  fd;
+    uint16_t error;
 } redirected_FILE;
 
 typedef struct {

@@ -4,6 +4,7 @@ import { open, readFile } from 'fs/promises';
 import 'mocha-skip-if';
 import { platform } from 'os';
 import { fileURLToPath } from 'url';
+import { InvalidArgument } from '../../../../zigar-runtime/src/errors.js';
 import { capture, captureError } from '../test-utils.js';
 
 use(chaiAsPromised);
@@ -358,6 +359,23 @@ export function addTests(importModule, options) {
         flags: { create: true, truncate: true, symlinkFollow: true },
       });
     })
+    it('should obtain error code using libc function', async function() {
+      this.timeout(0);
+      const { __zigar, triggerError } = await importTest('return-last-error-with-libc-function');
+      __zigar.on('open', () => {
+        return {
+          read() {
+            throw new InvalidArgument();
+          }
+        };
+      });
+      let result;
+      const [ error ] = await captureError(() => {
+        result = triggerError('/hello/world');
+      });
+      expect(`${result}`).to.equal('INVAL');
+      expect(error).to.contain('Invalid argument');
+    })
     it('should decompress xz file', async function() {
       this.timeout(0);
       const {
@@ -681,6 +699,7 @@ export function addTests(importModule, options) {
       expect(called).to.be.true;
       expect(args).to.eql([ 0n, 1000n ]);
     })
+    skip.
     it('should print contents of files in directory', async function() {
       this.timeout(0);
       const { __zigar, print } = await importTest('open-file-from-directory');

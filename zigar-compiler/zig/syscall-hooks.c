@@ -408,7 +408,12 @@ static int close_hook(int fd) {
     if (is_applicable_handle(fd)) {
         uint16_t err;
         redirect_close(fd, &err);
-        return (!err) ? 0 : -1;
+        if (err) {
+            return 0;
+        } else {
+            errno = err;
+            return -1;
+        }
     }
     return close(fd);
 }
@@ -419,7 +424,12 @@ static int fclose_hook(FILE *s) {
         uint16_t err;
         redirect_close(file->fd, &err);
         free(file);
-        return (!err) ? 0 : EOF;
+        if (err) {
+            return 0;
+        } else {
+            errno = file->error = err;
+            return EOF;
+        }
     }
     return fclose(s);
 }
@@ -449,7 +459,7 @@ static size_t fread_hook(void* buffer, size_t size, size_t n, FILE* s) {
         if (!err) {
             return (read == count) ? n : read / size;
         } else {
-            errno = err;
+            errno = file->error = err;
             return -1;
         }
     }
@@ -481,7 +491,7 @@ static size_t fwrite_hook(const void* buffer, size_t size, size_t n, FILE* s) {
         if (!err) {
             return (written == count) ? n : written / size;
         } else {
-            errno = err;
+            errno = file->error = err;
             return -1;
         }
 
@@ -496,7 +506,12 @@ static int fputs_hook(const char* t, FILE* s) {
         ssize_t written;
         uint16_t err;
         redirect_write(file->fd, t, len, &written, &err);
-        return (!err) ? written : -1;
+        if (!err) {
+            return written;
+        } else {
+            errno = file->error = err;
+            return -1;
+        }
     }
     return fputs(t, s);
 }
@@ -532,7 +547,7 @@ static int fputc_hook(int c, FILE* s) {
         if (!err) {
             return written;
         } else {
-            errno = err;
+            errno = file->error = err;
             return -1;
         }
     }
@@ -552,7 +567,7 @@ static int vfprintf_hook(FILE* s, const char* f, va_list arg) {
         if (!err) {
             return written;
         } else {
-            errno = err;
+            errno = file->error = err;
             return -1;
         }
     }
@@ -582,6 +597,23 @@ static int printf_hook(const char* f, ...) {
 static void perror_hook(const char* s) {
     printf_hook("%s: %s", s, strerror(errno));
 }
+
+static int ferror_hook(FILE* s) {
+    if (is_redirected_object(s)) {
+        redirected_FILE* file = (redirected_FILE*) s;
+        return file->error;
+    }
+    return ferror(s);
+}
+
+static void clearerr_hook(FILE* s) {
+    if (is_redirected_object(s)) {
+        redirected_FILE* file = (redirected_FILE*) s;
+        file->error = 0;
+        return;
+    }
+    clearerr(s);
+}   
 
 static off_t lseek_hook(int fd, off_t offset, int whence) {
     if (is_applicable_handle(fd)) {
@@ -622,7 +654,7 @@ static int fseek_hook(FILE* s, long offset, int whence) {
         if (!err) {
             return position;
         } else {
-            errno = err;
+            errno = file->error = err;
             return -1;
         }
     }
@@ -638,7 +670,7 @@ static int ftell_hook(FILE* s) {
         if (!err) {
             return position;
         } else {
-            errno = err;
+            errno = file->error = err;
             return -1;
         }
     }
@@ -994,7 +1026,7 @@ hook hooks[] = {
     { "openat64",                   openat64_hook },
     { "close",                      close_hook },
     { "read",                       read_hook },
-    { "write",                      write_hook },
+    // { "write",                      write_hook },
     { "lseek",                      lseek_hook },
     { "lseek64",                    lseek64_hook },
     { "fstat",                      fstat_hook },
@@ -1033,11 +1065,13 @@ hook hooks[] = {
     { "fputc",                      fputc_hook },
     { "putc",                       fputc_hook },
     { "putchar",                    putchar_hook },
-    { "vfprintf",                   vfprintf_hook },
-    { "vprintf",                    vprintf_hook },
-    { "fprintf",                    fprintf_hook },
+    // { "vfprintf",                   vfprintf_hook },
+    // { "vprintf",                    vprintf_hook },
+    // { "fprintf",                    fprintf_hook },
     { "printf",                     printf_hook },
     { "perror",                     perror_hook },
+    { "ferror",                     ferror_hook },
+    { "clearerr",                   clearerr_hook },
 #if defined(_WIN32)
     { "__stdio_common_vfprintf",    stdio_common_vfprintf_hook },
 #elif defined(__GLIBC__)
