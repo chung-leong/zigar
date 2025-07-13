@@ -90,6 +90,26 @@ static void redirect_vfprintf(int fd, const char* f, va_list arg, ssize_t* writt
     }
 }
 
+#if defined(_STDC_WANT_LIB_EXT1_) 
+static void redirect_vfprintf_s(int fd, const char* f, va_list arg, ssize_t* written, uint16_t* error_no) {
+    va_list arg_copy;
+    va_copy(arg_copy, arg);
+    char fixed_buffer[1024];
+    char* buffer = fixed_buffer;
+    int len = vsnprintf_s(fixed_buffer, sizeof(fixed_buffer), f, arg_copy);
+    bool too_large = len + 1 > sizeof(fixed_buffer);
+    if (too_large) {
+        va_copy(arg_copy, arg);
+        buffer = malloc(len + 1);
+        vsnprintf_s(buffer, len + 1, f, arg_copy);
+    }
+    redirect_write(fd, buffer, len, written, error_no);
+    if (too_large) {
+        free(buffer);
+    }
+}
+#endif
+
 static void redirect_seek(int fd, off_t offset, int whence, off64_t* pos, uint16_t* error_no) {
     syscall_struct call;
     call.futex_handle = 0;
@@ -596,6 +616,44 @@ static int printf_hook(const char* f, ...) {
     va_end(argptr);
     return n;
 }
+
+#if defined(_STDC_WANT_LIB_EXT1_) 
+static int vfprintf_s_hook(FILE* s, const char* f, va_list arg) {
+    if (is_redirected_object(s)) {
+        redirected_FILE* file = (redirected_FILE*) s;
+        ssize_t written;
+        uint16_t err;
+        redirect_vfprintf_s(file->fd, f, arg, &written, &err);
+        if (!err) {
+            return written;
+        } else {
+            errno = file->error = err;
+            return -1;
+        }
+    }
+    return vfprintf_s(s, f, arg);
+}
+
+static int vprintf_s_hook(const char* f, va_list arg) {
+    return vfprintf_s_hook(stdout, f, arg);
+}
+
+static int fprintf_s_hook(FILE* s, const char* f, ...) {
+    va_list argptr;
+    va_start(argptr, f);
+    int n = vfprintf_s_hook(s, f, argptr);
+    va_end(argptr);
+    return n;
+}
+
+static int printf_s_hook(const char* f, ...) {
+    va_list argptr;
+    va_start(argptr, f);
+    int n = vfprintf_s_hook(stdout, f, argptr);
+    va_end(argptr);
+    return n;
+}
+#endif
 
 static void perror_hook(const char* s) {
     printf_hook("%s: %s", s, strerror(errno));
@@ -1113,6 +1171,12 @@ hook hooks[] = {
     { "perror",                     perror_hook },
     { "ferror",                     ferror_hook },
     { "clearerr",                   clearerr_hook },    
+#if defined(_STDC_WANT_LIB_EXT1_) 
+    { "vfprintf_s",                 vfprintf_s_hook },
+    { "vprintf_s",                  vprintf_s_hook },
+    { "fprintf_s",                  fprintf_s_hook },
+    { "printf_s",                   printf_s_hook },
+#endif
 #if defined(_WIN32)
     { "__stdio_common_vfprintf",    stdio_common_vfprintf_hook },
 #elif defined(__GLIBC__)
