@@ -1,9 +1,13 @@
 import { expect } from 'chai';
+import { arch } from 'os';
 
 import {
-    load,
-    resolve,
+  load,
+  resolve,
 } from '../dist/index.js';
+
+process.env.BITS = [ 'arm', 'mips', 'mipsel', 'ppc', 'x86', ].includes(arch()) ? 32 : 64;
+process.env.TARGET = 'node';
 
 describe('Loader', function() {
   describe('resolve', function() {

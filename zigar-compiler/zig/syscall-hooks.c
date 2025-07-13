@@ -651,12 +651,11 @@ static off64_t lseek64_hook(int fd, off64_t offset, int whence) {
 static int fseek_hook(FILE* s, long offset, int whence) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
-        off64_t position;
+        off64_t pos;
         uint16_t err;
-        redirect_seek(file->fd, offset, whence, &position, &err);
+        redirect_seek(file->fd, offset, whence, &pos, &err);
         if (!err) {
-            file->eof = false;
-            return position;
+            return pos;
         } else {
             errno = file->error = err;
             return -1;
@@ -668,11 +667,11 @@ static int fseek_hook(FILE* s, long offset, int whence) {
 static int ftell_hook(FILE* s) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
-        off64_t position;
+        off64_t pos;
         uint16_t err;
-        redirect_seek(file->fd, 0, SEEK_CUR, &position, &err);
+        redirect_seek(file->fd, 0, SEEK_CUR, &pos, &err);
         if (!err) {
-            return position;
+            return pos;
         } else {
             errno = file->error = err;
             return -1;
@@ -687,11 +686,11 @@ static int fgetpos_hook(FILE* s, fpos_t* pos) {
         uint16_t err;
         redirect_getpos(file->fd, pos, &err);
         if (!err) {
-
+            return 0;
         } else {
-
+            errno = file->error = err;
+            return -1;
         }
-        return (!err) ? 0 : -1;
     }
     return fsetpos(s, pos);
 }
@@ -710,6 +709,23 @@ static int fsetpos_hook(FILE* s, const fpos_t* pos) {
         }
     }
     return fsetpos(s, pos);
+}
+
+static void rewind_hook(FILE* s) {
+    if (is_redirected_object(s)) {
+        redirected_FILE* file = (redirected_FILE*) s;
+        uint16_t err;
+        off64_t pos;
+        redirect_seek(file->fd, 0, SEEK_SET, &pos, &err);
+        if (!err) {
+            file->error = 0;
+            file->eof = false;
+        } else {
+            errno = file->error = err;
+        }
+        return;
+    }
+    rewind(s);
 }
 
 static int feof_hook(FILE* s) {
@@ -1083,6 +1099,7 @@ hook hooks[] = {
     { "ftell",                      ftell_hook },
     { "fgetpos",                    fgetpos_hook },
     { "fsetpos",                    fsetpos_hook },
+    { "rewind",                     rewind_hook },
     { "feof",                       feof_hook },
     { "fputs",                      fputs_hook },
     { "puts",                       puts_hook },

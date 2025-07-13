@@ -5,6 +5,7 @@ import 'mocha-skip-if';
 import { platform } from 'os';
 import { fileURLToPath } from 'url';
 import { InvalidArgument } from '../../../../zigar-runtime/src/errors.js';
+import { usize } from '../../../../zigar-runtime/src/utils.js';
 import { capture, captureError } from '../test-utils.js';
 
 use(chaiAsPromised);
@@ -384,6 +385,15 @@ export function addTests(importModule, options) {
       });
       const result = detectEOF('/hello/world');
       expect(result).to.be.true;
+    })
+    it('should rewind file using libc function', async function() {
+      this.timeout(0);
+      const { __zigar, getStartingPos } = await importTest('rewind-file-with-libc-function');
+      __zigar.on('open', () => {
+        return new Uint8Array(256);
+      });
+      const result = getStartingPos('/hello/world');
+      expect(result).to.equal(usize(0));
     })
     it('should decompress xz file', async function() {
       this.timeout(0);
