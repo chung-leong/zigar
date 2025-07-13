@@ -457,6 +457,9 @@ static size_t fread_hook(void* buffer, size_t size, size_t n, FILE* s) {
         size_t count = size * n;
         redirect_read(file->fd, buffer, count, &read, &err);
         if (!err) {
+            if (read == 0) {
+                file->eof = true;
+            }
             return (read == count) ? n : read / size;
         } else {
             errno = file->error = err;
@@ -652,6 +655,7 @@ static int fseek_hook(FILE* s, long offset, int whence) {
         uint16_t err;
         redirect_seek(file->fd, offset, whence, &position, &err);
         if (!err) {
+            file->eof = false;
             return position;
         } else {
             errno = file->error = err;
@@ -682,6 +686,11 @@ static int fgetpos_hook(FILE* s, fpos_t* pos) {
         redirected_FILE* file = (redirected_FILE*) s;
         uint16_t err;
         redirect_getpos(file->fd, pos, &err);
+        if (!err) {
+
+        } else {
+
+        }
         return (!err) ? 0 : -1;
     }
     return fsetpos(s, pos);
@@ -692,9 +701,23 @@ static int fsetpos_hook(FILE* s, const fpos_t* pos) {
         redirected_FILE* file = (redirected_FILE*) s;
         uint16_t err;
         redirect_setpos(file->fd, pos, &err);
-        return (!err) ? 0 : -1;
+        if (!err) {
+            file->eof = false;
+            return 0;
+        } else {
+            errno = file->error = err;
+            return -1;
+        }
     }
     return fsetpos(s, pos);
+}
+
+static int feof_hook(FILE* s) {
+    if (is_redirected_object(s)) {
+        redirected_FILE* file = (redirected_FILE*) s;
+        return file->eof ? 1 : 0;
+    }
+    return feof(s);
 }
 
 static int fstat_hook(int fd, struct stat *buf) {
@@ -1026,7 +1049,7 @@ hook hooks[] = {
     { "openat64",                   openat64_hook },
     { "close",                      close_hook },
     { "read",                       read_hook },
-    // { "write",                      write_hook },
+    { "write",                      write_hook },
     { "lseek",                      lseek_hook },
     { "lseek64",                    lseek64_hook },
     { "fstat",                      fstat_hook },
@@ -1060,18 +1083,19 @@ hook hooks[] = {
     { "ftell",                      ftell_hook },
     { "fgetpos",                    fgetpos_hook },
     { "fsetpos",                    fsetpos_hook },
+    { "feof",                       feof_hook },
     { "fputs",                      fputs_hook },
     { "puts",                       puts_hook },
     { "fputc",                      fputc_hook },
     { "putc",                       fputc_hook },
     { "putchar",                    putchar_hook },
-    // { "vfprintf",                   vfprintf_hook },
-    // { "vprintf",                    vprintf_hook },
-    // { "fprintf",                    fprintf_hook },
+    { "vfprintf",                   vfprintf_hook },
+    { "vprintf",                    vprintf_hook },
+    { "fprintf",                    fprintf_hook },
     { "printf",                     printf_hook },
     { "perror",                     perror_hook },
     { "ferror",                     ferror_hook },
-    { "clearerr",                   clearerr_hook },
+    { "clearerr",                   clearerr_hook },    
 #if defined(_WIN32)
     { "__stdio_common_vfprintf",    stdio_common_vfprintf_hook },
 #elif defined(__GLIBC__)

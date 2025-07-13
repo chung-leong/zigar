@@ -376,6 +376,15 @@ export function addTests(importModule, options) {
       expect(`${result}`).to.equal('INVAL');
       expect(error).to.contain('Invalid argument');
     })
+    it('should detect end of file using libc function', async function() {
+      this.timeout(0);
+      const { __zigar, detectEOF } = await importTest('detect-end-of-file-with-libc-function');
+      __zigar.on('open', () => {
+        return new Uint8Array(256);
+      });
+      const result = detectEOF('/hello/world');
+      expect(result).to.be.true;
+    })
     it('should decompress xz file', async function() {
       this.timeout(0);
       const {
