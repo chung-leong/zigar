@@ -472,6 +472,35 @@ export function addTests(importModule, options) {
       expect(check(dir, 'readable.txt', { write: true })).to.be.false;
       expect(check(dir, 'subdirectory', { execute: true })).to.be.true;
     })
+    it('should open file in directory using posix function', async function() {
+      this.timeout(0);
+      const { __zigar, write } = await importTest('open-file-at-dir-with-posix-function');
+      const array = [];
+      const map = new Map([
+        [ 'writable.txt', array ],
+      ])
+      let event;
+      __zigar.on('open', (evt) => {
+        const { path, parent } = event = evt;
+        if (!parent) {
+          if (path === 'world') return map;
+        } else {
+          return parent.get(path);
+        }
+      });
+      const dir = '/world';
+      const text = 'Hello world!!!';
+      const len = write(dir, '/writable.txt', text);
+      const output = await new Blob(array).text();
+      expect(output).to.equal(text);    
+      expect(len).to.equal(text.length);
+      expect(event).to.eql({
+        parent: map,
+        path: 'writable.txt',
+        rights: { write: true },
+        flags: { symlinkFollow: true }
+      });
+    })
     it('should decompress xz file', async function() {
       this.timeout(0);
       const {
