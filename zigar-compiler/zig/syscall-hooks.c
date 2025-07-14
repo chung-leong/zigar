@@ -189,11 +189,11 @@ static void redirect_futimes(int fd, const struct timeval tv[2], uint16_t* error
     call.futex_handle = 0;
     call.cmd = cmd_futimes;
     call.u.futimes.fd = fd;
-    memcpy(&call.u.futimes.tv, tv, sizeof(struct timeval) * 2);
+    memcpy(&call.u.futimes.times, tv, sizeof(struct timeval) * 2);
     *error_no = redirect_syscall(&call);
 }
 
-static bool redirect_utimes(int dirfd, const char* path, uint32_t flags, const struct timeval tv[2], uint16_t* error_no) {
+static bool redirect_utimes(int dirfd, const char* path, uint32_t flags, const struct timespec times[2], uint16_t* error_no) {
     syscall_struct call;
     call.futex_handle = 0;
     call.cmd = cmd_utimes;
@@ -201,7 +201,7 @@ static bool redirect_utimes(int dirfd, const char* path, uint32_t flags, const s
     call.u.utimes.path = path;
     call.u.utimes.path_len = strlen(path);
     call.u.utimes.flags = flags;
-    memcpy(&call.u.utimes.tv, tv, sizeof(struct timeval) * 2);
+    memcpy(&call.u.utimes.times, times, sizeof(struct timeval) * 2);
     if (!(*error_no = redirect_syscall(&call))) {
         return true;
     } else {
@@ -844,8 +844,8 @@ static int feof_hook(FILE* s) {
     return feof_orig(s);
 }
 
-static int (*fstat_orig)(int fd, struct stat *buf);
-static int fstat_hook(int fd, struct stat *buf) {
+static int (*fstat_orig)(int fd, struct stat* buf);
+static int fstat_hook(int fd, struct stat* buf) {
     if (is_applicable_handle(fd)) {
         uint16_t err;
         redirect_fstat(fd, buf, &err);
@@ -859,8 +859,8 @@ static int fstat_hook(int fd, struct stat *buf) {
     return fstat_orig(fd, buf);
 }
 
-static int (*fxstat_orig)(int ver, int fd, struct stat *buf);
-static int fxstat_hook(int ver, int fd, struct stat *buf) {
+static int (*fxstat_orig)(int ver, int fd, struct stat* buf);
+static int fxstat_hook(int ver, int fd, struct stat* buf) {
     if (is_applicable_handle(fd)) {
         uint16_t err;
         redirect_fstat(fd, buf, &err);
@@ -874,8 +874,8 @@ static int fxstat_hook(int ver, int fd, struct stat *buf) {
     return fxstat_orig(ver, fd, buf);
 }
 
-static int (*stat_orig)(const char *path, struct stat *buf);
-static int stat_hook(const char *path, struct stat *buf) {
+static int (*stat_orig)(const char* path, struct stat* buf);
+static int stat_hook(const char *path, struct stat* buf) {
     if (is_redirecting(mask_stat)) {
         uint16_t err;
         redirect_stat(-1, path, AT_SYMLINK_FOLLOW, buf, &err);
@@ -886,8 +886,8 @@ static int stat_hook(const char *path, struct stat *buf) {
     return stat_orig(path, buf);
 }
 
-static int (*xstat_orig)(int ver, const char *path, struct stat *buf);
-static int xstat_hook(int ver, const char *path, struct stat *buf) {
+static int (*xstat_orig)(int ver, const char* path, struct stat* buf);
+static int xstat_hook(int ver, const char* path, struct stat* buf) {
     if (is_redirecting(mask_stat)) {
         uint16_t err;
         redirect_stat(-1, path, AT_SYMLINK_FOLLOW, buf, &err);
@@ -901,8 +901,8 @@ static int xstat_hook(int ver, const char *path, struct stat *buf) {
     return xstat_orig(ver, path, buf);
 }
 
-static int (*lstat_orig)(const char *path, struct stat *buf);
-static int lstat_hook(const char *path, struct stat *buf) {
+static int (*lstat_orig)(const char* path, struct stat* buf);
+static int lstat_hook(const char *path, struct stat* buf) {
     if (is_redirecting(mask_stat)) {
         uint16_t err;
         redirect_stat(-1, path, AT_SYMLINK_NOFOLLOW, buf, &err);
@@ -916,7 +916,7 @@ static int lstat_hook(const char *path, struct stat *buf) {
     return lstat_orig(path, buf);
 }
 
-static int (*lxstat_orig)(int ver, const char *path, struct stat *buf);
+static int (*lxstat_orig)(int ver, const char* path, struct stat* buf);
 static int lxstat_hook(int ver, const char *path, struct stat *buf) {
     if (is_redirecting(mask_stat)) {
         uint16_t err;
@@ -932,8 +932,8 @@ static int lxstat_hook(int ver, const char *path, struct stat *buf) {
 }
 
 #ifdef __USE_ATFILE
-static int (*fstatat_orig)(int dirfd, const char *path, struct stat *buf, int flags);
-static int fstatat_hook(int dirfd, const char *path, struct stat *buf, int flags) {
+static int (*fstatat_orig)(int dirfd, const char* path, struct stat* buf, int flags);
+static int fstatat_hook(int dirfd, const char* path, struct stat* buf, int flags) {
     if (is_applicable_handle(dirfd) || (dirfd == -100 && is_redirecting(mask_stat))) {
         uint16_t err;
         redirect_stat(-1, path, flags, buf, &err);
@@ -947,7 +947,7 @@ static int fstatat_hook(int dirfd, const char *path, struct stat *buf, int flags
     return fstatat_orig(dirfd, path, buf, flags);
 }
 
-static int (*fxstatat_orig)(int ver, int dirfd, const char *path, struct stat *buf, int flags);
+static int (*fxstatat_orig)(int ver, int dirfd, const char* path, struct stat* buf, int flags);
 static int fxstatat_hook(int ver, int dirfd, const char *path, struct stat *buf, int flags) {
     if (is_applicable_handle(dirfd) || (dirfd == -100 && is_redirecting(mask_stat))) {
         uint16_t err;
@@ -967,7 +967,11 @@ static int (*futimes_orig)(int fd, const struct timeval tv[2]);
 static int futimes_hook(int fd, const struct timeval tv[2]) {
     if (is_applicable_handle(fd)) {
         uint16_t err;
-        redirect_futimes(fd, tv, &err);
+        struct timespec times[2] = {
+            { tv[0].tv_sec, tv[0].tv_usec * 1000 },
+            { tv[1].tv_sec, tv[1].tv_usec * 1000 },
+        };
+        redirect_futimes(fd, times, &err);
         if (!err) {
             return 0;
         } else {
@@ -978,11 +982,15 @@ static int futimes_hook(int fd, const struct timeval tv[2]) {
     return futimes_orig(fd, tv);
 }
 
-static int (*utimes_orig)(const char *path, const struct timeval tv[2]);
-static int utimes_hook(const char *path, const struct timeval tv[2]) {
+static int (*utimes_orig)(const char* path, const struct timeval tv[2]);
+static int utimes_hook(const char* path, const struct timeval tv[2]) {
     if (is_redirecting(mask_set_times)) {
         uint16_t err;
-        redirect_utimes(-1, path, AT_SYMLINK_FOLLOW, tv, &err);
+        struct timespec times[2] = {
+            { tv[0].tv_sec, tv[0].tv_usec * 1000 },
+            { tv[1].tv_sec, tv[1].tv_usec * 1000 },
+        };
+        redirect_utimes(-1, path, AT_SYMLINK_FOLLOW, times, &err);
         if (!err) {
             return 0;
         } else {
@@ -993,11 +1001,15 @@ static int utimes_hook(const char *path, const struct timeval tv[2]) {
     return utimes_orig(path, tv);
 }
 
-static int (*lutimes_orig)(const char *path, const struct timeval tv[2]);
-static int lutimes_hook(const char *path, const struct timeval tv[2]) {
+static int (*lutimes_orig)(const char* path, const struct timeval tv[2]);
+static int lutimes_hook(const char* path, const struct timeval tv[2]) {
     if (is_redirecting(mask_set_times)) {
         uint16_t err;
-        redirect_utimes(-1, path, AT_SYMLINK_NOFOLLOW, tv, &err);
+        struct timespec times[2] = {
+            { tv[0].tv_sec, tv[0].tv_usec * 1000 },
+            { tv[1].tv_sec, tv[1].tv_usec * 1000 },
+        };
+        redirect_utimes(-1, path, AT_SYMLINK_NOFOLLOW, times, &err);
         if (!err) {
             return 0;
         } else {
@@ -1007,6 +1019,37 @@ static int lutimes_hook(const char *path, const struct timeval tv[2]) {
     }
     return lutimes_orig(path, tv);
 }
+
+static int (*futimens_orig)(int fd, const struct timespec times[2]);
+static int futimens_hook(int fd, const struct timespec times[2]) {
+    if (is_applicable_handle(fd)) {
+        uint16_t err;
+        redirect_futimes(fd, times, &err);
+        if (!err) {
+            return 0;
+        } else {
+            errno = err;
+            return -1;
+        }
+    }
+    return futimens_orig(fd, times);
+}
+
+#ifdef __USE_ATFILE
+static int (*untimensat_orig)(int dirfd, const char* path, const struct timespec times[2], int flags);
+static int untimensat_hook(int dirfd, const char* path, const struct timespec times[2], int flags) {
+    if (is_redirecting(mask_set_times)) {
+        uint16_t err;
+        redirect_utimes(-1, path, AT_SYMLINK_NOFOLLOW, times, &err);
+        if (!err) {
+            return 0;
+        } else {
+            errno = err;
+            return -1;
+        }
+    }
+}
+#endif
 
 static int (*access_orig)(const char* path, int mode);
 static int access_hook(const char* path, int mode) {
@@ -1326,6 +1369,7 @@ hook hooks[] = {
     { "futimes",                    futimes_hook,                   (void**) &futimes_orig },
     { "utimes",                     utimes_hook,                    (void**) &utimes_orig },
     { "lutimes",                    lutimes_hook,                   (void**) &lutimes_orig },
+    { "futimens",                   futimens_hook,                  (void**) &futimens_orig },
     { "fcntl",                      fcntl_hook,                     (void**) &fcntl_orig },
     { "posix_fadvise",              posix_fadvise_hook,             (void**) &posix_fadvise_orig },
     { "fallocate",                  fallocate_hook,                 (void**) &fallocate_orig },
@@ -1345,6 +1389,7 @@ hook hooks[] = {
     { "faccessat",                  faccessat_hook,                 (void**) &faccessat_orig },
     { "mkdirat",                    mkdirat_hook,                   (void**) &mkdirat_orig },
     { "unlinkat",                   unlinkat_hook,                  (void**) &unlinkat_orig },
+    { "utimensat",                  untimensat_hook,                (void**) &untimensat_orig },
 #endif
     { "fopen",                      fopen_hook,                     (void**) &fopen_orig },
     { "fclose",                     fclose_hook,                    (void**) &fclose_orig },

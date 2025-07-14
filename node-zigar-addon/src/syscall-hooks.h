@@ -143,7 +143,7 @@ typedef struct {
 
 typedef struct {
     int32_t fd;
-    struct timeval tv[2];
+    struct timespec times[2];
 } syscall_futimes;
 
 typedef struct {
@@ -151,7 +151,7 @@ typedef struct {
     const char *path;
     uint32_t path_len;
     uint32_t flags;
-    struct timeval tv[2];
+    struct timespec times[2];
 } syscall_utimes;
 
 typedef struct {

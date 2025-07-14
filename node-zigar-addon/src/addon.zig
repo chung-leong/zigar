@@ -1048,8 +1048,8 @@ const ModuleHost = struct {
         const env = self.env;
         const flags: std.os.wasi.fstflags_t = .{ .ATIM = true, .MTIM = true };
         var times: [2]u64 = undefined;
-        for (args.tv, 0..) |t, index| {
-            times[index] = @as(u64, @intCast(t.tv_sec)) * 1_000_000_000 + @as(u64, @intCast(t.tv_usec)) * 1_000;
+        for (args.times, 0..) |t, index| {
+            times[index] = @as(u64, @intCast(t.tv_sec)) * 1_000_000_000 + @as(u64, @intCast(t.tv_nsec));
         }
         if (@hasField(@TypeOf(args.*), "fd")) {
             return try self.callPosixFunction(self.js.fd_filestat_set_times, &.{
