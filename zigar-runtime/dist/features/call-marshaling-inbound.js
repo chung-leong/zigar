@@ -155,7 +155,7 @@ var callMarshalingInbound = mixin({
       }
     };
   },
-  handleJsCall(id, argAddress, argSize, canWait) {
+  handleJscall(id, argAddress, argSize, canWait) {
     const dv = this.obtainZigView(argAddress, argSize, false);
     const caller = this.jsFunctionCallerMap.get(id);
     return (caller) ? caller(dv, canWait) : PosixError.EFAULT;
@@ -180,7 +180,7 @@ var callMarshalingInbound = mixin({
   },
   ...({
     exports: {
-      handleJsCall: { argType: 'iiib', returnType: 'i' },
+      handleJscall: { argType: 'iiib', returnType: 'i' },
       releaseFunction: { argType: 'i' },
     },
     imports: {

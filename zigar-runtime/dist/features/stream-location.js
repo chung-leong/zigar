@@ -1,12 +1,12 @@
-import { Descriptor } from '../constants.js';
+import { PosixDescriptor } from '../constants.js';
 import { mixin } from '../environment.js';
 import { decodeText } from '../utils.js';
 
 var streamLocation = mixin({
   init() {
-    this.streamLocationMap = new Map([ [ Descriptor.root, '' ]]);
+    this.streamLocationMap = new Map([ [ PosixDescriptor.root, '' ]]);
   },
-  obtainStreamLocation(dirfd, pathAddress, pathLen) {
+  obtainStreamLocation(dirFd, pathAddress, pathLen) {
     const pathArray = this.obtainZigArray(pathAddress, pathLen);
     let path = decodeText(pathArray).trim();
     if (path.endsWith('/')) {
@@ -21,7 +21,7 @@ var streamLocation = mixin({
         list.push(part);
       }
     }
-    const stream = this.getStream(dirfd);
+    const stream = this.getStream(dirFd);
     return { parent: stream.valueOf(), path: list.join('/') };
   },
   getStreamLocation(fd) {

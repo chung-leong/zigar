@@ -8,7 +8,7 @@ var fdAllocate = mixin({
       const stream = this.getStream(fd);
       return stream.allocate(offset, len);
     });
-  }
+  },
 });
 
 export { fdAllocate as default };

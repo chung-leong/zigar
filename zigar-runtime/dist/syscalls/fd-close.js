@@ -8,7 +8,7 @@ var fdClose = mixin({
       this.setStreamLocation?.(fd); 
       return this.destroyStreamHandle(fd);
     });
-  }
+  },
 });
 
 export { fdClose as default };

@@ -375,13 +375,14 @@ fn setSyscallMask(mask: u32, set: bool) callconv(.C) E {
     return .SUCCESS;
 }
 
-fn getSyscallHook(name: [*:0]const u8, dest: **const anyopaque) callconv(.C) E {
+fn getSyscallHook(name: [*:0]const u8, dest: **const Hook) callconv(.C) E {
     const fn_ptr = find_hook(name) orelse return .NOENT;
     dest.* = fn_ptr;
     return .SUCCESS;
 }
 
-extern fn find_hook([*:0]const u8) callconv(.C) ?*const anyopaque;
+const Hook = opaque {};
+extern fn find_hook([*:0]const u8) callconv(.C) ?*const Hook;
 comptime {
     @export(&redirectSyscall, .{ .name = "redirect_syscall", .visibility = .hidden });
     @export(&isRedirecting, .{ .name = "is_redirecting", .visibility = .hidden });
@@ -417,7 +418,7 @@ const Exports = extern struct {
     run_variadic_thunk: *const fn (usize, usize, usize, usize, usize) callconv(.C) E,
     create_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
     destroy_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
-    get_syscall_hook: *const fn ([*:0]const u8, **const anyopaque) callconv(.C) E,
+    get_syscall_hook: *const fn ([*:0]const u8, **const Hook) callconv(.C) E,
     set_syscall_mask: *const fn (u32, bool) callconv(.C) E,
 };
 

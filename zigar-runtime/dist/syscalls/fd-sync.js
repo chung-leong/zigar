@@ -8,7 +8,7 @@ var fdSync = mixin({
       const stream = this.getStream(fd);
       return stream.sync?.();
     });
-  }
+  },
 });
 
 export { fdSync as default };

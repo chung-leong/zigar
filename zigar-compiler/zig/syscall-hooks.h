@@ -40,6 +40,7 @@ typedef struct {
 } redirected_DIR;
 
 typedef enum {
+    cmd_access,
     cmd_advise,
     cmd_allocate,
     cmd_close,
@@ -76,9 +77,14 @@ typedef struct {
     int32_t dirfd;
     const char *path;
     uint32_t path_len;
+    uint32_t mode;
+} syscall_access;
+
+typedef struct {
+    int32_t dirfd;
+    const char *path;
+    uint32_t path_len;
     uint32_t oflags;
-    bool directory;
-    bool follow_symlink;
     int32_t fd;
 } syscall_open;
 
@@ -179,6 +185,7 @@ typedef struct {
 } syscall_readdir;
 
 typedef union  {
+    syscall_access access;
     syscall_advise advise;
     syscall_allocate allocate;
     syscall_close close;

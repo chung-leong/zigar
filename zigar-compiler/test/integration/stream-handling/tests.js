@@ -395,6 +395,83 @@ export function addTests(importModule, options) {
       const result = getStartingPos('/hello/world');
       expect(result).to.equal(usize(0));
     })
+    it('should check file access using posix function', async function() {
+      this.timeout(0);
+      const { __zigar, check } = await importTest('check-access-with-posix-function');
+      let event;
+      __zigar.on('open', (evt) => {
+        const { path } = event = evt;
+        switch(path) {
+          case 'readable.txt': 
+            return new Uint8Array(256);
+          case 'writable.txt':
+            return [];
+          case 'readwritable.txt':
+            return {
+              read() {},
+              write() {},
+            };
+          case 'subdirectory':
+            return new Map();
+        }
+      });
+      expect(check('/readable.txt', { read: true })).to.be.true;
+      expect(event).to.eql({
+        parent: null,
+        path: 'readable.txt',
+        rights: { read: true },
+        flags: { symlinkFollow: true, accessCheck: true }
+      });
+      expect(check('/readable.txt', { write: true })).to.be.false;
+      expect(check('/writable.txt', { write: true })).to.be.true;
+      expect(event).to.eql({
+        parent: null,
+        path: 'writable.txt',
+        rights: { write: true },
+        flags: { symlinkFollow: true, accessCheck: true }
+      });
+      expect(check('/writable.txt', { write: true, read: true })).to.be.false;
+      expect(check('/readwritable.txt', { write: true, read: true })).to.be.true;
+      expect(event).to.eql({
+        parent: null,
+        path: 'readwritable.txt',
+        rights: { read: true, write: true },
+        flags: { symlinkFollow: true, accessCheck: true }
+      });
+      expect(check('/readwritable.txt', { execute: true, read: true })).to.be.false;
+      expect(check('/subdirectory', { execute: true })).to.be.true;
+    })
+    it('should check access of file in directory using posix function', async function() {
+      this.timeout(0);
+      const { __zigar, check } = await importTest('check-access-at-dir-with-posix-function');
+      const uint8Array = new Uint8Array(256);
+      const array = [];
+      const submap = new Map();
+      const map = new Map([
+        [ 'readable.txt', uint8Array ],
+        [ 'writable.txt', array ],
+        [ 'subdirectory', submap ],
+      ])
+      let event;
+      __zigar.on('open', (evt) => {
+        const { path, parent } = event = evt;
+        if (!parent) {
+          if (path === 'world') return map;
+        } else {
+          return parent.get(path);
+        }
+      });
+      const dir = '/world';
+      expect(check(dir, 'readable.txt', { read: true })).to.be.true;
+      expect(event).to.eql({
+        parent: map,
+        path: 'readable.txt',
+        rights: { read: true },
+        flags: { symlinkFollow: true, accessCheck: true }
+      });
+      expect(check(dir, 'readable.txt', { write: true })).to.be.false;
+      expect(check(dir, 'subdirectory', { execute: true })).to.be.true;
+    })
     it('should decompress xz file', async function() {
       this.timeout(0);
       const {

@@ -2,7 +2,7 @@ import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 
 var fdPrestatDirName = mixin({
-  fdPrestatDirName(fd, path_address, path_len) {
+  fdPrestatDirName(fd, pathAddress, pathLen) {
     return PosixError.NONE;
   }
 }) ;

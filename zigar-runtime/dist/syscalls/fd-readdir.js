@@ -1,4 +1,4 @@
-import { PosixError, Descriptor, PosixFileType } from '../constants.js';
+import { PosixError, PosixDescriptor, PosixFileType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, InvalidEnumValue } from '../errors.js';
 import { createView, encodeText, decodeEnum } from '../utils.js';
@@ -30,7 +30,7 @@ var fdReaddir = mixin({
       const dv = createView(bufLen);
       let remaining = bufLen;
       let p = 0;
-      const defaultEntryCount = (fd !== Descriptor.root) ? 2 : 1;
+      const defaultEntryCount = (fd !== PosixDescriptor.root) ? 2 : 1;
       if (context) {
         let { iterator, entry } = context;
         if (entry) {

@@ -1,18 +1,14 @@
-import { PosixError } from '../constants.js';
+import { PosixError, PosixLookupFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError } from '../errors.js';
 import { decodeFlags } from '../utils.js';
 import './copy-stat.js';
 
-const LookupFlag = {
-  symlinkFollow: 1 << 0,
-};
-
 var pathFilestatGet = mixin({
-  pathFilestatGet(dirfd, lookupFlags, pathAddress, pathLen, bufAddress, canWait) {
+  pathFilestatGet(dirFd, lFlags, pathAddress, pathLen, bufAddress, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const loc = this.obtainStreamLocation(dirfd, pathAddress, pathLen);
-      const flags = decodeFlags(lookupFlags, LookupFlag);
+      const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
+      const flags = decodeFlags(lFlags, PosixLookupFlag);
       return this.triggerEvent('stat', { ...loc, flags }, PosixError.ENOENT);
     }, (stat) => this.copyStat(bufAddress, stat));
   },

@@ -107,6 +107,7 @@ export { default as SyscallFdSeek } from './syscalls/fd-seek.js';
 export { default as SyscallFdSync } from './syscalls/fd-sync.js';
 export { default as SyscallFdTell } from './syscalls/fd-tell.js';
 export { default as SyscallFdWrite } from './syscalls/fd-write.js';
+export { default as SyscallPathAccess } from './syscalls/path-access.js';
 export { default as SyscallPathCreateDirectory } from './syscalls/path-create-directory.js';
 export { default as SyscallPathFilestatGet } from './syscalls/path-filestat-get.js';
 export { default as SyscallPathFilestatSetTimes } from './syscalls/path-filestat-set-times.js';

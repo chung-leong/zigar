@@ -52,6 +52,7 @@ const ModuleHost = struct {
         fd_tell: ?Ref = null,
         fd_write: ?Ref = null,
         fd_write1: ?Ref = null,
+        path_access: ?Ref = null,
         path_create_directory: ?Ref = null,
         path_filestat_get: ?Ref = null,
         path_filestat_set_times: ?Ref = null,
@@ -243,9 +244,9 @@ const ModuleHost = struct {
         self.library = lib;
     }
 
-    pub fn getSyscallHook(self: *@This(), name: [*:0]const u8) ?*const anyopaque {
+    pub fn getSyscallHook(self: *@This(), name: [*:0]const u8) ?*const Hook {
         const module = self.module.?;
-        var ptr: *const anyopaque = undefined;
+        var ptr: *const Hook = undefined;
         if (module.exports.get_syscall_hook(name, &ptr) != .SUCCESS) return null;
         return ptr;
     }
@@ -822,6 +823,7 @@ const ModuleHost = struct {
                 else => |handle| try env.createUsize(handle),
             };
             const result: E = switch (call.cmd) {
+                .cmd_access => try self.handleAccess(futex, &call.u.access),
                 .cmd_open => try self.handleOpen(futex, &call.u.open),
                 .cmd_close => try self.handleClose(futex, &call.u.close),
                 .cmd_read => try self.handleRead(futex, &call.u.read),
@@ -875,21 +877,50 @@ const ModuleHost = struct {
         return try std.meta.intToEnum(E, error_code);
     }
 
-    fn handleOpen(self: *@This(), futex: Value, args: anytype) !E {
+    fn handleAccess(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
         const lflags: std.os.wasi.lookupflags_t = .{
-            .SYMLINK_FOLLOW = args.follow_symlink,
+            .SYMLINK_FOLLOW = true,
         };
+        const rights: std.os.wasi.rights_t = set: {
+            var r: std.os.wasi.rights_t = .{};
+            if (args.mode & std.posix.X_OK != 0) {
+                r.FD_READDIR = true;
+            } else {
+                if (args.mode & std.posix.R_OK != 0) {
+                    r.FD_READ = true;
+                }
+                if (args.mode & std.posix.W_OK != 0) {
+                    r.FD_WRITE = true;
+                }
+            }
+            break :set r;
+        };
+        return try self.callPosixFunction(self.js.path_access, &.{
+            try env.createInt32(args.dirfd),
+            try env.createUint32(@as(u32, @bitCast(lflags))),
+            try env.createUsize(@intFromPtr(args.path)),
+            try env.createUint32(args.path_len),
+            try env.createBigintUint64(@as(u64, @bitCast(rights))),
+            futex,
+        });
+    }
+
+    fn handleOpen(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
         const oflags_posix: std.posix.O = @bitCast(args.oflags);
+        const lflags: std.os.wasi.lookupflags_t = .{
+            .SYMLINK_FOLLOW = !oflags_posix.NOFOLLOW,
+        };
         const oflags: std.os.wasi.oflags_t = .{
             .CREAT = oflags_posix.CREAT,
-            .DIRECTORY = args.directory,
+            .DIRECTORY = oflags_posix.DIRECTORY,
             .EXCL = oflags_posix.EXCL,
             .TRUNC = oflags_posix.TRUNC,
         };
         const rights: std.os.wasi.rights_t = set: {
             var r: std.os.wasi.rights_t = .{};
-            if (args.directory) {
+            if (oflags_posix.DIRECTORY) {
                 r.FD_READDIR = true;
             } else {
                 if (oflags_posix.ACCMODE == .RDWR) {
@@ -1388,7 +1419,7 @@ const Exports = extern struct {
     run_variadic_thunk: *const fn (usize, usize, usize, usize, usize) callconv(.C) E,
     create_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
     destroy_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
-    get_syscall_hook: *const fn ([*:0]const u8, **const anyopaque) callconv(.C) E,
+    get_syscall_hook: *const fn ([*:0]const u8, **const Hook) callconv(.C) E,
     set_syscall_mask: *const fn (u32, bool) callconv(.C) E,
 };
 const Module = extern struct {
@@ -1413,6 +1444,11 @@ const MemoryAttributes = packed struct {
     is_const: bool = false,
     is_comptime: bool = false,
     _: u14 = 0,
+};
+const Hook = struct {
+    name: [*:0]u8,
+    handler: *const anyopaque,
+    original: **const anyopaque,
 };
 const Futex = struct {
     const initial_value = 0xffff_ffff;

@@ -10,7 +10,7 @@ pub const Syscall = extern struct {
     u: h.syscall_union,
     futex_handle: usize,
 
-    pub const Command: type = deriveZigEnum(u8, h, "cmd_advise", "cmd_write");
+    pub const Command: type = deriveZigEnum(u8, h, "cmd_access", "cmd_write");
 };
 pub const Mask: type = deriveZigEnum(u8, h, "mask_mkdir", "mask_unlink");
 pub const DT: type = deriveZigEnum(u8, h, "DT_UNKNOWN", "DT_WHT");
@@ -102,7 +102,7 @@ const linux = struct {
                 const hook = host.getSyscallHook(symbol_name) orelse continue;
                 const address = base_address + r.r_offset;
                 const ptr: **const anyopaque = @ptrFromInt(address);
-                if (ptr.* != hook) {
+                if (ptr.* != hook.handler) {
                     // get protection flags from segment load commands
                     var read_only = false;
                     for (segments) |seg| {
@@ -110,15 +110,16 @@ const linux = struct {
                             read_only = (seg.p_flags & elf.PF_W) == 0;
                         }
                     }
+                    hook.original.* = ptr.*;
                     if (read_only) {
                         const page_address = std.mem.alignBackward(usize, address, page_size);
                         const page_ptr: [*]align(std.heap.page_size_min) u8 = @ptrFromInt(page_address);
                         const page = page_ptr[0..page_size];
                         try std.posix.mprotect(page, std.posix.PROT.READ | std.posix.PROT.WRITE);
                         defer std.posix.mprotect(page, std.posix.PROT.READ) catch {};
-                        ptr.* = hook;
+                        ptr.* = hook.handler;
                     } else {
-                        ptr.* = hook;
+                        ptr.* = hook.handler;
                     }
                 }
             }
@@ -381,7 +382,8 @@ const darwin = struct {
                         } else continue;
                         const address = base_address + ds.offset + current_offset;
                         const ptr: **const anyopaque = @ptrFromInt(address);
-                        if (ptr.* != hook) {
+                        if (ptr.* != hook.handler) {
+                            ptr.original.* = ptr.*;
                             if (ds.read_only) {
                                 // disable write protection
                                 const page_address = std.mem.alignBackward(usize, address, page_size);
@@ -389,9 +391,9 @@ const darwin = struct {
                                 const page = page_ptr[0..page_size];
                                 try std.posix.mprotect(page, std.posix.PROT.READ | std.posix.PROT.WRITE);
                                 defer std.posix.mprotect(page, std.posix.PROT.READ) catch {};
-                                ptr.* = hook;
+                                ptr.* = hook.handler;
                             } else {
-                                ptr.* = hook;
+                                ptr.* = hook.handler;
                             }
                         }
                     },
@@ -467,7 +469,8 @@ const windows = struct {
                 const name: [*:0]const u8 = @ptrCast(&ibm_ptr.Name);
                 const hook = host.getSyscallHook(name) orelse continue;
                 const ptr: **const anyopaque = @ptrCast(&iat_ptr.u1.Function);
-                if (ptr.* != hook) {
+                if (ptr.* != hook.handler) {
+                    hook.original.* = ptr.*;
                     // make page writable
                     var mbi: std.os.windows.MEMORY_BASIC_INFORMATION = undefined;
                     var protect: u32 = std.os.windows.PAGE_READWRITE;
@@ -475,7 +478,7 @@ const windows = struct {
                     try std.os.windows.VirtualProtect(mbi.BaseAddress, mbi.RegionSize, protect, &mbi.Protect);
                     defer std.os.windows.VirtualProtect(mbi.BaseAddress, mbi.RegionSize, mbi.Protect, &protect) catch {};
                     // replace with hook
-                    ptr.* = hook;
+                    ptr.* = hook.handler;
                 }
             }
         }

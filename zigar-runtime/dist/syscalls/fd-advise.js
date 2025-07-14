@@ -18,7 +18,7 @@ var fdAdvise = mixin({
       const adviceKeys = Object.keys(Advice);
       return stream.advise?.(offset, len, adviceKeys[advice]);
     });
-  }
+  },
 });
 
 export { fdAdvise as default };
