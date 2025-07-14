@@ -168,14 +168,14 @@ static void redirect_fstat(int fd, struct stat *buf, uint16_t* error_no) {
     *error_no = redirect_syscall(&call);
 }
 
-static bool redirect_stat(int dirfd, const char* path, bool follow_symlink, struct stat *buf, uint16_t* error_no) {
+static bool redirect_stat(int dirfd, const char* path, uint32_t flags, struct stat *buf, uint16_t* error_no) {
     syscall_struct call;
     call.futex_handle = 0;
     call.cmd = cmd_stat;
     call.u.stat.dirfd = check_dirfd(dirfd);
     call.u.stat.path = path;
     call.u.stat.path_len = strlen(path);
-    call.u.stat.follow_symlink = follow_symlink;
+    call.u.stat.flags = flags;
     call.u.stat.stat = buf;
     if(!(*error_no = redirect_syscall(&call))) {
         return true;
@@ -193,14 +193,14 @@ static void redirect_futimes(int fd, const struct timeval tv[2], uint16_t* error
     *error_no = redirect_syscall(&call);
 }
 
-static bool redirect_utimes(int dirfd, const char* path, bool follow_symlink, const struct timeval tv[2], uint16_t* error_no) {
+static bool redirect_utimes(int dirfd, const char* path, uint32_t flags, const struct timeval tv[2], uint16_t* error_no) {
     syscall_struct call;
     call.futex_handle = 0;
     call.cmd = cmd_utimes;
     call.u.utimes.dirfd = check_dirfd(dirfd);
     call.u.utimes.path = path;
     call.u.utimes.path_len = strlen(path);
-    call.u.utimes.follow_symlink = follow_symlink;
+    call.u.utimes.flags = flags;
     memcpy(&call.u.utimes.tv, tv, sizeof(struct timeval) * 2);
     if (!(*error_no = redirect_syscall(&call))) {
         return true;
@@ -309,7 +309,7 @@ static void redirect_readdir(redirected_DIR* d, struct dirent** entry, uint16_t*
     }
 }
 
-int (*open_orig)(const char *path, int oflag, ...);
+static int (*open_orig)(const char *path, int oflag, ...);
 static int open_hook(const char *path, int oflag, ...) {
     mode_t mode = 0;
     if (oflag | O_CREAT) {
@@ -333,7 +333,7 @@ static int open_hook(const char *path, int oflag, ...) {
     return (oflag | O_CREAT) ? open_orig(path, oflag, mode) : open_orig(path, oflag);
 }
 
-int (*open64_orig)(const char *path, int oflag, ...);
+static int (*open64_orig)(const char *path, int oflag, ...);
 static int open64_hook(const char *path, int oflag, ...) {
     mode_t mode = 0;
     if (oflag | O_CREAT) {
@@ -358,7 +358,7 @@ static int open64_hook(const char *path, int oflag, ...) {
 }
 
 #ifdef __USE_ATFILE
-int (*openat_orig)(int dirfd, const char *path, int oflag, ...);
+static int (*openat_orig)(int dirfd, const char *path, int oflag, ...);
 static int openat_hook(int dirfd, const char *path, int oflag, ...) {
     mode_t mode = 0;
     if (oflag | O_CREAT) {
@@ -383,7 +383,7 @@ static int openat_hook(int dirfd, const char *path, int oflag, ...) {
 }
 #endif
 
-int (*openat64_orig)(int dirfd, const char *path, int oflag, ...);
+static int (*openat64_orig)(int dirfd, const char *path, int oflag, ...);
 static int openat64_hook(int dirfd, const char *path, int oflag, ...) {
     mode_t mode = 0;
     if (oflag | O_CREAT) {
@@ -407,7 +407,7 @@ static int openat64_hook(int dirfd, const char *path, int oflag, ...) {
     return (oflag | O_CREAT) ? openat64_orig(dirfd, path, oflag, mode) : openat64_orig(dirfd, path, oflag);
 }
 
-FILE* (*fopen_orig)(const char *path, const char *mode);
+static FILE* (*fopen_orig)(const char *path, const char *mode);
 static FILE* fopen_hook(const char *path, const char *mode) {
     if (is_redirecting(mask_open)) {
         int oflags = 0;
@@ -445,7 +445,7 @@ static FILE* fopen_hook(const char *path, const char *mode) {
     return fopen_orig(path, mode);
 }
 
-int (*close_orig)(int fd);
+static int (*close_orig)(int fd);
 static int close_hook(int fd) {
     if (is_applicable_handle(fd)) {
         uint16_t err;
@@ -460,7 +460,7 @@ static int close_hook(int fd) {
     return close_orig(fd);
 }
 
-int (*fclose_orig)(FILE *s);
+static int (*fclose_orig)(FILE *s);
 static int fclose_hook(FILE *s) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
@@ -477,7 +477,7 @@ static int fclose_hook(FILE *s) {
     return fclose_orig(s);
 }
 
-ssize_t (*read_orig)(int fd, void* buffer, size_t len);
+static ssize_t (*read_orig)(int fd, void* buffer, size_t len);
 static ssize_t read_hook(int fd, void* buffer, size_t len) {
     if (is_applicable_handle(fd)) {
         ssize_t read;
@@ -493,7 +493,7 @@ static ssize_t read_hook(int fd, void* buffer, size_t len) {
     return read_orig(fd, buffer, len);
 }
 
-size_t (*fread_orig)(void* buffer, size_t size, size_t n, FILE* s);
+static size_t (*fread_orig)(void* buffer, size_t size, size_t n, FILE* s);
 static size_t fread_hook(void* buffer, size_t size, size_t n, FILE* s) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
@@ -514,7 +514,7 @@ static size_t fread_hook(void* buffer, size_t size, size_t n, FILE* s) {
     return fread_orig(buffer, size, n, s);
 }
 
-ssize_t (*write_orig)(int fd, const void* buffer, size_t len);
+static ssize_t (*write_orig)(int fd, const void* buffer, size_t len);
 static ssize_t write_hook(int fd, const void* buffer, size_t len) {
     if (is_applicable_handle(fd)) {
         ssize_t read;
@@ -530,7 +530,7 @@ static ssize_t write_hook(int fd, const void* buffer, size_t len) {
     return write_orig(fd, buffer, len);
 }
 
-size_t (*fwrite_orig)(const void* buffer, size_t size, size_t n, FILE* s);
+static size_t (*fwrite_orig)(const void* buffer, size_t size, size_t n, FILE* s);
 static size_t fwrite_hook(const void* buffer, size_t size, size_t n, FILE* s) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
@@ -549,7 +549,7 @@ static size_t fwrite_hook(const void* buffer, size_t size, size_t n, FILE* s) {
     return fwrite_orig(buffer, size, n, s);
 }
 
-int (*fputs_orig)(const char* t, FILE* s);
+static int (*fputs_orig)(const char* t, FILE* s);
 static int fputs_hook(const char* t, FILE* s) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
@@ -567,7 +567,7 @@ static int fputs_hook(const char* t, FILE* s) {
     return fputs_orig(t, s);
 }
 
-int (*puts_orig)(const char* t);
+static int (*puts_orig)(const char* t);
 static int puts_hook(const char* t) {
     if (is_applicable_handle(1)) {
         size_t len = strlen(t);
@@ -589,7 +589,7 @@ static int puts_hook(const char* t) {
     return puts_orig(t);
 }
 
-int (*fputc_orig)(int c, FILE* s);
+static int (*fputc_orig)(int c, FILE* s);
 static int fputc_hook(int c, FILE* s) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
@@ -607,12 +607,12 @@ static int fputc_hook(int c, FILE* s) {
     return fputc_orig(c, s);
 }
 
-int (*putchar_orig)(int c);
+static int (*putchar_orig)(int c);
 static int putchar_hook(int c) {
     return fputc_hook(c, stdout);
 }
 
-int (*vfprintf_orig)(FILE* s, const char* f, va_list arg);
+static int (*vfprintf_orig)(FILE* s, const char* f, va_list arg);
 static int vfprintf_hook(FILE* s, const char* f, va_list arg) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
@@ -629,12 +629,12 @@ static int vfprintf_hook(FILE* s, const char* f, va_list arg) {
     return vfprintf_orig(s, f, arg);
 }
 
-int (*vprintf_orig)(const char* f, va_list arg);
+static int (*vprintf_orig)(const char* f, va_list arg);
 static int vprintf_hook(const char* f, va_list arg) {
     return vfprintf_hook(stdout, f, arg);
 }
 
-int (*fprintf_orig)(FILE* s, const char* f, ...);
+static int (*fprintf_orig)(FILE* s, const char* f, ...);
 static int fprintf_hook(FILE* s, const char* f, ...) {
     va_list argptr;
     va_start(argptr, f);
@@ -643,7 +643,7 @@ static int fprintf_hook(FILE* s, const char* f, ...) {
     return n;
 }
 
-int (*printf_orig)(const char* f, ...);
+static int (*printf_orig)(const char* f, ...);
 static int printf_hook(const char* f, ...) {
     va_list argptr;
     va_start(argptr, f);
@@ -653,7 +653,7 @@ static int printf_hook(const char* f, ...) {
 }
 
 #if defined(_STDC_WANT_LIB_EXT1_) 
-int (*vfprintf_s_orig)(FILE* s, const char* f, va_list arg)
+static int (*vfprintf_s_orig)(FILE* s, const char* f, va_list arg)
 static int vfprintf_s_hook(FILE* s, const char* f, va_list arg) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
@@ -670,12 +670,12 @@ static int vfprintf_s_hook(FILE* s, const char* f, va_list arg) {
     return vfprintf_s_orig(s, f, arg);
 }
 
-int (*vprintf_s_orig)(const char* f, va_list arg);
+static int (*vprintf_s_orig)(const char* f, va_list arg);
 static int vprintf_s_hook(const char* f, va_list arg) {
     return vfprintf_s_hook(stdout, f, arg);
 }
 
-int (*fprintf_s_orig)(FILE* s, const char* f, ...)
+static int (*fprintf_s_orig)(FILE* s, const char* f, ...)
 static int fprintf_s_hook(FILE* s, const char* f, ...) {
     va_list argptr;
     va_start(argptr, f);
@@ -684,7 +684,7 @@ static int fprintf_s_hook(FILE* s, const char* f, ...) {
     return n;
 }
 
-int (*printf_s_hook)(const char* f, ...);
+static int (*printf_s_hook)(const char* f, ...);
 static int printf_s_hook(const char* f, ...) {
     va_list argptr;
     va_start(argptr, f);
@@ -694,12 +694,12 @@ static int printf_s_hook(const char* f, ...) {
 }
 #endif
 
-void (*perror_orig)(const char* s);
+static void (*perror_orig)(const char* s);
 static void perror_hook(const char* s) {
     printf_hook("%s: %s", s, strerror(errno));
 }
 
-int (*ferror_orig)(FILE* s);
+static int (*ferror_orig)(FILE* s);
 static int ferror_hook(FILE* s) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
@@ -708,7 +708,7 @@ static int ferror_hook(FILE* s) {
     return ferror_orig(s);
 }
 
-void (*clearerr_orig)(FILE* s);
+static void (*clearerr_orig)(FILE* s);
 static void clearerr_hook(FILE* s) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
@@ -718,7 +718,7 @@ static void clearerr_hook(FILE* s) {
     clearerr_orig(s);
 }   
 
-off_t (*lseek_orig)(int fd, off_t offset, int whence);
+static off_t (*lseek_orig)(int fd, off_t offset, int whence);
 static off_t lseek_hook(int fd, off_t offset, int whence) {
     if (is_applicable_handle(fd)) {
         off64_t position;
@@ -734,7 +734,7 @@ static off_t lseek_hook(int fd, off_t offset, int whence) {
     return lseek_orig(fd, offset, whence);
 }
 
-off64_t (*lseek64_orig)(int fd, off64_t offset, int whence);
+static off64_t (*lseek64_orig)(int fd, off64_t offset, int whence);
 static off64_t lseek64_hook(int fd, off64_t offset, int whence) {
     if (is_applicable_handle(fd)) {
         off64_t position;
@@ -750,7 +750,7 @@ static off64_t lseek64_hook(int fd, off64_t offset, int whence) {
     return lseek64_orig(fd, offset, whence);
 }
 
-int (*fseek_orig)(FILE* s, long offset, int whence);
+static int (*fseek_orig)(FILE* s, long offset, int whence);
 static int fseek_hook(FILE* s, long offset, int whence) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
@@ -767,7 +767,7 @@ static int fseek_hook(FILE* s, long offset, int whence) {
     return fseek_orig(s, offset, whence);
 }
 
-int (*ftell_orig)(FILE* s);
+static int (*ftell_orig)(FILE* s);
 static int ftell_hook(FILE* s) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
@@ -784,7 +784,7 @@ static int ftell_hook(FILE* s) {
     return ftell_orig(s);
 }
 
-int (*fgetpos_orig)(FILE* s, fpos_t* pos);
+static int (*fgetpos_orig)(FILE* s, fpos_t* pos);
 static int fgetpos_hook(FILE* s, fpos_t* pos) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
@@ -800,7 +800,7 @@ static int fgetpos_hook(FILE* s, fpos_t* pos) {
     return fgetpos_orig(s, pos);
 }
 
-int (*fsetpos_orig)(FILE* s, const fpos_t* pos);
+static int (*fsetpos_orig)(FILE* s, const fpos_t* pos);
 static int fsetpos_hook(FILE* s, const fpos_t* pos) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
@@ -817,7 +817,7 @@ static int fsetpos_hook(FILE* s, const fpos_t* pos) {
     return fsetpos_orig(s, pos);
 }
 
-void (*rewind_orig)(FILE* s);
+static void (*rewind_orig)(FILE* s);
 static void rewind_hook(FILE* s) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
@@ -835,7 +835,7 @@ static void rewind_hook(FILE* s) {
     rewind_orig(s);
 }
 
-int (*feof_orig)(FILE* s);
+static int (*feof_orig)(FILE* s);
 static int feof_hook(FILE* s) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
@@ -844,7 +844,7 @@ static int feof_hook(FILE* s) {
     return feof_orig(s);
 }
 
-int (*fstat_orig)(int fd, struct stat *buf);
+static int (*fstat_orig)(int fd, struct stat *buf);
 static int fstat_hook(int fd, struct stat *buf) {
     if (is_applicable_handle(fd)) {
         uint16_t err;
@@ -859,7 +859,7 @@ static int fstat_hook(int fd, struct stat *buf) {
     return fstat_orig(fd, buf);
 }
 
-int (*fxstat_orig)(int ver, int fd, struct stat *buf);
+static int (*fxstat_orig)(int ver, int fd, struct stat *buf);
 static int fxstat_hook(int ver, int fd, struct stat *buf) {
     if (is_applicable_handle(fd)) {
         uint16_t err;
@@ -874,11 +874,11 @@ static int fxstat_hook(int ver, int fd, struct stat *buf) {
     return fxstat_orig(ver, fd, buf);
 }
 
-int (*stat_orig)(const char *path, struct stat *buf);
+static int (*stat_orig)(const char *path, struct stat *buf);
 static int stat_hook(const char *path, struct stat *buf) {
     if (is_redirecting(mask_stat)) {
         uint16_t err;
-        redirect_stat(-1, path, true, buf, &err);
+        redirect_stat(-1, path, AT_SYMLINK_FOLLOW, buf, &err);
         if (!err) {
             return 0;
         }
@@ -886,29 +886,11 @@ static int stat_hook(const char *path, struct stat *buf) {
     return stat_orig(path, buf);
 }
 
-#ifdef __USE_ATFILE
-int (*fstatat_orig)(int dirfd, const char *path, struct stat *buf, int flags);
-static int fstatat_hook(int dirfd, const char *path, struct stat *buf, int flags) {
-    if (is_applicable_handle(dirfd) || (dirfd == -100 && is_redirecting(mask_stat))) {
-        uint16_t err;
-        bool follow_symlink = !!(flags & AT_SYMLINK_NOFOLLOW);
-        redirect_stat(-1, path, follow_symlink, buf, &err);
-        if (!err) {
-            return 0;
-        } else if (dirfd != -100) {
-            errno = err;
-            return -1;
-        }
-    }
-    return fstatat_orig(dirfd, path, buf, flags);
-}
-#endif
-
-int (*xstat_orig)(int ver, const char *path, struct stat *buf);
+static int (*xstat_orig)(int ver, const char *path, struct stat *buf);
 static int xstat_hook(int ver, const char *path, struct stat *buf) {
     if (is_redirecting(mask_stat)) {
         uint16_t err;
-        redirect_stat(-1, path, true, buf, &err);
+        redirect_stat(-1, path, AT_SYMLINK_FOLLOW, buf, &err);
         if (!err) {
             return 0;
         } else {
@@ -919,11 +901,11 @@ static int xstat_hook(int ver, const char *path, struct stat *buf) {
     return xstat_orig(ver, path, buf);
 }
 
-int (*lstat_orig)(const char *path, struct stat *buf);
+static int (*lstat_orig)(const char *path, struct stat *buf);
 static int lstat_hook(const char *path, struct stat *buf) {
     if (is_redirecting(mask_stat)) {
         uint16_t err;
-        redirect_stat(-1, path, false, buf, &err);
+        redirect_stat(-1, path, AT_SYMLINK_NOFOLLOW, buf, &err);
         if (!err) {
             return 0;
         } else {
@@ -934,11 +916,11 @@ static int lstat_hook(const char *path, struct stat *buf) {
     return lstat_orig(path, buf);
 }
 
-int (*lxstat_orig)(int ver, const char *path, struct stat *buf);
+static int (*lxstat_orig)(int ver, const char *path, struct stat *buf);
 static int lxstat_hook(int ver, const char *path, struct stat *buf) {
     if (is_redirecting(mask_stat)) {
         uint16_t err;
-        redirect_stat(-1, path, false, buf, &err);
+        redirect_stat(-1, path, AT_SYMLINK_NOFOLLOW, buf, &err);
         if (!err) {
             return 0;
         } else {
@@ -949,7 +931,39 @@ static int lxstat_hook(int ver, const char *path, struct stat *buf) {
     return lxstat_orig(ver, path, buf);
 }
 
-int (*futimes_orig)(int fd, const struct timeval tv[2]);
+#ifdef __USE_ATFILE
+static int (*fstatat_orig)(int dirfd, const char *path, struct stat *buf, int flags);
+static int fstatat_hook(int dirfd, const char *path, struct stat *buf, int flags) {
+    if (is_applicable_handle(dirfd) || (dirfd == -100 && is_redirecting(mask_stat))) {
+        uint16_t err;
+        redirect_stat(-1, path, flags, buf, &err);
+        if (!err) {
+            return 0;
+        } else if (dirfd != -100) {
+            errno = err;
+            return -1;
+        }
+    }
+    return fstatat_orig(dirfd, path, buf, flags);
+}
+
+static int (*fxstatat_orig)(int ver, int dirfd, const char *path, struct stat *buf, int flags);
+static int fxstatat_hook(int ver, int dirfd, const char *path, struct stat *buf, int flags) {
+    if (is_applicable_handle(dirfd) || (dirfd == -100 && is_redirecting(mask_stat))) {
+        uint16_t err;
+        redirect_stat(dirfd, path, flags, buf, &err);
+        if (!err) {
+            return 0;
+        } else if (dirfd != -100) {
+            errno = err;
+            return -1;
+        }
+    }
+    return fxstatat_orig(ver, dirfd, path, buf, flags);
+}
+#endif
+
+static int (*futimes_orig)(int fd, const struct timeval tv[2]);
 static int futimes_hook(int fd, const struct timeval tv[2]) {
     if (is_applicable_handle(fd)) {
         uint16_t err;
@@ -964,11 +978,11 @@ static int futimes_hook(int fd, const struct timeval tv[2]) {
     return futimes_orig(fd, tv);
 }
 
-int (*utimes_orig)(const char *path, const struct timeval tv[2]);
+static int (*utimes_orig)(const char *path, const struct timeval tv[2]);
 static int utimes_hook(const char *path, const struct timeval tv[2]) {
     if (is_redirecting(mask_set_times)) {
         uint16_t err;
-        redirect_utimes(-1, path, true, tv, &err);
+        redirect_utimes(-1, path, AT_SYMLINK_FOLLOW, tv, &err);
         if (!err) {
             return 0;
         } else {
@@ -979,11 +993,11 @@ static int utimes_hook(const char *path, const struct timeval tv[2]) {
     return utimes_orig(path, tv);
 }
 
-int (*lutimes_orig)(const char *path, const struct timeval tv[2]);
+static int (*lutimes_orig)(const char *path, const struct timeval tv[2]);
 static int lutimes_hook(const char *path, const struct timeval tv[2]) {
     if (is_redirecting(mask_set_times)) {
         uint16_t err;
-        redirect_utimes(-1, path, false, tv, &err);
+        redirect_utimes(-1, path, AT_SYMLINK_NOFOLLOW, tv, &err);
         if (!err) {
             return 0;
         } else {
@@ -994,7 +1008,7 @@ static int lutimes_hook(const char *path, const struct timeval tv[2]) {
     return lutimes_orig(path, tv);
 }
 
-int (*access_orig)(const char* path, int mode);
+static int (*access_orig)(const char* path, int mode);
 static int access_hook(const char* path, int mode) {
     if (is_redirecting(mask_open)) {
         uint16_t err;
@@ -1011,7 +1025,7 @@ static int access_hook(const char* path, int mode) {
 }
 
 #ifdef __USE_ATFILE
-int (*faccessat_orig)(int dirfd, const char* path, int type, int mode);
+static int (*faccessat_orig)(int dirfd, const char* path, int type, int mode);
 static int faccessat_hook(int dirfd, const char* path, int type, int mode) {
     if (is_redirecting(mask_open)) {
         uint16_t err;
@@ -1028,7 +1042,7 @@ static int faccessat_hook(int dirfd, const char* path, int type, int mode) {
 }
 #endif
  
-int (*fcntl_orig)(int fd, int op, int arg);
+static int (*fcntl_orig)(int fd, int op, int arg);
 static int fcntl_hook(int fd, int op, int arg) {
     if (is_applicable_handle(fd)) {
         uint16_t err;
@@ -1039,7 +1053,7 @@ static int fcntl_hook(int fd, int op, int arg) {
     return fcntl_orig(fd, op, arg);
 }
 
-int (*fsync_orig)(int fd);
+static int (*fsync_orig)(int fd);
 static int fsync_hook(int fd) {
     if (is_applicable_handle(fd)) {
         uint16_t err;
@@ -1049,7 +1063,7 @@ static int fsync_hook(int fd) {
     return fsync_orig(fd);
 }
 
-int (*fdatasync_orig)(int fd);
+static int (*fdatasync_orig)(int fd);
 static int fdatasync_hook(int fd) {
     if (is_applicable_handle(fd)) {
         uint16_t err;
@@ -1059,7 +1073,7 @@ static int fdatasync_hook(int fd) {
     return fdatasync_orig(fd);
 }
 
-int (*posix_fadvise_orig)(int fd, off_t offset, off_t size, int advice);
+static int (*posix_fadvise_orig)(int fd, off_t offset, off_t size, int advice);
 static int posix_fadvise_hook(int fd, off_t offset, off_t size, int advice) {
     if (is_applicable_handle(fd)) {
         uint16_t err;
@@ -1069,7 +1083,7 @@ static int posix_fadvise_hook(int fd, off_t offset, off_t size, int advice) {
     return posix_fadvise_orig(fd, offset, size, advice);
 }
 
-int (*fallocate_orig)(int fd, int mode, off_t offset, off_t size);
+static int (*fallocate_orig)(int fd, int mode, off_t offset, off_t size);
 static int fallocate_hook(int fd, int mode, off_t offset, off_t size) {
     if (is_applicable_handle(fd)) {
         uint16_t err;
@@ -1079,7 +1093,7 @@ static int fallocate_hook(int fd, int mode, off_t offset, off_t size) {
     return fallocate_orig(fd, mode, offset, size);
 }
 
-int (*mkdir_orig)(const char *path, mode_t mode);
+static int (*mkdir_orig)(const char *path, mode_t mode);
 static int mkdir_hook(const char *path, mode_t mode) {
     if (is_redirecting(mask_mkdir)) {
         uint16_t err;
@@ -1096,7 +1110,7 @@ static int mkdir_hook(const char *path, mode_t mode) {
 }
 
 #ifdef __USE_ATFILE
-int (*mkdirat_orig)(int dirfd, const char *path, mode_t mode);
+static int (*mkdirat_orig)(int dirfd, const char *path, mode_t mode);
 static int mkdirat_hook(int dirfd, const char *path, mode_t mode) {
     if (is_redirecting(mask_mkdir)) {
         uint16_t err;
@@ -1113,7 +1127,7 @@ static int mkdirat_hook(int dirfd, const char *path, mode_t mode) {
 }
 #endif
 
-int (*rmdir_orig)(const char *path);
+static int (*rmdir_orig)(const char *path);
 static int rmdir_hook(const char *path) {
     if (is_redirecting(mask_rmdir)) {
         uint16_t err;
@@ -1129,7 +1143,7 @@ static int rmdir_hook(const char *path) {
     return rmdir_orig(path);
 }
 
-int (*unlink_orig)(const char *path);
+static int (*unlink_orig)(const char *path);
 static int unlink_hook(const char *path) {
     if (is_redirecting(mask_unlink)) {
         uint16_t err;
@@ -1146,7 +1160,7 @@ static int unlink_hook(const char *path) {
 }
 
 #ifdef __USE_ATFILE
-int (*unlinkat_orig)(int dirfd, const char *path, int flags);
+static int (*unlinkat_orig)(int dirfd, const char *path, int flags);
 static int unlinkat_hook(int dirfd, const char *path, int flags) {
     if (is_redirecting(mask_unlink)) {
         uint16_t err;
@@ -1166,7 +1180,7 @@ static int unlinkat_hook(int dirfd, const char *path, int flags) {
 }
 #endif
 
-DIR* (*opendir_orig)(const char *name);
+static DIR* (*opendir_orig)(const char *name);
 static DIR* opendir_hook(const char *name) {
     if (is_redirecting(mask_open)) {
         uint16_t err;
@@ -1195,7 +1209,7 @@ static DIR* opendir_hook(const char *name) {
     return opendir_orig(name);
 }
 
-struct dirent* (*readdir_orig)(DIR *d);
+static struct dirent* (*readdir_orig)(DIR *d);
 static struct dirent* readdir_hook(DIR *d) {
     if (is_redirected_object(d)) {
         redirected_DIR* dir = (redirected_DIR*) d;
@@ -1212,7 +1226,7 @@ static struct dirent* readdir_hook(DIR *d) {
     return readdir_orig(d);
 }
 
-int (*closedir_orig)(DIR* d);
+static int (*closedir_orig)(DIR* d);
 static int closedir_hook(DIR* d) {
     if (is_redirected_object(d)) {
         redirected_DIR* dir = (redirected_DIR*) d;
@@ -1230,7 +1244,7 @@ static int closedir_hook(DIR* d) {
 }
 
 #if defined(_WIN32)
-BOOL WINAPI (*write_file_orig)(HANDLE handle, LPCVOID buffer, DWORD len, LPDWORD written, LPOVERLAPPED overlapped)
+static BOOL WINAPI (*write_file_orig)(HANDLE handle, LPCVOID buffer, DWORD len, LPDWORD written, LPOVERLAPPED overlapped)
 static BOOL WINAPI write_file_hook(HANDLE handle, LPCVOID buffer, DWORD len, LPDWORD written, LPOVERLAPPED overlapped) {
     // return value of zero means success
     if (is_applicable_handle(handle)) {
@@ -1245,7 +1259,7 @@ static BOOL WINAPI write_file_hook(HANDLE handle, LPCVOID buffer, DWORD len, LPD
     return write_file_orig(handle, buffer, len, written, overlapped);
 }
 
-int (*stdio_common_vfprintf_orig)(unsigned __int64 options, FILE* s, char const* f, _locale_t locale, va_list arg);
+static int (*stdio_common_vfprintf_orig)(unsigned __int64 options, FILE* s, char const* f, _locale_t locale, va_list arg);
 static int stdio_common_vfprintf_hook(unsigned __int64 options, FILE* s, char const* f, _locale_t locale, va_list arg) {
     if (is_redirected_object(s)) {
         redirected_FILE* file = (redirected_FILE*) s;
@@ -1254,17 +1268,17 @@ static int stdio_common_vfprintf_hook(unsigned __int64 options, FILE* s, char co
     return stdio_common_vfprintf_orig(options, s, f, locale, arg);
 }
 #elif defined(__GLIBC__)
-int (*vfprintf_chk_orig)(FILE* s, int flag, const char* f, va_list arg);
+static int (*vfprintf_chk_orig)(FILE* s, int flag, const char* f, va_list arg);
 static int vfprintf_chk_hook(FILE* s, int flag, const char* f, va_list arg) {
     return vfprintf_hook(s, f, arg);
 }
 
-int (*vprintf_chk_orig)(int flag, const char* f, va_list arg);
+static int (*vprintf_chk_orig)(int flag, const char* f, va_list arg);
 static int vprintf_chk_hook(int flag, const char* f, va_list arg) {
     return vfprintf_chk_hook(stdout, flag, f, arg);
 }
 
-int (*fprintf_chk_orig)(FILE* s, int flag, const char* f, ...);
+static int (*fprintf_chk_orig)(FILE* s, int flag, const char* f, ...);
 static int fprintf_chk_hook(FILE* s, int flag, const char* f, ...) {
     va_list argptr;
     va_start(argptr, f);
@@ -1273,7 +1287,7 @@ static int fprintf_chk_hook(FILE* s, int flag, const char* f, ...) {
     return n;
 }
 
-int (*printf_chk_orig)(int flag, const char* f, ...);
+static int (*printf_chk_orig)(int flag, const char* f, ...);
 static int printf_chk_hook(int flag, const char* f, ...) {
     va_list argptr;
     va_start(argptr, f);
@@ -1327,6 +1341,7 @@ hook hooks[] = {
 #ifdef __USE_ATFILE
     { "openat",                     openat_hook,                    (void**) &openat_orig },
     { "fstatat",                    fstatat_hook,                   (void**) &fstatat_orig },
+    { "__fxstatat",                 fxstatat_hook,                  (void**) &fxstatat_orig },
     { "faccessat",                  faccessat_hook,                 (void**) &faccessat_orig },
     { "mkdirat",                    mkdirat_hook,                   (void**) &mkdirat_orig },
     { "unlinkat",                   unlinkat_hook,                  (void**) &unlinkat_orig },
@@ -1370,12 +1385,13 @@ hook hooks[] = {
 };
 #define HOOK_COUNT (sizeof(hooks) / sizeof(hook))
 
+__attribute__ ((visibility ("hidden")))
 const const hook* find_hook(const char* name) {
-    // printf("%s\n", name);
     for (int i = 0; i < HOOK_COUNT; i++) {
         if (strcmp(name, hooks[i].name) == 0) {
             return &hooks[i];
         }
     }
+    // printf("%s\n", name);
     return NULL;
 }

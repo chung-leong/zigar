@@ -1061,7 +1061,7 @@ const ModuleHost = struct {
             });
         } else {
             const lflags: std.os.wasi.lookupflags_t = .{
-                .SYMLINK_FOLLOW = args.follow_symlink,
+                .SYMLINK_FOLLOW = (args.flags & std.posix.AT.SYMLINK_NOFOLLOW) == 0,
             };
             return try self.callPosixFunction(self.js.path_filestat_set_times, &.{
                 try env.createInt32(args.dirfd),
@@ -1088,7 +1088,7 @@ const ModuleHost = struct {
             });
         } else {
             const lflags: std.os.wasi.lookupflags_t = .{
-                .SYMLINK_FOLLOW = args.follow_symlink,
+                .SYMLINK_FOLLOW = (args.flags & std.posix.AT.SYMLINK_NOFOLLOW) == 0,
             };
             result = try self.callPosixFunction(self.js.path_filestat_get, &.{
                 try env.createInt32(args.dirfd),

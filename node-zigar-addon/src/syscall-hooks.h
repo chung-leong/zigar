@@ -137,7 +137,7 @@ typedef struct {
     int32_t dirfd;
     const char *path;
     uint32_t path_len;
-    bool follow_symlink;
+    uint32_t flags;
     struct stat* stat;
 } syscall_stat;
 
@@ -150,7 +150,7 @@ typedef struct {
     int32_t dirfd;
     const char *path;
     uint32_t path_len;
-    bool follow_symlink;
+    uint32_t flags;
     struct timeval tv[2];
 } syscall_utimes;
 

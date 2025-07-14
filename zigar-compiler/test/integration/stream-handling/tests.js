@@ -501,6 +501,47 @@ export function addTests(importModule, options) {
         flags: { symlinkFollow: true }
       });
     })
+    it('should print stat of file in directory using posix function', async function() {
+      this.timeout(0);
+      const { __zigar, stat } = await importTest('stat-file-at-dir-with-posix-function');
+      const typeArray = new Uint8Array(256);
+      const map = new Map([
+        [ 'readable.txt', typeArray ],
+      ])
+      let event;
+      __zigar.on('open', (evt) => {
+        const { path, parent } = evt;
+        if (!parent) {
+          if (path === 'world') return map;
+        } else {
+          return parent.get(path);
+        }
+      });
+      __zigar.on('stat', (evt) => {
+        const { path, parent } = event = evt;
+        const file = parent?.get?.(path);
+        if (!file) return false;
+        return {
+          size: file.length,
+          ctime: 123n * 1_000_000_000n + 1n,
+          mtime: 124n * 1_000_000_000n + 2n,
+          atime: 125n * 1_000_000_000n + 3n,
+        }
+      });
+      const dir = '/world';
+      const lines = await capture(() => stat(dir, '/readable.txt'));
+      expect(lines).to.eql([ 
+        'size = 256',
+        'ctime = 123,1',
+        'mtime = 124,2',
+        'atime = 125,3' 
+      ]);
+      expect(event).to.eql({
+        parent: map,
+        path: 'readable.txt',
+        flags: { symlinkFollow: true }
+      });
+    })
     it('should decompress xz file', async function() {
       this.timeout(0);
       const {
