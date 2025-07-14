@@ -859,6 +859,21 @@ static int fstat_hook(int fd, struct stat* buf) {
     return fstat_orig(fd, buf);
 }
 
+static int (*fstat64_orig)(int fd, struct stat* buf);
+static int fstat64_hook(int fd, struct stat* buf) {
+    if (is_applicable_handle(fd)) {
+        uint16_t err;
+        redirect_fstat(fd, buf, &err);
+        if (!err) {
+            return 0;
+        } else {
+            errno = err;
+            return -1;
+        }
+    }
+    return fstat64_orig(fd, buf);
+}
+
 static int (*fxstat_orig)(int ver, int fd, struct stat* buf);
 static int fxstat_hook(int ver, int fd, struct stat* buf) {
     if (is_applicable_handle(fd)) {
@@ -884,6 +899,18 @@ static int stat_hook(const char *path, struct stat* buf) {
         }
     }
     return stat_orig(path, buf);
+}
+
+static int (*stat64_orig)(const char* path, struct stat* buf);
+static int stat64_hook(const char *path, struct stat* buf) {
+    if (is_redirecting(mask_stat)) {
+        uint16_t err;
+        redirect_stat(-1, path, AT_SYMLINK_FOLLOW, buf, &err);
+        if (!err) {
+            return 0;
+        }
+    }
+    return stat64_orig(path, buf);
 }
 
 static int (*xstat_orig)(int ver, const char* path, struct stat* buf);
@@ -914,6 +941,21 @@ static int lstat_hook(const char *path, struct stat* buf) {
         }
     }
     return lstat_orig(path, buf);
+}
+
+static int (*lstat64_orig)(const char* path, struct stat* buf);
+static int lstat64_hook(const char *path, struct stat* buf) {
+    if (is_redirecting(mask_stat)) {
+        uint16_t err;
+        redirect_stat(-1, path, AT_SYMLINK_NOFOLLOW, buf, &err);
+        if (!err) {
+            return 0;
+        } else {
+            errno = err;
+            return -1;
+        }
+    }
+    return lstat64_orig(path, buf);
 }
 
 static int (*lxstat_orig)(int ver, const char* path, struct stat* buf);
@@ -1360,10 +1402,13 @@ hook hooks[] = {
     { "lseek",                      lseek_hook,                     (void**) &lseek_orig },
     { "lseek64",                    lseek64_hook,                   (void**) &lseek64_orig },
     { "fstat",                      fstat_hook,                     (void**) &fstat_orig },
+    { "fstat64",                    fstat64_hook,                   (void**) &fstat64_orig },
     { "__fxstat",                   fxstat_hook,                    (void**) &fxstat_orig },
     { "stat",                       stat_hook,                      (void**) &stat_orig },
+    { "stat64",                     stat64_hook,                    (void**) &stat64_orig },
     { "__xstat",                    xstat_hook,                     (void**) &xstat_orig },
     { "lstat",                      lstat_hook,                     (void**) &lstat_orig },
+    { "lstat64",                    lstat64_hook,                   (void**) &lstat64_orig },
     { "__lxstat",                   lxstat_hook,                    (void**) &lxstat_orig },
     { "access",                     access_hook,                    (void**) &access_orig },
     { "futimes",                    futimes_hook,                   (void**) &futimes_orig },
