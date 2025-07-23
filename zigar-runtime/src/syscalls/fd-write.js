@@ -31,7 +31,7 @@ export default mixin({
         if (++i < iovsCount) {
           return next();
         } else {
-          this.copyUint32(writtenAddress, written);
+          this.copyUsize(writtenAddress, written);
         }
       });
     };
@@ -49,7 +49,7 @@ export default mixin({
         const chunk = new Uint8Array(len);
         this.moveExternBytes(chunk, address, false);
         return writer.write(chunk);
-      }, () => this.copyUint32(writtenAddress, len));
+      }, () => this.copyUsize(writtenAddress, (process.env.BITS === 64) ? BigInt(len) : len));
     },
     /* c8 ignore next */
   } : undefined),

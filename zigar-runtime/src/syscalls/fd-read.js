@@ -24,7 +24,7 @@ export default mixin({
         if (++i < iovsCount) {
           return next();
         } else {
-          this.copyUint32(readAddress, read);
+          this.copyUsize(readAddress, read);
         }
       });
     };
@@ -41,9 +41,8 @@ export default mixin({
         const reader = this.getStream(fd);
         return reader.read(len);
       }, (chunk) => {
-        const read = chunk.length;
         this.moveExternBytes(chunk, address, true);
-        this.copyUint32(readAddress, read);
+        this.copyUsize(readAddress, (process.env.BITS === 64) ? BigInt(chunk.length) : chunk.length);
       });
     },
     /* c8 ignore next */
