@@ -1,5 +1,8 @@
 const std = @import("std");
+
 const api_translator = @import("api-translator.zig");
+const camelize = api_translator.camelize;
+const snakify = api_translator.snakify;
 
 pub fn main() !void {
     // create instance of generator
@@ -7,7 +10,7 @@ pub fn main() !void {
     var generator: *api_translator.CodeGenerator(.{
         .include_paths = &.{"../../node_modules/node-api-headers/include"},
         .header_paths = &.{"node_api.h"},
-        .zigft_path = "code-gen/",
+        .zigft_path = "./",
         .c_error_type = "napi_status",
         .c_root_struct = "napi_env",
         .late_bind_expr = "late_binder",
@@ -29,7 +32,6 @@ pub fn main() !void {
     // save translated code to file
     const output_path = try std.fs.path.resolve(generator.allocator, &.{
         generator.cwd,
-        "..",
         "napi.zig",
     });
     const custom_path = try std.fs.path.resolve(generator.allocator, &.{
@@ -50,8 +52,6 @@ pub fn main() !void {
     }
 }
 
-const camelize = api_translator.camelize;
-const snakify = api_translator.snakify;
 const prefixes = .{
     "node_api_",
     "napi_key_",

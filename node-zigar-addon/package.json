@@ -12,7 +12,7 @@
     "test:gc": "mocha --v8-expose-gc -- test/gc/*.test.js",
     "debug": "mocha --reporter spec --inspect-brk -- test/*.test.js",
     "coverage": "c8 mocha -- test/*.test.js",
-    "rollup": "rollup -c rollup.config.js && rm src/addon.??b.js && cp ../zigar-compiler/zig/syscall-hooks.h ./src"
+    "rollup": "rollup -c rollup.config.js && rm src/addon.??b.js && cp ../zigar-compiler/zig/interface.zig ../zigar-compiler/zig/hooks.zig ./src/extra"
   },
   "files": [
     "src/*",

@@ -1,14 +1,13 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const export_options = @import("export-options.zig");
-const fn_transform = @import("fn-transform.zig");
-const meta = @import("meta.zig");
-const thunk_js = @import("thunk-js.zig");
-const thunk_zig = @import("thunk-zig.zig");
-const types = @import("types.zig");
-const Value = types.Value;
-const Memory = types.Memory;
+const export_options = @import("./export-options.zig");
+const fn_transform = @import("./fn-transform.zig");
+const meta = @import("./meta.zig");
+const thunk_js = @import("./thunk-js.zig");
+const thunk_zig = @import("./thunk-zig.zig");
+const types = @import("./types.zig");
+const Value = types.AnyValue;
 const TypeData = types.TypeData;
 
 fn Factory(comptime host: type, comptime module: type) type {
@@ -22,7 +21,7 @@ fn Factory(comptime host: type, comptime module: type) type {
         break :result tdc.createDatabase();
     };
     return struct {
-        pub fn getStructureType(comptime td: TypeData) types.StructureType {
+        pub fn getStructureType(comptime td: TypeData) StructureType {
             return if (td.attrs.is_arguments)
                 switch (td.attrs.is_variadic) {
                     false => .arg_struct,
@@ -57,7 +56,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             };
         }
 
-        pub fn getStructurePurpose(comptime td: TypeData) types.StructurePurpose {
+        pub fn getStructurePurpose(comptime td: TypeData) StructurePurpose {
             return switch (td.type) {
                 std.mem.Allocator => .allocator,
                 std.io.AnyReader => .reader,
@@ -74,7 +73,36 @@ fn Factory(comptime host: type, comptime module: type) type {
             };
         }
 
-        pub fn getStructureFlags(comptime td: TypeData) types.StructureFlags {
+        pub fn getStructureFlags(comptime td: TypeData) switch (@typeInfo(td.type)) {
+            .bool,
+            .int,
+            .comptime_int,
+            .float,
+            .comptime_float,
+            .null,
+            .undefined,
+            .void,
+            .type,
+            .enum_literal,
+            => StructureFlags.Primitive,
+            .@"struct" => if (td.isArguments())
+                StructureFlags.ArgStruct
+            else if (td.isSlice())
+                StructureFlags.Slice
+            else
+                StructureFlags.Struct,
+            .@"union" => StructureFlags.Union,
+            .error_union => StructureFlags.ErrorUnion,
+            .optional => StructureFlags.Optional,
+            .@"enum" => StructureFlags.Enum,
+            .error_set => StructureFlags.ErrorSet,
+            .array => StructureFlags.Array,
+            .vector => StructureFlags.Vector,
+            .pointer => StructureFlags.Pointer,
+            .@"opaque" => StructureFlags.Opaque,
+            .@"fn" => StructureFlags.Function,
+            else => @compileError("Unknown structure: " ++ @typeName(td.type)),
+        } {
             return switch (@typeInfo(td.type)) {
                 .bool,
                 .int,
@@ -87,10 +115,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .type,
                 .enum_literal,
                 => .{
-                    .primitive = .{
-                        .has_slot = td.isComptimeOnly(),
-                        .is_size = td.type == usize or td.type == isize,
-                    },
+                    .has_slot = td.isComptimeOnly(),
+                    .is_size = td.type == usize or td.type == isize,
                 },
                 .@"struct" => |st| init: {
                     const has_object = inline for (st.fields) |field| {
@@ -102,44 +128,38 @@ fn Factory(comptime host: type, comptime module: type) type {
                         if (field_td.isObject() or field_td.isComptimeOnly() or field.is_comptime) break true;
                     } else false;
                     break :init if (comptime td.isArguments()) .{
-                        .arg_struct = .{
-                            .has_object = has_object,
-                            .has_slot = has_slot,
-                            .has_pointer = td.hasPointer(),
-                            .has_options = inline for (st.fields) |field| {
-                                const field_td = tdb.get(field.type);
-                                if (getStructurePurpose(field_td).isOptional()) break true;
-                            } else false,
-                            .is_throwing = td.isThrowing(),
-                            .is_async = inline for (st.fields) |field| {
-                                const field_td = tdb.get(field.type);
-                                switch (getStructurePurpose(field_td)) {
-                                    .promise, .generator => break true,
-                                    else => {},
-                                }
-                            } else false,
-                        },
+                        .has_object = has_object,
+                        .has_slot = has_slot,
+                        .has_pointer = td.hasPointer(),
+                        .has_options = inline for (st.fields) |field| {
+                            const field_td = tdb.get(field.type);
+                            if (getStructurePurpose(field_td).isOptional()) break true;
+                        } else false,
+                        .is_throwing = td.isThrowing(),
+                        .is_async = inline for (st.fields) |field| {
+                            const field_td = tdb.get(field.type);
+                            switch (getStructurePurpose(field_td)) {
+                                .promise, .generator => break true,
+                                else => {},
+                            }
+                        } else false,
                     } else if (comptime td.isSlice()) .{
-                        .slice = .{
-                            .has_object = has_object,
-                            .has_slot = has_slot,
-                            .has_pointer = td.hasPointer(),
-                            .has_sentinel = td.type.sentinel != null,
-                            .is_string = td.getElementType() == u8 or td.getElementType() == u16,
-                            .is_typed_array = getTypedArrayBits(td) != null,
-                            .is_clamped_array = getTypedArrayBits(td) == 8,
-                            .is_opaque = td.type.is_opaque,
-                        },
+                        .has_object = has_object,
+                        .has_slot = has_slot,
+                        .has_pointer = td.hasPointer(),
+                        .has_sentinel = td.type.sentinel != null,
+                        .is_string = td.getElementType() == u8 or td.getElementType() == u16,
+                        .is_typed_array = getTypedArrayBits(td) != null,
+                        .is_clamped_array = getTypedArrayBits(td) == 8,
+                        .is_opaque = td.type.is_opaque,
                     } else .{
-                        .@"struct" = .{
-                            .has_object = has_object,
-                            .has_slot = has_slot,
-                            .has_pointer = td.hasPointer(),
-                            .is_extern = st.layout == .@"extern",
-                            .is_packed = st.layout == .@"packed",
-                            .is_tuple = st.is_tuple,
-                            .is_optional = types.hasDefaultFields(td.type),
-                        },
+                        .has_object = has_object,
+                        .has_slot = has_slot,
+                        .has_pointer = td.hasPointer(),
+                        .is_extern = st.layout == .@"extern",
+                        .is_packed = st.layout == .@"packed",
+                        .is_tuple = st.is_tuple,
+                        .is_optional = types.hasDefaultFields(td.type),
                     };
                 },
                 .@"union" => |un| init: {
@@ -152,85 +172,69 @@ fn Factory(comptime host: type, comptime module: type) type {
                         if (field_td.isObject() or field_td.isComptimeOnly()) break true;
                     } else false;
                     break :init .{
-                        .@"union" = .{
-                            .has_object = has_object,
-                            .has_slot = has_slot,
-                            .has_pointer = td.hasPointer(),
-                            .has_tag = un.tag_type != null,
-                            .has_inaccessible = un.tag_type == null and td.hasPointer(),
-                            .has_selector = td.hasSelector(),
-                            .is_extern = un.layout == .@"extern",
-                            .is_packed = un.layout == .@"packed",
-                        },
+                        .has_object = has_object,
+                        .has_slot = has_slot,
+                        .has_pointer = td.hasPointer(),
+                        .has_tag = un.tag_type != null,
+                        .has_inaccessible = un.tag_type == null and td.hasPointer(),
+                        .has_selector = td.hasSelector(),
+                        .is_extern = un.layout == .@"extern",
+                        .is_packed = un.layout == .@"packed",
                     };
                 },
                 .error_union => |eu| init: {
                     const payload_td = tdb.get(eu.payload);
                     break :init .{
-                        .error_union = .{
-                            .has_object = payload_td.isObject(),
-                            .has_slot = payload_td.isObject() or payload_td.isComptimeOnly(),
-                            .has_pointer = td.hasPointer(),
-                        },
+                        .has_object = payload_td.isObject(),
+                        .has_slot = payload_td.isObject() or payload_td.isComptimeOnly(),
+                        .has_pointer = td.hasPointer(),
                     };
                 },
                 .optional => |op| init: {
                     const child_td = tdb.get(op.child);
                     break :init .{
-                        .optional = .{
-                            .has_object = child_td.isObject(),
-                            .has_slot = child_td.isObject() or child_td.isComptimeOnly(),
-                            .has_pointer = td.hasPointer(),
-                            .has_selector = td.hasSelector(),
-                        },
+                        .has_object = child_td.isObject(),
+                        .has_slot = child_td.isObject() or child_td.isComptimeOnly(),
+                        .has_pointer = td.hasPointer(),
+                        .has_selector = td.hasSelector(),
                     };
                 },
                 .@"enum" => |en| .{
-                    .@"enum" = .{
-                        .is_open_ended = !en.is_exhaustive,
-                    },
+                    .is_open_ended = !en.is_exhaustive,
                 },
                 .error_set => |es| .{
-                    .error_set = .{
-                        .is_global = es == null,
-                    },
+                    .is_global = es == null,
                 },
                 .array => |ar| init: {
                     const child_td = tdb.get(ar.child);
                     break :init .{
-                        .array = .{
-                            .has_object = child_td.isObject(),
-                            .has_slot = child_td.isObject() or child_td.isComptimeOnly(),
-                            .has_pointer = child_td.hasPointer(),
-                            .has_sentinel = td.getSentinel() != null,
-                            .is_string = td.getElementType() == u8 or td.getElementType() == u16,
-                            .is_typed_array = getTypedArrayBits(td) != null,
-                            .is_clamped_array = getTypedArrayBits(td) == 8,
-                        },
+                        .has_object = child_td.isObject(),
+                        .has_slot = child_td.isObject() or child_td.isComptimeOnly(),
+                        .has_pointer = child_td.hasPointer(),
+                        .has_sentinel = td.getSentinel() != null,
+                        .is_string = td.getElementType() == u8 or td.getElementType() == u16,
+                        .is_typed_array = getTypedArrayBits(td) != null,
+                        .is_clamped_array = getTypedArrayBits(td) == 8,
                     };
                 },
                 .vector => |ve| init: {
                     const child_td = tdb.get(ve.child);
                     break :init .{
-                        .vector = .{
-                            .has_object = child_td.isObject(),
-                            .has_slot = child_td.isObject(),
-                            .has_pointer = child_td.hasPointer(),
-                            .is_typed_array = getTypedArrayBits(td) != null,
-                        },
+                        .has_object = child_td.isObject(),
+                        .has_slot = child_td.isObject(),
+                        .has_pointer = child_td.hasPointer(),
+                        .is_typed_array = getTypedArrayBits(td) != null,
                     };
                 },
                 .pointer => |pt| .{
-                    .pointer = .{
-                        .has_length = pt.size == .slice,
-                        .is_const = pt.is_const,
-                        .is_single = pt.size == .one or pt.size == .c,
-                        .is_multiple = pt.size != .one,
-                        .is_nullable = pt.is_allowzero or pt.child == anyopaque,
-                    },
+                    .has_length = pt.size == .slice,
+                    .is_const = pt.is_const,
+                    .is_single = pt.size == .one or pt.size == .c,
+                    .is_multiple = pt.size != .one,
+                    .is_nullable = pt.is_allowzero or pt.child == anyopaque,
                 },
-                .@"opaque" => .{ .@"opaque" = .{} },
-                .@"fn" => .{ .function = .{} },
+                .@"opaque" => .{},
+                .@"fn" => .{},
                 else => @compileError("Unknown structure: " ++ @typeName(td.type)),
             };
         }
@@ -284,7 +288,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .noreturn,
                 => null,
                 // return the name without ns qualifier if it's alphanumeric
-                .@"struct", .@"union", .@"enum" => comptime result: {
+                .@"struct", .@"union", .@"enum" => result: {
                     var name: []const u8 = @typeName(td.type);
                     if (std.mem.lastIndexOfScalar(u8, name, '.')) |index| {
                         name = name[index + 1 .. name.len];
@@ -310,7 +314,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             };
         }
 
-        pub fn getMemberType(comptime td: TypeData, comptime is_comptime: bool) types.MemberType {
+        pub fn getMemberType(comptime td: TypeData, comptime is_comptime: bool) MemberType {
             return switch (td.isSupported()) {
                 false => .unsupported,
                 true => switch (is_comptime) {
@@ -360,375 +364,353 @@ fn Factory(comptime host: type, comptime module: type) type {
             };
         }
 
-        // NOTE: error type has to be specified here since the function is called recursively
+        // NOTE: anyerror has to be used here since the function is called recursively
         // and https://github.com/ziglang/zig/issues/2971 has not been fully resolved yet
-        fn getStructure(self: @This(), comptime T: type) types.Error!Value {
+        fn getStructure(self: @This(), comptime T: type) anyerror!Value {
             const td = tdb.get(T);
             const slot = td.getSlot();
-            return host.readSlot(null, slot) catch result: {
-                const def: types.Structure = .{
-                    .name = comptime getStructureName(td),
+            return host.getSlotValue(null, slot) catch result: {
+                // create the structure and place it in the slot immediately
+                // so that recursive definition works correctly
+                const structure = try createObject(.{
+                    .name = getStructureName(td),
                     .type = getStructureType(td),
-                    .purpose = getStructurePurpose(td),
                     .flags = getStructureFlags(td),
                     .signature = td.getSignature(),
                     .length = getStructureLength(td),
-                    .byte_size = td.getByteSize(),
-                    .alignment = td.getAlignment(),
-                };
-                // create the structure and place it in the slot immediately
-                // so that recursive definition works correctly
-                const structure = try host.beginStructure(def);
-                try host.writeSlot(null, slot, structure);
+                    .byteSize = td.getByteSize(),
+                    .@"align" = td.getAlignment(),
+                });
+                try host.setSlotValue(null, slot, structure);
                 // define the shape of the structure
-                try self.addMembers(structure, td);
+                try setProperties(structure, .{
+                    .instance = try createObject(.{
+                        .members = try self.getMembers(td),
+                        .template = try self.getTemplate(td),
+                    }),
+                });
                 // finalize the shape so that static members can be instances of the structure
-                _ = try host.defineStructure(structure);
+                try host.defineStructure(structure);
                 // add static variables and functions, excluding internal types and problematic
                 // namespaces
                 if (comptime !td.shouldIgnoreDecls()) {
-                    try self.addStaticMembers(structure, td);
+                    const members = try self.getStaticMembers(td);
+                    const template = try self.getStaticTemplate(td);
+                    if (members != null or template != null) {
+                        try setProperties(structure, .{
+                            .static = try createObject(.{
+                                .members = members,
+                                .template = template,
+                            }),
+                        });
+                    }
                 }
-                try host.endStructure(structure);
+                try host.finalizeStructure(structure);
                 break :result structure;
             };
         }
 
-        fn addMembers(self: @This(), structure: Value, comptime td: TypeData) !void {
+        fn getMembers(self: @This(), comptime td: TypeData) !Value {
+            const list = try createList(.{});
             switch (comptime getStructureType(td)) {
-                .primitive, .error_set, .@"enum" => try self.addPrimitiveMember(structure, td),
-                .arg_struct, .variadic_struct => try self.addArgStructMembers(structure, td),
-                .@"struct" => try self.addStructMembers(structure, td),
-                .@"union" => try self.addUnionMembers(structure, td),
-                .pointer => try self.addPointerMember(structure, td),
-                .array => try self.addArrayMember(structure, td),
-                .slice => try self.addSliceMember(structure, td),
-                .error_union => try self.addErrorUnionMembers(structure, td),
-                .optional => try self.addOptionalMembers(structure, td),
-                .vector => try self.addVectorMember(structure, td),
-                .function => try self.addFunctionMember(structure, td),
+                .primitive, .error_set, .@"enum" => try self.addPrimitiveMember(list, td),
+                .arg_struct, .variadic_struct => try self.addArgStructMembers(list, td),
+                .@"struct" => try self.addStructMembers(list, td),
+                .@"union" => try self.addUnionMembers(list, td),
+                .pointer => try self.addPointerMember(list, td),
+                .array => try self.addArrayMember(list, td),
+                .slice => try self.addSliceMember(list, td),
+                .error_union => try self.addErrorUnionMembers(list, td),
+                .optional => try self.addOptionalMembers(list, td),
+                .vector => try self.addVectorMember(list, td),
+                .function => try self.addFunctionMember(list, td),
                 else => {},
             }
+            return list;
         }
 
-        fn addPrimitiveMember(self: @This(), structure: Value, comptime td: TypeData) !void {
-            try host.attachMember(structure, .{
+        fn addPrimitiveMember(self: @This(), list: Value, comptime td: TypeData) !void {
+            try appendList(list, .{
                 .type = getMemberType(td, false),
-                .flags = .{},
-                .bit_size = td.getBitSize(),
-                .bit_offset = 0,
-                .byte_size = td.getByteSize(),
-                .slot = if (td.isComptimeOnly()) 0 else null,
+                .bitSize = td.getBitSize(),
+                .byteSize = td.getByteSize(),
+                .slot = if (td.isComptimeOnly()) @as(usize, 0) else null,
                 .structure = try self.getStructure(td.type),
-            }, false);
+            });
         }
 
-        fn addArrayMember(self: @This(), structure: Value, comptime td: TypeData) !void {
+        fn addArrayMember(self: @This(), list: Value, comptime td: TypeData) !void {
             const child_td = tdb.get(td.getElementType());
-            try host.attachMember(structure, .{
+            try appendList(list, .{
                 .type = getMemberType(child_td, false),
-                .flags = .{},
-                .bit_size = child_td.getBitSize(),
-                .byte_size = child_td.getByteSize(),
+                .bitSize = child_td.getBitSize(),
+                .byteSize = child_td.getByteSize(),
                 .structure = try self.getStructure(child_td.type),
-            }, false);
-            try self.addSentinelMember(structure, td, child_td);
+            });
+            try self.addSentinelMember(list, td, child_td);
         }
 
-        fn addSliceMember(self: @This(), structure: Value, comptime td: TypeData) !void {
+        fn addSliceMember(self: @This(), list: Value, comptime td: TypeData) !void {
             const child_td = tdb.get(td.getElementType());
-            try host.attachMember(structure, .{
+            try appendList(list, .{
                 .type = getMemberType(child_td, false),
-                .flags = .{},
-                .bit_size = child_td.getBitSize(),
-                .byte_size = child_td.getByteSize(),
+                .bitSize = child_td.getBitSize(),
+                .byteSize = child_td.getByteSize(),
                 .structure = try self.getStructure(child_td.type),
-            }, false);
-            try self.addSentinelMember(structure, td, child_td);
+            });
+            try self.addSentinelMember(list, td, child_td);
         }
 
-        fn addSentinelMember(self: @This(), structure: Value, comptime td: TypeData, comptime child_td: TypeData) !void {
+        fn addSentinelMember(self: @This(), list: Value, comptime td: TypeData, comptime child_td: TypeData) !void {
             if (comptime td.getSentinel()) |sentinel| {
-                try host.attachMember(structure, .{
+                try appendList(list, .{
                     .type = getMemberType(child_td, false),
-                    .flags = .{
+                    .flags = MemberFlags{
                         .is_sentinel = true,
                         .is_required = sentinel.is_required,
                     },
-                    .bit_offset = 0,
-                    .bit_size = child_td.getBitSize(),
-                    .byte_size = child_td.getByteSize(),
+                    .bitSize = child_td.getBitSize(),
+                    .byteSize = child_td.getByteSize(),
                     .structure = try self.getStructure(child_td.type),
-                }, false);
-                const dv = try self.exportPointerTarget(&sentinel.value, false);
-                const template = try host.createTemplate(dv);
-                try host.attachTemplate(structure, template, false);
+                });
             }
         }
 
-        fn addVectorMember(self: @This(), structure: Value, comptime td: TypeData) !void {
+        fn addVectorMember(self: @This(), list: Value, comptime td: TypeData) !void {
             const child_td = tdb.get(td.getElementType());
-            try host.attachMember(structure, .{
+            try appendList(list, .{
                 .type = getMemberType(child_td, false),
-                .flags = .{},
-                .bit_size = child_td.getBitSize(),
-                .byte_size = if (td.isBitVector()) null else child_td.getByteSize(),
+                .bitSize = child_td.getBitSize(),
+                .byteSize = if (td.isBitVector()) null else child_td.getByteSize(),
                 .structure = try self.getStructure(child_td.type),
-            }, false);
+            });
         }
 
-        fn addPointerMember(self: @This(), structure: Value, comptime td: TypeData) !void {
+        fn addPointerMember(self: @This(), list: Value, comptime td: TypeData) !void {
             const TT = td.getTargetType();
-            try host.attachMember(structure, .{
+            try appendList(list, .{
                 .type = getMemberType(td, false),
-                .flags = .{},
-                .bit_size = td.getBitSize(),
-                .byte_size = td.getByteSize(),
+                .bitSize = td.getBitSize(),
+                .byteSize = td.getByteSize(),
                 .slot = 0,
                 .structure = try self.getStructure(TT),
-            }, false);
+            });
         }
 
-        fn canBeString(comptime T: type) bool {
-            return switch (@typeInfo(T)) {
-                inline .pointer, .array => |pt| pt.child == u8 or pt.child == u16,
-                .optional => |op| canBeString(op.child),
-                .error_union => |eu| canBeString(eu.payload),
-                else => false,
-            };
-        }
-
-        fn canReturnString(comptime f: std.builtin.Type.Fn) bool {
-            if (f.return_type) |RT| {
-                if (canBeString(RT)) return true;
-            }
-            inline for (f.params) |param| {
-                if (param.type) |PT| {
-                    if (types.getInternalType(PT)) |internal_type| {
-                        switch (internal_type) {
-                            .promise, .generator => {
-                                if (canBeString(PT.payload)) return true;
-                            },
-                            else => {},
-                        }
-                    }
-                }
-            }
-            return false;
-        }
-
-        fn addArgStructMembers(self: @This(), structure: Value, comptime td: TypeData) !void {
-            const st = @typeInfo(td.type).@"struct";
+        fn addArgStructMembers(self: @This(), list: Value, comptime td: TypeData) !void {
             const FT = td.parent_type.?;
-            inline for (st.fields, 0..) |field, index| {
+            inline for (std.meta.fields(td.type), 0..) |field, index| {
                 const field_td = tdb.get(field.type);
                 const is_string = comptime canBeString(field.type) and meta.call("isArgumentString", .{ FT, index });
-                try host.attachMember(structure, .{
+                try appendList(list, .{
                     .name = field.name,
                     .type = getMemberType(field_td, field.is_comptime),
-                    .flags = .{
+                    .flags = MemberFlags{
                         .is_required = true,
                         .is_string = is_string,
                     },
-                    .bit_offset = @bitOffsetOf(td.type, field.name),
-                    .bit_size = field_td.getBitSize(),
-                    .byte_size = field_td.getByteSize(),
+                    .bitOffset = @bitOffsetOf(td.type, field.name),
+                    .bitSize = field_td.getBitSize(),
+                    .byteSize = field_td.getByteSize(),
                     .slot = index,
                     .structure = try self.getStructure(field.type),
-                }, false);
+                });
             }
         }
 
-        fn addStructMembers(self: @This(), structure: Value, comptime td: TypeData) !void {
-            const st = @typeInfo(td.type).@"struct";
-            inline for (st.fields, 0..) |field, index| {
+        fn addStructMembers(self: @This(), list: Value, comptime td: TypeData) !void {
+            inline for (std.meta.fields(td.type), 0..) |field, index| {
                 const field_td = tdb.get(field.type);
                 // comptime fields are not actually stored in the struct
                 // fields of comptime types in comptime structs are handled in the same manner
-                const is_actual = !field.is_comptime and !field_td.isComptimeOnly();
+                const is_actual = comptime !field.is_comptime and !field_td.isComptimeOnly();
                 const is_string = comptime canBeString(field.type) and meta.call("isFieldString", .{ td.type, field.name });
                 const supported = comptime field_td.isSupported();
-                try host.attachMember(structure, .{
+                try appendList(list, .{
                     .name = field.name,
                     .type = getMemberType(field_td, field.is_comptime),
-                    .flags = .{
+                    .flags = MemberFlags{
                         .is_read_only = !is_actual,
                         .is_required = is_actual and field.default_value_ptr == null,
                         .is_string = is_string,
                     },
-                    .bit_offset = if (is_actual) @bitOffsetOf(td.type, field.name) else null,
-                    .bit_size = if (is_actual) field_td.getBitSize() else null,
-                    .byte_size = if (is_actual and !td.isPacked()) field_td.getByteSize() else null,
+                    .bitOffset = if (is_actual) @bitOffsetOf(td.type, field.name) else null,
+                    .bitSize = if (is_actual) field_td.getBitSize() else null,
+                    .byteSize = if (is_actual and !td.isPacked()) field_td.getByteSize() else null,
                     .slot = index,
                     .structure = if (supported) try self.getStructure(field.type) else null,
-                }, false);
+                });
             }
-            if (st.backing_integer) |IT| {
+            if (@typeInfo(td.type).@"struct".backing_integer) |IT| {
                 // add member for backing int
                 const int_td = tdb.get(IT);
-                try host.attachMember(structure, .{
+                try appendList(list, .{
                     .type = getMemberType(int_td, false),
-                    .flags = .{ .is_backing_int = true },
-                    .bit_offset = 0,
-                    .bit_size = int_td.getBitSize(),
-                    .byte_size = int_td.getByteSize(),
+                    .flags = MemberFlags{ .is_backing_int = true },
+                    .bitSize = int_td.getBitSize(),
+                    .byteSize = int_td.getByteSize(),
                     .structure = try self.getStructure(IT),
-                }, false);
-            }
-            // add default values
-            var template_maybe: ?Value = null;
-            if (@sizeOf(td.type) > 0) {
-                const default_values = comptime init: {
-                    var values: td.type = undefined;
-                    for (st.fields) |field| {
-                        if (!field.is_comptime) {
-                            if (field.default_value_ptr) |opaque_ptr| {
-                                const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-                                @field(values, field.name) = default_value_ptr.*;
-                            }
-                        }
-                    }
-                    break :init values;
-                };
-                const dv = try self.exportPointerTarget(&default_values, false);
-                template_maybe = try host.createTemplate(dv);
-            }
-            inline for (st.fields, 0..) |field, index| {
-                if (field.default_value_ptr) |opaque_ptr| {
-                    const field_td = tdb.get(field.type);
-                    const comptime_only = field.is_comptime or field_td.isComptimeOnly();
-                    if (comptime_only and comptime field_td.isSupported()) {
-                        // comptime members aren't stored in the struct's memory
-                        // they're separate objects in the slots of the struct template
-                        const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
-                        const value_obj = try self.exportPointerTarget(default_value_ptr, true);
-                        template_maybe = template_maybe orelse try host.createTemplate(null);
-                        try host.writeSlot(template_maybe.?, index, value_obj);
-                    }
-                }
-            }
-            if (template_maybe) |template| {
-                try host.attachTemplate(structure, template, false);
+                });
             }
         }
 
-        fn addUnionMembers(self: @This(), structure: Value, comptime td: TypeData) !void {
-            const fields = @typeInfo(td.type).@"union".fields;
-            inline for (fields, 0..) |field, index| {
+        fn addUnionMembers(self: @This(), list: Value, comptime td: TypeData) !void {
+            inline for (std.meta.fields(td.type), 0..) |field, index| {
                 const field_td = tdb.get(field.type);
                 const is_string = comptime canBeString(field.type) and meta.call("isFieldString", .{ td.type, field.name });
                 const supported = comptime field_td.isSupported();
-                try host.attachMember(structure, .{
+                try appendList(list, .{
                     .name = field.name,
                     .type = getMemberType(field_td, false),
-                    .flags = .{
+                    .flags = MemberFlags{
                         .is_read_only = field_td.isComptimeOnly(),
                         .is_string = is_string,
                     },
-                    .bit_offset = td.getContentBitOffset(),
-                    .bit_size = field_td.getBitSize(),
-                    .byte_size = field_td.getByteSize(),
+                    .bitOffset = td.getContentBitOffset(),
+                    .bitSize = field_td.getBitSize(),
+                    .byteSize = field_td.getByteSize(),
                     .slot = index,
                     .structure = if (supported) try self.getStructure(field_td.type) else null,
-                }, false);
+                });
             }
             if (td.getSelectorType()) |TT| {
                 const selector_td = tdb.get(TT);
-                try host.attachMember(structure, .{
+                try appendList(list, .{
                     .type = getMemberType(selector_td, false),
-                    .flags = .{ .is_selector = true },
-                    .bit_offset = td.getSelectorBitOffset(),
-                    .bit_size = selector_td.getBitSize(),
-                    .byte_size = selector_td.getByteSize(),
+                    .flags = MemberFlags{ .is_selector = true },
+                    .bitOffset = td.getSelectorBitOffset(),
+                    .bitSize = selector_td.getBitSize(),
+                    .byteSize = selector_td.getByteSize(),
                     .structure = try self.getStructure(selector_td.type),
-                }, false);
+                });
             }
         }
 
-        fn addOptionalMembers(self: @This(), structure: Value, comptime td: TypeData) !void {
+        fn addOptionalMembers(self: @This(), list: Value, comptime td: TypeData) !void {
             // value always comes first
             const child_td = tdb.get(@typeInfo(td.type).optional.child);
-            try host.attachMember(structure, .{
+            try appendList(list, .{
                 .type = getMemberType(child_td, false),
-                .flags = .{},
-                .bit_offset = 0,
-                .bit_size = child_td.getBitSize(),
-                .byte_size = child_td.getByteSize(),
+                .bitSize = child_td.getBitSize(),
+                .byteSize = child_td.getByteSize(),
                 .slot = 0,
                 .structure = try self.getStructure(child_td.type),
-            }, false);
+            });
             const ST = td.getSelectorType().?;
             const selector_td = tdb.get(ST);
-            try host.attachMember(structure, .{
+            try appendList(list, .{
                 .type = getMemberType(selector_td, false),
-                .flags = .{ .is_selector = true },
-                .bit_offset = td.getSelectorBitOffset(),
-                .bit_size = selector_td.getBitSize(),
-                .byte_size = selector_td.getByteSize(),
+                .flags = MemberFlags{ .is_selector = true },
+                .bitOffset = td.getSelectorBitOffset(),
+                .bitSize = selector_td.getBitSize(),
+                .byteSize = selector_td.getByteSize(),
                 .structure = try self.getStructure(selector_td.type),
-            }, false);
+            });
         }
 
-        fn addErrorUnionMembers(self: @This(), structure: Value, comptime td: TypeData) !void {
+        fn addErrorUnionMembers(self: @This(), list: Value, comptime td: TypeData) !void {
             const payload_td = tdb.get(@typeInfo(td.type).error_union.payload);
-            try host.attachMember(structure, .{
+            try appendList(list, .{
                 .type = getMemberType(payload_td, false),
-                .flags = .{},
-                .bit_offset = td.getContentBitOffset(),
-                .bit_size = payload_td.getBitSize(),
-                .byte_size = payload_td.getByteSize(),
+                .bitOffset = td.getContentBitOffset(),
+                .bitSize = payload_td.getBitSize(),
+                .byteSize = payload_td.getByteSize(),
                 .slot = 0,
                 .structure = try self.getStructure(payload_td.type),
-            }, false);
+            });
             // don't export inferred error sets that are essentially anyerror as separate sets
             comptime var ES = @typeInfo(td.type).error_union.error_set;
             if (@typeInfo(ES).error_set == null) {
                 ES = anyerror;
             }
             const error_td = tdb.get(ES);
-            try host.attachMember(structure, .{
+            try appendList(list, .{
                 .type = getMemberType(error_td, false),
-                .flags = .{ .is_selector = true },
-                .bit_offset = td.getErrorBitOffset(),
-                .bit_size = error_td.getBitSize(),
-                .byte_size = error_td.getByteSize(),
+                .flags = MemberFlags{ .is_selector = true },
+                .bitOffset = td.getErrorBitOffset(),
+                .bitSize = error_td.getBitSize(),
+                .byteSize = error_td.getByteSize(),
                 .structure = try self.getStructure(error_td.type),
-            }, false);
+            });
         }
 
-        fn addFunctionMember(self: @This(), structure: Value, comptime td: TypeData) !void {
+        fn addFunctionMember(self: @This(), list: Value, comptime td: TypeData) !void {
             const FT = types.Uninlined(td.type);
             const arg_td = tdb.get(types.ArgumentStruct(FT));
-            try host.attachMember(structure, .{
+            try appendList(list, .{
                 .type = getMemberType(arg_td, false),
-                .flags = .{},
-                .bit_size = arg_td.getBitSize(),
-                .byte_size = arg_td.getByteSize(),
+                .bitSize = arg_td.getBitSize(),
+                .byteSize = arg_td.getByteSize(),
                 .structure = try self.getStructure(arg_td.type),
-            }, false);
-            // store thunk as instance template
-            const thunk = comptime thunk_zig.createThunk(FT);
-            const thunk_dv = try self.exportPointerTarget(thunk, false);
-            const instance_template = try host.createTemplate(thunk_dv);
-            try host.attachTemplate(structure, instance_template, false);
-            const PT = *const FT;
-            if (comptime tdb.has(PT) and tdb.get(PT).isInUse() and !td.isVariadic()) {
-                // store JS thunk controller as static template
-                const controller = comptime thunk_js.createThunkController(host, FT);
-                const controller_dv = try self.exportPointerTarget(controller, false);
-                const static_template = try host.createTemplate(controller_dv);
-                try host.attachTemplate(structure, static_template, true);
-            }
+            });
         }
 
-        fn addStaticMembers(self: @This(), structure: Value, comptime td: TypeData) !void {
-            if (td.isSlice()) return;
-            var template_maybe: ?Value = null;
-            // add declared static members
-            comptime var offset = 0;
+        fn getTemplate(self: @This(), comptime td: TypeData) !?Value {
+            var template: ?Value = null;
             switch (@typeInfo(td.type)) {
-                inline .@"struct", .@"union", .@"enum", .@"opaque" => |st| {
-                    inline for (st.decls, 0..) |decl, index| {
+                .@"struct" => |st| if (!td.isArguments()) {
+                    if (@sizeOf(td.type) > 0) {
+                        const default_values = comptime init: {
+                            var values: td.type = undefined;
+                            for (st.fields) |field| {
+                                if (!field.is_comptime) {
+                                    if (field.default_value_ptr) |opaque_ptr| {
+                                        const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
+                                        @field(values, field.name) = default_value_ptr.*;
+                                    }
+                                }
+                            }
+                            break :init values;
+                        };
+                        const dv = try self.exportPointerTarget(&default_values, false);
+                        template = try host.createObject();
+                        try host.setMemory(template.?, dv);
+                    }
+                    inline for (st.fields, 0..) |field, index| {
+                        if (field.default_value_ptr) |opaque_ptr| {
+                            const field_td = tdb.get(field.type);
+                            const comptime_only = field.is_comptime or field_td.isComptimeOnly();
+                            if (comptime_only and comptime field_td.isSupported()) {
+                                // comptime members aren't stored in the struct's memory
+                                // they're separate objects in the slots of the static template
+                                const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
+                                const value_obj = try self.exportPointerTarget(default_value_ptr, true);
+                                if (template == null) template = try host.createObject();
+                                try host.setSlotValue(template.?, index, value_obj);
+                            }
+                        }
+                    }
+                },
+                .@"fn" => {
+                    const FT = types.Uninlined(td.type);
+                    const thunk = comptime thunk_zig.createThunk(FT);
+                    const thunk_dv = try self.exportPointerTarget(thunk, false);
+                    template = try host.createObject();
+                    try host.setMemory(template.?, thunk_dv);
+                },
+                .array => if (comptime td.getSentinel()) |sentinel| {
+                    const dv = try self.exportPointerTarget(&sentinel.value, false);
+                    template = try host.createObject();
+                    try host.setMemory(template.?, dv);
+                },
+                .pointer => if (comptime td.isSlice()) {
+                    if (comptime td.getSentinel()) |sentinel| {
+                        const dv = try self.exportPointerTarget(&sentinel.value, false);
+                        template = try host.createObject();
+                        try host.setMemory(template.?, dv);
+                    }
+                },
+                else => {},
+            }
+            return template;
+        }
+
+        fn getStaticMembers(self: @This(), comptime td: TypeData) !?Value {
+            comptime var offset: usize = 0;
+            var list: ?Value = null;
+            switch (@typeInfo(td.type)) {
+                .@"struct", .@"union", .@"enum", .@"opaque" => if (comptime !td.isArguments()) {
+                    inline for (comptime std.meta.declarations(td.type), 0..) |decl, index| {
                         if (comptime std.mem.startsWith(u8, decl.name, "meta(")) continue;
                         const decl_ptr = &@field(td.type, decl.name);
                         const decl_ptr_td = tdb.get(@TypeOf(decl_ptr));
@@ -747,21 +729,80 @@ fn Factory(comptime host: type, comptime module: type) type {
                             if (should_export) {
                                 checkStaticMember(DT);
                                 const decl_td = tdb.get(DT);
-                                const is_string = switch (@typeInfo(DT)) {
-                                    .@"fn" => |f| comptime canReturnString(f) and meta.call("isRetvalString", .{decl_value}),
-                                    else => comptime canBeString(DT) and meta.call("isFieldString", .{ td.type, decl.name }),
-                                };
-                                try host.attachMember(structure, .{
+                                if (list == null) list = try createList(.{});
+                                try appendList(list.?, .{
                                     .name = decl.name,
-                                    .type = .object,
-                                    .flags = .{
+                                    .type = MemberType.object,
+                                    .flags = MemberFlags{
                                         .is_read_only = decl_ptr_td.isConst(),
                                         .is_method = decl_td.isMethodOf(td.type),
-                                        .is_string = is_string,
+                                        .is_string = switch (@typeInfo(DT)) {
+                                            .@"fn" => |f| comptime canReturnString(f) and meta.call("isRetvalString", .{decl_value}),
+                                            else => comptime canBeString(DT) and meta.call("isFieldString", .{ td.type, decl.name }),
+                                        },
                                     },
                                     .slot = index,
                                     .structure = try self.getStructure(DT),
-                                }, true);
+                                });
+                            }
+                        }
+                        offset += 1;
+                    }
+                },
+                else => {},
+            }
+            switch (@typeInfo(td.type)) {
+                .@"enum" => |en| {
+                    // add fields as static members
+                    inline for (en.fields, 0..) |field, index| {
+                        if (list == null) list = try createList(.{});
+                        try appendList(list.?, .{
+                            .name = field.name,
+                            .type = MemberType.object,
+                            .flags = MemberFlags{ .is_part_of_set = true },
+                            .slot = offset + index,
+                            .structure = try self.getStructure(td.type),
+                        });
+                    }
+                },
+                .error_set => |es| if (es) |errors| {
+                    list = try createList(.{});
+                    inline for (errors, 0..) |err_rec, index| {
+                        if (list == null) list = try createList(.{});
+                        try appendList(list.?, .{
+                            .name = err_rec.name,
+                            .type = MemberType.object,
+                            .flags = MemberFlags{ .is_part_of_set = true },
+                            .slot = index,
+                            .structure = try self.getStructure(td.type),
+                        });
+                    }
+                },
+                else => {},
+            }
+            return list;
+        }
+
+        fn getStaticTemplate(self: @This(), comptime td: TypeData) !?Value {
+            var template: ?Value = null;
+            switch (@typeInfo(td.type)) {
+                .@"struct", .@"union", .@"enum", .@"opaque" => if (comptime !td.isArguments()) {
+                    inline for (comptime std.meta.declarations(td.type), 0..) |decl, index| {
+                        if (comptime std.mem.startsWith(u8, decl.name, "meta(")) continue;
+                        const decl_ptr = &@field(td.type, decl.name);
+                        const decl_ptr_td = tdb.get(@TypeOf(decl_ptr));
+                        if (comptime decl_ptr_td.isSupported()) {
+                            const decl_value = decl_ptr.*;
+                            const DT = @TypeOf(decl_value);
+                            const is_value_supported = switch (DT) {
+                                type => tdb.get(decl_value).isSupported(),
+                                else => true,
+                            };
+                            const should_export = if (is_value_supported) switch (@typeInfo(DT)) {
+                                .@"fn" => !export_options.omit_functions,
+                                else => !export_options.omit_variables or decl_ptr_td.isConst(),
+                            } else false;
+                            if (should_export) {
                                 const target_ptr = comptime switch (@typeInfo(DT)) {
                                     .@"fn" => |f| switch (f.calling_convention) {
                                         .@"inline" => &uninline(decl_value),
@@ -770,58 +811,27 @@ fn Factory(comptime host: type, comptime module: type) type {
                                     else => decl_ptr,
                                 };
                                 const value_obj = try self.exportPointerTarget(target_ptr, true);
-                                template_maybe = template_maybe orelse try host.createTemplate(null);
-                                try host.writeSlot(template_maybe.?, index, value_obj);
+                                if (template == null) template = try host.createObject();
+                                try host.setSlotValue(template.?, index, value_obj);
                             }
                         }
-                        offset += 1;
+                    }
+                },
+                .@"fn" => {
+                    // only export thunk controller where function pointer is in use
+                    const FT = types.Uninlined(td.type);
+                    const PT = *const FT;
+                    if (comptime tdb.has(PT) and tdb.get(PT).isInUse() and !td.isVariadic()) {
+                        // store JS thunk controller as static template
+                        const controller = comptime thunk_js.createThunkController(host, FT);
+                        const controller_dv = try self.exportPointerTarget(controller, false);
+                        template = try host.createObject();
+                        try host.setMemory(template.?, controller_dv);
                     }
                 },
                 else => {},
             }
-            // add implicit static members
-            switch (@typeInfo(td.type)) {
-                .@"enum" => |en| {
-                    // add fields as static members
-                    inline for (en.fields, 0..) |field, index| {
-                        const value = @field(td.type, field.name);
-                        const slot = offset + index;
-                        try host.attachMember(structure, .{
-                            .name = field.name,
-                            .type = .object,
-                            .flags = .{ .is_part_of_set = true },
-                            .slot = slot,
-                            .structure = structure,
-                        }, true);
-                        const value_obj = try self.exportPointerTarget(&value, true);
-                        template_maybe = template_maybe orelse try host.createTemplate(null);
-                        try host.writeSlot(template_maybe.?, slot, value_obj);
-                    }
-                },
-                .error_set => |es| if (es) |errors| {
-                    inline for (errors, 0..) |err_rec, index| {
-                        // get error from global set
-                        const err = @field(anyerror, err_rec.name);
-                        const slot = offset + index;
-                        try host.attachMember(structure, .{
-                            .name = err_rec.name,
-                            .type = .object,
-                            .flags = .{ .is_part_of_set = true },
-                            .slot = slot,
-                            .structure = structure,
-                        }, true);
-                        // can't use exportPointerTarget(), since each error in the set would be
-                        // considered a separate type--need special handling
-                        const value_obj = try self.exportError(err, structure);
-                        template_maybe = template_maybe orelse try host.createTemplate(null);
-                        try host.writeSlot(template_maybe.?, slot, value_obj);
-                    }
-                },
-                else => {},
-            }
-            if (template_maybe) |template| {
-                try host.attachTemplate(structure, template, true);
-            }
+            return template;
         }
 
         fn checkStaticMember(comptime T: anytype) void {
@@ -862,23 +872,20 @@ fn Factory(comptime host: type, comptime module: type) type {
             };
             const is_comptime = comptime pt.is_const and !target_td.isFunction() and !target_td.hasPointer();
             const export_handle = if (!is_comptime) host.getExportHandle(ptr) else null;
-            const memory = Memory.from(value_ptr, is_comptime);
             if (casting) {
                 const structure = try self.getStructure(target_td.type);
-                const obj = try host.castView(memory, structure, export_handle);
+                const obj = try createInstance(structure, value_ptr, is_comptime, export_handle);
                 if (comptime target_td.isComptimeOnly()) {
                     try self.attachComptimeValues(obj, ptr.*);
                 }
                 return obj;
             } else {
-                return host.captureView(memory, export_handle);
+                return createView(value_ptr, is_comptime, export_handle);
             }
         }
 
         fn exportError(_: @This(), err: anyerror, structure: Value) !Value {
-            const memory = Memory.from(&err, true);
-            const obj = try host.castView(memory, structure, null);
-            return obj;
+            return try createInstance(structure, &err, true, null);
         }
 
         fn exportComptimeValue(self: @This(), comptime value: anytype) !Value {
@@ -896,16 +903,16 @@ fn Factory(comptime host: type, comptime module: type) type {
             switch (@typeInfo(td.type)) {
                 .type => {
                     const obj = try self.getStructure(value);
-                    try host.writeSlot(target, 0, obj);
+                    try host.setSlotValue(target, 0, obj);
                 },
                 .comptime_int, .comptime_float, .enum_literal => {
                     const obj = try self.exportComptimeValue(value);
-                    try host.writeSlot(target, 0, obj);
+                    try host.setSlotValue(target, 0, obj);
                 },
                 .array => {
                     inline for (value, 0..) |element, index| {
                         const obj = try self.exportComptimeValue(element);
-                        try host.writeSlot(target, index, obj);
+                        try host.setSlotValue(target, index, obj);
                     }
                 },
                 .@"struct" => |st| {
@@ -914,7 +921,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         if (field_td.isComptimeOnly()) {
                             const field_value = @field(value, field.name);
                             const obj = try self.exportComptimeValue(field_value);
-                            try host.writeSlot(target, index, obj);
+                            try host.setSlotValue(target, index, obj);
                         }
                     }
                 },
@@ -927,7 +934,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 if (field_td.isComptimeOnly()) {
                                     const field_value = @field(value, field.name);
                                     const obj = try self.exportComptimeValue(field_value);
-                                    try host.writeSlot(target, index, obj);
+                                    try host.setSlotValue(target, index, obj);
                                 }
                             }
                         }
@@ -938,17 +945,126 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .optional => {
                     if (value) |v| {
                         const obj = try self.exportComptimeValue(v);
-                        try host.writeSlot(target, 0, obj);
+                        try host.setSlotValue(target, 0, obj);
                     }
                 },
                 .error_union => {
                     if (value) |v| {
                         const obj = try self.exportComptimeValue(v);
-                        try host.writeSlot(target, 0, obj);
+                        try host.setSlotValue(target, 0, obj);
                     } else |_| {}
                 },
                 else => {},
             }
+        }
+
+        fn createObject(initializers: anytype) !Value {
+            const object = try host.createObject();
+            try setProperties(object, initializers);
+            return object;
+        }
+
+        fn setProperties(object: Value, initializers: anytype) !void {
+            inline for (std.meta.fields(@TypeOf(initializers))) |field| {
+                if (try createValue(@field(initializers, field.name))) |value| {
+                    try host.setProperty(object, field.name, value);
+                }
+            }
+        }
+
+        fn createList(initializers: anytype) !Value {
+            const list = try host.createList();
+            inline for (initializers) |initializer| {
+                try appendList(list, initializer);
+            }
+            return list;
+        }
+
+        fn appendList(list: Value, initializer: anytype) !void {
+            if (try createValue(initializer)) |value| {
+                try host.appendList(list, value);
+            }
+        }
+
+        fn createValue(initializer: anytype) !?Value {
+            const T = @TypeOf(initializer);
+            return switch (@typeInfo(T)) {
+                .bool => try host.createBool(initializer),
+                .int => |int| if (T == usize)
+                    createValue(@as(u32, @intCast(initializer)))
+                else switch (int.bits) {
+                    32 => try host.createInteger(@bitCast(initializer), int.signedness == .unsigned),
+                    64 => try host.createBigInteger(@bitCast(initializer), int.signedness == .unsigned),
+                    else => try host.createInteger(@intCast(initializer), int.signedness == .unsigned),
+                },
+                .comptime_int => try createValue(@as(types.IntFor(initializer), initializer)),
+                .@"enum" => try createValue(@intFromEnum(initializer)),
+                .pointer => switch (T) {
+                    Value => initializer,
+                    []const u8, [:0]const u8 => try host.createString(initializer),
+                    else => {
+                        @compileLog(T);
+                        @compileError("Unhandled pointer type");
+                    },
+                },
+                .optional => if (initializer) |v| try createValue(v) else null,
+                .@"struct" => |st| switch (st.layout) {
+                    .@"packed" => try createValue(@as(st.backing_integer.?, @bitCast(initializer))),
+                    else => try createObject(initializer),
+                },
+                else => {
+                    @compileLog(T);
+                    @compileError("Unhandled type");
+                },
+            };
+        }
+
+        fn createView(ptr: anytype, copying: bool, export_handle: ?usize) !Value {
+            const PtrT = @TypeOf(ptr);
+            const pt = @typeInfo(PtrT).pointer;
+            const child_size = switch (@typeInfo(pt.child)) {
+                .@"fn" => 0,
+                else => @sizeOf(pt.child),
+            };
+            const address = switch (pt.size) {
+                .slice => @intFromPtr(ptr.ptr),
+                else => @intFromPtr(ptr),
+            };
+            const invalid_address = create: {
+                var invalid_ptr: *u8 = undefined;
+                _ = &invalid_ptr;
+                break :create @intFromPtr(invalid_ptr);
+            };
+            if (address == invalid_address) {
+                return host.createView(null, 0, true, export_handle);
+            }
+            const len: usize = switch (pt.size) {
+                .one => child_size,
+                .slice => child_size * ptr.len,
+                .many, .c => get: {
+                    if (address != 0) {
+                        if (pt.sentinel_ptr) |opaque_ptr| {
+                            const sentinel_ptr: *const pt.child = @ptrCast(@alignCast(opaque_ptr));
+                            var len: usize = 0;
+                            while (ptr[len] != sentinel_ptr.*) {
+                                len += 1;
+                            }
+                            break :get (len + 1) * child_size;
+                        } else {
+                            break :get 1;
+                        }
+                    } else {
+                        break :get 0;
+                    }
+                },
+            };
+            const bytes: [*]const u8 = @ptrFromInt(address);
+            return host.createView(bytes, len, copying, export_handle);
+        }
+
+        fn createInstance(structure: Value, ptr: anytype, copying: bool, export_handle: ?usize) !Value {
+            const dv = try createView(ptr, copying, export_handle);
+            return host.createInstance(structure, dv);
         }
     };
 }
@@ -963,17 +1079,6 @@ pub fn getFactoryThunk(comptime host: type, comptime module: type) thunk_zig.Thu
         }
     };
     return ns.exportStructures;
-}
-
-pub fn getModuleAttributes() types.ModuleAttributes {
-    return .{
-        .little_endian = builtin.target.cpu.arch.endian() == .little,
-        .runtime_safety = switch (builtin.mode) {
-            .Debug, .ReleaseSafe => true,
-            else => false,
-        },
-        .libc = builtin.link_libc,
-    };
 }
 
 fn ComptimeFree(comptime T: type) type {
@@ -1093,4 +1198,261 @@ fn readModifier(comptime modifier: ?type, comptime key: []const u8, comptime def
         }
     }
     return def;
+}
+
+const StructureType = enum(u32) {
+    primitive = 0,
+    array,
+    @"struct",
+    @"union",
+    error_union,
+    error_set,
+    @"enum",
+    optional,
+    pointer,
+    slice,
+    vector,
+    @"opaque",
+    arg_struct,
+    variadic_struct,
+    function,
+};
+
+const StructurePurpose = enum(u32) {
+    unknown,
+    promise,
+    generator,
+    abort_signal,
+    allocator,
+    iterator,
+    reader,
+    writer,
+    file,
+    directory,
+
+    pub fn isOptional(self: @This()) bool {
+        return switch (self) {
+            .promise, .generator, .abort_signal, .allocator => true,
+            else => false,
+        };
+    }
+};
+
+const StructureFlags = struct {
+    pub const Primitive = packed struct(u32) {
+        has_value: bool = true,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+
+        is_size: bool = false,
+        _: u27 = 0,
+    };
+    pub const Array = packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+
+        has_sentinel: bool = false,
+        is_string: bool = false,
+        is_typed_array: bool = false,
+        is_clamped_array: bool = false,
+
+        _: u24 = 0,
+    };
+    pub const Struct = packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+
+        is_extern: bool = false,
+        is_packed: bool = false,
+        is_tuple: bool = false,
+        is_optional: bool = false,
+
+        _: u24 = 0,
+    };
+    pub const Union = packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+
+        has_selector: bool = false,
+        has_tag: bool = false,
+        has_inaccessible: bool = false,
+        is_extern: bool = false,
+
+        is_packed: bool = false,
+        _: u23 = 0,
+    };
+    pub const ErrorUnion = packed struct(u32) {
+        has_value: bool = true,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+
+        _: u28 = 0,
+    };
+    pub const ErrorSet = packed struct(u32) {
+        has_value: bool = true,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+
+        is_global: bool = false,
+        _: u27 = 0,
+    };
+    pub const Enum = packed struct(u32) {
+        has_value: bool = true,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+
+        is_open_ended: bool = false,
+        _: u27 = 0,
+    };
+    pub const Optional = packed struct(u32) {
+        has_value: bool = true,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+
+        has_selector: bool = false,
+        _: u27 = 0,
+    };
+    pub const Pointer = packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = true,
+        has_slot: bool = true,
+
+        has_length: bool = false,
+        is_multiple: bool = false,
+        is_single: bool = false,
+        is_const: bool = false,
+
+        is_nullable: bool = false,
+        _: u23 = 0,
+    };
+    pub const Slice = packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+
+        has_sentinel: bool = false,
+        is_string: bool = false,
+        is_typed_array: bool = false,
+        is_clamped_array: bool = false,
+
+        is_opaque: bool = false,
+        _: u23 = 0,
+    };
+    pub const Vector = packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+
+        is_typed_array: bool = false,
+        is_clamped_array: bool = false,
+        _: u26 = 0,
+    };
+    pub const Opaque = packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+
+        _: u28 = 0,
+    };
+    pub const ArgStruct = packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = true,
+        has_slot: bool = true,
+
+        has_options: bool = false,
+        is_throwing: bool = false,
+        is_async: bool = false,
+        _: u25 = 0,
+    };
+    pub const VariadicStruct = packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = true,
+        has_slot: bool = true,
+
+        has_options: bool = false,
+        is_throwing: bool = false,
+        is_async: bool = false,
+        _: u25 = 0,
+    };
+    pub const Function = packed struct(u32) {
+        has_value: bool = false,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+
+        _: u28 = 0,
+    };
+};
+
+const MemberType = enum(u32) {
+    void = 0,
+    bool,
+    int,
+    uint,
+    float,
+    object,
+    type,
+    literal,
+    null,
+    undefined,
+    unsupported,
+};
+
+const MemberFlags = packed struct(u32) {
+    is_required: bool = false,
+    is_read_only: bool = false,
+    is_part_of_set: bool = false,
+    is_selector: bool = false,
+
+    is_method: bool = false,
+    is_sentinel: bool = false,
+    is_backing_int: bool = false,
+    is_string: bool = false,
+
+    _: u24 = 0,
+};
+
+fn canBeString(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        inline .pointer, .array => |pt| pt.child == u8 or pt.child == u16,
+        .optional => |op| canBeString(op.child),
+        .error_union => |eu| canBeString(eu.payload),
+        else => false,
+    };
+}
+
+fn canReturnString(comptime f: std.builtin.Type.Fn) bool {
+    if (f.return_type) |RT| {
+        if (canBeString(RT)) return true;
+    }
+    inline for (f.params) |param| {
+        if (param.type) |PT| {
+            if (types.getInternalType(PT)) |internal_type| {
+                switch (internal_type) {
+                    .promise, .generator => {
+                        if (canBeString(PT.payload)) return true;
+                    },
+                    else => {},
+                }
+            }
+        }
+    }
+    return false;
 }

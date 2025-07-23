@@ -1,10 +1,10 @@
 const std = @import("std");
-const builtin = @import("builtin");
-const types = @import("types.zig");
-
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectEqualSlices = std.testing.expectEqualSlices;
+const builtin = @import("builtin");
+
+const types = @import("./types.zig");
 
 pub const Error = error{
     TooManyArguments,

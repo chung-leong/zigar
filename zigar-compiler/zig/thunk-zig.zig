@@ -2,10 +2,10 @@ const std = @import("std");
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 
-const fn_transform = @import("fn-transform.zig");
-const types = @import("types.zig");
+const fn_transform = @import("./fn-transform.zig");
+const types = @import("./types.zig");
 const Memory = types.Memory;
-const variadic = @import("variadic.zig");
+const variadic = @import("./variadic.zig");
 
 pub const Thunk = *const fn (*const anyopaque, *anyopaque) anyerror!void;
 pub const VariadicThunk = *const fn (*const anyopaque, *anyopaque, *const anyopaque, usize) anyerror!void;

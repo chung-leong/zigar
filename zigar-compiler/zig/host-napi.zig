@@ -3,13 +3,15 @@ const expectEqual = std.testing.expectEqual;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
-const exporter = @import("exporter.zig");
-const thunk_js = @import("thunk-js.zig");
-const thunk_zig = @import("thunk-zig.zig");
-const types = @import("types.zig");
-const Value = types.Value;
-const Memory = types.Memory;
-const Error = types.Error;
+const exporter = @import("./exporter.zig");
+const fn_transform = @import("./fn-transform.zig");
+const hooks = @import("./hooks.zig");
+const interface = @import("./interface.zig");
+const thunk_js = @import("./thunk-js.zig");
+const thunk_zig = @import("./thunk-zig.zig");
+const types = @import("./types.zig");
+const AnyModuleHost = types.AnyModuleHost;
+const AnyValue = types.AnyValue;
 pub const Promise = types.Promise;
 pub const PromiseOf = types.PromiseOf;
 pub const PromiseArgOf = types.PromiseArgOf;
@@ -17,6 +19,8 @@ pub const Generator = types.Generator;
 pub const GeneratorOf = types.GeneratorOf;
 pub const GeneratorArgOf = types.GeneratorArgOf;
 pub const AbortSignal = types.AbortSignal;
+
+const Module = interface.Module(AnyModuleHost, AnyValue);
 
 pub fn WorkQueue(ns: type) type {
     return types.WorkQueue(ns, struct {
@@ -30,54 +34,21 @@ pub fn WorkQueue(ns: type) type {
     });
 }
 
-const ModuleHost = opaque {};
-
-// struct for C
-const StructureC = extern struct {
-    name: ?[*:0]const u8,
-    type: u32,
-    purpose: u32,
-    flags: u32,
-    signature: u64,
-    length: usize,
-    byte_size: usize,
-    alignment: u16,
-};
-const MemberC = extern struct {
-    name: ?[*:0]const u8,
-    type: u32,
-    flags: u32,
-    bit_offset: usize,
-    bit_size: usize,
-    byte_size: usize,
-    slot: usize,
-    structure: ?Value,
-};
-
 fn missing(comptime T: type) comptime_int {
     return std.math.maxInt(T);
 }
 
-const Jscall = extern struct {
-    fn_id: usize,
-    arg_address: usize,
-    arg_size: usize,
-    futex_handle: usize = 0,
-};
-
-const Syscall = opaque {};
-
 const MainThread = struct {
     thread_id: std.Thread.Id,
-    module_data: *ModuleHost,
+    module_data: *AnyModuleHost,
     multithread_count: std.atomic.Value(usize),
-    redirection_mask: u32 = 0,
+    redirection_mask: hooks.Mask = .{},
 };
 
 var gpa = std.heap.DebugAllocator(.{}).init;
 const allocator = gpa.allocator();
 var main_thread_list = std.ArrayList(*MainThread).init(allocator);
-var imports: Imports = undefined;
+var imports: Module.Imports = undefined;
 
 threadlocal var main_thread: ?MainThread = null;
 threadlocal var parent_thread_id: ?std.Thread.Id = null;
@@ -86,8 +57,8 @@ pub fn setParentThreadId(id: std.Thread.Id) void {
     parent_thread_id = id;
 }
 
-fn getModuleData() !*ModuleHost {
-    return if (main_thread) |mt| mt.module_data else Error.NotInMainThread;
+fn getModuleData() !*AnyModuleHost {
+    return if (main_thread) |mt| mt.module_data else error.NotInMainThread;
 }
 
 fn getMainThread() !std.meta.Tuple(&.{ *MainThread, bool }) {
@@ -102,34 +73,125 @@ fn getMainThread() !std.meta.Tuple(&.{ *MainThread, bool }) {
             return .{ mt, false };
         }
     }
-    return Error.MainThreadNotFound;
+    return error.MainThreadNotFound;
 }
 
-pub fn captureString(memory: Memory) !Value {
+pub fn createBool(initializer: bool) !AnyValue {
     const md = try getModuleData();
-    var value: Value = undefined;
-    if (imports.capture_string(md, &memory, &value) != .SUCCESS) {
-        return Error.UnableToCreateObject;
+    var value: AnyValue = undefined;
+    if (imports.create_bool(md, initializer, &value) != .SUCCESS) {
+        return error.UnableToCreateBoolean;
     }
     return value;
 }
 
-pub fn captureView(memory: Memory, export_handle: ?usize) !Value {
+pub fn createInteger(initializer: i32, is_unsigned: bool) !AnyValue {
     const md = try getModuleData();
-    var value: Value = undefined;
-    if (imports.capture_view(md, &memory, export_handle orelse 0, &value) != .SUCCESS) {
-        return Error.UnableToCreateDataView;
+    var value: AnyValue = undefined;
+    if (imports.create_integer(md, initializer, is_unsigned, &value) != .SUCCESS) {
+        return error.UnableToCreateInteger;
     }
     return value;
 }
 
-pub fn castView(memory: Memory, structure: Value, export_handle: ?usize) !Value {
+pub fn createBigInteger(initializer: i64, is_unsigned: bool) !AnyValue {
     const md = try getModuleData();
-    var value: Value = undefined;
-    if (imports.cast_view(md, &memory, structure, export_handle orelse 0, &value) != .SUCCESS) {
-        return Error.UnableToCreateObject;
+    var value: AnyValue = undefined;
+    if (imports.create_big_integer(md, initializer, is_unsigned, &value) != .SUCCESS) {
+        return error.UnableToCreateInteger;
     }
     return value;
+}
+
+pub fn createString(initializer: []const u8) !AnyValue {
+    const md = try getModuleData();
+    var value: AnyValue = undefined;
+    if (imports.create_string(md, initializer.ptr, initializer.len, &value) != .SUCCESS) {
+        return error.UnableToCreateString;
+    }
+    return value;
+}
+
+pub fn createView(bytes: ?[*]const u8, len: usize, copying: bool, export_handle: ?usize) !AnyValue {
+    const md = try getModuleData();
+    var value: AnyValue = undefined;
+    if (imports.create_view(md, bytes, len, copying, export_handle orelse 0, &value) != .SUCCESS) {
+        return error.UnableToCreateDataView;
+    }
+    return value;
+}
+
+pub fn createInstance(structure: AnyValue, dv: AnyValue) !AnyValue {
+    const md = try getModuleData();
+    var value: AnyValue = undefined;
+    if (imports.create_instance(md, structure, dv, &value) != .SUCCESS) {
+        return error.UnableToCreateStructureInstance;
+    }
+    return value;
+}
+
+pub fn createList() !AnyValue {
+    const md = try getModuleData();
+    var list: AnyValue = undefined;
+    if (imports.create_list(md, &list) != .SUCCESS) {
+        return error.UnableToCreateList;
+    }
+    return list;
+}
+
+pub fn createObject() !AnyValue {
+    const md = try getModuleData();
+    var object: AnyValue = undefined;
+    if (imports.create_object(md, &object) != .SUCCESS) {
+        return error.UnableToCreateObject;
+    }
+    return object;
+}
+
+pub fn getProperty(object: AnyValue, key: []const u8) !AnyValue {
+    const md = try getModuleData();
+    var value: AnyValue = undefined;
+    if (imports.get_property(md, object, key.ptr, key.len, &value) != .SUCCESS) {
+        return error.UnableToGetProperty;
+    }
+    return value;
+}
+
+pub fn setProperty(object: AnyValue, key: []const u8, value: AnyValue) !void {
+    const md = try getModuleData();
+    if (imports.set_property(md, object, key.ptr, key.len, value) != .SUCCESS) {
+        return error.UnableToSetProperty;
+    }
+}
+
+pub fn getSlotValue(object: ?AnyValue, slot: usize) !AnyValue {
+    const md = try getModuleData();
+    var value: AnyValue = undefined;
+    if (imports.get_slot_value(md, object, slot, &value) != .SUCCESS) {
+        return error.UnableToGetSlotValue;
+    }
+    return value;
+}
+
+pub fn setSlotValue(object: ?AnyValue, slot: usize, value: AnyValue) !void {
+    const md = try getModuleData();
+    if (imports.set_slot_value(md, object, slot, value) != .SUCCESS) {
+        return error.UnableToSetSlotValue;
+    }
+}
+
+pub fn setMemory(object: AnyValue, dv: AnyValue) !void {
+    const md = try getModuleData();
+    if (imports.set_memory(md, object, dv) != .SUCCESS) {
+        return error.UnableToSetMemory;
+    }
+}
+
+pub fn appendList(list: AnyValue, value: AnyValue) !void {
+    const md = try getModuleData();
+    if (imports.append_list(md, list, value) != .SUCCESS) {
+        return error.UnableToAppendList;
+    }
 }
 
 pub fn getExportHandle(comptime ptr: anytype) usize {
@@ -141,104 +203,24 @@ pub fn getExportHandle(comptime ptr: anytype) usize {
     return @intFromPtr(&ns.getAddress);
 }
 
-pub fn readSlot(target: ?Value, id: usize) !Value {
+pub fn defineStructure(structure: AnyValue) !void {
     const md = try getModuleData();
-    var result: Value = undefined;
-    if (imports.read_slot(md, target, id, &result) != .SUCCESS) {
-        return Error.UnableToRetrieveObject;
-    }
-    return result;
-}
-
-pub fn writeSlot(target: ?Value, id: usize, value: ?Value) !void {
-    const md = try getModuleData();
-    if (imports.write_slot(md, target, id, value) != .SUCCESS) {
-        return Error.UnableToInsertObject;
+    if (imports.define_structure(md, structure) != .SUCCESS) {
+        return error.UnableToDefineStructure;
     }
 }
 
-pub fn beginStructure(def: types.Structure) !Value {
+pub fn finalizeStructure(structure: AnyValue) !void {
     const md = try getModuleData();
-    const def_c: StructureC = .{
-        .name = if (def.name) |p| @ptrCast(p) else null,
-        .type = @intFromEnum(def.type),
-        .purpose = @intFromEnum(def.purpose),
-        .flags = @bitCast(def.flags),
-        .signature = def.signature,
-        .length = def.length orelse missing(usize),
-        .byte_size = def.byte_size orelse missing(usize),
-        .alignment = def.alignment orelse missing(u16),
-    };
-    var structure: Value = undefined;
-    if (imports.begin_structure(md, &def_c, &structure) != .SUCCESS) {
-        return Error.UnableToStartStructureDefinition;
+    if (imports.finalize_structure(md, structure) != .SUCCESS) {
+        return error.UnableToDefineStructure;
     }
-    return structure;
-}
-
-pub fn attachMember(structure: Value, member: types.Member, is_static: bool) !void {
-    const md = try getModuleData();
-    const member_c: MemberC = .{
-        .name = if (member.name) |p| @ptrCast(p) else null,
-        .type = @intFromEnum(member.type),
-        .flags = @bitCast(member.flags),
-        .bit_offset = member.bit_offset orelse missing(usize),
-        .bit_size = member.bit_size orelse missing(usize),
-        .byte_size = member.byte_size orelse missing(usize),
-        .slot = member.slot orelse missing(usize),
-        .structure = member.structure,
-    };
-    if (imports.attach_member(md, structure, &member_c, is_static) != .SUCCESS) {
-        if (is_static) {
-            return Error.UnableToAddStaticMember;
-        } else {
-            return Error.UnableToAddStructureMember;
-        }
-    }
-}
-
-pub fn attachTemplate(structure: Value, template: Value, is_static: bool) !void {
-    const md = try getModuleData();
-    if (imports.attach_template(md, structure, template, is_static) != .SUCCESS) {
-        return Error.UnableToAddStructureTemplate;
-    }
-}
-
-pub fn defineStructure(structure: Value) !Value {
-    const md = try getModuleData();
-    var value: Value = undefined;
-    if (imports.define_structure(md, structure, &value) != .SUCCESS) {
-        return Error.UnableToDefineStructure;
-    }
-    return value;
-}
-
-pub fn endStructure(structure: Value) !void {
-    const md = try getModuleData();
-    if (imports.end_structure(md, structure) != .SUCCESS) {
-        return Error.UnableToDefineStructure;
-    }
-}
-
-pub fn createTemplate(dv: ?Value) !Value {
-    const md = try getModuleData();
-    var value: Value = undefined;
-    if (imports.create_template(md, dv, &value) != .SUCCESS) {
-        return Error.UnableToCreateStructureTemplate;
-    }
-    return value;
-}
-
-pub fn createMessage(err: anyerror) ?Value {
-    const err_name = @errorName(err);
-    const memory = Memory.from(err_name, true);
-    return captureString(memory) catch null;
 }
 
 pub fn handleJscall(ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
-    const md: *ModuleHost = @ptrCast(ptr);
+    const md: *AnyModuleHost = @ptrCast(ptr);
     const in_main_thread = main_thread != null;
-    var call: Jscall = .{
+    var call: Module.Jscall = .{
         .fn_id = fn_id,
         .arg_address = @intFromPtr(arg_ptr),
         .arg_size = arg_size,
@@ -252,7 +234,7 @@ pub fn releaseFunction(fn_ptr: anytype) void {
     const control = thunk_js.createThunkController(@This(), FT);
     const fn_id = control(null, .get_id, thunk_address) catch return;
     const ptr_address = control(null, .get_ptr, thunk_address) catch return;
-    const md: *ModuleHost = @ptrFromInt(ptr_address);
+    const md: *AnyModuleHost = @ptrFromInt(ptr_address);
     const in_main_thread = main_thread != null;
     _ = imports.release_function(md, fn_id, in_main_thread);
 }
@@ -263,7 +245,7 @@ pub fn startMultithread() !void {
     errdefer _ = mt.multithread_count.fetchSub(1, .monotonic);
     if (prev_count == 0) {
         if (imports.enable_multithread(mt.module_data, in_main_thread) != .SUCCESS) {
-            return Error.UnableToUseThread;
+            return error.UnableToUseThread;
         }
     }
 }
@@ -276,7 +258,7 @@ pub fn stopMultithread() void {
     }
 }
 
-fn initialize(md: *ModuleHost) callconv(.C) E {
+fn initialize(md: *AnyModuleHost) callconv(.C) E {
     main_thread = .{
         .thread_id = std.Thread.getCurrentId(),
         .module_data = md,
@@ -354,92 +336,56 @@ fn destroyJsThunk(
     return .SUCCESS;
 }
 
-fn redirectSyscall(call: *Syscall) callconv(.C) std.posix.E {
+fn setSyscallMask(name: [*:0]const u8, set: bool) callconv(.C) E {
+    const mt, _ = getMainThread() catch return .FAULT;
+    const name_slice = name[0..std.mem.len(name)];
+    return inline for (std.meta.fields(hooks.Mask)) |field| {
+        if (std.mem.eql(u8, field.name, name_slice)) {
+            @field(mt.redirection_mask, field.name) = set;
+            break .SUCCESS;
+        }
+    } else .INVAL;
+}
+
+const hook_table = hooks.getHookTable(@This());
+
+fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
+    const name_s = name[0..std.mem.len(name)];
+    const entry = hook_table.get(name_s) orelse return .NOENT;
+    dest.* = entry;
+    return .SUCCESS;
+}
+
+pub fn redirectSyscall(call: *hooks.Syscall) std.posix.E {
     const mt, const in_main_thread = getMainThread() catch return .FAULT;
     const md = mt.module_data;
     return imports.handle_syscall(md, call, in_main_thread);
 }
 
-fn isRedirecting(op: u32) callconv(.C) bool {
+pub fn isRedirecting(comptime literal: @TypeOf(.enum_literal)) bool {
     const mt, _ = getMainThread() catch return false;
-    return (mt.redirection_mask & op) != 0;
+    const name = @tagName(literal);
+    return @field(mt.redirection_mask, name);
 }
 
-fn setSyscallMask(mask: u32, set: bool) callconv(.C) E {
-    const mt, _ = getMainThread() catch return .FAULT;
-    if (set) {
-        mt.redirection_mask |= mask;
-    } else {
-        mt.redirection_mask &= ~mask;
-    }
-    return .SUCCESS;
-}
-
-fn getSyscallHook(name: [*:0]const u8, dest: **const Hook) callconv(.C) E {
-    const fn_ptr = find_hook(name) orelse return .NOENT;
-    dest.* = fn_ptr;
-    return .SUCCESS;
-}
-
-const Hook = opaque {};
-extern fn find_hook([*:0]const u8) callconv(.C) ?*const Hook;
-comptime {
-    @export(&redirectSyscall, .{ .name = "redirect_syscall", .visibility = .hidden });
-    @export(&isRedirecting, .{ .name = "is_redirecting", .visibility = .hidden });
-}
-
-// pointer table that's filled on the C side
-const Imports = extern struct {
-    capture_string: *const fn (*ModuleHost, *const Memory, *Value) callconv(.C) E,
-    capture_view: *const fn (*ModuleHost, *const Memory, usize, *Value) callconv(.C) E,
-    cast_view: *const fn (*ModuleHost, *const Memory, Value, usize, *Value) callconv(.C) E,
-    read_slot: *const fn (*ModuleHost, ?Value, usize, *Value) callconv(.C) E,
-    write_slot: *const fn (*ModuleHost, ?Value, usize, ?Value) callconv(.C) E,
-    begin_structure: *const fn (*ModuleHost, *const StructureC, *Value) callconv(.C) E,
-    attach_member: *const fn (*ModuleHost, Value, *const MemberC, bool) callconv(.C) E,
-    attach_template: *const fn (*ModuleHost, Value, Value, bool) callconv(.C) E,
-    define_structure: *const fn (*ModuleHost, Value, *Value) callconv(.C) E,
-    end_structure: *const fn (*ModuleHost, Value) callconv(.C) E,
-    create_template: *const fn (*ModuleHost, ?Value, *Value) callconv(.C) E,
-    enable_multithread: *const fn (*ModuleHost, bool) callconv(.C) E,
-    disable_multithread: *const fn (*ModuleHost, bool) callconv(.C) E,
-    handle_jscall: *const fn (*ModuleHost, *Jscall, bool) callconv(.C) E,
-    handle_syscall: *const fn (*ModuleHost, *Syscall, bool) callconv(.C) std.posix.E,
-    release_function: *const fn (*ModuleHost, usize, bool) callconv(.C) E,
-};
-
-// pointer table that's used on the C side
-const Exports = extern struct {
-    initialize: *const fn (*ModuleHost) callconv(.C) E,
-    deinitialize: *const fn () callconv(.C) E,
-    get_export_address: *const fn (usize, *usize) callconv(.C) E,
-    get_factory_thunk: *const fn (*usize) callconv(.C) E,
-    run_thunk: *const fn (usize, usize, usize) callconv(.C) E,
-    run_variadic_thunk: *const fn (usize, usize, usize, usize, usize) callconv(.C) E,
-    create_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
-    destroy_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
-    get_syscall_hook: *const fn ([*:0]const u8, **const Hook) callconv(.C) E,
-    set_syscall_mask: *const fn (u32, bool) callconv(.C) E,
-};
-
-const Module = extern struct {
-    version: u32,
-    attributes: types.ModuleAttributes,
-    imports: *Imports = &imports,
-    exports: *const Exports,
-};
-
-pub fn createModule(comptime module: type) Module {
+pub fn createModule(comptime module_ns: type) Module {
     const host = @This();
     const ns = struct {
         fn getFactoryThunk(dest: *usize) callconv(.C) E {
-            dest.* = @intFromPtr(exporter.getFactoryThunk(host, module));
+            dest.* = @intFromPtr(exporter.getFactoryThunk(host, module_ns));
             return .SUCCESS;
         }
     };
     return .{
         .version = 6,
-        .attributes = exporter.getModuleAttributes(),
+        .attributes = .{
+            .little_endian = builtin.target.cpu.arch.endian() == .little,
+            .runtime_safety = switch (builtin.mode) {
+                .Debug, .ReleaseSafe => true,
+                else => false,
+            },
+            .libc = builtin.link_libc,
+        },
         .imports = &imports,
         .exports = &.{
             .initialize = initialize,
@@ -469,7 +415,7 @@ test "createModule" {
             return arg1 < arg2;
         }
     };
-    const module = createModule(Test);
-    try expectEqual(4, module.version);
-    try expectEqual((builtin.target.cpu.arch.endian() == .little), module.attributes.little_endian);
+    const m = createModule(Test);
+    try expectEqual(4, m.version);
+    try expectEqual((builtin.target.cpu.arch.endian() == .little), m.attributes.little_endian);
 }

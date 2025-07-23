@@ -3,12 +3,12 @@ const allocator = std.heap.wasm_allocator;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
-const exporter = @import("exporter.zig");
-const thunk_js = @import("thunk-js.zig");
+const exporter = @import("./exporter.zig");
+const thunk_js = @import("./thunk-js.zig");
 const ActionType = thunk_js.ActionType;
 const ActionResult = thunk_js.ActionResult;
-const thunk_zig = @import("thunk-zig.zig");
-const types = @import("types.zig");
+const thunk_zig = @import("./thunk-zig.zig");
+const types = @import("./types.zig");
 const Value = types.Value;
 const Memory = types.Memory;
 const Error = types.Error;

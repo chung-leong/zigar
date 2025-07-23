@@ -5,8 +5,8 @@ const expectError = std.testing.expectError;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
-const fn_transform = @import("fn-transform.zig");
-const types = @import("types.zig");
+const fn_transform = @import("./fn-transform.zig");
+const types = @import("./types.zig");
 const Memory = types.Memory;
 
 pub const Action = enum(u32) {

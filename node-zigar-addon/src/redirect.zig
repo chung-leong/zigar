@@ -1,21 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const h = @cImport({
-    @cInclude("syscall-hooks.h");
-});
-
-pub const Syscall = extern struct {
-    cmd: Command,
-    u: h.syscall_union,
-    futex_handle: usize,
-
-    pub const Command: type = deriveZigEnum(u8, h, "cmd_access", "cmd_write");
-};
-pub const Mask: type = deriveZigEnum(u8, h, "mask_mkdir", "mask_unlink");
-pub const DT: type = deriveZigEnum(u8, h, "DT_UNKNOWN", "DT_WHT");
-pub const FCNTL: type = deriveZigEnum(u8, h, "F_DUPFD", "F_SETFL");
-
 const ns = switch (builtin.target.os.tag) {
     .linux => linux,
     .driverkit, .ios, .macos, .tvos, .visionos, .watchos => darwin,
@@ -504,37 +489,4 @@ fn readStruct(comptime T: type, file: std.fs.File) !T {
     const bytes: [*]u8 = @ptrCast(&buffer);
     if (try file.read(bytes[0..len]) != len) return error.Unexpected;
     return buffer;
-}
-
-fn deriveZigEnum(comptime T: type, comptime c_ns: type, comptime first_item: []const u8, comptime last_item: []const u8) type {
-    // derive Zig enum from C enum
-    @setEvalBranchQuota(100000);
-    var count: usize = 0;
-    var in_enum = false;
-    for (std.meta.declarations(c_ns)) |decl| {
-        if (!in_enum and std.mem.eql(u8, decl.name, first_item)) in_enum = true;
-        if (in_enum) count += 1;
-        if (in_enum and std.mem.eql(u8, decl.name, last_item)) in_enum = false;
-    }
-    var fields: [count]std.builtin.Type.EnumField = undefined;
-    var i: usize = 0;
-    for (std.meta.declarations(c_ns)) |decl| {
-        if (!in_enum and std.mem.eql(u8, decl.name, first_item)) in_enum = true;
-        if (in_enum) {
-            fields[i] = .{
-                .name = decl.name,
-                .value = @field(h, decl.name),
-            };
-            i += 1;
-        }
-        if (in_enum and std.mem.eql(u8, decl.name, last_item)) in_enum = false;
-    }
-    return @Type(.{
-        .@"enum" = .{
-            .tag_type = T,
-            .fields = &fields,
-            .decls = &.{},
-            .is_exhaustive = true,
-        },
-    });
 }

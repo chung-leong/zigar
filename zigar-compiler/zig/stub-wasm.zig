@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const host = @import("host-wasm.zig");
+pub const host = @import("./host-wasm.zig");
 
 export fn getFactoryThunk() usize {
     return host.getFactoryThunk(@import("module"));

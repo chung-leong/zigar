@@ -3,7 +3,7 @@ const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectEqualSlices = std.testing.expectEqualSlices;
 
-const fn_transform = @import("./fn-transform.zig");
+const fn_transform = @import("fn-transform.zig");
 
 pub const CodeGeneratorOptions = struct {
     pub const ErrorValue = struct {

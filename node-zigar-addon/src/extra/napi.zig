@@ -1,7 +1,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const api_translator = @import("code-gen/api-translator.zig");
+
+const api_translator = @import("api-translator.zig");
 const inout = api_translator.inout;
+
 const c = @cImport({
     @cInclude("node_api.h");
 });
@@ -58,7 +60,7 @@ pub const PropertyAttributes = packed struct(c_uint) {
     _: u7 = 0,
     static: bool = false,
     __: std.meta.Int(.unsigned, @bitSizeOf(c_uint) - 11) = 0,
-    
+
     pub const default: @This() = .{};
     pub const default_method: @This() = .{ .writable = true, .configurable = true };
     pub const default_jsproperty: @This() = .{ .writable = true, .enumerable = true, .configurable = true };
@@ -167,7 +169,7 @@ pub const Filter = packed struct(c_uint) {
     skip_strings: bool = false,
     skip_symbols: bool = false,
     _: std.meta.Int(.unsigned, @bitSizeOf(c_uint) - 5) = 0,
-    
+
     pub const all_properties: @This() = .{};
 };
 /// https://nodejs.org/api/n-api.html#napi_key_conversion

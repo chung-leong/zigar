@@ -3,14 +3,17 @@ const allocator = std.heap.c_allocator;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
-const fn_transform = @import("code-gen/fn-transform.zig");
-const napi = @import("napi.zig");
+const fn_transform = @import("./extra/fn-transform.zig");
+const hooks = @import("./extra/hooks.zig");
+const HookEntry = hooks.Entry;
+const Syscall = hooks.Syscall;
+const interface = @import("./extra/interface.zig");
+const napi = @import("./extra/napi.zig");
 const Env = napi.Env;
 const Value = napi.Value;
 const Ref = napi.Ref;
 const ThreadsafeFunction = napi.ThreadsafeFunction;
-const redirect = @import("redirect.zig");
-const Syscall = redirect.Syscall;
+const redirect = @import("./redirect.zig");
 
 comptime {
     napi.createAddon(ModuleHost.attachExports);
@@ -24,16 +27,14 @@ const ModuleHost = struct {
     base_address: usize = 0,
     env: Env,
     js: struct {
-        capture_view: ?Ref = null,
-        cast_view: ?Ref = null,
-        read_slot: ?Ref = null,
-        write_slot: ?Ref = null,
-        begin_structure: ?Ref = null,
-        attach_member: ?Ref = null,
-        attach_template: ?Ref = null,
+        create_view: ?Ref = null,
+        create_instance: ?Ref = null,
+        append_list: ?Ref = null,
+        get_slot_value: ?Ref = null,
+        set_slot_value: ?Ref = null,
+        set_memory: ?Ref = null,
         define_structure: ?Ref = null,
-        end_structure: ?Ref = null,
-        create_template: ?Ref = null,
+        finalize_structure: ?Ref = null,
         handle_jscall: ?Ref = null,
         release_function: ?Ref = null,
 
@@ -70,6 +71,9 @@ const ModuleHost = struct {
     var module_count: i32 = 0;
     var buffer_count: i32 = 0;
     var function_count: i32 = 0;
+
+    const Module = interface.Module(@This(), Value);
+    const Jscall = Module.Jscall;
 
     fn attachExports(env: Env, exports: Value) !void {
         inline for (.{ "createEnvironment", "getGCStatistics" }) |name| {
@@ -244,11 +248,11 @@ const ModuleHost = struct {
         self.library = lib;
     }
 
-    pub fn getSyscallHook(self: *@This(), name: [*:0]const u8) ?*const Hook {
+    pub fn getSyscallHook(self: *@This(), name: [*:0]const u8) ?HookEntry {
         const module = self.module.?;
-        var ptr: *const Hook = undefined;
-        if (module.exports.get_syscall_hook(name, &ptr) != .SUCCESS) return null;
-        return ptr;
+        var hook: HookEntry = undefined;
+        if (module.exports.get_syscall_hook(name, &hook) != .SUCCESS) return null;
+        return hook;
     }
 
     fn getModuleAttributes(self: *@This()) !Value {
@@ -434,9 +438,15 @@ const ModuleHost = struct {
         try Futex.wake(handle, @enumFromInt(value));
     }
 
+    const NumberType = enum(u32) {
+        int = 2, // the numeric values match those for MemberType
+        uint,
+        float,
+    };
+
     fn getNumericValue(self: *@This(), member_type: Value, bits: Value, address: Value) !Value {
         const env = self.env;
-        const type_enum = try std.meta.intToEnum(MemberType, try env.getValueUint32(member_type));
+        const type_enum = try std.meta.intToEnum(NumberType, try env.getValueUint32(member_type));
         const bit_size = try env.getValueUint32(bits);
         const addr_value = try env.getValueUsize(address);
         if (!std.mem.isAligned(addr_value, bit_size / 8)) return error.PointerMisalignment;
@@ -461,13 +471,12 @@ const ModuleHost = struct {
                 32 => try env.createDouble(@as(*const f32, @ptrCast(@alignCast(src))).*),
                 else => return error.InvalidArg,
             },
-            else => return error.Unexpected,
         };
     }
 
     fn setNumericValue(self: *@This(), member_type: Value, bits: Value, address: Value, value: Value) !void {
         const env = self.env;
-        const type_enum = try std.meta.intToEnum(MemberType, try env.getValueUint32(member_type));
+        const type_enum = try std.meta.intToEnum(NumberType, try env.getValueUint32(member_type));
         const bit_size = try env.getValueUint32(bits);
         const addr_value = try env.getValueUsize(address);
         if (!std.mem.isAligned(addr_value, bit_size / 8)) return error.PointerMisalignment;
@@ -511,7 +520,6 @@ const ModuleHost = struct {
                     else => return error.InvalidArg,
                 }
             },
-            else => return error.Unexpected,
         }
     }
 
@@ -536,33 +544,33 @@ const ModuleHost = struct {
         const event_len = try env.getValueStringUtf8(event, null);
         const event_bytes = try allocator.alloc(u8, event_len + 1);
         _ = try env.getValueStringUtf8(event, event_bytes);
-        const event_name = event_bytes[0..event_len];
+        const event_name: [*:0]const u8 = @ptrCast(event_bytes);
         const set = try env.getValueBool(listening);
         defer allocator.free(event_bytes);
-        const event_mask = inline for (std.meta.fields(redirect.Mask)) |field| {
-            if (std.mem.eql(u8, event_name, field.name[5..])) {
-                break @field(redirect.Mask, field.name);
-            }
-        } else return error.UnknownEvent;
         const module = self.module orelse return error.NoLoadedModule;
-        if (module.exports.set_syscall_mask(@intFromEnum(event_mask), set) != .SUCCESS) {
+        if (module.exports.set_syscall_mask(event_name, set) != .SUCCESS) {
             return error.Unexpected;
         }
     }
 
     fn exportFunctionsToModule(self: *@This()) !void {
         const names = .{
-            "capture_string",
-            "capture_view",
-            "cast_view",
-            "read_slot",
-            "write_slot",
-            "begin_structure",
-            "attach_member",
-            "attach_template",
+            "create_bool",
+            "create_integer",
+            "create_big_integer",
+            "create_string",
+            "create_view",
+            "create_instance",
+            "create_list",
+            "create_object",
+            "append_list",
+            "get_property",
+            "set_property",
+            "get_slot_value",
+            "set_slot_value",
+            "set_memory",
             "define_structure",
-            "end_structure",
-            "create_template",
+            "finalize_structure",
             "enable_multithread",
             "disable_multithread",
             "handle_jscall",
@@ -620,49 +628,104 @@ const ModuleHost = struct {
         }
     }
 
-    fn captureString(self: *@This(), mem: *const Memory) !Value {
+    fn createBool(self: *@This(), value: bool) !Value {
         const env = self.env;
-        return try env.createStringUtf8(mem.bytes.?[0..mem.len]);
+        return try env.getBoolean(value);
     }
 
-    fn captureView(self: *@This(), mem: *const Memory, handle: usize) !Value {
+    fn createInteger(self: *@This(), value: i32, unsigned: bool) !Value {
+        const env = self.env;
+        if (unsigned) {
+            const unsigned_value: u32 = @bitCast(value);
+            return try env.createUint32(unsigned_value);
+        } else {
+            return try env.createInt32(value);
+        }
+    }
+
+    fn createBigInteger(self: *@This(), value: i64, unsigned: bool) !Value {
+        const env = self.env;
+        if (unsigned) {
+            const unsigned_value: u64 = @bitCast(value);
+            return try env.createBigintUint64(unsigned_value);
+        } else {
+            return try env.createBigintInt64(value);
+        }
+    }
+
+    fn createString(self: *@This(), bytes: [*]const u8, len: usize) !Value {
+        const env = self.env;
+        return try env.createStringUtf8(bytes[0..len]);
+    }
+
+    fn createView(self: *@This(), bytes: ?[*]const u8, len: usize, copying: bool, handle: usize) !Value {
         const env = self.env;
         const pi_handle = if (handle != 0) handle - self.base_address else 0;
         const args: [4]Value = .{
-            try env.createUsize(@intFromPtr(mem.bytes)),
-            try env.createUint32(@as(u32, @truncate(mem.len))),
-            try env.getBoolean(mem.attributes.is_comptime),
+            try env.createUsize(if (bytes) |b| @intFromPtr(b) else 0),
+            try env.createUint32(@as(u32, @truncate(len))),
+            try env.getBoolean(copying),
             try env.createUsize(pi_handle),
         };
         return env.callFunction(
             try env.getNull(),
-            try env.getReferenceValue(self.js.capture_view orelse return error.Unexpected),
+            try env.getReferenceValue(self.js.create_view orelse return error.Unexpected),
             &args,
         );
     }
 
-    fn castView(self: *@This(), mem: *const Memory, structure: Value, handle: usize) !Value {
+    fn createInstance(self: *@This(), structure: Value, dv: Value) !Value {
         const env = self.env;
-        const pi_handle = if (handle != 0) handle - self.base_address else 0;
-        const args: [5]Value = .{
-            try env.createUsize(@intFromPtr(mem.bytes)),
-            try env.createUint32(@as(u32, @truncate(mem.len))),
-            try env.getBoolean(mem.attributes.is_comptime),
+        const args: [2]Value = .{
             structure,
-            try env.createUsize(pi_handle),
+            dv,
         };
         return env.callFunction(
             try env.getNull(),
-            try env.getReferenceValue(self.js.cast_view orelse return error.Unexpected),
+            try env.getReferenceValue(self.js.create_instance orelse return error.Unexpected),
             &args,
         );
     }
 
-    fn readSlot(self: *@This(), object: ?Value, slot: usize) !Value {
+    fn createList(self: *@This()) !Value {
+        const env = self.env;
+        return try env.createArray();
+    }
+
+    fn createObject(self: *@This()) !Value {
+        const env = self.env;
+        return try env.createObject();
+    }
+
+    fn appendList(self: *@This(), list: Value, element: Value) !void {
+        const env = self.env;
+        _ = try env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.append_list orelse return error.Unexpected),
+            &.{
+                list,
+                element,
+            },
+        );
+    }
+
+    fn getProperty(self: *@This(), object: Value, key_bytes: [*]const u8, key_len: usize) !Value {
+        const env = self.env;
+        const key = try env.createStringUtf8(key_bytes[0..key_len]);
+        return try env.getProperty(object, key);
+    }
+
+    fn setProperty(self: *@This(), object: Value, key_bytes: [*]const u8, key_len: usize, value: Value) !void {
+        const env = self.env;
+        const key = try env.createStringUtf8(key_bytes[0..key_len]);
+        return try env.setProperty(object, key, value);
+    }
+
+    fn getSlotValue(self: *@This(), object: ?Value, slot: usize) !Value {
         const env = self.env;
         const result = try env.callFunction(
             try env.getNull(),
-            try env.getReferenceValue(self.js.read_slot orelse return error.Unexpected),
+            try env.getReferenceValue(self.js.get_slot_value orelse return error.Unexpected),
             &.{
                 object orelse try env.getNull(),
                 try env.createUint32(@as(u32, @truncate(slot))),
@@ -674,11 +737,11 @@ const ModuleHost = struct {
         };
     }
 
-    fn writeSlot(self: *@This(), object: ?Value, slot: usize, value: ?Value) !void {
+    fn setSlotValue(self: *@This(), object: ?Value, slot: usize, value: ?Value) !void {
         const env = self.env;
         _ = try env.callFunction(
             try env.getNull(),
-            try env.getReferenceValue(self.js.write_slot orelse return error.Unexpected),
+            try env.getReferenceValue(self.js.set_slot_value orelse return error.Unexpected),
             &.{
                 object orelse try env.getNull(),
                 try env.createUint32(@as(u32, @truncate(slot))),
@@ -687,74 +750,21 @@ const ModuleHost = struct {
         );
     }
 
-    fn beginStructure(self: *@This(), structure: *const Structure) !Value {
-        const env = self.env;
-        const object = try env.createObject();
-        try env.setNamedProperty(object, "type", try env.createUint32(structure.type));
-        try env.setNamedProperty(object, "purpose", try env.createUint32(structure.purpose));
-        try env.setNamedProperty(object, "flags", try env.createUint32(structure.flags));
-        try env.setNamedProperty(object, "signature", try env.createBigintUint64(structure.signature));
-        if (structure.length != missing(usize))
-            try env.setNamedProperty(object, "length", try env.createUint32(@as(u32, @truncate(structure.length))));
-        if (structure.byte_size != missing(usize))
-            try env.setNamedProperty(object, "byteSize", try env.createUint32(@as(u32, @truncate(structure.byte_size))));
-        if (structure.alignment != missing(usize))
-            try env.setNamedProperty(object, "align", try env.createUint32(@as(u32, structure.alignment)));
-        if (structure.name) |name|
-            try env.setNamedProperty(object, "name", try env.createStringUtf8(name[0..std.mem.len(name)]));
-        return try env.callFunction(
-            try env.getNull(),
-            try env.getReferenceValue(self.js.begin_structure orelse return error.Unexpected),
-            &.{
-                object,
-            },
-        );
-    }
-
-    fn attachMember(self: *@This(), structure: Value, member: *const Member, is_static: bool) !void {
-        const env = self.env;
-        const object = try env.createObject();
-        try env.setNamedProperty(object, "type", try env.createUint32(member.type));
-        try env.setNamedProperty(object, "flags", try env.createUint32(member.flags));
-        if (member.bit_size != missing(usize))
-            try env.setNamedProperty(object, "bitSize", try env.createUint32(@as(u32, @truncate(member.bit_size))));
-        if (member.bit_offset != missing(usize))
-            try env.setNamedProperty(object, "bitOffset", try env.createUint32(@as(u32, @truncate(member.bit_offset))));
-        if (member.byte_size != missing(usize))
-            try env.setNamedProperty(object, "byteSize", try env.createUint32(@as(u32, @truncate(member.byte_size))));
-        if (member.slot != missing(usize))
-            try env.setNamedProperty(object, "slot", try env.createUint32(@as(u32, @truncate(member.slot))));
-        if (member.name) |name|
-            try env.setNamedProperty(object, "name", try env.createStringUtf8(name[0..std.mem.len(name)]));
-        if (member.structure) |s|
-            try env.setNamedProperty(object, "structure", s);
-        _ = try env.callFunction(
-            try env.getNull(),
-            try env.getReferenceValue(self.js.attach_member orelse return error.Unexpected),
-            &.{
-                structure,
-                object,
-                try env.getBoolean(is_static),
-            },
-        );
-    }
-
-    fn attachTemplate(self: *@This(), structure: Value, template_obj: Value, is_static: bool) !void {
+    fn setMemory(self: *@This(), object: Value, dv: ?Value) !void {
         const env = self.env;
         _ = try env.callFunction(
             try env.getNull(),
-            try env.getReferenceValue(self.js.attach_template orelse return error.Unexpected),
+            try env.getReferenceValue(self.js.set_memory orelse return error.Unexpected),
             &.{
-                structure,
-                template_obj,
-                try env.getBoolean(is_static),
+                object,
+                dv orelse try env.getNull(),
             },
         );
     }
 
-    fn defineStructure(self: *@This(), structure: Value) !Value {
+    fn defineStructure(self: *@This(), structure: Value) !void {
         const env = self.env;
-        return try env.callFunction(
+        _ = try env.callFunction(
             try env.getNull(),
             try env.getReferenceValue(self.js.define_structure orelse return error.Unexpected),
             &.{
@@ -763,24 +773,13 @@ const ModuleHost = struct {
         );
     }
 
-    fn endStructure(self: *@This(), structure: Value) !void {
+    fn finalizeStructure(self: *@This(), structure: Value) !void {
         const env = self.env;
         _ = try env.callFunction(
             try env.getNull(),
-            try env.getReferenceValue(self.js.end_structure orelse return error.Unexpected),
+            try env.getReferenceValue(self.js.finalize_structure orelse return error.Unexpected),
             &.{
                 structure,
-            },
-        );
-    }
-
-    fn createTemplate(self: *@This(), dv: ?Value) !Value {
-        const env = self.env;
-        return env.callFunction(
-            try env.getNull(),
-            try env.getReferenceValue(self.js.create_template orelse return error.Unexpected),
-            &.{
-                dv orelse try env.getNull(),
             },
         );
     }
@@ -823,28 +822,26 @@ const ModuleHost = struct {
                 else => |handle| try env.createUsize(handle),
             };
             const result: E = switch (call.cmd) {
-                .cmd_access => try self.handleAccess(futex, &call.u.access),
-                .cmd_open => try self.handleOpen(futex, &call.u.open),
-                .cmd_close => try self.handleClose(futex, &call.u.close),
-                .cmd_read => try self.handleRead(futex, &call.u.read),
-                .cmd_write => try self.handleWrite(futex, &call.u.write),
-                .cmd_seek => try self.handleSeek(futex, &call.u.seek),
-                .cmd_tell => try self.handleTell(futex, &call.u.tell),
-                .cmd_getpos => try self.handleGetpos(futex, &call.u.getpos),
-                .cmd_setpos => try self.handleSetpos(futex, &call.u.setpos),
-                .cmd_fcntl => try self.handleFcntl(futex, &call.u.fcntl),
-                .cmd_fstat => try self.handleStat(futex, &call.u.fstat),
-                .cmd_stat => try self.handleStat(futex, &call.u.stat),
-                .cmd_futimes => try self.handleSetTimes(futex, &call.u.futimes),
-                .cmd_utimes => try self.handleSetTimes(futex, &call.u.utimes),
-                .cmd_advise => try self.handleAdvise(futex, &call.u.advise),
-                .cmd_allocate => try self.handleAllocate(futex, &call.u.allocate),
-                .cmd_sync => try self.handleSync(futex, &call.u.sync),
-                .cmd_datasync => try self.handleDatasync(futex, &call.u.datasync),
-                .cmd_readdir => try self.handleReaddir(futex, &call.u.readdir),
-                .cmd_mkdir => try self.handleMkdir(futex, &call.u.mkdir),
-                .cmd_rmdir => try self.handleRmdir(futex, &call.u.rmdir),
-                .cmd_unlink => try self.handleUnlink(futex, &call.u.unlink),
+                .access => try self.handleAccess(futex, &call.u.access),
+                .open => try self.handleOpen(futex, &call.u.open),
+                .close => try self.handleClose(futex, &call.u.close),
+                .read => try self.handleRead(futex, &call.u.read),
+                .write => try self.handleWrite(futex, &call.u.write),
+                .seek => try self.handleSeek(futex, &call.u.seek),
+                .tell => try self.handleTell(futex, &call.u.tell),
+                .fcntl => try self.handleFcntl(futex, &call.u.fcntl),
+                .fstat => try self.handleStat(futex, &call.u.fstat),
+                .stat => try self.handleStat(futex, &call.u.stat),
+                .futimes => try self.handleSettimes(futex, &call.u.futimes),
+                .utimes => try self.handleSettimes(futex, &call.u.utimes),
+                .advise => try self.handleAdvise(futex, &call.u.advise),
+                .allocate => try self.handleAllocate(futex, &call.u.allocate),
+                .sync => try self.handleSync(futex, &call.u.sync),
+                .datasync => try self.handleDatasync(futex, &call.u.datasync),
+                .getdents => try self.handleGetdents(futex, &call.u.getdents),
+                .mkdir => try self.handleMkdir(futex, &call.u.mkdir),
+                .rmdir => try self.handleRmdir(futex, &call.u.rmdir),
+                .unlink => try self.handleUnlink(futex, &call.u.unlink),
             };
             // translate from WASI enum to the current system's
             return inline for (std.meta.fields(E)) |field| {
@@ -896,11 +893,12 @@ const ModuleHost = struct {
             }
             break :set r;
         };
+        const path_len: u32 = @truncate(std.mem.len(args.path));
         return try self.callPosixFunction(self.js.path_access, &.{
             try env.createInt32(args.dirfd),
             try env.createUint32(@as(u32, @bitCast(lflags))),
             try env.createUsize(@intFromPtr(args.path)),
-            try env.createUint32(args.path_len),
+            try env.createUint32(path_len),
             try env.createBigintUint64(@as(u64, @bitCast(rights))),
             futex,
         });
@@ -940,11 +938,12 @@ const ModuleHost = struct {
             .NONBLOCK = oflags_posix.NONBLOCK,
             .SYNC = oflags_posix.SYNC,
         };
+        const path_len: u32 = @truncate(std.mem.len(args.path));
         return try self.callPosixFunction(self.js.path_open, &.{
             try env.createInt32(args.dirfd),
             try env.createUint32(@as(u32, @bitCast(lflags))),
             try env.createUsize(@intFromPtr(args.path)),
-            try env.createUint32(args.path_len),
+            try env.createUint32(path_len),
             try env.createUint32(@as(u16, @bitCast(oflags))),
             try env.createBigintUint64(@as(u64, @bitCast(rights))),
             try env.createBigintUint64(0),
@@ -964,10 +963,11 @@ const ModuleHost = struct {
 
     fn handleRead(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
+        const len: u32 = @intCast(args.len);
         return try self.callPosixFunction(self.js.fd_read1, &.{
             try env.createInt32(args.fd),
             try env.createUsize(@intFromPtr(args.bytes)),
-            try env.createUint32(args.len),
+            try env.createUint32(len),
             try env.createUsize(@intFromPtr(&args.read)),
             futex,
         });
@@ -975,10 +975,11 @@ const ModuleHost = struct {
 
     fn handleWrite(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
+        const len: u32 = @intCast(args.len);
         return try self.callPosixFunction(self.js.fd_write1, &.{
             try env.createInt32(args.fd),
             try env.createUsize(@intFromPtr(args.bytes)),
-            try env.createUint32(args.len),
+            try env.createUint32(len),
             try env.createUsize(@intFromPtr(&args.written)),
             futex,
         });
@@ -989,7 +990,7 @@ const ModuleHost = struct {
         return try self.callPosixFunction(self.js.fd_seek, &.{
             try env.createInt32(args.fd),
             try env.createBigintInt64(args.offset),
-            try env.createUint32(args.whence),
+            try env.createInt32(args.whence),
             try env.createUsize(@intFromPtr(&args.position)),
             futex,
         });
@@ -1004,52 +1005,13 @@ const ModuleHost = struct {
         });
     }
 
-    fn handleGetpos(self: *@This(), futex: Value, args: anytype) !E {
-        const env = self.env;
-        var position: u64 = undefined;
-        const result = try self.callPosixFunction(self.js.fd_tell, &.{
-            try env.createInt32(args.fd),
-            try env.createUsize(@intFromPtr(&position)),
-            futex,
-        });
-        if (result == .SUCCESS) {
-            const Pos = @TypeOf(args.pos.*);
-            args.pos.* = std.mem.zeroes(Pos);
-            inline for (std.meta.fields(Pos)) |field| {
-                if (comptime std.mem.containsAtLeast(u8, field.name, 1, "pos")) {
-                    @field(args.pos.*, field.name) = @intCast(position);
-                    break;
-                }
-            }
-        }
-        return result;
-    }
-
-    fn handleSetpos(self: *@This(), futex: Value, args: anytype) !E {
-        const env = self.env;
-        var position: u64 = undefined;
-        const Pos = @TypeOf(args.pos.*);
-        inline for (std.meta.fields(Pos)) |field| {
-            if (comptime std.mem.containsAtLeast(u8, field.name, 1, "pos")) {
-                position = @intCast(@field(args.pos.*, field.name));
-                break;
-            }
-        }
-        return try self.callPosixFunction(self.js.fd_seek, &.{
-            try env.createInt32(args.fd),
-            try env.createBigintUint64(position),
-            try env.createUint32(@intFromEnum(std.os.wasi.whence_t.SET)),
-            try env.createUsize(@intFromPtr(&position)),
-            futex,
-        });
-    }
-
-    fn handleSetTimes(self: *@This(), futex: Value, args: anytype) !E {
+    fn handleSettimes(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
         const flags: std.os.wasi.fstflags_t = .{ .ATIM = true, .MTIM = true };
         var times: [2]u64 = undefined;
-        for (args.times, 0..) |t, index| {
-            times[index] = @as(u64, @intCast(t.tv_sec)) * 1_000_000_000 + @as(u64, @intCast(t.tv_nsec));
+        for (&times, 0..) |*ptr, index| {
+            const t = args.times[index];
+            ptr.* = @as(u64, @intCast(t.sec)) * 1_000_000_000 + @as(u64, @intCast(t.nsec));
         }
         if (@hasField(@TypeOf(args.*), "fd")) {
             return try self.callPosixFunction(self.js.fd_filestat_set_times, &.{
@@ -1063,11 +1025,12 @@ const ModuleHost = struct {
             const lflags: std.os.wasi.lookupflags_t = .{
                 .SYMLINK_FOLLOW = (args.flags & std.posix.AT.SYMLINK_NOFOLLOW) == 0,
             };
+            const path_len: u32 = @truncate(std.mem.len(args.path));
             return try self.callPosixFunction(self.js.path_filestat_set_times, &.{
                 try env.createInt32(args.dirfd),
                 try env.createUint32(@as(u32, @bitCast(lflags))),
                 try env.createUsize(@intFromPtr(args.path)),
-                try env.createUint32(args.path_len),
+                try env.createUint32(path_len),
                 try env.createBigintUint64(times[0]),
                 try env.createBigintUint64(times[1]),
                 try env.createUint32(@as(u16, @bitCast(flags))),
@@ -1090,28 +1053,27 @@ const ModuleHost = struct {
             const lflags: std.os.wasi.lookupflags_t = .{
                 .SYMLINK_FOLLOW = (args.flags & std.posix.AT.SYMLINK_NOFOLLOW) == 0,
             };
+            const path_len: u32 = @truncate(std.mem.len(args.path));
             result = try self.callPosixFunction(self.js.path_filestat_get, &.{
                 try env.createInt32(args.dirfd),
                 try env.createUint32(@as(u32, @bitCast(lflags))),
                 try env.createUsize(@intFromPtr(args.path)),
-                try env.createUint32(args.path_len),
+                try env.createUint32(path_len),
                 try env.createUsize(@intFromPtr(&stat)),
                 futex,
             });
         }
         if (result == .SUCCESS) {
-            const c_ptr = args.stat.?;
-            const Stat = @TypeOf(c_ptr.*);
-            const ptr: *Stat = @ptrCast(c_ptr);
-            ptr.* = std.mem.zeroes(Stat);
-            ptr.st_ino = stat.ino;
-            ptr.st_size = @truncate(@as(i64, @intCast(stat.size)));
-            ptr.st_mode = @intFromEnum(stat.filetype);
+            const ptr = args.stat;
+            ptr.* = std.mem.zeroes(@TypeOf(ptr.*));
+            ptr.ino = stat.ino;
+            ptr.size = @truncate(@as(i64, @intCast(stat.size)));
+            ptr.mode = @intFromEnum(stat.filetype);
             inline for (.{ "atim", "mtim", "ctim" }) |field_name| {
                 const ns = @field(stat, field_name);
-                @field(ptr, "st_" ++ field_name) = .{
-                    .tv_sec = @truncate(@as(i64, @intCast(ns / 1_000_000_000))),
-                    .tv_nsec = @truncate(@as(i64, @intCast(ns % 1_000_000_000))),
+                @field(ptr, field_name) = .{
+                    .sec = @truncate(@as(i64, @intCast(ns / 1_000_000_000))),
+                    .nsec = @truncate(@as(i64, @intCast(ns % 1_000_000_000))),
                 };
             }
         }
@@ -1120,10 +1082,9 @@ const ModuleHost = struct {
 
     fn handleFcntl(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        const op: redirect.FCNTL = @enumFromInt(args.op);
         var result: E = undefined;
-        switch (op) {
-            .F_GETFL => {
+        switch (args.op) {
+            std.c.F.GETFL => {
                 var fdstat: std.os.wasi.fdstat_t = undefined;
                 result = try self.callPosixFunction(self.js.fd_fdstat_get, &.{
                     try env.createInt32(args.fd),
@@ -1166,8 +1127,8 @@ const ModuleHost = struct {
         };
         return try self.callPosixFunction(self.js.fd_advise, &.{
             try env.createInt32(args.fd),
-            try env.createBigintUint64(args.offset),
-            try env.createBigintUint64(args.size),
+            try env.createBigintInt64(args.offset),
+            try env.createBigintInt64(args.len),
             try env.createInt32(@intFromEnum(advice)),
             futex,
         });
@@ -1177,8 +1138,8 @@ const ModuleHost = struct {
         const env = self.env;
         return try self.callPosixFunction(self.js.fd_allocate, &.{
             try env.createInt32(args.fd),
-            try env.createBigintUint64(args.offset),
-            try env.createBigintUint64(args.size),
+            try env.createBigintInt64(args.offset),
+            try env.createBigintInt64(args.len),
             futex,
         });
     }
@@ -1201,75 +1162,81 @@ const ModuleHost = struct {
 
     fn handleMkdir(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
+        const path_len: u32 = @truncate(std.mem.len(args.path));
         return try self.callPosixFunction(self.js.path_create_directory, &.{
             try env.createInt32(args.dirfd),
             try env.createUsize(@intFromPtr(args.path)),
-            try env.createUint32(args.path_len),
+            try env.createUint32(path_len),
             futex,
         });
     }
 
     fn handleRmdir(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
+        const path_len: u32 = @truncate(std.mem.len(args.path));
         return try self.callPosixFunction(self.js.path_remove_directory, &.{
             try env.createInt32(args.dirfd),
             try env.createUsize(@intFromPtr(args.path)),
-            try env.createUint32(args.path_len),
+            try env.createUint32(path_len),
             futex,
         });
     }
 
     fn handleUnlink(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
+        const path_len: u32 = @truncate(std.mem.len(args.path));
         return try self.callPosixFunction(self.js.path_unlink_file, &.{
             try env.createInt32(args.dirfd),
             try env.createUsize(@intFromPtr(args.path)),
-            try env.createUint32(args.path_len),
+            try env.createUint32(path_len),
             futex,
         });
     }
 
-    fn handleReaddir(self: *@This(), futex: Value, args: anytype) !E {
-        // convert C pointer to regular single pointer
-        const Dir = @TypeOf(args.dir.*);
-        const dir: *Dir = @ptrCast(args.dir);
-        const DirEnt = std.os.wasi.dirent_t;
-        if (dir.data_len - dir.data_next < @sizeOf(DirEnt)) {
-            const env = self.env;
-            const result = try self.callPosixFunction(self.js.fd_readdir, &.{
-                try env.createInt32(dir.fd),
-                try env.createUsize(@intFromPtr(&dir.buffer)),
-                try env.createUint32(dir.buffer.len),
-                try env.createBigintUint64(dir.cookie),
-                try env.createBigintUint64(@intFromPtr(&dir.data_len)),
-                futex,
-            });
-            if (result != .SUCCESS) return result;
-            dir.data_next = 0;
-        }
-        if (dir.data_len > 0) {
-            const entry: *align(1) DirEnt = @ptrCast(&dir.buffer[dir.data_next]);
-            const offset = dir.data_next + @sizeOf(DirEnt);
-            const type_posix: redirect.DT = switch (entry.type) {
-                .UNKNOWN => .DT_UNKNOWN,
-                .BLOCK_DEVICE => .DT_BLK,
-                .CHARACTER_DEVICE => .DT_CHR,
-                .DIRECTORY => .DT_DIR,
-                .REGULAR_FILE => .DT_REG,
-                .SOCKET_DGRAM, .SOCKET_STREAM => .DT_SOCK,
-                .SYMBOLIC_LINK => .DT_LNK,
-                else => .DT_UNKNOWN,
-            };
-            const name = dir.buffer[offset .. offset + entry.namlen];
-            const name_len = @min(name.len, @sizeOf(@TypeOf(dir.entry.d_name)) - 1);
-            @memcpy(dir.entry.d_name[0..name_len], name[0..name_len]);
-            dir.entry.d_name[name_len] = 0;
-            dir.entry.d_ino = entry.ino;
-            dir.entry.d_type = @intFromEnum(type_posix);
-            dir.cookie = entry.next;
-            dir.data_next += @sizeOf(DirEnt) + entry.namlen;
-        }
-        return .SUCCESS;
+    fn handleGetdents(self: *@This(), futex: Value, args: anytype) !E {
+        _ = self;
+        _ = futex;
+        _ = args;
+        return E.NOTCAPABLE;
+        // const Dir = @TypeOf(args.dir.*);
+        // const dir: *Dir = @ptrCast(args.dir);
+        // const DirEnt = std.os.wasi.dirent_t;
+        // if (dir.data_len - dir.data_next < @sizeOf(DirEnt)) {
+        //     const env = self.env;
+        //     const result = try self.callPosixFunction(self.js.fd_readdir, &.{
+        //         try env.createInt32(dir.fd),
+        //         try env.createUsize(@intFromPtr(&dir.buffer)),
+        //         try env.createUint32(dir.buffer.len),
+        //         try env.createBigintUint64(dir.cookie),
+        //         try env.createBigintUint64(@intFromPtr(&dir.data_len)),
+        //         futex,
+        //     });
+        //     if (result != .SUCCESS) return result;
+        //     dir.data_next = 0;
+        // }
+        // if (dir.data_len > 0) {
+        //     const entry: *align(1) DirEnt = @ptrCast(&dir.buffer[dir.data_next]);
+        //     const offset = dir.data_next + @sizeOf(DirEnt);
+        //     const type_posix: redirect.DT = switch (entry.type) {
+        //         .UNKNOWN => .DT_UNKNOWN,
+        //         .BLOCK_DEVICE => .DT_BLK,
+        //         .CHARACTER_DEVICE => .DT_CHR,
+        //         .DIRECTORY => .DT_DIR,
+        //         .REGULAR_FILE => .DT_REG,
+        //         .SOCKET_DGRAM, .SOCKET_STREAM => .DT_SOCK,
+        //         .SYMBOLIC_LINK => .DT_LNK,
+        //         else => .DT_UNKNOWN,
+        //     };
+        //     const name = dir.buffer[offset .. offset + entry.namlen];
+        //     const name_len = @min(name.len, @sizeOf(@TypeOf(dir.entry.d_name)) - 1);
+        //     @memcpy(dir.entry.d_name[0..name_len], name[0..name_len]);
+        //     dir.entry.d_name[name_len] = 0;
+        //     dir.entry.d_ino = entry.ino;
+        //     dir.entry.d_type = @intFromEnum(type_posix);
+        //     dir.cookie = entry.next;
+        //     dir.data_next += @sizeOf(DirEnt) + entry.namlen;
+        // }
+        // return .SUCCESS;
     }
 
     fn releaseFunction(self: *@This(), fn_id: usize, in_main_thread: bool) !void {
@@ -1353,103 +1320,7 @@ const ModuleHost = struct {
         }
     }
 };
-const Structure = extern struct {
-    name: ?[*:0]const u8,
-    type: u32,
-    purpose: u32,
-    flags: u32,
-    signature: u64,
-    length: usize,
-    byte_size: usize,
-    alignment: u16,
-};
-const Member = extern struct {
-    name: ?[*:0]const u8,
-    type: u32,
-    flags: u32,
-    bit_offset: usize,
-    bit_size: usize,
-    byte_size: usize,
-    slot: usize,
-    structure: ?Value,
-};
-const MemberType = enum(u32) {
-    void = 0,
-    bool,
-    int,
-    uint,
-    float,
-    object,
-    type,
-    literal,
-    null,
-    undefined,
-    unsupported,
-};
-const Jscall = extern struct {
-    fn_id: usize,
-    arg_address: usize,
-    arg_size: usize,
-    futex_handle: usize,
-};
-const Imports = extern struct {
-    capture_string: *const fn (*ModuleHost, *const Memory, *Value) callconv(.C) E,
-    capture_view: *const fn (*ModuleHost, *const Memory, usize, *Value) callconv(.C) E,
-    cast_view: *const fn (*ModuleHost, *const Memory, Value, usize, *Value) callconv(.C) E,
-    read_slot: *const fn (*ModuleHost, ?Value, usize, *Value) callconv(.C) E,
-    write_slot: *const fn (*ModuleHost, ?Value, usize, ?Value) callconv(.C) E,
-    begin_structure: *const fn (*ModuleHost, *const Structure, *Value) callconv(.C) E,
-    attach_member: *const fn (*ModuleHost, Value, *const Member, bool) callconv(.C) E,
-    attach_template: *const fn (*ModuleHost, Value, Value, bool) callconv(.C) E,
-    define_structure: *const fn (*ModuleHost, Value, *Value) callconv(.C) E,
-    end_structure: *const fn (*ModuleHost, Value) callconv(.C) E,
-    create_template: *const fn (*ModuleHost, ?Value, *Value) callconv(.C) E,
-    enable_multithread: *const fn (*ModuleHost, bool) callconv(.C) E,
-    disable_multithread: *const fn (*ModuleHost, bool) callconv(.C) E,
-    handle_jscall: *const fn (*ModuleHost, *Jscall, bool) callconv(.C) E,
-    handle_syscall: *const fn (*ModuleHost, *Syscall, bool) callconv(.C) std.c.E,
-    release_function: *const fn (*ModuleHost, usize, bool) callconv(.C) E,
-};
-const Exports = extern struct {
-    initialize: *const fn (*ModuleHost) callconv(.C) E,
-    deinitialize: *const fn () callconv(.C) E,
-    get_export_address: *const fn (usize, *usize) callconv(.C) E,
-    get_factory_thunk: *const fn (*usize) callconv(.C) E,
-    run_thunk: *const fn (usize, usize, usize) callconv(.C) E,
-    run_variadic_thunk: *const fn (usize, usize, usize, usize, usize) callconv(.C) E,
-    create_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
-    destroy_js_thunk: *const fn (usize, usize, *usize) callconv(.C) E,
-    get_syscall_hook: *const fn ([*:0]const u8, **const Hook) callconv(.C) E,
-    set_syscall_mask: *const fn (u32, bool) callconv(.C) E,
-};
-const Module = extern struct {
-    version: u32,
-    attributes: ModuleAttributes,
-    imports: *Imports,
-    exports: *const Exports,
-};
-const ModuleAttributes = packed struct(u32) {
-    little_endian: bool,
-    runtime_safety: bool,
-    libc: bool,
-    _: u29 = 0,
-};
-const Memory = struct {
-    bytes: ?[*]u8 = null,
-    len: usize = 0,
-    attributes: MemoryAttributes = .{},
-};
-const MemoryAttributes = packed struct {
-    alignment: u16 = 0,
-    is_const: bool = false,
-    is_comptime: bool = false,
-    _: u14 = 0,
-};
-const Hook = struct {
-    name: [*:0]u8,
-    handler: *const anyopaque,
-    original: **const anyopaque,
-};
+
 const Futex = struct {
     const initial_value = 0xffff_ffff;
 

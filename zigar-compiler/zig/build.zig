@@ -44,7 +44,7 @@ pub fn build(b: *std.Build) void {
         lib.stack_size = cfg.stack_size;
         lib.max_memory = cfg.max_memory;
     } else {
-        lib.addCSourceFile(.{ .file = .{ .cwd_relative = cfg.zigar_src_path ++ "syscall-hooks.c" } });
+        lib.addCSourceFile(.{ .file = .{ .cwd_relative = cfg.zigar_src_path ++ "hooks.c" } });
     }
     const options = b.addOptions();
     options.addOption(comptime_int, "eval_branch_quota", cfg.eval_branch_quota);

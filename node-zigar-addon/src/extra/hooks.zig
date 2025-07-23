@@ -1,0 +1,1201 @@
+const std = @import("std");
+const builtin = @import("builtin");
+
+const fn_transform = @import("./fn-transform.zig");
+
+pub const Entry = extern struct {
+    handler: *const anyopaque,
+    original: **const anyopaque,
+};
+pub const Mask = packed struct {
+    open: bool = false,
+    mkdir: bool = false,
+    rmdir: bool = false,
+    set_times: bool = false,
+    stat: bool = false,
+    unlink: bool = false,
+};
+pub const Syscall = extern struct {
+    cmd: Command,
+    u: extern union {
+        access: extern struct {
+            dirfd: c_int,
+            path: [*:0]const u8,
+            mode: c_int,
+        },
+        advise: extern struct {
+            fd: c_int,
+            offset: isize,
+            len: isize,
+            advice: c_int,
+        },
+        allocate: extern struct {
+            fd: c_int,
+            offset: isize,
+            len: isize,
+        },
+        close: extern struct {
+            fd: c_int,
+        },
+        datasync: extern struct {
+            fd: c_int,
+        },
+        fcntl: extern struct {
+            fd: c_int,
+            op: c_int,
+            arg: c_int,
+            result: c_int = undefined,
+        },
+        fstat: extern struct {
+            fd: c_int,
+            stat: *std.posix.Stat,
+        },
+        futimes: extern struct {
+            fd: c_int,
+            times: [*]const std.posix.timespec,
+        },
+        getdents: extern struct {
+            dirfd: c_int,
+            buffer: [*]u8,
+            len: usize,
+            read: c_int = undefined,
+        },
+        mkdir: extern struct {
+            dirfd: c_int,
+            path: [*:0]const u8,
+            mode: c_int,
+        },
+        open: extern struct {
+            dirfd: c_int,
+            path: [*:0]const u8,
+            oflags: c_int,
+            mode: c_int,
+            fd: c_int = undefined,
+        },
+        read: extern struct {
+            fd: c_int,
+            bytes: [*]const u8,
+            len: isize,
+            read: isize = undefined,
+        },
+        rmdir: extern struct {
+            dirfd: c_int,
+            path: [*:0]const u8,
+        },
+        seek: extern struct {
+            fd: c_int,
+            offset: isize,
+            whence: c_int,
+            position: i64 = undefined,
+        },
+        stat: extern struct {
+            dirfd: c_int,
+            path: [*:0]const u8,
+            flags: c_int,
+            stat: *std.posix.Stat,
+        },
+        sync: extern struct {
+            fd: c_int,
+        },
+        tell: extern struct {
+            fd: c_int,
+            position: i64 = undefined,
+        },
+        unlink: extern struct {
+            dirfd: c_int,
+            path: [*:0]const u8,
+            flags: c_int,
+        },
+        utimes: extern struct {
+            dirfd: c_int,
+            path: [*:0]const u8,
+            flags: c_int,
+            times: [*]const std.posix.timespec,
+        },
+        write: extern struct {
+            fd: c_int,
+            bytes: [*]const u8,
+            len: isize,
+            written: isize = undefined,
+        },
+    },
+    futex_handle: usize = 0,
+
+    pub const Command = enum(c_int) {
+        access,
+        advise,
+        allocate,
+        close,
+        datasync,
+        fcntl,
+        fstat,
+        futimes,
+        getdents,
+        mkdir,
+        open,
+        read,
+        rmdir,
+        seek,
+        stat,
+        sync,
+        tell,
+        unlink,
+        utimes,
+        write,
+    };
+
+    pub const Mask = packed struct(u8) {
+        mkdir: bool = false,
+        open: bool = false,
+        rmdir: bool = false,
+        set_times: bool = false,
+        stat: bool = false,
+        unlink: bool = false,
+        _: u2 = 0,
+    };
+};
+
+const fd_min = 0xfffff;
+
+pub fn SyscallRedirector(comptime Host: type) type {
+    return struct {
+        pub fn access(path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
+            return faccessat(-1, path, mode, result);
+        }
+
+        pub fn close(fd: c_int, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(fd)) {
+                var call: Syscall = .{ .cmd = .close, .u = .{
+                    .close = .{
+                        .fd = fd,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                result.* = intFromError(err);
+                return true;
+            }
+            return false;
+        }
+
+        pub fn faccessat(dirfd: c_int, path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.open))) {
+                var call: Syscall = .{ .cmd = .access, .u = .{
+                    .access = .{
+                        .dirfd = checkDirFD(dirfd),
+                        .path = path,
+                        .mode = mode,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS or err == .ACCES) {
+                    result.* = intFromError(err);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        pub fn fadvise(fd: c_int, offset: isize, len: isize, advice: c_int, result: *c_int) callconv(.c) bool {
+            return fadvise64(fd, offset, len, advice, result);
+        }
+
+        pub fn fadvise64(fd: c_int, offset: isize, len: isize, advice: c_int, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(fd)) {
+                var call: Syscall = .{ .cmd = .access, .u = .{
+                    .advise = .{
+                        .fd = fd,
+                        .offset = offset,
+                        .len = len,
+                        .advice = advice,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                result.* = intFromError(err);
+                return true;
+            }
+            return false;
+        }
+
+        pub fn fallocate(fd: c_int, offset: isize, len: isize, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(fd)) {
+                var call: Syscall = .{ .cmd = .allocate, .u = .{
+                    .allocate = .{
+                        .fd = fd,
+                        .offset = offset,
+                        .len = len,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                result.* = intFromError(err);
+                return true;
+            }
+            return false;
+        }
+
+        pub fn fcntl(fd: c_int, op: c_int, arg: c_int, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(fd)) {
+                var call: Syscall = .{ .cmd = .fcntl, .u = .{
+                    .fcntl = .{
+                        .fd = fd,
+                        .op = op,
+                        .arg = arg,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                result.* = intFromError(err);
+                return true;
+            }
+            return false;
+        }
+
+        pub fn fdatasync(fd: c_int, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(fd)) {
+                var call: Syscall = .{ .cmd = .datasync, .u = .{
+                    .datasync = .{
+                        .fd = fd,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                result.* = intFromError(err);
+                return true;
+            }
+            return false;
+        }
+
+        pub fn fstat(fd: c_int, buf: *std.posix.Stat, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(fd)) {
+                var call: Syscall = .{ .cmd = .fstat, .u = .{
+                    .fstat = .{
+                        .fd = fd,
+                        .stat = buf,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                result.* = intFromError(err);
+                return true;
+            }
+            return false;
+        }
+
+        pub fn fstatat64(dirfd: c_int, path: [*:0]const u8, buf: *std.posix.Stat, flags: c_int, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.stat))) {
+                var call: Syscall = .{ .cmd = .stat, .u = .{
+                    .stat = .{
+                        .dirfd = dirfd,
+                        .path = path,
+                        .flags = flags,
+                        .stat = buf,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                result.* = intFromError(err);
+                return true;
+            }
+            return false;
+        }
+
+        pub fn fsync(fd: c_int, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(fd)) {
+                var call: Syscall = .{ .cmd = .sync, .u = .{
+                    .sync = .{
+                        .fd = fd,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                result.* = intFromError(err);
+                return true;
+            }
+            return false;
+        }
+
+        pub fn futimes(fd: c_int, tv: [*]std.posix.timeval, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(fd)) {
+                var call: Syscall = .{ .cmd = .futimes, .u = .{
+                    .futimes = .{
+                        .fd = fd,
+                        .times = &.{
+                            .{ .sec = tv[0].sec, .nsec = tv[0].usec * 1000 },
+                            .{ .sec = tv[1].sec, .nsec = tv[1].usec * 1000 },
+                        },
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                result.* = intFromError(err);
+                return true;
+            }
+            return false;
+        }
+
+        pub fn futimesat(dirfd: c_int, path: [*:0]const u8, tv: [*]std.posix.timeval, result: *c_int) callconv(.c) bool {
+            const times = convertTimeval(tv);
+            return utimensat(dirfd, path, std.posix.AT.SYMLINK_FOLLOW, &times, result);
+        }
+
+        pub fn getdents(dirfd: c_int, buffer: [*]u8, len: usize, result: *c_int) callconv(.c) bool {
+            return getdents64(dirfd, buffer, len, result);
+        }
+
+        pub fn getdents64(dirfd: c_int, buffer: [*]u8, len: usize, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(dirfd)) {
+                var call: Syscall = .{ .cmd = .getdents, .u = .{
+                    .getdents = .{
+                        .dirfd = dirfd,
+                        .buffer = buffer,
+                        .len = len,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS) {
+                    result.* = call.u.getdents.read;
+                } else {
+                    result.* = intFromError(err);
+                }
+                return true;
+            }
+            return false;
+        }
+
+        pub fn lseek(fd: c_int, offset: isize, whence: c_int, result: *isize) callconv(.c) bool {
+            if (isApplicableHandle(fd)) {
+                const tell = offset == 0 and whence == std.posix.SEEK.CUR;
+                var call: Syscall = switch (tell) {
+                    true => .{ .cmd = .tell, .u = .{
+                        .tell = .{
+                            .fd = fd,
+                        },
+                    } },
+                    false => .{ .cmd = .seek, .u = .{
+                        .seek = .{
+                            .fd = fd,
+                            .offset = offset,
+                            .whence = whence,
+                        },
+                    } },
+                };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS) {
+                    result.* = switch (tell) {
+                        true => @truncate(call.u.tell.position),
+                        false => @truncate(call.u.seek.position),
+                    };
+                } else {
+                    result.* = intFromError(err);
+                }
+                return true;
+            }
+            return false;
+        }
+
+        pub fn lstat(path: [*:0]const u8, buf: *std.posix.Stat, result: *c_int) callconv(.c) bool {
+            return fstatat64(-1, path, buf, std.posix.AT.SYMLINK_NOFOLLOW, result);
+        }
+
+        pub fn lutimes(path: [*:0]const u8, tv: [*]std.posix.timeval, result: *c_int) callconv(.c) bool {
+            const times = convertTimeval(tv);
+            return utimensat(-1, path, std.posix.AT.SYMLINK_NOFOLLOW, &times, result);
+        }
+
+        pub fn mkdir(path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
+            return mkdirat(-1, path, mode, result);
+        }
+
+        pub fn mkdirat(dirfd: c_int, path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.mkdir))) {
+                var call: Syscall = .{ .cmd = .mkdir, .u = .{
+                    .mkdir = .{
+                        .dirfd = checkDirFD(dirfd),
+                        .path = path,
+                        .mode = mode,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS or err == .EXIST or isApplicableHandle(dirfd)) {
+                    result.* = intFromError(err);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        pub fn open(path: [*:0]const u8, oflags: c_int, mode: c_int, result: *c_int) callconv(.c) bool {
+            return openat(-1, path, oflags, mode, result);
+        }
+
+        pub fn openat(dirfd: c_int, path: [*:0]const u8, oflags: c_int, mode: c_int, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.open))) {
+                var call: Syscall = .{ .cmd = .open, .u = .{
+                    .open = .{
+                        .dirfd = checkDirFD(dirfd),
+                        .path = path,
+                        .oflags = oflags,
+                        .mode = mode,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS or err != .NOENT) {
+                    result.* = intFromError(err);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        pub fn read(fd: c_int, buffer: [*]u8, len: isize, result: *isize) callconv(.c) bool {
+            if (isApplicableHandle(fd)) {
+                var call: Syscall = .{ .cmd = .read, .u = .{
+                    .read = .{
+                        .fd = fd,
+                        .bytes = buffer,
+                        .len = len,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS) {
+                    result.* = call.u.read.read;
+                } else {
+                    result.* = intFromError(err);
+                }
+                return true;
+            }
+            return false;
+        }
+
+        pub fn rmdir(path: [*:0]const u8, result: *c_int) callconv(.c) bool {
+            if (Host.isRedirecting(.rmdir)) {
+                var call: Syscall = .{ .cmd = .rmdir, .u = .{
+                    .rmdir = .{
+                        .dirfd = -1,
+                        .path = path,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS or err != .NOENT) {
+                    result.* = intFromError(err);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        pub fn stat(path: [*:0]const u8, buf: *std.posix.Stat, result: *c_int) callconv(.c) bool {
+            return fstatat64(-1, path, buf, 0, result);
+        }
+
+        pub fn unlink(path: [*:0]const u8, result: *c_int) callconv(.c) bool {
+            return unlinkat(-1, path, 0, result);
+        }
+
+        pub fn unlinkat(dirfd: c_int, path: [*:0]const u8, flags: c_int, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.unlink))) {
+                var call: Syscall = .{ .cmd = .mkdir, .u = .{
+                    .unlink = .{
+                        .dirfd = checkDirFD(dirfd),
+                        .path = path,
+                        .flags = flags,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS or isApplicableHandle(dirfd)) {
+                    result.* = intFromError(err);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        pub fn utimes(path: [*:0]const u8, tv: [*]std.posix.timeval, result: *c_int) callconv(.c) bool {
+            const times = convertTimeval(tv);
+            return utimensat(-1, path, std.posix.AT.SYMLINK_FOLLOW, &times, result);
+        }
+
+        pub fn utimensat(dirfd: c_int, path: [*:0]const u8, flags: c_int, times: [*]const std.posix.timespec, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.set_times))) {
+                var call: Syscall = .{ .cmd = .utimes, .u = .{
+                    .utimes = .{
+                        .dirfd = checkDirFD(dirfd),
+                        .path = path,
+                        .flags = flags,
+                        .times = times,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS or isApplicableHandle(dirfd)) {
+                    result.* = intFromError(err);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        pub fn write(fd: c_int, buffer: [*]u8, len: isize, result: *isize) callconv(.c) bool {
+            if (isApplicableHandle(fd)) {
+                var call: Syscall = .{ .cmd = .write, .u = .{
+                    .write = .{
+                        .fd = fd,
+                        .bytes = buffer,
+                        .len = len,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS) {
+                    result.* = call.u.write.written;
+                } else {
+                    result.* = intFromError(err);
+                }
+                return true;
+            }
+            return false;
+        }
+
+        fn isApplicableHandle(fd: c_int) bool {
+            return switch (fd) {
+                0, 1, 2 => true,
+                else => fd >= fd_min,
+            };
+        }
+
+        fn checkDirFD(dirfd: c_int) c_int {
+            return switch (dirfd) {
+                -100 => -1,
+                else => dirfd,
+            };
+        }
+
+        fn convertTimeval(tv: [*]const std.posix.timeval) [2]std.posix.timespec {
+            var times: [2]std.posix.timespec = undefined;
+            for (&times, 0..) |*ptr, index| {
+                ptr.* = .{
+                    .sec = tv[index].sec,
+                    .nsec = tv[index].usec * 1000,
+                };
+            }
+            return times;
+        }
+
+        fn intFromError(err: std.posix.E) c_int {
+            const value: c_int = @intFromEnum(err);
+            return -value;
+        }
+    };
+}
+
+pub fn PosixSubstitute(comptime Redirector: type) type {
+    return struct {
+        pub const access = makeStdHook("access");
+        pub const close = makeStdHook("close");
+        pub const faccessat = makeStdHook("faccessat");
+        pub const fadvise = makeStdHook("fadvise");
+        pub const fadvise64 = makeStdHook("fadvise64");
+        pub const fallocate = makeStdHook("fallocate");
+        pub const fcntl = makeStdHook("fcntl");
+        pub const fdatasync = makeStdHook("fdatasync");
+        pub const fstat = makeStdHook("fstat");
+        pub const fstatat64 = makeStdHook("fstatat64");
+        pub const fsync = makeStdHook("fsync");
+        pub const futimes = makeStdHook("futimes");
+        pub const futimesat = makeStdHook("futimesat");
+        pub const lseek = makeStdHook("lseek");
+        pub const lstat = makeStdHook("lstat");
+        pub const lutimes = makeStdHook("lutimes");
+        pub const mkdir = makeStdHook("mkdir");
+        pub const mkdirat = makeStdHook("mkdirat");
+        pub const open = makeStdHook("open");
+        pub const openat = makeStdHook("openat");
+        pub const read = makeStdHook("read");
+        pub const rmdir = makeStdHook("rmdir");
+        pub const stat = makeStdHook("stat");
+        pub const unlink = makeStdHook("unlink");
+        pub const unlinkat = makeStdHook("unlinkat");
+        pub const utimes = makeStdHook("utimes");
+        pub const utimensat = makeStdHook("utimensat");
+        pub const write = makeStdHook("write");
+
+        pub fn closedir(d: *std.c.DIR) callconv(.c) void {
+            // if (is_redirected_object(d)) {
+            //     redirected_DIR* dir = (redirected_DIR*) d;
+            //     uint16_t err;
+            //     redirect_close(dir->fd, &err);
+            //     free(dir);
+            //     if (!err) {
+            //         return 0;
+            //     } else {
+            //         errno = err;
+            //         return -1;
+            //     }
+            // }
+            // return closedir_orig(d);
+            return Original.closedir(d);
+        }
+
+        pub fn opendir(path: [*:0]const u8) callconv(.c) ?*std.c.DIR {
+            // if (is_redirecting(mask_open)) {
+            //     uint16_t err;
+            //     int fd;
+            //     if (redirect_open(-1, name, O_DIRECTORY, &fd, &err)) {
+            //         redirected_DIR* dir;
+            //         if (!err) {
+            //             dir = malloc(sizeof(redirected_DIR));
+            //             if (!dir) {
+            //                 err = ENOMEM;
+            //             }
+            //         }
+            //         if (!err) {
+            //             dir->signature = REDIRECTED_OBJECT_SIGNATURE;
+            //             dir->fd = fd;
+            //             dir->cookie = 0;
+            //             dir->data_len = 0;
+            //             dir->data_next = 0;
+            //             memset(&dir->entry, 0, sizeof(struct dirent));
+            //             return dir;
+            //         } else {
+            //             return NULL;
+            //         }
+            //     }
+            // }
+            // return opendir_orig(name);
+            return Original.opendir(path);
+        }
+
+        pub fn readdir(d: *std.c.DIR) callconv(.c) ?*std.c.DIR {
+            // if (is_redirected_object(d)) {
+            //     redirected_DIR* dir = (redirected_DIR*) d;
+            //     struct dirent* entry;
+            //     uint16_t err;
+            //     redirect_readdir(d, &entry, &err);
+            //     if (!err) {
+            //         return entry;
+            //     } else {
+            //         errno = err;
+            //         return NULL;
+            //     }
+            // }
+            // return readdir_orig(d);
+            return Original.readdir(d);
+        }
+
+        fn makeStdHook(comptime name: []const u8) StdHook(@TypeOf(@field(Redirector, name))) {
+            const handler = @field(Redirector, name);
+            const Handler = @TypeOf(handler);
+            const HandlerArgs = std.meta.ArgsTuple(Handler);
+            const Hook = StdHook(Handler);
+            const HookArgs = std.meta.ArgsTuple(Hook);
+            const RT = @typeInfo(Hook).@"fn".return_type.?;
+            const ns = struct {
+                fn hook(hook_args: HookArgs) RT {
+                    var handler_args: HandlerArgs = undefined;
+                    inline for (hook_args, 0..) |arg, index| {
+                        handler_args[index] = arg;
+                    }
+                    var result: RT = undefined;
+                    handler_args[handler_args.len - 1] = &result;
+                    if (@call(.auto, handler, handler_args)) {
+                        return setPosixError(result);
+                    }
+                    const original = @field(Original, name);
+                    return @call(.auto, original, hook_args);
+                }
+            };
+            return fn_transform.spreadArgs(ns.hook, .c);
+        }
+
+        fn StdHook(comptime Func: type) type {
+            const params = @typeInfo(Func).@"fn".params;
+            const ResultPtr = params[params.len - 1].type.?;
+            const RT = @typeInfo(ResultPtr).pointer.child;
+            var new_params: [params.len - 1]std.builtin.Type.Fn.Param = undefined;
+            for (&new_params, 0..) |*ptr, index| ptr.* = params[index];
+            return @Type(.{
+                .@"fn" = .{
+                    .params = &new_params,
+                    .return_type = RT,
+                    .is_generic = false,
+                    .is_var_args = false,
+                    .calling_convention = .c,
+                },
+            });
+        }
+
+        fn setPosixError(result: anytype) @TypeOf(result) {
+            if (result < 0) {
+                errno = @intCast(-result);
+                return -1;
+            }
+            return result;
+        }
+
+        const Sub = @This();
+        pub const Original = struct {
+            pub var access: *const @TypeOf(Sub.access) = undefined;
+            pub var close: *const @TypeOf(Sub.close) = undefined;
+            pub var closedir: *const @TypeOf(Sub.closedir) = undefined;
+            pub var faccessat: *const @TypeOf(Sub.faccessat) = undefined;
+            pub var fadvise: *const @TypeOf(Sub.fadvise) = undefined;
+            pub var fadvise64: *const @TypeOf(Sub.fadvise64) = undefined;
+            pub var fallocate: *const @TypeOf(Sub.fallocate) = undefined;
+            pub var fcntl: *const @TypeOf(Sub.fcntl) = undefined;
+            pub var fdatasync: *const @TypeOf(Sub.fdatasync) = undefined;
+            pub var fstat: *const @TypeOf(Sub.fstat) = undefined;
+            pub var fstatat64: *const @TypeOf(Sub.fstatat64) = undefined;
+            pub var fsync: *const @TypeOf(Sub.fsync) = undefined;
+            pub var futimes: *const @TypeOf(Sub.futimes) = undefined;
+            pub var futimesat: *const @TypeOf(Sub.futimesat) = undefined;
+            pub var lseek: *const @TypeOf(Sub.lseek) = undefined;
+            pub var lstat: *const @TypeOf(Sub.lstat) = undefined;
+            pub var lutimes: *const @TypeOf(Sub.lutimes) = undefined;
+            pub var mkdir: *const @TypeOf(Sub.mkdir) = undefined;
+            pub var mkdirat: *const @TypeOf(Sub.mkdirat) = undefined;
+            pub var open: *const @TypeOf(Sub.open) = undefined;
+            pub var opendir: *const @TypeOf(Sub.opendir) = undefined;
+            pub var openat: *const @TypeOf(Sub.openat) = undefined;
+            pub var read: *const @TypeOf(Sub.read) = undefined;
+            pub var readdir: *const @TypeOf(Sub.readdir) = undefined;
+            pub var rmdir: *const @TypeOf(Sub.rmdir) = undefined;
+            pub var stat: *const @TypeOf(Sub.stat) = undefined;
+            pub var unlink: *const @TypeOf(Sub.unlink) = undefined;
+            pub var unlinkat: *const @TypeOf(Sub.unlinkat) = undefined;
+            pub var utimes: *const @TypeOf(Sub.utimes) = undefined;
+            pub var utimensat: *const @TypeOf(Sub.utimensat) = undefined;
+            pub var write: *const @TypeOf(Sub.write) = undefined;
+        };
+        extern threadlocal var errno: c_int;
+    };
+}
+
+const RedirectedFile = extern struct {
+    sig: u64 = signature,
+    fd: c_int,
+    errno: u16,
+    eof: bool,
+
+    pub const signature = 0x4C49_4652_4147_495A;
+};
+const RedirectedDir = extern struct {
+    sig: u64 = signature,
+    fd: c_int,
+    data_next: usize,
+    data_len: usize,
+    buffer: [4096]u8,
+
+    pub const signature = 0x5249_4452_4147_495A;
+};
+
+pub fn LibCSubstitute(comptime Redirector: type) type {
+    _ = Redirector;
+    return struct {
+        pub fn clearerr(s: *std.c.FILE) callconv(.c) void {
+            // if (is_redirected_object(s)) {
+            //     redirected_FILE* file = (redirected_FILE*) s;
+            //     file->error = 0;
+            //     return;
+            // }
+            // clearerr_orig(s);
+            return Original.clearerr(s);
+        }
+
+        pub fn fclose(s: *std.c.FILE) callconv(.c) c_int {
+            // if (is_redirected_object(s)) {
+            //     redirected_FILE* file = (redirected_FILE*) s;
+            //     uint16_t err;
+            //     redirect_close(file->fd, &err);
+            //     free(file);
+            //     if (err) {
+            //         return 0;
+            //     } else {
+            //         errno = file->error = err;
+            //         return EOF;
+            //     }
+            // }
+            // return fclose_orig(s);
+            return Original.fclose(s);
+        }
+
+        pub fn feof(s: *std.c.FILE) callconv(.c) c_int {
+            // if (is_redirected_object(s)) {
+            //     redirected_FILE* file = (redirected_FILE*) s;
+            //     return file->eof ? 1 : 0;
+            // }
+            // return feof_orig(s);
+            return Original.feof(s);
+        }
+
+        pub fn ferror(s: *std.c.FILE) callconv(.c) c_int {
+            // if (is_redirected_object(s)) {
+            //     redirected_FILE* file = (redirected_FILE*) s;
+            //     return file->error;
+            // }
+            // return ferror_orig(s);
+            return Original.ferror(s);
+        }
+
+        pub fn fgetpos(s: *std.c.FILE, pos: *fpos_t) callconv(.c) c_int {
+            // if (is_redirected_object(s)) {
+            //     redirected_FILE* file = (redirected_FILE*) s;
+            //     uint16_t err;
+            //     redirect_getpos(file->fd, pos, &err);
+            //     if (!err) {
+            //         return 0;
+            //     } else {
+            //         errno = file->error = err;
+            //         return -1;
+            //     }
+            // }
+            // return fgetpos_orig(s, pos);
+            return Original.fgetpos(s, pos);
+        }
+
+        pub fn fopen(path: [*:0]const u8, mode: [*:0]const u8) callconv(.c) ?*std.c.FILE {
+            // int oflags = 0;
+            // if (mode[0] == 'r') {
+            //     oflags |= (mode[1] == '+') ? O_RDWR : O_RDONLY;
+            // } else if (mode[0] == 'w') {
+            //     oflags |= (mode[1] == '+') ? O_RDWR : O_WRONLY;
+            //     oflags |= O_TRUNC | O_CREAT;
+            // } else if (mode[0] == 'a') {
+            //     oflags |= (mode[1] == '+') ? O_RDWR : O_WRONLY;
+            //     oflags |= O_APPEND | O_CREAT;
+            // } else {
+            //     return NULL;
+            // }
+            // int result;
+            // if (redirect_open(path, oflags, 0666, &result)) {
+            //     redirected_FILE* file;
+            //     if (result > 0) {
+            //         file = malloc(sizeof(redirected_FILE));
+            //         if (!file) {
+            //             result = -ENOMEM;
+            //         }
+            //     }
+            //     if (result > 0) {
+            //         file->signature = REDIRECTED_OBJECT_SIGNATURE;
+            //         file->fd = result;
+            //         return (FILE*) file;
+            //     } else {
+            //         set_posix_error(result);
+            //         return NULL;
+            //     }
+            // }
+            // return fopen_orig(path, mode);
+            return Original.fopen(path, mode);
+        }
+
+        pub fn fputc(c: c_int, s: *std.c.FILE) callconv(.c) c_int {
+            // if (is_redirected_object(s)) {
+            //     redirected_FILE* file = (redirected_FILE*) s;
+            //     char b = c;
+            //     ssize_t written;
+            //     uint16_t err;
+            //     redirect_write(file->fd, &b, 1, &written, &err);
+            //     if (!err) {
+            //         return written;
+            //     } else {
+            //         errno = file->error = err;
+            //         return -1;
+            //     }
+            // }
+            // return fputc_orig(c, s);
+            return Original.fputc(c, s);
+        }
+
+        pub fn fputs(text: []const u8, s: *std.c.FILE) callconv(.c) c_int {
+            // if (is_redirected_object(s)) {
+            //     redirected_FILE* file = (redirected_FILE*) s;
+            //     size_t len = strlen(t);
+            //     ssize_t written;
+            //     uint16_t err;
+            //     redirect_write(file->fd, t, len, &written, &err);
+            //     if (!err) {
+            //         return written;
+            //     } else {
+            //         errno = file->error = err;
+            //         return -1;
+            //     }
+            // }
+            // return fputs_orig(t, s);
+            return Original.fputs(text, s);
+        }
+
+        pub fn fread(buffer: [*]u8, size: usize, n: usize, s: *std.c.FILE) callconv(.c) usize {
+            // if (is_redirected_object(s)) {
+            //     redirected_FILE* file = (redirected_FILE*) s;
+            //     ssize_t read;
+            //     uint16_t err;
+            //     size_t count = size * n;
+            //     redirect_read(file->fd, buffer, count, &read, &err);
+            //     if (!err) {
+            //         if (read == 0) {
+            //             file->eof = true;
+            //         }
+            //         return (read == count) ? n : read / size;
+            //     } else {
+            //         errno = file->error = err;
+            //         return -1;
+            //     }
+            // }
+            // return fread_orig(buffer, size, n, s);
+            return Original.fread(buffer, size, n, s);
+        }
+
+        pub fn fseek(s: *std.c.FILE, offset: c_long, whence: c_int) callconv(.c) c_int {
+            // if (is_redirected_object(s)) {
+            //     redirected_FILE* file = (redirected_FILE*) s;
+            //     off64_t pos;
+            //     uint16_t err;
+            //     redirect_seek(file->fd, offset, whence, &pos, &err);
+            //     if (!err) {
+            //         return pos;
+            //     } else {
+            //         errno = file->error = err;
+            //         return -1;
+            //     }
+            // }
+            // return fseek_orig(s, offset, whence);
+            return Original.fseek(s, offset, whence);
+        }
+
+        pub fn fsetpos(s: *std.c.FILE, pos: *const fpos_t) callconv(.c) c_int {
+            // if (is_redirected_object(s)) {
+            //     redirected_FILE* file = (redirected_FILE*) s;
+            //     uint16_t err;
+            //     redirect_setpos(file->fd, pos, &err);
+            //     if (!err) {
+            //         file->eof = false;
+            //         return 0;
+            //     } else {
+            //         errno = file->error = err;
+            //         return -1;
+            //     }
+            // }
+            // return fsetpos_orig(s, pos);
+            return Original.fsetpos(s, pos);
+        }
+
+        pub fn ftell(s: *std.c.FILE) callconv(.c) c_int {
+            // if (is_redirected_object(s)) {
+            //     redirected_FILE* file = (redirected_FILE*) s;
+            //     off64_t pos;
+            //     uint16_t err;
+            //     redirect_seek(file->fd, 0, SEEK_CUR, &pos, &err);
+            //     if (!err) {
+            //         return pos;
+            //     } else {
+            //         errno = file->error = err;
+            //         return -1;
+            //     }
+            // }
+            // return ftell_orig(s);
+            return Original.ftell(s);
+        }
+
+        pub fn fwrite(buffer: [*]const u8, size: usize, n: usize, s: *std.c.FILE) callconv(.c) usize {
+            // if (is_redirected_object(s)) {
+            //     redirected_FILE* file = (redirected_FILE*) s;
+            //     ssize_t written;
+            //     uint16_t err;
+            //     size_t count = size * n;
+            //     redirect_write(file->fd, buffer, count, &written, &err);
+            //     if (!err) {
+            //         return (written == count) ? n : written / size;
+            //     } else {
+            //         errno = file->error = err;
+            //         return -1;
+            //     }
+
+            // }
+            // return fwrite_orig(buffer, size, n, s);
+            return Original.fwrite(buffer, size, n, s);
+        }
+
+        pub fn perror(text: [*:0]const u8) callconv(.c) void {
+            // printf_hook("%s: %s", s, strerror(errno));
+            return Original.perror(text);
+        }
+
+        pub fn putchar(c: c_int) callconv(.c) c_int {
+            // return fputc_hook(c, stdout);
+            return Original.putchar(c);
+        }
+
+        pub fn puts(text: [*:0]const u8) callconv(.c) c_int {
+            // if (is_applicable_handle(1)) {
+            //     size_t len = strlen(t);
+            //     ssize_t written;
+            //     uint16_t err;
+            //     redirect_write(1, t, len, &written, &err);
+            //     if (!err) {
+            //         ssize_t one;
+            //         redirect_write(1, "\n", 1, &one, &err);
+            //         written += 1;
+            //     }
+            //     if (!err) {
+            //         return written;
+            //     } else {
+            //         errno = err;
+            //         return -1;
+            //     }
+            // }
+            // return puts_orig(t);
+            return Original.puts(text);
+        }
+
+        pub fn rewind(s: *std.c.FILE) callconv(.c) void {
+            // if (is_redirected_object(s)) {
+            //     redirected_FILE* file = (redirected_FILE*) s;
+            //     uint16_t err;
+            //     off64_t pos;
+            //     redirect_seek(file->fd, 0, SEEK_SET, &pos, &err);
+            //     if (!err) {
+            //         file->error = 0;
+            //         file->eof = false;
+            //     } else {
+            //         errno = file->error = err;
+            //     }
+            //     return;
+            // }
+            // rewind_orig(s);
+            return Original.rewind(s);
+        }
+
+        const stdio = @cImport({
+            @cInclude("stdio.h");
+        });
+        const fpos_t = stdio.fpos_t;
+
+        const Self = @This();
+        pub const Original = struct {
+            pub var clearerr: *const @TypeOf(Self.clearerr) = undefined;
+            pub var fclose: *const @TypeOf(Self.fclose) = undefined;
+            pub var feof: *const @TypeOf(Self.feof) = undefined;
+            pub var ferror: *const @TypeOf(Self.ferror) = undefined;
+            pub var fgetpos: *const @TypeOf(Self.fgetpos) = undefined;
+            pub var fopen: *const @TypeOf(Self.fopen) = undefined;
+            pub var fputc: *const @TypeOf(Self.fputc) = undefined;
+            pub var fputs: *const @TypeOf(Self.fputs) = undefined;
+            pub var fread: *const @TypeOf(Self.fread) = undefined;
+            pub var fseek: *const @TypeOf(Self.fseek) = undefined;
+            pub var fsetpos: *const @TypeOf(Self.fsetpos) = undefined;
+            pub var ftell: *const @TypeOf(Self.ftell) = undefined;
+            pub var fwrite: *const @TypeOf(Self.fwrite) = undefined;
+            pub var perror: *const @TypeOf(Self.perror) = undefined;
+            pub var putchar: *const @TypeOf(Self.putchar) = undefined;
+            pub var puts: *const @TypeOf(Self.puts) = undefined;
+            pub var rewind: *const @TypeOf(Self.rewind) = undefined;
+        };
+    };
+}
+
+pub fn LibCSubstituteS(comptime Redirector: type) type {
+    _ = Redirector;
+    return struct {};
+}
+
+pub fn Win32SubstituteS(comptime Redirector: type) type {
+    _ = Redirector;
+    return struct {
+        pub fn WriteFile(handle: HANDLE, buffer: LPCVOID, len: DWORD, written: *DWORD, overlapped: *OVERLAPPED) callconv(.c) c_int {
+            // if (is_applicable_handle(handle)) {
+            //     if (redirect_write(handle, buffer, len)) {
+            //         *written = len;
+            //         if (overlapped) {
+            //             SetEvent(overlapped->hEvent);
+            //         }
+            //         return TRUE;
+            //     }
+            // }
+            // return write_file_orig(handle, buffer, len, written, overlapped);
+            return Original.WriteFile(handle, buffer, len, written, overlapped);
+        }
+
+        const DWORD = std.os.windows.DWORD;
+        const HANDLE = std.os.windows.HANDLE;
+        const LPCVOID = std.os.windows.LPCVOID;
+        const OVERLAPPED = std.os.windows.OVERLAPPED;
+
+        const Self = @This();
+        pub const Original = struct {
+            pub var WriteFile: *const @TypeOf(Self.WriteFile) = undefined;
+        };
+    };
+}
+
+pub const HandlerVTable = init: {
+    const Redirector = SyscallRedirector(void);
+    const len = count: {
+        var count: usize = 0;
+        for (std.meta.declarations(Redirector)) |decl| {
+            const DT = @TypeOf(@field(Redirector, decl.name));
+            if (@typeInfo(DT) == .@"fn") count += 1;
+        }
+        break :count count;
+    };
+    var fields: [len]std.builtin.Type.StructField = undefined;
+    var index: usize = 0;
+    for (std.meta.declarations(Redirector)) |decl| {
+        const DT = @TypeOf(@field(Redirector, decl.name));
+        if (@typeInfo(DT) == .@"fn") {
+            fields[index] = .{
+                .name = decl.name,
+                .type = *const DT,
+                .default_value_ptr = null,
+                .is_comptime = false,
+                .alignment = @alignOf(DT),
+            };
+            index += 1;
+        }
+    }
+    break :init @Type(.{
+        .@"struct" = .{
+            .layout = .@"extern",
+            .fields = &fields,
+            .decls = &.{},
+            .is_tuple = false,
+        },
+    });
+};
+
+pub fn getHandlerVtable(comptime Host: type) HandlerVTable {
+    var vtable: HandlerVTable = undefined;
+    const Redirector = SyscallRedirector(Host);
+    inline for (std.meta.declarations(Redirector)) |decl| {
+        const DT = @TypeOf(@field(Redirector, decl.name));
+        if (@typeInfo(DT) == .@"fn") {
+            @field(vtable, decl.name) = &@field(Redirector, decl.name);
+        }
+    }
+    return vtable;
+}
+
+pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
+    const Redirector = SyscallRedirector(Host);
+    const list = switch (builtin.target.os.tag) {
+        .linux => .{
+            PosixSubstitute(Redirector),
+        },
+        else => .{},
+    };
+    const len = init: {
+        var total: usize = 1;
+        inline for (list) |Sub| {
+            const decls = std.meta.declarations(Sub.Original);
+            total += decls.len;
+        }
+        break :init total;
+    };
+    var table: [len]std.meta.Tuple(&.{ []const u8, Entry }) = undefined;
+    // make vtable available through the hook table
+    table[0] = .{ "__syscall", .{
+        .handler = &getHandlerVtable(Host),
+        .original = undefined,
+    } };
+    var index: usize = 1;
+    inline for (list) |Sub| {
+        const decls = std.meta.declarations(Sub.Original);
+        inline for (decls) |decl| {
+            table[index] = .{ decl.name, .{
+                .handler = &@field(Sub, decl.name),
+                .original = &@field(Sub.Original, decl.name),
+            } };
+            index += 1;
+        }
+    }
+    return std.StaticStringMap(Entry).initComptime(table);
+}
