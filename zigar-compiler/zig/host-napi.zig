@@ -203,16 +203,16 @@ pub fn getExportHandle(comptime ptr: anytype) usize {
     return @intFromPtr(&ns.getAddress);
 }
 
-pub fn defineStructure(structure: AnyValue) !void {
+pub fn beginStructure(structure: AnyValue) !void {
     const md = try getModuleData();
-    if (imports.define_structure(md, structure) != .SUCCESS) {
+    if (imports.begin_structure(md, structure) != .SUCCESS) {
         return error.UnableToDefineStructure;
     }
 }
 
-pub fn finalizeStructure(structure: AnyValue) !void {
+pub fn finishStructure(structure: AnyValue) !void {
     const md = try getModuleData();
-    if (imports.finalize_structure(md, structure) != .SUCCESS) {
+    if (imports.finish_structure(md, structure) != .SUCCESS) {
         return error.UnableToDefineStructure;
     }
 }

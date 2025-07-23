@@ -370,8 +370,8 @@ fn Factory(comptime host: type, comptime module: type) type {
             const td = tdb.get(T);
             const slot = td.getSlot();
             return host.getSlotValue(null, slot) catch result: {
-                // create the structure and place it in the slot immediately
-                // so that recursive definition works correctly
+                const instance = try createObject(.{});
+                const static = try createObject(.{});
                 const structure = try createObject(.{
                     .name = getStructureName(td),
                     .type = getStructureType(td),
@@ -380,32 +380,27 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .length = getStructureLength(td),
                     .byteSize = td.getByteSize(),
                     .@"align" = td.getAlignment(),
+                    .instance = instance,
+                    .static = static,
                 });
+                // place the structure its slot immediately so that recursive definition works correctly
                 try host.setSlotValue(null, slot, structure);
-                // define the shape of the structure
-                try setProperties(structure, .{
-                    .instance = try createObject(.{
-                        .members = try self.getMembers(td),
-                        .template = try self.getTemplate(td),
-                    }),
+                // define members and add template if applicable
+                try setProperties(instance, .{
+                    .members = try self.getMembers(td),
+                    .template = try self.getTemplate(td),
                 });
-                // finalize the shape so that static members can be instances of the structure
-                try host.defineStructure(structure);
-                // add static variables and functions, excluding internal types and problematic
-                // namespaces
+                // define the shape so that static members can be instances of the structure
+                try host.beginStructure(structure);
+                // add static variables and functions, excluding internal types and problematic namespaces
                 if (comptime !td.shouldIgnoreDecls()) {
-                    const members = try self.getStaticMembers(td);
-                    const template = try self.getStaticTemplate(td);
-                    if (members != null or template != null) {
-                        try setProperties(structure, .{
-                            .static = try createObject(.{
-                                .members = members,
-                                .template = template,
-                            }),
-                        });
-                    }
+                    try setProperties(static, .{
+                        .members = try self.getStaticMembers(td),
+                        .template = try self.getStaticTemplate(td),
+                    });
                 }
-                try host.finalizeStructure(structure);
+                // indicate that structure is complete
+                try host.finishStructure(structure);
                 break :result structure;
             };
         }
@@ -434,6 +429,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .type = getMemberType(td, false),
                 .bitSize = td.getBitSize(),
                 .byteSize = td.getByteSize(),
+                .bitOffset = 0,
                 .slot = if (td.isComptimeOnly()) @as(usize, 0) else null,
                 .structure = try self.getStructure(td.type),
             });
@@ -707,7 +703,7 @@ fn Factory(comptime host: type, comptime module: type) type {
 
         fn getStaticMembers(self: @This(), comptime td: TypeData) !?Value {
             comptime var offset: usize = 0;
-            var list: ?Value = null;
+            const list = try createList(.{});
             switch (@typeInfo(td.type)) {
                 .@"struct", .@"union", .@"enum", .@"opaque" => if (comptime !td.isArguments()) {
                     inline for (comptime std.meta.declarations(td.type), 0..) |decl, index| {
@@ -729,8 +725,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             if (should_export) {
                                 checkStaticMember(DT);
                                 const decl_td = tdb.get(DT);
-                                if (list == null) list = try createList(.{});
-                                try appendList(list.?, .{
+                                try appendList(list, .{
                                     .name = decl.name,
                                     .type = MemberType.object,
                                     .flags = MemberFlags{
@@ -755,8 +750,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .@"enum" => |en| {
                     // add fields as static members
                     inline for (en.fields, 0..) |field, index| {
-                        if (list == null) list = try createList(.{});
-                        try appendList(list.?, .{
+                        try appendList(list, .{
                             .name = field.name,
                             .type = MemberType.object,
                             .flags = MemberFlags{ .is_part_of_set = true },
@@ -768,8 +762,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .error_set => |es| if (es) |errors| {
                     list = try createList(.{});
                     inline for (errors, 0..) |err_rec, index| {
-                        if (list == null) list = try createList(.{});
-                        try appendList(list.?, .{
+                        try appendList(list, .{
                             .name = err_rec.name,
                             .type = MemberType.object,
                             .flags = MemberFlags{ .is_part_of_set = true },

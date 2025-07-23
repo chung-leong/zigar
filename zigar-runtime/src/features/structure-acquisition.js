@@ -74,69 +74,7 @@ export default mixin({
     this.runtimeSafety = false;
     this.libc = false;
   },
-  readSlot(target, slot) {
-    const slots = target ? target[SLOTS] : this.slots;
-    return slots?.[slot];
-  },
-  writeSlot(target, slot, value) {
-    const slots = target ? target[SLOTS] : this.slots;
-    if (slots) {
-      slots[slot] = value;
-    }
-  },
-  createTemplate(dv) {
-    return {
-      [MEMORY]: dv,
-      [SLOTS]: {}
-    };
-  },
-  beginStructure(def) {
-    const {
-      type,
-      purpose,
-      name,
-      length,
-      signature = -1n,
-      byteSize,
-      align,
-      flags,
-    } = def;
-    return {
-      constructor: null,
-      type,
-      purpose,
-      flags,
-      signature,
-      name,
-      length,
-      byteSize,
-      align,
-      instance: {
-        members: [],
-        template: null,
-      },
-      static: {
-        members: [],
-        template: null,
-      },
-    };
-  },
-  attachMember(structure, member, isStatic = false) {
-    const target = (isStatic) ? structure.static : structure.instance;
-    target.members.push(member);
-  },
-  attachTemplate(structure, template, isStatic = false) {
-    const target = (isStatic) ? structure.static : structure.instance;
-    target.template = template;
-  },
-  endStructure(structure) {
-    if (!structure.name) {
-      this.inferTypeName(structure);
-    }
-    this.structures.push(structure);
-    this.finalizeStructure(structure);
-  },
-  captureView(address, len, copy, handle) {
+  createView(address, len, copy, handle) {
     if (copy) {
       // copy content into JavaScript memory
       const dv = this.allocateJSMemory(len, 0);
@@ -155,18 +93,41 @@ export default mixin({
       return dv;
     }
   },
-  castView(address, len, copy, structure, handle) {
+  createInstance(structure, dv) {
     const { constructor, flags } = structure;
-    const dv = this.captureView(address, len, copy, handle);
     const object = constructor.call(ENVIRONMENT, dv);
     if (flags & StructureFlag.HasPointer) {
       // acquire targets of pointers
       this.updatePointerTargets(null, object);
     }
-    if (copy && len > 0) {
+    if (!dv[ZIG]) {
       this.makeReadOnly?.(object);
     }
     return object;
+  },
+  appendList(list, element) {
+    list.push(element);
+  },
+  getSlotValue(target, slot) {
+    const slots = target ? target[SLOTS] : this.slots;
+    return slots?.[slot];
+  },
+  setSlotValue(target, slot, value) {
+    const slots = target ? target[SLOTS] ??= {} : this.slots;
+    slots[slot] = value;
+  },
+  setMemory(object, dv) {
+    object[MEMORY] = dv;
+  },
+  beginStructure(structure) {
+    this.defineStructure(structure);
+  },
+  finishStructure(structure) {
+    if (!structure.name) {
+      this.inferTypeName(structure);
+    }
+    this.structures.push(structure);
+    this.finalizeStructure(structure);
   },
   acquireStructures() {
     const attrs = this.getModuleAttributes();
@@ -213,7 +174,7 @@ export default mixin({
       if (zig) {
         // replace Zig memory
         const { address, len, handle } = zig;
-        const jsDV = object[MEMORY] = this.captureView(address, len, true);
+        const jsDV = object[MEMORY] = this.createView(address, len, true, 0);
         if (handle) {
           jsDV.handle = handle;
         }
@@ -371,7 +332,7 @@ export default mixin({
     s.name = handler.call(this, s);
   },
   getPrimitiveName(s) {
-    const { instance: { members: [member] }, static: { template }, flags } = s;
+    const { instance: { members: [member] }, flags = 0 } = s;
     switch (member.type) {
       case MemberType.Bool:
         return `bool`;
@@ -533,16 +494,14 @@ export default mixin({
     },
   } : process.env.TARGET === 'node' ? {
     exports: {
-      captureView: {},
-      castView: {},
-      readSlot: {},
-      writeSlot: {},
+      createView: {},
+      createInstance: {},
+      appendList: {},
+      getSlotValue: {},
+      setSlotValue: {},
+      setMemory: {},
       beginStructure: {},
-      attachMember: {},
-      createTemplate: {},
-      attachTemplate: {},
-      defineStructure: {},
-      endStructure: {},
+      finishStructure: {},
     },
     imports: {
       getFactoryThunk: {},

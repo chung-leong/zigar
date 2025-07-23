@@ -33,8 +33,8 @@ const ModuleHost = struct {
         get_slot_value: ?Ref = null,
         set_slot_value: ?Ref = null,
         set_memory: ?Ref = null,
-        define_structure: ?Ref = null,
-        finalize_structure: ?Ref = null,
+        begin_structure: ?Ref = null,
+        finish_structure: ?Ref = null,
         handle_jscall: ?Ref = null,
         release_function: ?Ref = null,
 
@@ -445,6 +445,7 @@ const ModuleHost = struct {
     };
 
     fn getNumericValue(self: *@This(), member_type: Value, bits: Value, address: Value) !Value {
+        std.debug.print("getNumericValue\n", .{});
         const env = self.env;
         const type_enum = try std.meta.intToEnum(NumberType, try env.getValueUint32(member_type));
         const bit_size = try env.getValueUint32(bits);
@@ -569,8 +570,8 @@ const ModuleHost = struct {
             "get_slot_value",
             "set_slot_value",
             "set_memory",
-            "define_structure",
-            "finalize_structure",
+            "begin_structure",
+            "finish_structure",
             "enable_multithread",
             "disable_multithread",
             "handle_jscall",
@@ -762,22 +763,22 @@ const ModuleHost = struct {
         );
     }
 
-    fn defineStructure(self: *@This(), structure: Value) !void {
+    fn beginStructure(self: *@This(), structure: Value) !void {
         const env = self.env;
         _ = try env.callFunction(
             try env.getNull(),
-            try env.getReferenceValue(self.js.define_structure orelse return error.Unexpected),
+            try env.getReferenceValue(self.js.begin_structure orelse return error.Unexpected),
             &.{
                 structure,
             },
         );
     }
 
-    fn finalizeStructure(self: *@This(), structure: Value) !void {
+    fn finishStructure(self: *@This(), structure: Value) !void {
         const env = self.env;
         _ = try env.callFunction(
             try env.getNull(),
-            try env.getReferenceValue(self.js.finalize_structure orelse return error.Unexpected),
+            try env.getReferenceValue(self.js.finish_structure orelse return error.Unexpected),
             &.{
                 structure,
             },
