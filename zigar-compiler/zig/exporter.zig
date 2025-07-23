@@ -643,7 +643,8 @@ fn Factory(comptime host: type, comptime module: type) type {
         }
 
         fn getTemplate(self: @This(), comptime td: TypeData) !?Value {
-            var template: ?Value = null;
+            var memory: ?Value = null;
+            var slots: ?Value = null;
             switch (@typeInfo(td.type)) {
                 .@"struct" => |st| if (!td.isArguments()) {
                     if (@sizeOf(td.type) > 0) {
@@ -659,9 +660,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                             }
                             break :init values;
                         };
-                        const dv = try self.exportPointerTarget(&default_values, false);
-                        template = try host.createObject();
-                        try host.setMemory(template.?, dv);
+                        memory = try self.exportPointerTarget(&default_values, false);
                     }
                     inline for (st.fields, 0..) |field, index| {
                         if (field.default_value_ptr) |opaque_ptr| {
@@ -672,8 +671,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 // they're separate objects in the slots of the static template
                                 const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
                                 const value_obj = try self.exportPointerTarget(default_value_ptr, true);
-                                if (template == null) template = try host.createObject();
-                                try host.setSlotValue(template.?, index, value_obj);
+                                if (slots == null) slots = try host.createObject();
+                                try host.setSlotValue(slots, index, value_obj);
                             }
                         }
                     }
@@ -681,25 +680,24 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .@"fn" => {
                     const FT = types.Uninlined(td.type);
                     const thunk = comptime thunk_zig.createThunk(FT);
-                    const thunk_dv = try self.exportPointerTarget(thunk, false);
-                    template = try host.createObject();
-                    try host.setMemory(template.?, thunk_dv);
+                    memory = try self.exportPointerTarget(thunk, false);
                 },
                 .array => if (comptime td.getSentinel()) |sentinel| {
-                    const dv = try self.exportPointerTarget(&sentinel.value, false);
-                    template = try host.createObject();
-                    try host.setMemory(template.?, dv);
+                    _ = sentinel;
+                    // memory = try self.exportPointerTarget(&sentinel.value, false);
                 },
                 .pointer => if (comptime td.isSlice()) {
-                    if (comptime td.getSentinel()) |sentinel| {
-                        const dv = try self.exportPointerTarget(&sentinel.value, false);
-                        template = try host.createObject();
-                        try host.setMemory(template.?, dv);
-                    }
+                    // if (comptime td.getSentinel()) |sentinel| {
+                    //     memory = try self.exportPointerTarget(&sentinel.value, false);
+                    // }
                 },
                 else => {},
             }
-            return template;
+            const flags = getStructureFlags(td);
+            // add slots to template if the structure is using them
+            if (slots == null and flags.has_slot) slots = try host.createObject();
+            if (memory == null and slots == null) return null;
+            return try host.createTemplate(memory, slots);
         }
 
         fn getStaticMembers(self: @This(), comptime td: TypeData) !?Value {
@@ -779,7 +777,8 @@ fn Factory(comptime host: type, comptime module: type) type {
 
         fn getStaticTemplate(self: @This(), comptime td: TypeData) !?Value {
             comptime var offset: usize = 0;
-            var template: ?Value = null;
+            var memory: ?Value = null;
+            var slots: ?Value = null;
             switch (@typeInfo(td.type)) {
                 .@"struct", .@"union", .@"enum", .@"opaque" => if (comptime !td.isArguments()) {
                     inline for (comptime std.meta.declarations(td.type), 0..) |decl, index| {
@@ -806,8 +805,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                                     else => decl_ptr,
                                 };
                                 const value_obj = try self.exportPointerTarget(target_ptr, true);
-                                if (template == null) template = try host.createObject();
-                                try host.setSlotValue(template.?, index, value_obj);
+                                if (slots == null) slots = try host.createObject();
+                                try host.setSlotValue(slots.?, index, value_obj);
                             }
                         }
                         offset += 1;
@@ -820,17 +819,16 @@ fn Factory(comptime host: type, comptime module: type) type {
                     inline for (en.fields, 0..) |field, index| {
                         const value = @field(td.type, field.name);
                         const value_obj = try self.exportPointerTarget(&value, true);
-                        if (template == null) template = try host.createObject();
-                        try host.setSlotValue(template.?, offset + index, value_obj);
+                        if (slots == null) slots = try host.createObject();
+                        try host.setSlotValue(slots.?, offset + index, value_obj);
                     }
                 },
                 .error_set => |es| if (es) |errors| {
                     inline for (errors, 0..) |err_rec, index| {
-                        if (template == null) template = try host.createObject();
                         const err = @field(anyerror, err_rec.name);
                         const value_obj = try self.exportError(err, td);
-                        if (template == null) template = try host.createObject();
-                        try host.setSlotValue(template.?, offset + index, value_obj);
+                        if (slots == null) slots = try host.createObject();
+                        try host.setSlotValue(slots.?, offset + index, value_obj);
                     }
                 },
                 .@"fn" => {
@@ -840,14 +838,13 @@ fn Factory(comptime host: type, comptime module: type) type {
                     if (comptime tdb.has(PT) and tdb.get(PT).isInUse() and !td.isVariadic()) {
                         // store JS thunk controller as static template
                         const controller = comptime thunk_js.createThunkController(host, FT);
-                        const controller_dv = try self.exportPointerTarget(controller, false);
-                        template = try host.createObject();
-                        try host.setMemory(template.?, controller_dv);
+                        memory = try self.exportPointerTarget(controller, false);
                     }
                 },
                 else => {},
             }
-            return template;
+            if (memory == null and slots == null) return null;
+            return host.createTemplate(memory, slots);
         }
 
         fn checkStaticMember(comptime T: anytype) void {
@@ -890,10 +887,11 @@ fn Factory(comptime host: type, comptime module: type) type {
             const export_handle = if (!is_comptime) host.getExportHandle(ptr) else null;
             if (casting) {
                 const structure = try self.getStructure(target_td.type);
-                const obj = try createInstance(structure, value_ptr, is_comptime, export_handle);
-                if (comptime target_td.isComptimeOnly()) {
-                    try self.attachComptimeValues(obj, ptr.*);
-                }
+                const comptime_values = switch (comptime target_td.isComptimeOnly()) {
+                    true => try self.getComptimeValues(ptr.*),
+                    false => null,
+                };
+                const obj = try createInstance(structure, value_ptr, is_comptime, export_handle, comptime_values);
                 return obj;
             } else {
                 return createView(value_ptr, is_comptime, export_handle);
@@ -902,7 +900,7 @@ fn Factory(comptime host: type, comptime module: type) type {
 
         fn exportError(self: @This(), err: anyerror, comptime td: TypeData) !Value {
             const structure = try self.getStructure(td.type);
-            return try createInstance(structure, &err, true, null);
+            return try createInstance(structure, &err, true, null, null);
         }
 
         fn exportComptimeValue(self: @This(), comptime value: anytype) !Value {
@@ -915,64 +913,56 @@ fn Factory(comptime host: type, comptime module: type) type {
             };
         }
 
-        fn attachComptimeValues(self: @This(), target: Value, comptime value: anytype) !void {
-            const td = tdb.get(@TypeOf(value));
-            switch (@typeInfo(td.type)) {
+        fn getComptimeValues(self: @This(), comptime value: anytype) !Value {
+            const T = @TypeOf(value);
+            const slots = try host.createObject();
+            switch (@typeInfo(T)) {
                 .type => {
-                    const obj = try self.getStructure(value);
-                    try host.setSlotValue(target, 0, obj);
+                    const object = try self.getStructure(value);
+                    try host.setSlotValue(slots, 0, object);
                 },
                 .comptime_int, .comptime_float, .enum_literal => {
-                    const obj = try self.exportComptimeValue(value);
-                    try host.setSlotValue(target, 0, obj);
+                    const object = try self.exportComptimeValue(value);
+                    try host.setSlotValue(slots, 0, object);
                 },
-                .array => {
-                    inline for (value, 0..) |element, index| {
-                        const obj = try self.exportComptimeValue(element);
-                        try host.setSlotValue(target, index, obj);
+                .optional => if (value) |v| {
+                    const object = try self.exportComptimeValue(v);
+                    try host.setSlotValue(slots, 0, object);
+                },
+                .error_union => if (value) |v| {
+                    const object = try self.exportComptimeValue(v);
+                    try host.setSlotValue(slots, 0, object);
+                } else |_| {},
+                .array => inline for (value, 0..) |element, index| {
+                    const obj = try self.exportComptimeValue(element);
+                    try host.setSlotValue(slots, index, obj);
+                },
+                .@"struct" => |st| inline for (st.fields, 0..) |field, index| {
+                    const field_td = tdb.get(field.type);
+                    if (field_td.isComptimeOnly()) {
+                        const field_value = @field(value, field.name);
+                        const obj = try self.exportComptimeValue(field_value);
+                        try host.setSlotValue(slots, index, obj);
                     }
                 },
-                .@"struct" => |st| {
-                    inline for (st.fields, 0..) |field, index| {
-                        const field_td = tdb.get(field.type);
-                        if (field_td.isComptimeOnly()) {
-                            const field_value = @field(value, field.name);
-                            const obj = try self.exportComptimeValue(field_value);
-                            try host.setSlotValue(target, index, obj);
-                        }
-                    }
-                },
-                .@"union" => |un| {
-                    if (un.tag_type) |Tag| {
-                        const tag: Tag = value;
-                        inline for (un.fields, 0..) |field, index| {
-                            if (@field(Tag, field.name) == tag) {
-                                const field_td = tdb.get(field.type);
-                                if (field_td.isComptimeOnly()) {
-                                    const field_value = @field(value, field.name);
-                                    const obj = try self.exportComptimeValue(field_value);
-                                    try host.setSlotValue(target, index, obj);
-                                }
+                .@"union" => |un| if (un.tag_type) |Tag| {
+                    const tag: Tag = value;
+                    inline for (un.fields, 0..) |field, index| {
+                        if (@field(Tag, field.name) == tag) {
+                            const field_td = tdb.get(field.type);
+                            if (field_td.isComptimeOnly()) {
+                                const field_value = @field(value, field.name);
+                                const obj = try self.exportComptimeValue(field_value);
+                                try host.setSlotValue(slots, index, obj);
                             }
                         }
-                    } else {
-                        @compileError("Unable to handle comptime value in bare union");
                     }
-                },
-                .optional => {
-                    if (value) |v| {
-                        const obj = try self.exportComptimeValue(v);
-                        try host.setSlotValue(target, 0, obj);
-                    }
-                },
-                .error_union => {
-                    if (value) |v| {
-                        const obj = try self.exportComptimeValue(v);
-                        try host.setSlotValue(target, 0, obj);
-                    } else |_| {}
+                } else {
+                    @compileError("Unable to handle comptime value in bare union");
                 },
                 else => {},
             }
+            return slots;
         }
 
         fn createObject(initializers: anytype) !Value {
@@ -1080,9 +1070,9 @@ fn Factory(comptime host: type, comptime module: type) type {
             return host.createView(bytes, len, copying, export_handle);
         }
 
-        fn createInstance(structure: Value, ptr: anytype, copying: bool, export_handle: ?usize) !Value {
+        fn createInstance(structure: Value, ptr: anytype, copying: bool, export_handle: ?usize, slots: ?Value) !Value {
             const dv = try createView(ptr, copying, export_handle);
-            return host.createInstance(structure, dv);
+            return host.createInstance(structure, dv, slots);
         }
     };
 }

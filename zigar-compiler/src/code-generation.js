@@ -133,7 +133,7 @@ function addStructureDefinitions(lines, definition) {
     flags: 0,
     signature: undefined,
     name: undefined,
-    byteSize: 0,
+    byteSize: undefined,
     align: 0,
     instance: {
       members: [],

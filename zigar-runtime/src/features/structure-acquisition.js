@@ -93,31 +93,34 @@ export default mixin({
       return dv;
     }
   },
-  createInstance(structure, dv) {
+  createInstance(structure, dv, slots) {
     const { constructor, flags } = structure;
     const object = constructor.call(ENVIRONMENT, dv);
     if (flags & StructureFlag.HasPointer) {
       // acquire targets of pointers
       this.updatePointerTargets(null, object);
     }
+    if (slots) {
+      Object.assign(object[SLOTS], slots);
+    }
     if (!dv[ZIG]) {
       this.makeReadOnly?.(object);
     }
     return object;
   },
+  createTemplate(dv, slots) {
+    return { [MEMORY]: dv, [SLOTS]: slots };
+  },
   appendList(list, element) {
     list.push(element);
   },
-  getSlotValue(target, slot) {
-    const slots = target ? target[SLOTS] : this.slots;
-    return slots?.[slot];
+  getSlotValue(slots, slot) {
+    if (!slots) slots = this.slots;
+    return slots[slot];
   },
-  setSlotValue(target, slot, value) {
-    const slots = target ? target[SLOTS] ??= {} : this.slots;
+  setSlotValue(slots, slot, value) {
+    if (!slots) slots = this.slots;
     slots[slot] = value;
-  },
-  setMemory(object, dv) {
-    object[MEMORY] = dv;
   },
   beginStructure(structure) {
     this.defineStructure(structure);
@@ -496,10 +499,10 @@ export default mixin({
     exports: {
       createView: {},
       createInstance: {},
+      createTemplate: {},
       appendList: {},
       getSlotValue: {},
       setSlotValue: {},
-      setMemory: {},
       beginStructure: {},
       finishStructure: {},
     },

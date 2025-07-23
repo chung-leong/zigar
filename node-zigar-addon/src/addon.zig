@@ -29,10 +29,10 @@ const ModuleHost = struct {
     js: struct {
         create_view: ?Ref = null,
         create_instance: ?Ref = null,
+        create_template: ?Ref = null,
         append_list: ?Ref = null,
         get_slot_value: ?Ref = null,
         set_slot_value: ?Ref = null,
-        set_memory: ?Ref = null,
         begin_structure: ?Ref = null,
         finish_structure: ?Ref = null,
         handle_jscall: ?Ref = null,
@@ -562,6 +562,7 @@ const ModuleHost = struct {
             "create_string",
             "create_view",
             "create_instance",
+            "create_template",
             "create_list",
             "create_object",
             "append_list",
@@ -569,7 +570,6 @@ const ModuleHost = struct {
             "set_property",
             "get_slot_value",
             "set_slot_value",
-            "set_memory",
             "begin_structure",
             "finish_structure",
             "enable_multithread",
@@ -662,29 +662,40 @@ const ModuleHost = struct {
     fn createView(self: *@This(), bytes: ?[*]const u8, len: usize, copying: bool, handle: usize) !Value {
         const env = self.env;
         const pi_handle = if (handle != 0) handle - self.base_address else 0;
-        const args: [4]Value = .{
-            try env.createUsize(if (bytes) |b| @intFromPtr(b) else 0),
-            try env.createUint32(@as(u32, @truncate(len))),
-            try env.getBoolean(copying),
-            try env.createUsize(pi_handle),
-        };
         return env.callFunction(
             try env.getNull(),
             try env.getReferenceValue(self.js.create_view orelse return error.Unexpected),
-            &args,
+            &.{
+                try env.createUsize(if (bytes) |b| @intFromPtr(b) else 0),
+                try env.createUint32(@as(u32, @truncate(len))),
+                try env.getBoolean(copying),
+                try env.createUsize(pi_handle),
+            },
         );
     }
 
-    fn createInstance(self: *@This(), structure: Value, dv: Value) !Value {
+    fn createInstance(self: *@This(), structure: Value, dv: Value, slots: ?Value) !Value {
         const env = self.env;
-        const args: [2]Value = .{
-            structure,
-            dv,
-        };
         return env.callFunction(
             try env.getNull(),
             try env.getReferenceValue(self.js.create_instance orelse return error.Unexpected),
-            &args,
+            &.{
+                structure,
+                dv,
+                slots orelse try env.getNull(),
+            },
+        );
+    }
+
+    fn createTemplate(self: *@This(), dv: ?Value, slots: ?Value) !Value {
+        const env = self.env;
+        return try env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.create_template orelse return error.Unexpected),
+            &.{
+                dv orelse try env.getNull(),
+                slots orelse try env.getNull(),
+            },
         );
     }
 
@@ -747,18 +758,6 @@ const ModuleHost = struct {
                 object orelse try env.getNull(),
                 try env.createUint32(@as(u32, @truncate(slot))),
                 value orelse try env.getNull(),
-            },
-        );
-    }
-
-    fn setMemory(self: *@This(), object: Value, dv: ?Value) !void {
-        const env = self.env;
-        _ = try env.callFunction(
-            try env.getNull(),
-            try env.getReferenceValue(self.js.set_memory orelse return error.Unexpected),
-            &.{
-                object,
-                dv orelse try env.getNull(),
             },
         );
     }

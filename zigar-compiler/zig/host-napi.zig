@@ -121,11 +121,20 @@ pub fn createView(bytes: ?[*]const u8, len: usize, copying: bool, export_handle:
     return value;
 }
 
-pub fn createInstance(structure: AnyValue, dv: AnyValue) !AnyValue {
+pub fn createInstance(structure: AnyValue, dv: AnyValue, slots: ?AnyValue) !AnyValue {
     const md = try getModuleData();
     var value: AnyValue = undefined;
-    if (imports.create_instance(md, structure, dv, &value) != .SUCCESS) {
+    if (imports.create_instance(md, structure, dv, slots, &value) != .SUCCESS) {
         return error.UnableToCreateStructureInstance;
+    }
+    return value;
+}
+
+pub fn createTemplate(dv: ?AnyValue, slots: ?AnyValue) !AnyValue {
+    const md = try getModuleData();
+    var value: AnyValue = undefined;
+    if (imports.create_template(md, dv, slots, &value) != .SUCCESS) {
+        return error.UnableToCreateTemplate;
     }
     return value;
 }
@@ -177,13 +186,6 @@ pub fn setSlotValue(object: ?AnyValue, slot: usize, value: AnyValue) !void {
     const md = try getModuleData();
     if (imports.set_slot_value(md, object, slot, value) != .SUCCESS) {
         return error.UnableToSetSlotValue;
-    }
-}
-
-pub fn setMemory(object: AnyValue, dv: AnyValue) !void {
-    const md = try getModuleData();
-    if (imports.set_memory(md, object, dv) != .SUCCESS) {
-        return error.UnableToSetMemory;
     }
 }
 
