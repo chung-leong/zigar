@@ -589,6 +589,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .type = getMemberType(child_td, false),
                 .bitSize = child_td.getBitSize(),
                 .byteSize = child_td.getByteSize(),
+                .bitOffset = 0,
                 .slot = 0,
                 .structure = try self.getStructure(child_td.type),
             });
@@ -746,6 +747,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 },
                 else => {},
             }
+            // add implicit static members
             switch (@typeInfo(td.type)) {
                 .@"enum" => |en| {
                     // add fields as static members
@@ -760,7 +762,6 @@ fn Factory(comptime host: type, comptime module: type) type {
                     }
                 },
                 .error_set => |es| if (es) |errors| {
-                    list = try createList(.{});
                     inline for (errors, 0..) |err_rec, index| {
                         try appendList(list, .{
                             .name = err_rec.name,
@@ -777,6 +778,7 @@ fn Factory(comptime host: type, comptime module: type) type {
         }
 
         fn getStaticTemplate(self: @This(), comptime td: TypeData) !?Value {
+            comptime var offset: usize = 0;
             var template: ?Value = null;
             switch (@typeInfo(td.type)) {
                 .@"struct", .@"union", .@"enum", .@"opaque" => if (comptime !td.isArguments()) {
@@ -808,6 +810,27 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 try host.setSlotValue(template.?, index, value_obj);
                             }
                         }
+                        offset += 1;
+                    }
+                },
+                else => {},
+            }
+            switch (@typeInfo(td.type)) {
+                .@"enum" => |en| {
+                    inline for (en.fields, 0..) |field, index| {
+                        const value = @field(td.type, field.name);
+                        const value_obj = try self.exportPointerTarget(&value, true);
+                        if (template == null) template = try host.createObject();
+                        try host.setSlotValue(template.?, offset + index, value_obj);
+                    }
+                },
+                .error_set => |es| if (es) |errors| {
+                    inline for (errors, 0..) |err_rec, index| {
+                        if (template == null) template = try host.createObject();
+                        const err = @field(anyerror, err_rec.name);
+                        const value_obj = try self.exportError(err, td);
+                        if (template == null) template = try host.createObject();
+                        try host.setSlotValue(template.?, offset + index, value_obj);
                     }
                 },
                 .@"fn" => {
@@ -877,7 +900,8 @@ fn Factory(comptime host: type, comptime module: type) type {
             }
         }
 
-        fn exportError(_: @This(), err: anyerror, structure: Value) !Value {
+        fn exportError(self: @This(), err: anyerror, comptime td: TypeData) !Value {
+            const structure = try self.getStructure(td.type);
             return try createInstance(structure, &err, true, null);
         }
 
@@ -1005,6 +1029,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .@"packed" => try createValue(@as(st.backing_integer.?, @bitCast(initializer))),
                     else => try createObject(initializer),
                 },
+                .null => null,
                 else => {
                     @compileLog(T);
                     @compileError("Unhandled type");
