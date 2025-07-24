@@ -1216,7 +1216,7 @@ pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
         .linux => .{
             PosixSubstitute(redirector),
             LibCSubstitute(redirector),
-            // GNUSubstitute(redirector),
+            GNUSubstitute(redirector),
         },
         else => .{},
     };
