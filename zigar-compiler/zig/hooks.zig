@@ -1,4 +1,5 @@
 const std = @import("std");
+const allocator = std.heap.c_allocator;
 const builtin = @import("builtin");
 
 const fn_transform = @import("./fn-transform.zig");
@@ -156,8 +157,8 @@ pub const Syscall = extern struct {
 };
 
 const fd_min = 0xfffff;
-
-pub fn SyscallRedirector(comptime Host: type) type {
+const is_win = builtin.target.os.tag == .windows;
+pub fn Syscallredirector(comptime Host: type) type {
     return struct {
         pub fn access(path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
             return faccessat(-1, path, mode, result);
@@ -527,7 +528,7 @@ pub fn SyscallRedirector(comptime Host: type) type {
             return false;
         }
 
-        pub fn write(fd: c_int, buffer: [*]u8, len: isize, result: *isize) callconv(.c) bool {
+        pub fn write(fd: c_int, buffer: [*]const u8, len: isize, result: *isize) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
                 var call: Syscall = .{ .cmd = .write, .u = .{
                     .write = .{
@@ -571,15 +572,10 @@ pub fn SyscallRedirector(comptime Host: type) type {
             }
             return times;
         }
-
-        fn intFromError(err: std.posix.E) c_int {
-            const value: c_int = @intFromEnum(err);
-            return -value;
-        }
     };
 }
 
-pub fn PosixSubstitute(comptime Redirector: type) type {
+pub fn PosixSubstitute(comptime redirector: type) type {
     return struct {
         pub const access = makeStdHook("access");
         pub const close = makeStdHook("close");
@@ -673,8 +669,8 @@ pub fn PosixSubstitute(comptime Redirector: type) type {
             return Original.readdir(d);
         }
 
-        fn makeStdHook(comptime name: []const u8) StdHook(@TypeOf(@field(Redirector, name))) {
-            const handler = @field(Redirector, name);
+        fn makeStdHook(comptime name: []const u8) StdHook(@TypeOf(@field(redirector, name))) {
+            const handler = @field(redirector, name);
             const Handler = @TypeOf(handler);
             const HandlerArgs = std.meta.ArgsTuple(Handler);
             const Hook = StdHook(Handler);
@@ -689,7 +685,7 @@ pub fn PosixSubstitute(comptime Redirector: type) type {
                     var result: RT = undefined;
                     handler_args[handler_args.len - 1] = &result;
                     if (@call(.auto, handler, handler_args)) {
-                        return setPosixError(result);
+                        return setError(result);
                     }
                     const original = @field(Original, name);
                     return @call(.auto, original, hook_args);
@@ -715,7 +711,7 @@ pub fn PosixSubstitute(comptime Redirector: type) type {
             });
         }
 
-        fn setPosixError(result: anytype) @TypeOf(result) {
+        fn setError(result: anytype) @TypeOf(result) {
             if (result < 0) {
                 errno = @intCast(-result);
                 return -1;
@@ -757,18 +753,10 @@ pub fn PosixSubstitute(comptime Redirector: type) type {
             pub var utimensat: *const @TypeOf(Sub.utimensat) = undefined;
             pub var write: *const @TypeOf(Sub.write) = undefined;
         };
-        extern threadlocal var errno: c_int;
+        pub extern threadlocal var errno: u16;
     };
 }
 
-const RedirectedFile = extern struct {
-    sig: u64 = signature,
-    fd: c_int,
-    errno: u16,
-    eof: bool,
-
-    pub const signature = 0x4C49_4652_4147_495A;
-};
 const RedirectedDir = extern struct {
     sig: u64 = signature,
     fd: c_int,
@@ -776,58 +764,66 @@ const RedirectedDir = extern struct {
     data_len: usize,
     buffer: [4096]u8,
 
-    pub const signature = 0x5249_4452_4147_495A;
+    pub const signature = 0x5249_4452_4147_495B;
+
+    pub fn cast(s: *std.c.FILE) ?*@This() {
+        if (!std.mem.isAligned(@intFromPtr(s), @alignOf(u64))) return null;
+        const sig: *u64 = @ptrCast(@alignCast(s));
+        return if (sig.* == signature) @ptrCast(sig) else null;
+    }
+};
+const RedirectedFile = extern struct {
+    sig: u64 = signature,
+    fd: c_int,
+    errno: u16 = 0,
+    eof: bool = false,
+    proxy: bool = false,
+
+    pub const signature = 0x4C49_4652_4147_495A;
+
+    pub fn cast(s: *std.c.FILE) ?*@This() {
+        if (!std.mem.isAligned(@intFromPtr(s), @alignOf(u64))) return null;
+        const sig: *u64 = @ptrCast(@alignCast(s));
+        return if (sig.* == signature) @ptrCast(sig) else null;
+    }
 };
 
-pub fn LibCSubstitute(comptime Redirector: type) type {
-    _ = Redirector;
+pub fn LibCSubstitute(comptime redirector: type) type {
     return struct {
+        const posix = PosixSubstitute(redirector);
+
         pub fn clearerr(s: *std.c.FILE) callconv(.c) void {
-            // if (is_redirected_object(s)) {
-            //     redirected_FILE* file = (redirected_FILE*) s;
-            //     file->error = 0;
-            //     return;
-            // }
-            // clearerr_orig(s);
+            if (getRedirectedFile(s)) |file| {
+                file.errno = 0;
+                return;
+            }
             return Original.clearerr(s);
         }
 
         pub fn fclose(s: *std.c.FILE) callconv(.c) c_int {
-            // if (is_redirected_object(s)) {
-            //     redirected_FILE* file = (redirected_FILE*) s;
-            //     uint16_t err;
-            //     redirect_close(file->fd, &err);
-            //     free(file);
-            //     if (err) {
-            //         return 0;
-            //     } else {
-            //         errno = file->error = err;
-            //         return EOF;
-            //     }
-            // }
-            // return fclose_orig(s);
+            if (getRedirectedFile(s)) |file| {
+                const result = posix.close(file.fd);
+                if (!file.proxy) allocator.destroy(file);
+                return result;
+            }
             return Original.fclose(s);
         }
 
         pub fn feof(s: *std.c.FILE) callconv(.c) c_int {
-            // if (is_redirected_object(s)) {
-            //     redirected_FILE* file = (redirected_FILE*) s;
-            //     return file->eof ? 1 : 0;
-            // }
-            // return feof_orig(s);
+            if (getRedirectedFile(s)) |file| {
+                return if (file.eof) 1 else 0;
+            }
             return Original.feof(s);
         }
 
         pub fn ferror(s: *std.c.FILE) callconv(.c) c_int {
-            // if (is_redirected_object(s)) {
-            //     redirected_FILE* file = (redirected_FILE*) s;
-            //     return file->error;
-            // }
-            // return ferror_orig(s);
+            if (getRedirectedFile(s)) |file| {
+                return file.errno;
+            }
             return Original.ferror(s);
         }
 
-        pub fn fgetpos(s: *std.c.FILE, pos: *fpos_t) callconv(.c) c_int {
+        pub fn fgetpos(s: *std.c.FILE, pos: *stdio.fpos_t) callconv(.c) c_int {
             // if (is_redirected_object(s)) {
             //     redirected_FILE* file = (redirected_FILE*) s;
             //     uint16_t err;
@@ -844,115 +840,74 @@ pub fn LibCSubstitute(comptime Redirector: type) type {
         }
 
         pub fn fopen(path: [*:0]const u8, mode: [*:0]const u8) callconv(.c) ?*std.c.FILE {
-            // int oflags = 0;
-            // if (mode[0] == 'r') {
-            //     oflags |= (mode[1] == '+') ? O_RDWR : O_RDONLY;
-            // } else if (mode[0] == 'w') {
-            //     oflags |= (mode[1] == '+') ? O_RDWR : O_WRONLY;
-            //     oflags |= O_TRUNC | O_CREAT;
-            // } else if (mode[0] == 'a') {
-            //     oflags |= (mode[1] == '+') ? O_RDWR : O_WRONLY;
-            //     oflags |= O_APPEND | O_CREAT;
-            // } else {
-            //     return NULL;
-            // }
-            // int result;
-            // if (redirect_open(path, oflags, 0666, &result)) {
-            //     redirected_FILE* file;
-            //     if (result > 0) {
-            //         file = malloc(sizeof(redirected_FILE));
-            //         if (!file) {
-            //             result = -ENOMEM;
-            //         }
-            //     }
-            //     if (result > 0) {
-            //         file->signature = REDIRECTED_OBJECT_SIGNATURE;
-            //         file->fd = result;
-            //         return (FILE*) file;
-            //     } else {
-            //         set_posix_error(result);
-            //         return NULL;
-            //     }
-            // }
-            // return fopen_orig(path, mode);
+            var oflags: std.c.O = .{};
+            if (mode[0] == 'r') {
+                oflags.ACCMODE = if (mode[1] == '+') .RDONLY else .RDWR;
+            } else if (mode[0] == 'w') {
+                oflags.ACCMODE = if (mode[1] == '+') .RDWR else .WRONLY;
+                oflags.CREAT = true;
+                oflags.TRUNC = true;
+            } else if (mode[0] == 'a') {
+                oflags.ACCMODE = if (mode[1] == '+') .RDWR else .WRONLY;
+                oflags.CREAT = true;
+                oflags.APPEND = true;
+            }
+            const oflags_int: u32 = @bitCast(oflags);
+            var fd: c_int = undefined;
+            if (redirector.open(path, @intCast(oflags_int), 0, &fd)) {
+                var file: *RedirectedFile = undefined;
+                if (fd > 0) {
+                    file = allocator.create(RedirectedFile) catch return null;
+                    file.fd = fd;
+                    return @ptrCast(file);
+                } else {
+                    return null;
+                }
+            }
             return Original.fopen(path, mode);
         }
 
         pub fn fputc(c: c_int, s: *std.c.FILE) callconv(.c) c_int {
-            // if (is_redirected_object(s)) {
-            //     redirected_FILE* file = (redirected_FILE*) s;
-            //     char b = c;
-            //     ssize_t written;
-            //     uint16_t err;
-            //     redirect_write(file->fd, &b, 1, &written, &err);
-            //     if (!err) {
-            //         return written;
-            //     } else {
-            //         errno = file->error = err;
-            //         return -1;
-            //     }
-            // }
-            // return fputc_orig(c, s);
+            if (getRedirectedFile(s)) |file| {
+                if (0 < c or 0 > 255) {
+                    file.errno = @intFromEnum(std.posix.E.INVAL);
+                    return -1;
+                }
+                const b: [1]u8 = .{@intCast(c)};
+                return @intCast(write(file, &b, 1));
+            }
             return Original.fputc(c, s);
         }
 
-        pub fn fputs(text: []const u8, s: *std.c.FILE) callconv(.c) c_int {
-            // if (is_redirected_object(s)) {
-            //     redirected_FILE* file = (redirected_FILE*) s;
-            //     size_t len = strlen(t);
-            //     ssize_t written;
-            //     uint16_t err;
-            //     redirect_write(file->fd, t, len, &written, &err);
-            //     if (!err) {
-            //         return written;
-            //     } else {
-            //         errno = file->error = err;
-            //         return -1;
-            //     }
-            // }
-            // return fputs_orig(t, s);
+        pub fn fputs(text: [*:0]const u8, s: *std.c.FILE) callconv(.c) c_int {
+            if (getRedirectedFile(s)) |file| {
+                const len: isize = @intCast(std.mem.len(text));
+                return @intCast(write(file, text, len));
+            }
             return Original.fputs(text, s);
         }
 
         pub fn fread(buffer: [*]u8, size: usize, n: usize, s: *std.c.FILE) callconv(.c) usize {
-            // if (is_redirected_object(s)) {
-            //     redirected_FILE* file = (redirected_FILE*) s;
-            //     ssize_t read;
-            //     uint16_t err;
-            //     size_t count = size * n;
-            //     redirect_read(file->fd, buffer, count, &read, &err);
-            //     if (!err) {
-            //         if (read == 0) {
-            //             file->eof = true;
-            //         }
-            //         return (read == count) ? n : read / size;
-            //     } else {
-            //         errno = file->error = err;
-            //         return -1;
-            //     }
-            // }
-            // return fread_orig(buffer, size, n, s);
+            if (getRedirectedFile(s)) |file| {
+                const len: isize = @intCast(size * n);
+                const result = read(file, buffer, len);
+                if (result < 0) return 0;
+                return if (len == result) n else @as(usize, @intCast(result)) / size;
+            }
             return Original.fread(buffer, size, n, s);
         }
 
         pub fn fseek(s: *std.c.FILE, offset: c_long, whence: c_int) callconv(.c) c_int {
-            // if (is_redirected_object(s)) {
-            //     redirected_FILE* file = (redirected_FILE*) s;
-            //     off64_t pos;
-            //     uint16_t err;
-            //     redirect_seek(file->fd, offset, whence, &pos, &err);
-            //     if (!err) {
-            //         return pos;
-            //     } else {
-            //         errno = file->error = err;
-            //         return -1;
-            //     }
-            // }
-            // return fseek_orig(s, offset, whence);
+            if (getRedirectedFile(s)) |file| {
+                // TODO: flush buffer
+                const result = posix.lseek(file.fd, offset, whence);
+                if (result < 0) file.errno = posix.errno;
+                return @intCast(result);
+            }
             return Original.fseek(s, offset, whence);
         }
 
-        pub fn fsetpos(s: *std.c.FILE, pos: *const fpos_t) callconv(.c) c_int {
+        pub fn fsetpos(s: *std.c.FILE, pos: *const stdio.fpos_t) callconv(.c) c_int {
             // if (is_redirected_object(s)) {
             //     redirected_FILE* file = (redirected_FILE*) s;
             //     uint16_t err;
@@ -970,95 +925,112 @@ pub fn LibCSubstitute(comptime Redirector: type) type {
         }
 
         pub fn ftell(s: *std.c.FILE) callconv(.c) c_int {
-            // if (is_redirected_object(s)) {
-            //     redirected_FILE* file = (redirected_FILE*) s;
-            //     off64_t pos;
-            //     uint16_t err;
-            //     redirect_seek(file->fd, 0, SEEK_CUR, &pos, &err);
-            //     if (!err) {
-            //         return pos;
-            //     } else {
-            //         errno = file->error = err;
-            //         return -1;
-            //     }
-            // }
-            // return ftell_orig(s);
+            if (getRedirectedFile(s)) |file| {
+                const result = posix.lseek(file.fd, 0, std.c.SEEK.CUR);
+                if (result < 0) file.errno = posix.errno;
+                return @intCast(result);
+            }
             return Original.ftell(s);
         }
 
         pub fn fwrite(buffer: [*]const u8, size: usize, n: usize, s: *std.c.FILE) callconv(.c) usize {
-            // if (is_redirected_object(s)) {
-            //     redirected_FILE* file = (redirected_FILE*) s;
-            //     ssize_t written;
-            //     uint16_t err;
-            //     size_t count = size * n;
-            //     redirect_write(file->fd, buffer, count, &written, &err);
-            //     if (!err) {
-            //         return (written == count) ? n : written / size;
-            //     } else {
-            //         errno = file->error = err;
-            //         return -1;
-            //     }
-
-            // }
-            // return fwrite_orig(buffer, size, n, s);
+            if (getRedirectedFile(s)) |file| {
+                const len: isize = @intCast(size * n);
+                const result = write(file, buffer, len);
+                if (result < 0) return 0;
+                return if (len == result) n else @as(usize, @intCast(result)) / size;
+            }
             return Original.fwrite(buffer, size, n, s);
         }
 
         pub fn perror(text: [*:0]const u8) callconv(.c) void {
-            // printf_hook("%s: %s", s, strerror(errno));
-            return Original.perror(text);
+            const stderr = getStdProxy(2).?;
+            const strings: [4][*:0]const u8 = .{
+                text,
+                ": ",
+                stdio.strerror(posix.errno),
+                "\n",
+            };
+            for (strings) |s| {
+                const len: isize = @intCast(std.mem.len(s));
+                const result = write(stderr, text, len);
+                if (result < 0) break;
+            }
         }
 
         pub fn putchar(c: c_int) callconv(.c) c_int {
-            // return fputc_hook(c, stdout);
-            return Original.putchar(c);
+            const stdout = getStdProxy(1).?;
+            if (0 < c or 0 > 255) {
+                stdout.errno = @intFromEnum(std.posix.E.INVAL);
+                return -1;
+            }
+            const b: [1]u8 = .{@intCast(c)};
+            return @intCast(write(stdout, &b, 1));
         }
 
         pub fn puts(text: [*:0]const u8) callconv(.c) c_int {
-            // if (is_applicable_handle(1)) {
-            //     size_t len = strlen(t);
-            //     ssize_t written;
-            //     uint16_t err;
-            //     redirect_write(1, t, len, &written, &err);
-            //     if (!err) {
-            //         ssize_t one;
-            //         redirect_write(1, "\n", 1, &one, &err);
-            //         written += 1;
-            //     }
-            //     if (!err) {
-            //         return written;
-            //     } else {
-            //         errno = err;
-            //         return -1;
-            //     }
-            // }
-            // return puts_orig(t);
-            return Original.puts(text);
+            const stdout = getStdProxy(1).?;
+            const strings: [2][*:0]const u8 = .{
+                text,
+                "\n",
+            };
+            var total: isize = 0;
+            for (strings) |s| {
+                const len: isize = @intCast(std.mem.len(s));
+                const result = write(stdout, text, len);
+                if (result < 0) return @intCast(result);
+                total += result;
+            }
+            return @intCast(total);
         }
 
         pub fn rewind(s: *std.c.FILE) callconv(.c) void {
-            // if (is_redirected_object(s)) {
-            //     redirected_FILE* file = (redirected_FILE*) s;
-            //     uint16_t err;
-            //     off64_t pos;
-            //     redirect_seek(file->fd, 0, SEEK_SET, &pos, &err);
-            //     if (!err) {
-            //         file->error = 0;
-            //         file->eof = false;
-            //     } else {
-            //         errno = file->error = err;
-            //     }
-            //     return;
-            // }
-            // rewind_orig(s);
+            if (getRedirectedFile(s)) |file| {
+                const result = posix.lseek(file.fd, 0, std.c.SEEK.CUR);
+                if (result == 0) {
+                    file.errno = 0;
+                    file.eof = false;
+                } else {
+                    file.errno = posix.errno;
+                }
+            }
             return Original.rewind(s);
         }
 
+        fn read(file: *RedirectedFile, buffer: [*]u8, len: isize) isize {
+            const result = posix.read(file.fd, buffer, len);
+            if (result < 0) file.errno = posix.errno;
+            return result;
+        }
+
+        fn write(file: *RedirectedFile, buffer: [*]const u8, len: isize) isize {
+            const result = posix.write(file.fd, buffer, len);
+            if (result < 0) file.errno = posix.errno;
+            return result;
+        }
+
+        fn getRedirectedFile(s: *std.c.FILE) ?*RedirectedFile {
+            const sc: *stdio.FILE = @ptrCast(@alignCast(s));
+            return RedirectedFile.cast(s) orelse getStdProxy(stdio.fileno(sc));
+        }
+
+        fn getStdProxy(fd: c_int) ?*RedirectedFile {
+            if (fd < 0 or fd > 2) return null;
+            const index: usize = @intCast(fd);
+            const file = &std_proxies[index];
+            return file;
+        }
+
+        var std_proxies: [3]RedirectedFile = .{
+            .{ .fd = 0, .proxy = true },
+            .{ .fd = 1, .proxy = true },
+            .{ .fd = 2, .proxy = true },
+        };
+
         const stdio = @cImport({
             @cInclude("stdio.h");
+            @cInclude("string.h");
         });
-        const fpos_t = stdio.fpos_t;
 
         const Self = @This();
         pub const Original = struct {
@@ -1083,13 +1055,13 @@ pub fn LibCSubstitute(comptime Redirector: type) type {
     };
 }
 
-pub fn LibCSubstituteS(comptime Redirector: type) type {
-    _ = Redirector;
+pub fn LibCSubstituteS(comptime redirector: type) type {
+    _ = redirector;
     return struct {};
 }
 
-pub fn Win32SubstituteS(comptime Redirector: type) type {
-    _ = Redirector;
+pub fn Win32SubstituteS(comptime redirector: type) type {
+    _ = redirector;
     return struct {
         pub fn WriteFile(handle: HANDLE, buffer: LPCVOID, len: DWORD, written: *DWORD, overlapped: *OVERLAPPED) callconv(.c) c_int {
             // if (is_applicable_handle(handle)) {
@@ -1118,19 +1090,19 @@ pub fn Win32SubstituteS(comptime Redirector: type) type {
 }
 
 pub const HandlerVTable = init: {
-    const Redirector = SyscallRedirector(void);
+    const redirector = Syscallredirector(void);
     const len = count: {
         var count: usize = 0;
-        for (std.meta.declarations(Redirector)) |decl| {
-            const DT = @TypeOf(@field(Redirector, decl.name));
+        for (std.meta.declarations(redirector)) |decl| {
+            const DT = @TypeOf(@field(redirector, decl.name));
             if (@typeInfo(DT) == .@"fn") count += 1;
         }
         break :count count;
     };
     var fields: [len]std.builtin.Type.StructField = undefined;
     var index: usize = 0;
-    for (std.meta.declarations(Redirector)) |decl| {
-        const DT = @TypeOf(@field(Redirector, decl.name));
+    for (std.meta.declarations(redirector)) |decl| {
+        const DT = @TypeOf(@field(redirector, decl.name));
         if (@typeInfo(DT) == .@"fn") {
             fields[index] = .{
                 .name = decl.name,
@@ -1154,21 +1126,22 @@ pub const HandlerVTable = init: {
 
 pub fn getHandlerVtable(comptime Host: type) HandlerVTable {
     var vtable: HandlerVTable = undefined;
-    const Redirector = SyscallRedirector(Host);
-    inline for (std.meta.declarations(Redirector)) |decl| {
-        const DT = @TypeOf(@field(Redirector, decl.name));
+    const redirector = Syscallredirector(Host);
+    inline for (std.meta.declarations(redirector)) |decl| {
+        const DT = @TypeOf(@field(redirector, decl.name));
         if (@typeInfo(DT) == .@"fn") {
-            @field(vtable, decl.name) = &@field(Redirector, decl.name);
+            @field(vtable, decl.name) = &@field(redirector, decl.name);
         }
     }
     return vtable;
 }
 
 pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
-    const Redirector = SyscallRedirector(Host);
+    const redirector = Syscallredirector(Host);
     const list = switch (builtin.target.os.tag) {
         .linux => .{
-            PosixSubstitute(Redirector),
+            PosixSubstitute(redirector),
+            LibCSubstitute(redirector),
         },
         else => .{},
     };
@@ -1198,4 +1171,9 @@ pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
         }
     }
     return std.StaticStringMap(Entry).initComptime(table);
+}
+
+fn intFromError(err: std.posix.E) c_int {
+    const value: c_int = @intFromEnum(err);
+    return -value;
 }
