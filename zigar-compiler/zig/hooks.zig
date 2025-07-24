@@ -157,7 +157,7 @@ pub const Syscall = extern struct {
 };
 
 const fd_min = 0xfffff;
-const is_win = builtin.target.os.tag == .windows;
+
 pub fn Syscallredirector(comptime Host: type) type {
     return struct {
         pub fn access(path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
@@ -685,7 +685,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
                     var result: RT = undefined;
                     handler_args[handler_args.len - 1] = &result;
                     if (@call(.auto, handler, handler_args)) {
-                        return setError(result);
+                        return saveError(result);
                     }
                     const original = @field(Original, name);
                     return @call(.auto, original, hook_args);
@@ -711,13 +711,36 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             });
         }
 
-        fn setError(result: anytype) @TypeOf(result) {
+        fn saveError(result: anytype) @TypeOf(result) {
             if (result < 0) {
-                errno = @intCast(-result);
+                setError(@intCast(-result));
                 return -1;
             }
             return result;
         }
+
+        fn setError(err: c_int) void {
+            const ptr = getErrnoPtr();
+            ptr.* = err;
+        }
+
+        fn getError() c_int {
+            const ptr = getErrnoPtr();
+            return ptr.*;
+        }
+
+        var errno_ptr: ?*c_int = null;
+
+        fn getErrnoPtr() *c_int {
+            return errno_ptr orelse get: {
+                errno_ptr = errno.__errno_location();
+                break :get errno_ptr.?;
+            };
+        }
+
+        const errno = @cImport({
+            @cInclude("errno.h");
+        });
 
         const Sub = @This();
         pub const Original = struct {
@@ -753,7 +776,6 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var utimensat: *const @TypeOf(Sub.utimensat) = undefined;
             pub var write: *const @TypeOf(Sub.write) = undefined;
         };
-        pub extern threadlocal var errno: u16;
     };
 }
 
@@ -775,7 +797,7 @@ const RedirectedDir = extern struct {
 const RedirectedFile = extern struct {
     sig: u64 = signature,
     fd: c_int,
-    errno: u16 = 0,
+    errno: c_int = 0,
     eof: bool = false,
     proxy: bool = false,
 
@@ -869,7 +891,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
 
         pub fn fputc(c: c_int, s: *std.c.FILE) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
-                if (0 < c or 0 > 255) {
+                if (c < 0 or c > 255) {
                     file.errno = @intFromEnum(std.posix.E.INVAL);
                     return -1;
                 }
@@ -901,7 +923,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             if (getRedirectedFile(s)) |file| {
                 // TODO: flush buffer
                 const result = posix.lseek(file.fd, offset, whence);
-                if (result < 0) file.errno = posix.errno;
+                if (result < 0) file.errno = posix.getError();
                 return @intCast(result);
             }
             return Original.fseek(s, offset, whence);
@@ -927,7 +949,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         pub fn ftell(s: *std.c.FILE) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
                 const result = posix.lseek(file.fd, 0, std.c.SEEK.CUR);
-                if (result < 0) file.errno = posix.errno;
+                if (result < 0) file.errno = posix.getError();
                 return @intCast(result);
             }
             return Original.ftell(s);
@@ -944,28 +966,38 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         }
 
         pub fn perror(text: [*:0]const u8) callconv(.c) void {
+            const msg = stdio.strerror(posix.getError());
             const stderr = getStdProxy(2).?;
-            const strings: [4][*:0]const u8 = .{
-                text,
-                ": ",
-                stdio.strerror(posix.errno),
-                "\n",
-            };
+            const strings: [4][*:0]const u8 = .{ text, ": ", msg, "\n" };
             for (strings) |s| {
                 const len: isize = @intCast(std.mem.len(s));
-                const result = write(stderr, text, len);
-                if (result < 0) break;
+                const result = write(stderr, s, len);
+                if (result < 0) {
+                    break;
+                }
             }
+        }
+
+        pub fn putc(c: c_int, s: *std.c.FILE) callconv(.c) c_int {
+            if (getRedirectedFile(s)) |file| {
+                if (c < 0 or c > 255) {
+                    file.errno = @intFromEnum(std.posix.E.INVAL);
+                    return -1;
+                }
+                const b: [1]u8 = .{@intCast(c)};
+                return @intCast(write(file, &b, 1));
+            }
+            return Original.putc(c, s);
         }
 
         pub fn putchar(c: c_int) callconv(.c) c_int {
             const stdout = getStdProxy(1).?;
-            if (0 < c or 0 > 255) {
+            if (c < 0 or c > 255) {
                 stdout.errno = @intFromEnum(std.posix.E.INVAL);
                 return -1;
             }
             const b: [1]u8 = .{@intCast(c)};
-            return @intCast(write(stdout, &b, 1));
+            return @intCast(write(stdout, b[0..1].ptr, 1));
         }
 
         pub fn puts(text: [*:0]const u8) callconv(.c) c_int {
@@ -977,7 +1009,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             var total: isize = 0;
             for (strings) |s| {
                 const len: isize = @intCast(std.mem.len(s));
-                const result = write(stdout, text, len);
+                const result = write(stdout, s, len);
                 if (result < 0) return @intCast(result);
                 total += result;
             }
@@ -991,25 +1023,42 @@ pub fn LibCSubstitute(comptime redirector: type) type {
                     file.errno = 0;
                     file.eof = false;
                 } else {
-                    file.errno = posix.errno;
+                    file.errno = posix.getError();
                 }
             }
             return Original.rewind(s);
         }
 
-        fn read(file: *RedirectedFile, buffer: [*]u8, len: isize) isize {
+        // hooks implemented in C
+        pub extern fn vfprintf_hook() callconv(.c) void;
+        pub extern fn vprintf_hook() callconv(.c) void;
+        pub extern fn fprintf_hook() callconv(.c) void;
+        pub extern fn printf_hook() callconv(.c) void;
+        pub extern fn vfprintf_s_hook() callconv(.c) void;
+        pub extern fn vprintf_s_hook() callconv(.c) void;
+        pub extern fn fprintf_s_hook() callconv(.c) void;
+        pub extern fn printf_s_hook() callconv(.c) void;
+
+        // function required by C hooks
+        comptime {
+            @export(&read, .{ .name = "redirected_read", .visibility = .hidden });
+            @export(&write, .{ .name = "redirected_write", .visibility = .hidden });
+            @export(&getRedirectedFile, .{ .name = "get_redirected_file", .visibility = .hidden });
+        }
+
+        fn read(file: *RedirectedFile, buffer: [*]u8, len: isize) callconv(.c) isize {
             const result = posix.read(file.fd, buffer, len);
-            if (result < 0) file.errno = posix.errno;
+            if (result < 0) file.errno = posix.getError();
             return result;
         }
 
-        fn write(file: *RedirectedFile, buffer: [*]const u8, len: isize) isize {
+        fn write(file: *RedirectedFile, buffer: [*]const u8, len: isize) callconv(.c) isize {
             const result = posix.write(file.fd, buffer, len);
-            if (result < 0) file.errno = posix.errno;
+            if (result < 0) file.errno = posix.getError();
             return result;
         }
 
-        fn getRedirectedFile(s: *std.c.FILE) ?*RedirectedFile {
+        fn getRedirectedFile(s: *std.c.FILE) callconv(.c) ?*RedirectedFile {
             const sc: *stdio.FILE = @ptrCast(@alignCast(s));
             return RedirectedFile.cast(s) orelse getStdProxy(stdio.fileno(sc));
         }
@@ -1048,16 +1097,41 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             pub var ftell: *const @TypeOf(Self.ftell) = undefined;
             pub var fwrite: *const @TypeOf(Self.fwrite) = undefined;
             pub var perror: *const @TypeOf(Self.perror) = undefined;
+            pub var putc: *const @TypeOf(Self.putc) = undefined;
             pub var putchar: *const @TypeOf(Self.putchar) = undefined;
             pub var puts: *const @TypeOf(Self.puts) = undefined;
             pub var rewind: *const @TypeOf(Self.rewind) = undefined;
+
+            pub extern var vfprintf_orig: *const @TypeOf(Self.vfprintf_hook);
+            pub extern var vprintf_orig: *const @TypeOf(Self.vprintf_hook);
+            pub extern var fprintf_orig: *const @TypeOf(Self.fprintf_hook);
+            pub extern var printf_orig: *const @TypeOf(Self.printf_hook);
+            pub extern var vfprintf_s_orig: *const @TypeOf(Self.vfprintf_s_hook);
+            pub extern var vprintf_s_orig: *const @TypeOf(Self.vprintf_s_hook);
+            pub extern var fprintf_s_orig: *const @TypeOf(Self.fprintf_s_hook);
+            pub extern var printf_s_orig: *const @TypeOf(Self.printf_s_hook);
         };
     };
 }
 
-pub fn LibCSubstituteS(comptime redirector: type) type {
-    _ = redirector;
-    return struct {};
+pub fn GNUSubstitute(comptime redirector: type) type {
+    return struct {
+        const libc = LibCSubstitute(redirector);
+
+        // hooks implemented in C
+        pub extern fn __vfprintf_chk_hook() callconv(.c) void;
+        pub extern fn __vprintf_chk_hook() callconv(.c) void;
+        pub extern fn __fprintf_chk_hook() callconv(.c) void;
+        pub extern fn __printf_chk_hook() callconv(.c) void;
+
+        const Self = @This();
+        pub const Original = struct {
+            pub extern var __vfprintf_chk_orig: *const @TypeOf(Self.__vfprintf_chk_hook);
+            pub extern var __vprintf_chk_orig: *const @TypeOf(Self.__vprintf_chk_hook);
+            pub extern var __fprintf_chk_orig: *const @TypeOf(Self.__fprintf_chk_hook);
+            pub extern var __printf_chk_orig: *const @TypeOf(Self.__printf_chk_hook);
+        };
+    };
 }
 
 pub fn Win32SubstituteS(comptime redirector: type) type {
@@ -1142,6 +1216,7 @@ pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
         .linux => .{
             PosixSubstitute(redirector),
             LibCSubstitute(redirector),
+            // GNUSubstitute(redirector),
         },
         else => .{},
     };
@@ -1163,8 +1238,11 @@ pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
     inline for (list) |Sub| {
         const decls = std.meta.declarations(Sub.Original);
         inline for (decls) |decl| {
-            table[index] = .{ decl.name, .{
-                .handler = &@field(Sub, decl.name),
+            const w_suffix = std.mem.endsWith(u8, decl.name, "_orig");
+            const name = if (w_suffix) decl.name[0 .. decl.name.len - 5] else decl.name;
+            const handler_name = if (w_suffix) name ++ "_hook" else name;
+            table[index] = .{ name, .{
+                .handler = &@field(Sub, handler_name),
                 .original = &@field(Sub.Original, decl.name),
             } };
             index += 1;
