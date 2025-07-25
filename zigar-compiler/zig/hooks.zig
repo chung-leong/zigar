@@ -20,101 +20,101 @@ pub const Syscall = extern struct {
     cmd: Command,
     u: extern union {
         access: extern struct {
-            dirfd: c_int,
+            dirfd: i32,
             path: [*:0]const u8,
-            mode: c_int,
+            mode: i32,
         },
         advise: extern struct {
-            fd: c_int,
+            fd: i32,
             offset: isize,
             len: isize,
-            advice: c_int,
+            advice: i32,
         },
         allocate: extern struct {
-            fd: c_int,
+            fd: i32,
             offset: isize,
             len: isize,
         },
         close: extern struct {
-            fd: c_int,
+            fd: i32,
         },
         datasync: extern struct {
-            fd: c_int,
+            fd: i32,
         },
         fcntl: extern struct {
-            fd: c_int,
-            op: c_int,
-            arg: c_int,
-            result: c_int = undefined,
+            fd: i32,
+            op: i32,
+            arg: i32,
+            result: i32 = undefined,
         },
         fstat: extern struct {
-            fd: c_int,
+            fd: i32,
             stat: *std.posix.Stat,
         },
         futimes: extern struct {
-            fd: c_int,
+            fd: i32,
             times: [*]const std.posix.timespec,
         },
         getdents: extern struct {
-            dirfd: c_int,
+            dirfd: i32,
             buffer: [*]u8,
             len: usize,
-            read: c_int = undefined,
+            read: i32 = undefined,
         },
         mkdir: extern struct {
-            dirfd: c_int,
+            dirfd: i32,
             path: [*:0]const u8,
-            mode: c_int,
+            mode: i32,
         },
         open: extern struct {
-            dirfd: c_int,
+            dirfd: i32,
             path: [*:0]const u8,
-            oflags: c_int,
-            mode: c_int,
-            fd: c_int = undefined,
+            oflags: i32,
+            mode: i32,
+            fd: i32 = undefined,
         },
         read: extern struct {
-            fd: c_int,
+            fd: i32,
             bytes: [*]const u8,
             len: isize,
             read: isize = undefined,
         },
         rmdir: extern struct {
-            dirfd: c_int,
+            dirfd: i32,
             path: [*:0]const u8,
         },
         seek: extern struct {
-            fd: c_int,
+            fd: i32,
             offset: isize,
-            whence: c_int,
+            whence: i32,
             position: i64 = undefined,
         },
         stat: extern struct {
-            dirfd: c_int,
+            dirfd: i32,
             path: [*:0]const u8,
-            flags: c_int,
+            flags: i32,
             stat: *std.posix.Stat,
         },
         sync: extern struct {
-            fd: c_int,
+            fd: i32,
         },
         tell: extern struct {
-            fd: c_int,
+            fd: i32,
             position: i64 = undefined,
         },
         unlink: extern struct {
-            dirfd: c_int,
+            dirfd: i32,
             path: [*:0]const u8,
-            flags: c_int,
+            flags: i32,
         },
         utimes: extern struct {
-            dirfd: c_int,
+            dirfd: i32,
             path: [*:0]const u8,
-            flags: c_int,
+            flags: i32,
             times: [*]const std.posix.timespec,
         },
         write: extern struct {
-            fd: c_int,
+            fd: i32,
             bytes: [*]const u8,
             len: isize,
             written: isize = undefined,
@@ -158,7 +158,7 @@ pub const Syscall = extern struct {
 
 const fd_min = 0xfffff;
 
-pub fn Syscallredirector(comptime Host: type) type {
+pub fn SyscallRedirector(comptime Host: type) type {
     return struct {
         pub fn access(path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
             return faccessat(-1, path, mode, result);
@@ -433,7 +433,10 @@ pub fn Syscallredirector(comptime Host: type) type {
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS or err != .NOENT) {
+                if (err == .SUCCESS) {
+                    result.* = call.u.open.fd;
+                    return true;
+                } else if (err != .NOENT) {
                     result.* = intFromError(err);
                     return true;
                 }
@@ -880,7 +883,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
                 var file: *RedirectedFile = undefined;
                 if (fd > 0) {
                     file = allocator.create(RedirectedFile) catch return null;
-                    file.fd = fd;
+                    file.* = .{ .fd = fd };
                     return @ptrCast(file);
                 } else {
                     return null;
@@ -914,6 +917,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
                 const len: isize = @intCast(size * n);
                 const result = read(file, buffer, len);
                 if (result < 0) return 0;
+                if (result == 0) file.eof = true;
                 return if (len == result) n else @as(usize, @intCast(result)) / size;
             }
             return Original.fread(buffer, size, n, s);
@@ -1018,13 +1022,14 @@ pub fn LibCSubstitute(comptime redirector: type) type {
 
         pub fn rewind(s: *std.c.FILE) callconv(.c) void {
             if (getRedirectedFile(s)) |file| {
-                const result = posix.lseek(file.fd, 0, std.c.SEEK.CUR);
+                const result = posix.lseek(file.fd, 0, std.c.SEEK.SET);
                 if (result == 0) {
                     file.errno = 0;
                     file.eof = false;
                 } else {
                     file.errno = posix.getError();
                 }
+                return;
             }
             return Original.rewind(s);
         }
@@ -1164,7 +1169,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
 }
 
 pub const HandlerVTable = init: {
-    const redirector = Syscallredirector(void);
+    const redirector = SyscallRedirector(void);
     const len = count: {
         var count: usize = 0;
         for (std.meta.declarations(redirector)) |decl| {
@@ -1200,7 +1205,7 @@ pub const HandlerVTable = init: {
 
 pub fn getHandlerVtable(comptime Host: type) HandlerVTable {
     var vtable: HandlerVTable = undefined;
-    const redirector = Syscallredirector(Host);
+    const redirector = SyscallRedirector(Host);
     inline for (std.meta.declarations(redirector)) |decl| {
         const DT = @TypeOf(@field(redirector, decl.name));
         if (@typeInfo(DT) == .@"fn") {
@@ -1211,7 +1216,7 @@ pub fn getHandlerVtable(comptime Host: type) HandlerVTable {
 }
 
 pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
-    const redirector = Syscallredirector(Host);
+    const redirector = SyscallRedirector(Host);
     const list = switch (builtin.target.os.tag) {
         .linux => .{
             PosixSubstitute(redirector),

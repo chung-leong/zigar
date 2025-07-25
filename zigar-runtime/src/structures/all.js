@@ -83,50 +83,52 @@ export default mixin({
     const descriptors = {
       [Symbol.toStringTag]: defineValue(name),
     };
-    for (const member of members) {
-      const { name, slot, flags } = member;
-      if (member.structure.type === StructureType.Function) {
-        let fn = template[SLOTS][slot];
-        if (flags & MemberFlag.IsString) {
-          fn[STRING_RETVAL] = true;
-        }
-        staticDescriptors[name] = defineValue(fn);
-        // provide a name if one isn't assigned yet
-        if (!fn.name) {
-          defineProperty(fn, 'name', defineValue(name));
-        }
-        // see if it's a getter or setter
-        const [ accessorType, propName ] = /^(get|set)\s+([\s\S]+)/.exec(name)?.slice(1) ?? [];
-        const argRequired = (accessorType === 'get') ? 0 : 1;
-        if (accessorType && fn.length  === argRequired) {
-          staticDescriptors[propName] ||= {};
-          const descriptor = staticDescriptors[propName];
-          descriptor[accessorType] = fn;
-        }
-        // see if it's a method
-        if (member.flags & MemberFlag.IsMethod) {
-          const method = function(...args) {
-            try {
-              return fn(this, ...args);
-            } catch (err) {
-              // adjust argument index/count
-              err[UPDATE]?.(1);
-              throw err;
-            }
-          };
-          defineProperties(method, {
-            name: defineValue(name),
-            length: defineValue(fn.length - 1),
-          });
-          descriptors[name] = defineValue(method);
-          if (accessorType && method.length === argRequired) {
-            const descriptor = descriptors[propName] ||= {};
-            descriptor[accessorType] = method;
+    if (members) {
+      for (const member of members) {
+        const { name, slot, flags } = member;
+        if (member.structure.type === StructureType.Function) {
+          let fn = template[SLOTS][slot];
+          if (flags & MemberFlag.IsString) {
+            fn[STRING_RETVAL] = true;
           }
+          staticDescriptors[name] = defineValue(fn);
+          // provide a name if one isn't assigned yet
+          if (!fn.name) {
+            defineProperty(fn, 'name', defineValue(name));
+          }
+          // see if it's a getter or setter
+          const [ accessorType, propName ] = /^(get|set)\s+([\s\S]+)/.exec(name)?.slice(1) ?? [];
+          const argRequired = (accessorType === 'get') ? 0 : 1;
+          if (accessorType && fn.length  === argRequired) {
+            staticDescriptors[propName] ||= {};
+            const descriptor = staticDescriptors[propName];
+            descriptor[accessorType] = fn;
+          }
+          // see if it's a method
+          if (member.flags & MemberFlag.IsMethod) {
+            const method = function(...args) {
+              try {
+                return fn(this, ...args);
+              } catch (err) {
+                // adjust argument index/count
+                err[UPDATE]?.(1);
+                throw err;
+              }
+            };
+            defineProperties(method, {
+              name: defineValue(name),
+              length: defineValue(fn.length - 1),
+            });
+            descriptors[name] = defineValue(method);
+            if (accessorType && method.length === argRequired) {
+              const descriptor = descriptors[propName] ||= {};
+              descriptor[accessorType] = method;
+            }
+          }
+        } else {
+          staticDescriptors[name] = this.defineMember(member);
+          props.push(name);
         }
-      } else {
-        staticDescriptors[name] = this.defineMember(member);
-        props.push(name);
       }
     }
     // static variable/constants are stored in slots

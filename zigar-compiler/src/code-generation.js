@@ -327,21 +327,23 @@ function addStructureDefinitions(lines, definition) {
               const { members, template } = value;
               add(`${name}: {`);
               add(`members: [`);
-              for (const member of members) {
-                add(`{`);
-                add(`...m,`);
-                for (const [ name, value ] of Object.entries(member)) {
-                  if (isDifferent(value, defaultMember[name])) {
-                    switch (name) {
-                      case 'structure':
-                        add(`${name}: ${structureNames.get(value)},`);
-                        break;
-                      default:
-                        add(`${name}: ${JSON.stringify(value)},`);
+              if (members) {
+                for (const member of members) {
+                  add(`{`);
+                  add(`...m,`);
+                  for (const [ name, value ] of Object.entries(member)) {
+                    if (isDifferent(value, defaultMember[name])) {
+                      switch (name) {
+                        case 'structure':
+                          add(`${name}: ${structureNames.get(value)},`);
+                          break;
+                        default:
+                          add(`${name}: ${JSON.stringify(value)},`);
+                      }
                     }
                   }
+                  add(`},`);
                 }
-                add(`},`);
               }
               add(`],`);
               if (template) {
