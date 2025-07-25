@@ -9,7 +9,7 @@ pub fn triggerError(path: [:0]const u8) !std.posix.E {
     defer _ = c.fclose(file);
     var buffer: [128]u8 = undefined;
     const read = c.fread(&buffer, 1, buffer.len, file);
-    if (read != 0) {
+    if (read != buffer.len and c.feof(file) == 0) {
         const err = c.ferror(file);
         c.clearerr(file);
         if (c.ferror(file) != 0) {

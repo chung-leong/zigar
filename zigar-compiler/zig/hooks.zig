@@ -983,7 +983,10 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             if (getRedirectedFile(s)) |file| {
                 const len: isize = @intCast(size * n);
                 const result = read(file, buffer, len);
-                if (result < 0) return 0;
+                if (result < 0) {
+                    file.errno = posix.getError();
+                    return 0;
+                }
                 if (result == 0) file.eof = true;
                 return if (len == result) n else @as(usize, @intCast(result)) / size;
             }
@@ -1026,7 +1029,10 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             if (getRedirectedFile(s)) |file| {
                 const len: isize = @intCast(size * n);
                 const result = write(file, buffer, len);
-                if (result < 0) return 0;
+                if (result < 0) {
+                    file.errno = posix.getError();
+                    return 0;
+                }
                 return if (len == result) n else @as(usize, @intCast(result)) / size;
             }
             return Original.fwrite(buffer, size, n, s);
