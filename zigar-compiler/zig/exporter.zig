@@ -375,6 +375,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 const structure = try createObject(.{
                     .name = getStructureName(td),
                     .type = getStructureType(td),
+                    .purpose = getStructurePurpose(td),
                     .flags = getStructureFlags(td),
                     .signature = td.getSignature(),
                     .length = getStructureLength(td),

@@ -589,20 +589,26 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const fcntl = makeStdHook("fcntl");
         pub const fdatasync = makeStdHook("fdatasync");
         pub const fstat = makeStdHook("fstat");
+        pub const fstat64 = makeStdHook("fstat");
         pub const fstatat64 = makeStdHook("fstatat64");
         pub const fsync = makeStdHook("fsync");
         pub const futimes = makeStdHook("futimes");
         pub const futimesat = makeStdHook("futimesat");
         pub const lseek = makeStdHook("lseek");
+        pub const lseek64 = makeStdHook("lseek");
         pub const lstat = makeStdHook("lstat");
+        pub const lstat64 = makeStdHook("lstat");
         pub const lutimes = makeStdHook("lutimes");
         pub const mkdir = makeStdHook("mkdir");
         pub const mkdirat = makeStdHook("mkdirat");
         pub const open = makeStdHook("open");
         pub const openat = makeStdHook("openat");
+        pub const open64 = makeStdHook("open");
+        pub const openat64 = makeStdHook("openat");
         pub const read = makeStdHook("read");
         pub const rmdir = makeStdHook("rmdir");
         pub const stat = makeStdHook("stat");
+        pub const stat64 = makeStdHook("stat");
         pub const unlink = makeStdHook("unlink");
         pub const unlinkat = makeStdHook("unlinkat");
         pub const utimes = makeStdHook("utimes");
@@ -757,22 +763,28 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var fcntl: *const @TypeOf(Sub.fcntl) = undefined;
             pub var fdatasync: *const @TypeOf(Sub.fdatasync) = undefined;
             pub var fstat: *const @TypeOf(Sub.fstat) = undefined;
+            pub var fstat64: *const @TypeOf(Sub.fstat64) = undefined;
             pub var fstatat64: *const @TypeOf(Sub.fstatat64) = undefined;
             pub var fsync: *const @TypeOf(Sub.fsync) = undefined;
             pub var futimes: *const @TypeOf(Sub.futimes) = undefined;
             pub var futimesat: *const @TypeOf(Sub.futimesat) = undefined;
             pub var lseek: *const @TypeOf(Sub.lseek) = undefined;
+            pub var lseek64: *const @TypeOf(Sub.lseek64) = undefined;
             pub var lstat: *const @TypeOf(Sub.lstat) = undefined;
+            pub var lstat64: *const @TypeOf(Sub.lstat64) = undefined;
             pub var lutimes: *const @TypeOf(Sub.lutimes) = undefined;
             pub var mkdir: *const @TypeOf(Sub.mkdir) = undefined;
             pub var mkdirat: *const @TypeOf(Sub.mkdirat) = undefined;
             pub var open: *const @TypeOf(Sub.open) = undefined;
-            pub var opendir: *const @TypeOf(Sub.opendir) = undefined;
+            pub var open64: *const @TypeOf(Sub.open64) = undefined;
             pub var openat: *const @TypeOf(Sub.openat) = undefined;
+            pub var openat64: *const @TypeOf(Sub.openat64) = undefined;
+            pub var opendir: *const @TypeOf(Sub.opendir) = undefined;
             pub var read: *const @TypeOf(Sub.read) = undefined;
             pub var readdir: *const @TypeOf(Sub.readdir) = undefined;
             pub var rmdir: *const @TypeOf(Sub.rmdir) = undefined;
             pub var stat: *const @TypeOf(Sub.stat) = undefined;
+            pub var stat64: *const @TypeOf(Sub.stat64) = undefined;
             pub var unlink: *const @TypeOf(Sub.unlink) = undefined;
             pub var unlinkat: *const @TypeOf(Sub.unlinkat) = undefined;
             pub var utimes: *const @TypeOf(Sub.utimes) = undefined;
@@ -867,7 +879,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         pub fn fopen(path: [*:0]const u8, mode: [*:0]const u8) callconv(.c) ?*std.c.FILE {
             var oflags: std.c.O = .{};
             if (mode[0] == 'r') {
-                oflags.ACCMODE = if (mode[1] == '+') .RDONLY else .RDWR;
+                oflags.ACCMODE = if (mode[1] == '+') .RDWR else .RDONLY;
             } else if (mode[0] == 'w') {
                 oflags.ACCMODE = if (mode[1] == '+') .RDWR else .WRONLY;
                 oflags.CREAT = true;
