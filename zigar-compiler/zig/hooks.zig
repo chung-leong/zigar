@@ -309,15 +309,12 @@ pub fn SyscallRedirector(comptime Host: type) type {
             return false;
         }
 
-        pub fn futimes(fd: c_int, tv: [*]std.posix.timeval, result: *c_int) callconv(.c) bool {
+        pub fn futimens(fd: c_int, times: [*]const std.posix.timespec, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
                 var call: Syscall = .{ .cmd = .futimes, .u = .{
                     .futimes = .{
                         .fd = fd,
-                        .times = &.{
-                            .{ .sec = tv[0].sec, .nsec = tv[0].usec * 1000 },
-                            .{ .sec = tv[1].sec, .nsec = tv[1].usec * 1000 },
-                        },
+                        .times = times,
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
@@ -327,9 +324,20 @@ pub fn SyscallRedirector(comptime Host: type) type {
             return false;
         }
 
-        pub fn futimesat(dirfd: c_int, path: [*:0]const u8, tv: [*]std.posix.timeval, result: *c_int) callconv(.c) bool {
-            const times = convertTimeval(tv);
-            return utimensat(dirfd, path, std.posix.AT.SYMLINK_FOLLOW, &times, result);
+        pub fn futimes(fd: c_int, tv: [*]const std.posix.timeval, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(fd)) {
+                const times = convertTimeval(tv);
+                return futimens(fd, &times, result);
+            }
+            return false;
+        }
+
+        pub fn futimesat(dirfd: c_int, path: [*:0]const u8, tv: [*]const std.posix.timeval, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.set_times))) {
+                const times = convertTimeval(tv);
+                return utimensat(dirfd, path, std.posix.AT.SYMLINK_FOLLOW, &times, result);
+            }
+            return false;
         }
 
         pub fn getdents(dirfd: c_int, buffer: [*]u8, len: usize, result: *c_int) callconv(.c) bool {
@@ -391,7 +399,7 @@ pub fn SyscallRedirector(comptime Host: type) type {
             return fstatat64(-1, path, buf, std.posix.AT.SYMLINK_NOFOLLOW, result);
         }
 
-        pub fn lutimes(path: [*:0]const u8, tv: [*]std.posix.timeval, result: *c_int) callconv(.c) bool {
+        pub fn lutimes(path: [*:0]const u8, tv: [*]const std.posix.timeval, result: *c_int) callconv(.c) bool {
             const times = convertTimeval(tv);
             return utimensat(-1, path, std.posix.AT.SYMLINK_NOFOLLOW, &times, result);
         }
@@ -507,7 +515,7 @@ pub fn SyscallRedirector(comptime Host: type) type {
             return false;
         }
 
-        pub fn utimes(path: [*:0]const u8, tv: [*]std.posix.timeval, result: *c_int) callconv(.c) bool {
+        pub fn utimes(path: [*:0]const u8, tv: [*]const std.posix.timeval, result: *c_int) callconv(.c) bool {
             const times = convertTimeval(tv);
             return utimensat(-1, path, std.posix.AT.SYMLINK_FOLLOW, &times, result);
         }
@@ -583,36 +591,37 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const access = makeStdHook("access");
         pub const close = makeStdHook("close");
         pub const faccessat = makeStdHook("faccessat");
-        pub const fadvise = makeStdHook("fadvise");
-        pub const fadvise64 = makeStdHook("fadvise64");
         pub const fallocate = makeStdHook("fallocate");
         pub const fcntl = makeStdHook("fcntl");
         pub const fdatasync = makeStdHook("fdatasync");
         pub const fstat = makeStdHook("fstat");
-        pub const fstat64 = makeStdHook("fstat");
+        pub const fstat64 = makeStdHookUsing("fstat64", "fstat");
+        pub const fstatat = makeStdHookUsing("fstatat", "fstatat64");
         pub const fstatat64 = makeStdHook("fstatat64");
         pub const fsync = makeStdHook("fsync");
+        pub const futimens = makeStdHook("futimens");
         pub const futimes = makeStdHook("futimes");
         pub const futimesat = makeStdHook("futimesat");
         pub const lseek = makeStdHook("lseek");
-        pub const lseek64 = makeStdHook("lseek");
+        pub const lseek64 = makeStdHookUsing("lseek64", "lseek");
         pub const lstat = makeStdHook("lstat");
-        pub const lstat64 = makeStdHook("lstat");
+        pub const lstat64 = makeStdHookUsing("lstat64", "lstat");
         pub const lutimes = makeStdHook("lutimes");
         pub const mkdir = makeStdHook("mkdir");
         pub const mkdirat = makeStdHook("mkdirat");
         pub const open = makeStdHook("open");
         pub const openat = makeStdHook("openat");
-        pub const open64 = makeStdHook("open");
-        pub const openat64 = makeStdHook("openat");
+        pub const open64 = makeStdHookUsing("open64", "open");
+        pub const openat64 = makeStdHookUsing("openat64", "openat");
+        pub const posix_fadvise = makeStdHookUsing("posix_fadvise", "fadvise64");
         pub const read = makeStdHook("read");
         pub const rmdir = makeStdHook("rmdir");
         pub const stat = makeStdHook("stat");
-        pub const stat64 = makeStdHook("stat");
+        pub const stat64 = makeStdHookUsing("stat64", "stat");
         pub const unlink = makeStdHook("unlink");
         pub const unlinkat = makeStdHook("unlinkat");
-        pub const utimes = makeStdHook("utimes");
         pub const utimensat = makeStdHook("utimensat");
+        pub const utimes = makeStdHook("utimes");
         pub const write = makeStdHook("write");
 
         pub fn __fxstat(ver: c_int, fd: c_int, buf: *std.posix.Stat) callconv(.c) c_int {
@@ -711,7 +720,12 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         }
 
         fn makeStdHook(comptime name: []const u8) StdHook(@TypeOf(@field(redirector, name))) {
-            const handler = @field(redirector, name);
+            // default case where the name of the handler matches the name of the function being hooked
+            return makeStdHookUsing(name, name);
+        }
+
+        fn makeStdHookUsing(comptime original_name: []const u8, comptime handler_name: []const u8) StdHook(@TypeOf(@field(redirector, handler_name))) {
+            const handler = @field(redirector, handler_name);
             const Handler = @TypeOf(handler);
             const HandlerArgs = std.meta.ArgsTuple(Handler);
             const Hook = StdHook(Handler);
@@ -728,7 +742,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
                     if (@call(.auto, handler, handler_args)) {
                         return saveError(result);
                     }
-                    const original = @field(Original, name);
+                    const original = @field(Original, original_name);
                     return @call(.auto, original, hook_args);
                 }
             };
@@ -793,16 +807,16 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var close: *const @TypeOf(Sub.close) = undefined;
             pub var closedir: *const @TypeOf(Sub.closedir) = undefined;
             pub var faccessat: *const @TypeOf(Sub.faccessat) = undefined;
-            pub var fadvise: *const @TypeOf(Sub.fadvise) = undefined;
-            pub var fadvise64: *const @TypeOf(Sub.fadvise64) = undefined;
             pub var fallocate: *const @TypeOf(Sub.fallocate) = undefined;
             pub var fcntl: *const @TypeOf(Sub.fcntl) = undefined;
             pub var fdatasync: *const @TypeOf(Sub.fdatasync) = undefined;
             pub var fstat: *const @TypeOf(Sub.fstat) = undefined;
             pub var fstat64: *const @TypeOf(Sub.fstat64) = undefined;
+            pub var fstatat: *const @TypeOf(Sub.fstatat) = undefined;
             pub var fstatat64: *const @TypeOf(Sub.fstatat64) = undefined;
             pub var fsync: *const @TypeOf(Sub.fsync) = undefined;
             pub var futimes: *const @TypeOf(Sub.futimes) = undefined;
+            pub var futimens: *const @TypeOf(Sub.futimens) = undefined;
             pub var futimesat: *const @TypeOf(Sub.futimesat) = undefined;
             pub var lseek: *const @TypeOf(Sub.lseek) = undefined;
             pub var lseek64: *const @TypeOf(Sub.lseek64) = undefined;
@@ -816,6 +830,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var openat: *const @TypeOf(Sub.openat) = undefined;
             pub var openat64: *const @TypeOf(Sub.openat64) = undefined;
             pub var opendir: *const @TypeOf(Sub.opendir) = undefined;
+            pub var posix_fadvise: *const @TypeOf(Sub.posix_fadvise) = undefined;
             pub var read: *const @TypeOf(Sub.read) = undefined;
             pub var readdir: *const @TypeOf(Sub.readdir) = undefined;
             pub var rmdir: *const @TypeOf(Sub.rmdir) = undefined;
@@ -823,8 +838,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var stat64: *const @TypeOf(Sub.stat64) = undefined;
             pub var unlink: *const @TypeOf(Sub.unlink) = undefined;
             pub var unlinkat: *const @TypeOf(Sub.unlinkat) = undefined;
-            pub var utimes: *const @TypeOf(Sub.utimes) = undefined;
             pub var utimensat: *const @TypeOf(Sub.utimensat) = undefined;
+            pub var utimes: *const @TypeOf(Sub.utimes) = undefined;
             pub var write: *const @TypeOf(Sub.write) = undefined;
         };
     };
