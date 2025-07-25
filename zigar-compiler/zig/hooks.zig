@@ -615,6 +615,38 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const utimensat = makeStdHook("utimensat");
         pub const write = makeStdHook("write");
 
+        pub fn __fxstat(ver: c_int, fd: c_int, buf: *std.posix.Stat) callconv(.c) c_int {
+            var result: c_int = undefined;
+            if (redirector.fstat(fd, buf, &result)) {
+                return saveError(result);
+            }
+            return Original.__fxstat(ver, fd, buf);
+        }
+
+        pub fn __fxstatat(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
+            var result: c_int = undefined;
+            if (redirector.fstatat64(dirfd, path, buf, std.posix.AT.SYMLINK_FOLLOW, &result)) {
+                return saveError(result);
+            }
+            return Original.__fxstatat(ver, dirfd, path, buf);
+        }
+
+        pub fn __lxstat(ver: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
+            var result: c_int = undefined;
+            if (redirector.lstat(path, buf, &result)) {
+                return saveError(result);
+            }
+            return Original.__lxstat(ver, path, buf);
+        }
+
+        pub fn __xstat(ver: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
+            var result: c_int = undefined;
+            if (redirector.stat(path, buf, &result)) {
+                return saveError(result);
+            }
+            return Original.__xstat(ver, path, buf);
+        }
+
         pub fn closedir(d: *std.c.DIR) callconv(.c) void {
             // if (is_redirected_object(d)) {
             //     redirected_DIR* dir = (redirected_DIR*) d;
@@ -753,6 +785,10 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         const Sub = @This();
         pub const Original = struct {
+            pub var __fxstat: *const @TypeOf(Sub.__fxstat) = undefined;
+            pub var __fxstatat: *const @TypeOf(Sub.__fxstatat) = undefined;
+            pub var __lxstat: *const @TypeOf(Sub.__lxstat) = undefined;
+            pub var __xstat: *const @TypeOf(Sub.__xstat) = undefined;
             pub var access: *const @TypeOf(Sub.access) = undefined;
             pub var close: *const @TypeOf(Sub.close) = undefined;
             pub var closedir: *const @TypeOf(Sub.closedir) = undefined;
