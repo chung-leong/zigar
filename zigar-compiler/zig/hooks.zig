@@ -911,19 +911,23 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             return Original.ferror(s);
         }
 
+        const fpos_field_name = for (.{"pos"}) |substring| {
+            const name: ?[:0]const u8 = for (std.meta.fields(stdio.fpos_t)) |field| {
+                if (std.mem.containsAtLeast(u8, field.name, 1, substring)) break field.name;
+            } else null;
+            if (name) |n| break n;
+        } else @compileError("Unable to find position field inside fpos_t");
+
         pub fn fgetpos(s: *std.c.FILE, pos: *stdio.fpos_t) callconv(.c) c_int {
-            // if (is_redirected_object(s)) {
-            //     redirected_FILE* file = (redirected_FILE*) s;
-            //     uint16_t err;
-            //     redirect_getpos(file->fd, pos, &err);
-            //     if (!err) {
-            //         return 0;
-            //     } else {
-            //         errno = file->error = err;
-            //         return -1;
-            //     }
-            // }
-            // return fgetpos_orig(s, pos);
+            if (getRedirectedFile(s)) |file| {
+                const result = posix.lseek64(file.fd, 0, std.c.SEEK.CUR);
+                if (result < 0) {
+                    file.errno = posix.getError();
+                    return -1;
+                }
+                @field(pos, fpos_field_name) = result;
+                return 0;
+            }
             return Original.fgetpos(s, pos);
         }
 
@@ -997,19 +1001,15 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         }
 
         pub fn fsetpos(s: *std.c.FILE, pos: *const stdio.fpos_t) callconv(.c) c_int {
-            // if (is_redirected_object(s)) {
-            //     redirected_FILE* file = (redirected_FILE*) s;
-            //     uint16_t err;
-            //     redirect_setpos(file->fd, pos, &err);
-            //     if (!err) {
-            //         file->eof = false;
-            //         return 0;
-            //     } else {
-            //         errno = file->error = err;
-            //         return -1;
-            //     }
-            // }
-            // return fsetpos_orig(s, pos);
+            if (getRedirectedFile(s)) |file| {
+                const offset = @field(pos, fpos_field_name);
+                const result = posix.lseek64(file.fd, offset, std.c.SEEK.SET);
+                if (result < 0) {
+                    file.errno = posix.getError();
+                    return -1;
+                }
+                return 0;
+            }
             return Original.fsetpos(s, pos);
         }
 
