@@ -19,6 +19,6 @@ pub fn check(dir_path: [*:0]const u8, path: [*:0]const u8, flags: Flags) !bool {
     if (flags.read) mode |= c.R_OK;
     if (flags.write) mode |= c.W_OK;
     if (flags.execute) mode |= c.X_OK;
-    const result = c.faccessat(dirfd, path, c.AT_SYMLINK_NOFOLLOW, mode);
+    const result = c.faccessat(dirfd, path, mode, c.AT_SYMLINK_NOFOLLOW);
     return result == 0;
 }

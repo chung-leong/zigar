@@ -35,8 +35,4 @@ export default mixin({
       m.delete(fd);
     }
   },
-  getDirectoryEntries(fd) {
-    const dir = this.getStream(fd);
-    return dir.readdir();
-  },
 });

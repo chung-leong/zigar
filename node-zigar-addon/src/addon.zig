@@ -877,7 +877,7 @@ const ModuleHost = struct {
     fn handleAccess(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
         const lflags: std.os.wasi.lookupflags_t = .{
-            .SYMLINK_FOLLOW = true,
+            .SYMLINK_FOLLOW = (args.flags & std.posix.AT.SYMLINK_NOFOLLOW) == 0,
         };
         const rights: std.os.wasi.rights_t = set: {
             var r: std.os.wasi.rights_t = .{};
@@ -990,7 +990,7 @@ const ModuleHost = struct {
         return try self.callPosixFunction(self.js.fd_seek, &.{
             try env.createInt32(args.fd),
             try env.createBigintInt64(args.offset),
-            try env.createInt32(args.whence),
+            try env.createUint32(args.whence),
             try env.createUsize(@intFromPtr(&args.position)),
             futex,
         });
@@ -1041,12 +1041,10 @@ const ModuleHost = struct {
 
     fn handleStat(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        var stat: std.os.wasi.filestat_t = undefined;
-        var result: E = undefined;
         if (@hasField(@TypeOf(args.*), "fd")) {
-            result = try self.callPosixFunction(self.js.fd_filestat_get, &.{
+            return try self.callPosixFunction(self.js.fd_filestat_get, &.{
                 try env.createInt32(args.fd),
-                try env.createUsize(@intFromPtr(&stat)),
+                try env.createUsize(@intFromPtr(&args.stat)),
                 futex,
             });
         } else {
@@ -1054,62 +1052,27 @@ const ModuleHost = struct {
                 .SYMLINK_FOLLOW = (args.flags & std.posix.AT.SYMLINK_NOFOLLOW) == 0,
             };
             const path_len: u32 = @truncate(std.mem.len(args.path));
-            result = try self.callPosixFunction(self.js.path_filestat_get, &.{
+            return try self.callPosixFunction(self.js.path_filestat_get, &.{
                 try env.createInt32(args.dirfd),
                 try env.createUint32(@as(u32, @bitCast(lflags))),
                 try env.createUsize(@intFromPtr(args.path)),
                 try env.createUint32(path_len),
-                try env.createUsize(@intFromPtr(&stat)),
+                try env.createUsize(@intFromPtr(&args.stat)),
                 futex,
             });
         }
-        if (result == .SUCCESS) {
-            const ptr = args.stat;
-            ptr.* = std.mem.zeroes(@TypeOf(ptr.*));
-            ptr.ino = stat.ino;
-            ptr.size = @truncate(@as(i64, @intCast(stat.size)));
-            ptr.mode = @intFromEnum(stat.filetype);
-            inline for (.{ "atim", "mtim", "ctim" }) |field_name| {
-                const ns = @field(stat, field_name);
-                @field(ptr, field_name) = .{
-                    .sec = @truncate(@as(i64, @intCast(ns / 1_000_000_000))),
-                    .nsec = @truncate(@as(i64, @intCast(ns % 1_000_000_000))),
-                };
-            }
-        }
-        return result;
     }
 
     fn handleFcntl(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        var result: E = undefined;
-        switch (args.op) {
-            std.c.F.GETFL => {
-                var fdstat: std.os.wasi.fdstat_t = undefined;
-                result = try self.callPosixFunction(self.js.fd_fdstat_get, &.{
-                    try env.createInt32(args.fd),
-                    try env.createUsize(@intFromPtr(&fdstat)),
-                    futex,
-                });
-                if (result == .SUCCESS) {
-                    var oflags_posix: std.posix.O = .{};
-                    if (fdstat.fs_rights_base.FD_READ) {
-                        if (fdstat.fs_rights_base.FD_WRITE) {
-                            oflags_posix.ACCMODE = .RDWR;
-                        } else {
-                            oflags_posix.ACCMODE = .RDONLY;
-                        }
-                    } else if (fdstat.fs_rights_base.FD_WRITE) {
-                        oflags_posix.ACCMODE = .WRONLY;
-                    } else if (fdstat.fs_rights_base.FD_READDIR) {
-                        oflags_posix.DIRECTORY = true;
-                    }
-                    args.result = @bitCast(oflags_posix);
-                }
-            },
-            else => result = E.INVAL,
-        }
-        return result;
+        return switch (args.op) {
+            std.c.F.GETFL => try self.callPosixFunction(self.js.fd_fdstat_get, &.{
+                try env.createInt32(args.fd),
+                try env.createUsize(@intFromPtr(&args.result.getfl)),
+                futex,
+            }),
+            else => .INVAL,
+        };
     }
 
     fn handleAdvise(self: *@This(), futex: Value, args: anytype) !E {
@@ -1127,8 +1090,8 @@ const ModuleHost = struct {
         };
         return try self.callPosixFunction(self.js.fd_advise, &.{
             try env.createInt32(args.fd),
-            try env.createBigintInt64(args.offset),
-            try env.createBigintInt64(args.len),
+            try env.createBigintUint64(args.offset),
+            try env.createBigintUint64(args.len),
             try env.createInt32(@intFromEnum(advice)),
             futex,
         });
@@ -1138,8 +1101,8 @@ const ModuleHost = struct {
         const env = self.env;
         return try self.callPosixFunction(self.js.fd_allocate, &.{
             try env.createInt32(args.fd),
-            try env.createBigintInt64(args.offset),
-            try env.createBigintInt64(args.len),
+            try env.createBigintUint64(args.offset),
+            try env.createBigintUint64(args.len),
             futex,
         });
     }
@@ -1194,49 +1157,15 @@ const ModuleHost = struct {
     }
 
     fn handleGetdents(self: *@This(), futex: Value, args: anytype) !E {
-        _ = self;
-        _ = futex;
-        _ = args;
-        return E.NOTCAPABLE;
-        // const Dir = @TypeOf(args.dir.*);
-        // const dir: *Dir = @ptrCast(args.dir);
-        // const DirEnt = std.os.wasi.dirent_t;
-        // if (dir.data_len - dir.data_next < @sizeOf(DirEnt)) {
-        //     const env = self.env;
-        //     const result = try self.callPosixFunction(self.js.fd_readdir, &.{
-        //         try env.createInt32(dir.fd),
-        //         try env.createUsize(@intFromPtr(&dir.buffer)),
-        //         try env.createUint32(dir.buffer.len),
-        //         try env.createBigintUint64(dir.cookie),
-        //         try env.createBigintUint64(@intFromPtr(&dir.data_len)),
-        //         futex,
-        //     });
-        //     if (result != .SUCCESS) return result;
-        //     dir.data_next = 0;
-        // }
-        // if (dir.data_len > 0) {
-        //     const entry: *align(1) DirEnt = @ptrCast(&dir.buffer[dir.data_next]);
-        //     const offset = dir.data_next + @sizeOf(DirEnt);
-        //     const type_posix: redirect.DT = switch (entry.type) {
-        //         .UNKNOWN => .DT_UNKNOWN,
-        //         .BLOCK_DEVICE => .DT_BLK,
-        //         .CHARACTER_DEVICE => .DT_CHR,
-        //         .DIRECTORY => .DT_DIR,
-        //         .REGULAR_FILE => .DT_REG,
-        //         .SOCKET_DGRAM, .SOCKET_STREAM => .DT_SOCK,
-        //         .SYMBOLIC_LINK => .DT_LNK,
-        //         else => .DT_UNKNOWN,
-        //     };
-        //     const name = dir.buffer[offset .. offset + entry.namlen];
-        //     const name_len = @min(name.len, @sizeOf(@TypeOf(dir.entry.d_name)) - 1);
-        //     @memcpy(dir.entry.d_name[0..name_len], name[0..name_len]);
-        //     dir.entry.d_name[name_len] = 0;
-        //     dir.entry.d_ino = entry.ino;
-        //     dir.entry.d_type = @intFromEnum(type_posix);
-        //     dir.cookie = entry.next;
-        //     dir.data_next += @sizeOf(DirEnt) + entry.namlen;
-        // }
-        // return .SUCCESS;
+        const env = self.env;
+        return try self.callPosixFunction(self.js.fd_readdir, &.{
+            try env.createInt32(args.dirfd),
+            try env.createUsize(@intFromPtr(args.buffer)),
+            try env.createUint32(@intCast(args.len)),
+            try env.createBigintUint64(0),
+            try env.createUsize(@intFromPtr(&args.read)),
+            futex,
+        });
     }
 
     fn releaseFunction(self: *@This(), fn_id: usize, in_main_thread: bool) !void {

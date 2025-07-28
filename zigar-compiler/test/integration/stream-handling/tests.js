@@ -467,7 +467,7 @@ export function addTests(importModule, options) {
         parent: map,
         path: 'readable.txt',
         rights: { read: true },
-        flags: { symlinkFollow: true, accessCheck: true }
+        flags: { accessCheck: true }
       });
       expect(check(dir, 'readable.txt', { write: true })).to.be.false;
       expect(check(dir, 'subdirectory', { execute: true })).to.be.true;
@@ -771,8 +771,9 @@ export function addTests(importModule, options) {
       this.timeout(0);
       const { __zigar, setTimes } = await importTest('set-times-of-file-at-dir-with-posix-function');
       let event;
+      const map = new Map();
       __zigar.on('open', (evt) => {
-        return new Map();
+        return map;
       });
       __zigar.on('set_times', (evt) => {
         event = evt;
@@ -780,7 +781,7 @@ export function addTests(importModule, options) {
       });
       setTimes('/world', '/hello.txt', 123, 456);
       expect(event).to.eql({
-        parent: null,
+        parent: map,
         path: 'hello.txt',
         times: { atime: 123000000025n, mtime: 456000000055n },
         flags: {}

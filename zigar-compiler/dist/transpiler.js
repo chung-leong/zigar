@@ -1018,7 +1018,7 @@ function addStructureDefinitions(lines, definition) {
     flags: 0,
     signature: undefined,
     name: undefined,
-    byteSize: 0,
+    byteSize: undefined,
     align: 0,
     instance: {
       members: [],
@@ -1212,21 +1212,23 @@ function addStructureDefinitions(lines, definition) {
               const { members, template } = value;
               add(`${name}: {`);
               add(`members: [`);
-              for (const member of members) {
-                add(`{`);
-                add(`...m,`);
-                for (const [ name, value ] of Object.entries(member)) {
-                  if (isDifferent(value, defaultMember[name])) {
-                    switch (name) {
-                      case 'structure':
-                        add(`${name}: ${structureNames.get(value)},`);
-                        break;
-                      default:
-                        add(`${name}: ${JSON.stringify(value)},`);
+              if (members) {
+                for (const member of members) {
+                  add(`{`);
+                  add(`...m,`);
+                  for (const [ name, value ] of Object.entries(member)) {
+                    if (isDifferent(value, defaultMember[name])) {
+                      switch (name) {
+                        case 'structure':
+                          add(`${name}: ${structureNames.get(value)},`);
+                          break;
+                        default:
+                          add(`${name}: ${JSON.stringify(value)},`);
+                      }
                     }
                   }
+                  add(`},`);
                 }
-                add(`},`);
               }
               add(`],`);
               if (template) {
@@ -3516,7 +3518,7 @@ var callMarshalingInbound = mixin({
       }
     };
   },
-  handleJsCall(id, argAddress, argSize, canWait) {
+  handleJscall(id, argAddress, argSize, canWait) {
     const dv = this.obtainZigView(argAddress, argSize, false);
     const caller = this.jsFunctionCallerMap.get(id);
     return (caller) ? caller(dv, canWait) : PosixError.EFAULT;
@@ -3541,7 +3543,7 @@ var callMarshalingInbound = mixin({
   },
   ...({
     exports: {
-      handleJsCall: { argType: 'iiib', returnType: 'i' },
+      handleJscall: { argType: 'iiib', returnType: 'i' },
       releaseFunction: { argType: 'i' },
     },
     imports: {
@@ -3880,16 +3882,43 @@ var dirConversion = mixin({
 
 class MapDirectory {
   onClose = null;
+  keys = null;
+  cookie = 0n;
 
   constructor(map) {
     this.map = map;
     map.close = () => this.onClose?.();
   }
 
-  *readdir() {
-    for (const [ name, stat ] of this.map) {
-      yield { name, ...stat };
+  readdir() {
+    const offset = Number(this.cookie);
+    let dent;
+    switch (offset) {
+      case 0:
+      case 1: 
+        dent = { name: '.'.repeat(offset + 1), type: 'directory' };
+        break;
+      default:
+        if (!this.keys) {
+          this.keys = [ ...this.map.keys() ];
+        }
+        const name = this.keys[offset - 2];
+        if (name === undefined) {
+          return null;
+        }
+        const stat = this.map.get(name);
+        dent = { name, ...stat };        
     }
+    this.cookie++;
+    return dent;
+  }
+
+  seek(cookie) {
+    return this.cookie = cookie;
+  }
+
+  tell() {
+    return this.cookie;
   }
 
   valueOf() {
@@ -4777,10 +4806,6 @@ var streamLocation = mixin({
       m.delete(fd);
     }
   },
-  getDirectoryEntries(fd) {
-    const dir = this.getStream(fd);
-    return dir.readdir();
-  },
 });
 
 var streamRedirection = mixin({
@@ -5620,7 +5645,7 @@ var environGet = mixin({
   },
 });
 
-var copyUsize = mixin({
+var copyInt = mixin({
   copyUsize(bufAddress, value) {
     {
       this.copyUint32(bufAddress, value);
@@ -5793,13 +5818,14 @@ var fdFilestatGet = mixin({
 });
 
 var fdFileStatSetTimes = mixin({
-  fdFilestatSetTimes(fd, atime, mtime, flags, canWait) {
+  fdFilestatSetTimes(fd, atime, mtime, tFlags, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const stream = this.getStream(fd);
       const target = stream.valueOf();
       const loc = this.getStreamLocation?.(fd);
-      const times = extractTimes(atime, mtime, flags);
-      return this.triggerEvent('set_times', { ...loc, target, times }, PosixError.EBADF);
+      const times = extractTimes(atime, mtime, tFlags);
+      const flags = {};
+      return this.triggerEvent('set_times', { ...loc, target, times, flags }, PosixError.EBADF);
     }, (result) => expectBoolean(result, PosixError.EBADF));
   },
 });
@@ -5848,7 +5874,7 @@ var fdRead = mixin({
         if (++i < iovsCount) {
           return next();
         } else {
-          this.copyUint32(readAddress, read);
+          this.copyUsize(readAddress, read);
         }
       });
     };
@@ -5857,80 +5883,53 @@ var fdRead = mixin({
 });
 
 var fdReaddir = mixin({
-  init() {
-    this.readdirCookieMap = new Map();
-    this.readdirNextCookie = 1n;
-  },
   fdReaddir(fd, bufAddress, bufLen, cookie, bufusedAddress, canWait) {
     if (bufLen < 24) {
       return PosixError.EINVAL;
     }
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      if (cookie === 0n) {
-        return this.getDirectoryEntries(fd);
+      const dir = this.getStream(fd);
+      if ("wasm" === 'node') ; else {
+        if (cookie !== dir.tell()) {
+          cookie = dir.seek(cookie);
+        }
       }
-    }, (generator) => {
-      let context;
-      if (cookie === 0n) {
-        const iterator = generator[Symbol.iterator]();
-        context = { iterator, count: 0, entry: null };
-        cookie = this.readdirNextCookie++;
-        this.readdirCookieMap.set(cookie, context);
+      const result = dir.readdir();      
+      if (isPromise(result)) {
+        // don't pass the dir object when call is async
+        return result.then((dent) => [ dent ]);
       } else {
-        context = this.readdirCookieMap.get(cookie);
+        return [ result, dir ];
       }
+    }, ([ dent, dir ]) => {
       const dv = createView(bufLen);
       let remaining = bufLen;
-      let p = 0;
-      const defaultEntryCount = (fd !== PosixDescriptor.root) ? 2 : 1;
-      if (context) {
-        let { iterator, entry } = context;
-        if (entry) {
-          context.entry = null;
+      let p = 0;      
+      while (dent) {
+        const { name, type = 'unknown', ino = 0 } = dent;
+        const nameArray = encodeText(name);
+        const typeIndex = decodeEnum(type, PosixFileType);
+        if (typeIndex === undefined) {
+          throw new InvalidEnumValue(PosixFileType, type);
         }
-        while (remaining >= 24) {
-          if (!entry) {
-            if (++context.count <= defaultEntryCount) {
-              entry = { 
-                value: { name: '.'.repeat(context.count), type: 'directory' },
-                done: false,
-              };
-            } else {
-              entry = iterator.next();
-            }
-          }
-          const { value, done } = entry;
-          if (done) {
-            break;
-          }
-          const { name, type, ino = 0 } = value;
-          const array = encodeText(name);
-          if (remaining < 24 + array.length) {
-            context.entry = entry;
-            break;
-          }
-          const typeIndex = (type !== undefined) ? decodeEnum(type, PosixFileType) : PosixFileType.unknown;
-          if (typeIndex === undefined) {
-            throw new InvalidEnumValue(PosixFileType, type);
-          }
-          dv.setBigUint64(p, cookie, true);
-          dv.setBigUint64(p + 8, BigInt(ino), true);
-          dv.setUint32(p + 16, array.length, true);
-          dv.setUint8(p + 20, typeIndex);
-          p += 24;
-          remaining -= 24;
-          for (let i = 0; i < array.length; i++, p++) {
-            dv.setUint8(p, array[i]);
-          }
-          remaining -= array.length;
-          entry = null;
+        if (remaining < 24 + nameArray.length) {
+          break;
         }
+        dv.setBigUint64(p, ++cookie, true);
+        dv.setBigUint64(p + 8, BigInt(ino), true);
+        dv.setUint32(p + 16, nameArray.length, true);
+        dv.setUint8(p + 20, typeIndex);
+        p += 24;
+        remaining -= 24;
+        for (let i = 0; i < nameArray.length; i++, p++) {
+          dv.setUint8(p, nameArray[i]);
+        }
+        remaining -= nameArray.length;
+        // get next entry if call is sync
+        dent = (remaining > 24 + 16 && dir) ? dir.readdir() : null;
       }
       this.moveExternBytes(dv, bufAddress, true);
-      this.copyUint32(bufusedAddress, p);
-      if (p === 0) {
-        this.readdirCookieMap.delete(cookie);
-      }
+      this.copyUsize(bufusedAddress, p);
     })
   },
 });
@@ -5997,7 +5996,7 @@ var fdWrite = mixin({
         if (++i < iovsCount) {
           return next();
         } else {
-          this.copyUint32(writtenAddress, written);
+          this.copyUsize(writtenAddress, written);
         }
       });
     };
@@ -6011,10 +6010,8 @@ var pathCreateDirectory = mixin({
       const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
       return this.triggerEvent('mkdir', loc, PosixError.ENOENT);
     }, (result) => {
-      if (result instanceof Map) return;
-      if (result === true) return PosixError.EEXIST; 
-      if (result === false) return PosixError.ENOENT;
-      throw new TypeMismatch$1('boolean', result);
+      if (result instanceof Map) return PosixError.EEXIST;
+      return expectBoolean(result, PosixError.ENOENT);
     });
   },
 });
@@ -6030,16 +6027,17 @@ var pathFilestatGet = mixin({
 });
 
 var pathFilestatSetTimes = mixin({
-  pathFilestatSetTimes(dirFd, pathAddress, pathLen, atime, mtime, flags, canWait) {
+  pathFilestatSetTimes(dirFd, lFlags, pathAddress, pathLen, atime, mtime, tFlags, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
-      const times = extractTimes(atime, mtime, flags);
-      return this.triggerEvent('set_times', { ...loc, times }, PosixError.ENOENT);
+      const times = extractTimes(atime, mtime, tFlags);
+      const flags = decodeFlags(lFlags, PosixLookupFlag) ;
+      return this.triggerEvent('set_times', { ...loc, times, flags }, PosixError.ENOENT);
     }, (result) => expectBoolean(result, PosixError.ENOENT));
   },
 });
 
-const Right = {
+const Right$1 = {
   read: BigInt(PosixDescriptorRight.fd_read),
   write: BigInt(PosixDescriptorRight.fd_write),
   readdir: BigInt(PosixDescriptorRight.fd_readdir),
@@ -6047,7 +6045,7 @@ const Right = {
 
 var pathOpen = mixin({
   pathOpen(dirFd, lFlags, pathAddress, pathLen, oFlags, rightsBase, rightsInheriting, fdFlags, fdAddress, canWait) {
-    const rights = decodeFlags(rightsBase | rightsInheriting, Right);
+    const rights = decodeFlags(rightsBase | rightsInheriting, Right$1);
     const flags = {
       ...decodeFlags(lFlags, PosixLookupFlag),
       ...decodeFlags(oFlags, PosixOpenFlag),
@@ -6277,69 +6275,7 @@ var structureAcquisition = mixin({
     this.runtimeSafety = false;
     this.libc = false;
   },
-  readSlot(target, slot) {
-    const slots = target ? target[SLOTS] : this.slots;
-    return slots?.[slot];
-  },
-  writeSlot(target, slot, value) {
-    const slots = target ? target[SLOTS] : this.slots;
-    if (slots) {
-      slots[slot] = value;
-    }
-  },
-  createTemplate(dv) {
-    return {
-      [MEMORY]: dv,
-      [SLOTS]: {}
-    };
-  },
-  beginStructure(def) {
-    const {
-      type,
-      purpose,
-      name,
-      length,
-      signature = -1n,
-      byteSize,
-      align,
-      flags,
-    } = def;
-    return {
-      constructor: null,
-      type,
-      purpose,
-      flags,
-      signature,
-      name,
-      length,
-      byteSize,
-      align,
-      instance: {
-        members: [],
-        template: null,
-      },
-      static: {
-        members: [],
-        template: null,
-      },
-    };
-  },
-  attachMember(structure, member, isStatic = false) {
-    const target = (isStatic) ? structure.static : structure.instance;
-    target.members.push(member);
-  },
-  attachTemplate(structure, template, isStatic = false) {
-    const target = (isStatic) ? structure.static : structure.instance;
-    target.template = template;
-  },
-  endStructure(structure) {
-    if (!structure.name) {
-      this.inferTypeName(structure);
-    }
-    this.structures.push(structure);
-    this.finalizeStructure(structure);
-  },
-  captureView(address, len, copy, handle) {
+  createView(address, len, copy, handle) {
     if (copy) {
       // copy content into JavaScript memory
       const dv = this.allocateJSMemory(len, 0);
@@ -6356,18 +6292,44 @@ var structureAcquisition = mixin({
       return dv;
     }
   },
-  castView(address, len, copy, structure, handle) {
+  createInstance(structure, dv, slots) {
     const { constructor, flags } = structure;
-    const dv = this.captureView(address, len, copy, handle);
     const object = constructor.call(ENVIRONMENT, dv);
     if (flags & StructureFlag.HasPointer) {
       // acquire targets of pointers
       this.updatePointerTargets(null, object);
     }
-    if (copy && len > 0) {
+    if (slots) {
+      Object.assign(object[SLOTS], slots);
+    }
+    if (!dv[ZIG]) {
       this.makeReadOnly?.(object);
     }
     return object;
+  },
+  createTemplate(dv, slots) {
+    return { [MEMORY]: dv, [SLOTS]: slots };
+  },
+  appendList(list, element) {
+    list.push(element);
+  },
+  getSlotValue(slots, slot) {
+    if (!slots) slots = this.slots;
+    return slots[slot];
+  },
+  setSlotValue(slots, slot, value) {
+    if (!slots) slots = this.slots;
+    slots[slot] = value;
+  },
+  beginStructure(structure) {
+    this.defineStructure(structure);
+  },
+  finishStructure(structure) {
+    if (!structure.name) {
+      this.inferTypeName(structure);
+    }
+    this.structures.push(structure);
+    this.finalizeStructure(structure);
   },
   acquireStructures() {
     const attrs = this.getModuleAttributes();
@@ -6414,7 +6376,7 @@ var structureAcquisition = mixin({
       if (zig) {
         // replace Zig memory
         const { address, len, handle } = zig;
-        const jsDV = object[MEMORY] = this.captureView(address, len, true);
+        const jsDV = object[MEMORY] = this.createView(address, len, true, 0);
         if (handle) {
           jsDV.handle = handle;
         }
@@ -6570,7 +6532,7 @@ var structureAcquisition = mixin({
     s.name = handler.call(this, s);
   },
   getPrimitiveName(s) {
-    const { instance: { members: [member] }, static: { template }, flags } = s;
+    const { instance: { members: [member] }, flags = 0 } = s;
     switch (member.type) {
       case MemberType.Bool:
         return `bool`;
@@ -7783,50 +7745,52 @@ var all$1 = mixin({
     const descriptors = {
       [Symbol.toStringTag]: defineValue(name),
     };
-    for (const member of members) {
-      const { name, slot, flags } = member;
-      if (member.structure.type === StructureType.Function) {
-        let fn = template[SLOTS][slot];
-        if (flags & MemberFlag.IsString) {
-          fn[STRING_RETVAL] = true;
-        }
-        staticDescriptors[name] = defineValue(fn);
-        // provide a name if one isn't assigned yet
-        if (!fn.name) {
-          defineProperty(fn, 'name', defineValue(name));
-        }
-        // see if it's a getter or setter
-        const [ accessorType, propName ] = /^(get|set)\s+([\s\S]+)/.exec(name)?.slice(1) ?? [];
-        const argRequired = (accessorType === 'get') ? 0 : 1;
-        if (accessorType && fn.length  === argRequired) {
-          staticDescriptors[propName] ||= {};
-          const descriptor = staticDescriptors[propName];
-          descriptor[accessorType] = fn;
-        }
-        // see if it's a method
-        if (member.flags & MemberFlag.IsMethod) {
-          const method = function(...args) {
-            try {
-              return fn(this, ...args);
-            } catch (err) {
-              // adjust argument index/count
-              err[UPDATE]?.(1);
-              throw err;
-            }
-          };
-          defineProperties(method, {
-            name: defineValue(name),
-            length: defineValue(fn.length - 1),
-          });
-          descriptors[name] = defineValue(method);
-          if (accessorType && method.length === argRequired) {
-            const descriptor = descriptors[propName] ||= {};
-            descriptor[accessorType] = method;
+    if (members) {
+      for (const member of members) {
+        const { name, slot, flags } = member;
+        if (member.structure.type === StructureType.Function) {
+          let fn = template[SLOTS][slot];
+          if (flags & MemberFlag.IsString) {
+            fn[STRING_RETVAL] = true;
           }
+          staticDescriptors[name] = defineValue(fn);
+          // provide a name if one isn't assigned yet
+          if (!fn.name) {
+            defineProperty(fn, 'name', defineValue(name));
+          }
+          // see if it's a getter or setter
+          const [ accessorType, propName ] = /^(get|set)\s+([\s\S]+)/.exec(name)?.slice(1) ?? [];
+          const argRequired = (accessorType === 'get') ? 0 : 1;
+          if (accessorType && fn.length  === argRequired) {
+            staticDescriptors[propName] ||= {};
+            const descriptor = staticDescriptors[propName];
+            descriptor[accessorType] = fn;
+          }
+          // see if it's a method
+          if (member.flags & MemberFlag.IsMethod) {
+            const method = function(...args) {
+              try {
+                return fn(this, ...args);
+              } catch (err) {
+                // adjust argument index/count
+                err[UPDATE]?.(1);
+                throw err;
+              }
+            };
+            defineProperties(method, {
+              name: defineValue(name),
+              length: defineValue(fn.length - 1),
+            });
+            descriptors[name] = defineValue(method);
+            if (accessorType && method.length === argRequired) {
+              const descriptor = descriptors[propName] ||= {};
+              descriptor[accessorType] = method;
+            }
+          }
+        } else {
+          staticDescriptors[name] = this.defineMember(member);
+          props.push(name);
         }
-      } else {
-        staticDescriptors[name] = this.defineMember(member);
-        props.push(name);
       }
     }
     // static variable/constants are stored in slots
@@ -9902,6 +9866,49 @@ var vector = mixin({
   },
 });
 
+const Right = {
+  read: BigInt(PosixDescriptorRight.fd_read),
+  write: BigInt(PosixDescriptorRight.fd_write),
+  readdir: BigInt(PosixDescriptorRight.fd_readdir),
+};
+
+var pathAccess = mixin({
+  // not part of WASI
+  pathAccess(dirFd, lFlags, pathAddress, pathLen, rightsBase, canWait) {
+    const rights = decodeFlags(rightsBase, Right);
+    const flags = { 
+      ...decodeFlags(lFlags, PosixLookupFlag),
+      accessCheck: true,
+    };
+    let loc;
+    return catchPosixError(canWait, PosixError.ENOENT, () => {
+      loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
+      return this.triggerEvent('open', { ...loc, rights, flags }, PosixError.ENOENT);
+    }, (arg) => {
+      if (arg === false) {
+        return PosixError.ENOENT;
+      }
+      try {
+        let resource;
+        if (rights.read) {
+          resource = this.convertReader(arg);
+        } else if (rights.write) {
+          resource = this.convertWriter(arg);
+        } else if (rights.readdir) {
+          resource = this.convertDirectory(arg);
+        }
+        for (const name of Object.keys(rights)) {
+          if (!hasMethod(resource, name)) {
+            return PosixError.EACCES;
+          }
+        }
+      } catch {
+        return PosixError.EACCES;
+      }
+    });
+  },
+});
+
 var all = mixin({
   defineVisitor() {
     return {
@@ -10184,7 +10191,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   StructureVector: vector,
   StructureWriter: writer,
   SyscallCopyStat: copyStat,
-  SyscallCopyUsize: copyUsize,
+  SyscallCopyUsize: copyInt,
   SyscallEnvironGet: environGet,
   SyscallEnvironSizesGet: environSizesGet,
   SyscallFdAdvise: fdAdvise,
@@ -10202,6 +10209,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   SyscallFdSync: fdSync,
   SyscallFdTell: fdTell,
   SyscallFdWrite: fdWrite,
+  SyscallPathAccess: pathAccess,
   SyscallPathCreateDirectory: pathCreateDirectory,
   SyscallPathFilestatGet: pathFilestatGet,
   SyscallPathFilestatSetTimes: pathFilestatSetTimes,

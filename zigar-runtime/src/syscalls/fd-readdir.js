@@ -1,84 +1,62 @@
-import { PosixDescriptor, PosixError, PosixFileType } from '../constants.js';
+import { PosixError, PosixFileType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, InvalidEnumValue } from '../errors.js';
-import { createView, decodeEnum, encodeText } from '../utils.js';
-import './copy-usize.js';
+import { createView, decodeEnum, encodeText, isPromise } from '../utils.js';
+import './copy-int.js';
 
 export default mixin({
-  init() {
-    this.readdirCookieMap = new Map();
-    this.readdirNextCookie = 1n;
-  },
   fdReaddir(fd, bufAddress, bufLen, cookie, bufusedAddress, canWait) {
     if (bufLen < 24) {
       return PosixError.EINVAL;
     }
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      if (cookie === 0n) {
-        return this.getDirectoryEntries(fd);
-      }
-    }, (generator) => {
-      let context;
-      if (cookie === 0n) {
-        const iterator = generator[Symbol.iterator]();
-        context = { iterator, count: 0, entry: null };
-        cookie = this.readdirNextCookie++;
-        this.readdirCookieMap.set(cookie, context);
+      const dir = this.getStream(fd);
+      if (process.env.TARGET === 'node') {
+        // we don't get a cookie on the Node side
+        if (cookie === 0n) {
+          cookie = dir.tell();
+        }
       } else {
-        context = this.readdirCookieMap.get(cookie);
+        if (cookie !== dir.tell()) {
+          cookie = dir.seek(cookie);
+        }
       }
+      const result = dir.readdir();      
+      if (isPromise(result)) {
+        // don't pass the dir object when call is async
+        return result.then((dent) => [ dent ]);
+      } else {
+        return [ result, dir ];
+      }
+    }, ([ dent, dir ]) => {
       const dv = createView(bufLen);
       let remaining = bufLen;
-      let p = 0;
-      const defaultEntryCount = (fd !== PosixDescriptor.root) ? 2 : 1;
-      if (context) {
-        let { iterator, entry } = context;
-        if (entry) {
-          context.entry = null;
+      let p = 0;      
+      while (dent) {
+        const { name, type = 'unknown', ino = 0 } = dent;
+        const nameArray = encodeText(name);
+        const typeIndex = decodeEnum(type, PosixFileType);
+        if (typeIndex === undefined) {
+          throw new InvalidEnumValue(PosixFileType, type);
         }
-        while (remaining >= 24) {
-          if (!entry) {
-            if (++context.count <= defaultEntryCount) {
-              entry = { 
-                value: { name: '.'.repeat(context.count), type: 'directory' },
-                done: false,
-              };
-            } else {
-              entry = iterator.next()
-            }
-          }
-          const { value, done } = entry;
-          if (done) {
-            break;
-          }
-          const { name, type, ino = 0 } = value;
-          const array = encodeText(name);
-          if (remaining < 24 + array.length) {
-            context.entry = entry;
-            break;
-          }
-          const typeIndex = (type !== undefined) ? decodeEnum(type, PosixFileType) : PosixFileType.unknown;
-          if (typeIndex === undefined) {
-            throw new InvalidEnumValue(PosixFileType, type);
-          }
-          dv.setBigUint64(p, cookie, true);
-          dv.setBigUint64(p + 8, BigInt(ino), true);
-          dv.setUint32(p + 16, array.length, true);
-          dv.setUint8(p + 20, typeIndex);
-          p += 24;
-          remaining -= 24;
-          for (let i = 0; i < array.length; i++, p++) {
-            dv.setUint8(p, array[i]);
-          }
-          remaining -= array.length;
-          entry = null;
+        if (remaining < 24 + nameArray.length) {
+          break;
         }
+        dv.setBigUint64(p, ++cookie, true);
+        dv.setBigUint64(p + 8, BigInt(ino), true);
+        dv.setUint32(p + 16, nameArray.length, true);
+        dv.setUint8(p + 20, typeIndex);
+        p += 24;
+        remaining -= 24;
+        for (let i = 0; i < nameArray.length; i++, p++) {
+          dv.setUint8(p, nameArray[i]);
+        }
+        remaining -= nameArray.length;
+        // get next entry if call is sync
+        dent = (remaining > 24 + 16 && dir) ? dir.readdir() : null;
       }
       this.moveExternBytes(dv, bufAddress, true);
-      this.copyUint32(bufusedAddress, p);
-      if (p === 0) {
-        this.readdirCookieMap.delete(cookie);
-      }
+      this.copyUsize(bufusedAddress, p);
     })
   },
   ...(process.env.TARGET === 'node' ? {

@@ -16,16 +16,43 @@ export default mixin({
 
 class MapDirectory {
   onClose = null;
+  keys = null;
+  cookie = 0n;
 
   constructor(map) {
     this.map = map;
     map.close = () => this.onClose?.();
   }
 
-  *readdir() {
-    for (const [ name, stat ] of this.map) {
-      yield { name, ...stat };
+  readdir() {
+    const offset = Number(this.cookie);
+    let dent;
+    switch (offset) {
+      case 0:
+      case 1: 
+        dent = { name: '.'.repeat(offset + 1), type: 'directory' };
+        break;
+      default:
+        if (!this.keys) {
+          this.keys = [ ...this.map.keys() ];
+        }
+        const name = this.keys[offset - 2];
+        if (name === undefined) {
+          return null;
+        }
+        const stat = this.map.get(name);
+        dent = { name, ...stat };        
     }
+    this.cookie++;
+    return dent;
+  }
+
+  seek(cookie) {
+    return this.cookie = cookie;
+  }
+
+  tell() {
+    return this.cookie;
   }
 
   valueOf() {
