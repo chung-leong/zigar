@@ -5,8 +5,6 @@ const builtin = @import("builtin");
 
 const fn_transform = @import("./extra/fn-transform.zig");
 const hooks = @import("./extra/hooks.zig");
-const HookEntry = hooks.Entry;
-const Syscall = hooks.Syscall;
 const interface = @import("./extra/interface.zig");
 const napi = @import("./extra/napi.zig");
 const Env = napi.Env;
@@ -20,6 +18,10 @@ comptime {
 }
 
 const ModuleHost = struct {
+    pub const HookEntry = hooks.Entry;
+    pub const Syscall = hooks.Syscall;
+    const redirection_controller = redirect.Controller(@This());
+
     ref_count: isize = 1,
     redirecting_io: bool = false,
     module: ?*Module = null,
@@ -150,7 +152,9 @@ const ModuleHost = struct {
                 }
             }
             if (self.library) |*lib| lib.close();
-            if (self.redirecting_io) redirect.stop();
+            if (self.redirecting_io) {
+                // TODO--not sure
+            }
             allocator.destroy(self);
             module_count -= 1;
         }
@@ -211,10 +215,10 @@ const ModuleHost = struct {
     fn loadModule(self: *@This(), path: Value, redirectIO: Value) !void {
         const env = self.env;
         const path_len = try env.getValueStringUtf8(path, null);
-        const path_bytes = try allocator.alloc(u8, path_len + 1);
-        defer allocator.free(path_bytes);
-        _ = try env.getValueStringUtf8(path, path_bytes);
-        var lib = try std.DynLib.open(path_bytes);
+        const path_slice = try allocator.alloc(u8, path_len + 1);
+        defer allocator.free(path_slice);
+        _ = try env.getValueStringUtf8(path, path_slice);
+        var lib = try std.DynLib.open(path_slice);
         errdefer lib.close();
         const module = lib.lookup(*Module, "zig_module") orelse return error.MissingSymbol;
         if (module.version != 6) return error.IncorrectVersion;
@@ -242,7 +246,7 @@ const ModuleHost = struct {
         try self.exportFunctionsToModule();
         if (module.exports.initialize(self) != .SUCCESS) return error.Unexpected;
         if (env.getValueBool(redirectIO) catch true) {
-            try redirect.redirectIO(&lib, path_bytes, self);
+            try redirection_controller.installHooks(&lib, path_slice, self);
             self.redirecting_io = true;
         }
         self.library = lib;
