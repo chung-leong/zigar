@@ -20,6 +20,7 @@ comptime {
 const ModuleHost = struct {
     pub const HookEntry = hooks.Entry;
     pub const Syscall = hooks.Syscall;
+    pub const HandlerVTable = hooks.HandlerVTable;
     const redirection_controller = redirect.Controller(@This());
 
     ref_count: isize = 1,
@@ -73,6 +74,7 @@ const ModuleHost = struct {
     var module_count: i32 = 0;
     var buffer_count: i32 = 0;
     var function_count: i32 = 0;
+    var trapping_syscall: bool = false;
 
     const Module = interface.Module(@This(), Value);
     const Jscall = Module.Jscall;
@@ -82,6 +84,12 @@ const ModuleHost = struct {
             const func = @field(@This(), name);
             try env.setNamedProperty(exports, name, try env.createCallback(name, func, false, null));
         }
+        try env.addEnvCleanupHook(cleanup, null);
+        redirection_controller.installSyscallTrap() catch {};
+    }
+
+    fn cleanup(_: ?*anyopaque) callconv(.c) void {
+        redirection_controller.uninstallSyscallTrap();
     }
 
     fn createEnvironment(env: Env) !Value {

@@ -1,4 +1,5 @@
 const std = @import("std");
+const c_allocator = std.heap.c_allocator;
 const builtin = @import("builtin");
 
 const os = switch (builtin.target.os.tag) {
@@ -13,7 +14,7 @@ pub fn Controller(comptime Host: type) type {
     const page_size = std.heap.pageSize();
     return struct {
         pub fn installHooks(lib: *std.DynLib, path: []const u8, host: *Host) !void {
-            var sfb = std.heap.stackFallback(4096, std.heap.c_allocator);
+            var sfb = std.heap.stackFallback(4096, c_allocator);
             const allocator = sfb.get();
             if (os == .linux) {
                 const elf = std.elf;
@@ -80,6 +81,17 @@ pub fn Controller(comptime Host: type) type {
                         const address = base_address + r.r_offset;
                         try installHook(hook, address, read_only);
                     }
+                }
+                // determine the library's extent
+                var max_vaddr: ?usize = null;
+                for (segments) |segment| {
+                    const end = segment.p_vaddr + segment.p_memsz;
+                    if (max_vaddr == null or end > max_vaddr.?) max_vaddr = end;
+                }
+                const lib_len = max_vaddr.?;
+                // get the syscall vtable
+                if (host.getSyscallHook("__syscall")) |hook| {
+                    try addSyscallVtable(base_address, lib_len, @ptrCast(hook.handler));
                 }
             } else if (os == .darwin) {
                 const macho = std.macho;
@@ -298,43 +310,201 @@ pub fn Controller(comptime Host: type) type {
             }
         }
 
-        var syscall_trap_installed: bool = false;
-        var trapping_syscalls: bool = false;
+        const HandlerEntry = struct {
+            start_address: usize,
+            end_address: usize,
+            vtable: *const Host.HandlerVTable,
+        };
 
-        pub fn installTrap() void {
+        const empty_list: [*]const HandlerEntry = &.{
+            .{ .start_address = 0, .end_address = 0, .vtable = undefined },
+        };
+        var syscall_vtables: [*]const HandlerEntry = empty_list;
+
+        fn addSyscallVtable(address: usize, len: usize, vtable: *const Host.HandlerVTable) !void {
+            // the list is just a many pointer that we can update atomically
+            // in order to expand it we need to determine the new length first
+            const list = syscall_vtables;
+            const old_len = count: {
+                var index: usize = 0;
+                while (true) : (index += 1) {
+                    const entry = list[index];
+                    if (entry.start_address == 0) break;
+                }
+                break :count index;
+            };
+            const new_len = old_len + 1;
+            const new_list = try c_allocator.alloc(HandlerEntry, new_len + 1);
+            // copy from old list
+            for (0..old_len) |index| {
+                new_list[index] = list[index];
+            }
+            new_list[old_len] = .{
+                .start_address = address,
+                .end_address = address + len,
+                .vtable = vtable,
+            };
+            // add terminator
+            new_list[new_len] = empty_list[0];
+            // make the switch
+            syscall_vtables = new_list.ptr;
+            // free the old list if necessary
+            if (list != empty_list) c_allocator.free(list[0 .. old_len + 1]);
+        }
+
+        fn removeSyscallVtable(vtable: *const Host.HandlerVTable) !void {
+            const list = syscall_vtables;
+            const old_len = count: {
+                var index: usize = 0;
+                while (true) : (index += 1) {
+                    const entry = list[index];
+                    if (entry.start_address == 0) break;
+                }
+                break :count index;
+            };
+            const removing = find: {
+                var index: usize = 0;
+                while (true) : (index += 1) {
+                    const entry = list[index];
+                    if (entry.vtable == vtable) break;
+                    if (entry.start_address == 0) return;
+                }
+                break :find index;
+            };
+            const new_len = old_len - 1;
+            if (new_len > 0) {
+                const new_list = try c_allocator.alloc(HandlerEntry, new_len + 1);
+                var remaining: usize = 0;
+                for (0..old_len) |index| {
+                    if (index != removing) {
+                        new_list[remaining] = list[index];
+                        remaining += 1;
+                    }
+                }
+                new_list[new_len] = empty_list[0];
+                syscall_vtables = new_list.ptr;
+            } else {
+                syscall_vtables = empty_list;
+            }
+            c_allocator.free(list[0 .. old_len + 1]);
+        }
+
+        fn getSyscallVtable(address: usize) ?*const Host.HandlerVTable {
+            const list = syscall_vtables;
+            var index: usize = 0;
+            while (true) : (index += 1) {
+                const entry = list[index];
+                if (entry.start_address == 0) break;
+                if (entry.start_address <= address and address < entry.end_address) {
+                    return entry.vtable;
+                }
+            }
+            return null;
+        }
+
+        threadlocal var trapping_syscalls: bool = false;
+
+        pub fn installSyscallTrap() !void {
             if (os == .linux) {
+                const prctl_h = @cImport({
+                    @cInclude("sys/prctl.h");
+                });
+                try installSignalHandler();
+                // enable syscall user dispatch, excluding the memory region where libc sits; the signal
+                // trampoline is also inside this range, allowing us to reenable trapping from within
+                // the signal handler (otherwise sigreturn() would trigger SIGSYS inside a SIGSYS)
+                const libc = try getLibcExtend();
+                if (std.c.prctl(
+                    prctl_h.PR_SET_SYSCALL_USER_DISPATCH,
+                    prctl_h.PR_SYS_DISPATCH_ON,
+                    libc.address,
+                    libc.len,
+                    @intFromPtr(&trapping_syscalls),
+                ) != 0) {
+                    return error.SyscallUserDispatchFailure;
+                }
+                trapping_syscalls = true;
+            }
+        }
+
+        pub fn uninstallSyscallTrap() void {
+            const prctl_h = @cImport({
+                @cInclude("sys/prctl.h");
+            });
+            if (os == .linux) {
+                uninstallSignalHandler();
+                _ = std.c.prctl(
+                    prctl_h.PR_SET_SYSCALL_USER_DISPATCH,
+                    prctl_h.PR_SYS_DISPATCH_OFF,
+                    @as(usize, 0),
+                    @as(usize, 0),
+                    @as(usize, 0),
+                );
+            }
+        }
+
+        pub fn activateSyscallTrap() void {
+            if (os == .linux) {
+                trapping_syscalls = true;
+            }
+        }
+
+        pub fn deactivateSyscallTrap() void {
+            if (os == .linux) {
+                trapping_syscalls = false;
+            }
+        }
+
+        var sig_handler_count = std.atomic.Value(usize).init(0);
+        var previous_signal_handler: ?std.c.Sigaction = null;
+
+        fn installSignalHandler() !void {
+            // don't do anything if the trap is already set
+            if (sig_handler_count.fetchAdd(1, .monotonic) > 0) return;
+            const act: std.c.Sigaction = .{
+                .handler = .{ .sigaction = handleSigsysSignal },
+                .mask = std.mem.zeroes(std.c.sigset_t),
+                .flags = std.c.SA.SIGINFO,
+            };
+            var prev_act: std.c.Sigaction = undefined;
+            if (std.c.sigaction(std.c.SIG.SYS, &act, &prev_act) != 0) return error.SignalHandlingFailure;
+            errdefer _ = std.c.sigaction(std.c.SIG.SYS, &prev_act, null);
+            if (prev_act.flags != 0) {
+                return error.UnexpectedSignalHandlingStatus;
+            }
+            previous_signal_handler = prev_act;
+        }
+
+        fn uninstallSignalHandler() void {
+            if (sig_handler_count.fetchSub(1, .monotonic) > 1) return;
+            if (previous_signal_handler) |prev_act| {
+                _ = std.c.sigaction(std.c.SIG.SYS, &prev_act, null);
+            }
+        }
+
+        const LibcExtent = struct { address: usize, len: usize };
+        var libc_extent: ?LibcExtent = null;
+
+        fn getLibcExtend() !LibcExtent {
+            return libc_extent orelse {
                 const dlfcn_h = @cImport({
                     @cDefine("_GNU_SOURCE", {});
                     @cInclude("dlfcn.h");
-                });
-                const prctl_h = @cImport({
-                    @cInclude("sys/prctl.h");
                 });
                 const elf = std.elf;
                 const Elf_Ehdr = if (bits == 64) elf.Elf64_Ehdr else elf.Elf32_Ehdr;
                 const Elf_Phdr = if (bits == 64) elf.Elf64_Phdr else elf.Elf32_Phdr;
 
-                // set up syscall signal handler
-                const act: std.c.Sigaction = .{
-                    .handler = .{ .sigaction = handleSigsysSignal },
-                    .mask = std.mem.zeroes(std.c.sigset_t),
-                    .flags = std.c.SA.SIGINFO,
-                };
-                var prev_act: std.c.Sigaction = undefined;
-                if (std.c.sigaction(std.c.SIG.SYS, &act, &prev_act) != 0)
-                    return error.SignalHandlingFailure;
-                if (prev_act.flags != 0) {
-                    _ = std.c.sigaction(std.c.SIG.SYS, &prev_act, null);
-                    return;
-                }
                 // look for libc's path and base address
                 var dl_info: dlfcn_h.Dl_info = undefined;
                 const dladdr_res = dlfcn_h.dladdr(&std.c.sigaction, &dl_info);
-                if (dladdr_res == 0) return error.Unexpected;
+                if (dladdr_res == 0) {
+                    return error.Unexpected;
+                }
                 const libc_path = dl_info.dli_fname[0..std.mem.len(dl_info.dli_fname)];
                 const libc_address = @intFromPtr(dl_info.dli_fbase.?);
                 // scan the .so to determine its extent in memory
-                var sfb = std.heap.stackFallback(4096, std.heap.c_allocator);
+                var sfb = std.heap.stackFallback(4096, c_allocator);
                 const allocator = sfb.get();
                 const file = try std.fs.openFileAbsolute(libc_path, .{});
                 defer file.close();
@@ -347,46 +517,9 @@ pub fn Controller(comptime Host: type) type {
                     const end = segment.p_vaddr + segment.p_memsz;
                     if (max_vaddr == null or end > max_vaddr.?) max_vaddr = end;
                 }
-                const libc_len = max_vaddr.?;
-                // enable syscall user dispatch, excluding the memory region where libc sits; the signal
-                // trampoline is also inside this range, allowing us to reenable trapping from within
-                // the signal handler (otherwise sigreturn() would trigger SIGSYS inside a SIGSYS)
-                if (std.c.prctl(
-                    prctl_h.PR_SET_SYSCALL_USER_DISPATCH,
-                    prctl_h.PR_SYS_DISPATCH_ON,
-                    libc_address,
-                    libc_len,
-                    @intFromPtr(&trapping_syscalls),
-                ) != 0) return error.SyscallUserDispatchFailure;
-                syscall_trap_installed = true;
-            }
-        }
-
-        pub fn uninstallTrap() void {
-            const prctl_h = @cImport({
-                @cInclude("sys/prctl.h");
-            });
-            if (os == .linux) {
-                _ = std.c.prctl(
-                    prctl_h.PR_SET_SYSCALL_USER_DISPATCH,
-                    prctl_h.PR_SYS_DISPATCH_OFF,
-                    @as(usize, 0),
-                    @as(usize, 0),
-                    @as(usize, 0),
-                );
-            }
-        }
-
-        pub fn activateTrap() void {
-            if (os == .linux) {
-                trapping_syscalls = true;
-            }
-        }
-
-        pub fn deactivateTrap() void {
-            if (os == .linux) {
-                trapping_syscalls = false;
-            }
+                libc_extent = .{ .address = libc_address, .len = max_vaddr.? };
+                return libc_extent.?;
+            };
         }
 
         fn handleSigsysSignal(_: i32, info: *const std.c.siginfo_t, ucontext: ?*anyopaque) callconv(.c) void {
@@ -398,15 +531,43 @@ pub fn Controller(comptime Host: type) type {
                 if (@hasField(@TypeOf(sc), "args")) {
                     const num: i32 = @intCast(index);
                     if (num == info.fields.sigsys.syscall) {
+                        const args = syscall.getArguments(ucontext, sc.args);
+                        if (@hasField(Host.HandlerVTable, sc.name)) {
+                            const ip = syscall.getInstructionPointer(ucontext);
+                            if (getSyscallVtable(ip)) |vtable| {
+                                const handler = @field(vtable, sc.name);
+                                const FnPtrT = @TypeOf(handler);
+                                const FnT = @typeInfo(FnPtrT).pointer.child;
+                                var handler_args: std.meta.ArgsTuple(FnT) = undefined;
+                                var result: isize = undefined;
+                                inline for (&handler_args, 0..) |*ptr, arg_index| {
+                                    const ArgT = @TypeOf(ptr.*);
+                                    ptr.* = switch (arg_index) {
+                                        handler_args.len - 1 => &result,
+                                        else => switch (@typeInfo(ArgT)) {
+                                            .pointer => @ptrFromInt(args[arg_index]),
+                                            else => @bitCast(args[arg_index]),
+                                        },
+                                    };
+                                }
+                                if (@call(.auto, handler, handler_args)) {
+                                    // call was handled--set the return value
+                                    syscall.setRetval(ucontext, @bitCast(result));
+                                    return;
+                                }
+                            }
+                        }
+                        // perform the syscall normally
                         const fn_name = std.fmt.comptimePrint("syscall{d}", .{sc.args});
                         const syscaller = @field(std.os.linux, fn_name);
-                        var args: std.meta.ArgsTuple(@TypeOf(syscaller)) = undefined;
-                        args[0] = @enumFromInt(info.fields.sigsys.syscall);
-                        const arg_array = syscall.getArguments(ucontext, 3);
-                        inline for (arg_array, 0..) |arg_value, arg_index| {
-                            args[arg_index + 1] = arg_value;
+                        var syscall_args: std.meta.ArgsTuple(@TypeOf(syscaller)) = undefined;
+                        inline for (&syscall_args, 0..) |*ptr, arg_index| {
+                            ptr.* = switch (arg_index) {
+                                0 => @enumFromInt(info.fields.sigsys.syscall),
+                                else => args[arg_index - 1],
+                            };
                         }
-                        const retval = @call(.auto, syscaller, args);
+                        const retval = @call(.auto, syscaller, syscall_args);
                         syscall.setRetval(ucontext, retval);
                     }
                 }

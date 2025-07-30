@@ -1,13 +1,13 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const h = @cImport({
+const ucontext_h = @cImport({
     @cDefine("_GNU_SOURCE", {});
     @cInclude("ucontext.h");
 });
 
 pub const table = switch (builtin.target.os.tag) {
-    .linux => .{switch (builtin.target.cpu.arch) {
+    .linux => switch (builtin.target.cpu.arch) {
         .x86_64 => .{
             .{ .args = 3, .name = "read" },
             .{ .args = 3, .name = "write" },
@@ -2155,18 +2155,18 @@ pub const table = switch (builtin.target.os.tag) {
             .{ .args = 5, .name = "kexec_file_load" },
         },
         else => @compileError("Unsupported architecture"),
-    }},
+    },
     else => {},
 };
 
 pub fn getArguments(ucontext: ?*anyopaque, comptime len: usize) [len]usize {
-    const ctx: *h.ucontext_t = @ptrCast(@alignCast(ucontext.?));
+    const ctx: *ucontext_h.ucontext_t = @ptrCast(@alignCast(ucontext.?));
     var arg_values: [len]usize = undefined;
     inline for (0..len) |index| {
         switch (builtin.target.cpu.arch) {
             .x86_64 => {
                 const registers = .{ "RDI", "RSI", "RDX", "R10", "R8", "R9" };
-                const reg_index = @field(h, "REG_" ++ registers[index]);
+                const reg_index = @field(ucontext_h, "REG_" ++ registers[index]);
                 arg_values[index] = @bitCast(ctx.uc_mcontext.gregs[reg_index]);
             },
             .aarch64, .aarch64_be => {
@@ -2181,11 +2181,11 @@ pub fn getArguments(ucontext: ?*anyopaque, comptime len: usize) [len]usize {
             .x86 => {
                 const registers = .{ "EBX", "ECX", "EDX", "ESI", "EDI" };
                 if (comptime len != 6 or index < 4) {
-                    const reg_index = @field(h, "REG_" ++ registers[index]);
+                    const reg_index = @field(ucontext_h, "REG_" ++ registers[index]);
                     arg_values[index] = @bitCast(ctx.uc_mcontext.gregs[reg_index]);
                 } else {
                     // arg 5 and 6 are on the stack due to lack of registers
-                    const stack_reg_index = @field(h, "REG_ESP");
+                    const stack_reg_index = @field(ucontext_h, "REG_ESP");
                     const stack_ptr_address: usize = @bitCast(ctx.uc_mcontext.gregs[stack_reg_index]);
                     const stack_ptr: [*]usize = @ptrFromInt(stack_ptr_address);
                     arg_values[index] = stack_ptr[len - index + 1];
@@ -2201,29 +2201,29 @@ pub fn getArguments(ucontext: ?*anyopaque, comptime len: usize) [len]usize {
     return arg_values;
 }
 
+pub fn getInstructionPointer(ucontext: ?*anyopaque) usize {
+    const ctx: *ucontext_h.ucontext_t = @ptrCast(@alignCast(ucontext.?));
+    const value = switch (builtin.target.cpu.arch) {
+        .x86_64 => ctx.uc_mcontext.gregs[@field(ucontext_h, "REG_RIP")],
+        .aarch64, .aarch64_be => ctx.uc_mcontext.pc,
+        .riscv64 => ctx.uc_mcontext.gregs[0],
+        .powerpc64, .powerpc64le => ctx.uc_mcontext.gp_regs[32],
+        .x86 => ctx.uc_mcontext.gregs[@field(ucontext_h, "REG_EIP")],
+        .arm, .armeb => ctx.uc_mcontext.arm_pc,
+        else => @compileError("Unsupported platform"),
+    };
+    return @bitCast(value);
+}
+
 pub fn setRetval(ucontext: ?*anyopaque, value: usize) void {
-    const ctx: *h.ucontext_t = @ptrCast(@alignCast(ucontext.?));
+    const ctx: *ucontext_h.ucontext_t = @ptrCast(@alignCast(ucontext.?));
     switch (builtin.target.cpu.arch) {
-        .x86_64 => {
-            const reg_index = @field(h, "REG_RAX");
-            ctx.uc_mcontext.gregs[reg_index] = @bitCast(value);
-        },
-        .aarch64, .aarch64_be => {
-            ctx.uc_mcontext.regs[0] = @bitCast(value);
-        },
-        .riscv64 => {
-            ctx.uc_mcontext.__gregs[10] = @bitCast(value);
-        },
-        .powerpc64, .powerpc64le => {
-            ctx.uc_mcontext.gp_regs[3] = @bitCast(value);
-        },
-        .x86 => {
-            const reg_index = @field(h, "REG_EAX");
-            ctx.uc_mcontext.gregs[reg_index] = @bitCast(value);
-        },
-        .arm, .armeb => {
-            ctx.uc_mcontext.arm_r0 = @bitCast(value);
-        },
+        .x86_64 => ctx.uc_mcontext.gregs[@field(ucontext_h, "REG_RAX")] = @bitCast(value),
+        .aarch64, .aarch64_be => ctx.uc_mcontext.regs[0] = @bitCast(value),
+        .riscv64 => ctx.uc_mcontext.gregs[10] = @bitCast(value),
+        .powerpc64, .powerpc64le => ctx.uc_mcontext.gp_regs[3] = @bitCast(value),
+        .x86 => ctx.uc_mcontext.gregs[@field(ucontext_h, "REG_EAX")] = @bitCast(value),
+        .arm, .armeb => ctx.uc_mcontext.arm_r0 = @bitCast(value),
         else => @compileError("Unsupported platform"),
     }
 }
