@@ -805,7 +805,7 @@ export function addTests(importModule, options) {
         const name = 'x'.repeat(i + 1) + '.txt';
         initializers.push([ name, { type: 'file' } ]);
       }
-      const map2 = new Map(initializers)
+      const map2 = new Map(initializers);
       const lines2 = await capture(() => print(map2));
       expect(lines2).to.have.lengthOf(100);
     })

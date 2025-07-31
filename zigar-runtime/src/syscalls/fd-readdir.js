@@ -31,7 +31,7 @@ export default mixin({
     }, ([ dent, dir ]) => {
       const dv = createView(bufLen);
       let remaining = bufLen;
-      let p = 0;      
+      let p = 0;
       while (dent) {
         const { name, type = 'unknown', ino = 0 } = dent;
         const nameArray = encodeText(name);
@@ -40,6 +40,7 @@ export default mixin({
           throw new InvalidEnumValue(PosixFileType, type);
         }
         if (remaining < 24 + nameArray.length) {
+          dir.seek(cookie);
           break;
         }
         dv.setBigUint64(p, ++cookie, true);

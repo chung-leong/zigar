@@ -311,23 +311,6 @@ pub fn SyscallRedirector(comptime Host: type) type {
             return false;
         }
 
-        pub fn fstatat64(dirfd: isize, path: [*:0]const u8, buf: *std.posix.Stat, flags: isize, result: *isize) callconv(.c) bool {
-            if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.stat))) {
-                var call: Syscall = .{ .cmd = .stat, .u = .{
-                    .stat = .{
-                        .dirfd = @intCast(dirfd),
-                        .path = path,
-                        .flags = @intCast(flags),
-                    },
-                } };
-                const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) copyStat(buf, &call.u.stat.stat);
-                result.* = intFromError(err);
-                return true;
-            }
-            return false;
-        }
-
         pub fn fsync(fd: isize, result: *isize) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
                 var call: Syscall = .{ .cmd = .sync, .u = .{
@@ -496,7 +479,7 @@ pub fn SyscallRedirector(comptime Host: type) type {
         }
 
         pub fn lstat(path: [*:0]const u8, buf: *std.posix.Stat, result: *isize) callconv(.c) bool {
-            return fstatat64(-1, path, buf, std.posix.AT.SYMLINK_NOFOLLOW, result);
+            return newfstatat(-1, path, buf, std.posix.AT.SYMLINK_NOFOLLOW, result);
         }
 
         pub fn lutimes(path: [*:0]const u8, tv: [*]const std.posix.timeval, result: *isize) callconv(.c) bool {
@@ -522,6 +505,23 @@ pub fn SyscallRedirector(comptime Host: type) type {
                     result.* = intFromError(err);
                     return true;
                 }
+            }
+            return false;
+        }
+
+        pub fn newfstatat(dirfd: isize, path: [*:0]const u8, buf: *std.posix.Stat, flags: isize, result: *isize) callconv(.c) bool {
+            if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.stat))) {
+                var call: Syscall = .{ .cmd = .stat, .u = .{
+                    .stat = .{
+                        .dirfd = @intCast(dirfd),
+                        .path = path,
+                        .flags = @intCast(flags),
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS) copyStat(buf, &call.u.stat.stat);
+                result.* = intFromError(err);
+                return true;
             }
             return false;
         }
@@ -591,7 +591,7 @@ pub fn SyscallRedirector(comptime Host: type) type {
         }
 
         pub fn stat(path: [*:0]const u8, buf: *std.posix.Stat, result: *isize) callconv(.c) bool {
-            return fstatat64(-1, path, buf, 0, result);
+            return newfstatat(-1, path, buf, 0, result);
         }
 
         pub fn unlink(path: [*:0]const u8, result: *isize) callconv(.c) bool {
@@ -711,8 +711,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const fdatasync = makeStdHook("fdatasync");
         pub const fstat = makeStdHook("fstat");
         pub const fstat64 = makeStdHookUsing("fstat64", "fstat");
-        pub const fstatat = makeStdHookUsing("fstatat", "fstatat64");
-        pub const fstatat64 = makeStdHook("fstatat64");
+        pub const fstatat = makeStdHookUsing("fstatat", "newfstatat");
+        pub const fstatat64 = makeStdHookUsing("fstatat64", "newfstatat");
         pub const fsync = makeStdHook("fsync");
         pub const futimens = makeStdHook("futimens");
         pub const futimes = makeStdHook("futimes");
@@ -749,7 +749,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         pub fn __fxstatat(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
             var result: isize = undefined;
-            if (redirector.fstatat64(dirfd, path, buf, std.posix.AT.SYMLINK_FOLLOW, &result)) {
+            if (redirector.newfstatat(dirfd, path, buf, std.posix.AT.SYMLINK_FOLLOW, &result)) {
                 return saveError(c_int, result);
             }
             return Original.__fxstatat(ver, dirfd, path, buf);

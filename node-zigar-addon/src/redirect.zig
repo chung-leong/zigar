@@ -527,10 +527,9 @@ pub fn Controller(comptime Host: type) type {
             @setEvalBranchQuota(100000);
             trapping_syscalls = false;
             defer trapping_syscalls = true;
-            inline for (syscall.table, 0..) |sc, index| {
+            inline for (syscall.table) |sc| {
                 if (@hasField(@TypeOf(sc), "args")) {
-                    const num: i32 = @intCast(index);
-                    if (num == info.fields.sigsys.syscall) {
+                    if (info.fields.sigsys.syscall == sc.num) {
                         const args = syscall.getArguments(ucontext, sc.args);
                         if (@hasField(Host.HandlerVTable, sc.name)) {
                             const ip = syscall.getInstructionPointer(ucontext);
