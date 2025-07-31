@@ -538,20 +538,37 @@ pub fn Controller(comptime Host: type) type {
                                 const FnPtrT = @TypeOf(handler);
                                 const FnT = @typeInfo(FnPtrT).pointer.child;
                                 var handler_args: std.meta.ArgsTuple(FnT) = undefined;
-                                var result: isize = undefined;
+                                const RvPtrT = @TypeOf(handler_args[handler_args.len - 1]);
+                                const RvT = @typeInfo(RvPtrT).pointer.child;
+                                var result: RvT = undefined;
                                 inline for (&handler_args, 0..) |*ptr, arg_index| {
                                     const ArgT = @TypeOf(ptr.*);
-                                    ptr.* = switch (arg_index) {
-                                        handler_args.len - 1 => &result,
-                                        else => switch (@typeInfo(ArgT)) {
-                                            .pointer => @ptrFromInt(args[arg_index]),
-                                            else => @bitCast(args[arg_index]),
-                                        },
+                                    ptr.* = if (arg_index == handler_args.len - 1) &result else cast: {
+                                        const arg: usize = args[arg_index];
+                                        switch (@typeInfo(ArgT)) {
+                                            .pointer => break :cast @ptrFromInt(arg),
+                                            .int => |int| {
+                                                const arg_trunc: @Type(.{
+                                                    .int = .{
+                                                        .bits = int.bits,
+                                                        .signedness = .unsigned,
+                                                    },
+                                                }) = @truncate(arg);
+                                                break :cast @bitCast(arg_trunc);
+                                            },
+                                            else => @compileError("Unrecognized type"),
+                                        }
                                     };
                                 }
                                 if (@call(.auto, handler, handler_args)) {
                                     // call was handled--set the return value
-                                    syscall.setRetval(ucontext, @bitCast(result));
+                                    const rv_unsigned: @Type(.{
+                                        .int = .{
+                                            .bits = @typeInfo(RvT).int.bits,
+                                            .signedness = .unsigned,
+                                        },
+                                    }) = @bitCast(result);
+                                    syscall.setRetval(ucontext, rv_unsigned);
                                     return;
                                 }
                             }
