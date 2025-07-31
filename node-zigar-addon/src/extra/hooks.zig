@@ -594,6 +594,34 @@ pub fn SyscallRedirector(comptime Host: type) type {
             return newfstatat(-1, path, buf, 0, result);
         }
 
+        pub fn statx(dirfd: c_int, path: [*:0]const u8, flags: c_int, mask: c_uint, buf: *std.os.linux.Statx, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.stat))) {
+                if (flags & std.os.linux.AT.EMPTY_PATH != 0 and std.mem.len(path) == 0) {
+                    var call: Syscall = .{ .cmd = .fstat, .u = .{
+                        .fstat = .{
+                            .fd = remapDirFD(dirfd),
+                        },
+                    } };
+                    const err = Host.redirectSyscall(&call);
+                    if (err == .SUCCESS) copyStatx(buf, &call.u.fstat.stat, mask);
+                    result.* = intFromError(err);
+                } else {
+                    var call: Syscall = .{ .cmd = .stat, .u = .{
+                        .stat = .{
+                            .dirfd = remapDirFD(dirfd),
+                            .path = path,
+                            .flags = @intCast(flags),
+                        },
+                    } };
+                    const err = Host.redirectSyscall(&call);
+                    if (err == .SUCCESS) copyStatx(buf, &call.u.stat.stat, mask);
+                    result.* = intFromError(err);
+                }
+                return true;
+            }
+            return false;
+        }
+
         pub fn unlink(path: [*:0]const u8, result: *c_int) callconv(.c) bool {
             return unlinkat(-1, path, 0, result);
         }
@@ -690,13 +718,48 @@ pub fn SyscallRedirector(comptime Host: type) type {
             dest.ino = src.ino;
             dest.size = @truncate(@as(i64, @intCast(src.size)));
             dest.mode = @intFromEnum(src.filetype);
-            inline for (.{ "atim", "mtim", "ctim" }) |field_name| {
-                const ns = @field(src, field_name);
-                @field(dest, field_name) = .{
-                    .sec = @truncate(@as(i64, @intCast(ns / 1_000_000_000))),
-                    .nsec = @truncate(@as(i64, @intCast(ns % 1_000_000_000))),
+            copyTime(&dest.atim, src.atim);
+            copyTime(&dest.mtim, src.mtim);
+            copyTime(&dest.ctim, src.ctim);
+        }
+
+        fn copyStatx(dest: *std.os.linux.Statx, src: *const std.os.wasi.filestat_t, mask: c_uint) void {
+            dest.* = std.mem.zeroes(std.os.linux.Statx);
+            dest.mask = @intCast(mask);
+            dest.ino = src.ino;
+            dest.size = src.size;
+            if (mask & std.os.linux.STATX_MODE != 0) {}
+            if (mask & std.os.linux.STATX_TYPE != 0) {
+                dest.mode |= switch (src.filetype) {
+                    .BLOCK_DEVICE => std.os.linux.S.IFBLK,
+                    .CHARACTER_DEVICE => std.os.linux.S.IFCHR,
+                    .DIRECTORY => std.os.linux.S.IFDIR,
+                    .REGULAR_FILE => std.os.linux.S.IFREG,
+                    .SOCKET_DGRAM, .SOCKET_STREAM => std.os.linux.S.IFSOCK,
+                    .SYMBOLIC_LINK => std.os.linux.S.IFLNK,
+                    else => 0,
                 };
             }
+            if (mask & std.os.linux.STATX_NLINK != 0) {
+                dest.nlink = @intCast(src.nlink);
+            }
+            if (mask & std.os.linux.STATX_ATIME != 0) {
+                copyTime(&dest.atime, src.atim);
+            }
+            if (mask & std.os.linux.STATX_BTIME != 0) {
+                copyTime(&dest.btime, src.ctim);
+            }
+            if (mask & std.os.linux.STATX_CTIME != 0) {
+                copyTime(&dest.ctime, src.ctim);
+            }
+            if (mask & std.os.linux.STATX_MTIME != 0) {
+                copyTime(&dest.mtime, src.mtim);
+            }
+        }
+
+        fn copyTime(dest: anytype, ns: u64) void {
+            dest.sec = @intCast(ns / 1_000_000_000);
+            dest.nsec = @intCast(ns % 1_000_000_000);
         }
     };
 }
