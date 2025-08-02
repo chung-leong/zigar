@@ -276,7 +276,7 @@ pub fn createMessage(err: anyerror) ?Value {
     return captureString(memory) catch null;
 }
 
-pub fn handleJscall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
+pub fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
     return _handleJscall(fn_id, arg_ptr, arg_size);
 }
 

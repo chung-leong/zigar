@@ -70,15 +70,21 @@ const ModuleHost = struct {
         handle_syscall: ?ThreadsafeFunction = null,
         release_function: ?ThreadsafeFunction = null,
     } = .{},
+    multithread_count: std.atomic.Value(usize) = .init(0),
+    redirection_mask: hooks.Mask = .{},
     syscall_trap_count: usize = 0,
     syscall_trap_mutex: std.Thread.Mutex = .{},
     syscall_trap_switches: std.ArrayList(*bool),
+
+    pub threadlocal var instance: *@This() = undefined;
+    pub threadlocal var in_main_thread: bool = undefined;
+    pub threadlocal var trapping_syscalls: bool = false;
 
     var module_count: i32 = 0;
     var buffer_count: i32 = 0;
     var function_count: i32 = 0;
 
-    const Module = interface.Module(@This(), Value);
+    const Module = interface.Module(Value);
     const Jscall = Module.Jscall;
 
     fn attachExports(env: Env, exports: Value) !void {
@@ -103,6 +109,7 @@ const ModuleHost = struct {
         const js_env = try env.callFunction(try env.getNull(), create_env, &.{});
         const self = try createSelf(env);
         defer self.release();
+        try self.setThreadContext(true);
         // import functions from the environment
         try self.importFunctionsFromJavaScript(js_env);
         // export functions to it; exported functions will keep self alive until they're all
@@ -148,6 +155,7 @@ const ModuleHost = struct {
             .env = env,
             .syscall_trap_switches = .init(c_allocator),
         };
+        instance = self;
         return self;
     }
 
@@ -256,12 +264,17 @@ const ModuleHost = struct {
             }
         };
         try self.exportFunctionsToModule();
-        if (module.exports.initialize(self) != .SUCCESS) return error.Unexpected;
         if (env.getValueBool(redirectIO) catch true) {
             try redirection_controller.installHooks(&lib, path_slice, self);
             self.redirecting_io = true;
         }
         self.library = lib;
+    }
+
+    pub fn setThreadContext(self: *@This(), is_main: bool) !void {
+        instance = self;
+        in_main_thread = is_main;
+        try self.addSyscallTrapSwitch();
     }
 
     pub fn getSyscallHook(self: *@This(), name: [*:0]const u8) ?HookEntry {
@@ -461,7 +474,6 @@ const ModuleHost = struct {
     };
 
     fn getNumericValue(self: *@This(), member_type: Value, bits: Value, address: Value) !Value {
-        std.debug.print("getNumericValue\n", .{});
         const env = self.env;
         const type_enum = try std.meta.intToEnum(NumberType, try env.getValueUint32(member_type));
         const bit_size = try env.getValueUint32(bits);
@@ -560,23 +572,61 @@ const ModuleHost = struct {
         const env = self.env;
         const event_len = try env.getValueStringUtf8(event, null);
         const event_bytes = try c_allocator.alloc(u8, event_len + 1);
-        _ = try env.getValueStringUtf8(event, event_bytes);
-        const event_name: [*:0]const u8 = @ptrCast(event_bytes);
-        const set = try env.getValueBool(listening);
         defer c_allocator.free(event_bytes);
-        const module = self.module orelse return error.NoLoadedModule;
-        if (module.exports.set_syscall_mask(event_name, set) != .SUCCESS) {
-            return error.Unexpected;
+        _ = try env.getValueStringUtf8(event, event_bytes);
+        const event_name = event_bytes[0..event_len];
+        const set = try env.getValueBool(listening);
+        const count_before = countEventHandlers(self.redirection_mask);
+        return inline for (std.meta.fields(hooks.Mask)) |field| {
+            if (std.mem.eql(u8, field.name, event_name)) {
+                @field(self.redirection_mask, field.name) = set;
+                const count_after = countEventHandlers(self.redirection_mask);
+                if (count_before == 0 and count_after != 0) {
+                    self.enableSyscallTrap();
+                } else if (count_before != 0 and count_after == 0) {
+                    self.disableSyscallTrap();
+                }
+                break;
+            }
+        } else error.UnknownEventName;
+    }
+
+    fn countEventHandlers(mask: hooks.Mask) usize {
+        var count: usize = 0;
+        inline for (std.meta.fields(hooks.Mask)) |field| {
+            if (@field(mask, field.name)) {
+                count += 1;
+            }
         }
+        return count;
     }
 
     fn setSyscallTrap(self: *@This(), trapping: Value) !void {
         const env = self.env;
         const set = try env.getValueBool(trapping);
         if (set) {
-            try self.enableSyscallTrap();
+            self.enableSyscallTrap();
         } else {
-            try self.disableSyscallTrap();
+            self.disableSyscallTrap();
+        }
+    }
+
+    fn enableSyscallTrap(self: *@This()) void {
+        self.syscall_trap_count += 1;
+        if (self.syscall_trap_count == 1) {
+            for (self.syscall_trap_switches.items) |ptr| {
+                ptr.* = true;
+            }
+        }
+    }
+
+    fn disableSyscallTrap(self: *@This()) void {
+        if (self.syscall_trap_count == 0) return;
+        self.syscall_trap_count -= 1;
+        if (self.syscall_trap_count == 0) {
+            for (self.syscall_trap_switches.items) |ptr| {
+                ptr.* = false;
+            }
         }
     }
 
@@ -600,10 +650,11 @@ const ModuleHost = struct {
             "finish_structure",
             "enable_multithread",
             "disable_multithread",
+            "get_instance",
+            "initialize_thread",
             "handle_jscall",
             "handle_syscall",
-            "enable_syscall_trap",
-            "disable_syscall_trap",
+            "get_syscall_mask",
             "release_function",
         };
         const module = self.module orelse return error.NoLoadedModule;
@@ -616,19 +667,23 @@ const ModuleHost = struct {
                 .error_union => |eu| eu.payload,
                 else => RT,
             };
+            const extra = if (Payload == void or Payload == std.c.E) 0 else 1;
             const NewArgs = comptime define: {
                 const fields = std.meta.fields(Args);
-                const extra = if (Payload == void or Payload == std.c.E) 0 else 1;
-                var new_fields: [fields.len + extra]std.builtin.Type.StructField = undefined;
+                var new_fields: [fields.len - 1 + extra]std.builtin.Type.StructField = undefined;
                 var new_args_info = @typeInfo(Args);
                 new_args_info.@"struct".fields = &new_fields;
                 for (&new_fields, 0..) |*field_ptr, i| {
-                    field_ptr.* = if (i < fields.len) fields[i] else .{
+                    const Arg = switch (i) {
+                        fields.len - 1 => *Payload,
+                        else => fields[i + 1].type,
+                    };
+                    field_ptr.* = .{
                         .name = std.fmt.comptimePrint("{d}", .{i}),
-                        .type = *Payload,
+                        .type = Arg,
                         .default_value_ptr = null,
                         .is_comptime = false,
-                        .alignment = @alignOf(*Payload),
+                        .alignment = @alignOf(Arg),
                     };
                 }
                 break :define @Type(new_args_info);
@@ -638,14 +693,19 @@ const ModuleHost = struct {
                 fn call(new_args: NewArgs) NewRT {
                     var args: Args = undefined;
                     inline for (&args, 0..) |*arg_ptr, i| {
-                        arg_ptr.* = new_args[i];
+                        if (i == 0) {
+                            // use instance of @This() associated with this thread
+                            arg_ptr.* = instance;
+                        } else {
+                            arg_ptr.* = new_args[i - 1];
+                        }
                     }
                     const retval = @call(.auto, func, args);
                     if (retval) |payload| {
                         if (Payload == std.c.E) {
                             return payload;
                         } else {
-                            if (new_args.len > args.len) new_args[args.len].* = payload;
+                            if (extra == 1) new_args[new_args.len - 1].* = payload;
                             return .SUCCESS;
                         }
                     } else |_| {
@@ -812,7 +872,7 @@ const ModuleHost = struct {
         );
     }
 
-    fn handleJscall(self: *@This(), call: *Jscall, in_main_thread: bool) !void {
+    fn handleJscall(self: *@This(), call: *Jscall) !void {
         if (in_main_thread) {
             if (call.futex_handle != 0) {
                 errdefer Futex.wake(call.futex_handle, E.FAULT) catch {};
@@ -842,7 +902,7 @@ const ModuleHost = struct {
         }
     }
 
-    fn handleSyscall(self: *@This(), call: *Syscall, in_main_thread: bool) !std.c.E {
+    fn handleSyscall(self: *@This(), call: *Syscall) !std.c.E {
         if (in_main_thread) {
             const env = self.env;
             const futex = switch (call.futex_handle) {
@@ -1196,35 +1256,20 @@ const ModuleHost = struct {
         });
     }
 
-    pub fn addSyscallTrapSwitch(self: *@This(), ptr: *bool) !void {
+    fn addSyscallTrapSwitch(self: *@This()) !void {
         self.syscall_trap_mutex.lock();
         defer self.syscall_trap_mutex.unlock();
-        try self.syscall_trap_switches.append(ptr);
+        try self.syscall_trap_switches.append(&trapping_syscalls);
         if (self.syscall_trap_count > 0) {
-            ptr.* = true;
+            trapping_syscalls = true;
         }
     }
 
-    fn enableSyscallTrap(self: *@This()) !void {
-        self.syscall_trap_count += 1;
-        if (self.syscall_trap_count == 1) {
-            for (self.syscall_trap_switches.items) |ptr| {
-                ptr.* = true;
-            }
-        }
+    fn getSyscallMask(self: *@This(), ptr: *hooks.Mask) !void {
+        ptr.* = self.redirection_mask;
     }
 
-    fn disableSyscallTrap(self: *@This()) !void {
-        if (self.syscall_trap_count == 0) return;
-        self.syscall_trap_count -= 1;
-        if (self.syscall_trap_count == 0) {
-            for (self.syscall_trap_switches.items) |ptr| {
-                ptr.* = false;
-            }
-        }
-    }
-
-    fn releaseFunction(self: *@This(), fn_id: usize, in_main_thread: bool) !void {
+    fn releaseFunction(self: *@This(), fn_id: usize) !void {
         if (in_main_thread) {
             const env = self.env;
             _ = try env.callFunction(
@@ -1240,46 +1285,63 @@ const ModuleHost = struct {
         }
     }
 
-    fn disableMultithread(self: *@This(), in_main_thread: bool) !void {
-        if (in_main_thread) {
+    fn enableMultithread(self: *@This()) !void {
+        if (!in_main_thread) return error.Unsupported;
+        const prev_count = self.multithread_count.fetchAdd(1, .monotonic);
+        errdefer _ = self.multithread_count.fetchSub(1, .monotonic);
+        if (prev_count == 0) {
+            const env = self.env;
             const fields = @typeInfo(@FieldType(ModuleHost, "ts")).@"struct".fields;
+            const resource_name = try env.createStringUtf8("zigar");
             inline for (fields) |field| {
-                if (@field(self.ts, field.name)) |ref|
-                    try napi.releaseThreadsafeFunction(ref, .abort);
-                @field(self.ts, field.name) = null;
+                const cb = @field(threadsafe_callback, field.name);
+                @field(self.ts, field.name) = try env.createThreadsafeFunction(
+                    null,
+                    null,
+                    resource_name,
+                    0,
+                    1,
+                    null,
+                    null,
+                    @ptrCast(self),
+                    @ptrCast(&cb),
+                );
             }
-        } else {
-            const func = self.ts.disable_multithread orelse return error.Disabled;
-            try napi.callThreadsafeFunction(func, null, .nonblocking);
         }
     }
 
-    fn enableMultithread(self: *@This(), in_main_thread: bool) !void {
-        if (!in_main_thread) return error.Unsupported;
-        const env = self.env;
-        const fields = @typeInfo(@FieldType(ModuleHost, "ts")).@"struct".fields;
-        const resource_name = try env.createStringUtf8("zigar");
-        inline for (fields) |field| {
-            const cb = @field(threadsafe_callback, field.name);
-            @field(self.ts, field.name) = try env.createThreadsafeFunction(
-                null,
-                null,
-                resource_name,
-                0,
-                1,
-                null,
-                null,
-                @ptrCast(self),
-                @ptrCast(&cb),
-            );
+    fn disableMultithread(self: *@This()) !void {
+        const prev_count = self.multithread_count.fetchSub(1, .monotonic);
+        errdefer _ = self.multithread_count.fetchAdd(1, .monotonic);
+        if (prev_count == 1) {
+            if (in_main_thread) {
+                const fields = @typeInfo(@FieldType(ModuleHost, "ts")).@"struct".fields;
+                inline for (fields) |field| {
+                    if (@field(self.ts, field.name)) |ref|
+                        try napi.releaseThreadsafeFunction(ref, .abort);
+                    @field(self.ts, field.name) = null;
+                }
+            } else {
+                const func = self.ts.disable_multithread orelse return error.Disabled;
+                try napi.callThreadsafeFunction(func, null, .nonblocking);
+            }
         }
+    }
+
+    fn getInstance(self: *@This(), ptr: **anyopaque) !void {
+        ptr.* = self;
+    }
+
+    fn initializeThread(_: *@This(), ptr: *anyopaque) !void {
+        const self: *@This() = @ptrCast(@alignCast(ptr));
+        try self.setThreadContext(false);
     }
 
     const threadsafe_callback = struct {
         fn handle_jscall(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
             const call: *Jscall = @ptrCast(@alignCast(data));
-            handleJscall(self, call, true) catch {
+            handleJscall(self, call) catch {
                 // wake caller if call fails since JavaScript isn't going to do it
                 Futex.wake(call.futex_handle, .FAULT) catch {};
             };
@@ -1288,7 +1350,7 @@ const ModuleHost = struct {
         fn handle_syscall(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
             const call: *Syscall = @ptrCast(@alignCast(data));
-            _ = handleSyscall(self, call, true) catch {
+            _ = handleSyscall(self, call) catch {
                 Futex.wake(call.futex_handle, .FAULT) catch {};
             };
         }
@@ -1296,12 +1358,12 @@ const ModuleHost = struct {
         fn release_function(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
             const fn_id = @intFromPtr(data);
-            releaseFunction(self, fn_id, true) catch {};
+            releaseFunction(self, fn_id) catch {};
         }
 
         fn disable_multithread(_: *Env, _: Value, context: *anyopaque, _: *anyopaque) callconv(.C) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
-            disableMultithread(self, true) catch {};
+            disableMultithread(self) catch {};
         }
     };
 };

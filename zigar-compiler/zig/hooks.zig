@@ -162,7 +162,7 @@ pub const Syscall = extern struct {
 
 const fd_min = 0xfffff;
 
-pub fn SyscallRedirector(comptime Host: type) type {
+pub fn SyscallRedirector(comptime ModuleHost: type) type {
     return struct {
         pub fn access(path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
             return faccessat(-1, path, mode, result);
@@ -688,6 +688,8 @@ pub fn SyscallRedirector(comptime Host: type) type {
             return false;
         }
 
+        const Host = ModuleHost;
+
         fn isApplicableHandle(fd: isize) bool {
             return switch (fd) {
                 0, 1, 2 => true,
@@ -859,6 +861,16 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.opendir(path);
         }
 
+        pub fn pthread_create(thread: *std.c.pthread_t, attr: ?*const std.c.pthread_attr_t, start_routine: *const fn (?*anyopaque) callconv(.c) ?*anyopaque, arg: ?*anyopaque) c_int {
+            const info = c_allocator.create(ThreadInfo) catch return @intFromEnum(std.posix.E.NOMEM);
+            info.* = .{
+                .proc = start_routine,
+                .arg = arg,
+                .instance = redirector.Host.getInstance() catch return @intFromEnum(std.posix.E.FAULT),
+            };
+            return Original.pthread_create(thread, attr, setThreadContext, info);
+        }
+
         pub fn readdir(d: *std.c.DIR) callconv(.c) ?*align(1) const std.c.dirent64 {
             if (RedirectedDir.cast(d)) |dir| {
                 if (dir.data_next == dir.data_len) {
@@ -986,6 +998,22 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             };
         }
 
+        const ThreadInfo = struct {
+            proc: *const fn (?*anyopaque) callconv(.c) ?*anyopaque,
+            arg: ?*anyopaque,
+            instance: *anyopaque,
+        };
+
+        fn setThreadContext(ptr: ?*anyopaque) callconv(.c) ?*anyopaque {
+            const info: *ThreadInfo = @ptrCast(@alignCast(ptr.?));
+            const proc = info.proc;
+            const arg = info.arg;
+            const instance = info.instance;
+            c_allocator.destroy(info);
+            redirector.Host.initializeThread(instance) catch {};
+            return proc(arg);
+        }
+
         const errno_h = @cImport({
             @cInclude("errno.h");
         });
@@ -1024,6 +1052,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var openat64: *const @TypeOf(Sub.openat64) = undefined;
             pub var opendir: *const @TypeOf(Sub.opendir) = undefined;
             pub var posix_fadvise: *const @TypeOf(Sub.posix_fadvise) = undefined;
+            pub var pthread_create: *const @TypeOf(Sub.pthread_create) = undefined;
             pub var read: *const @TypeOf(Sub.read) = undefined;
             pub var readdir: *const @TypeOf(Sub.readdir) = undefined;
             pub var rewinddir: *const @TypeOf(Sub.rewinddir) = undefined;

@@ -5,7 +5,6 @@ const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 const builtin = @import("builtin");
 
-pub const AnyModuleHost = opaque {};
 pub const AnyValue = *opaque {};
 
 pub fn IntFor(comptime n: comptime_int) type {

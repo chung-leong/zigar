@@ -15,7 +15,7 @@ fn Factory(comptime host: type, comptime module: type) type {
         var tdc = types.TypeDataCollector.init(256);
         tdc.add(*const fn (*const anyopaque, *anyopaque) anyerror!void);
         tdc.add(*const fn (*const anyopaque, *anyopaque, *const anyopaque, usize) anyerror!void);
-        tdc.add(*const fn (?*anyopaque, thunk_js.Action, usize) anyerror!usize);
+        tdc.add(*const fn (thunk_js.Action, usize) anyerror!usize);
         tdc.add(*const anyopaque);
         tdc.scan(module);
         break :result tdc.createDatabase();

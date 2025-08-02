@@ -92,7 +92,6 @@ pub fn Controller(comptime Host: type) type {
                 // get the syscall vtable
                 if (host.getSyscallHook("__syscall")) |hook| {
                     try addSyscallVtable(base_address, lib_len, @ptrCast(hook.handler));
-                    try host.addSyscallTrapSwitch(&trapping_syscalls);
                 }
             } else if (os == .darwin) {
                 const macho = std.macho;
@@ -403,8 +402,6 @@ pub fn Controller(comptime Host: type) type {
             return null;
         }
 
-        threadlocal var trapping_syscalls: bool = false;
-
         pub fn installSyscallTrap() !void {
             if (os == .linux) {
                 const prctl_h = @cImport({
@@ -420,7 +417,7 @@ pub fn Controller(comptime Host: type) type {
                     prctl_h.PR_SYS_DISPATCH_ON,
                     libc.address,
                     libc.len,
-                    @intFromPtr(&trapping_syscalls),
+                    @intFromPtr(&Host.trapping_syscalls),
                 ) != 0) {
                     return error.SyscallUserDispatchFailure;
                 }
@@ -513,8 +510,8 @@ pub fn Controller(comptime Host: type) type {
         fn handleSigsysSignal(_: i32, info: *const std.c.siginfo_t, ucontext: ?*anyopaque) callconv(.c) void {
             const syscall = @import("./syscall.zig");
             @setEvalBranchQuota(100000);
-            trapping_syscalls = false;
-            defer trapping_syscalls = true;
+            Host.trapping_syscalls = false;
+            defer Host.trapping_syscalls = true;
             inline for (syscall.table) |sc| {
                 if (@hasField(@TypeOf(sc), "args")) {
                     if (info.fields.sigsys.syscall == sc.num) {

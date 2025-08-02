@@ -12,12 +12,10 @@ const Memory = types.Memory;
 pub const Action = enum(u32) {
     create,
     destroy,
-    get_ptr,
-    get_id,
 };
 pub const Error = error{ UnableToCreateThunk, UnableToFindThunk };
 
-pub const ThunkController = *const fn (?*anyopaque, Action, usize) anyerror!usize;
+pub const ThunkController = *const fn (Action, usize) anyerror!usize;
 
 pub usingnamespace switch (builtin.target.cpu.arch.isWasm()) {
     true => wasm,
@@ -29,9 +27,8 @@ const native = struct {
 
     pub fn createThunkController(comptime host: type, comptime BFT: type) ThunkController {
         const ft_ns = struct {
-            fn control(ptr: ?*anyopaque, action: Action, arg: usize) anyerror!usize {
+            fn control(action: Action, arg: usize) anyerror!usize {
                 const vars = .{
-                    .@"-2" = ptr,
                     .@"-1" = arg,
                 };
                 const CT = @TypeOf(vars);
@@ -53,22 +50,6 @@ const native = struct {
                             return Error.UnableToFindThunk;
                         }
                     },
-                    .get_ptr => {
-                        const thunk: *const BFT = @ptrFromInt(arg);
-                        if (fn_binding.bound(CT, thunk)) |ctx| {
-                            return @intFromPtr(ctx.@"-2");
-                        } else {
-                            return Error.UnableToFindThunk;
-                        }
-                    },
-                    .get_id => {
-                        const thunk: *const BFT = @ptrFromInt(arg);
-                        if (fn_binding.bound(CT, thunk)) |ctx| {
-                            return ctx.@"-1";
-                        } else {
-                            return Error.UnableToFindThunk;
-                        }
-                    },
                 }
             }
         };
@@ -79,8 +60,8 @@ const native = struct {
         const BFT = fn (i32, f64) usize;
         const ArgStruct = types.ArgumentStruct(BFT);
         const host = struct {
-            fn handleJscall(module_ptr: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
-                if (@intFromPtr(module_ptr) == 0xdead_beef and arg_size == @sizeOf(ArgStruct)) {
+            fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
+                if (arg_size == @sizeOf(ArgStruct)) {
                     @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = fn_id;
                     return .SUCCESS;
                 } else {
@@ -89,8 +70,7 @@ const native = struct {
             }
         };
         const tc = createThunkController(host, BFT);
-        const module_ptr: *anyopaque = @ptrFromInt(0xdead_beef);
-        const thunk_address = try tc(module_ptr, .create, 1234);
+        const thunk_address = try tc(.create, 1234);
         const thunk: *const BFT = @ptrFromInt(thunk_address);
         const result = thunk(777, 3.14);
         try expectEqual(1234, result);
@@ -165,7 +145,7 @@ const wasm = struct {
         const BFT = fn (i32, f64) usize;
         const ArgStruct = types.ArgumentStruct(BFT);
         const host = struct {
-            fn handleJscall(_: ?*anyopaque, fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
+            fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
                 if (arg_size == @sizeOf(ArgStruct)) {
                     @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = fn_id;
                     return .SUCCESS;
@@ -221,9 +201,8 @@ fn getJscallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
                 @field(arg_struct, name) = args[arg_index];
             }
             // the last two arguments are the context pointer and the function id
-            const ctx = args[ch.params.len - 2];
             const fn_id = args[ch.params.len - 1];
-            const result = host.handleJscall(ctx, fn_id, &arg_struct, @sizeOf(ArgStruct));
+            const result = host.handleJscall(fn_id, &arg_struct, @sizeOf(ArgStruct));
             switch (result) {
                 .SUCCESS => {},
                 .DEADLK => {
@@ -252,7 +231,7 @@ test "getJscallHandler" {
     const BFT = fn (i32, f64) usize;
     const ArgStruct = types.ArgumentStruct(BFT);
     const host = struct {
-        fn handleJscall(_: ?*anyopaque, _: usize, arg_ptr: *anyopaque, arg_size: usize) E {
+        fn handleJscall(_: usize, arg_ptr: *anyopaque, arg_size: usize) E {
             if (arg_size == @sizeOf(ArgStruct)) {
                 @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = 1234;
                 return .SUCCESS;
@@ -272,7 +251,7 @@ test "getJscallHandler (error handling)" {
             return .{};
         }
 
-        fn handleJscall(_: ?*anyopaque, _: usize, _: *anyopaque, _: usize) E {
+        fn handleJscall(_: usize, _: *anyopaque, _: usize) E {
             return .FAULT;
         }
     };
