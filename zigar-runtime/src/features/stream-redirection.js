@@ -6,11 +6,8 @@ import { decodeText, hasMethod } from '../utils.js';
 export default mixin({
   init() {
     const root = {
-      *readdir() {        
-      },
-      valueOf() {
-        return null;
-      }
+      readdir() {},
+      valueOf() { return null }
     };
     this.streamMap = new Map([ 
       [ PosixDescriptor.stdout, this.createLogWriter('stdout') ], 
@@ -31,12 +28,22 @@ export default mixin({
     const fd = this.nextStreamHandle++;
     this.streamMap.set(fd, stream);
     stream.onClose = () => this.destroyStreamHandle(fd);
+    if (process.env.TARGET === 'node') {
+      if (this.streamMap.size === 4) {
+        this.setSyscallTrap(true);
+      }
+    }
     return fd;
   },
   destroyStreamHandle(fd) {
     const stream = this.streamMap.get(fd);
     stream?.destroy?.();
     this.streamMap.delete(fd);
+    if (process.env.TARGET === 'node') {
+      if (this.streamMap.size === 3) {
+        this.setSyscallTrap(false);
+      }
+    }
   },
   redirectStream(num, arg) {
     const map = this.streamMap;
@@ -127,6 +134,7 @@ export default mixin({
     imports: {
       flushStdout: {},
       setRedirectionMask: {},
+      setSyscallTrap: {},
     },
     /* c8 ignore next */
   } : undefined),

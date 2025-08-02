@@ -122,6 +122,25 @@ export function addTests(importModule, options) {
         flags: { symlinkFollow: true }, 
       });
     })
+    skip.if(platform() != 'linux').
+    it('should open file through direct syscall', async function() {
+      this.timeout(0);
+      const { __zigar, check } = await importTest('open-file-through-direct-syscall');
+      const content = new Uint8Array(16);
+      let event;
+      __zigar.on('open', (evt) => {
+        event = evt;
+        return content;
+      });
+      const result = check('/hello/world.txt');
+      expect(result).to.be.true;
+      expect(event).to.eql({
+        parent: null,
+        path: 'hello/world.txt',
+        rights: { read: true },
+        flags: { symlinkFollow: true }
+      });
+    })
     it('should open and read from file using posix functions', async function() {
       this.timeout(0);
       const { __zigar, hash } = await importTest('open-and-read-file-with-posix-functions');
@@ -799,6 +818,7 @@ export function addTests(importModule, options) {
         [ 'world', { type: 'directory' } ],
       ]);
       const lines1 = await capture(() => print(map1));
+      map1.close();
       expect(lines1).to.eql([ 'hello.txt file', 'world directory' ]);
       const initializers = [];
       for (let i = 0; i < 100; i++) {
@@ -807,6 +827,7 @@ export function addTests(importModule, options) {
       }
       const map2 = new Map(initializers);
       const lines2 = await capture(() => print(map2));
+      map2.close();
       expect(lines2).to.have.lengthOf(100);
     })
     it('should perform sync operation using posix function', async function() {

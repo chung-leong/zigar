@@ -341,12 +341,29 @@ fn destroyJsThunk(
 fn setSyscallMask(name: [*:0]const u8, set: bool) callconv(.C) E {
     const mt, _ = getMainThread() catch return .FAULT;
     const name_slice = name[0..std.mem.len(name)];
+    const count_before = countEventHandlers(mt.redirection_mask);
     return inline for (std.meta.fields(hooks.Mask)) |field| {
         if (std.mem.eql(u8, field.name, name_slice)) {
             @field(mt.redirection_mask, field.name) = set;
+            const count_after = countEventHandlers(mt.redirection_mask);
+            if (count_before == 0 and count_after != 0) {
+                _ = imports.enable_syscall_trap(mt.module_data);
+            } else if (count_before != 0 and count_after == 0) {
+                _ = imports.disable_syscall_trap(mt.module_data);
+            }
             break .SUCCESS;
         }
     } else .INVAL;
+}
+
+fn countEventHandlers(mask: hooks.Mask) usize {
+    var count: usize = 0;
+    inline for (std.meta.fields(hooks.Mask)) |field| {
+        if (@field(mask, field.name)) {
+            count += 1;
+        }
+    }
+    return count;
 }
 
 const hook_table = hooks.getHookTable(@This());

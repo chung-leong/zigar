@@ -1,5 +1,5 @@
 const std = @import("std");
-const allocator = std.heap.c_allocator;
+const c_allocator = std.heap.c_allocator;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
@@ -70,11 +70,13 @@ const ModuleHost = struct {
         handle_syscall: ?ThreadsafeFunction = null,
         release_function: ?ThreadsafeFunction = null,
     } = .{},
+    syscall_trap_count: usize = 0,
+    syscall_trap_mutex: std.Thread.Mutex = .{},
+    syscall_trap_switches: std.ArrayList(*bool),
 
     var module_count: i32 = 0;
     var buffer_count: i32 = 0;
     var function_count: i32 = 0;
-    var trapping_syscall: bool = false;
 
     const Module = interface.Module(@This(), Value);
     const Jscall = Module.Jscall;
@@ -141,8 +143,11 @@ const ModuleHost = struct {
     }
 
     fn createSelf(env: Env) !*@This() {
-        const self = try allocator.create(@This());
-        self.* = .{ .env = env };
+        const self = try c_allocator.create(@This());
+        self.* = .{
+            .env = env,
+            .syscall_trap_switches = .init(c_allocator),
+        };
         return self;
     }
 
@@ -160,10 +165,8 @@ const ModuleHost = struct {
                 }
             }
             if (self.library) |*lib| lib.close();
-            if (self.redirecting_io) {
-                // TODO--not sure
-            }
-            allocator.destroy(self);
+            self.syscall_trap_switches.deinit();
+            c_allocator.destroy(self);
             module_count -= 1;
         }
     }
@@ -201,6 +204,7 @@ const ModuleHost = struct {
             "requireBufferFallback",
             "syncExternalBuffer",
             "setRedirectionMask",
+            "setSyscallTrap",
         };
         inline for (names) |name| {
             const cb = @field(@This(), name);
@@ -223,8 +227,8 @@ const ModuleHost = struct {
     fn loadModule(self: *@This(), path: Value, redirectIO: Value) !void {
         const env = self.env;
         const path_len = try env.getValueStringUtf8(path, null);
-        const path_slice = try allocator.alloc(u8, path_len + 1);
-        defer allocator.free(path_slice);
+        const path_slice = try c_allocator.alloc(u8, path_len + 1);
+        defer c_allocator.free(path_slice);
         _ = try env.getValueStringUtf8(path, path_slice);
         var lib = try std.DynLib.open(path_slice);
         errdefer lib.close();
@@ -555,14 +559,24 @@ const ModuleHost = struct {
     fn setRedirectionMask(self: *@This(), event: Value, listening: Value) !void {
         const env = self.env;
         const event_len = try env.getValueStringUtf8(event, null);
-        const event_bytes = try allocator.alloc(u8, event_len + 1);
+        const event_bytes = try c_allocator.alloc(u8, event_len + 1);
         _ = try env.getValueStringUtf8(event, event_bytes);
         const event_name: [*:0]const u8 = @ptrCast(event_bytes);
         const set = try env.getValueBool(listening);
-        defer allocator.free(event_bytes);
+        defer c_allocator.free(event_bytes);
         const module = self.module orelse return error.NoLoadedModule;
         if (module.exports.set_syscall_mask(event_name, set) != .SUCCESS) {
             return error.Unexpected;
+        }
+    }
+
+    fn setSyscallTrap(self: *@This(), trapping: Value) !void {
+        const env = self.env;
+        const set = try env.getValueBool(trapping);
+        if (set) {
+            try self.enableSyscallTrap();
+        } else {
+            try self.disableSyscallTrap();
         }
     }
 
@@ -588,6 +602,8 @@ const ModuleHost = struct {
             "disable_multithread",
             "handle_jscall",
             "handle_syscall",
+            "enable_syscall_trap",
+            "disable_syscall_trap",
             "release_function",
         };
         const module = self.module orelse return error.NoLoadedModule;
@@ -1180,6 +1196,34 @@ const ModuleHost = struct {
         });
     }
 
+    pub fn addSyscallTrapSwitch(self: *@This(), ptr: *bool) !void {
+        self.syscall_trap_mutex.lock();
+        defer self.syscall_trap_mutex.unlock();
+        try self.syscall_trap_switches.append(ptr);
+        if (self.syscall_trap_count > 0) {
+            ptr.* = true;
+        }
+    }
+
+    fn enableSyscallTrap(self: *@This()) !void {
+        self.syscall_trap_count += 1;
+        if (self.syscall_trap_count == 1) {
+            for (self.syscall_trap_switches.items) |ptr| {
+                ptr.* = true;
+            }
+        }
+    }
+
+    fn disableSyscallTrap(self: *@This()) !void {
+        if (self.syscall_trap_count == 0) return;
+        self.syscall_trap_count -= 1;
+        if (self.syscall_trap_count == 0) {
+            for (self.syscall_trap_switches.items) |ptr| {
+                ptr.* = false;
+            }
+        }
+    }
+
     fn releaseFunction(self: *@This(), fn_id: usize, in_main_thread: bool) !void {
         if (in_main_thread) {
             const env = self.env;
@@ -1207,6 +1251,27 @@ const ModuleHost = struct {
         } else {
             const func = self.ts.disable_multithread orelse return error.Disabled;
             try napi.callThreadsafeFunction(func, null, .nonblocking);
+        }
+    }
+
+    fn enableMultithread(self: *@This(), in_main_thread: bool) !void {
+        if (!in_main_thread) return error.Unsupported;
+        const env = self.env;
+        const fields = @typeInfo(@FieldType(ModuleHost, "ts")).@"struct".fields;
+        const resource_name = try env.createStringUtf8("zigar");
+        inline for (fields) |field| {
+            const cb = @field(threadsafe_callback, field.name);
+            @field(self.ts, field.name) = try env.createThreadsafeFunction(
+                null,
+                null,
+                resource_name,
+                0,
+                1,
+                null,
+                null,
+                @ptrCast(self),
+                @ptrCast(&cb),
+            );
         }
     }
 
@@ -1239,27 +1304,6 @@ const ModuleHost = struct {
             disableMultithread(self, true) catch {};
         }
     };
-
-    fn enableMultithread(self: *@This(), in_main_thread: bool) !void {
-        if (!in_main_thread) return error.Unsupported;
-        const env = self.env;
-        const fields = @typeInfo(@FieldType(ModuleHost, "ts")).@"struct".fields;
-        const resource_name = try env.createStringUtf8("zigar");
-        inline for (fields) |field| {
-            const cb = @field(threadsafe_callback, field.name);
-            @field(self.ts, field.name) = try env.createThreadsafeFunction(
-                null,
-                null,
-                resource_name,
-                0,
-                1,
-                null,
-                null,
-                @ptrCast(self),
-                @ptrCast(&cb),
-            );
-        }
-    }
 };
 
 const Futex = struct {

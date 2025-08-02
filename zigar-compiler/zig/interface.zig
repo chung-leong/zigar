@@ -37,6 +37,8 @@ pub fn Module(comptime ModuleHost: type, comptime Value: type) type {
             disable_multithread: *const fn (*ModuleHost, bool) callconv(.C) E,
             handle_jscall: *const fn (*ModuleHost, *Jscall, bool) callconv(.C) E,
             handle_syscall: *const fn (*ModuleHost, *Syscall, bool) callconv(.C) std.c.E,
+            enable_syscall_trap: *const fn (*ModuleHost) callconv(.C) E,
+            disable_syscall_trap: *const fn (*ModuleHost) callconv(.C) E,
             release_function: *const fn (*ModuleHost, usize, bool) callconv(.C) E,
         };
         pub const Exports = extern struct { // vtable that's used by the addon

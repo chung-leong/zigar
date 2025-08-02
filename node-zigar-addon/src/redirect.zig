@@ -92,6 +92,7 @@ pub fn Controller(comptime Host: type) type {
                 // get the syscall vtable
                 if (host.getSyscallHook("__syscall")) |hook| {
                     try addSyscallVtable(base_address, lib_len, @ptrCast(hook.handler));
+                    try host.addSyscallTrapSwitch(&trapping_syscalls);
                 }
             } else if (os == .darwin) {
                 const macho = std.macho;
@@ -423,7 +424,6 @@ pub fn Controller(comptime Host: type) type {
                 ) != 0) {
                     return error.SyscallUserDispatchFailure;
                 }
-                trapping_syscalls = true;
             }
         }
 
@@ -440,18 +440,6 @@ pub fn Controller(comptime Host: type) type {
                     @as(usize, 0),
                     @as(usize, 0),
                 );
-            }
-        }
-
-        pub fn activateSyscallTrap() void {
-            if (os == .linux) {
-                trapping_syscalls = true;
-            }
-        }
-
-        pub fn deactivateSyscallTrap() void {
-            if (os == .linux) {
-                trapping_syscalls = false;
             }
         }
 
