@@ -812,12 +812,28 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.__fxstat(ver, fd, buf);
         }
 
+        pub fn __fxstat64(ver: c_int, fd: c_int, buf: *std.posix.Stat) callconv(.c) c_int {
+            var result: c_int = undefined;
+            if (redirector.fstat(fd, buf, &result)) {
+                return saveError(c_int, result);
+            }
+            return Original.__fxstat64(ver, fd, buf);
+        }
+
         pub fn __fxstatat(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
             if (redirector.newfstatat(dirfd, path, buf, std.posix.AT.SYMLINK_FOLLOW, &result)) {
                 return saveError(c_int, result);
             }
             return Original.__fxstatat(ver, dirfd, path, buf);
+        }
+
+        pub fn __fxstatat64(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
+            var result: c_int = undefined;
+            if (redirector.newfstatat(dirfd, path, buf, std.posix.AT.SYMLINK_FOLLOW, &result)) {
+                return saveError(c_int, result);
+            }
+            return Original.__fxstatat64(ver, dirfd, path, buf);
         }
 
         pub fn __lxstat(ver: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
@@ -828,12 +844,28 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.__lxstat(ver, path, buf);
         }
 
+        pub fn __lxstat64(ver: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
+            var result: c_int = undefined;
+            if (redirector.lstat(path, buf, &result)) {
+                return saveError(c_int, result);
+            }
+            return Original.__lxstat64(ver, path, buf);
+        }
+
         pub fn __xstat(ver: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
             if (redirector.stat(path, buf, &result)) {
                 return saveError(c_int, result);
             }
             return Original.__xstat(ver, path, buf);
+        }
+
+        pub fn __xstat64(ver: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
+            var result: c_int = undefined;
+            if (redirector.stat(path, buf, &result)) {
+                return saveError(c_int, result);
+            }
+            return Original.__xstat64(ver, path, buf);
         }
 
         pub fn closedir(d: *std.c.DIR) callconv(.c) void {
@@ -1021,9 +1053,13 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         const Sub = @This();
         pub const Original = struct {
             pub var __fxstat: *const @TypeOf(Sub.__fxstat) = undefined;
+            pub var __fxstat64: *const @TypeOf(Sub.__fxstat64) = undefined;
             pub var __fxstatat: *const @TypeOf(Sub.__fxstatat) = undefined;
+            pub var __fxstatat64: *const @TypeOf(Sub.__fxstatat64) = undefined;
             pub var __lxstat: *const @TypeOf(Sub.__lxstat) = undefined;
+            pub var __lxstat64: *const @TypeOf(Sub.__lxstat64) = undefined;
             pub var __xstat: *const @TypeOf(Sub.__xstat) = undefined;
+            pub var __xstat64: *const @TypeOf(Sub.__xstat64) = undefined;
             pub var access: *const @TypeOf(Sub.access) = undefined;
             pub var close: *const @TypeOf(Sub.close) = undefined;
             pub var closedir: *const @TypeOf(Sub.closedir) = undefined;

@@ -512,64 +512,62 @@ pub fn Controller(comptime Host: type) type {
             Host.trapping_syscalls = false;
             defer Host.trapping_syscalls = true;
             inline for (syscall.table) |sc| {
-                if (@hasField(@TypeOf(sc), "args")) {
-                    if (info.fields.sigsys.syscall == sc.num) {
-                        const args = syscall.getArguments(ucontext, sc.args);
-                        if (@hasField(Host.HandlerVTable, sc.name)) {
-                            const ip = syscall.getInstructionPointer(ucontext);
-                            if (getSyscallVtable(ip)) |vtable| {
-                                const handler = @field(vtable, sc.name);
-                                const FnPtrT = @TypeOf(handler);
-                                const FnT = @typeInfo(FnPtrT).pointer.child;
-                                var handler_args: std.meta.ArgsTuple(FnT) = undefined;
-                                const RvPtrT = @TypeOf(handler_args[handler_args.len - 1]);
-                                const RvT = @typeInfo(RvPtrT).pointer.child;
-                                var result: RvT = undefined;
-                                inline for (&handler_args, 0..) |*ptr, arg_index| {
-                                    const ArgT = @TypeOf(ptr.*);
-                                    ptr.* = if (arg_index == handler_args.len - 1) &result else cast: {
-                                        const arg: usize = args[arg_index];
-                                        switch (@typeInfo(ArgT)) {
-                                            .pointer => break :cast @ptrFromInt(arg),
-                                            .int => |int| {
-                                                const arg_trunc: @Type(.{
-                                                    .int = .{
-                                                        .bits = int.bits,
-                                                        .signedness = .unsigned,
-                                                    },
-                                                }) = @truncate(arg);
-                                                break :cast @bitCast(arg_trunc);
-                                            },
-                                            else => @compileError("Unrecognized type"),
-                                        }
-                                    };
-                                }
-                                if (@call(.auto, handler, handler_args)) {
-                                    // call was handled--set the return value
-                                    const rv_unsigned: @Type(.{
-                                        .int = .{
-                                            .bits = @typeInfo(RvT).int.bits,
-                                            .signedness = .unsigned,
+                if (info.fields.sigsys.syscall == sc.num) {
+                    const args = syscall.getArguments(ucontext, sc.args);
+                    if (@hasField(Host.HandlerVTable, sc.name)) {
+                        const ip = syscall.getInstructionPointer(ucontext);
+                        if (getSyscallVtable(ip)) |vtable| {
+                            const handler = @field(vtable, sc.name);
+                            const FnPtrT = @TypeOf(handler);
+                            const FnT = @typeInfo(FnPtrT).pointer.child;
+                            var handler_args: std.meta.ArgsTuple(FnT) = undefined;
+                            const RvPtrT = @TypeOf(handler_args[handler_args.len - 1]);
+                            const RvT = @typeInfo(RvPtrT).pointer.child;
+                            var result: RvT = undefined;
+                            inline for (&handler_args, 0..) |*ptr, arg_index| {
+                                const ArgT = @TypeOf(ptr.*);
+                                ptr.* = if (arg_index == handler_args.len - 1) &result else cast: {
+                                    const arg: usize = args[arg_index];
+                                    switch (@typeInfo(ArgT)) {
+                                        .pointer => break :cast @ptrFromInt(arg),
+                                        .int => |int| {
+                                            const arg_trunc: @Type(.{
+                                                .int = .{
+                                                    .bits = int.bits,
+                                                    .signedness = .unsigned,
+                                                },
+                                            }) = @truncate(arg);
+                                            break :cast @bitCast(arg_trunc);
                                         },
-                                    }) = @bitCast(result);
-                                    syscall.setRetval(ucontext, rv_unsigned);
-                                    return;
-                                }
+                                        else => @compileError("Unrecognized type"),
+                                    }
+                                };
+                            }
+                            if (@call(.auto, handler, handler_args)) {
+                                // call was handled--set the return value
+                                const rv_unsigned: @Type(.{
+                                    .int = .{
+                                        .bits = @typeInfo(RvT).int.bits,
+                                        .signedness = .unsigned,
+                                    },
+                                }) = @bitCast(result);
+                                syscall.setRetval(ucontext, rv_unsigned);
+                                return;
                             }
                         }
-                        // perform the syscall normally
-                        const fn_name = std.fmt.comptimePrint("syscall{d}", .{sc.args});
-                        const syscaller = @field(std.os.linux, fn_name);
-                        var syscall_args: std.meta.ArgsTuple(@TypeOf(syscaller)) = undefined;
-                        inline for (&syscall_args, 0..) |*ptr, arg_index| {
-                            ptr.* = switch (arg_index) {
-                                0 => @enumFromInt(info.fields.sigsys.syscall),
-                                else => args[arg_index - 1],
-                            };
-                        }
-                        const retval = @call(.auto, syscaller, syscall_args);
-                        syscall.setRetval(ucontext, retval);
                     }
+                    // perform the syscall normally
+                    const fn_name = std.fmt.comptimePrint("syscall{d}", .{sc.args});
+                    const syscaller = @field(std.os.linux, fn_name);
+                    var syscall_args: std.meta.ArgsTuple(@TypeOf(syscaller)) = undefined;
+                    inline for (&syscall_args, 0..) |*ptr, arg_index| {
+                        ptr.* = switch (arg_index) {
+                            0 => @enumFromInt(info.fields.sigsys.syscall),
+                            else => args[arg_index - 1],
+                        };
+                    }
+                    const retval = @call(.auto, syscaller, syscall_args);
+                    syscall.setRetval(ucontext, retval);
                 }
             }
         }

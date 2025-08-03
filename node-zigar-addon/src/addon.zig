@@ -236,10 +236,11 @@ const ModuleHost = struct {
     fn loadModule(self: *@This(), path: Value, redirectIO: Value) !void {
         const env = self.env;
         const path_len = try env.getValueStringUtf8(path, null);
-        const path_slice = try c_allocator.alloc(u8, path_len + 1);
-        defer c_allocator.free(path_slice);
-        _ = try env.getValueStringUtf8(path, path_slice);
-        var lib = try std.DynLib.open(path_slice);
+        const path_bytes = try c_allocator.alloc(u8, path_len + 1);
+        defer c_allocator.free(path_bytes);
+        _ = try env.getValueStringUtf8(path, path_bytes);
+        const path_s = path_bytes[0..path_len];
+        var lib = try std.DynLib.open(path_s);
         errdefer lib.close();
         const module = lib.lookup(*Module, "zig_module") orelse return error.MissingSymbol;
         if (module.version != 6) return error.IncorrectVersion;
@@ -266,7 +267,7 @@ const ModuleHost = struct {
         };
         try self.exportFunctionsToModule();
         if (env.getValueBool(redirectIO) catch true) {
-            try redirection_controller.installHooks(&lib, path_slice, self);
+            try redirection_controller.installHooks(&lib, path_s, self);
             self.redirecting_io = true;
         }
         self.library = lib;
