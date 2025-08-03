@@ -407,7 +407,6 @@ pub fn Controller(comptime Host: type) type {
                 const prctl_h = @cImport({
                     @cInclude("sys/prctl.h");
                 });
-                try installSignalHandler();
                 // enable syscall user dispatch, excluding the memory region where libc sits; the signal
                 // trampoline is also inside this range, allowing us to reenable trapping from within
                 // the signal handler (otherwise sigreturn() would trigger SIGSYS inside a SIGSYS)
@@ -443,7 +442,7 @@ pub fn Controller(comptime Host: type) type {
         var sig_handler_count = std.atomic.Value(usize).init(0);
         var previous_signal_handler: ?std.c.Sigaction = null;
 
-        fn installSignalHandler() !void {
+        pub fn installSignalHandler() !void {
             // don't do anything if the trap is already set
             if (sig_handler_count.fetchAdd(1, .monotonic) > 0) return;
             const act: std.c.Sigaction = .{
@@ -460,7 +459,7 @@ pub fn Controller(comptime Host: type) type {
             previous_signal_handler = prev_act;
         }
 
-        fn uninstallSignalHandler() void {
+        pub fn uninstallSignalHandler() void {
             if (sig_handler_count.fetchSub(1, .monotonic) > 1) return;
             if (previous_signal_handler) |prev_act| {
                 _ = std.c.sigaction(std.c.SIG.SYS, &prev_act, null);

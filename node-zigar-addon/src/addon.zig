@@ -93,11 +93,12 @@ const ModuleHost = struct {
             try env.setNamedProperty(exports, name, try env.createCallback(name, func, false, null));
         }
         try env.addEnvCleanupHook(cleanup, null);
-        redirection_controller.installSyscallTrap() catch {};
+        redirection_controller.installSignalHandler() catch {};
     }
 
     fn cleanup(_: ?*anyopaque) callconv(.c) void {
         redirection_controller.uninstallSyscallTrap();
+        redirection_controller.uninstallSignalHandler();
     }
 
     fn createEnvironment(env: Env) !Value {
@@ -275,6 +276,7 @@ const ModuleHost = struct {
         instance = self;
         in_main_thread = is_main;
         try self.addSyscallTrapSwitch();
+        try redirection_controller.installSyscallTrap();
     }
 
     pub fn getSyscallHook(self: *@This(), name: [*:0]const u8) ?HookEntry {
@@ -1286,45 +1288,48 @@ const ModuleHost = struct {
     }
 
     fn enableMultithread(self: *@This()) !void {
-        if (!in_main_thread) return error.Unsupported;
-        const prev_count = self.multithread_count.fetchAdd(1, .monotonic);
-        errdefer _ = self.multithread_count.fetchSub(1, .monotonic);
-        if (prev_count == 0) {
-            const env = self.env;
-            const fields = @typeInfo(@FieldType(ModuleHost, "ts")).@"struct".fields;
-            const resource_name = try env.createStringUtf8("zigar");
-            inline for (fields) |field| {
-                const cb = @field(threadsafe_callback, field.name);
-                @field(self.ts, field.name) = try env.createThreadsafeFunction(
-                    null,
-                    null,
-                    resource_name,
-                    0,
-                    1,
-                    null,
-                    null,
-                    @ptrCast(self),
-                    @ptrCast(&cb),
-                );
+        if (in_main_thread) {
+            const prev_count = self.multithread_count.fetchAdd(1, .monotonic);
+            errdefer _ = self.multithread_count.fetchSub(1, .monotonic);
+            if (prev_count == 0) {
+                const env = self.env;
+                const fields = @typeInfo(@FieldType(ModuleHost, "ts")).@"struct".fields;
+                const resource_name = try env.createStringUtf8("zigar");
+                inline for (fields) |field| {
+                    const cb = @field(threadsafe_callback, field.name);
+                    @field(self.ts, field.name) = try env.createThreadsafeFunction(
+                        null,
+                        null,
+                        resource_name,
+                        0,
+                        1,
+                        null,
+                        null,
+                        @ptrCast(self),
+                        @ptrCast(&cb),
+                    );
+                }
             }
+        } else {
+            return error.Unsupported;
         }
     }
 
     fn disableMultithread(self: *@This()) !void {
-        const prev_count = self.multithread_count.fetchSub(1, .monotonic);
-        errdefer _ = self.multithread_count.fetchAdd(1, .monotonic);
-        if (prev_count == 1) {
-            if (in_main_thread) {
+        if (in_main_thread) {
+            const prev_count = self.multithread_count.fetchSub(1, .monotonic);
+            errdefer _ = self.multithread_count.fetchAdd(1, .monotonic);
+            if (prev_count == 1) {
                 const fields = @typeInfo(@FieldType(ModuleHost, "ts")).@"struct".fields;
                 inline for (fields) |field| {
                     if (@field(self.ts, field.name)) |ref|
                         try napi.releaseThreadsafeFunction(ref, .abort);
                     @field(self.ts, field.name) = null;
                 }
-            } else {
-                const func = self.ts.disable_multithread orelse return error.Disabled;
-                try napi.callThreadsafeFunction(func, null, .nonblocking);
             }
+        } else {
+            const func = self.ts.disable_multithread orelse return error.Disabled;
+            try napi.callThreadsafeFunction(func, null, .nonblocking);
         }
     }
 

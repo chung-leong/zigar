@@ -4811,11 +4811,8 @@ var streamLocation = mixin({
 var streamRedirection = mixin({
   init() {
     const root = {
-      *readdir() {        
-      },
-      valueOf() {
-        return null;
-      }
+      readdir() {},
+      valueOf() { return null }
     };
     this.streamMap = new Map([ 
       [ PosixDescriptor.stdout, this.createLogWriter('stdout') ], 
@@ -5807,7 +5804,7 @@ var fdFilestatGet = mixin({
       const loc = this.getStreamLocation?.(fd);
       try {
         return this.triggerEvent('stat', { ...loc, target, flags: {} }, PosixError.ENOENT);
-      } catch (err) {        
+      } catch (err) {
         if (err.code !== PosixError.ENOENT) {
           throw err;
         }
@@ -5904,7 +5901,7 @@ var fdReaddir = mixin({
     }, ([ dent, dir ]) => {
       const dv = createView(bufLen);
       let remaining = bufLen;
-      let p = 0;      
+      let p = 0;
       while (dent) {
         const { name, type = 'unknown', ino = 0 } = dent;
         const nameArray = encodeText(name);
@@ -5913,6 +5910,7 @@ var fdReaddir = mixin({
           throw new InvalidEnumValue(PosixFileType, type);
         }
         if (remaining < 24 + nameArray.length) {
+          dir.seek(cookie);
           break;
         }
         dv.setBigUint64(p, ++cookie, true);

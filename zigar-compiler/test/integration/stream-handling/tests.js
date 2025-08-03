@@ -185,6 +185,29 @@ export function addTests(importModule, options) {
         flags: { symlinkFollow: true }, 
       });
     })
+    it('should open a file and seek to a particular position', async function() {
+      this.timeout(0);
+      const { read } = await importTest('seek-file');
+      const path = absolute('./data/test.txt');
+      const content = await readFile(path);
+      const chunk = read(content, 32, 16);
+      expect(chunk).to.have.lengthOf(16);
+      expect(chunk.string).to.equal('ur fathers broug');
+    })
+    it('should open a file and seek to a particular position in thread', async function() {
+      this.timeout(0);
+      const { startup, shutdown, read } = await importTest('seek-file-in-thread', { multithreaded: true });
+      startup(1);
+      try {
+        const path = absolute('./data/test.txt');
+        const content = await readFile(path);
+        const chunk = await read(content, 32, 16);
+        expect(chunk).to.have.lengthOf(16);
+        expect(chunk.string).to.equal('ur fathers broug');       
+      } finally {
+        shutdown();
+      }
+    })
     it('should open a file and seek to a particular position using posix functions', async function() {
       this.timeout(0);
       const { __zigar, read } = await importTest('seek-file-with-posix-functions');
@@ -829,6 +852,31 @@ export function addTests(importModule, options) {
       const lines2 = await capture(() => print(map2));
       map2.close();
       expect(lines2).to.have.lengthOf(100);
+    })
+    it('should print directory contents in thread', async function() {
+      this.timeout(0);
+      const { startup, shutdown, print } = await importTest('read-directory-in-thread', { multithreaded: true });
+      startup(1);
+      try {
+        const map1 = new Map([
+          [ 'hello.txt', { type: 'file' } ],
+          [ 'world', { type: 'directory' } ],
+        ]);
+        const lines1 = await capture(() => print(map1));
+        map1.close();
+        expect(lines1).to.eql([ 'hello.txt file', 'world directory' ]);
+        const initializers = [];
+        for (let i = 0; i < 100; i++) {
+          const name = 'x'.repeat(i + 1) + '.txt';
+          initializers.push([ name, { type: 'file' } ]);
+        }
+        const map2 = new Map(initializers);
+        const lines2 = await capture(() => print(map2));
+        map2.close();
+        expect(lines2).to.have.lengthOf(100);
+      } finally {
+        shutdown();
+      }
     })
     it('should perform sync operation using posix function', async function() {
       this.timeout(0);
