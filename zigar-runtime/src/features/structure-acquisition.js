@@ -446,7 +446,7 @@ export default mixin({
   getFunctionName(s) {
     const { instance: { members: [args] } } = s;
     const argName = args.structure.name;
-    return argName.slice(4, -1);
+    return (argName) ? argName.slice(4, -1) : 'fn ()';
   },
   ...(process.env.TARGET === 'wasm' ? {
     exports: {

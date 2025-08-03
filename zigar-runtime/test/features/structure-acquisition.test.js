@@ -1201,6 +1201,22 @@ describe('Feature: structure-acquisition', function() {
       });
       expect(name).to.equal('fn (u32, u32) i32');
     })
+    it('should not fail when name is missing', function() {
+      const env = new Env();
+      const name = env.getFunctionName({
+        type: StructureType.Function,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              structure: {
+              },
+            },
+          ]
+        },
+      });
+      expect(name).to.equal('fn ()');
+    })
   })
   if (process.env.TARGET === 'wasm') {
     describe('beginDefinition', function() {
