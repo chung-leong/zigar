@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+
 const cfg = @import("build-cfg.zig");
 
 pub fn build(b: *std.Build) void {
@@ -46,11 +47,15 @@ pub fn build(b: *std.Build) void {
         lib.import_memory = true;
         lib.import_table = true;
         lib.max_memory = cfg.max_memory;
+    } else {
+        lib.addCSourceFile(.{ .file = .{ .cwd_relative = cfg.zigar_src_path ++ "hooks.c" } });
     }
-    const wf = switch (@hasDecl(std.Build, "addUpdateSourceFiles")) {
-        true => b.addUpdateSourceFiles(),
-        false => b.addWriteFiles(),
-    };
+    const options = b.addOptions();
+    options.addOption(comptime_int, "eval_branch_quota", cfg.eval_branch_quota);
+    options.addOption(bool, "omit_functions", cfg.omit_functions);
+    options.addOption(bool, "omit_variables", cfg.omit_variables);
+    lib.root_module.addOptions("export-options.zig", options);
+    const wf = b.addUpdateSourceFiles();
     wf.addCopyFileToSource(lib.getEmittedBin(), cfg.output_path);
     wf.step.dependOn(&lib.step);
     b.getInstallStep().dependOn(&wf.step);

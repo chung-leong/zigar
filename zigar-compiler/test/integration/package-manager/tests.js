@@ -33,14 +33,14 @@ export function addTests(importModule, options) {
       const path = fileURLToPath(new URL('./use-zig-sqlite/chinook.db', import.meta.url));
       const content = await readFile(path);
       __zigar.on('open', ({ path }) => {
-        if (path === 'chinook.db') return content;
+        if (path.endsWith('chinook.db')) return content;
         return false;
       });
       __zigar.on('stat', ({ path }) => {
-        if (path === 'chinook.db') return { size: content.length };
+        if (path.endsWith('chinook.db')) return { size: content.length };
         return false;
       });
-      __zigar.on('mkdir', () => new Map());
+      __zigar.on('mkdir', () => true);
       __zigar.on('rmdir', () => true);
       const lines = await capture(() => search('music'));
       expect(lines).to.have.lengthOf(4);
