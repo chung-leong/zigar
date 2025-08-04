@@ -1071,6 +1071,30 @@ export function addTests(importModule, options) {
       remove('/hello/world.txt');
       expect(event).to.eql({ parent: null, path: 'hello/world.txt' });
     })
+    it('should open and read from file using pread', async function() {
+      this.timeout(0);
+      const { __zigar, readAt } = await importTest('open-and-read-file-with-pread');
+      const path = absolute('./data/test.txt');
+      const content = await readFile(path);
+      __zigar.on('open', (evt) => {
+        return content;
+      });
+      const chunk = readAt('/hello/world', 120n, 16n);
+      expect(chunk.string).to.equal('cated to the pro');
+    })
+    it('should open and write into file using pwrite', async function() {
+      this.timeout(0);
+      const { __zigar, writeAt } = await importTest('open-and-write-file-with-pwrite');
+      const array = new Uint8Array(256);
+      __zigar.on('open', (evt) => {
+        return array;
+      });
+      const written = writeAt('/hello/world', 'Hello world', 120n);
+      expect(written).to.equal(11);
+      const subarray = array.slice(120, 120 + 11);
+      const text = new TextDecoder().decode(subarray);
+      expect(text).to.equal('Hello world');
+    })
   })
 }
 

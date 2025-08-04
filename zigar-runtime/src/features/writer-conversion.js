@@ -1,7 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { empty } from '../utils.js';
-import { NullStream } from './reader-conversion.js';
+import { ArrayWriter, NullStream, Uint8ArrayReadWriter, WebStreamWriter } from '../streams.js';
 
 export default mixin({
   convertWriter(arg) {
@@ -9,6 +8,8 @@ export default mixin({
       return new WebStreamWriter(arg);
     } else if (Array.isArray(arg)) {
       return new ArrayWriter(arg);
+    } else if (arg instanceof Uint8Array) {
+      return new Uint8ArrayReadWriter(arg);
     } else if (arg === null) {
       return new NullStream();
     } else if (typeof(arg?.write) === 'function') {
@@ -19,37 +20,3 @@ export default mixin({
   },
 });
 
-class WebStreamWriter {
-  onClose = null;
-  done = false;
-
-  constructor(writer) {
-    this.writer = writer;
-    writer.closed.catch(empty).then(() => {
-      this.done = true;
-      this.onClose?.();
-    });
-  }
-
-  async write(bytes) {
-    await this.writer.write(bytes);
-  }
-
-  destroy() {
-    if (!this.done) {
-      this.writer.close();
-    }
-  }
-}
-
-class ArrayWriter {
-  constructor(array) {
-    this.array = array;
-    this.closeCB = null;
-    array.close = () => this.onClose?.();
-  }
-
-  write(bytes) {
-    this.array.push(bytes);
-  }
-}

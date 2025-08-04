@@ -39,8 +39,8 @@ export default mixin({
   },
   ...(process.env.TARGET === 'node' ? {
     exports: {
-      fdRead: { async: true },
-      fdRead1: { async: true },
+      fdPread: { async: true },
+      fdPread1: { async: true },
     },
 
     fdPread1(fd, address, len, offset, readAddress, canWait) {

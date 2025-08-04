@@ -41,8 +41,8 @@ export default mixin({
   },
   ...(process.env.TARGET === 'node' ? {
     exports: {
-      fdWrite: { async: true },
-      fdWrite1: { async: true },
+      fdPwrite: { async: true },
+      fdPwrite1: { async: true },
     },
 
     fdPwrite1(fd, address, len, offset, writtenAddress, canWait) {

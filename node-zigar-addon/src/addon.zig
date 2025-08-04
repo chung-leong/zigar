@@ -48,6 +48,10 @@ const ModuleHost = struct {
         fd_fdstat_get: ?Ref = null,
         fd_filestat_get: ?Ref = null,
         fd_filestat_set_times: ?Ref = null,
+        fd_pread: ?Ref = null,
+        fd_pread1: ?Ref = null,
+        fd_pwrite: ?Ref = null,
+        fd_pwrite1: ?Ref = null,
         fd_read: ?Ref = null,
         fd_read1: ?Ref = null,
         fd_readdir: ?Ref = null,
@@ -917,7 +921,9 @@ const ModuleHost = struct {
                 .open => try self.handleOpen(futex, &call.u.open),
                 .close => try self.handleClose(futex, &call.u.close),
                 .read => try self.handleRead(futex, &call.u.read),
+                .pread => try self.handlePread(futex, &call.u.pread),
                 .write => try self.handleWrite(futex, &call.u.write),
+                .pwrite => try self.handlePwrite(futex, &call.u.pwrite),
                 .seek => try self.handleSeek(futex, &call.u.seek),
                 .tell => try self.handleTell(futex, &call.u.tell),
                 .fcntl => try self.handleFcntl(futex, &call.u.fcntl),
@@ -1064,6 +1070,19 @@ const ModuleHost = struct {
         });
     }
 
+    fn handlePread(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        const len: u32 = @intCast(args.len);
+        return try self.callPosixFunction(self.js.fd_pread1, &.{
+            try env.createInt32(args.fd),
+            try env.createUsize(@intFromPtr(args.bytes)),
+            try env.createUint32(len),
+            try env.createUsize(args.offset),
+            try env.createUsize(@intFromPtr(&args.read)),
+            futex,
+        });
+    }
+
     fn handleWrite(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
         const len: u32 = @intCast(args.len);
@@ -1071,6 +1090,19 @@ const ModuleHost = struct {
             try env.createInt32(args.fd),
             try env.createUsize(@intFromPtr(args.bytes)),
             try env.createUint32(len),
+            try env.createUsize(@intFromPtr(&args.written)),
+            futex,
+        });
+    }
+
+    fn handlePwrite(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        const len: u32 = @intCast(args.len);
+        return try self.callPosixFunction(self.js.fd_pwrite1, &.{
+            try env.createInt32(args.fd),
+            try env.createUsize(@intFromPtr(args.bytes)),
+            try env.createUint32(len),
+            try env.createUsize(args.offset),
             try env.createUsize(@intFromPtr(&args.written)),
             futex,
         });

@@ -77,6 +77,20 @@ pub const Syscall = extern struct {
             mode: u32,
             fd: i32 = undefined,
         },
+        pread: extern struct {
+            fd: i32,
+            bytes: [*]const u8,
+            len: usize,
+            offset: usize,
+            read: usize = undefined,
+        },
+        pwrite: extern struct {
+            fd: i32,
+            bytes: [*]const u8,
+            len: usize,
+            offset: usize,
+            written: usize = undefined,
+        },
         read: extern struct {
             fd: i32,
             bytes: [*]const u8,
@@ -138,6 +152,8 @@ pub const Syscall = extern struct {
         getdents,
         mkdir,
         open,
+        pread,
+        pwrite,
         read,
         rmdir,
         seek,
@@ -553,6 +569,48 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
+        pub fn pread(fd: c_int, buffer: [*]u8, len: isize, offset: isize, result: *isize) callconv(.c) bool {
+            if (isApplicableHandle(fd)) {
+                var call: Syscall = .{ .cmd = .pread, .u = .{
+                    .pread = .{
+                        .fd = @intCast(fd),
+                        .bytes = buffer,
+                        .len = @intCast(len),
+                        .offset = @intCast(offset),
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS) {
+                    result.* = @intCast(call.u.pread.read);
+                } else {
+                    result.* = intFromError(err);
+                }
+                return true;
+            }
+            return false;
+        }
+
+        pub fn pwrite(fd: c_int, buffer: [*]const u8, len: isize, offset: isize, result: *isize) callconv(.c) bool {
+            if (isApplicableHandle(fd)) {
+                var call: Syscall = .{ .cmd = .pwrite, .u = .{
+                    .pwrite = .{
+                        .fd = @intCast(fd),
+                        .bytes = buffer,
+                        .len = @intCast(len),
+                        .offset = @intCast(offset),
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS) {
+                    result.* = @intCast(call.u.pwrite.written);
+                } else {
+                    result.* = intFromError(err);
+                }
+                return true;
+            }
+            return false;
+        }
+
         pub fn read(fd: c_int, buffer: [*]u8, len: isize, result: *isize) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
                 var call: Syscall = .{ .cmd = .read, .u = .{
@@ -794,6 +852,10 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const open64 = makeStdHookUsing("open64", "open");
         pub const openat64 = makeStdHookUsing("openat64", "openat");
         pub const posix_fadvise = makeStdHookUsing("posix_fadvise", "fadvise64");
+        pub const pread = makeStdHook("pread");
+        pub const pread64 = makeStdHookUsing("pread64", "pread");
+        pub const pwrite = makeStdHook("pwrite");
+        pub const pwrite64 = makeStdHookUsing("pwrite64", "pwrite");
         pub const read = makeStdHook("read");
         pub const rmdir = makeStdHook("rmdir");
         pub const stat = makeStdHook("stat");
@@ -1087,6 +1149,10 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var openat: *const @TypeOf(Sub.openat) = undefined;
             pub var openat64: *const @TypeOf(Sub.openat64) = undefined;
             pub var opendir: *const @TypeOf(Sub.opendir) = undefined;
+            pub var pread: *const @TypeOf(Sub.pread) = undefined;
+            pub var pread64: *const @TypeOf(Sub.pread64) = undefined;
+            pub var pwrite: *const @TypeOf(Sub.pwrite) = undefined;
+            pub var pwrite64: *const @TypeOf(Sub.pwrite64) = undefined;
             pub var posix_fadvise: *const @TypeOf(Sub.posix_fadvise) = undefined;
             pub var pthread_create: *const @TypeOf(Sub.pthread_create) = undefined;
             pub var read: *const @TypeOf(Sub.read) = undefined;

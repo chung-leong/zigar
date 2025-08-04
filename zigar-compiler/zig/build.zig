@@ -51,10 +51,7 @@ pub fn build(b: *std.Build) void {
     options.addOption(bool, "omit_functions", cfg.omit_functions);
     options.addOption(bool, "omit_variables", cfg.omit_variables);
     lib.root_module.addOptions("export-options.zig", options);
-    const wf = switch (@hasDecl(std.Build, "addUpdateSourceFiles")) {
-        true => b.addUpdateSourceFiles(),
-        false => b.addWriteFiles(),
-    };
+    const wf = b.addUpdateSourceFiles();
     wf.addCopyFileToSource(lib.getEmittedBin(), cfg.output_path);
     if (@TypeOf(cfg.pdb_path) != @TypeOf(null) and optimize == .Debug) {
         wf.addCopyFileToSource(lib.getEmittedPdb(), cfg.pdb_path);
