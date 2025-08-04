@@ -48,6 +48,8 @@ const ModuleHost = struct {
         fd_fdstat_get: ?Ref = null,
         fd_filestat_get: ?Ref = null,
         fd_filestat_set_times: ?Ref = null,
+        fd_lock_get: ?Ref = null,
+        fd_lock_set: ?Ref = null,
         fd_pread: ?Ref = null,
         fd_pread1: ?Ref = null,
         fd_pwrite: ?Ref = null,
@@ -926,7 +928,9 @@ const ModuleHost = struct {
                 .pwrite => try self.handlePwrite(futex, &call.u.pwrite),
                 .seek => try self.handleSeek(futex, &call.u.seek),
                 .tell => try self.handleTell(futex, &call.u.tell),
-                .fcntl => try self.handleFcntl(futex, &call.u.fcntl),
+                .getfl => try self.handleGetDescriptorFlags(futex, &call.u.getfl),
+                .getlk => try self.handleGetLock(futex, &call.u.getlk),
+                .setlk => try self.handleSetLock(futex, &call.u.setlk),
                 .fstat => try self.handleStat(futex, &call.u.fstat),
                 .stat => try self.handleStat(futex, &call.u.stat),
                 .futimes => try self.handleSettimes(futex, &call.u.futimes),
@@ -1186,16 +1190,31 @@ const ModuleHost = struct {
         }
     }
 
-    fn handleFcntl(self: *@This(), futex: Value, args: anytype) !E {
+    fn handleGetDescriptorFlags(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        return switch (args.op) {
-            std.c.F.GETFL => try self.callPosixFunction(self.js.fd_fdstat_get, &.{
-                try env.createInt32(args.fd),
-                try env.createUsize(@intFromPtr(&args.result.getfl)),
-                futex,
-            }),
-            else => .INVAL,
-        };
+        return try self.callPosixFunction(self.js.fd_fdstat_get, &.{
+            try env.createInt32(args.fd),
+            try env.createUsize(@intFromPtr(&args.fdstat)),
+            futex,
+        });
+    }
+
+    fn handleSetLock(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        return try self.callPosixFunction(self.js.fd_lock_set, &.{
+            try env.createInt32(args.fd),
+            try env.createUsize(@intFromPtr(&args.flock)),
+            futex,
+        });
+    }
+
+    fn handleGetLock(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        return try self.callPosixFunction(self.js.fd_lock_get, &.{
+            try env.createInt32(args.fd),
+            try env.createUsize(@intFromPtr(&args.flock)),
+            futex,
+        });
     }
 
     fn handleAdvise(self: *@This(), futex: Value, args: anytype) !E {

@@ -43,21 +43,21 @@ pub const Syscall = extern struct {
         datasync: extern struct {
             fd: i32,
         },
-        fcntl: extern struct {
+        getfl: extern struct {
             fd: i32,
-            op: u32,
-            arg: u32,
-            result: extern union {
-                getfl: std.os.wasi.fdstat_t,
-            } = undefined,
+            fdstat: Fdstat = undefined,
+        },
+        getlk: extern struct {
+            fd: i32,
+            flock: Flock,
         },
         fstat: extern struct {
             fd: i32,
-            stat: std.os.wasi.filestat_t = undefined,
+            stat: Filestat = undefined,
         },
         futimes: extern struct {
             fd: i32,
-            times: [*]const std.posix.timespec,
+            times: [*]const Timespec,
         },
         getdents: extern struct {
             dirfd: i32,
@@ -107,11 +107,15 @@ pub const Syscall = extern struct {
             whence: u32,
             position: u64 = undefined,
         },
+        setlk: extern struct {
+            fd: i32,
+            flock: Flock,
+        },
         stat: extern struct {
             dirfd: i32,
             path: [*:0]const u8,
             flags: u32,
-            stat: std.os.wasi.filestat_t = undefined,
+            stat: Filestat = undefined,
         },
         sync: extern struct {
             fd: i32,
@@ -129,7 +133,7 @@ pub const Syscall = extern struct {
             dirfd: i32,
             path: [*:0]const u8,
             flags: u32,
-            times: [*]const std.posix.timespec,
+            times: [*]const Timespec,
         },
         write: extern struct {
             fd: i32,
@@ -146,10 +150,11 @@ pub const Syscall = extern struct {
         allocate,
         close,
         datasync,
-        fcntl,
         fstat,
         futimes,
         getdents,
+        getfl,
+        getlk,
         mkdir,
         open,
         pread,
@@ -157,6 +162,7 @@ pub const Syscall = extern struct {
         read,
         rmdir,
         seek,
+        setlk,
         stat,
         sync,
         tell,
@@ -164,7 +170,6 @@ pub const Syscall = extern struct {
         utimes,
         write,
     };
-
     pub const Mask = packed struct(u8) {
         mkdir: bool = false,
         open: bool = false,
@@ -174,6 +179,16 @@ pub const Syscall = extern struct {
         unlink: bool = false,
         _: u2 = 0,
     };
+    pub const Flock = extern struct {
+        type: i16,
+        whence: i16,
+        start: u64,
+        len: u64,
+        pid: i32,
+    };
+    pub const Timespec = std.posix.timespec;
+    pub const Fdstat = std.os.wasi.fdstat_t;
+    pub const Filestat = std.os.wasi.filestat_t;
 };
 
 const fd_min = 0xfffff;
@@ -259,20 +274,18 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn fcntl(fd: c_int, op: c_int, arg: c_int, result: *c_int) callconv(.c) bool {
+        pub fn fcntl(fd: c_int, op: c_int, arg: usize, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
-                var call: Syscall = .{ .cmd = .fcntl, .u = .{
-                    .fcntl = .{
-                        .fd = @intCast(fd),
-                        .op = @intCast(op),
-                        .arg = @intCast(arg),
-                    },
-                } };
-                const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) {
-                    switch (op) {
-                        std.c.F.GETFL => {
-                            const fdstat = call.u.fcntl.result.getfl;
+                switch (op) {
+                    std.posix.F.GETFL => {
+                        var call: Syscall = .{ .cmd = .getfl, .u = .{
+                            .getfl = .{
+                                .fd = @intCast(fd),
+                            },
+                        } };
+                        const err = Host.redirectSyscall(&call);
+                        if (err == .SUCCESS) {
+                            const fdstat = call.u.getfl.fdstat;
                             var oflags: std.posix.O = .{};
                             if (fdstat.fs_rights_base.FD_READ) {
                                 if (fdstat.fs_rights_base.FD_WRITE) {
@@ -287,11 +300,40 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                             }
                             const oflags_int: @typeInfo(std.posix.O).@"struct".backing_integer.? = @bitCast(oflags);
                             result.* = @intCast(oflags_int);
-                        },
-                        else => {},
-                    }
-                } else {
-                    result.* = intFromError(err);
+                        } else {
+                            result.* = intFromError(err);
+                        }
+                    },
+                    std.posix.F.SETLK => {
+                        const flock: *const std.posix.Flock = @ptrFromInt(arg);
+                        var call: Syscall = .{ .cmd = .setlk, .u = .{
+                            .setlk = .{ .fd = @intCast(fd), .flock = .{
+                                .type = flock.type,
+                                .whence = flock.whence,
+                                .start = @intCast(flock.start),
+                                .len = @intCast(flock.len),
+                                .pid = @intCast(flock.pid),
+                            } },
+                        } };
+                        const err = Host.redirectSyscall(&call);
+                        result.* = intFromError(err);
+                    },
+                    std.posix.F.GETLK => {
+                        const flock: *std.posix.Flock = @ptrFromInt(arg);
+                        var call: Syscall = .{ .cmd = .setlk, .u = .{
+                            .setlk = .{ .fd = @intCast(fd), .flock = .{
+                                .type = flock.type,
+                                .whence = flock.whence,
+                                .start = @intCast(flock.start),
+                                .len = @intCast(flock.len),
+                                .pid = @intCast(flock.pid),
+                            } },
+                        } };
+                        const err = Host.redirectSyscall(&call);
+                        if (err == .SUCCESS) {}
+                        result.* = intFromError(err);
+                    },
+                    else => result.* = intFromError(.INVAL),
                 }
                 return true;
             }
@@ -831,6 +873,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const faccessat = makeStdHookUsing("faccessat", "faccessat2");
         pub const fallocate = makeStdHook("fallocate");
         pub const fcntl = makeStdHook("fcntl");
+        pub const fcntl64 = makeStdHookUsing("fcntl64", "fcntl");
         pub const fdatasync = makeStdHook("fdatasync");
         pub const fstat = makeStdHook("fstat");
         pub const fstat64 = makeStdHookUsing("fstat64", "fstat");
@@ -1128,6 +1171,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var faccessat: *const @TypeOf(Sub.faccessat) = undefined;
             pub var fallocate: *const @TypeOf(Sub.fallocate) = undefined;
             pub var fcntl: *const @TypeOf(Sub.fcntl) = undefined;
+            pub var fcntl64: *const @TypeOf(Sub.fcntl64) = undefined;
             pub var fdatasync: *const @TypeOf(Sub.fdatasync) = undefined;
             pub var fstat: *const @TypeOf(Sub.fstat) = undefined;
             pub var fstat64: *const @TypeOf(Sub.fstat64) = undefined;

@@ -99,6 +99,8 @@ export { default as SyscallFdDatasync } from './syscalls/fd-datasync.js';
 export { default as SyscallFdFdstatGet } from './syscalls/fd-fdstat-get.js';
 export { default as SyscallFdFilestatGet } from './syscalls/fd-filestat-get.js';
 export { default as SyscallFdFilestatSetTimes } from './syscalls/fd-filestat-set-times.js';
+export { default as SyscallFdLockGet } from './syscalls/fd-lock-get.js';
+export { default as SyscallFdLockSet } from './syscalls/fd-lock-set.js';
 export { default as SyscallFdPread } from './syscalls/fd-pread.js';
 export { default as SyscallFdPrestatDirName } from './syscalls/fd-prestat-dir-name.js';
 export { default as SyscallFdPrestatGet } from './syscalls/fd-prestat-get.js';
