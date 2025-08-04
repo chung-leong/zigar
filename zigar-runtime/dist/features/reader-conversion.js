@@ -113,12 +113,16 @@ class BlobReader {
   }
 
   async read(len) {
-    const start = Number(this.pos);
-    const end = start + len;
-    const slice = this.blob.slice(start, end);
+    const buf = await this.pread(len, this.pos);
+    this.pos += BigInt(buf.length);
+    return buf;
+  }
+
+  async pread(len, offset) {
+    const start = Number(offset);
+    const slice = this.blob.slice(start, start + len);
     const response = new Response(slice);
     const buffer = await response.arrayBuffer();
-    this.pos = BigInt(end);
     return new Uint8Array(buffer);
   }
 
@@ -145,19 +149,41 @@ class BlobReader {
 
 class Uint8ArrayReader extends BlobReader {
   read(len) {
-    const start = Number(this.pos);
+    const buf = this.pread(len, this.pos);
+    this.pos = BigInt(buf.length);
+    return buf;
+  }
+
+  write(buf) {
+    this.pwrite(buf, this.pos);
+    this.pos += BigInt(buf.length);
+  }
+
+  pread(len, offset) {
+    const start = Number(offset);
     const end = start + len;
     this.pos = BigInt(end);
     return this.blob.subarray(start, end);
+  }
+
+  pwrite(buf, offset) {
+    const start = Number(offset);
+    this.blob.set(buf, start);
   }
 }
 
 class NullStream {
   read() {
-    return 0;
+    return this.pread();
+  }
+
+  pread() {
+    return new Uint8Array(0);
   }
 
   write() {}
+
+  pwrite() {}
 }
 
 export { NullStream, readerConversion as default };

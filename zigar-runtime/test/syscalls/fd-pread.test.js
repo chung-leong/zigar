@@ -7,7 +7,7 @@ import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
-describe('Syscall: fd-read', function() {
+describe('Syscall: fd-pread', function() {
   it('should read from a Uint8Array', async function() {
     const env = new Env();
     if (process.env.TARGET === 'wasm') {
@@ -32,7 +32,7 @@ describe('Syscall: fd-read', function() {
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
     }   
-    const array = new TextEncoder().encode('Hello world');
+    const array = new TextEncoder().encode('   Hello world');
     const reader = env.convertReader(array);
     env.redirectStream(0, reader);
     const iovsAddress = usize(0x1000);
@@ -47,11 +47,11 @@ describe('Syscall: fd-read', function() {
     set.call(iovsDV, usizeByteSize * 2, stringAddress, le);
     set.call(iovsDV, usizeByteSize * 3, stringLen, le);
     env.moveExternBytes(iovsDV, iovsAddress, true);
-    const result = env.fdRead(0, iovsAddress, 2, readAddress)
+    const result = env.fdPread(0, iovsAddress, 2, usize(3), readAddress)
     expect(result).to.equal(PosixError.NONE);
     const readDV = env.obtainZigView(readAddress, 4);
     const read = readDV.getUint32(0, le);
-    expect(read).to.equal(array.length);
+    expect(read).to.equal(array.length - 3);
   })
   it('should fail when reading from an async source from the main thread', async function() {
     const env = new Env();
@@ -77,12 +77,8 @@ describe('Syscall: fd-read', function() {
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
     }   
-    const stream = new ReadableStream({
-      async pull(controller) {
-        controller.close();
-      }
-    });
-    const reader = env.convertReader(stream.getReader());
+    const blob = new Blob([]);
+    const reader = env.convertReader(blob);
     env.redirectStream(0, reader);
     const iovsAddress = usize(0x1000);
     const stringAddress = usize(0x2000);
@@ -95,7 +91,7 @@ describe('Syscall: fd-read', function() {
     set.call(iovsDV, usizeByteSize * 1, stringLen, le);
     let result;
     const [ error ] = await captureError(() => {
-      result = env.fdRead(0, iovsAddress, 1, readAddress);
+      result = env.fdPread(0, iovsAddress, 1, usize(0), readAddress);
     });
     expect(result).to.equal(PosixError.EDEADLK);
     expect(error).to.contains('promise');
@@ -116,8 +112,8 @@ describe('Syscall: fd-read', function() {
       iovsDV.setUint32(4 * 0, stringAddress, le);
       iovsDV.setUint32(4 * 1, stringLen, le);
       env.moveExternBytes(iovsDV, iovsAddress, true);
-      const f = env.getWASIHandler('fd_read');
-      const result = f(0, iovsAddress, 2, readAddress)
+      const f = env.getWASIHandler('fd_pread');
+      const result = f(0, iovsAddress, 2, usize(0), readAddress)
       expect(result).to.equal(PosixError.NONE);
       const readDV = env.obtainZigView(readAddress, 4);
       const read = readDV.getUint32(0, le);
@@ -145,13 +141,13 @@ describe('Syscall: fd-read', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
-      const array = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ]);
+      const array = new Uint8Array([ 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ]);
       const reader = env.convertReader(array);
       env.redirectStream(0, reader);
       const bufAddress = usize(0x1000);
       const readAddress = usize(0x2000);
       const len = 4;
-      const res = env.fdRead1(0, bufAddress, len, readAddress);
+      const res = env.fdPread1(0, bufAddress, len, usize(4), readAddress);
       expect(res).to.equal(PosixError.NONE);
       const dv = env.obtainZigView(bufAddress, len, false);
       const read = env.obtainZigView(readAddress, 4).getUint32(0, env.littleEndian);

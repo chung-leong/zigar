@@ -2,7 +2,7 @@ import { PosixDescriptorRight, PosixDescriptorFlag, PosixOpenFlag, PosixLookupFl
 import { mixin } from '../environment.js';
 import { catchPosixError } from '../errors.js';
 import { decodeFlags } from '../utils.js';
-import './copy-usize.js';
+import './copy-int.js';
 
 const Right = {
   read: BigInt(PosixDescriptorRight.fd_read),

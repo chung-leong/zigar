@@ -2,11 +2,12 @@ import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError } from '../errors.js';
 import { createView, usizeByteSize } from '../utils.js';
-import './copy-usize.js';
+import './copy-int.js';
 
 var fdWrite = mixin({
   fdWrite(fd, iovsAddress, iovsCount, writtenAddress, canWait) {
     const iovsSize = usizeByteSize * 2;
+    const le = this.littleEndian;
     let iovs, writer, i = 0;
     let written = 0;
     const next = () => {
@@ -16,7 +17,6 @@ var fdWrite = mixin({
           this.moveExternBytes(iovs, iovsAddress, false);
           writer = this.getStream(fd, 'write');
         }
-        const le = this.littleEndian;
         const ptr = iovs.getUint32(i * iovsSize, le);
         const len = iovs.getUint32(i * iovsSize + 4, le);
         const chunk = new Uint8Array(len);
@@ -27,7 +27,7 @@ var fdWrite = mixin({
         if (++i < iovsCount) {
           return next();
         } else {
-          this.copyUint32(writtenAddress, written);
+          this.copyUsize(writtenAddress, written);
         }
       });
     };

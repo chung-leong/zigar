@@ -5,7 +5,7 @@ import { createView, usizeByteSize } from '../utils.js';
 import './copy-int.js';
 
 export default mixin({
-  fdRead(fd, iovsAddress, iovsCount, readAddress, canWait) {
+  fdPread(fd, iovsAddress, iovsCount, offset, readAddress, canWait) {
     const iovsSize = usizeByteSize * 2;
     const le = this.littleEndian;
     let iovs, reader, i = 0;
@@ -20,7 +20,7 @@ export default mixin({
         const len = (process.env.BITS == 64) 
                   ? iovs.getBigUint64(i * iovsSize + 8, le)
                   : iovs.getUint32(i * iovsSize + 4, le);
-        return reader.read(process.env.BITS == 64 ? Number(len) : len);
+        return reader.pread(process.env.BITS == 64 ? Number(len) : len, offset);
       }, (chunk) => {
         const ptr = (process.env.BITS == 64) 
                   ? iovs.getBigUint64(i * iovsSize, le) 
@@ -28,6 +28,7 @@ export default mixin({
         this.moveExternBytes(chunk, ptr, true);
         read += (process.env.BITS == 64) ? BigInt(chunk.length) : chunk.length;
         if (++i < iovsCount) {
+          offset += (process.env.BITS == 64) ? BigInt(chunk.byteLength) : chunk.byteLength;
           return next();
         } else {
           this.copyUsize(readAddress, read);
@@ -42,10 +43,10 @@ export default mixin({
       fdRead1: { async: true },
     },
 
-    fdRead1(fd, address, len, readAddress, canWait) {
+    fdPread1(fd, address, len, offset, readAddress, canWait) {
       return catchPosixError(canWait, PosixError.EIO, () => {
         const reader = this.getStream(fd);
-        return reader.read(len);
+        return reader.pread(len, offset);
       }, (chunk) => {
         this.moveExternBytes(chunk, address, true);
         this.copyUsize(readAddress, (process.env.BITS == 64) ? BigInt(chunk.length) : chunk.length);

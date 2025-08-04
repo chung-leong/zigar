@@ -35,10 +35,6 @@ var streamLocation = mixin({
       m.delete(fd);
     }
   },
-  getDirectoryEntries(fd) {
-    const dir = this.getStream(fd);
-    return dir.readdir();
-  },
 });
 
 export { streamLocation as default };

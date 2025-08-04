@@ -10,6 +10,7 @@ const Env = defineEnvironment();
 describe('Syscall: fd-readdir', function() {
   it('should read directory entries from a Map', async function() {
     const env = new Env();
+    let syscallTrap = false;
     if (process.env.TARGET === 'wasm') {
       env.memory = new WebAssembly.Memory({ initial: 1 });
     } else {
@@ -23,17 +24,16 @@ describe('Syscall: fd-readdir', function() {
         return buffer;
       };
       env.moveExternBytes = function(jsDV, address, to) {
-        if (to) {
-          map.set(address, jsDV.buffer);
-        } else {
-          const len = Number(jsDV.byteLength);
-          if (!(jsDV instanceof DataView)) {
-            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
-          }
-          const zigDV = this.obtainZigView(address, len);
-          const copy = this.getCopyFunction(len);
-          copy(jsDV, zigDV);
+        const len = jsDV.byteLength;
+        const zigDV = this.obtainZigView(address, len);
+        if (!(jsDV instanceof DataView)) {
+          jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
+        const copy = this.getCopyFunction(len);
+        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+      };
+      env.setSyscallTrap = function(set) {
+        syscallTrap = set;
       };
     }   
     const map = new Map([
@@ -43,7 +43,7 @@ describe('Syscall: fd-readdir', function() {
     const dir = env.convertDirectory(map);
     const fd = env.createStreamHandle(dir);
     const bufAddress = usize(0x1000);
-    const bufLen = 24 + 1 + 24 + 2 + 10;
+    const bufLen = 24 + 1 + 24 + 2 + 16;
     const usedAddress = usize(0x2000);
     const le = env.littleEndian;
     let cookie = 0n;
@@ -54,10 +54,12 @@ describe('Syscall: fd-readdir', function() {
       const used = usedDV.getUint32(0, le);
       const direntDV = env.obtainZigView(bufAddress, 24, false);
       const len = direntDV.getUint32(16, le);
+      cookie = direntDV.getBigUint64(0, le);
       switch (i) {
         case 0:
           expect(used).to.equal(24 + 1 + 24 + 2);
           expect(len).to.equal(1); // .
+          cookie += 1n;
           break;
         case 1:
           expect(used).to.equal(24 + 9);
@@ -71,7 +73,11 @@ describe('Syscall: fd-readdir', function() {
           expect(used).to.equal(0);
           break;
       }
-      cookie = direntDV.getBigUint64(0, le);
+    }
+    if (process.env.TARGET === 'node') {
+      expect(syscallTrap).to.be.true;
+      map.close();
+      expect(syscallTrap).to.be.false;
     }
   })
   it('should work with default root directory', async function() {
@@ -89,22 +95,18 @@ describe('Syscall: fd-readdir', function() {
         return buffer;
       };
       env.moveExternBytes = function(jsDV, address, to) {
-        if (to) {
-          map.set(address, jsDV.buffer);
-        } else {
-          const len = Number(jsDV.byteLength);
-          if (!(jsDV instanceof DataView)) {
-            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
-          }
-          const zigDV = this.obtainZigView(address, len);
-          const copy = this.getCopyFunction(len);
-          copy(jsDV, zigDV);
+        const len = jsDV.byteLength;
+        const zigDV = this.obtainZigView(address, len);
+        if (!(jsDV instanceof DataView)) {
+          jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
+        const copy = this.getCopyFunction(len);
+        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
     }   
     const fd = PosixDescriptor.root;
     const bufAddress = usize(0x1000);
-    const bufLen = 24 + 1 + 24 + 2 + 10;
+    const bufLen = 24 + 1 + 24 + 2 + 16;
     const usedAddress = usize(0x2000);
     const le = env.littleEndian;
     let cookie = 0n;
@@ -114,7 +116,7 @@ describe('Syscall: fd-readdir', function() {
     const used = usedDV.getUint32(0, le);
     const direntDV = env.obtainZigView(bufAddress, 24);
     const len = direntDV.getUint32(16, le);
-    expect(used).to.equal(25);
+    expect(used).to.equal(50);
     expect(len).to.equal(1);
     })
   it('should return EINVAL when entry type is incorrect', async function() {
@@ -132,18 +134,15 @@ describe('Syscall: fd-readdir', function() {
         return buffer;
       };
       env.moveExternBytes = function(jsDV, address, to) {
-        if (to) {
-          map.set(address, jsDV.buffer);
-        } else {
-          const len = Number(jsDV.byteLength);
-          if (!(jsDV instanceof DataView)) {
-            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
-          }
-          const zigDV = this.obtainZigView(address, len);
-          const copy = this.getCopyFunction(len);
-          copy(jsDV, zigDV);
+        const len = jsDV.byteLength;
+        const zigDV = this.obtainZigView(address, len);
+        if (!(jsDV instanceof DataView)) {
+          jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
+        const copy = this.getCopyFunction(len);
+        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = function(set) {};
     }   
     const map = new Map([
       [ 'hello.txt', { type: 'file', ino: 1n } ],
@@ -152,7 +151,7 @@ describe('Syscall: fd-readdir', function() {
     const dir = env.convertDirectory(map);
     const fd = env.createStreamHandle(dir);
     const bufAddress = usize(0x1000);
-    const bufLen = 24 + 1 + 24 + 2 + 10;
+    const bufLen = 24 + 1 + 24 + 2 + 16;
     const usedAddress = usize(0x2000);
     let cookie = 0n;
     for (let i = 0; i < 3; i++) {
@@ -161,9 +160,15 @@ describe('Syscall: fd-readdir', function() {
         result = env.fdReaddir(fd, bufAddress, bufLen, cookie, usedAddress);
       });
       const direntDV = env.obtainZigView(bufAddress, 24);
+      cookie = direntDV.getBigUint64(0, true);
       switch (i) {
         case 0:
+          // . and ..
+          expect(result).to.equal(0);
+          cookie += 1n;
+          break;
         case 1:
+          // hello.txt
           expect(result).to.equal(0);
           break;
         case 2:
@@ -171,7 +176,6 @@ describe('Syscall: fd-readdir', function() {
           expect(error).to.contain('fil');
           break;
       }
-      cookie = direntDV.getBigUint64(0, true);
     }
   })
   it('should return error code when buffer is too small', async function() {
@@ -190,7 +194,7 @@ describe('Syscall: fd-readdir', function() {
       const dir = env.convertDirectory(map);
       const fd = env.createStreamHandle(dir);
       const bufAddress = 0x1000;
-      const bufLen = 24 + 1 + 24 + 2 + 10;
+      const bufLen = 24 + 1 + 24 + 2 + 16;
       const usedAddress = 0x2000;
       const le = env.littleEndian;
       const f = env.getWASIHandler('fd_readdir');
@@ -202,10 +206,12 @@ describe('Syscall: fd-readdir', function() {
         const used = usedDV.getUint32(0, le);
         const direntDV = env.obtainZigView(bufAddress, 24);
         const len = direntDV.getUint32(16, le);
+        cookie = direntDV.getBigUint64(0, true);
         switch (i) {
           case 0:
             expect(used).to.equal(24 + 1 + 24 + 2);
             expect(len).to.equal(1); // .
+            cookie += 1n;
             break;
           case 1:
             expect(used).to.equal(24 + 9);
@@ -219,7 +225,6 @@ describe('Syscall: fd-readdir', function() {
             expect(used).to.equal(0);
             break;
         }
-        cookie = direntDV.getBigUint64(0, true);
       }
     })
   }

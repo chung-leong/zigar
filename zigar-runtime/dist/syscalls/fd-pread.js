@@ -4,8 +4,8 @@ import { catchPosixError } from '../errors.js';
 import { createView, usizeByteSize } from '../utils.js';
 import './copy-int.js';
 
-var fdRead = mixin({
-  fdRead(fd, iovsAddress, iovsCount, readAddress, canWait) {
+var fdPread = mixin({
+  fdPread(fd, iovsAddress, iovsCount, offset, readAddress, canWait) {
     const iovsSize = usizeByteSize * 2;
     const le = this.littleEndian;
     let iovs, reader, i = 0;
@@ -18,12 +18,13 @@ var fdRead = mixin({
           reader = this.getStream(fd);
         }
         const len = iovs.getUint32(i * iovsSize + 4, le);
-        return reader.read(len);
+        return reader.pread(len, offset);
       }, (chunk) => {
         const ptr = iovs.getUint32(i * iovsSize, le);
         this.moveExternBytes(chunk, ptr, true);
         read += chunk.length;
         if (++i < iovsCount) {
+          offset += chunk.byteLength;
           return next();
         } else {
           this.copyUsize(readAddress, read);
@@ -34,4 +35,4 @@ var fdRead = mixin({
   },
 });
 
-export { fdRead as default };
+export { fdPread as default };

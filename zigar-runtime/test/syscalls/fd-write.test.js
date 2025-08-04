@@ -23,17 +23,13 @@ describe('Syscall: fd-write', function() {
         return buffer;
       };
       env.moveExternBytes = function(jsDV, address, to) {
-        if (to) {
-          map.set(address, jsDV.buffer);
-        } else {
-          const len = Number(jsDV.byteLength);
-          if (!(jsDV instanceof DataView)) {
-            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
-          }
-          const zigDV = this.obtainZigView(address, len);
-          const copy = this.getCopyFunction(len);
-          copy(jsDV, zigDV);
+        const len = jsDV.byteLength;
+        const zigDV = this.obtainZigView(address, len);
+        if (!(jsDV instanceof DataView)) {
+          jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
+        const copy = this.getCopyFunction(len);
+        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
     }
     const iovsAddress = usize(0x1000);
@@ -76,17 +72,13 @@ describe('Syscall: fd-write', function() {
         return buffer;
       };
       env.moveExternBytes = function(jsDV, address, to) {
-        if (to) {
-          map.set(address, jsDV.buffer);
-        } else {
-          const len = Number(jsDV.byteLength);
-          if (!(jsDV instanceof DataView)) {
-            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
-          }
-          const zigDV = this.obtainZigView(address, len);
-          const copy = this.getCopyFunction(len);
-          copy(jsDV, zigDV);
+        const len = jsDV.byteLength;
+        const zigDV = this.obtainZigView(address, len);
+        if (!(jsDV instanceof DataView)) {
+          jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
+        const copy = this.getCopyFunction(len);
+        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
     }
     const iovsAddress = usize(0x1000);
@@ -126,17 +118,13 @@ describe('Syscall: fd-write', function() {
         return buffer;
       };
       env.moveExternBytes = function(jsDV, address, to) {
-        if (to) {
-          map.set(address, jsDV.buffer);
-        } else {
-          const len = Number(jsDV.byteLength);
-          if (!(jsDV instanceof DataView)) {
-            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
-          }
-          const zigDV = this.obtainZigView(address, len);
-          const copy = this.getCopyFunction(len);
-          copy(jsDV, zigDV);
+        const len = jsDV.byteLength;
+        const zigDV = this.obtainZigView(address, len);
+        if (!(jsDV instanceof DataView)) {
+          jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
+        const copy = this.getCopyFunction(len);
+        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
     }
     const iovsAddress = usize(0x1000);
@@ -178,8 +166,9 @@ describe('Syscall: fd-write', function() {
       iovsDV.setUint32(4 * 2, stringAddress, le);
       iovsDV.setUint32(4 * 3, stringLen, le);
       let result;
+      const f = env.getWASIHandler('fd_write');
       const [ line1, line2 ] = await capture(() => {
-        result = env.fdWrite(1, iovsAddress, 2, writtenAddress);
+        result = f(1, iovsAddress, 2, writtenAddress);
       });
       expect(result).to.equal(PosixError.NONE);
       expect(line1).to.equal(text.trim());
@@ -205,24 +194,21 @@ describe('Syscall: fd-write', function() {
           return buffer;
         };
         env.moveExternBytes = function(jsDV, address, to) {
-          if (to) {
-            map.set(address, jsDV.buffer);
-          } else {
-            const len = Number(jsDV.byteLength);
-            if (!(jsDV instanceof DataView)) {
-              jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
-            }
-            const zigDV = this.obtainZigView(address, len);
-            const copy = this.getCopyFunction(len);
-            copy(jsDV, zigDV);
+          const len = jsDV.byteLength;
+          const zigDV = this.obtainZigView(address, len);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
           }
+          const copy = this.getCopyFunction(len);
+          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
         };
       }
       const address = usize(0x1000);
+      const writtenAddress = usize(0x3000);
       const array = new TextEncoder().encode('Hello world\n');
       const dv = env.obtainZigView(address, array.length, false);
       for (let i = 0; i < array.length; i++) dv.setUint8(i, array[i]);
-      const lines = await capture(() => env.fdWrite1(1, address, dv.byteLength));
+      const lines = await capture(() => env.fdWrite1(1, address, dv.byteLength, writtenAddress));
       expect(lines).to.eql([ 'Hello world' ]);
     })
     it('should allow addition text to be append to current line', async function() {
@@ -240,20 +226,17 @@ describe('Syscall: fd-write', function() {
           return buffer;
         };
         env.moveExternBytes = function(jsDV, address, to) {
-          if (to) {
-            map.set(address, jsDV.buffer);
-          } else {
-            const len = Number(jsDV.byteLength);
-            if (!(jsDV instanceof DataView)) {
-              jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
-            }
-            const zigDV = this.obtainZigView(address, len);
-            const copy = this.getCopyFunction(len);
-            copy(jsDV, zigDV);
+          const len = jsDV.byteLength;
+          const zigDV = this.obtainZigView(address, len);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
           }
+          const copy = this.getCopyFunction(len);
+          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
         };
       }
       const address1 = usize(0x1000);
+      const writtenAddress = usize(0x3000);
       const array1 = new TextEncoder().encode('Hello world!');
       const dv1 = env.obtainZigView(address1, array1.length, false);
       for (let i = 0; i < array1.length; i++) dv1.setUint8(i, array1[i]);
@@ -262,9 +245,9 @@ describe('Syscall: fd-write', function() {
       const dv2 = env.obtainZigView(address2, array2.length, false);
       for (let i = 0; i < array2.length; i++) dv2.setUint8(i, array2[i]);
       const lines = await capture(async () => {
-        env.fdWrite1(2, address1, dv1.byteLength);
+        env.fdWrite1(2, address1, dv1.byteLength, writtenAddress);
         await delay(10);
-        env.fdWrite1(2, address2, dv2.byteLength);
+        env.fdWrite1(2, address2, dv2.byteLength, writtenAddress);
       });
       expect(lines).to.eql([ 'Hello world!' ]);
       env.flushStreams();
@@ -281,19 +264,16 @@ describe('Syscall: fd-write', function() {
         return buffer;
       };
       env.moveExternBytes = function(jsDV, address, to) {
-        if (to) {
-          map.set(address, jsDV.buffer);
-        } else {
-          const len = Number(jsDV.byteLength);
-          if (!(jsDV instanceof DataView)) {
-            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
-          }
-          const zigDV = this.obtainZigView(address, len);
-          const copy = this.getCopyFunction(len);
-          copy(jsDV, zigDV);
+        const len = jsDV.byteLength;
+        const zigDV = this.obtainZigView(address, len);
+        if (!(jsDV instanceof DataView)) {
+          jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
+        const copy = this.getCopyFunction(len);
+        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
       const address1 = usize(0x1000);
+      const writtenAddress = usize(0x3000);
       const array1 = new TextEncoder().encode('Hi!\nHello world');
       const dv1 = env.obtainZigView(address1, array1.length, false);
       for (let i = 0; i < array1.length; i++) dv1.setUint8(i, array1[i]);
@@ -302,9 +282,9 @@ describe('Syscall: fd-write', function() {
       const dv2 = env.obtainZigView(address2, array2.length, false);
       for (let i = 0; i < array2.length; i++) dv2.setUint8(i, array2[i]);
       const lines = await capture(async () => {
-        env.fdWrite1(1, address1, dv1.byteLength);
+        env.fdWrite1(1, address1, dv1.byteLength, writtenAddress);
         await delay(10);
-        env.fdWrite1(1, address2, dv2.byteLength);
+        env.fdWrite1(1, address2, dv2.byteLength, writtenAddress);
         await delay(300);
       });
       expect(lines).to.eql([ 'Hi!', 'Hello world!' ]);

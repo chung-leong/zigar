@@ -1,11 +1,9 @@
-import { mixin } from "../environment.js";
-import { createView } from "../utils.js";
+import { mixin } from '../environment.js';
+import { createView } from '../utils.js';
 
-export default mixin({
+var copyInt = mixin({
   copyUsize(bufAddress, value) {
-    if (process.env.BITS == 64) {
-      this.copyUint64(bufAddress, value);
-    } else {
+    {
       this.copyUint32(bufAddress, value);
     }
   },
@@ -20,3 +18,5 @@ export default mixin({
     this.moveExternBytes(buf, bufAddress, true);
   },
 });
+
+export { copyInt as default };

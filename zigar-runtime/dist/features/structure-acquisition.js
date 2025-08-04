@@ -28,8 +28,10 @@ import '../syscalls/fd-datasync.js';
 import '../syscalls/fd-fdstat-get.js';
 import '../syscalls/fd-filestat-get.js';
 import '../syscalls/fd-filestat-set-times.js';
+import '../syscalls/fd-pread.js';
 import '../syscalls/fd-prestat-dir-name.js';
 import '../syscalls/fd-prestat-get.js';
+import '../syscalls/fd-pwrite.js';
 import '../syscalls/fd-read.js';
 import '../syscalls/fd-readdir.js';
 import '../syscalls/fd-seek.js';
@@ -69,69 +71,7 @@ var structureAcquisition = mixin({
     this.runtimeSafety = false;
     this.libc = false;
   },
-  readSlot(target, slot) {
-    const slots = target ? target[SLOTS] : this.slots;
-    return slots?.[slot];
-  },
-  writeSlot(target, slot, value) {
-    const slots = target ? target[SLOTS] : this.slots;
-    if (slots) {
-      slots[slot] = value;
-    }
-  },
-  createTemplate(dv) {
-    return {
-      [MEMORY]: dv,
-      [SLOTS]: {}
-    };
-  },
-  beginStructure(def) {
-    const {
-      type,
-      purpose,
-      name,
-      length,
-      signature = -1n,
-      byteSize,
-      align,
-      flags,
-    } = def;
-    return {
-      constructor: null,
-      type,
-      purpose,
-      flags,
-      signature,
-      name,
-      length,
-      byteSize,
-      align,
-      instance: {
-        members: [],
-        template: null,
-      },
-      static: {
-        members: [],
-        template: null,
-      },
-    };
-  },
-  attachMember(structure, member, isStatic = false) {
-    const target = (isStatic) ? structure.static : structure.instance;
-    target.members.push(member);
-  },
-  attachTemplate(structure, template, isStatic = false) {
-    const target = (isStatic) ? structure.static : structure.instance;
-    target.template = template;
-  },
-  endStructure(structure) {
-    if (!structure.name) {
-      this.inferTypeName(structure);
-    }
-    this.structures.push(structure);
-    this.finalizeStructure(structure);
-  },
-  captureView(address, len, copy, handle) {
+  createView(address, len, copy, handle) {
     if (copy) {
       // copy content into JavaScript memory
       const dv = this.allocateJSMemory(len, 0);
@@ -148,18 +88,44 @@ var structureAcquisition = mixin({
       return dv;
     }
   },
-  castView(address, len, copy, structure, handle) {
+  createInstance(structure, dv, slots) {
     const { constructor, flags } = structure;
-    const dv = this.captureView(address, len, copy, handle);
     const object = constructor.call(ENVIRONMENT, dv);
     if (flags & StructureFlag.HasPointer) {
       // acquire targets of pointers
       this.updatePointerTargets(null, object);
     }
-    if (copy && len > 0) {
+    if (slots) {
+      Object.assign(object[SLOTS], slots);
+    }
+    if (!dv[ZIG]) {
       this.makeReadOnly?.(object);
     }
     return object;
+  },
+  createTemplate(dv, slots) {
+    return { [MEMORY]: dv, [SLOTS]: slots };
+  },
+  appendList(list, element) {
+    list.push(element);
+  },
+  getSlotValue(slots, slot) {
+    if (!slots) slots = this.slots;
+    return slots[slot];
+  },
+  setSlotValue(slots, slot, value) {
+    if (!slots) slots = this.slots;
+    slots[slot] = value;
+  },
+  beginStructure(structure) {
+    this.defineStructure(structure);
+  },
+  finishStructure(structure) {
+    if (!structure.name) {
+      this.inferTypeName(structure);
+    }
+    this.structures.push(structure);
+    this.finalizeStructure(structure);
   },
   acquireStructures() {
     const attrs = this.getModuleAttributes();
@@ -206,7 +172,7 @@ var structureAcquisition = mixin({
       if (zig) {
         // replace Zig memory
         const { address, len, handle } = zig;
-        const jsDV = object[MEMORY] = this.captureView(address, len, true);
+        const jsDV = object[MEMORY] = this.createView(address, len, true, 0);
         if (handle) {
           jsDV.handle = handle;
         }
@@ -252,7 +218,7 @@ var structureAcquisition = mixin({
     s.name = handler.call(this, s);
   },
   getPrimitiveName(s) {
-    const { instance: { members: [member] }, static: { template }, flags } = s;
+    const { instance: { members: [member] }, flags = 0 } = s;
     switch (member.type) {
       case MemberType.Bool:
         return `bool`;
@@ -363,7 +329,7 @@ var structureAcquisition = mixin({
   getFunctionName(s) {
     const { instance: { members: [args] } } = s;
     const argName = args.structure.name;
-    return argName.slice(4, -1);
+    return (argName) ? argName.slice(4, -1) : 'fn ()';
   },
   ...({
     exports: {

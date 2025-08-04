@@ -11,7 +11,7 @@ var fdFilestatGet = mixin({
       const loc = this.getStreamLocation?.(fd);
       try {
         return this.triggerEvent('stat', { ...loc, target, flags: {} }, PosixError.ENOENT);
-      } catch (err) {        
+      } catch (err) {
         if (err.code !== PosixError.ENOENT) {
           throw err;
         }

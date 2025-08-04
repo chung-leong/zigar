@@ -4,29 +4,32 @@ import { catchPosixError } from '../errors.js';
 import { createView, usizeByteSize } from '../utils.js';
 import './copy-int.js';
 
-var fdRead = mixin({
-  fdRead(fd, iovsAddress, iovsCount, readAddress, canWait) {
+var fdPwrite = mixin({
+  fdPwrite(fd, iovsAddress, iovsCount, offset, writtenAddress, canWait) {
     const iovsSize = usizeByteSize * 2;
     const le = this.littleEndian;
-    let iovs, reader, i = 0;
-    let read = 0;
+    let iovs, writer, i = 0;
+    let written = 0;
     const next = () => {
       return catchPosixError(canWait, PosixError.EIO, () => {
         if (!iovs) {
           iovs = createView(iovsSize * iovsCount);
           this.moveExternBytes(iovs, iovsAddress, false);
-          reader = this.getStream(fd);
+          writer = this.getStream(fd, 'write');
         }
-        const len = iovs.getUint32(i * iovsSize + 4, le);
-        return reader.read(len);
-      }, (chunk) => {
         const ptr = iovs.getUint32(i * iovsSize, le);
-        this.moveExternBytes(chunk, ptr, true);
-        read += chunk.length;
+        const len = iovs.getUint32(i * iovsSize + 4, le);
+        const chunk = new Uint8Array(len);
+        const pos = offset;
+        this.moveExternBytes(chunk, ptr, false);
+        written += len;
+        offset += len;
+        return writer.pwrite(chunk, pos);
+      }, () => {
         if (++i < iovsCount) {
           return next();
         } else {
-          this.copyUsize(readAddress, read);
+          this.copyUsize(writtenAddress, written);
         }
       });
     };
@@ -34,4 +37,4 @@ var fdRead = mixin({
   },
 });
 
-export { fdRead as default };
+export { fdPwrite as default };

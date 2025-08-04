@@ -6,11 +6,26 @@ import { decodeText, hasMethod } from '../utils.js';
 var streamRedirection = mixin({
   init() {
     const root = {
-      *readdir() {        
+      cookie: 0n,
+      readdir() {
+        const offset = Number(this.cookie);
+        let dent = null;
+        switch (offset) {
+          case 0:
+          case 1: 
+            dent = { name: '.'.repeat(offset + 1), type: 'directory' };
+        }
+        return dent;
       },
-      valueOf() {
+      seek(cookie) { 
+        return this.cookie = cookie;
+      },
+      tell() { 
+        return this.cookie;
+      },
+      valueOf() { 
         return null;
-      }
+      },
     };
     this.streamMap = new Map([ 
       [ PosixDescriptor.stdout, this.createLogWriter('stdout') ], 
