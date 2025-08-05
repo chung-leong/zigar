@@ -1,7 +1,7 @@
 import { PosixError, PosixDescriptorRight, PosixFileType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, InvalidEnumValue } from '../errors.js';
-import { hasMethod, decodeEnum, createView } from '../utils.js';
+import { hasMethod, getEnumNumber, createView } from '../utils.js';
 
 var fdFdstatGet = mixin({
   fdFdstatGet(fd, bufAddress, canWait) {
@@ -18,7 +18,7 @@ var fdFdstatGet = mixin({
         }
       }
       if (stream.type) {
-        type = decodeEnum(stream.type, PosixFileType);
+        type = getEnumNumber(stream.type, PosixFileType);
         if (type === undefined) {
           throw new InvalidEnumValue(PosixFileType, stream.type);
         }

@@ -293,7 +293,15 @@ export function decodeFlags(flags, set) {
   return object;
 }
 
-export function decodeEnum(string, set) {
+export function decodeEnum(num, set) {
+  for (const [ name, value ] of Object.entries(set)) {
+    if (num === value) {
+      return name;
+    }
+  }
+}
+
+export function getEnumNumber(string, set) {
   for (const [ name, value ] of Object.entries(set)) {
     if (name === string) {
       return value;

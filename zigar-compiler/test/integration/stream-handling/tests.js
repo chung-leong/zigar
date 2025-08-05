@@ -1095,6 +1095,49 @@ export function addTests(importModule, options) {
       const text = new TextDecoder().decode(subarray);
       expect(text).to.equal('Hello world');
     })
+    it('should set lock on file using fcntl', async function() {
+      this.timeout(0);
+      const { lock } = await importTest('set-lock-with-fcntl');
+      const file1 = {
+        read() {},
+        setlock(lock) {
+          if (!this.lock) {
+            this.lock = lock;
+            return true;
+          } else {
+            return false;
+          }
+        }
+      };
+      lock(file1);
+      expect(file1.lock).to.eql({ type: 1, whence: 0, start: 1234n, len: 8000n, pid: 123 });
+      expect(() => lock(file1)).to.throw(Error).with.property('message').that.contains('Locked');
+      const file2 = {
+        read() {},
+      };
+      expect(() => lock(file2)).to.not.throw();
+    })
+    it('should get lock on file using fcntl', async function() {
+      this.timeout(0);
+      const { check } = await importTest('get-lock-with-fcntl');
+      const file1 = {
+        read() {},
+        getlock(lock) {}
+      };
+      expect(check(file1)).to.be.null;
+      const file2 = {
+        read() {},
+      };
+      expect(check(file2)).to.be.null;
+      const file3 = {
+        read() {},
+        getlock(lock) {
+          return { ...lock, type: 0 };
+        }
+      };
+      const lock = check(file3).valueOf();
+      expect(lock).to.eql({ type: 0, whence: 0, start: 1234n, len: 8000n, pid: 123 });
+    })
   })
 }
 

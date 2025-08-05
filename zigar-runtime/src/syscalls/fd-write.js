@@ -13,9 +13,9 @@ export default mixin({
     const next = () => {
       return catchPosixError(canWait, PosixError.EIO, () => {
         if (!iovs) {
+          writer = this.getStream(fd, 'write');
           iovs = createView(iovsSize * iovsCount);
           this.moveExternBytes(iovs, iovsAddress, false);
-          writer = this.getStream(fd, 'write');
         }
         const ptr = (process.env.BITS == 64) 
                   ? iovs.getBigUint64(i * iovsSize, le) 

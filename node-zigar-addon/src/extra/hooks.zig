@@ -45,7 +45,7 @@ pub const Syscall = extern struct {
         },
         getfl: extern struct {
             fd: i32,
-            fdstat: Fdstat,
+            fdstat: Fdstat = undefined,
         },
         getlk: extern struct {
             fd: i32,
@@ -182,9 +182,9 @@ pub const Syscall = extern struct {
     pub const Flock = extern struct {
         type: i16,
         whence: i16,
-        start: u64,
-        len: u64,
         pid: i32,
+        start: i64,
+        len: u64,
     };
     pub const Timespec = std.posix.timespec;
     pub const Fdstat = std.os.wasi.fdstat_t;
@@ -285,7 +285,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         } };
                         const err = Host.redirectSyscall(&call);
                         if (err == .SUCCESS) {
-                            const fdstat = call.u.fcntl.fdstat;
+                            const fdstat = call.u.getfl.fdstat;
                             var oflags: std.posix.O = .{};
                             if (fdstat.fs_rights_base.FD_READ) {
                                 if (fdstat.fs_rights_base.FD_WRITE) {
@@ -305,7 +305,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         }
                     },
                     std.posix.F.SETLK => {
-                        const flock: std.posix.Flock = @ptrFromInt(arg);
+                        const flock: *const std.posix.Flock = @ptrFromInt(arg);
                         var call: Syscall = .{ .cmd = .setlk, .u = .{
                             .setlk = .{ .fd = @intCast(fd), .flock = .{
                                 .type = flock.type,
@@ -316,11 +316,28 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                             } },
                         } };
                         const err = Host.redirectSyscall(&call);
-                        if (err == .SUCCESS) {} else {
-                            result.* = intFromError(err);
-                        }
+                        result.* = intFromError(err);
                     },
-                    std.posix.F.GETLK => {},
+                    std.posix.F.GETLK => {
+                        const flock: *std.posix.Flock = @ptrFromInt(arg);
+                        var call: Syscall = .{ .cmd = .getlk, .u = .{
+                            .getlk = .{ .fd = @intCast(fd), .flock = .{
+                                .type = flock.type,
+                                .whence = flock.whence,
+                                .start = @intCast(flock.start),
+                                .len = @intCast(flock.len),
+                                .pid = @intCast(flock.pid),
+                            } },
+                        } };
+                        const err = Host.redirectSyscall(&call);
+                        flock.type = call.u.getlk.flock.type;
+                        flock.whence = call.u.getlk.flock.whence;
+                        flock.start = @intCast(call.u.getlk.flock.start);
+                        flock.len = @intCast(call.u.getlk.flock.len);
+                        flock.pid = @intCast(call.u.getlk.flock.pid);
+                        result.* = intFromError(err);
+                    },
+                    else => result.* = intFromError(.INVAL),
                 }
                 return true;
             }

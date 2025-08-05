@@ -149,7 +149,6 @@ export const PosixError = {
   ENOTSUP: 58,
   ESPIPE: 70,
 };
-
 export const PosixFileType = {
   unknown: 0,
   blockDevice: 1,
@@ -160,18 +159,20 @@ export const PosixFileType = {
   socketStream: 6,
   symbolicLink: 7,
 };
-
 export const PosixOpenFlag = {
   create: 1 << 0,
   directory: 1 << 1,
   exclusive: 1 << 2,
   truncate: 1 << 3,
 };
-
 export const PosixLookupFlag = {
   symlinkFollow: 1 << 0,
 };
-
+export const PosixLockType = {
+  read: 0,
+  write: 1,
+  unlock: 2,
+};
 export const PosixDescriptorRight = {
   fd_datasync: 1 << 0,
   fd_read: 1 << 1,
@@ -204,7 +205,6 @@ export const PosixDescriptorRight = {
   sock_shutdown: 1 << 28,
   sock_accept: 1 << 29,
 };
-
 export const PosixDescriptorFlag = {
   append: 1 << 0,
   dsync: 1 << 1,
@@ -212,7 +212,6 @@ export const PosixDescriptorFlag = {
   rsync: 1 << 3,
   sync: 1 << 4,
 };
-
 export const PosixDescriptor = {
   stdin: 0,
   stdout: 1,

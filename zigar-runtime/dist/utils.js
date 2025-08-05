@@ -258,7 +258,15 @@ function decodeFlags(flags, set) {
   return object;
 }
 
-function decodeEnum(string, set) {
+function decodeEnum(num, set) {
+  for (const [ name, value ] of Object.entries(set)) {
+    if (num === value) {
+      return name;
+    }
+  }
+}
+
+function getEnumNumber(string, set) {
   for (const [ name, value ] of Object.entries(set)) {
     if (name === string) {
       return value;
@@ -338,4 +346,4 @@ function extractTimes(st_atim, st_mtim, fst_flags) {
   return times;
 }
 
-export { ObjectCache, adjustAddress, alignForward, always, createView, decodeBase64, decodeEnum, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, extractTimes, findElements, findObjects, findSortedIndex, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, never, toString, transformIterable, usize, usizeByteSize, usizeInvalid, usizeMax, usizeMin };
+export { ObjectCache, adjustAddress, alignForward, always, createView, decodeBase64, decodeEnum, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, extractTimes, findElements, findObjects, findSortedIndex, getEnumNumber, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, never, toString, transformIterable, usize, usizeByteSize, usizeInvalid, usizeMax, usizeMin };

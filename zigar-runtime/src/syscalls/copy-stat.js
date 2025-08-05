@@ -1,7 +1,7 @@
 import { PosixError, PosixFileType } from "../constants.js";
 import { mixin } from "../environment.js";
 import { InvalidEnumValue, TypeMismatch } from "../errors.js";
-import { createView, decodeEnum } from "../utils.js";
+import { createView, getEnumNumber } from "../utils.js";
 
 export default mixin({
   copyStat(bufAddress, stat) {
@@ -11,7 +11,7 @@ export default mixin({
     if (typeof(stat) !== 'object' || !stat) {
       throw new TypeMismatch('object or false', stat);
     }
-    let type = decodeEnum(stat.type, PosixFileType);
+    let type = getEnumNumber(stat.type, PosixFileType);
     if (type === undefined) {
       if (stat.type) {
         throw new InvalidEnumValue(PosixFileType, stat.type);

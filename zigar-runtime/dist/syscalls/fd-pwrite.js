@@ -13,9 +13,9 @@ var fdPwrite = mixin({
     const next = () => {
       return catchPosixError(canWait, PosixError.EIO, () => {
         if (!iovs) {
+          writer = this.getStream(fd, 'write');
           iovs = createView(iovsSize * iovsCount);
           this.moveExternBytes(iovs, iovsAddress, false);
-          writer = this.getStream(fd, 'write');
         }
         const ptr = iovs.getUint32(i * iovsSize, le);
         const len = iovs.getUint32(i * iovsSize + 4, le);

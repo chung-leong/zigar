@@ -1,7 +1,7 @@
 import { PosixError, PosixFileType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, InvalidEnumValue } from '../errors.js';
-import { isPromise, createView, encodeText, decodeEnum } from '../utils.js';
+import { isPromise, createView, encodeText, getEnumNumber } from '../utils.js';
 import './copy-int.js';
 
 var fdReaddir = mixin({
@@ -30,7 +30,7 @@ var fdReaddir = mixin({
       while (dent) {
         const { name, type = 'unknown', ino = 0 } = dent;
         const nameArray = encodeText(name);
-        const typeIndex = decodeEnum(type, PosixFileType);
+        const typeIndex = getEnumNumber(type, PosixFileType);
         if (typeIndex === undefined) {
           throw new InvalidEnumValue(PosixFileType, type);
         }

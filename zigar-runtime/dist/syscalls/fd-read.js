@@ -13,9 +13,9 @@ var fdRead = mixin({
     const next = () => {
       return catchPosixError(canWait, PosixError.EIO, () => {
         if (!iovs) {
+          reader = this.getStream(fd);
           iovs = createView(iovsSize * iovsCount);
           this.moveExternBytes(iovs, iovsAddress, false);
-          reader = this.getStream(fd);
         }
         const len = iovs.getUint32(i * iovsSize + 4, le);
         return reader.read(len);

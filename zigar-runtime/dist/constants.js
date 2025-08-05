@@ -149,7 +149,6 @@ const PosixError = {
   ENOTSUP: 58,
   ESPIPE: 70,
 };
-
 const PosixFileType = {
   unknown: 0,
   blockDevice: 1,
@@ -160,18 +159,20 @@ const PosixFileType = {
   socketStream: 6,
   symbolicLink: 7,
 };
-
 const PosixOpenFlag = {
   create: 1 << 0,
   directory: 1 << 1,
   exclusive: 1 << 2,
   truncate: 1 << 3,
 };
-
 const PosixLookupFlag = {
   symlinkFollow: 1 << 0,
 };
-
+const PosixLockType = {
+  read: 0,
+  write: 1,
+  unlock: 2,
+};
 const PosixDescriptorRight = {
   fd_datasync: 1 << 0,
   fd_read: 1 << 1,
@@ -204,7 +205,6 @@ const PosixDescriptorRight = {
   sock_shutdown: 1 << 28,
   sock_accept: 1 << 29,
 };
-
 const PosixDescriptorFlag = {
   append: 1 << 0,
   dsync: 1 << 1,
@@ -212,7 +212,6 @@ const PosixDescriptorFlag = {
   rsync: 1 << 3,
   sync: 1 << 4,
 };
-
 const PosixDescriptor = {
   stdin: 0,
   stdout: 1,
@@ -223,4 +222,4 @@ const PosixDescriptor = {
   max: 0x07ff_ffff, 
 };
 
-export { ArgStructFlag, ArrayFlag, EnumFlag, ErrorSetFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PosixDescriptor, PosixDescriptorFlag, PosixDescriptorRight, PosixError, PosixFileType, PosixLookupFlag, PosixOpenFlag, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };
+export { ArgStructFlag, ArrayFlag, EnumFlag, ErrorSetFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PosixDescriptor, PosixDescriptorFlag, PosixDescriptorRight, PosixError, PosixFileType, PosixLockType, PosixLookupFlag, PosixOpenFlag, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };
