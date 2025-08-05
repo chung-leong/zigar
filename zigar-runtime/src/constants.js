@@ -139,6 +139,7 @@ export const VisitorFlag = {
 export const PosixError = {
   NONE: 0,  
   EACCES: 2,
+  EAGAIN: 6,
   EBADF: 8,
   EDEADLK: 16,
   EEXIST: 20,

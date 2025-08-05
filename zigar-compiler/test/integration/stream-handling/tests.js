@@ -6,7 +6,7 @@ import { platform } from 'os';
 import { fileURLToPath } from 'url';
 import { InvalidArgument } from '../../../../zigar-runtime/src/errors.js';
 import { usize } from '../../../../zigar-runtime/src/utils.js';
-import { capture, captureError } from '../test-utils.js';
+import { capture, captureError, delay } from '../test-utils.js';
 
 use(chaiAsPromised);
 
@@ -1117,6 +1117,35 @@ export function addTests(importModule, options) {
       };
       expect(() => lock(file2)).to.not.throw();
     })
+    it('should set lock on file', async function() {
+      this.timeout(0);
+      const { lock, unlock } = await importTest('set-lock-on-file');
+      const file = {
+        read() {},
+        setlock(lock) {
+          if (!this.lock) {
+            if (lock.type !== 2) {
+              this.lock = lock;
+              return true;
+            }
+          } else {
+            if (lock.type === 2) {
+              this.lock = null;
+              return true;
+            }
+          }
+          return false;
+        }
+      };
+      const result1 = lock(file);
+      expect(result1).to.be.true;
+      expect(file.lock).to.eql({ type: 1, whence: 0, start: 0n, len: 0n, pid: 0 });
+      const result2 = lock(file);
+      expect(result2).to.be.false;
+      const result3 = unlock(file);
+      expect(result3).to.be.true;
+      expect(file.lock).to.be.null;
+    })
     it('should get lock on file using fcntl', async function() {
       this.timeout(0);
       const { check } = await importTest('get-lock-with-fcntl');
@@ -1137,6 +1166,66 @@ export function addTests(importModule, options) {
       };
       const lock = check(file3).valueOf();
       expect(lock).to.eql({ type: 0, whence: 0, start: 1234n, len: 8000n, pid: 123 });
+    })
+    it('should set lock on file using posix function', async function() {
+      this.timeout(0);
+      const { lock, unlock } = await importTest('set-lock-with-posix-function');
+      const file = {
+        read() {},
+        setlock(lock) {
+          if (!this.lock) {
+            if (lock.type !== 2) {
+              this.lock = lock;
+              return true;
+            }
+          } else {
+            if (lock.type === 2) {
+              this.lock = null;
+              return true;
+            }
+          }
+          return false;
+        }
+      };
+      const result1 = lock(file);
+      expect(result1).to.be.true;
+      expect(file.lock).to.eql({ type: 1, whence: 0, start: 0n, len: 0n, pid: 0 });
+      const result2 = lock(file);
+      expect(result2).to.be.false;
+      const result3 = unlock(file);
+      expect(result3).to.be.true;
+      expect(file.lock).to.be.null;
+    })
+    it('should set lock on file inside thread', async function() {
+      this.timeout(0);
+      const { spawn, startup, shutdown } = await importTest('set-lock-on-file-in-thread', { multithreaded: true });
+      const file = {
+        chunks: [],
+
+        write(chunk) {
+          this.chunks.push(chunk);
+        },
+        setlock(lock, wait) {
+          if (!this.lock && wait) {
+            this.lock = lock;
+            return delay(500).then(() => true);
+          } else if (lock.type == 2) {
+            this.lock = null;
+            return true;
+          }
+          return false;
+        }
+      };
+      startup();
+      try {
+        const written = await spawn(file);
+        expect(written).to.equal(11);
+        // wait a moment for the file to be unlocked
+        await delay(50);
+        expect(file.lock).to.be.null;
+      } finally {
+        shutdown();
+      }
     })
   })
 }

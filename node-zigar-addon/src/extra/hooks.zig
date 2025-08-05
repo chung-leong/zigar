@@ -109,6 +109,7 @@ pub const Syscall = extern struct {
         },
         setlk: extern struct {
             fd: i32,
+            wait: bool,
             flock: Flock,
         },
         stat: extern struct {
@@ -304,37 +305,44 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                             result.* = intFromError(err);
                         }
                     },
-                    std.posix.F.SETLK => {
-                        const flock: *const std.posix.Flock = @ptrFromInt(arg);
+                    std.posix.F.SETLK, std.posix.F.SETLKW => {
+                        const lock: *const std.posix.Flock = @ptrFromInt(arg);
                         var call: Syscall = .{ .cmd = .setlk, .u = .{
-                            .setlk = .{ .fd = @intCast(fd), .flock = .{
-                                .type = flock.type,
-                                .whence = flock.whence,
-                                .start = @intCast(flock.start),
-                                .len = @intCast(flock.len),
-                                .pid = @intCast(flock.pid),
-                            } },
+                            .setlk = .{
+                                .fd = @intCast(fd),
+                                .wait = op == std.posix.F.SETLKW,
+                                .flock = .{
+                                    .type = lock.type,
+                                    .whence = lock.whence,
+                                    .start = @intCast(lock.start),
+                                    .len = @intCast(lock.len),
+                                    .pid = @intCast(lock.pid),
+                                },
+                            },
                         } };
                         const err = Host.redirectSyscall(&call);
                         result.* = intFromError(err);
                     },
                     std.posix.F.GETLK => {
-                        const flock: *std.posix.Flock = @ptrFromInt(arg);
+                        const lock: *std.posix.Flock = @ptrFromInt(arg);
                         var call: Syscall = .{ .cmd = .getlk, .u = .{
-                            .getlk = .{ .fd = @intCast(fd), .flock = .{
-                                .type = flock.type,
-                                .whence = flock.whence,
-                                .start = @intCast(flock.start),
-                                .len = @intCast(flock.len),
-                                .pid = @intCast(flock.pid),
-                            } },
+                            .getlk = .{
+                                .fd = @intCast(fd),
+                                .flock = .{
+                                    .type = lock.type,
+                                    .whence = lock.whence,
+                                    .start = @intCast(lock.start),
+                                    .len = @intCast(lock.len),
+                                    .pid = @intCast(lock.pid),
+                                },
+                            },
                         } };
                         const err = Host.redirectSyscall(&call);
-                        flock.type = call.u.getlk.flock.type;
-                        flock.whence = call.u.getlk.flock.whence;
-                        flock.start = @intCast(call.u.getlk.flock.start);
-                        flock.len = @intCast(call.u.getlk.flock.len);
-                        flock.pid = @intCast(call.u.getlk.flock.pid);
+                        lock.type = call.u.getlk.flock.type;
+                        lock.whence = call.u.getlk.flock.whence;
+                        lock.start = @intCast(call.u.getlk.flock.start);
+                        lock.len = @intCast(call.u.getlk.flock.len);
+                        lock.pid = @intCast(call.u.getlk.flock.pid);
                         result.* = intFromError(err);
                     },
                     else => result.* = intFromError(.INVAL),
@@ -354,6 +362,33 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 const err = Host.redirectSyscall(&call);
                 result.* = intFromError(err);
                 return true;
+            }
+            return false;
+        }
+
+        pub fn flock(fd: c_int, op: c_int, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(fd)) {
+                const lock: std.posix.Flock = .{
+                    .type = switch (op & ~@as(c_int, std.posix.LOCK.NB)) {
+                        std.posix.LOCK.SH => std.posix.F.RDLCK,
+                        std.posix.LOCK.EX => std.posix.F.WRLCK,
+                        std.posix.LOCK.UN => std.posix.F.UNLCK,
+                        else => {
+                            result.* = intFromError(std.posix.E.INVAL);
+                            return true;
+                        },
+                    },
+                    .whence = std.posix.SEEK.SET,
+                    .start = 0,
+                    .len = 0,
+                    .pid = 0,
+                };
+                const fcntl_op: c_int = switch (op & std.posix.LOCK.NB) {
+                    0 => std.posix.F.SETLKW,
+                    else => std.posix.F.SETLK,
+                };
+                std.debug.print("flock\n", .{});
+                return fcntl(fd, fcntl_op, @intFromPtr(&lock), result);
             }
             return false;
         }
@@ -879,6 +914,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const fcntl = makeStdHook("fcntl");
         pub const fcntl64 = makeStdHookUsing("fcntl64", "fcntl");
         pub const fdatasync = makeStdHook("fdatasync");
+        pub const flock = makeStdHook("flock");
         pub const fstat = makeStdHook("fstat");
         pub const fstat64 = makeStdHookUsing("fstat64", "fstat");
         pub const fstatat = makeStdHookUsing("fstatat", "newfstatat");
@@ -911,7 +947,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const unlinkat = makeStdHook("unlinkat");
         pub const utimensat = makeStdHook("utimensat");
         pub const utimes = makeStdHook("utimes");
-        pub const write = makeStdHook("write");
+        // pub const write = makeStdHook("write");
 
         pub fn __fxstat(ver: c_int, fd: c_int, buf: *std.posix.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
@@ -1009,7 +1045,15 @@ pub fn PosixSubstitute(comptime redirector: type) type {
                 .arg = arg,
                 .instance = redirector.Host.getInstance() catch return @intFromEnum(std.posix.E.FAULT),
             };
-            return Original.pthread_create(thread, attr, setThreadContext, info);
+            std.debug.print("pthread_create {x} {x}\n", .{ @intFromPtr(&setThreadContext), @intFromPtr(start_routine) });
+            // _ = thread;
+            // _ = attr;
+            // return 0;
+            const result = Original.pthread_create(thread, attr, setThreadContext, info);
+            std.debug.print("pthread_create => {}\n", .{result});
+            return result;
+
+            // return Original.pthread_create(thread, attr, start_routine, arg);
         }
 
         pub fn readdir(d: *std.c.DIR) callconv(.c) ?*align(1) const std.c.dirent64 {
@@ -1146,13 +1190,20 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         };
 
         fn setThreadContext(ptr: ?*anyopaque) callconv(.c) ?*anyopaque {
-            const info: *ThreadInfo = @ptrCast(@alignCast(ptr.?));
-            const proc = info.proc;
-            const arg = info.arg;
-            const instance = info.instance;
-            c_allocator.destroy(info);
-            redirector.Host.initializeThread(instance) catch {};
-            return proc(arg);
+            _ = ptr;
+            // std.debug.print("setThreadContext\n", .{});
+            // const info: *ThreadInfo = @ptrCast(@alignCast(ptr.?));
+            // const proc = info.proc;
+            // const arg = info.arg;
+            // const instance = info.instance;
+            // std.debug.print("setThreadContext: destroying...\n", .{});
+            // c_allocator.destroy(info);
+            // std.debug.print("setThreadContext: initializing...\n", .{});
+            // redirector.Host.initializeThread(instance) catch {};
+            // // return proc(arg);
+            // _ = proc;
+            // _ = arg;
+            return null;
         }
 
         const errno_h = @cImport({
@@ -1177,6 +1228,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var fcntl: *const @TypeOf(Sub.fcntl) = undefined;
             pub var fcntl64: *const @TypeOf(Sub.fcntl64) = undefined;
             pub var fdatasync: *const @TypeOf(Sub.fdatasync) = undefined;
+            pub var flock: *const @TypeOf(Sub.flock) = undefined;
             pub var fstat: *const @TypeOf(Sub.fstat) = undefined;
             pub var fstat64: *const @TypeOf(Sub.fstat64) = undefined;
             pub var fstatat: *const @TypeOf(Sub.fstatat) = undefined;
@@ -1215,7 +1267,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var unlinkat: *const @TypeOf(Sub.unlinkat) = undefined;
             pub var utimensat: *const @TypeOf(Sub.utimensat) = undefined;
             pub var utimes: *const @TypeOf(Sub.utimes) = undefined;
-            pub var write: *const @TypeOf(Sub.write) = undefined;
+            // pub var write: *const @TypeOf(Sub.write) = undefined;
         };
     };
 }
@@ -1507,9 +1559,13 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         }
 
         fn write(file: *RedirectedFile, buffer: [*]const u8, len: isize) callconv(.c) isize {
-            const result = posix.write(file.fd, buffer, len);
-            if (result < 0) file.errno = posix.getError();
-            return result;
+            // const result = posix.write(file.fd, buffer, len);
+            // if (result < 0) file.errno = posix.getError();
+            // return result;
+            _ = file;
+            _ = buffer;
+            _ = len;
+            return 0;
         }
 
         fn getRedirectedFile(s: *std.c.FILE) callconv(.c) ?*RedirectedFile {

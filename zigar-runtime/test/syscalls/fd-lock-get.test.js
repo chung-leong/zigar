@@ -50,7 +50,7 @@ describe('Syscall: fd-lock-get', function() {
     const result2 = env.fdLockGet(fd1, flockAddress, false);
     expect(result2).to.equal(0);
   })
-  it('should return EACCESS on lock conflict', async function() {
+  it('should copy info about existing lock into memory location', async function() {
     const env = new Env();
     if (process.env.TARGET === 'wasm') {
       env.memory = new WebAssembly.Memory({ initial: 1 });
@@ -92,7 +92,7 @@ describe('Syscall: fd-lock-get', function() {
     dv.setBigUint64(16, 2048n, le);
     const fd1 = env.createStreamHandle(file1);
     const result1 = env.fdLockGet(fd1, flockAddress, false);
-    expect(result1).to.equal(PosixError.EACCES);
+    expect(result1).to.equal(PosixError.NONE);
     const lock1 = {
       type: dv.getUint16(0, le),
       whence: dv.getUint16(2, le),
@@ -108,7 +108,7 @@ describe('Syscall: fd-lock-get', function() {
     };
     const fd2 = env.createStreamHandle(file2);
     const result2 = env.fdLockGet(fd2, flockAddress, false);
-    expect(result2).to.equal(PosixError.EACCES);
+    expect(result2).to.equal(PosixError.NONE);
     const lock2 = {
       type: dv.getUint16(0, le),
       whence: dv.getUint16(2, le),

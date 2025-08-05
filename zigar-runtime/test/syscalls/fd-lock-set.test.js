@@ -89,6 +89,6 @@ describe('Syscall: fd-lock-set', function() {
     const fd = env.createStreamHandle(file);
     env.fdLockSet(fd, flockAddress, false);
     const result = env.fdLockSet(fd, flockAddress, false);
-    expect(result).to.equal(PosixError.EACCES);
+    expect(result).to.equal(PosixError.EAGAIN);
   })
 })

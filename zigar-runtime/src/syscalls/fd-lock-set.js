@@ -4,9 +4,9 @@ import { catchPosixError, expectBoolean } from '../errors.js';
 import { createView, hasMethod } from '../utils.js';
 
 export default mixin({
-  fdLockSet(fd, flockAddress, canWait) {
+  fdLockSet(fd, flockAddress, wait, canWait) {
     const le = this.littleEndian;
-    return catchPosixError(canWait, PosixError.EACCES, () => {
+    return catchPosixError(canWait, PosixError.EAGAIN, () => {
       const stream = this.getStream(fd);
       if (hasMethod(stream, 'setlock')) {
         const flock = createView(24);
@@ -16,11 +16,11 @@ export default mixin({
         const pid = flock.getUint32(4, le)
         const start = flock.getBigUint64(8, le)
         const len = flock.getBigUint64(16, le)
-        return stream.setlock({ type, whence, start, len, pid });
+        return stream.setlock({ type, whence, start, len, pid }, wait);
       } else {
         return true;
       }
-    }, (set) => expectBoolean(set, PosixError.EACCES));
+    }, (set) => expectBoolean(set, PosixError.EAGAIN));
   },
   ...(process.env.TARGET === 'node' ? {
     exports: {

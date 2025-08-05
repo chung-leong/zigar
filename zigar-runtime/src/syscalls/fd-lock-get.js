@@ -19,7 +19,7 @@ export default mixin({
         return stream.getlock({ type, whence, start, length, pid });
       } 
     }, (lock) => {
-      let flock, err;
+      let flock;
       if (lock) {
         // conflict
         flock = createView(24);
@@ -28,15 +28,12 @@ export default mixin({
         flock.setUint32(4, lock.pid ?? 0, le);
         flock.setBigInt64(8, lock.start ?? 0n, le);
         flock.setBigUint64(16, lock.length ?? 0n, le);
-        err = PosixError.EACCES;
       } else {
         // change type to unlock (2)
         flock = createView(2);
         flock.setUint16(0, 2, le);
-        err = PosixError.NONE;
       }
       this.moveExternBytes(flock, flockAddress, true);
-      return err;
     });
   },
   ...(process.env.TARGET === 'node' ? {

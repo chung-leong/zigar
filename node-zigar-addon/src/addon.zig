@@ -1204,6 +1204,7 @@ const ModuleHost = struct {
         return try self.callPosixFunction(self.js.fd_lock_set, &.{
             try env.createInt32(args.fd),
             try env.createUsize(@intFromPtr(&args.flock)),
+            try env.getBoolean(args.wait),
             futex,
         });
     }
