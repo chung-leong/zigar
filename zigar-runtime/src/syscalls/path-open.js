@@ -5,14 +5,18 @@ import { decodeFlags } from '../utils.js';
 import './copy-int.js';
 
 const Right = {
-  read: BigInt(PosixDescriptorRight.fd_read),
-  write: BigInt(PosixDescriptorRight.fd_write),
-  readdir: BigInt(PosixDescriptorRight.fd_readdir),
+  read: PosixDescriptorRight.fd_read,
+  write: PosixDescriptorRight.fd_write,
+  readdir: PosixDescriptorRight.fd_readdir,
 };
 
 export default mixin({
   pathOpen(dirFd, lFlags, pathAddress, pathLen, oFlags, rightsBase, rightsInheriting, fdFlags, fdAddress, canWait) {
-    const rights = decodeFlags(rightsBase | rightsInheriting, Right);
+    let fdRights = Number(rightsBase | rightsInheriting);
+    if (!(fdRights & PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write | PosixDescriptorRight.fd_readdir)) {
+      fdRights |= PosixDescriptorRight.fd_read;
+    }
+    const rights = decodeFlags(fdRights, Right);
     const flags = {
       ...decodeFlags(lFlags, PosixLookupFlag),
       ...decodeFlags(oFlags, PosixOpenFlag),
@@ -27,14 +31,14 @@ export default mixin({
         return PosixError.ENOENT;
       }
       let resource;
-      if (rights.read || Object.values(rights).length === 0) {
+      if (rights.read) {
         resource = this.convertReader(arg);
       } else if (rights.write) {
         resource = this.convertWriter(arg);
       } else if (rights.readdir) {
         resource = this.convertDirectory(arg);
       }
-      const fd = this.createStreamHandle(resource);
+      const fd = this.createStreamHandle(resource, fdRights, fdFlags);
       this.setStreamLocation?.(fd, loc);
       this.copyUint32(fdAddress, fd);
     });

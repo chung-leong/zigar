@@ -6,7 +6,7 @@ import { extractTimes } from '../utils.js';
 export default mixin({
   fdFilestatSetTimes(fd, atime, mtime, tFlags, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      const stream = this.getStream(fd);
+      const [ stream ] = this.getStream(fd);
       const target = stream.valueOf();
       const loc = this.getStreamLocation?.(fd);
       const times = extractTimes(atime, mtime, tFlags);

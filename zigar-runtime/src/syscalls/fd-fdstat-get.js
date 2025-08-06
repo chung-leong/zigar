@@ -1,22 +1,13 @@
 import { PosixDescriptorRight, PosixError, PosixFileType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, InvalidEnumValue } from '../errors.js';
-import { createView, getEnumNumber, hasMethod } from '../utils.js';
+import { createView, getEnumNumber } from '../utils.js';
 
 export default mixin({
   fdFdstatGet(fd, bufAddress, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      const stream = this.getStream(fd);
-      let rights = 0, flags = 0, type;
-      rights = PosixDescriptorRight.fd_filestat_get;
-      if (this.listenerMap.get('set_times') && this.getStreamLocation?.(fd)) {
-        rights |= PosixDescriptorRight.fd_filestat_set_times;
-      }
-      for (const name of [ 'read', 'write', 'seek', 'tell', 'advise', 'allocate', 'datasync', 'sync', 'readdir' ]) {
-        if (hasMethod(stream, name)) {
-          rights |= PosixDescriptorRight[`fd_${name}`];
-        }
-      }
+      const [ stream, rights, flags ] = this.getStream(fd);
+      let type;
       if (stream.type) {
         type = getEnumNumber(stream.type, PosixFileType);
         if (type === undefined) {
@@ -28,9 +19,6 @@ export default mixin({
         } else {
           type = PosixFileType.directory;
         }
-      }
-      if (type === PosixFileType.directory) {
-        rights |= PosixDescriptorRight.path_open | PosixDescriptorRight.path_filestat_get;
       }
       const dv = createView(24);
       dv.setUint8(0, type);

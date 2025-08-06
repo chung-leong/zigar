@@ -91,7 +91,7 @@ describe('Feature: reader-conversion', function() {
       const reader = env.convertReader(null);
       const buffer = new Uint8Array(4);
       const res = await reader.read(buffer);
-      expect(res).to.equal(0);
+      expect(res).to.have.property('length', 0);
       expect(buffer).to.eql(new Uint8Array([ 0, 0, 0, 0 ]));
     })
     it('should return the same object when it contains a read function', async function() {

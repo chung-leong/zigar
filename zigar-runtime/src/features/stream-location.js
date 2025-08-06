@@ -21,7 +21,7 @@ export default mixin({
         list.push(part);
       }
     }
-    const stream = this.getStream(dirFd);
+    const [ stream ] = this.getStream(dirFd);
     return { parent: stream.valueOf(), path: list.join('/') };
   },
   getStreamLocation(fd) {

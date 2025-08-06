@@ -1,6 +1,6 @@
 import { memberNames, PosixError, StructureType } from './constants.js';
 import { TYPED_ARRAY, UPDATE } from './symbols.js';
-import { defineProperty, getPrimitiveName, isPromise } from './utils.js';
+import { defineProperty, getPrimitiveName, hasMethod, isPromise } from './utils.js';
 
 export class MustBeOverridden extends Error {
   constructor() {
@@ -563,6 +563,18 @@ export function catchPosixError(canWait = false, defErrorCode, run, resolve, rej
     }
   } catch (err) {
     return fail(err);
+  }
+}
+
+export function checkAccessRight(rights, required) {
+  if (!(rights & required)) {
+    throw new InvalidFileDescriptor();
+  }
+}
+
+export function checkStreamMethod(stream, name) {
+  if (!hasMethod(stream, name)) {
+    throw new InvalidFileDescriptor();
   }
 }
 

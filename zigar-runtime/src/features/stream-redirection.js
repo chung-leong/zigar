@@ -1,7 +1,7 @@
-import { PosixDescriptor } from '../constants.js';
+import { PosixDescriptor, PosixDescriptorRight } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidFileDescriptor } from '../errors.js';
-import { decodeText, hasMethod } from '../utils.js';
+import { decodeText } from '../utils.js';
 
 export default mixin({
   init() {
@@ -28,23 +28,32 @@ export default mixin({
       },
     };
     this.streamMap = new Map([ 
-      [ PosixDescriptor.stdout, this.createLogWriter('stdout') ], 
-      [ PosixDescriptor.stderr, this.createLogWriter('stderr') ], 
-      [ PosixDescriptor.root, root ] 
+      [ 
+        PosixDescriptor.stdout, 
+        [ this.createLogWriter('stdout'), PosixDescriptorRight.fd_write, 0 ] 
+      ], 
+      [ 
+        PosixDescriptor.stderr, 
+        [ this.createLogWriter('stderr'), PosixDescriptorRight.fd_write, 0 ]
+      ], 
+      [ 
+        PosixDescriptor.root, 
+        [ root, PosixDescriptorRight.fd_readdir, 0 ], 
+      ] 
     ]);
     this.flushRequestMap = new Map();
     this.nextStreamHandle = PosixDescriptor.min;
   },
-  getStream(fd, method) {
-    const stream = this.streamMap.get(fd);
-    if (!stream || (method && !hasMethod(stream, method))) {
+  getStream(fd) {
+    const entry = this.streamMap.get(fd);
+    if (!entry) {
       throw new InvalidFileDescriptor();
     }
-    return stream;
+    return entry;
   },
-  createStreamHandle(stream) {
+  createStreamHandle(stream, rights, flags = 0) {
     const fd = this.nextStreamHandle++;
-    this.streamMap.set(fd, stream);
+    this.streamMap.set(fd, [ stream, rights, flags ]);
     stream.onClose = () => this.destroyStreamHandle(fd);
     if (process.env.TARGET === 'node') {
       if (this.streamMap.size === 4) {
@@ -54,7 +63,7 @@ export default mixin({
     return fd;
   },
   destroyStreamHandle(fd) {
-    const stream = this.streamMap.get(fd);
+    const [ stream ] = this.streamMap.get(fd);
     stream?.destroy?.();
     this.streamMap.delete(fd);
     if (process.env.TARGET === 'node') {
@@ -68,17 +77,20 @@ export default mixin({
     const fd = (num === 3) ? PosixDescriptor.root : num;
     const previous = map.get(fd);
     if (arg !== undefined) {
-      let stream;
+      let stream, rights;
       if (num === 0) {
         stream = this.convertReader(arg);
+        rights = PosixDescriptorRight.fd_read;
       } else if (num === 1 || num === 2) {
         stream = this.convertWriter(arg);
+        rights = PosixDescriptorRight.fd_write;
       } else if (num === 3) {
         stream = this.convertDirectory(arg);
+        rights = PosixDescriptorRight.fd_readdir;
       } else {
         throw new Error(`Expecting 0, 1, 2, or 3, received ${fd}`);
       }
-      map.set(fd, stream);
+      map.set(fd, [ stream, rights, 0 ]);
     } else {
       map.delete(fd);
     }

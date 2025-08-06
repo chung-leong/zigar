@@ -55,7 +55,8 @@ describe('Syscall: fd-filestat-set-times', function() {
     expect(event).to.eql({
       parent: null,
       target: array,
-      path: 'hello.txt', 
+      path: 'hello.txt',
+      flags: {},
       times: { atime: 123n, mtime: 456n } 
     });
   })
@@ -95,6 +96,7 @@ describe('Syscall: fd-filestat-set-times', function() {
     const result = env.fdFilestatSetTimes(fd, 123n, 456n, 1 << 0 | 1 << 2);
     expect(result).to.equal(PosixError.NONE);
     expect(event).to.eql({
+      flags: {},
       target: array,
       times: { atime: 123n, mtime: 456n } 
     });

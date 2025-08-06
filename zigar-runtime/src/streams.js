@@ -1,41 +1,60 @@
+import { PosixError } from './constants.js';
 import { InvalidArgument } from './errors.js';
 import { empty } from './utils.js';
 
-export class WebStreamReader {
-  done = false;  
+export class AsyncReader {
   bytes = null;
-  onClose = null;
+  promise = null;
+  done = false;  
 
-  constructor(reader) {
-    this.reader = reader;
-    reader.close = () => this.onClose?.();
+  readnb(len) {
+    if (!this.bytes) {
+      if (!this.promise) {
+        this.promise = this.fetch(len).then(() => this.promise = null);
+      }
+      return PosixError.EAGAIN;
+    }
+    return this.shift(len);
   }
 
   async read(len) {
+    if (this.promise) {
+      // wait for outstanding non-blocking retrieval
+      await this.promise;
+    }
     // keep reading until there's enough bytes to cover the request length
     while ((!this.bytes || this.bytes.length < len) && !this.done) {
-      let { value } = await this.reader.read();
-      if (value) {
-        if (!(value instanceof Uint8Array)) {
-          if (value instanceof ArrayBuffer) {
-            value = new Uint8Array(value);
-          } else if (value.buffer instanceof ArrayBuffer) {
-            value = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
-          }
-        }
-        if (!this.bytes) {
-          this.bytes = value;
-        } else {
-          const len1 = this.bytes.length, len2 = value.length;
-          const array = new Uint8Array(len1 + len2);
-          array.set(this.bytes);
-          array.set(value, len1);
-          this.bytes = array;
-        }
+      await this.fetch(len - (this.bytes?.length ?? 0));
+    }
+    return this.shift(len);
+  }
+
+  store(chunk) {
+    if (!chunk) {
+      this.done = true;
+      return;
+    }
+    if (!(chunk instanceof Uint8Array)) {
+      if (chunk instanceof ArrayBuffer) {
+        chunk = new Uint8Array(value);
+      } else if (value.buffer instanceof ArrayBuffer) {
+        chunk = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
       } else {
-        this.done = true;
+        return;
       }
     }
+    if (!this.bytes) {
+      this.bytes = chunk;
+    } else {
+      const len1 = this.bytes.length, len2 = chunk.length;
+      const array = new Uint8Array(len1 + len2);
+      array.set(this.bytes);
+      array.set(chunk, len1);
+      this.bytes = array;
+    }
+  }
+
+  shift(len) {
     let chunk;
     if (this.bytes) {
       if (this.bytes.length > len) {
@@ -46,7 +65,22 @@ export class WebStreamReader {
         this.bytes = null;
       }
     }
-    return chunk ?? new Uint8Array(0);
+    return chunk ?? new Uint8Array(0);    
+  }
+}
+
+export class WebStreamReader extends AsyncReader {
+  onClose = null;
+
+  constructor(reader) {
+    super();
+    this.reader = reader;
+    reader.close = () => this.onClose?.();
+  }
+
+  async fetch() {
+    const { value } = await this.reader.read();
+    this.store(value);
   }
 
   destroy() {
@@ -62,30 +96,41 @@ export class WebStreamReader {
 }
 
 export class WebStreamReaderBYOB extends WebStreamReader {
-  bytes = null;
+  buffer = null;
 
-  async read(len) {
-    if (!this.bytes || this.bytes.length < len) {
-      this.bytes = new Uint8Array(len);
-    }
-    let chunk;
-    if (!this.done) {
-      const { value } = await this.reader.read(this.bytes);
-      if (value) {
-        chunk = value;
-      } else {
-        this.done = true;
-      }
-    }
-    return chunk ?? new Uint8Array(0);
+  async fetch(len) {
+    const buffer = new Uint8Array(len);
+    const { value } = await this.reader.read(buffer);
+    this.store(value);
   }
 }
 
-export class WebStreamWriter {
+export class AsyncWriter {
+  promise = null;
+
+  writenb(bytes) {
+    if (this.promise) {
+      return PosixError.EAGAIN;
+    }
+    this.promise = this.send(bytes).then(() => {
+      this.promise = null;
+    });
+  }
+
+  async write(bytes) {
+    if (this.promise) {
+      await this.promise;
+    }
+    await this.send(bytes);
+  }
+}
+
+export class WebStreamWriter extends AsyncWriter {
   onClose = null;
   done = false;
 
   constructor(writer) {
+    super();
     this.writer = writer;
     writer.closed.catch(empty).then(() => {
       this.done = true;
@@ -93,7 +138,7 @@ export class WebStreamWriter {
     });
   }
 
-  async write(bytes) {
+  async send(bytes) {
     await this.writer.write(bytes);
   }
 
@@ -104,20 +149,21 @@ export class WebStreamWriter {
   }
 }
 
-export class BlobReader {
+export class BlobReader extends AsyncReader {
   pos = 0n;
   onClose = null;
 
   constructor(blob) {
+    super();
     this.blob = blob;
-    this.size = BigInt(blob.size ?? blob.length);
+    this.size = BigInt(blob.size);
     blob.close = () => this.onClose?.();
   }
 
-  async read(len) {
-    const buf = await this.pread(len, this.pos);
-    this.pos += BigInt(buf.length);
-    return buf;
+  async fetch(len) {
+    const chunk = await this.pread(len, this.pos);
+    this.pos += BigInt(chunk.length);
+    this.store(chunk.length > 0 ? chunk : null);
   }
 
   async pread(len, offset) {
@@ -133,15 +179,8 @@ export class BlobReader {
   }
 
   seek(offset, whence) {
-    const { size } = this;
-    let pos = -1n;
-    switch (whence) {
-      case 0: pos = offset; break;
-      case 1: pos = this.pos + offset; break;
-      case 2: pos = size + offset; break;
-    }
-    if (!(pos >= 0n && pos <= size)) throw new InvalidArgument();
-    return this.pos = pos;
+    this.done = false;
+    return this.pos = reposition(whence, offset, this.pos, this.size);
   }
 
   valueOf() {
@@ -149,11 +188,28 @@ export class BlobReader {
   }
 }
 
-export class Uint8ArrayReadWriter extends BlobReader {
+export class Uint8ArrayReadWriter {
+  pos = 0n;
+  onClose = null;
+
+  constructor(array) {
+    this.array = array;
+    this.size = BigInt(array.length);    
+    array.close = () => this.onClose?.();
+  }
+
+  readnb(len) {
+    return this.read(len);
+  }
+
   read(len) {
     const buf = this.pread(len, this.pos);
-    this.pos = BigInt(buf.length);
+    this.pos += BigInt(buf.length);
     return buf;
+  }
+
+  writenb(buf) {
+    return this.write(buf);
   }
 
   write(buf) {
@@ -164,13 +220,24 @@ export class Uint8ArrayReadWriter extends BlobReader {
   pread(len, offset) {
     const start = Number(offset);
     const end = start + len;
-    this.pos = BigInt(end);
-    return this.blob.subarray(start, end);
+    return this.array.subarray(start, end);
   }
 
   pwrite(buf, offset) {
     const start = Number(offset);
-    this.blob.set(buf, start);
+    this.array.set(buf, start);
+  }
+
+  tell() {
+    return this.pos;
+  }
+
+  seek(offset, whence) {
+    return this.pos = reposition(whence, offset, this.pos, this.size);
+  }
+
+  valueOf() {
+    return this.array;
   }
 }
 
@@ -179,6 +246,10 @@ export class ArrayWriter {
     this.array = array;
     this.closeCB = null;
     array.close = () => this.onClose?.();
+  }
+
+  writenb(bytes) {
+    this.write(bytes);
   }
 
   write(bytes) {
@@ -244,4 +315,15 @@ export class MapDirectory {
   valueOf() {
     return this.map;
   }
+}
+
+function reposition(whence, offset, current, size) {
+  let pos = -1n;
+  switch (whence) {
+    case 0: pos = offset; break;
+    case 1: pos = current + offset; break;
+    case 2: pos = size + offset; break;
+  }
+  if (!(pos >= 0n && pos <= size)) throw new InvalidArgument();
+  return pos;
 }

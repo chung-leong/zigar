@@ -7,7 +7,7 @@ export default mixin({
   fdLockGet(fd, flockAddress, canWait) {
     const le = this.littleEndian;
     return catchPosixError(canWait, PosixError.EACCES, () => {      
-      const stream = this.getStream(fd);
+      const [ stream ] = this.getStream(fd);
       if (hasMethod(stream, 'getlock')) {
         const flock = createView(24);
         this.moveExternBytes(flock, flockAddress, false);

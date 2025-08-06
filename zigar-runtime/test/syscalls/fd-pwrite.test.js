@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { PosixError } from '../../src/constants.js';
+import { PosixDescriptorRight, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { usize, usizeByteSize } from '../../src/utils.js';
@@ -47,9 +47,9 @@ describe('Syscall: fd-pwrite', function() {
     set.call(iovsDV, usizeByteSize * 3, stringLen, le);
     let result;
     const array = new Uint8Array(64);
-    const reader = env.convertReader(array);
-    env.redirectStream(0, reader);
-    result = env.fdPwrite(0, iovsAddress, 2, usize(4), writtenAddress);
+    const writer = env.convertWriter(array);
+    const fd = env.createStreamHandle(writer, PosixDescriptorRight.fd_write);
+    result = env.fdPwrite(fd, iovsAddress, 2, usize(4), writtenAddress);
     expect(result).to.equal(PosixError.NONE);
     const writtenDV = env.obtainZigView(writtenAddress, 4);
     const written = writtenDV.getUint32(0, le);
@@ -79,9 +79,9 @@ describe('Syscall: fd-pwrite', function() {
       let result;
       const f = env.getWASIHandler('fd_pwrite');
       const array = new Uint8Array(64);
-      const reader = env.convertReader(array);
-      env.redirectStream(0, reader);
-      result = f(0, iovsAddress, 2, usize(4), writtenAddress);
+      const writer = env.convertWriter(array);
+      const fd = env.createStreamHandle(writer, PosixDescriptorRight.fd_write);
+      result = f(fd, iovsAddress, 2, usize(4), writtenAddress);
       const writtenDV = env.obtainZigView(writtenAddress, 4);
       const written = writtenDV.getUint32(0, le);
       expect(written).to.equal(string.length * 2);
@@ -117,14 +117,14 @@ describe('Syscall: fd-pwrite', function() {
         };
       }
       const array = new Uint8Array(64);
-      const reader = env.convertReader(array);
-      env.redirectStream(0, reader);
+      const writer = env.convertWriter(array);
+      const fd = env.createStreamHandle(writer, PosixDescriptorRight.fd_write);
       const address = usize(0x1000);
       const writtenAddress = usize(0x3000);
       const string = new TextEncoder().encode('Hello world\n');
       const dv = env.obtainZigView(address, string.length, false);
       for (let i = 0; i < string.length; i++) dv.setUint8(i, string[i]);
-      env.fdPwrite1(0, address, dv.byteLength, usize(4), writtenAddress);
+      env.fdPwrite1(fd, address, dv.byteLength, usize(4), writtenAddress);
       const subarray = array.slice(4, 4 + string.length);
       expect(subarray).to.eql(string);
     })

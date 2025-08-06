@@ -10,7 +10,7 @@ export default mixin({
       return PosixError.EINVAL;
     }
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      const dir = this.getStream(fd);
+      const [ dir ] = this.getStream(fd);
       if (process.env.TARGET === 'node') {
         // we don't get a cookie on the Node side
         if (cookie === 0n) {

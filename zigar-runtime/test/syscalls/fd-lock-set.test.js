@@ -47,7 +47,7 @@ describe('Syscall: fd-lock-set', function() {
     expect(result).to.equal(0);
     expect(file.lock).to.eql({ type: 0, whence: 0, start: 1000n, len: 2048n, pid: 0 });
   })
-  it('should return EACCESS on lock conflict', async function() {
+  it('should return EAGAIN on lock conflict', async function() {
     const env = new Env();
     if (process.env.TARGET === 'wasm') {
       env.memory = new WebAssembly.Memory({ initial: 1 });

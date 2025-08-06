@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { BlobReader, NullStream, Uint8ArrayReadWriter, WebStreamReaderBYOB } from '../streams.js';
+import { BlobReader, NullStream, Uint8ArrayReadWriter, WebStreamReader, WebStreamReaderBYOB } from '../streams.js';
 import { hasMethod } from '../utils.js';
 
 export default mixin({

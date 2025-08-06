@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { PosixError } from '../../src/constants.js';
+import { PosixDescriptorRight, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { usize, usizeByteSize } from '../../src/utils.js';
@@ -193,7 +193,7 @@ describe('Feature: stream-redirection', function() {
       });
       const reader = stream.getReader();
       const file = env.convertReader(reader);
-      const handle = env.createStreamHandle(file);
+      const handle = env.createStreamHandle(file, PosixDescriptorRight.fd_read);
       expect(handle).to.be.a('number');
       env.destroyStreamHandle(handle);
     })
@@ -204,14 +204,14 @@ describe('Feature: stream-redirection', function() {
       });
       const writer = stream.getWriter();
       const file = env.convertWriter(writer);
-      const handle = env.createStreamHandle(file);
+      const handle = env.createStreamHandle(file, PosixDescriptorRight.fd_write);
       expect(handle).to.be.a('number');
       env.destroyStreamHandle(handle);
     })
     it('should create a handle from null', async function() {
       const env = new Env();
       const file = env.convertWriter(null);
-      const handle = env.createStreamHandle(file);
+      const handle = env.createStreamHandle(file, PosixDescriptorRight.fd_read);
       expect(handle).to.be.a('number');
       env.destroyStreamHandle(handle);
     })

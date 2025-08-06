@@ -6,7 +6,7 @@ import './copy-stat.js';
 export default mixin({
   fdFilestatGet(fd, bufAddress, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      const stream = this.getStream(fd);
+      const [ stream ] = this.getStream(fd);
       const target = stream.valueOf();
       const loc = this.getStreamLocation?.(fd);
       try {
