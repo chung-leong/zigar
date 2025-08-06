@@ -98,6 +98,8 @@ export { default as SyscallFdAllocate } from './syscalls/fd-allocate.js';
 export { default as SyscallFdClose } from './syscalls/fd-close.js';
 export { default as SyscallFdDatasync } from './syscalls/fd-datasync.js';
 export { default as SyscallFdFdstatGet } from './syscalls/fd-fdstat-get.js';
+export { default as SyscallFdFdstatSetFlags } from './syscalls/fd-fdstat-set-flags.js';
+export { default as SyscallFdFdstatSetRights } from './syscalls/fd-fdstat-set-rights.js';
 export { default as SyscallFdFilestatGet } from './syscalls/fd-filestat-get.js';
 export { default as SyscallFdFilestatSetTimes } from './syscalls/fd-filestat-set-times.js';
 export { default as SyscallFdLockGet } from './syscalls/fd-lock-get.js';

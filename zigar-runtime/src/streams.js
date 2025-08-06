@@ -1,5 +1,4 @@
-import { PosixError } from './constants.js';
-import { InvalidArgument } from './errors.js';
+import { InvalidArgument, WouldBlock } from './errors.js';
 import { empty } from './utils.js';
 
 export class AsyncReader {
@@ -12,7 +11,7 @@ export class AsyncReader {
       if (!this.promise) {
         this.promise = this.fetch(len).then(() => this.promise = null);
       }
-      return PosixError.EAGAIN;
+      throw new WouldBlock();
     }
     return this.shift(len);
   }
@@ -110,7 +109,7 @@ export class AsyncWriter {
 
   writenb(bytes) {
     if (this.promise) {
-      return PosixError.EAGAIN;
+      throw new WouldBlock();
     }
     this.promise = this.send(bytes).then(() => {
       this.promise = null;

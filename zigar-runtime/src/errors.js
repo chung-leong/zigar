@@ -421,6 +421,14 @@ export class InvalidFileDescriptor extends Error {
   }
 }
 
+export class MissingStreamMethod extends Error {
+  code = PosixError.EBADF;
+
+  constructor(name) {
+    super(`Missing stream method: ${name}`);
+  }
+}
+
 export class InvalidArgument extends Error {
   code = PosixError.EINVAL;
 
@@ -434,6 +442,14 @@ export class IllegalSeek extends Error {
 
   constructor() {
     super(`Illegal seek`);
+  }
+}
+
+export class WouldBlock extends Error {
+  code = PosixError.EAGAIN;
+
+  constructor() {
+    super(`Would block`);
   }
 }
 
@@ -544,7 +560,14 @@ export function deanimalizeErrorName(name) {
 
 export function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
   const fail = (err) => {
-    const result = (reject) ? reject(err) : console.error(err);
+    let result;
+    if (reject) {
+      result = reject(err);
+    } else {
+      if (err.code !== PosixError.EAGAIN) {
+        console.error(err);
+      }
+    }
     return result ?? err.code ?? defErrorCode;
   };
   const done = (value) => {
@@ -574,7 +597,7 @@ export function checkAccessRight(rights, required) {
 
 export function checkStreamMethod(stream, name) {
   if (!hasMethod(stream, name)) {
-    throw new InvalidFileDescriptor();
+    throw new MissingStreamMethod(name);
   }
 }
 
