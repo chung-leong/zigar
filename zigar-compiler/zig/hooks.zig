@@ -107,6 +107,10 @@ pub const Syscall = extern struct {
             whence: u32,
             position: u64 = undefined,
         },
+        setfl: extern struct {
+            fd: i32,
+            fdflags: Fdflags = undefined,
+        },
         setlk: extern struct {
             fd: i32,
             wait: bool,
@@ -163,6 +167,7 @@ pub const Syscall = extern struct {
         read,
         rmdir,
         seek,
+        setfl,
         setlk,
         stat,
         sync,
@@ -190,6 +195,7 @@ pub const Syscall = extern struct {
     pub const Timespec = std.posix.timespec;
     pub const Fdstat = std.os.wasi.fdstat_t;
     pub const Filestat = std.os.wasi.filestat_t;
+    pub const Fdflags = std.os.wasi.fdflags_t;
 };
 
 const fd_min = 0xfffff;
@@ -298,12 +304,28 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                                 oflags.ACCMODE = .WRONLY;
                             } else if (fdstat.fs_rights_base.FD_READDIR) {
                                 oflags.DIRECTORY = true;
+                                oflags.ACCMODE = .RDONLY;
                             }
                             const oflags_int: @typeInfo(std.posix.O).@"struct".backing_integer.? = @bitCast(oflags);
                             result.* = @intCast(oflags_int);
                         } else {
                             result.* = intFromError(err);
                         }
+                    },
+                    std.posix.F.SETFL => {
+                        const oflags_int: @typeInfo(std.posix.O).@"struct".backing_integer.? = @truncate(arg);
+                        const oflags: std.posix.O = @bitCast(oflags_int);
+                        var call: Syscall = .{ .cmd = .setfl, .u = .{
+                            .setfl = .{
+                                .fd = @intCast(fd),
+                                .fdflags = .{
+                                    .NONBLOCK = oflags.NONBLOCK,
+                                    .APPEND = oflags.APPEND,
+                                },
+                            },
+                        } };
+                        const err = Host.redirectSyscall(&call);
+                        result.* = intFromError(err);
                     },
                     std.posix.F.SETLK, std.posix.F.SETLKW => {
                         const lock: *const std.posix.Flock = @ptrFromInt(arg);
@@ -951,7 +973,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub fn __fxstat(ver: c_int, fd: c_int, buf: *std.posix.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
             if (redirector.fstat(fd, buf, &result)) {
-                return saveError(c_int, result);
+                return saveError(result);
             }
             return Original.__fxstat(ver, fd, buf);
         }
@@ -959,7 +981,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub fn __fxstat64(ver: c_int, fd: c_int, buf: *std.posix.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
             if (redirector.fstat(fd, buf, &result)) {
-                return saveError(c_int, result);
+                return saveError(result);
             }
             return Original.__fxstat64(ver, fd, buf);
         }
@@ -967,7 +989,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub fn __fxstatat(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
             if (redirector.newfstatat(dirfd, path, buf, std.posix.AT.SYMLINK_FOLLOW, &result)) {
-                return saveError(c_int, result);
+                return saveError(result);
             }
             return Original.__fxstatat(ver, dirfd, path, buf);
         }
@@ -975,7 +997,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub fn __fxstatat64(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
             if (redirector.newfstatat(dirfd, path, buf, std.posix.AT.SYMLINK_FOLLOW, &result)) {
-                return saveError(c_int, result);
+                return saveError(result);
             }
             return Original.__fxstatat64(ver, dirfd, path, buf);
         }
@@ -983,7 +1005,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub fn __lxstat(ver: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
             if (redirector.lstat(path, buf, &result)) {
-                return saveError(c_int, result);
+                return saveError(result);
             }
             return Original.__lxstat(ver, path, buf);
         }
@@ -991,7 +1013,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub fn __lxstat64(ver: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
             if (redirector.lstat(path, buf, &result)) {
-                return saveError(c_int, result);
+                return saveError(result);
             }
             return Original.__lxstat64(ver, path, buf);
         }
@@ -999,7 +1021,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub fn __xstat(ver: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
             if (redirector.stat(path, buf, &result)) {
-                return saveError(c_int, result);
+                return saveError(result);
             }
             return Original.__xstat(ver, path, buf);
         }
@@ -1007,7 +1029,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub fn __xstat64(ver: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
             if (redirector.stat(path, buf, &result)) {
-                return saveError(c_int, result);
+                return saveError(result);
             }
             return Original.__xstat64(ver, path, buf);
         }
@@ -1118,12 +1140,10 @@ pub fn PosixSubstitute(comptime redirector: type) type {
                     inline for (hook_args, 0..) |arg, index| {
                         handler_args[index] = arg;
                     }
-                    const ResultPtrT = @TypeOf(handler_args[handler_args.len - 1]);
-                    const ResultT = @typeInfo(ResultPtrT).pointer.child;
-                    var result: ResultT = undefined;
+                    var result: RT = undefined;
                     handler_args[handler_args.len - 1] = &result;
                     if (@call(.auto, handler, handler_args)) {
-                        return saveError(RT, result);
+                        return saveError(result);
                     }
                     const original = @field(Original, original_name);
                     return @call(.auto, original, hook_args);
@@ -1136,10 +1156,12 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             const params = @typeInfo(Func).@"fn".params;
             var new_params: [params.len - 1]std.builtin.Type.Fn.Param = undefined;
             for (&new_params, 0..) |*ptr, index| ptr.* = params[index];
+            const RPtrT = params[params.len - 1].type.?;
+            const RT = @typeInfo(RPtrT).pointer.child;
             return @Type(.{
                 .@"fn" = .{
                     .params = &new_params,
-                    .return_type = c_int,
+                    .return_type = RT,
                     .is_generic = false,
                     .is_var_args = false,
                     .calling_convention = .c,
@@ -1147,12 +1169,12 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             });
         }
 
-        fn saveError(comptime RT: type, result: anytype) RT {
+        fn saveError(result: anytype) @TypeOf(result) {
             if (result < 0) {
                 setError(@intCast(-result));
                 return -1;
             }
-            return @intCast(result);
+            return result;
         }
 
         fn setError(err: c_int) void {

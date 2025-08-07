@@ -1227,6 +1227,34 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    it('should set no-blocking flag of descriptor using fcntl', async function() {
+      this.timeout(0);
+      const { print, startup, shutdown } = await importTest('set-non-blocking-flag-with-fcntl', { multithreaded: true });
+      const path = absolute('./data/macbeth.txt');
+      const content = await readFile(path);
+      const stream = new ReadableStream({
+        pos: 0,
+        async pull(controller) {
+          const chunk = content.subarray(this.pos, this.pos + 64);
+          if (chunk.length > 0) {
+            this.pos += chunk.length;
+            controller.enqueue(chunk);
+          } else {
+            controller.close();
+          }
+        }
+      });
+      const reader = stream.getReader();
+      startup();
+      try {
+        const lines = await capture(() => print(reader));        
+        const line = lines.find(s => s.includes('Signifying nothing'));
+        expect(line).to.be.a('string');
+      } finally {
+        shutdown();
+      }
+      reader.close();
+    })
   })
 }
 

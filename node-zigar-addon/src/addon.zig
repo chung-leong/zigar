@@ -46,6 +46,8 @@ const ModuleHost = struct {
         fd_close: ?Ref = null,
         fd_datasync: ?Ref = null,
         fd_fdstat_get: ?Ref = null,
+        fd_fdstat_set_flags: ?Ref = null,
+        fd_fdstat_set_rights: ?Ref = null,
         fd_filestat_get: ?Ref = null,
         fd_filestat_set_times: ?Ref = null,
         fd_lock_get: ?Ref = null,
@@ -676,7 +678,7 @@ const ModuleHost = struct {
                 .error_union => |eu| eu.payload,
                 else => RT,
             };
-            const extra = if (Payload == void or Payload == std.c.E) 0 else 1;
+            const extra = if (Payload == void or Payload == E) 0 else 1;
             const NewArgs = comptime define: {
                 const fields = std.meta.fields(Args);
                 var new_fields: [fields.len - 1 + extra]std.builtin.Type.StructField = undefined;
@@ -697,9 +699,8 @@ const ModuleHost = struct {
                 }
                 break :define @Type(new_args_info);
             };
-            const NewRT = if (Payload == std.c.E) std.c.E else E;
             const ns = struct {
-                fn call(new_args: NewArgs) NewRT {
+                fn call(new_args: NewArgs) E {
                     var args: Args = undefined;
                     inline for (&args, 0..) |*arg_ptr, i| {
                         if (i == 0) {
@@ -711,12 +712,9 @@ const ModuleHost = struct {
                     }
                     const retval = @call(.auto, func, args);
                     if (retval) |payload| {
-                        if (Payload == std.c.E) {
-                            return payload;
-                        } else {
-                            if (extra == 1) new_args[new_args.len - 1].* = payload;
-                            return .SUCCESS;
-                        }
+                        if (Payload == E) return payload;
+                        if (extra == 1) new_args[new_args.len - 1].* = payload;
+                        return .SUCCESS;
                     } else |_| {
                         return .FAULT;
                     }
@@ -881,7 +879,7 @@ const ModuleHost = struct {
         );
     }
 
-    fn handleJscall(self: *@This(), call: *Jscall) !void {
+    fn handleJscall(self: *@This(), call: *Jscall) !E {
         if (in_main_thread) {
             if (call.futex_handle != 0) {
                 errdefer Futex.wake(call.futex_handle, E.FAULT) catch {};
@@ -897,28 +895,24 @@ const ModuleHost = struct {
                     try env.createUsize(call.futex_handle),
                 },
             );
-            return switch (try std.meta.intToEnum(E, try env.getValueUint32(status))) {
-                .SUCCESS => {},
-                .DEADLK => error.Deadlock,
-                else => error.Unexpected,
-            };
+            return std.meta.intToEnum(E, try env.getValueUint32(status)) catch .FAULT;
         } else {
             const func = self.ts.handle_jscall orelse return error.Disabled;
             var futex: Futex = undefined;
             call.futex_handle = futex.init();
             try napi.callThreadsafeFunction(func, @ptrCast(@constCast(call)), .nonblocking);
-            try futex.wait();
+            return futex.wait();
         }
     }
 
-    fn handleSyscall(self: *@This(), call: *Syscall) !std.c.E {
+    fn handleSyscall(self: *@This(), call: *Syscall) !E {
         if (in_main_thread) {
             const env = self.env;
             const futex = switch (call.futex_handle) {
                 0 => try env.getUndefined(),
                 else => |handle| try env.createUsize(handle),
             };
-            const result: E = switch (call.cmd) {
+            return switch (call.cmd) {
                 .access => try self.handleAccess(futex, &call.u.access),
                 .open => try self.handleOpen(futex, &call.u.open),
                 .close => try self.handleClose(futex, &call.u.close),
@@ -929,6 +923,7 @@ const ModuleHost = struct {
                 .seek => try self.handleSeek(futex, &call.u.seek),
                 .tell => try self.handleTell(futex, &call.u.tell),
                 .getfl => try self.handleGetDescriptorFlags(futex, &call.u.getfl),
+                .setfl => try self.handleSetDescriptorFlags(futex, &call.u.setfl),
                 .getlk => try self.handleGetLock(futex, &call.u.getlk),
                 .setlk => try self.handleSetLock(futex, &call.u.setlk),
                 .fstat => try self.handleStat(futex, &call.u.fstat),
@@ -944,23 +939,12 @@ const ModuleHost = struct {
                 .rmdir => try self.handleRmdir(futex, &call.u.rmdir),
                 .unlink => try self.handleUnlink(futex, &call.u.unlink),
             };
-            // translate from WASI enum to the current system's
-            return inline for (std.meta.fields(E)) |field| {
-                const wasi_enum = @field(E, field.name);
-                if (wasi_enum == result) {
-                    break switch (@hasField(std.c.E, field.name)) {
-                        true => @field(std.c.E, field.name),
-                        false => .FAULT,
-                    };
-                }
-            } else .FAULT;
         } else {
             const func = self.ts.handle_syscall orelse return error.Disabled;
             var futex: Futex = undefined;
             call.futex_handle = futex.init();
             try napi.callThreadsafeFunction(func, @ptrCast(call), .nonblocking);
-            try futex.wait();
-            return .SUCCESS;
+            return futex.wait();
         }
     }
 
@@ -1065,13 +1049,14 @@ const ModuleHost = struct {
     fn handleRead(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
         const len: u32 = @intCast(args.len);
-        return try self.callPosixFunction(self.js.fd_read1, &.{
+        const result = try self.callPosixFunction(self.js.fd_read1, &.{
             try env.createInt32(args.fd),
             try env.createUsize(@intFromPtr(args.bytes)),
             try env.createUint32(len),
             try env.createUsize(@intFromPtr(&args.read)),
             futex,
         });
+        return result;
     }
 
     fn handlePread(self: *@This(), futex: Value, args: anytype) !E {
@@ -1195,6 +1180,16 @@ const ModuleHost = struct {
         return try self.callPosixFunction(self.js.fd_fdstat_get, &.{
             try env.createInt32(args.fd),
             try env.createUsize(@intFromPtr(&args.fdstat)),
+            futex,
+        });
+    }
+
+    fn handleSetDescriptorFlags(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        const flags_int: u16 = @bitCast(args.fdflags);
+        return try self.callPosixFunction(self.js.fd_fdstat_set_flags, &.{
+            try env.createInt32(args.fd),
+            try env.createUint32(flags_int),
             futex,
         });
     }
@@ -1399,7 +1394,7 @@ const ModuleHost = struct {
         fn handle_jscall(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
             const call: *Jscall = @ptrCast(@alignCast(data));
-            handleJscall(self, call) catch {
+            _ = handleJscall(self, call) catch {
                 // wake caller if call fails since JavaScript isn't going to do it
                 Futex.wake(call.futex_handle, .FAULT) catch {};
             };
@@ -1438,10 +1433,9 @@ const Futex = struct {
         return self.handle;
     }
 
-    pub fn wait(self: *@This()) !void {
+    pub fn wait(self: *@This()) E {
         std.Thread.Futex.wait(&self.value, initial_value);
-        const result: E = @enumFromInt(self.value.load(.acquire));
-        if (result != .SUCCESS) return error.Unexpected;
+        return @enumFromInt(self.value.load(.acquire));
     }
 
     pub fn wake(handle: usize, result: E) !void {

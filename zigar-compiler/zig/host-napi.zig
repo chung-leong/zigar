@@ -268,7 +268,17 @@ fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
 }
 
 pub fn redirectSyscall(call: *hooks.Syscall) std.posix.E {
-    return imports.handle_syscall(call);
+    const result = imports.handle_syscall(call);
+    // translate from WASI enum to the current system's
+    return inline for (std.meta.fields(E)) |field| {
+        const wasi_enum = @field(E, field.name);
+        if (wasi_enum == result) {
+            break switch (@hasField(std.posix.E, field.name)) {
+                true => @field(std.posix.E, field.name),
+                false => .FAULT,
+            };
+        }
+    } else .FAULT;
 }
 
 pub fn isRedirecting(comptime literal: @TypeOf(.enum_literal)) bool {

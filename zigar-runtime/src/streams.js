@@ -35,9 +35,9 @@ export class AsyncReader {
     }
     if (!(chunk instanceof Uint8Array)) {
       if (chunk instanceof ArrayBuffer) {
-        chunk = new Uint8Array(value);
+        chunk = new Uint8Array(chunk);
       } else if (value.buffer instanceof ArrayBuffer) {
-        chunk = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+        chunk = new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
       } else {
         return;
       }

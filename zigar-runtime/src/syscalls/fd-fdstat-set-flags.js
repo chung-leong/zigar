@@ -3,11 +3,13 @@ import { mixin } from '../environment.js';
 import { catchPosixError, checkStreamMethod } from '../errors.js';
 
 export default mixin({
-  fdFdstatSetFlags(fd, flags, canWait) {
+  fdFdstatSetFlags(fd, newFlags, canWait) {
+    // only these flags can be changed
+    const mask = PosixDescriptorFlag.append | PosixDescriptorFlag.nonblock;
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const entry = this.getStream(fd);
-      const [ stream, rights ] = entry;
-      if (flags & PosixDescriptorFlag.nonblock) {
+      const [ stream, rights, flags ] = entry;
+      if (newFlags & PosixDescriptorFlag.nonblock) {
         if (rights & PosixDescriptorRight.fd_read) {
           checkStreamMethod(stream, 'readnb');
         }
@@ -15,7 +17,7 @@ export default mixin({
           checkStreamMethod(stream, 'writenb');
         }
       }
-      entry[2] = flags;
+      entry[2] = (flags & ~mask) | (newFlags & mask);
     });    
   },
   ...(process.env.TARGET === 'node' ? {
