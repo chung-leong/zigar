@@ -1557,7 +1557,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
 
         pub fn perror(text: [*:0]const u8) callconv(.c) void {
             const msg = stdio_h.strerror(posix.getError());
-            const stderr = getStdProxy(2).?;
+            const stderr = getStdProxy(2);
             const strings: [4][*:0]const u8 = .{ text, ": ", msg, "\n" };
             for (strings) |s| {
                 const len: isize = @intCast(std.mem.len(s));
@@ -1581,7 +1581,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         }
 
         pub fn putchar(c: c_int) callconv(.c) c_int {
-            const stdout = getStdProxy(1).?;
+            const stdout = getStdProxy(1);
             if (c < 0 or c > 255) {
                 stdout.errno = @intFromEnum(std.posix.E.INVAL);
                 return -1;
@@ -1591,7 +1591,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         }
 
         pub fn puts(text: [*:0]const u8) callconv(.c) c_int {
-            const stdout = getStdProxy(1).?;
+            const stdout = getStdProxy(1);
             const strings: [2][*:0]const u8 = .{
                 text,
                 "\n",
@@ -1724,11 +1724,15 @@ pub fn LibCSubstitute(comptime redirector: type) type {
 
         fn getRedirectedFile(s: *std.c.FILE) callconv(.c) ?*RedirectedFile {
             const sc: *stdio_h.FILE = @ptrCast(@alignCast(s));
-            return RedirectedFile.cast(s) orelse getStdProxy(stdio_h.fileno(sc));
+            return RedirectedFile.cast(s) orelse findStdProxy(stdio_h.fileno(sc));
         }
 
-        fn getStdProxy(fd: c_int) ?*RedirectedFile {
+        fn findStdProxy(fd: c_int) ?*RedirectedFile {
             if (fd < 0 or fd > 2) return null;
+            return getStdProxy(fd);
+        }
+
+        fn getStdProxy(fd: c_int) *RedirectedFile {
             const index: usize = @intCast(fd);
             const file = &std_proxies[index];
             return file;

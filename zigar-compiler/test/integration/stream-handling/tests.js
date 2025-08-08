@@ -1283,7 +1283,35 @@ export function addTests(importModule, options) {
       }
       reader.close();
     })
-
+    it('should read lines from stdin using fgets', async function() {
+      this.timeout(0);
+      const { __zigar, print, startup, shutdown } = await importTest('read-line-from-stdin-with-fgets', { multithreaded: true });
+      const path = absolute('./data/macbeth.txt');
+      const content = await readFile(path);
+      const stream = new ReadableStream({
+        pos: 0,
+        async pull(controller) {
+          const chunk = content.subarray(this.pos, this.pos + 64);
+          if (chunk.length > 0) {
+            this.pos += chunk.length;
+            controller.enqueue(chunk);
+          } else {
+            controller.close();
+          }
+        }
+      });
+      const reader = stream.getReader();
+      __zigar.redirect(0, reader);
+      startup();
+      try {
+        const lines = await capture(() => print());
+        const line = lines.find(s => s.includes('Signifying nothing'));
+        expect(line).to.be.a('string');
+      } finally {
+        shutdown();
+      }
+      reader.close();
+    })
   })
 }
 
