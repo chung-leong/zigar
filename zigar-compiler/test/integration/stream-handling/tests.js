@@ -1247,7 +1247,7 @@ export function addTests(importModule, options) {
       const reader = stream.getReader();
       startup();
       try {
-        const lines = await capture(() => print(reader));        
+        const lines = await capture(() => print(reader));
         const line = lines.find(s => s.includes('Signifying nothing'));
         expect(line).to.be.a('string');
       } finally {

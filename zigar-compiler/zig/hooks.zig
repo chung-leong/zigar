@@ -1278,7 +1278,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
     };
 }
 
-const RedirectedDir = extern struct {
+const RedirectedDir = struct {
     sig: u64 = signature,
     fd: c_int = undefined,
     cookie: u64 = 0,
@@ -1299,10 +1299,16 @@ const RedirectedDir = extern struct {
         return if (sig.* == signature) @ptrCast(sig) else null;
     }
 };
-const RedirectedFile = extern struct {
+comptime {
+    if (@offsetOf(RedirectedDir, "sig") != 0) @compileError("Signature is not at offset 0");
+}
+const RedirectedFile = struct {
     sig: u64 = signature,
     fd: c_int,
     errno: c_int = 0,
+    buffer: ?[]u8 = null,
+    buf_start: usize = 0,
+    buf_end: usize = 0,
     eof: bool = false,
     proxy: bool = false,
 
@@ -1313,7 +1319,58 @@ const RedirectedFile = extern struct {
         const sig: *u64 = @ptrCast(@alignCast(s));
         return if (sig.* == signature) @ptrCast(sig) else null;
     }
+
+    pub fn consumeBuffer(self: *@This(), dest: [*]u8, desired_len: usize) usize {
+        const buf = self.buffer orelse return 0;
+        const len = @min(desired_len, self.buf_end - self.buf_start);
+        @memcpy(dest[0..len], buf[self.buf_start .. self.buf_start + len]);
+        self.buf_start += len;
+        return len;
+    }
+
+    pub fn replenishBuffer(self: *@This(), amount: usize) void {
+        self.buf_end += amount;
+    }
+
+    pub fn previewBuffer(self: *@This()) []u8 {
+        var buf = self.buffer orelse return &.{};
+        return buf[self.buf_start..self.buf_end];
+    }
+
+    pub fn prepareBuffer(self: *@This()) ![]u8 {
+        var buf = self.buffer orelse create: {
+            self.buffer = try c_allocator.alloc(u8, 8192);
+            break :create self.buffer.?;
+        };
+        const remaining = self.buf_end - self.buf_start;
+        if (self.buf_start > 0) {
+            // shift remaining data to the beginning of the buffer
+            if (remaining > 0) {
+                std.mem.copyBackwards(u8, buf[0..remaining], buf[self.buf_start..self.buf_end]);
+            }
+            self.buf_start = 0;
+            self.buf_end = remaining;
+        }
+        if (remaining < 1024) {
+            // enlarge buffer
+            buf = try c_allocator.realloc(buf, buf.len * 2);
+            self.buffer = buf;
+        }
+        return buf[self.buf_end..];
+    }
+
+    pub fn clearBuffer(self: *@This()) void {
+        self.buf_start = 0;
+        self.buf_end = 0;
+    }
+
+    pub fn freeBuffer(self: *@This()) void {
+        if (self.buffer) |buf| c_allocator.free(buf);
+    }
 };
+comptime {
+    if (@offsetOf(RedirectedFile, "sig") != 0) @compileError("Signature is not at offset 0");
+}
 
 pub fn LibCSubstitute(comptime redirector: type) type {
     return struct {
@@ -1330,6 +1387,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         pub fn fclose(s: *std.c.FILE) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
                 const result = posix.close(file.fd);
+                file.freeBuffer();
                 if (!file.proxy) c_allocator.destroy(file);
                 return result;
             }
@@ -1368,6 +1426,23 @@ pub fn LibCSubstitute(comptime redirector: type) type {
                 return 0;
             }
             return Original.fgetpos(s, pos);
+        }
+
+        pub fn fgets(buf: [*]u8, num: c_int, s: *std.c.FILE) ?[*:0]u8 {
+            if (getRedirectedFile(s)) |file| {
+                if (num < 0) {
+                    _ = saveFileError(file, .INVAL);
+                    return null;
+                }
+                const result = bufferUntil(file, '\n');
+                if (result < 0) return null;
+                const end: usize = @intCast(result);
+                const len: usize = @intCast(num - 1);
+                const used = file.consumeBuffer(buf, @min(len, end));
+                buf[used] = 0;
+                return buf;
+            }
+            return Original.fgets(buf, num, s);
         }
 
         pub fn fopen(path: [*:0]const u8, mode: [*:0]const u8) callconv(.c) ?*std.c.FILE {
@@ -1433,9 +1508,9 @@ pub fn LibCSubstitute(comptime redirector: type) type {
 
         pub fn fseek(s: *std.c.FILE, offset: c_long, whence: c_int) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
-                // TODO: flush buffer
                 const result = posix.lseek(file.fd, offset, whence);
-                if (result < 0) file.errno = posix.getError();
+                if (result < 0) return saveFileError(file, posix.getError());
+                file.clearBuffer();
                 return @intCast(result);
             }
             return Original.fseek(s, offset, whence);
@@ -1445,10 +1520,8 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             if (getRedirectedFile(s)) |file| {
                 const offset = @field(pos, fpos_field_name);
                 const result = posix.lseek64(file.fd, offset, std.c.SEEK.SET);
-                if (result < 0) {
-                    file.errno = posix.getError();
-                    return -1;
-                }
+                if (result < 0) return saveFileError(file, posix.getError());
+                file.clearBuffer();
                 return 0;
             }
             return Original.fsetpos(s, pos);
@@ -1530,12 +1603,13 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         pub fn rewind(s: *std.c.FILE) callconv(.c) void {
             if (getRedirectedFile(s)) |file| {
                 const result = posix.lseek(file.fd, 0, std.c.SEEK.SET);
-                if (result == 0) {
-                    file.errno = 0;
-                    file.eof = false;
-                } else {
-                    file.errno = posix.getError();
+                if (result != 0) {
+                    _ = saveFileError(file, posix.getError());
+                    return;
                 }
+                file.clearBuffer();
+                file.errno = 0;
+                file.eof = false;
                 return;
             }
             return Original.rewind(s);
@@ -1558,20 +1632,81 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             @export(&getRedirectedFile, .{ .name = "get_redirected_file", .visibility = .hidden });
         }
 
-        fn read(file: *RedirectedFile, buffer: [*]u8, len: isize) callconv(.c) isize {
-            const result = posix.read(file.fd, buffer, len);
-            if (result < 0) file.errno = posix.getError();
+        fn read(file: *RedirectedFile, dest: [*]u8, len: isize) callconv(.c) isize {
+            const len_u: usize = @intCast(len);
+            const copied = file.consumeBuffer(dest, len_u);
+            const remaining = len_u - copied;
+            if (remaining == 0) return len;
+            if (remaining >= 8192) {
+                // read directly into the destination when the amount is large
+                const result = posix.read(file.fd, dest[copied..], @intCast(remaining));
+                if (result < 0) return saveFileError(file, posix.getError());
+                return result;
+            } else {
+                const buf: []u8 = file.prepareBuffer() catch return saveFileError(file, .NOMEM);
+                const result = posix.read(file.fd, buf.ptr, @intCast(buf.len));
+                if (result < 0) return saveFileError(file, posix.getError());
+                file.replenishBuffer(@intCast(result));
+                const copied2 = file.consumeBuffer(dest[copied..], remaining);
+                return @intCast(copied + copied2);
+            }
+        }
+
+        fn write(file: *RedirectedFile, dest: [*]const u8, len: isize) callconv(.c) isize {
+            const result = posix.write(file.fd, dest, len);
+            if (result < 0) return saveFileError(file, posix.getError());
             return result;
         }
 
-        fn write(file: *RedirectedFile, buffer: [*]const u8, len: isize) callconv(.c) isize {
-            // const result = posix.write(file.fd, buffer, len);
-            // if (result < 0) file.errno = posix.getError();
-            // return result;
-            _ = file;
-            _ = buffer;
-            _ = len;
-            return 0;
+        fn bufferUntil(file: *RedirectedFile, delimiter: u8) isize {
+            const fd = file.fd;
+            var checked_len: usize = 0;
+            while (true) {
+                // look for delimiter
+                const content = file.previewBuffer();
+                for (checked_len..content.len) |i| {
+                    if (content[i] == delimiter) return i + 1;
+                } else if (file.eof) {
+                    return content.len;
+                } else {
+                    checked_len = content.len;
+                    // retrieve more data, first try to get one character
+                    const buf = file.prepareBuffer() catch return saveFileError(file, .NOMEM);
+                    const result1 = posix.read(fd, buf[0..], 1);
+                    if (result1 < 0) return saveFileError(file, posix.getError());
+                    if (result1 > 0) {
+                        file.replenishBuffer(1);
+                        // switch into non-blocking mode and read the rest of the available bytes
+                        if (setNonBlocking(fd, true) != 0) return saveFileError(file, posix.getError());
+                        const result2 = posix.read(fd, buf[1..], @intCast(buf.len - 1));
+                        if (setNonBlocking(fd, false) != 0) return saveFileError(file, posix.getError());
+                        if (result2 < 0) return saveFileError(file, posix.getError());
+                        file.replenishBuffer(@intCast(result2));
+                    } else {
+                        file.eof = true;
+                    }
+                }
+            }
+        }
+
+        fn setNonBlocking(fd: c_int, nonblocking: bool) c_int {
+            const oflags: std.posix.O = .{ .NONBLOCK = nonblocking };
+            const oflags_int: @typeInfo(std.posix.O).@"struct".backing_integer.? = @bitCast(oflags);
+            return posix.fcntl(fd, std.posix.F.SETFL, oflags_int);
+        }
+
+        fn saveFileError(file: *RedirectedFile, err: anytype) c_int {
+            const T = @TypeOf(err);
+            switch (@typeInfo(T)) {
+                .int => file.errno = err,
+                .@"enum" => file.errno = @intFromEnum(err),
+                .enum_literal => {
+                    const err_enum = @as(std.posix.E, err);
+                    file.errno = @intFromEnum(err_enum);
+                },
+                else => @compileError("Unexpected"),
+            }
+            return -1;
         }
 
         fn getRedirectedFile(s: *std.c.FILE) callconv(.c) ?*RedirectedFile {
