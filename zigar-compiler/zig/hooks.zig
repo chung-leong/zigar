@@ -1351,7 +1351,8 @@ const RedirectedFile = struct {
             self.buf_start = 0;
             self.buf_end = remaining;
         }
-        if (remaining < 1024) {
+        const space = buf.len - self.buf_end;
+        if (space < 1024) {
             // enlarge buffer
             buf = try c_allocator.realloc(buf, buf.len * 2);
             self.buffer = buf;
@@ -1394,6 +1395,18 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             return Original.fclose(s);
         }
 
+        pub fn fdopen(fd: c_int, mode: [*]const u8) callconv(.c) ?*std.c.FILE {
+            if (redirector.isApplicableHandle(fd)) {
+                // const oflags_int = decodeOpenMode(mode);
+                if (c_allocator.create(RedirectedFile)) |file| {
+                    file.* = .{ .fd = @intCast(fd) };
+                    return @ptrCast(file);
+                } else |_| {}
+                return null;
+            }
+            return Original.fdopen(fd, mode);
+        }
+
         pub fn feof(s: *std.c.FILE) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
                 return if (file.eof) 1 else 0;
@@ -1428,37 +1441,30 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             return Original.fgetpos(s, pos);
         }
 
-        pub fn fgets(buf: [*]u8, num: c_int, s: *std.c.FILE) ?[*:0]u8 {
+        pub fn fgets(buf: [*]u8, num: c_int, s: *std.c.FILE) callconv(.c) ?[*:0]u8 {
             if (getRedirectedFile(s)) |file| {
                 if (num < 0) {
                     _ = saveFileError(file, .INVAL);
                     return null;
                 }
-                const result = bufferUntil(file, '\n');
-                if (result < 0) return null;
-                const end: usize = @intCast(result);
+                const end = bufferUntil(file, '\n') catch |err| {
+                    switch (err) {
+                        error.OutOfMemory => _ = saveFileError(file, .NOMEM),
+                        else => _ = saveFileError(file, posix.getError()),
+                    }
+                    return null;
+                };
+                if (end == 0) return null;
                 const len: usize = @intCast(num - 1);
                 const used = file.consumeBuffer(buf, @min(len, end));
                 buf[used] = 0;
-                return buf;
+                return @ptrCast(buf);
             }
             return Original.fgets(buf, num, s);
         }
 
         pub fn fopen(path: [*:0]const u8, mode: [*:0]const u8) callconv(.c) ?*std.c.FILE {
-            var oflags: std.c.O = .{};
-            if (mode[0] == 'r') {
-                oflags.ACCMODE = if (mode[1] == '+') .RDWR else .RDONLY;
-            } else if (mode[0] == 'w') {
-                oflags.ACCMODE = if (mode[1] == '+') .RDWR else .WRONLY;
-                oflags.CREAT = true;
-                oflags.TRUNC = true;
-            } else if (mode[0] == 'a') {
-                oflags.ACCMODE = if (mode[1] == '+') .RDWR else .WRONLY;
-                oflags.CREAT = true;
-                oflags.APPEND = true;
-            }
-            const oflags_int: u32 = @bitCast(oflags);
+            const oflags_int = decodeOpenMode(mode);
             var result: c_int = undefined;
             if (redirector.open(path, @intCast(oflags_int), 0, &result)) {
                 if (result > 0) {
@@ -1658,29 +1664,36 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             return result;
         }
 
-        fn bufferUntil(file: *RedirectedFile, delimiter: u8) isize {
+        fn bufferUntil(file: *RedirectedFile, delimiter: u8) !usize {
             const fd = file.fd;
             var checked_len: usize = 0;
             while (true) {
                 // look for delimiter
                 const content = file.previewBuffer();
                 for (checked_len..content.len) |i| {
-                    if (content[i] == delimiter) return i + 1;
+                    if (content[i] == delimiter) {
+                        return i + 1;
+                    }
                 } else if (file.eof) {
                     return content.len;
                 } else {
                     checked_len = content.len;
                     // retrieve more data, first try to get one character
-                    const buf = file.prepareBuffer() catch return saveFileError(file, .NOMEM);
-                    const result1 = posix.read(fd, buf[0..], 1);
-                    if (result1 < 0) return saveFileError(file, posix.getError());
+                    const buf = try file.prepareBuffer();
+                    const result1 = posix.read(fd, buf.ptr, 1);
+                    if (result1 < 0) return error.UnableToRead;
                     if (result1 > 0) {
                         file.replenishBuffer(1);
                         // switch into non-blocking mode and read the rest of the available bytes
-                        if (setNonBlocking(fd, true) != 0) return saveFileError(file, posix.getError());
-                        const result2 = posix.read(fd, buf[1..], @intCast(buf.len - 1));
-                        if (setNonBlocking(fd, false) != 0) return saveFileError(file, posix.getError());
-                        if (result2 < 0) return saveFileError(file, posix.getError());
+                        try setNonBlocking(fd, true);
+                        const buf2 = buf[1..];
+                        const result2 = posix.read(fd, buf2.ptr, @intCast(buf2.len));
+                        try setNonBlocking(fd, false);
+                        if (result2 < 0) {
+                            if (posix.getError() != @intFromEnum(std.posix.E.AGAIN)) {
+                                return error.UnableToPerformNonblockingRead;
+                            }
+                        }
                         file.replenishBuffer(@intCast(result2));
                     } else {
                         file.eof = true;
@@ -1689,10 +1702,10 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             }
         }
 
-        fn setNonBlocking(fd: c_int, nonblocking: bool) c_int {
+        fn setNonBlocking(fd: c_int, nonblocking: bool) !void {
             const oflags: std.posix.O = .{ .NONBLOCK = nonblocking };
             const oflags_int: @typeInfo(std.posix.O).@"struct".backing_integer.? = @bitCast(oflags);
-            return posix.fcntl(fd, std.posix.F.SETFL, oflags_int);
+            if (posix.fcntl(fd, std.posix.F.SETFL, oflags_int) != 0) return error.UnableToSetFlag;
         }
 
         fn saveFileError(file: *RedirectedFile, err: anytype) c_int {
@@ -1721,6 +1734,22 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             return file;
         }
 
+        fn decodeOpenMode(mode: [*:0]const u8) u32 {
+            var oflags: std.c.O = .{};
+            if (mode[0] == 'r') {
+                oflags.ACCMODE = if (mode[1] == '+') .RDWR else .RDONLY;
+            } else if (mode[0] == 'w') {
+                oflags.ACCMODE = if (mode[1] == '+') .RDWR else .WRONLY;
+                oflags.CREAT = true;
+                oflags.TRUNC = true;
+            } else if (mode[0] == 'a') {
+                oflags.ACCMODE = if (mode[1] == '+') .RDWR else .WRONLY;
+                oflags.CREAT = true;
+                oflags.APPEND = true;
+            }
+            return @bitCast(oflags);
+        }
+
         var std_proxies: [3]RedirectedFile = .{
             .{ .fd = 0, .proxy = true },
             .{ .fd = 1, .proxy = true },
@@ -1736,9 +1765,11 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         pub const Original = struct {
             pub var clearerr: *const @TypeOf(Self.clearerr) = undefined;
             pub var fclose: *const @TypeOf(Self.fclose) = undefined;
+            pub var fdopen: *const @TypeOf(Self.fdopen) = undefined;
             pub var feof: *const @TypeOf(Self.feof) = undefined;
             pub var ferror: *const @TypeOf(Self.ferror) = undefined;
             pub var fgetpos: *const @TypeOf(Self.fgetpos) = undefined;
+            pub var fgets: *const @TypeOf(Self.fgets) = undefined;
             pub var fopen: *const @TypeOf(Self.fopen) = undefined;
             pub var fputc: *const @TypeOf(Self.fputc) = undefined;
             pub var fputs: *const @TypeOf(Self.fputs) = undefined;

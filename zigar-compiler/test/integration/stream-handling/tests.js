@@ -1255,6 +1255,35 @@ export function addTests(importModule, options) {
       }
       reader.close();
     })
+    it('should read lines from file using fgets', async function() {
+      this.timeout(0);
+      const { print, startup, shutdown } = await importTest('read-line-from-file-with-fgets', { multithreaded: true });
+      const path = absolute('./data/macbeth.txt');
+      const content = await readFile(path);
+      const stream = new ReadableStream({
+        pos: 0,
+        async pull(controller) {
+          const chunk = content.subarray(this.pos, this.pos + 64);
+          if (chunk.length > 0) {
+            this.pos += chunk.length;
+            controller.enqueue(chunk);
+          } else {
+            controller.close();
+          }
+        }
+      });
+      const reader = stream.getReader();
+      startup();
+      try {
+        const lines = await capture(() => print(reader));
+        const line = lines.find(s => s.includes('Signifying nothing'));
+        expect(line).to.be.a('string');
+      } finally {
+        shutdown();
+      }
+      reader.close();
+    })
+
   })
 }
 
