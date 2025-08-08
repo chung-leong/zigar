@@ -1385,6 +1385,21 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             return Original.clearerr(s);
         }
 
+        pub fn gets_s(buf: [*]u8, len: usize) callconv(.c) ?[*:0]u8 {
+            const stdin = getStdProxy(0);
+            const end = bufferUntil(stdin, '\n') catch |err| {
+                switch (err) {
+                    error.OutOfMemory => _ = saveFileError(stdin, .NOMEM),
+                    else => _ = saveFileError(stdin, posix.getError()),
+                }
+                return null;
+            };
+            if (end == 0) return null;
+            const used = stdin.consumeBuffer(buf, @max(end, len - 1));
+            buf[used] = 0;
+            return @ptrCast(buf);
+        }
+
         pub fn fclose(s: *std.c.FILE) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
                 const result = posix.close(file.fd);
@@ -1768,6 +1783,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         const Self = @This();
         pub const Original = struct {
             pub var clearerr: *const @TypeOf(Self.clearerr) = undefined;
+            pub var gets_s: *const @TypeOf(Self.gets_s) = undefined;
             pub var fclose: *const @TypeOf(Self.fclose) = undefined;
             pub var fdopen: *const @TypeOf(Self.fdopen) = undefined;
             pub var feof: *const @TypeOf(Self.feof) = undefined;
