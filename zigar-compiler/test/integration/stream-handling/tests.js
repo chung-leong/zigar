@@ -1397,6 +1397,25 @@ export function addTests(importModule, options) {
       const line = lines.find(s => s.includes('Signifying nothing'));
       expect(line).to.be.a('string');
     })
+    it('should push character into stdin using ungetc', async function() {
+      this.timeout(0);
+      const { __zigar, push, get } = await importTest('push-character-into-stdin-with-ungetc');
+      const content = new Uint8Array([ 1, 2, 3, 4 ]);
+      __zigar.redirect(0, content);
+      push(5);
+      const result1 = get();
+      expect(result1).to.equal(5);
+      const result2 = get();
+      expect(result2).to.equal(1);
+      push(6);
+      push(7);
+      const result3 = get();
+      expect(result3).to.equal(7);
+      const result4 = get();
+      expect(result4).to.equal(6);
+      const result5 = get();
+      expect(result5).to.equal(2);
+    })
   })
 }
 

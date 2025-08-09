@@ -1367,6 +1367,23 @@ const RedirectedFile = struct {
         self.buf_end = 0;
     }
 
+    pub fn unconsumeBuffer(self: *@This(), c: u8) !void {
+        const buf = self.buffer orelse try self.prepareBuffer();
+        if (self.buf_start > 0) {
+            self.buf_start -= 1;
+            buf[self.buf_start] = c;
+        } else if (self.buf_end == self.buf_start) {
+            buf[0] = c;
+            self.buf_start = 0;
+            self.buf_end = 1;
+        } else {
+            const len = self.buf_end - self.buf_start;
+            std.mem.copyBackwards(u8, buf[1 .. 1 + len], buf[0..len]);
+            self.buf_end += 1;
+            buf[0] = c;
+        }
+    }
+
     pub fn freeBuffer(self: *@This()) void {
         if (self.buffer) |buf| c_allocator.free(buf);
     }
@@ -1639,6 +1656,15 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             return Original.rewind(s);
         }
 
+        pub fn ungetc(c: c_int, s: *std.c.FILE) callconv(.c) c_int {
+            if (getRedirectedFile(s)) |file| {
+                if (c < 0 or c > 255) return -1;
+                file.unconsumeBuffer(@intCast(c)) catch return -1;
+                return c;
+            }
+            return Original.ungetc(c, s);
+        }
+
         // hooks implemented in C
         pub extern fn vfprintf_hook() callconv(.c) void;
         pub extern fn vprintf_hook() callconv(.c) void;
@@ -1846,6 +1872,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             pub var putchar: *const @TypeOf(Self.putchar) = undefined;
             pub var puts: *const @TypeOf(Self.puts) = undefined;
             pub var rewind: *const @TypeOf(Self.rewind) = undefined;
+            pub var ungetc: *const @TypeOf(Self.ungetc) = undefined;
 
             pub extern var vfprintf_orig: *const @TypeOf(Self.vfprintf_hook);
             pub extern var vprintf_orig: *const @TypeOf(Self.vprintf_hook);
