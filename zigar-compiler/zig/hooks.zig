@@ -1387,6 +1387,13 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             return Original.clearerr(s);
         }
 
+        pub fn getchar() callconv(.c) c_int {
+            const stdin = getStdProxy(0);
+            var buf: [1]u8 = undefined;
+            if (read(stdin, &buf, 1) != 1) return -1;
+            return buf[0];
+        }
+
         pub fn gets_s(buf: [*]u8, len: usize) callconv(.c) ?[*:0]u8 {
             const stdin = getStdProxy(0);
             const end = bufferUntil(stdin, '\n');
@@ -1450,6 +1457,15 @@ pub fn LibCSubstitute(comptime redirector: type) type {
                 return 0;
             }
             return Original.fgetpos(s, pos);
+        }
+
+        pub fn fgetc(s: *std.c.FILE) callconv(.c) c_int {
+            if (getRedirectedFile(s)) |file| {
+                var buf: [1]u8 = undefined;
+                if (read(file, &buf, 1) != 1) return -1;
+                return buf[0];
+            }
+            return Original.fgetc(s);
         }
 
         pub fn fgets(buf: [*]u8, num: c_int, s: *std.c.FILE) callconv(.c) ?[*:0]u8 {
@@ -1647,21 +1663,20 @@ pub fn LibCSubstitute(comptime redirector: type) type {
 
         fn read(file: *RedirectedFile, dest: [*]u8, len: isize) callconv(.c) isize {
             const len_u: usize = @intCast(len);
-            const copied = file.consumeBuffer(dest, len_u);
-            const remaining = len_u - copied;
-            if (remaining == 0) return len;
-            if (remaining >= 8192) {
+            var copied = file.consumeBuffer(dest, len_u);
+            if (len_u - copied >= 8192) {
                 // read directly into the destination when the amount is large
-                const result = readRaw(file, dest[copied..], @intCast(remaining));
+                const result = readRaw(file, dest[copied..], @intCast(len_u - copied));
                 if (result < 0) return -1;
                 return @as(isize, @intCast(copied)) + result;
             } else {
-                const buf: []u8 = file.prepareBuffer() catch return saveFileError(file, .NOMEM);
-                const result = readRaw(file, buf.ptr, @intCast(buf.len));
-                if (result < 0) return -1;
-                file.replenishBuffer(@intCast(result));
-                const copied2 = file.consumeBuffer(dest[copied..], remaining);
-                return @intCast(copied + copied2);
+                while (len_u - copied > 0) {
+                    if (bufferMore(file) < 0) return -1;
+                    const amount = file.consumeBuffer(dest[copied..], len_u - copied);
+                    if (amount == 0) break;
+                    copied += amount;
+                }
+                return @intCast(copied);
             }
         }
 
@@ -1694,24 +1709,35 @@ pub fn LibCSubstitute(comptime redirector: type) type {
                     return content.len;
                 } else {
                     checked_len = content.len;
-                    // retrieve more data, first try to get one character
-                    const buf = file.prepareBuffer() catch return 0;
-                    const result1 = readRaw(file, buf.ptr, 1);
-                    if (result1 < 0) return 0;
-                    if (result1 > 0) {
-                        file.replenishBuffer(1);
-                        // switch into non-blocking mode and read the rest of the available bytes
-                        if (setNonBlocking(file, true) != 0) return 0;
-                        defer _ = setNonBlocking(file, false);
-                        const buf2 = buf[1..];
-                        const result2 = readRaw(file, buf2.ptr, @intCast(buf2.len));
-                        if (result2 < 0) return 0;
-                        file.replenishBuffer(@intCast(result2));
-                    } else {
-                        file.eof = true;
-                    }
+                    // retrieve more data
+                    if (bufferMore(file) < 0) return 0;
                 }
             }
+        }
+
+        fn bufferMore(file: *RedirectedFile) callconv(.c) isize {
+            // first try to get one character in blocking mode
+            const buf = file.prepareBuffer() catch return 0;
+            const result1 = readRaw(file, buf.ptr, 1);
+            var count: isize = 0;
+            if (result1 < 0) return -1;
+            if (result1 > 0) {
+                file.replenishBuffer(1);
+                count += 1;
+                // switch into non-blocking mode and read the rest of the available bytes
+                const in_non_blocking_mode = setNonBlocking(file, true) != 0;
+                defer if (in_non_blocking_mode) {
+                    _ = setNonBlocking(file, false);
+                };
+                const buf2 = buf[1..];
+                const result2 = readRaw(file, buf2.ptr, @intCast(buf2.len));
+                if (result2 < 0) return -1;
+                file.replenishBuffer(@intCast(result2));
+                count += 1;
+            } else {
+                file.eof = true;
+            }
+            return count;
         }
 
         fn getLine(file: *RedirectedFile) callconv(.c) ?[*:0]u8 {
@@ -1798,11 +1824,13 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         const Self = @This();
         pub const Original = struct {
             pub var clearerr: *const @TypeOf(Self.clearerr) = undefined;
+            pub var getchar: *const @TypeOf(Self.getchar) = undefined;
             pub var gets_s: *const @TypeOf(Self.gets_s) = undefined;
             pub var fclose: *const @TypeOf(Self.fclose) = undefined;
             pub var fdopen: *const @TypeOf(Self.fdopen) = undefined;
             pub var feof: *const @TypeOf(Self.feof) = undefined;
             pub var ferror: *const @TypeOf(Self.ferror) = undefined;
+            pub var fgetc: *const @TypeOf(Self.fgetc) = undefined;
             pub var fgetpos: *const @TypeOf(Self.fgetpos) = undefined;
             pub var fgets: *const @TypeOf(Self.fgets) = undefined;
             pub var fopen: *const @TypeOf(Self.fopen) = undefined;

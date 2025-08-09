@@ -1344,6 +1344,7 @@ export function addTests(importModule, options) {
       reader.close();
     })
     it('should scan variables from a file using fscanf', async function() {
+      // C is needed for this test since varargs handling in Zig is still dodgy
       this.timeout(0);
       const { scan } = await importTest('c/scan-file-with-fscanf');
       const input = [
@@ -1360,6 +1361,7 @@ export function addTests(importModule, options) {
       ]);
     })
     it('should scan variables from a stdin using scanf', async function() {
+      // ditto
       this.timeout(0);
       const { __zigar, scan } = await importTest('c/scan-stdin-with-scanf');
       const input = [
@@ -1375,6 +1377,25 @@ export function addTests(importModule, options) {
         '4 5 6 world',
         'count = 2',
       ]);
+    })
+    it('should get characters from a file using fgetc', async function() {
+      this.timeout(0);
+      const { print } = await importTest('read-file-content-with-fgetc');
+      const path = absolute('./data/macbeth.txt');
+      const content = await readFile(path);
+      const lines = await capture(() => print(content));
+      const line = lines.find(s => s.includes('Signifying nothing'));
+      expect(line).to.be.a('string');
+    })
+    it('should get characters from stdin using getchar', async function() {
+      this.timeout(0);
+      const { __zigar, print } = await importTest('read-stdin-with-getchar');
+      const path = absolute('./data/macbeth.txt');
+      const content = await readFile(path);
+      __zigar.redirect(0, content);
+      const lines = await capture(() => print());
+      const line = lines.find(s => s.includes('Signifying nothing'));
+      expect(line).to.be.a('string');
     })
   })
 }
