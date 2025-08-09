@@ -13,8 +13,10 @@
 int redirected_read(void*, char*, int);
 int redirected_write(void*, const char*, int);
 void* get_redirected_file(FILE*);
+char* get_line(void*);
 
 bool load_vfprintf(void* other_fn);
+bool load_vfscanf(void* other_fn);
 
 MODULE_VISIBILITY int (*vfprintf_orig)(FILE* s, const char* f, va_list arg) = NULL;
 MODULE_VISIBILITY int vfprintf_hook(FILE* s, const char* f, va_list arg) {
@@ -131,11 +133,82 @@ MODULE_VISIBILITY int __printf_chk_hook(int flag, const char* f, ...) {
     return n;
 }
 
-// set vfprintf_orig when vfprintf itself isn't begin hooked
-bool load_vfprintf(void* other_fn) {
-    if (vfprintf_orig) return true;
+MODULE_VISIBILITY int (*vfscanf_orig)(FILE* s, const char *f, va_list arg) = NULL;
+MODULE_VISIBILITY int vfscanf_hook(FILE* s, const char *f, va_list arg) {
+    void* file = get_redirected_file(s);
+    if (file) {
+        char* line = get_line(file);
+        if (!line) {
+            return EOF;
+        }
+        return vsscanf(line, f, arg);
+    }
+    return vfscanf_orig(s, f, arg);
+}
+
+MODULE_VISIBILITY int (*vscanf_orig)(FILE* s, const char *f, va_list arg) = NULL;
+MODULE_VISIBILITY int vscanf_hook(FILE* s, const char *f, va_list arg) {
+    if (!load_vfscanf(vscanf_orig)) return -1;
+    return vfscanf_hook(stdin, f, arg);
+}
+
+MODULE_VISIBILITY int (*fscanf_orig)(FILE* s, const char *f, ...)  = NULL;
+MODULE_VISIBILITY int fscanf_hook(FILE* s, const char *f, ...) {
+    if (!load_vfscanf(fscanf_orig)) {
+        return -1;
+    }
+    va_list argptr;
+    va_start(argptr, f);
+    int n = vfscanf_hook(s, f, argptr);
+    va_end(argptr);
+    return n;
+}
+
+MODULE_VISIBILITY int (*scanf_orig)(const char *f, ...)  = NULL;
+MODULE_VISIBILITY int scanf_hook(const char *f, ...) {
+    if (!load_vfscanf(scanf_orig)) return -1;
+    va_list argptr;
+    va_start(argptr, f);
+    int n = vfscanf_hook(stdin, f, argptr);
+    va_end(argptr);
+    return n;
+}
+
+MODULE_VISIBILITY int (*__isoc99_vfscanf_orig)(FILE* s, const char *f, va_list arg) = NULL;
+MODULE_VISIBILITY int __isoc99_vfscanf_hook(FILE* s, const char *f, va_list arg) {
+    if (!load_vfscanf(__isoc99_vfscanf_orig)) return -1;
+    return vfscanf_hook(s, f, arg);
+}
+
+MODULE_VISIBILITY int (*__isoc99_vscanf_orig)(FILE* s, const char *f, va_list arg) = NULL;
+MODULE_VISIBILITY int __isoc99_vscanf_hook(FILE* s, const char *f, va_list arg) {
+    if (!load_vfscanf(__isoc99_vscanf_orig)) return -1;
+    return vfscanf_hook(stdin, f, arg);
+}
+
+MODULE_VISIBILITY int (*__isoc99_fscanf_orig)(FILE* s, const char *f, ...)  = NULL;
+MODULE_VISIBILITY int __isoc99_fscanf_hook(FILE* s, const char *f, ...) {
+    if (!load_vfscanf(__isoc99_fscanf_orig)) return -1;
+    va_list argptr;
+    va_start(argptr, f);
+    int n = vfscanf_hook(s, f, argptr);
+    va_end(argptr);
+    return n;
+}
+
+MODULE_VISIBILITY int (*__isoc99_scanf_orig)(const char *f, ...)  = NULL;
+MODULE_VISIBILITY int __isoc99_scanf_hook(const char *f, ...) {
+    if (!load_vfscanf(__isoc99_scanf_orig)) return -1;
+    va_list argptr;
+    va_start(argptr, f);
+    int n = vfscanf_hook(stdin, f, argptr);
+    va_end(argptr);
+    return n;
+}
+
+bool load_orig_func(void** orig_ptr, void* other_fn, const char* name) {
+    if (*orig_ptr) return true;
     void* addr = NULL;
-    const char* name = "vfprintf";
 #if defined(_WIN32)
     HMODULE handle;
     if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, other_fn, &handle)) {
@@ -152,6 +225,16 @@ bool load_vfprintf(void* other_fn) {
     }
 #endif
     if (!addr) return false;
-    vfprintf_orig = addr;
+    *orig_ptr = addr;
     return true;
+}
+
+// set vfprintf_orig when vfprintf itself isn't begin hooked
+bool load_vfprintf(void* other_fn) {
+    return load_orig_func(&vfprintf_orig, other_fn, "vfprintf");
+}
+
+// set vfscanf_orig when vfscanf itself isn't begin hooked
+bool load_vfscanf(void* other_fn) {
+    return load_orig_func(&vfscanf_orig, other_fn, "vfscanf");
 }

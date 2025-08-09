@@ -1278,7 +1278,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
     };
 }
 
-const RedirectedDir = extern struct {
+const RedirectedDir = struct {
     sig: u64 = signature,
     fd: c_int = undefined,
     cookie: u64 = 0,
@@ -1299,10 +1299,16 @@ const RedirectedDir = extern struct {
         return if (sig.* == signature) @ptrCast(sig) else null;
     }
 };
-const RedirectedFile = extern struct {
+comptime {
+    if (@offsetOf(RedirectedDir, "sig") != 0) @compileError("Signature is not at offset 0");
+}
+const RedirectedFile = struct {
     sig: u64 = signature,
     fd: c_int,
     errno: c_int = 0,
+    buffer: ?[]u8 = null,
+    buf_start: usize = 0,
+    buf_end: usize = 0,
     eof: bool = false,
     proxy: bool = false,
 
@@ -1313,7 +1319,61 @@ const RedirectedFile = extern struct {
         const sig: *u64 = @ptrCast(@alignCast(s));
         return if (sig.* == signature) @ptrCast(sig) else null;
     }
+
+    pub fn consumeBuffer(self: *@This(), dest: ?[*]u8, desired_len: usize) usize {
+        const buf = self.buffer orelse return 0;
+        const len = @min(desired_len, self.buf_end - self.buf_start);
+        if (dest) |ptr| {
+            @memcpy(ptr[0..len], buf[self.buf_start .. self.buf_start + len]);
+        }
+        self.buf_start += len;
+        return len;
+    }
+
+    pub fn replenishBuffer(self: *@This(), amount: usize) void {
+        self.buf_end += amount;
+    }
+
+    pub fn previewBuffer(self: *@This()) []u8 {
+        var buf = self.buffer orelse return &.{};
+        return buf[self.buf_start..self.buf_end];
+    }
+
+    pub fn prepareBuffer(self: *@This()) ![]u8 {
+        var buf = self.buffer orelse create: {
+            self.buffer = try c_allocator.alloc(u8, 8192);
+            break :create self.buffer.?;
+        };
+        const remaining = self.buf_end - self.buf_start;
+        if (self.buf_start > 0) {
+            // shift remaining data to the beginning of the buffer
+            if (remaining > 0) {
+                std.mem.copyBackwards(u8, buf[0..remaining], buf[self.buf_start..self.buf_end]);
+            }
+            self.buf_start = 0;
+            self.buf_end = remaining;
+        }
+        const space = buf.len - self.buf_end;
+        if (space < 1024) {
+            // enlarge buffer
+            buf = try c_allocator.realloc(buf, buf.len * 2);
+            self.buffer = buf;
+        }
+        return buf[self.buf_end..];
+    }
+
+    pub fn clearBuffer(self: *@This()) void {
+        self.buf_start = 0;
+        self.buf_end = 0;
+    }
+
+    pub fn freeBuffer(self: *@This()) void {
+        if (self.buffer) |buf| c_allocator.free(buf);
+    }
 };
+comptime {
+    if (@offsetOf(RedirectedFile, "sig") != 0) @compileError("Signature is not at offset 0");
+}
 
 pub fn LibCSubstitute(comptime redirector: type) type {
     return struct {
@@ -1327,13 +1387,35 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             return Original.clearerr(s);
         }
 
+        pub fn gets_s(buf: [*]u8, len: usize) callconv(.c) ?[*:0]u8 {
+            const stdin = getStdProxy(0);
+            const end = bufferUntil(stdin, '\n');
+            if (end == 0) return null;
+            const used = stdin.consumeBuffer(buf, @max(end, len - 1));
+            buf[used] = 0;
+            return @ptrCast(buf);
+        }
+
         pub fn fclose(s: *std.c.FILE) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
                 const result = posix.close(file.fd);
+                file.freeBuffer();
                 if (!file.proxy) c_allocator.destroy(file);
                 return result;
             }
             return Original.fclose(s);
+        }
+
+        pub fn fdopen(fd: c_int, mode: [*]const u8) callconv(.c) ?*std.c.FILE {
+            if (redirector.isApplicableHandle(fd)) {
+                // const oflags_int = decodeOpenMode(mode);
+                if (c_allocator.create(RedirectedFile)) |file| {
+                    file.* = .{ .fd = @intCast(fd) };
+                    return @ptrCast(file);
+                } else |_| {}
+                return null;
+            }
+            return Original.fdopen(fd, mode);
         }
 
         pub fn feof(s: *std.c.FILE) callconv(.c) c_int {
@@ -1370,20 +1452,24 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             return Original.fgetpos(s, pos);
         }
 
-        pub fn fopen(path: [*:0]const u8, mode: [*:0]const u8) callconv(.c) ?*std.c.FILE {
-            var oflags: std.c.O = .{};
-            if (mode[0] == 'r') {
-                oflags.ACCMODE = if (mode[1] == '+') .RDWR else .RDONLY;
-            } else if (mode[0] == 'w') {
-                oflags.ACCMODE = if (mode[1] == '+') .RDWR else .WRONLY;
-                oflags.CREAT = true;
-                oflags.TRUNC = true;
-            } else if (mode[0] == 'a') {
-                oflags.ACCMODE = if (mode[1] == '+') .RDWR else .WRONLY;
-                oflags.CREAT = true;
-                oflags.APPEND = true;
+        pub fn fgets(buf: [*]u8, num: c_int, s: *std.c.FILE) callconv(.c) ?[*:0]u8 {
+            if (getRedirectedFile(s)) |file| {
+                if (num < 0) {
+                    _ = saveFileError(file, .INVAL);
+                    return null;
+                }
+                const end = bufferUntil(file, '\n');
+                if (end == 0) return null;
+                const len: usize = @intCast(num - 1);
+                const used = file.consumeBuffer(buf, @min(len, end));
+                buf[used] = 0;
+                return @ptrCast(buf);
             }
-            const oflags_int: u32 = @bitCast(oflags);
+            return Original.fgets(buf, num, s);
+        }
+
+        pub fn fopen(path: [*:0]const u8, mode: [*:0]const u8) callconv(.c) ?*std.c.FILE {
+            const oflags_int = decodeOpenMode(mode);
             var result: c_int = undefined;
             if (redirector.open(path, @intCast(oflags_int), 0, &result)) {
                 if (result > 0) {
@@ -1421,10 +1507,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             if (getRedirectedFile(s)) |file| {
                 const len: isize = @intCast(size * n);
                 const result = read(file, buffer, len);
-                if (result < 0) {
-                    file.errno = posix.getError();
-                    return 0;
-                }
+                if (result < 0) return 0;
                 if (result == 0) file.eof = true;
                 return if (len == result) n else @as(usize, @intCast(result)) / size;
             }
@@ -1433,9 +1516,9 @@ pub fn LibCSubstitute(comptime redirector: type) type {
 
         pub fn fseek(s: *std.c.FILE, offset: c_long, whence: c_int) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
-                // TODO: flush buffer
                 const result = posix.lseek(file.fd, offset, whence);
-                if (result < 0) file.errno = posix.getError();
+                if (result < 0) return saveFileError(file, posix.getError());
+                file.clearBuffer();
                 return @intCast(result);
             }
             return Original.fseek(s, offset, whence);
@@ -1445,10 +1528,8 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             if (getRedirectedFile(s)) |file| {
                 const offset = @field(pos, fpos_field_name);
                 const result = posix.lseek64(file.fd, offset, std.c.SEEK.SET);
-                if (result < 0) {
-                    file.errno = posix.getError();
-                    return -1;
-                }
+                if (result < 0) return saveFileError(file, posix.getError());
+                file.clearBuffer();
                 return 0;
             }
             return Original.fsetpos(s, pos);
@@ -1478,7 +1559,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
 
         pub fn perror(text: [*:0]const u8) callconv(.c) void {
             const msg = stdio_h.strerror(posix.getError());
-            const stderr = getStdProxy(2).?;
+            const stderr = getStdProxy(2);
             const strings: [4][*:0]const u8 = .{ text, ": ", msg, "\n" };
             for (strings) |s| {
                 const len: isize = @intCast(std.mem.len(s));
@@ -1502,7 +1583,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         }
 
         pub fn putchar(c: c_int) callconv(.c) c_int {
-            const stdout = getStdProxy(1).?;
+            const stdout = getStdProxy(1);
             if (c < 0 or c > 255) {
                 stdout.errno = @intFromEnum(std.posix.E.INVAL);
                 return -1;
@@ -1512,7 +1593,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         }
 
         pub fn puts(text: [*:0]const u8) callconv(.c) c_int {
-            const stdout = getStdProxy(1).?;
+            const stdout = getStdProxy(1);
             const strings: [2][*:0]const u8 = .{
                 text,
                 "\n",
@@ -1530,12 +1611,13 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         pub fn rewind(s: *std.c.FILE) callconv(.c) void {
             if (getRedirectedFile(s)) |file| {
                 const result = posix.lseek(file.fd, 0, std.c.SEEK.SET);
-                if (result == 0) {
-                    file.errno = 0;
-                    file.eof = false;
-                } else {
-                    file.errno = posix.getError();
+                if (result != 0) {
+                    _ = saveFileError(file, posix.getError());
+                    return;
                 }
+                file.clearBuffer();
+                file.errno = 0;
+                file.eof = false;
                 return;
             }
             return Original.rewind(s);
@@ -1546,6 +1628,10 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         pub extern fn vprintf_hook() callconv(.c) void;
         pub extern fn fprintf_hook() callconv(.c) void;
         pub extern fn printf_hook() callconv(.c) void;
+        pub extern fn vfscanf_hook() callconv(.c) void;
+        pub extern fn vscanf_hook() callconv(.c) void;
+        pub extern fn fscanf_hook() callconv(.c) void;
+        pub extern fn scanf_hook() callconv(.c) void;
         pub extern fn vfprintf_s_hook() callconv(.c) void;
         pub extern fn vprintf_s_hook() callconv(.c) void;
         pub extern fn fprintf_s_hook() callconv(.c) void;
@@ -1553,37 +1639,149 @@ pub fn LibCSubstitute(comptime redirector: type) type {
 
         // function required by C hooks
         comptime {
+            @export(&getRedirectedFile, .{ .name = "get_redirected_file", .visibility = .hidden });
             @export(&read, .{ .name = "redirected_read", .visibility = .hidden });
             @export(&write, .{ .name = "redirected_write", .visibility = .hidden });
-            @export(&getRedirectedFile, .{ .name = "get_redirected_file", .visibility = .hidden });
+            @export(&getLine, .{ .name = "get_line", .visibility = .hidden });
         }
 
-        fn read(file: *RedirectedFile, buffer: [*]u8, len: isize) callconv(.c) isize {
-            const result = posix.read(file.fd, buffer, len);
-            if (result < 0) file.errno = posix.getError();
+        fn read(file: *RedirectedFile, dest: [*]u8, len: isize) callconv(.c) isize {
+            const len_u: usize = @intCast(len);
+            const copied = file.consumeBuffer(dest, len_u);
+            const remaining = len_u - copied;
+            if (remaining == 0) return len;
+            if (remaining >= 8192) {
+                // read directly into the destination when the amount is large
+                const result = readRaw(file, dest[copied..], @intCast(remaining));
+                if (result < 0) return -1;
+                return @as(isize, @intCast(copied)) + result;
+            } else {
+                const buf: []u8 = file.prepareBuffer() catch return saveFileError(file, .NOMEM);
+                const result = readRaw(file, buf.ptr, @intCast(buf.len));
+                if (result < 0) return -1;
+                file.replenishBuffer(@intCast(result));
+                const copied2 = file.consumeBuffer(dest[copied..], remaining);
+                return @intCast(copied + copied2);
+            }
+        }
+
+        fn readRaw(file: *RedirectedFile, dest: [*]u8, len: isize) callconv(.c) isize {
+            const result = posix.read(file.fd, dest, len);
+            if (result < 0) return saveFileError(file, posix.getError());
             return result;
         }
 
-        fn write(file: *RedirectedFile, buffer: [*]const u8, len: isize) callconv(.c) isize {
-            // const result = posix.write(file.fd, buffer, len);
-            // if (result < 0) file.errno = posix.getError();
-            // return result;
-            _ = file;
-            _ = buffer;
-            _ = len;
+        fn write(file: *RedirectedFile, src: [*]const u8, len: isize) callconv(.c) isize {
+            return writeRaw(file, src, len);
+        }
+
+        fn writeRaw(file: *RedirectedFile, src: [*]const u8, len: isize) callconv(.c) isize {
+            const result = posix.write(file.fd, src, len);
+            if (result < 0) return saveFileError(file, posix.getError());
+            return result;
+        }
+
+        fn bufferUntil(file: *RedirectedFile, delimiter: u8) callconv(.c) usize {
+            var checked_len: usize = 0;
+            while (true) {
+                // look for delimiter
+                const content = file.previewBuffer();
+                for (checked_len..content.len) |i| {
+                    if (content[i] == delimiter) {
+                        return i + 1;
+                    }
+                } else if (file.eof) {
+                    return content.len;
+                } else {
+                    checked_len = content.len;
+                    // retrieve more data, first try to get one character
+                    const buf = file.prepareBuffer() catch return 0;
+                    const result1 = readRaw(file, buf.ptr, 1);
+                    if (result1 < 0) return 0;
+                    if (result1 > 0) {
+                        file.replenishBuffer(1);
+                        // switch into non-blocking mode and read the rest of the available bytes
+                        if (setNonBlocking(file, true) != 0) return 0;
+                        defer _ = setNonBlocking(file, false);
+                        const buf2 = buf[1..];
+                        const result2 = readRaw(file, buf2.ptr, @intCast(buf2.len));
+                        if (result2 < 0) return 0;
+                        file.replenishBuffer(@intCast(result2));
+                    } else {
+                        file.eof = true;
+                    }
+                }
+            }
+        }
+
+        fn getLine(file: *RedirectedFile) callconv(.c) ?[*:0]u8 {
+            const end = bufferUntil(file, '\n');
+            if (end == 0) return null;
+            var buf = file.previewBuffer();
+            _ = file.consumeBuffer(null, end);
+            if (end == buf.len) {
+                // end of file
+                buf.len += 1;
+                buf[end] = 0;
+            } else {
+                buf[end - 1] = 0;
+            }
+            return @ptrCast(buf.ptr);
+        }
+
+        fn setNonBlocking(file: *RedirectedFile, nonblocking: bool) callconv(.c) c_int {
+            const oflags: std.posix.O = .{ .NONBLOCK = nonblocking };
+            const oflags_int: @typeInfo(std.posix.O).@"struct".backing_integer.? = @bitCast(oflags);
+            if (posix.fcntl(file.fd, std.posix.F.SETFL, oflags_int) != 0) {
+                return saveFileError(file, posix.getError());
+            }
             return 0;
         }
 
         fn getRedirectedFile(s: *std.c.FILE) callconv(.c) ?*RedirectedFile {
             const sc: *stdio_h.FILE = @ptrCast(@alignCast(s));
-            return RedirectedFile.cast(s) orelse getStdProxy(stdio_h.fileno(sc));
+            return RedirectedFile.cast(s) orelse findStdProxy(stdio_h.fileno(sc));
         }
 
-        fn getStdProxy(fd: c_int) ?*RedirectedFile {
+        fn findStdProxy(fd: c_int) callconv(.c) ?*RedirectedFile {
             if (fd < 0 or fd > 2) return null;
+            return getStdProxy(fd);
+        }
+
+        fn getStdProxy(fd: c_int) callconv(.c) *RedirectedFile {
             const index: usize = @intCast(fd);
             const file = &std_proxies[index];
             return file;
+        }
+
+        fn saveFileError(file: *RedirectedFile, err: anytype) c_int {
+            const T = @TypeOf(err);
+            switch (@typeInfo(T)) {
+                .int => file.errno = err,
+                .@"enum" => file.errno = @intFromEnum(err),
+                .enum_literal => {
+                    const err_enum = @as(std.posix.E, err);
+                    file.errno = @intFromEnum(err_enum);
+                },
+                else => @compileError("Unexpected"),
+            }
+            return -1;
+        }
+
+        fn decodeOpenMode(mode: [*:0]const u8) u32 {
+            var oflags: std.c.O = .{};
+            if (mode[0] == 'r') {
+                oflags.ACCMODE = if (mode[1] == '+') .RDWR else .RDONLY;
+            } else if (mode[0] == 'w') {
+                oflags.ACCMODE = if (mode[1] == '+') .RDWR else .WRONLY;
+                oflags.CREAT = true;
+                oflags.TRUNC = true;
+            } else if (mode[0] == 'a') {
+                oflags.ACCMODE = if (mode[1] == '+') .RDWR else .WRONLY;
+                oflags.CREAT = true;
+                oflags.APPEND = true;
+            }
+            return @bitCast(oflags);
         }
 
         var std_proxies: [3]RedirectedFile = .{
@@ -1600,10 +1798,13 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         const Self = @This();
         pub const Original = struct {
             pub var clearerr: *const @TypeOf(Self.clearerr) = undefined;
+            pub var gets_s: *const @TypeOf(Self.gets_s) = undefined;
             pub var fclose: *const @TypeOf(Self.fclose) = undefined;
+            pub var fdopen: *const @TypeOf(Self.fdopen) = undefined;
             pub var feof: *const @TypeOf(Self.feof) = undefined;
             pub var ferror: *const @TypeOf(Self.ferror) = undefined;
             pub var fgetpos: *const @TypeOf(Self.fgetpos) = undefined;
+            pub var fgets: *const @TypeOf(Self.fgets) = undefined;
             pub var fopen: *const @TypeOf(Self.fopen) = undefined;
             pub var fputc: *const @TypeOf(Self.fputc) = undefined;
             pub var fputs: *const @TypeOf(Self.fputs) = undefined;
@@ -1622,6 +1823,10 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             pub extern var vprintf_orig: *const @TypeOf(Self.vprintf_hook);
             pub extern var fprintf_orig: *const @TypeOf(Self.fprintf_hook);
             pub extern var printf_orig: *const @TypeOf(Self.printf_hook);
+            pub extern var vfscanf_orig: *const @TypeOf(Self.vfscanf_hook);
+            pub extern var vscanf_orig: *const @TypeOf(Self.vscanf_hook);
+            pub extern var fscanf_orig: *const @TypeOf(Self.fscanf_hook);
+            pub extern var scanf_orig: *const @TypeOf(Self.scanf_hook);
             pub extern var vfprintf_s_orig: *const @TypeOf(Self.vfprintf_s_hook);
             pub extern var vprintf_s_orig: *const @TypeOf(Self.vprintf_s_hook);
             pub extern var fprintf_s_orig: *const @TypeOf(Self.fprintf_s_hook);
@@ -1639,6 +1844,10 @@ pub fn GNUSubstitute(comptime redirector: type) type {
         pub extern fn __vprintf_chk_hook() callconv(.c) void;
         pub extern fn __fprintf_chk_hook() callconv(.c) void;
         pub extern fn __printf_chk_hook() callconv(.c) void;
+        pub extern fn __isoc99_vfscanf_hook() callconv(.c) void;
+        pub extern fn __isoc99_vscanf_hook() callconv(.c) void;
+        pub extern fn __isoc99_fscanf_hook() callconv(.c) void;
+        pub extern fn __isoc99_scanf_hook() callconv(.c) void;
 
         const Self = @This();
         pub const Original = struct {
@@ -1646,6 +1855,10 @@ pub fn GNUSubstitute(comptime redirector: type) type {
             pub extern var __vprintf_chk_orig: *const @TypeOf(Self.__vprintf_chk_hook);
             pub extern var __fprintf_chk_orig: *const @TypeOf(Self.__fprintf_chk_hook);
             pub extern var __printf_chk_orig: *const @TypeOf(Self.__printf_chk_hook);
+            pub extern var __isoc99_vfscanf_orig: *const @TypeOf(Self.__isoc99_vfscanf_hook);
+            pub extern var __isoc99_vscanf_orig: *const @TypeOf(Self.__isoc99_vscanf_hook);
+            pub extern var __isoc99_fscanf_orig: *const @TypeOf(Self.__isoc99_fscanf_hook);
+            pub extern var __isoc99_scanf_orig: *const @TypeOf(Self.__isoc99_scanf_hook);
         };
     };
 }

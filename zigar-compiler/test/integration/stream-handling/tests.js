@@ -1343,6 +1343,39 @@ export function addTests(importModule, options) {
       }
       reader.close();
     })
+    it('should scan variables from a file using fscanf', async function() {
+      this.timeout(0);
+      const { scan } = await importTest('c/scan-file-with-fscanf');
+      const input = [
+        '1 2 3 hello',
+        '4 5 6 world',
+        '123 456',
+      ];
+      const data = new TextEncoder().encode(input.join('\n'));
+      const lines = await capture(() => scan(data));
+      expect(lines).to.eql([
+        '1 2 3 hello',
+        '4 5 6 world',
+        'count = 2',
+      ]);
+    })
+    it('should scan variables from a stdin using scanf', async function() {
+      this.timeout(0);
+      const { __zigar, scan } = await importTest('c/scan-stdin-with-scanf');
+      const input = [
+        '1 2 3 hello',
+        '4 5 6 world',
+        '123 456',
+      ];
+      const data = new TextEncoder().encode(input.join('\n'));
+      __zigar.redirect(0, data);
+      const lines = await capture(() => scan());
+      expect(lines).to.eql([
+        '1 2 3 hello',
+        '4 5 6 world',
+        'count = 2',
+      ]);
+    })
   })
 }
 

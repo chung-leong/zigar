@@ -1320,10 +1320,12 @@ const RedirectedFile = struct {
         return if (sig.* == signature) @ptrCast(sig) else null;
     }
 
-    pub fn consumeBuffer(self: *@This(), dest: [*]u8, desired_len: usize) usize {
+    pub fn consumeBuffer(self: *@This(), dest: ?[*]u8, desired_len: usize) usize {
         const buf = self.buffer orelse return 0;
         const len = @min(desired_len, self.buf_end - self.buf_start);
-        @memcpy(dest[0..len], buf[self.buf_start .. self.buf_start + len]);
+        if (dest) |ptr| {
+            @memcpy(ptr[0..len], buf[self.buf_start .. self.buf_start + len]);
+        }
         self.buf_start += len;
         return len;
     }
@@ -1626,6 +1628,10 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         pub extern fn vprintf_hook() callconv(.c) void;
         pub extern fn fprintf_hook() callconv(.c) void;
         pub extern fn printf_hook() callconv(.c) void;
+        pub extern fn vfscanf_hook() callconv(.c) void;
+        pub extern fn vscanf_hook() callconv(.c) void;
+        pub extern fn fscanf_hook() callconv(.c) void;
+        pub extern fn scanf_hook() callconv(.c) void;
         pub extern fn vfprintf_s_hook() callconv(.c) void;
         pub extern fn vprintf_s_hook() callconv(.c) void;
         pub extern fn fprintf_s_hook() callconv(.c) void;
@@ -1636,7 +1642,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             @export(&getRedirectedFile, .{ .name = "get_redirected_file", .visibility = .hidden });
             @export(&read, .{ .name = "redirected_read", .visibility = .hidden });
             @export(&write, .{ .name = "redirected_write", .visibility = .hidden });
-            @export(&bufferUntil, .{ .name = "buffer_until", .visibility = .hidden });
+            @export(&getLine, .{ .name = "get_line", .visibility = .hidden });
         }
 
         fn read(file: *RedirectedFile, dest: [*]u8, len: isize) callconv(.c) isize {
@@ -1706,6 +1712,21 @@ pub fn LibCSubstitute(comptime redirector: type) type {
                     }
                 }
             }
+        }
+
+        fn getLine(file: *RedirectedFile) callconv(.c) ?[*:0]u8 {
+            const end = bufferUntil(file, '\n');
+            if (end == 0) return null;
+            var buf = file.previewBuffer();
+            _ = file.consumeBuffer(null, end);
+            if (end == buf.len) {
+                // end of file
+                buf.len += 1;
+                buf[end] = 0;
+            } else {
+                buf[end - 1] = 0;
+            }
+            return @ptrCast(buf.ptr);
         }
 
         fn setNonBlocking(file: *RedirectedFile, nonblocking: bool) callconv(.c) c_int {
@@ -1802,6 +1823,10 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             pub extern var vprintf_orig: *const @TypeOf(Self.vprintf_hook);
             pub extern var fprintf_orig: *const @TypeOf(Self.fprintf_hook);
             pub extern var printf_orig: *const @TypeOf(Self.printf_hook);
+            pub extern var vfscanf_orig: *const @TypeOf(Self.vfscanf_hook);
+            pub extern var vscanf_orig: *const @TypeOf(Self.vscanf_hook);
+            pub extern var fscanf_orig: *const @TypeOf(Self.fscanf_hook);
+            pub extern var scanf_orig: *const @TypeOf(Self.scanf_hook);
             pub extern var vfprintf_s_orig: *const @TypeOf(Self.vfprintf_s_hook);
             pub extern var vprintf_s_orig: *const @TypeOf(Self.vprintf_s_hook);
             pub extern var fprintf_s_orig: *const @TypeOf(Self.fprintf_s_hook);
@@ -1819,6 +1844,10 @@ pub fn GNUSubstitute(comptime redirector: type) type {
         pub extern fn __vprintf_chk_hook() callconv(.c) void;
         pub extern fn __fprintf_chk_hook() callconv(.c) void;
         pub extern fn __printf_chk_hook() callconv(.c) void;
+        pub extern fn __isoc99_vfscanf_hook() callconv(.c) void;
+        pub extern fn __isoc99_vscanf_hook() callconv(.c) void;
+        pub extern fn __isoc99_fscanf_hook() callconv(.c) void;
+        pub extern fn __isoc99_scanf_hook() callconv(.c) void;
 
         const Self = @This();
         pub const Original = struct {
@@ -1826,6 +1855,10 @@ pub fn GNUSubstitute(comptime redirector: type) type {
             pub extern var __vprintf_chk_orig: *const @TypeOf(Self.__vprintf_chk_hook);
             pub extern var __fprintf_chk_orig: *const @TypeOf(Self.__fprintf_chk_hook);
             pub extern var __printf_chk_orig: *const @TypeOf(Self.__printf_chk_hook);
+            pub extern var __isoc99_vfscanf_orig: *const @TypeOf(Self.__isoc99_vfscanf_hook);
+            pub extern var __isoc99_vscanf_orig: *const @TypeOf(Self.__isoc99_vscanf_hook);
+            pub extern var __isoc99_fscanf_orig: *const @TypeOf(Self.__isoc99_fscanf_hook);
+            pub extern var __isoc99_scanf_orig: *const @TypeOf(Self.__isoc99_scanf_hook);
         };
     };
 }
