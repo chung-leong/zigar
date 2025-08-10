@@ -1216,7 +1216,7 @@ const ModuleHost = struct {
     fn handleAdvise(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
         // the POSIX enum is different from the WASI one; using a switch here because using
-        // std.posix.POSIX_FADV here would somehow pull in Solaris code leading to an assert
+        // std.c.POSIX_FADV here would somehow pull in Solaris code leading to an assert
         const advice: std.os.wasi.advice_t = switch (args.advice) {
             0 => .NORMAL,
             1 => .RANDOM,

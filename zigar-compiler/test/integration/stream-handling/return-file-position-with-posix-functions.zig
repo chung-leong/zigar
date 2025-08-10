@@ -5,8 +5,8 @@ const c = @cImport({
 });
 
 pub fn seek(path: []const u8, offset: isize) !std.c.off_t {
-    const fd = try std.posix.open(path, .{ .ACCMODE = .RDONLY }, 0);
-    defer std.posix.close(fd);
-    try std.posix.lseek_END(fd, offset);
+    const fd = try std.c.open(path, .{ .ACCMODE = .RDONLY }, 0);
+    defer std.c.close(fd);
+    try std.c.lseek_END(fd, offset);
     return std.c.lseek(fd, 0, 1);
 }

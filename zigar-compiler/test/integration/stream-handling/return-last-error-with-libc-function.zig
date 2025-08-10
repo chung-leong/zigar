@@ -4,7 +4,7 @@ const c = @cImport({
     @cInclude("stdio.h");
 });
 
-pub fn triggerError(path: [:0]const u8) !std.posix.E {
+pub fn triggerError(path: [:0]const u8) !std.c.E {
     const file = c.fopen(path, "r") orelse return error.UnableToOpenFile;
     defer _ = c.fclose(file);
     var buffer: [128]u8 = undefined;

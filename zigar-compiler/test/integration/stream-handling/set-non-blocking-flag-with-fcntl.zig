@@ -37,11 +37,11 @@ pub fn run(file: std.fs.File, promise: zigar.function.Promise(void)) !void {
             start = 0;
             end = remaining;
             last_checked = remaining;
-            if (try std.posix.read(fd, buffer[end .. end + 1]) != 0) {
+            if (try std.c.read(fd, buffer[end .. end + 1]) != 0) {
                 end += 1;
                 // switch into non-blocking mode and read the rest of the available bytes
                 try setNonBlocking(fd, true);
-                const read = std.posix.read(fd, buffer[end..]) catch |err|
+                const read = std.c.read(fd, buffer[end..]) catch |err|
                     if (err == error.WouldBlock) 0 else return err;
                 try setNonBlocking(fd, false);
                 end += read;
@@ -54,9 +54,9 @@ pub fn run(file: std.fs.File, promise: zigar.function.Promise(void)) !void {
 }
 
 fn setNonBlocking(fd: c_int, nonblocking: bool) !void {
-    const oflags: std.posix.O = .{ .NONBLOCK = nonblocking };
-    const oflags_int: @typeInfo(std.posix.O).@"struct".backing_integer.? = @bitCast(oflags);
-    _ = try std.posix.fcntl(fd, std.posix.F.SETFL, oflags_int);
+    const oflags: std.c.O = .{ .NONBLOCK = nonblocking };
+    const oflags_int: @typeInfo(std.c.O).@"struct".backing_integer.? = @bitCast(oflags);
+    _ = try std.c.fcntl(fd, std.c.F.SETFL, oflags_int);
 }
 
 pub fn startup() !void {

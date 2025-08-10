@@ -1,5 +1,5 @@
 const std = @import("std");
 
 pub fn remove(path: []const u8) !void {
-    try std.posix.rmdir(path);
+    try std.c.rmdir(path);
 }

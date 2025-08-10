@@ -301,8 +301,8 @@ pub fn Controller(comptime Host: type) type {
                 hook.original.* = ptr.*;
                 if (read_only) {
                     const page = getPageSlice(address);
-                    try std.posix.mprotect(page, std.posix.PROT.READ | std.posix.PROT.WRITE);
-                    defer std.posix.mprotect(page, std.posix.PROT.READ) catch {};
+                    if (std.c.mprotect(page.ptr, page.len, std.c.PROT.READ | std.c.PROT.WRITE) < 0) return error.UnableToInstallHooks;
+                    defer _ = std.c.mprotect(page.ptr, page.len, std.c.PROT.READ);
                     ptr.* = hook.handler;
                 } else {
                     ptr.* = hook.handler;

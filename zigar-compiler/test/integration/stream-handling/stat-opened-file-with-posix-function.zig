@@ -6,8 +6,8 @@ const c = @cImport({
 });
 
 pub fn print(path: []const u8) !void {
-    const fd = try std.posix.open(path, .{ .ACCMODE = .RDONLY }, 0);
-    defer std.posix.close(fd);
+    const fd = try std.c.open(path, .{ .ACCMODE = .RDONLY }, 0);
+    defer std.c.close(fd);
     var info: c.struct_stat = undefined;
     const result = c.fstat(fd, &info);
     if (result != 0) return error.UnableToGetStat;
