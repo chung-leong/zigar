@@ -1416,6 +1416,24 @@ export function addTests(importModule, options) {
       const result5 = get();
       expect(result5).to.equal(2);
     })
+    it('should flush open file using fflush', async function() {
+      this.timeout(0);
+      const { __zigar, open, close, write, writeFlush, writeFlushAll } = await importTest('flush-buffer-with-fflush');
+      const array = [];
+      __zigar.on('open', (evt) => array);
+      open('/hello.txt');
+      try {
+        writeFlush('Hello world');
+        expect(array).to.have.lengthOf(1);
+        writeFlushAll('Hello world');
+        expect(array).to.have.lengthOf(2);
+        write('Hello world');
+        expect(array).to.have.lengthOf(2);
+      } finally{
+        close();
+      }
+      expect(array).to.have.lengthOf(3);
+    })
   })
 }
 
