@@ -8,6 +8,7 @@ var file: *stdio.FILE = undefined;
 
 pub fn open(path: [*:0]const u8) !void {
     file = stdio.fopen(path, "w") orelse return error.UnableToCreateFile;
+    stdio.setbuf(file, null); // should do nothing
 }
 
 pub fn write(s: []const u8) void {

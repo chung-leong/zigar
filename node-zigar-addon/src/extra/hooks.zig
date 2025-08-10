@@ -1682,6 +1682,20 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             return Original.rewind(s);
         }
 
+        pub fn setbuf(s: *std.c.FILE, buffer: [*]u8) callconv(.c) void {
+            if (getRedirectedFile(s)) |_| {
+                return; // ignore call
+            }
+            return Original.setbuf(s, buffer);
+        }
+
+        pub fn setvbuf(s: *std.c.FILE, buffer: [*]u8, mode: c_int, size: usize) callconv(.c) void {
+            if (getRedirectedFile(s)) |_| {
+                return; // ignore call
+            }
+            return Original.setvbuf(s, buffer, mode, size);
+        }
+
         pub fn ungetc(c: c_int, s: *std.c.FILE) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
                 if (c < 0 or c > 255) return -1;
@@ -1963,6 +1977,8 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             pub var putchar: *const @TypeOf(Self.putchar) = undefined;
             pub var puts: *const @TypeOf(Self.puts) = undefined;
             pub var rewind: *const @TypeOf(Self.rewind) = undefined;
+            pub var setbuf: *const @TypeOf(Self.setbuf) = undefined;
+            pub var setvbuf: *const @TypeOf(Self.setvbuf) = undefined;
             pub var ungetc: *const @TypeOf(Self.ungetc) = undefined;
 
             pub extern var vfprintf_orig: *const @TypeOf(Self.vfprintf_hook);
