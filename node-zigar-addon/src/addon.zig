@@ -962,17 +962,17 @@ const ModuleHost = struct {
     fn handleAccess(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
         const lflags: std.os.wasi.lookupflags_t = .{
-            .SYMLINK_FOLLOW = (args.flags & std.posix.AT.SYMLINK_NOFOLLOW) == 0,
+            .SYMLINK_FOLLOW = (args.flags & std.c.AT.SYMLINK_NOFOLLOW) == 0,
         };
         const rights: std.os.wasi.rights_t = set: {
             var r: std.os.wasi.rights_t = .{};
-            if (args.mode & std.posix.X_OK != 0) {
+            if (args.mode & std.c.X_OK != 0) {
                 r.FD_READDIR = true;
             } else {
-                if (args.mode & std.posix.R_OK != 0) {
+                if (args.mode & std.c.R_OK != 0) {
                     r.FD_READ = true;
                 }
-                if (args.mode & std.posix.W_OK != 0) {
+                if (args.mode & std.c.W_OK != 0) {
                     r.FD_WRITE = true;
                 }
             }
@@ -991,7 +991,7 @@ const ModuleHost = struct {
 
     fn handleOpen(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        const oflags_posix: std.posix.O = @bitCast(args.oflags);
+        const oflags_posix: std.c.O = @bitCast(args.oflags);
         const lflags: std.os.wasi.lookupflags_t = .{
             .SYMLINK_FOLLOW = !oflags_posix.NOFOLLOW,
         };
@@ -1135,7 +1135,7 @@ const ModuleHost = struct {
             });
         } else {
             const lflags: std.os.wasi.lookupflags_t = .{
-                .SYMLINK_FOLLOW = (args.flags & std.posix.AT.SYMLINK_NOFOLLOW) == 0,
+                .SYMLINK_FOLLOW = (args.flags & std.c.AT.SYMLINK_NOFOLLOW) == 0,
             };
             const path_len: u32 = @truncate(std.mem.len(args.path));
             return try self.callPosixFunction(self.js.path_filestat_set_times, &.{
@@ -1161,7 +1161,7 @@ const ModuleHost = struct {
             });
         } else {
             const lflags: std.os.wasi.lookupflags_t = .{
-                .SYMLINK_FOLLOW = (args.flags & std.posix.AT.SYMLINK_NOFOLLOW) == 0,
+                .SYMLINK_FOLLOW = (args.flags & std.c.AT.SYMLINK_NOFOLLOW) == 0,
             };
             const path_len: u32 = @truncate(std.mem.len(args.path));
             return try self.callPosixFunction(self.js.path_filestat_get, &.{

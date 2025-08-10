@@ -192,7 +192,7 @@ pub const Syscall = extern struct {
         start: i64,
         len: u64,
     };
-    pub const Timespec = std.posix.timespec;
+    pub const Timespec = std.c.timespec;
     pub const Fdstat = std.os.wasi.fdstat_t;
     pub const Filestat = std.os.wasi.filestat_t;
     pub const Fdflags = std.os.wasi.fdflags_t;
@@ -284,7 +284,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         pub fn fcntl(fd: c_int, op: c_int, arg: usize, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
                 switch (op) {
-                    std.posix.F.GETFL => {
+                    std.c.F.GETFL => {
                         var call: Syscall = .{ .cmd = .getfl, .u = .{
                             .getfl = .{
                                 .fd = @intCast(fd),
@@ -293,7 +293,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         const err = Host.redirectSyscall(&call);
                         if (err == .SUCCESS) {
                             const fdstat = call.u.getfl.fdstat;
-                            var oflags: std.posix.O = .{};
+                            var oflags: std.c.O = .{};
                             if (fdstat.fs_rights_base.FD_READ) {
                                 if (fdstat.fs_rights_base.FD_WRITE) {
                                     oflags.ACCMODE = .RDWR;
@@ -306,15 +306,15 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                                 oflags.DIRECTORY = true;
                                 oflags.ACCMODE = .RDONLY;
                             }
-                            const oflags_int: @typeInfo(std.posix.O).@"struct".backing_integer.? = @bitCast(oflags);
+                            const oflags_int: @typeInfo(std.c.O).@"struct".backing_integer.? = @bitCast(oflags);
                             result.* = @intCast(oflags_int);
                         } else {
                             result.* = intFromError(err);
                         }
                     },
-                    std.posix.F.SETFL => {
-                        const oflags_int: @typeInfo(std.posix.O).@"struct".backing_integer.? = @truncate(arg);
-                        const oflags: std.posix.O = @bitCast(oflags_int);
+                    std.c.F.SETFL => {
+                        const oflags_int: @typeInfo(std.c.O).@"struct".backing_integer.? = @truncate(arg);
+                        const oflags: std.c.O = @bitCast(oflags_int);
                         var call: Syscall = .{ .cmd = .setfl, .u = .{
                             .setfl = .{
                                 .fd = @intCast(fd),
@@ -327,12 +327,12 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         const err = Host.redirectSyscall(&call);
                         result.* = intFromError(err);
                     },
-                    std.posix.F.SETLK, std.posix.F.SETLKW => {
-                        const lock: *const std.posix.Flock = @ptrFromInt(arg);
+                    std.c.F.SETLK, std.c.F.SETLKW => {
+                        const lock: *const std.c.Flock = @ptrFromInt(arg);
                         var call: Syscall = .{ .cmd = .setlk, .u = .{
                             .setlk = .{
                                 .fd = @intCast(fd),
-                                .wait = op == std.posix.F.SETLKW,
+                                .wait = op == std.c.F.SETLKW,
                                 .flock = .{
                                     .type = lock.type,
                                     .whence = lock.whence,
@@ -345,8 +345,8 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         const err = Host.redirectSyscall(&call);
                         result.* = intFromError(err);
                     },
-                    std.posix.F.GETLK => {
-                        const lock: *std.posix.Flock = @ptrFromInt(arg);
+                    std.c.F.GETLK => {
+                        const lock: *std.c.Flock = @ptrFromInt(arg);
                         var call: Syscall = .{ .cmd = .getlk, .u = .{
                             .getlk = .{
                                 .fd = @intCast(fd),
@@ -390,31 +390,31 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn flock(fd: c_int, op: c_int, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
-                const lock: std.posix.Flock = .{
-                    .type = switch (op & ~@as(c_int, std.posix.LOCK.NB)) {
-                        std.posix.LOCK.SH => std.posix.F.RDLCK,
-                        std.posix.LOCK.EX => std.posix.F.WRLCK,
-                        std.posix.LOCK.UN => std.posix.F.UNLCK,
+                const lock: std.c.Flock = .{
+                    .type = switch (op & ~@as(c_int, std.c.LOCK.NB)) {
+                        std.c.LOCK.SH => std.c.F.RDLCK,
+                        std.c.LOCK.EX => std.c.F.WRLCK,
+                        std.c.LOCK.UN => std.c.F.UNLCK,
                         else => {
-                            result.* = intFromError(std.posix.E.INVAL);
+                            result.* = intFromError(std.c.E.INVAL);
                             return true;
                         },
                     },
-                    .whence = std.posix.SEEK.SET,
+                    .whence = std.c.SEEK.SET,
                     .start = 0,
                     .len = 0,
                     .pid = 0,
                 };
-                const fcntl_op: c_int = switch (op & std.posix.LOCK.NB) {
-                    0 => std.posix.F.SETLKW,
-                    else => std.posix.F.SETLK,
+                const fcntl_op: c_int = switch (op & std.c.LOCK.NB) {
+                    0 => std.c.F.SETLKW,
+                    else => std.c.F.SETLK,
                 };
                 return fcntl(fd, fcntl_op, @intFromPtr(&lock), result);
             }
             return false;
         }
 
-        pub fn fstat(fd: c_int, buf: *std.posix.Stat, result: *c_int) callconv(.c) bool {
+        pub fn fstat(fd: c_int, buf: *std.c.Stat, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
                 var call: Syscall = .{ .cmd = .fstat, .u = .{
                     .fstat = .{
@@ -443,7 +443,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn futimens(fd: c_int, times: [*]const std.posix.timespec, result: *c_int) callconv(.c) bool {
+        pub fn futimens(fd: c_int, times: [*]const std.c.timespec, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
                 var call: Syscall = .{ .cmd = .futimes, .u = .{
                     .futimes = .{
@@ -458,7 +458,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn futimes(fd: c_int, tv: [*]const std.posix.timeval, result: *c_int) callconv(.c) bool {
+        pub fn futimes(fd: c_int, tv: [*]const std.c.timeval, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
                 const times = convertTimeval(tv);
                 return futimens(fd, &times, result);
@@ -466,10 +466,10 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn futimesat(dirfd: c_int, path: [*:0]const u8, tv: [*]const std.posix.timeval, result: *c_int) callconv(.c) bool {
+        pub fn futimesat(dirfd: c_int, path: [*:0]const u8, tv: [*]const std.c.timeval, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.set_times))) {
                 const times = convertTimeval(tv);
-                return utimensat(dirfd, path, &times, std.posix.AT.SYMLINK_FOLLOW, result);
+                return utimensat(dirfd, path, &times, std.c.AT.SYMLINK_FOLLOW, result);
             }
             return false;
         }
@@ -517,7 +517,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         if (offset + reclen >= len) {
                             // retrieved too much data--reposition cursor before exiting
                             var seek_result: isize = undefined;
-                            _ = lseek(dirfd, next_pos, std.posix.SEEK.SET, &seek_result);
+                            _ = lseek(dirfd, next_pos, std.c.SEEK.SET, &seek_result);
                             break;
                         }
                         if (@hasField(std.c.dirent64, "ino")) {
@@ -567,7 +567,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn lseek(fd: c_int, offset: isize, whence: c_int, result: *isize) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
-                const tell = offset == 0 and whence == std.posix.SEEK.CUR;
+                const tell = offset == 0 and whence == std.c.SEEK.CUR;
                 var call: Syscall = switch (tell) {
                     true => .{ .cmd = .tell, .u = .{
                         .tell = .{
@@ -596,13 +596,13 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn lstat(path: [*:0]const u8, buf: *std.posix.Stat, result: *c_int) callconv(.c) bool {
-            return newfstatat(-1, path, buf, std.posix.AT.SYMLINK_NOFOLLOW, result);
+        pub fn lstat(path: [*:0]const u8, buf: *std.c.Stat, result: *c_int) callconv(.c) bool {
+            return newfstatat(-1, path, buf, std.c.AT.SYMLINK_NOFOLLOW, result);
         }
 
-        pub fn lutimes(path: [*:0]const u8, tv: [*]const std.posix.timeval, result: *c_int) callconv(.c) bool {
+        pub fn lutimes(path: [*:0]const u8, tv: [*]const std.c.timeval, result: *c_int) callconv(.c) bool {
             const times = convertTimeval(tv);
-            return utimensat(-1, path, &times, std.posix.AT.SYMLINK_NOFOLLOW, result);
+            return utimensat(-1, path, &times, std.c.AT.SYMLINK_NOFOLLOW, result);
         }
 
         pub fn mkdir(path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
@@ -627,7 +627,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn newfstatat(dirfd: c_int, path: [*:0]const u8, buf: *std.posix.Stat, flags: c_int, result: *c_int) callconv(.c) bool {
+        pub fn newfstatat(dirfd: c_int, path: [*:0]const u8, buf: *std.c.Stat, flags: c_int, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.stat))) {
                 var call: Syscall = .{ .cmd = .stat, .u = .{
                     .stat = .{
@@ -750,7 +750,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn stat(path: [*:0]const u8, buf: *std.posix.Stat, result: *c_int) callconv(.c) bool {
+        pub fn stat(path: [*:0]const u8, buf: *std.c.Stat, result: *c_int) callconv(.c) bool {
             return newfstatat(-1, path, buf, 0, result);
         }
 
@@ -804,12 +804,12 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn utimes(path: [*:0]const u8, tv: [*]const std.posix.timeval, result: *c_int) callconv(.c) bool {
+        pub fn utimes(path: [*:0]const u8, tv: [*]const std.c.timeval, result: *c_int) callconv(.c) bool {
             const times = convertTimeval(tv);
-            return utimensat(-1, path, &times, std.posix.AT.SYMLINK_FOLLOW, result);
+            return utimensat(-1, path, &times, std.c.AT.SYMLINK_FOLLOW, result);
         }
 
-        pub fn utimensat(dirfd: c_int, path: [*:0]const u8, times: [*]const std.posix.timespec, flags: c_int, result: *c_int) callconv(.c) bool {
+        pub fn utimensat(dirfd: c_int, path: [*:0]const u8, times: [*]const std.c.timespec, flags: c_int, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.set_times))) {
                 var call: Syscall = .{ .cmd = .utimes, .u = .{
                     .utimes = .{
@@ -864,8 +864,8 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             };
         }
 
-        fn convertTimeval(tv: [*]const std.posix.timeval) [2]std.posix.timespec {
-            var times: [2]std.posix.timespec = undefined;
+        fn convertTimeval(tv: [*]const std.c.timeval) [2]std.c.timespec {
+            var times: [2]std.c.timespec = undefined;
             for (&times, 0..) |*ptr, index| {
                 ptr.* = .{
                     .sec = tv[index].sec,
@@ -875,7 +875,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return times;
         }
 
-        fn copyStat(dest: *std.posix.Stat, src: *const std.os.wasi.filestat_t) void {
+        fn copyStat(dest: *std.c.Stat, src: *const std.os.wasi.filestat_t) void {
             dest.* = std.mem.zeroes(std.c.Stat);
             dest.ino = src.ino;
             dest.size = @truncate(@as(i64, @intCast(src.size)));
@@ -970,7 +970,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const utimes = makeStdHook("utimes");
         pub const write = makeStdHook("write");
 
-        pub fn __fxstat(ver: c_int, fd: c_int, buf: *std.posix.Stat) callconv(.c) c_int {
+        pub fn __fxstat(ver: c_int, fd: c_int, buf: *std.c.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
             if (redirector.fstat(fd, buf, &result)) {
                 return saveError(result);
@@ -978,7 +978,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.__fxstat(ver, fd, buf);
         }
 
-        pub fn __fxstat64(ver: c_int, fd: c_int, buf: *std.posix.Stat) callconv(.c) c_int {
+        pub fn __fxstat64(ver: c_int, fd: c_int, buf: *std.c.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
             if (redirector.fstat(fd, buf, &result)) {
                 return saveError(result);
@@ -986,23 +986,23 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.__fxstat64(ver, fd, buf);
         }
 
-        pub fn __fxstatat(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
+        pub fn __fxstatat(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *std.c.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
-            if (redirector.newfstatat(dirfd, path, buf, std.posix.AT.SYMLINK_FOLLOW, &result)) {
+            if (redirector.newfstatat(dirfd, path, buf, std.c.AT.SYMLINK_FOLLOW, &result)) {
                 return saveError(result);
             }
             return Original.__fxstatat(ver, dirfd, path, buf);
         }
 
-        pub fn __fxstatat64(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
+        pub fn __fxstatat64(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *std.c.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
-            if (redirector.newfstatat(dirfd, path, buf, std.posix.AT.SYMLINK_FOLLOW, &result)) {
+            if (redirector.newfstatat(dirfd, path, buf, std.c.AT.SYMLINK_FOLLOW, &result)) {
                 return saveError(result);
             }
             return Original.__fxstatat64(ver, dirfd, path, buf);
         }
 
-        pub fn __lxstat(ver: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
+        pub fn __lxstat(ver: c_int, path: [*:0]const u8, buf: *std.c.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
             if (redirector.lstat(path, buf, &result)) {
                 return saveError(result);
@@ -1010,7 +1010,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.__lxstat(ver, path, buf);
         }
 
-        pub fn __lxstat64(ver: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
+        pub fn __lxstat64(ver: c_int, path: [*:0]const u8, buf: *std.c.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
             if (redirector.lstat(path, buf, &result)) {
                 return saveError(result);
@@ -1018,7 +1018,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.__lxstat64(ver, path, buf);
         }
 
-        pub fn __xstat(ver: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
+        pub fn __xstat(ver: c_int, path: [*:0]const u8, buf: *std.c.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
             if (redirector.stat(path, buf, &result)) {
                 return saveError(result);
@@ -1026,7 +1026,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.__xstat(ver, path, buf);
         }
 
-        pub fn __xstat64(ver: c_int, path: [*:0]const u8, buf: *std.posix.Stat) callconv(.c) c_int {
+        pub fn __xstat64(ver: c_int, path: [*:0]const u8, buf: *std.c.Stat) callconv(.c) c_int {
             var result: c_int = undefined;
             if (redirector.stat(path, buf, &result)) {
                 return saveError(result);
@@ -1045,8 +1045,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         pub fn opendir(path: [*:0]const u8) callconv(.c) ?*std.c.DIR {
             var result: c_int = undefined;
-            const flags: std.posix.O = .{ .DIRECTORY = true };
-            const flags_int: @typeInfo(std.posix.O).@"struct".backing_integer.? = @bitCast(flags);
+            const flags: std.c.O = .{ .DIRECTORY = true };
+            const flags_int: @typeInfo(std.c.O).@"struct".backing_integer.? = @bitCast(flags);
             if (redirector.open(path, flags_int, 0, &result)) {
                 if (result > 0) {
                     if (c_allocator.create(RedirectedDir)) |dir| {
@@ -1060,11 +1060,11 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         }
 
         pub fn pthread_create(thread: *std.c.pthread_t, attr: ?*const std.c.pthread_attr_t, start_routine: *const fn (?*anyopaque) callconv(.c) ?*anyopaque, arg: ?*anyopaque) callconv(.c) c_int {
-            const info = c_allocator.create(ThreadInfo) catch return @intFromEnum(std.posix.E.NOMEM);
+            const info = c_allocator.create(ThreadInfo) catch return @intFromEnum(std.c.E.NOMEM);
             info.* = .{
                 .proc = start_routine,
                 .arg = arg,
-                .instance = redirector.Host.getInstance() catch return @intFromEnum(std.posix.E.FAULT),
+                .instance = redirector.Host.getInstance() catch return @intFromEnum(std.c.E.FAULT),
             };
             return Original.pthread_create(thread, attr, &setThreadContext, info);
         }
@@ -1095,7 +1095,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         pub fn rewinddir(d: *std.c.DIR) callconv(.c) void {
             if (RedirectedDir.cast(d)) |dir| {
-                if (lseek(dir.fd, 0, std.posix.SEEK.SET) == 0) {
+                if (lseek(dir.fd, 0, std.c.SEEK.SET) == 0) {
                     dir.cookie = 0;
                     dir.data_next = 0;
                     dir.data_len = 0;
@@ -1106,7 +1106,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         pub fn seekdir(d: *std.c.DIR, offset: c_ulong) callconv(.c) void {
             if (RedirectedDir.cast(d)) |dir| {
-                if (lseek(dir.fd, @intCast(offset), std.posix.SEEK.SET) == 0) {
+                if (lseek(dir.fd, @intCast(offset), std.c.SEEK.SET) == 0) {
                     dir.cookie = offset;
                     dir.data_next = 0;
                     dir.data_len = 0;
@@ -1310,7 +1310,7 @@ const RedirectedFile = struct {
     buf_start: usize = 0,
     buf_end: usize = 0,
     buf_mode: BufferMode = .read,
-    flags: std.posix.O,
+    flags: std.c.O,
     eof: bool = false,
     proxy: bool = false,
 
@@ -1350,7 +1350,7 @@ const RedirectedFile = struct {
     }
 
     pub fn prepareBuffer(self: *@This()) ![]u8 {
-        errdefer self.errno = @intFromEnum(std.posix.E.NOMEM);
+        errdefer self.errno = @intFromEnum(std.c.E.NOMEM);
         var buf = self.buffer orelse create: {
             self.buffer = try c_allocator.alloc(u8, 8192);
             break :create self.buffer.?;
@@ -1545,7 +1545,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         pub fn fputc(c: c_int, s: *std.c.FILE) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
                 if (c < 0 or c > 255) {
-                    file.errno = @intFromEnum(std.posix.E.INVAL);
+                    file.errno = @intFromEnum(std.c.E.INVAL);
                     return -1;
                 }
                 const b: [1]u8 = .{@intCast(c)};
@@ -1632,7 +1632,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         pub fn putc(c: c_int, s: *std.c.FILE) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
                 if (c < 0 or c > 255) {
-                    file.errno = @intFromEnum(std.posix.E.INVAL);
+                    file.errno = @intFromEnum(std.c.E.INVAL);
                     return -1;
                 }
                 const b: [1]u8 = .{@intCast(c)};
@@ -1644,7 +1644,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         pub fn putchar(c: c_int) callconv(.c) c_int {
             const stdout = getStdProxy(1);
             if (c < 0 or c > 255) {
-                stdout.errno = @intFromEnum(std.posix.E.INVAL);
+                stdout.errno = @intFromEnum(std.c.E.INVAL);
                 return -1;
             }
             const b: [1]u8 = .{@intCast(c)};
@@ -1861,15 +1861,15 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         }
 
         fn setNonBlocking(file: *RedirectedFile, nonblocking: bool) callconv(.c) c_int {
-            const oflags: std.posix.O = .{ .NONBLOCK = nonblocking };
-            const oflags_int: @typeInfo(std.posix.O).@"struct".backing_integer.? = @bitCast(oflags);
-            if (posix.fcntl(file.fd, std.posix.F.SETFL, oflags_int) != 0) {
+            const oflags: std.c.O = .{ .NONBLOCK = nonblocking };
+            const oflags_int: @typeInfo(std.c.O).@"struct".backing_integer.? = @bitCast(oflags);
+            if (posix.fcntl(file.fd, std.c.F.SETFL, oflags_int) != 0) {
                 return saveFileError(file, posix.getError());
             }
             return 0;
         }
 
-        fn addRedirectedFile(fd: c_int, oflags: std.posix.O) !*std.c.FILE {
+        fn addRedirectedFile(fd: c_int, oflags: std.c.O) !*std.c.FILE {
             if (fd <= 0) return error.InvalidFileDescriptor;
             const file = try c_allocator.create(RedirectedFile);
             errdefer c_allocator.destroy(file);
@@ -1916,7 +1916,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
                 .int => file.errno = err,
                 .@"enum" => file.errno = @intFromEnum(err),
                 .enum_literal => {
-                    const err_enum = @as(std.posix.E, err);
+                    const err_enum = @as(std.c.E, err);
                     file.errno = @intFromEnum(err_enum);
                 },
                 else => @compileError("Unexpected"),
@@ -2146,7 +2146,7 @@ pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
     return std.StaticStringMap(Entry).initComptime(table);
 }
 
-fn intFromError(err: std.posix.E) c_int {
+fn intFromError(err: std.c.E) c_int {
     const value: c_int = @intFromEnum(err);
     return -value;
 }
