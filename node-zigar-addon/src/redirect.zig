@@ -424,11 +424,10 @@ pub fn Controller(comptime Host: type) type {
         }
 
         pub fn uninstallSyscallTrap() void {
-            const prctl_h = @cImport({
-                @cInclude("sys/prctl.h");
-            });
             if (os == .linux) {
-                uninstallSignalHandler();
+                const prctl_h = @cImport({
+                    @cInclude("sys/prctl.h");
+                });
                 _ = std.c.prctl(
                     prctl_h.PR_SET_SYSCALL_USER_DISPATCH,
                     prctl_h.PR_SYS_DISPATCH_OFF,
