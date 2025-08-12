@@ -5,7 +5,11 @@ const stdio = @cImport({
 });
 
 pub fn push(c: c_int) void {
-    _ = stdio.ungetc(c, stdio.stdin);
+    const stdin = switch (@typeInfo(@TypeOf(stdio.stdin))) {
+        .@"fn" => stdio.stdin(),
+        else => stdio.stdin,
+    };
+    _ = stdio.ungetc(c, stdin);
 }
 
 pub fn get() c_int {

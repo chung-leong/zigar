@@ -16,9 +16,13 @@ pub fn print(promise: zigar.function.Promise(void)) !void {
 }
 
 fn run(promise: zigar.function.Promise(void)) !void {
+    const stdin = switch (@typeInfo(@TypeOf(stdio.stdin))) {
+        .@"fn" => stdio.stdin(),
+        else => stdio.stdin,
+    };
     var buffer: [128]u8 = undefined;
     while (true) {
-        const result = stdio.fgets(&buffer, @intCast(buffer.len), stdio.stdin);
+        const result = stdio.fgets(&buffer, @intCast(buffer.len), stdin);
         if (result == null) break;
         const line: [*:0]const u8 = @ptrCast(result);
         std.debug.print("> {s}", .{line});

@@ -8,5 +8,5 @@ pub fn lock(file: std.fs.File) !void {
         .start = 1234,
         .len = 8000,
     };
-    _ = try std.c.fcntl(file.handle, std.c.F.SETLK, @intFromPtr(&flock));
+    if (std.c.fcntl(file.handle, std.c.F.SETLK, @intFromPtr(&flock)) != 0) return error.UnableToSetLock;
 }

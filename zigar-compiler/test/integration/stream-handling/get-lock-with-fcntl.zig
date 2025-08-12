@@ -8,11 +8,7 @@ pub fn check(file: std.fs.File) !?std.c.Flock {
         .start = 1234,
         .len = 8000,
     };
-    if (std.c.fcntl(file.handle, std.c.F.GETLK, @intFromPtr(&flock))) |_| {
-        if (flock.type != std.c.F.UNLCK) return error.Unexpected;
-        return null;
-    } else |err| {
-        if (err != error.Locked) return err;
-        return flock;
-    }
+    const result = std.c.fcntl(file.handle, std.c.F.GETLK, @intFromPtr(&flock));
+    if (result < 0) return error.UnableToGetLock;
+    return if (flock.type != std.c.F.UNLCK) flock else null;
 }
