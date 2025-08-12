@@ -13,7 +13,7 @@ pub fn stat(dir_path: [*:0]const u8, path: [*:0]const u8) !void {
     var info: c.struct_stat = undefined;
     if (c.fstatat(dirfd, path, &info, 0) != 0) return error.UnableToGetStat;
     std.debug.print("size = {d}\n", .{info.st_size});
-    if (@hasField(c.struct_stat, "st_ctime")) {
+    if (@hasField(c.struct_stat, "st_ctim")) {
         std.debug.print("ctime = {d},{d}\n", .{ info.st_ctim.tv_sec, info.st_ctim.tv_nsec });
         std.debug.print("mtime = {d},{d}\n", .{ info.st_mtim.tv_sec, info.st_mtim.tv_nsec });
         std.debug.print("atime = {d},{d}\n", .{ info.st_atim.tv_sec, info.st_atim.tv_nsec });

@@ -100,7 +100,6 @@ export function addTests(importModule, options) {
       const digest = hash(content);
       expect(digest.string).to.equal(correct);
     })
-    skip.
     it('should open and read from file in main thread', async function() {
       this.timeout(0);
       const { __zigar, hash } = await importTest('open-and-read-from-file-in-main-thread');
@@ -337,7 +336,6 @@ export function addTests(importModule, options) {
       const string = await blob.text();
       expect(string).to.equal('This is a test');
     })
-    skip.
     it('should open and write to file in main thread', async function() {
       this.timeout(0);
       const { __zigar, save } = await importTest('open-and-write-to-file-in-main-thread');
@@ -618,7 +616,6 @@ export function addTests(importModule, options) {
         await shutdown();
       }
     })
-    skip.
     it('should print stats of an Uint8Array passed as a file', async function() {
       this.timeout(0);
       const { print } = await importTest('stat-opened-file');
@@ -836,7 +833,6 @@ export function addTests(importModule, options) {
       expect(() => setTimes('/world', '/hello.txt', 123, 456)).to.throw(Error)
         .with.property('message', 'Unable to set times');
     })
-    skip.
     it('should print directory contents', async function() {
       this.timeout(0);
       const { print } = await importTest('read-directory');
@@ -857,7 +853,6 @@ export function addTests(importModule, options) {
       map2.close();
       expect(lines2).to.have.lengthOf(100);
     })
-    skip.
     it('should print directory contents in thread', async function() {
       this.timeout(0);
       const { startup, shutdown, print } = await importTest('read-directory-in-thread', { multithreaded: true });
@@ -991,7 +986,6 @@ export function addTests(importModule, options) {
       expect(called).to.be.true;
       expect(args).to.eql([ 0n, 1000n ]);
     })
-    skip.
     it('should print contents of files in directory', async function() {
       this.timeout(0);
       const { __zigar, print } = await importTest('open-file-from-directory');

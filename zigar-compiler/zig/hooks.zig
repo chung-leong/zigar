@@ -1533,7 +1533,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
                 }
                 switch (@typeInfo(stdio_h.fpos_t)) {
                     .int => pos.* = result,
-                    .@"struct" => if (@hasField(stdio_h.fpos_h, "__pos")) {
+                    .@"struct" => if (@hasField(stdio_h.fpos_t, "__pos")) {
                         @field(pos, "__pos") = result;
                     },
                     else => @compileError("Unexpected fpos_t type"),
@@ -1629,7 +1629,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
                 if (flush(file) < 0) return -1;
                 const offset = switch (@typeInfo(stdio_h.fpos_t)) {
                     .int => pos.*,
-                    .@"struct" => if (@hasField(stdio_h.fpos_h, "__pos"))
+                    .@"struct" => if (@hasField(stdio_h.fpos_t, "__pos"))
                         @field(pos, "__pos"),
                     else => @compileError("Unexpected fpos_t type"),
                 };
