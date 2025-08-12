@@ -1802,7 +1802,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         fn write(file: *RedirectedFile, src: [*]const u8, len: isize) callconv(.c) isize {
             if (setBufferMode(file, .write) < 0) return -1;
             const len_u: usize = @intCast(len);
-            if (len_u >= 8192 or file.fd == 2) {
+            if (len_u >= 8192 or file.fd == 1 or file.fd == 2) {
                 // don't bother buffering when the amount is large
                 if (flush(file) < 0) return -1;
                 return writeRaw(file, src, len);
