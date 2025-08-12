@@ -5,9 +5,10 @@ const c = @cImport({
     @cInclude("unistd.h");
 });
 
-pub fn print(path: []const u8) !void {
-    const fd = try std.c.open(path, .{ .ACCMODE = .RDONLY }, 0);
-    defer std.c.close(fd);
+pub fn print(path: [*:0]const u8) !void {
+    const fd = std.c.open(path, .{ .ACCMODE = .RDONLY });
+    if (fd < 0) return error.UnableToOpenFile;
+    defer _ = std.c.close(fd);
     var info: c.struct_stat = undefined;
     const result = c.fstat(fd, &info);
     if (result != 0) return error.UnableToGetStat;

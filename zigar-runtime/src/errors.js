@@ -425,7 +425,7 @@ export class MissingStreamMethod extends Error {
   code = PosixError.EBADF;
 
   constructor(name) {
-    super(`Missing stream method: ${name}`);
+    super(`Missing stream method '${name}'`);
   }
 }
 

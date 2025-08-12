@@ -249,7 +249,7 @@ pub fn Controller(comptime Host: type) type {
                                     if (ds.index == segment_index) break ds;
                                 } else continue;
                                 const address = base_address + ds.offset + current_offset;
-                                installHook(hook, address, ds.read_only);
+                                try installHook(hook, address, ds.read_only);
                             },
                             else => break,
                         }
@@ -289,7 +289,7 @@ pub fn Controller(comptime Host: type) type {
                         const name: [*:0]const u8 = @ptrCast(&ibm_ptr.Name);
                         const hook = host.getSyscallHook(name) orelse continue;
                         const address = @intFromPtr(&iat_ptr.u1.Function);
-                        installHook(hook, address, true);
+                        try installHook(hook, address, true);
                     }
                 }
             }
@@ -508,6 +508,7 @@ pub fn Controller(comptime Host: type) type {
 
         fn handleSigsysSignal(_: i32, info: *const std.c.siginfo_t, ucontext: ?*anyopaque) callconv(.c) void {
             const syscall = @import("./syscall.zig");
+            if (@TypeOf(syscall.table) == void) return;
             @setEvalBranchQuota(100000);
             Host.trapping_syscalls = false;
             defer Host.trapping_syscalls = true;

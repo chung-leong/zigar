@@ -63,12 +63,15 @@ export default mixin({
     return fd;
   },
   destroyStreamHandle(fd) {
-    const [ stream ] = this.streamMap.get(fd);
-    stream?.destroy?.();
-    this.streamMap.delete(fd);
-    if (process.env.TARGET === 'node') {
-      if (this.streamMap.size === 3) {
-        this.setSyscallTrap(false);
+    const entry = this.streamMap.get(fd);
+    if (entry) {
+      const [ stream ] = entry;
+      stream?.destroy?.();
+      this.streamMap.delete(fd);
+      if (process.env.TARGET === 'node') {
+        if (this.streamMap.size === 3) {
+          this.setSyscallTrap(false);
+        }
       }
     }
   },
