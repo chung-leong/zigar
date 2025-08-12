@@ -1466,8 +1466,9 @@ pub fn LibCSubstitute(comptime redirector: type) type {
 
         pub fn gets_s(buf: [*]u8, len: usize) callconv(.c) ?[*:0]u8 {
             const stdin = getStdProxy(0);
-            const end = bufferUntil(stdin, '\n');
-            if (end == 0) return null;
+            const result = bufferUntil(stdin, '\n');
+            if (result <= 0) return null;
+            const end: usize = @intCast(result);
             const used = stdin.consumeBuffer(buf, @max(end, len - 1));
             buf[used] = 0;
             return @ptrCast(buf);
@@ -1557,8 +1558,9 @@ pub fn LibCSubstitute(comptime redirector: type) type {
                     _ = saveFileError(file, .INVAL);
                     return null;
                 }
-                const end = bufferUntil(file, '\n');
-                if (end == 0) return null;
+                const result = bufferUntil(file, '\n');
+                if (result <= 0) return null;
+                const end: usize = @intCast(result);
                 const len: usize = @intCast(num - 1);
                 const used = file.consumeBuffer(buf, @min(len, end));
                 buf[used] = 0;
@@ -1843,7 +1845,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             return result;
         }
 
-        fn bufferUntil(file: *RedirectedFile, delimiter: u8) callconv(.c) usize {
+        fn bufferUntil(file: *RedirectedFile, delimiter: u8) callconv(.c) isize {
             if (setBufferMode(file, .read) < 0) return 0;
             var checked_len: usize = 0;
             while (true) {
@@ -1851,14 +1853,14 @@ pub fn LibCSubstitute(comptime redirector: type) type {
                 const content = file.previewBuffer();
                 for (checked_len..content.len) |i| {
                     if (content[i] == delimiter) {
-                        return i + 1;
+                        return @intCast(i + 1);
                     }
                 } else if (file.eof) {
-                    return content.len;
+                    return @intCast(content.len);
                 } else {
                     checked_len = content.len;
                     // retrieve more data
-                    if (bufferMore(file) < 0) return 0;
+                    if (bufferMore(file) < 0) return -1;
                 }
             }
         }
@@ -1874,13 +1876,15 @@ pub fn LibCSubstitute(comptime redirector: type) type {
                 _ = file.replenishBuffer(null, 1);
                 len += 1;
                 // switch into non-blocking mode and read the rest of the available bytes
-                const in_non_blocking_mode = setNonBlocking(file, true) != 0;
+                const in_non_blocking_mode = setNonBlocking(file, true) == 0;
                 defer if (in_non_blocking_mode) {
                     _ = setNonBlocking(file, false);
                 };
                 const buf2 = buf[1..];
                 const result2 = readRaw(file, buf2.ptr, @intCast(buf2.len));
-                if (result2 < 0) return -1;
+                if (result2 < 0) {
+                    if (posix.getError() != @intFromEnum(std.c.E.AGAIN)) return -1;
+                }
                 _ = file.replenishBuffer(null, @intCast(result2));
                 len += @intCast(result2);
             } else {
@@ -1890,9 +1894,10 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         }
 
         fn getLine(file: *RedirectedFile) callconv(.c) ?[*:0]u8 {
-            const end = bufferUntil(file, '\n');
-            if (end == 0) return null;
+            const result = bufferUntil(file, '\n');
+            if (result <= 0) return null;
             var buf = file.previewBuffer();
+            const end: usize = @intCast(result);
             _ = file.consumeBuffer(null, end);
             if (end == buf.len) {
                 // end of file
