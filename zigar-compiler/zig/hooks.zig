@@ -198,6 +198,10 @@ pub const Syscall = extern struct {
         pid: i32,
         start: i64,
         len: u64,
+
+        pub const RDLCK = 0;
+        pub const WRLCK = 1;
+        pub const UNLCK = 2;
     };
     pub const Timespec = std.c.timespec;
     pub const Fdstat = std.os.wasi.fdstat_t;
@@ -350,7 +354,12 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                                 .fd = @intCast(fd),
                                 .wait = op == std.c.F.SETLKW,
                                 .flock = .{
-                                    .type = lock.type,
+                                    .type = switch (lock.type) {
+                                        std.c.F.RDLCK => Syscall.Flock.RDLCK,
+                                        std.c.F.WRLCK => Syscall.Flock.WRLCK,
+                                        std.c.F.UNLCK => Syscall.Flock.UNLCK,
+                                        else => 0,
+                                    },
                                     .whence = lock.whence,
                                     .start = @intCast(lock.start),
                                     .len = @intCast(lock.len),
@@ -896,9 +905,16 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             dest.ino = src.ino;
             dest.size = @truncate(@as(i64, @intCast(src.size)));
             dest.mode = @intFromEnum(src.filetype);
-            copyTime(&dest.atim, src.atim);
-            copyTime(&dest.mtim, src.mtim);
-            copyTime(&dest.ctim, src.ctim);
+            if (@hasField(Stat, "atim")) {
+                copyTime(&dest.atim, src.atim);
+                copyTime(&dest.mtim, src.mtim);
+                copyTime(&dest.ctim, src.ctim);
+            } else if (@hasField(Stat, "atimespec")) {
+                // MacOS
+                copyTime(&dest.atimespec, src.atim);
+                copyTime(&dest.mtimespec, src.mtim);
+                copyTime(&dest.ctimespec, src.ctim);
+            }
         }
 
         fn copyStatx(dest: *std.os.linux.Statx, src: *const std.os.wasi.filestat_t, mask: c_uint) void {
@@ -1101,7 +1117,11 @@ pub fn PosixSubstitute(comptime redirector: type) type {
                     } else if (@hasField(Dirent, "namlen")) {
                         dir.data_next += @offsetOf(Dirent, "name") + dirent.namlen;
                     }
-                    dir.cookie = dirent.off;
+                    if (@hasField(Dirent, "off")) {
+                        dir.cookie = dirent.off;
+                    } else if (@hasField(Dirent, "seekoff")) {
+                        dir.cookie = dirent.seekoff;
+                    }
                     return dirent;
                 }
                 return null;
@@ -1207,7 +1227,11 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         fn getErrnoPtr() *c_int {
             return errno_ptr orelse get: {
-                errno_ptr = errno_h.__errno_location();
+                if (@hasDecl(errno_h, "__errno_location")) {
+                    errno_ptr = errno_h.__errno_location();
+                } else if (@hasDecl(errno_h, "__error")) {
+                    errno_ptr = errno_h.__error();
+                }
                 break :get errno_ptr.?;
             };
         }
@@ -1499,13 +1523,6 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             }
         }
 
-        const fpos_field_name = for (.{"pos"}) |substring| {
-            const name: ?[:0]const u8 = for (std.meta.fields(stdio_h.fpos_t)) |field| {
-                if (std.mem.containsAtLeast(u8, field.name, 1, substring)) break field.name;
-            } else null;
-            if (name) |n| break n;
-        } else @compileError("Unable to find position field inside fpos_t");
-
         pub fn fgetpos(s: *std.c.FILE, pos: *stdio_h.fpos_t) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
                 const result = posix.lseek64(file.fd, 0, std.c.SEEK.CUR);
@@ -1513,7 +1530,13 @@ pub fn LibCSubstitute(comptime redirector: type) type {
                     file.errno = posix.getError();
                     return -1;
                 }
-                @field(pos, fpos_field_name) = result;
+                switch (@typeInfo(stdio_h.fpos_t)) {
+                    .int => pos.* = result,
+                    .@"struct" => if (@hasField(stdio_h.fpos_h, "__pos")) {
+                        @field(pos, "__pos") = result;
+                    },
+                    else => @compileError("Unexpected fpos_t type"),
+                }
                 return 0;
             }
             return Original.fgetpos(s, pos);
@@ -1602,7 +1625,12 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         pub fn fsetpos(s: *std.c.FILE, pos: *const stdio_h.fpos_t) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
                 if (flush(file) < 0) return -1;
-                const offset = @field(pos, fpos_field_name);
+                const offset = switch (@typeInfo(stdio_h.fpos_t)) {
+                    .int => pos.*,
+                    .@"struct" => if (@hasField(stdio_h.fpos_h, "__pos"))
+                        @field(pos, "__pos"),
+                    else => @compileError("Unexpected fpos_t type"),
+                };
                 const result = posix.lseek64(file.fd, offset, std.c.SEEK.SET);
                 if (result < 0) return saveFileError(file, posix.getError());
                 return 0;
@@ -2119,11 +2147,15 @@ pub fn getHandlerVtable(comptime Host: type) HandlerVTable {
 
 pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
     const redirector = SyscallRedirector(Host);
-    const list = switch (builtin.target.os.tag) {
+    const list = switch (os) {
         .linux => .{
             PosixSubstitute(redirector),
             LibCSubstitute(redirector),
             GNUSubstitute(redirector),
+        },
+        .darwin => .{
+            PosixSubstitute(redirector),
+            LibCSubstitute(redirector),
         },
         else => .{},
     };

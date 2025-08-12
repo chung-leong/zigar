@@ -13,7 +13,7 @@
 int redirected_read(void*, char*, int);
 int redirected_write(void*, const char*, int);
 void* get_redirected_file(FILE*);
-char* get_line(void*);
+extern char* get_line(void*);
 
 bool load_vfprintf(void* other_fn);
 bool load_vfscanf(void* other_fn);

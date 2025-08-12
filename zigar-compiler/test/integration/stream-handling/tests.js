@@ -122,7 +122,7 @@ export function addTests(importModule, options) {
         flags: { symlinkFollow: true }, 
       });
     })
-    skip.if(platform() != 'linux').
+    skip.entirely.if(target !== 'linux').
     it('should open file through direct syscall', async function() {
       this.timeout(0);
       const { __zigar, check } = await importTest('open-file-through-direct-syscall');
@@ -903,6 +903,7 @@ export function addTests(importModule, options) {
       save('/hello/world', 'This is a test');
       expect(called).to.be.true;
     })
+    skip.entirely.unless(target === 'linux').
     it('should perform datasync operation using posix function', async function() {
       this.timeout(0);
       const { __zigar, save } = await importTest('perform-datasync-with-posix-function');
@@ -928,6 +929,7 @@ export function addTests(importModule, options) {
       save('/hello/world', 'This is a test');
       expect(called).to.be.true;
     })
+    skip.entirely.unless(target === 'linux').
     it('should perform advise operation using posix function', async function() {
       this.timeout(0);
       const { __zigar, save } = await importTest('perform-advise-with-posix-function');
@@ -955,6 +957,7 @@ export function addTests(importModule, options) {
       expect(called).to.be.true;
       expect(args).to.eql([ 5n, 1000n, 'random' ]);
     })
+    skip.entirely.unless(target === 'linux').
     it('should perform allocate operation using posix function', async function() {
       this.timeout(0);
       const { __zigar, save } = await importTest('perform-allocate-with-posix-function');
