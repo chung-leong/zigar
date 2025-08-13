@@ -261,7 +261,18 @@ fn destroyJsThunk(
 const hook_table = hooks.getHookTable(@This());
 
 fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
-    const name_s = name[0..std.mem.len(name)];
+    const os = switch (builtin.target.os.tag) {
+        .linux => .linux,
+        .driverkit, .ios, .macos, .tvos, .visionos, .watchos => .darwin,
+        .windows => .windows,
+        else => .unknown,
+    };
+    var name_s = name[0..std.mem.len(name)];
+    if (os == .darwin) {
+        if (std.mem.indexOf(u8, name_s, "$INODE64")) |suffic_index| {
+            name_s.len = suffic_index;
+        }
+    }
     const entry = hook_table.get(name_s) orelse return .NOENT;
     dest.* = entry;
     return .SUCCESS;

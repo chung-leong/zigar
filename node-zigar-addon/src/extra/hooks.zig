@@ -547,6 +547,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         }
                         if (@hasField(Dirent, "ino")) {
                             entry.ino = @intCast(src_entry.ino);
+                            if (os == .darwin and entry.ino == 0) entry.ino = 1;
                         } else if (@hasField(Dirent, "fileno")) {
                             entry.fileno = @intCast(src_entry.ino);
                         }
@@ -884,7 +885,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         fn remapDirFD(dirfd: isize) i32 {
             return switch (dirfd) {
-                -100 => -1,
+                std.c.AT.FDCWD => -1,
                 else => @intCast(dirfd),
             };
         }
@@ -1032,6 +1033,14 @@ pub fn PosixSubstitute(comptime redirector: type) type {
                 return saveError(result);
             }
             return Original.__fxstatat64(ver, dirfd, path, buf);
+        }
+
+        pub fn __getdirentries64(dirfd: c_int, buffer: [*]u8, len: c_uint, basep: *i64) callconv(.c) isize {
+            var result: c_int = undefined;
+            if (redirector.getdents64(dirfd, buffer, len, &result)) {
+                return saveError(result);
+            }
+            return Original.__getdirentries64(dirfd, buffer, len, basep);
         }
 
         pub fn __lxstat(ver: c_int, path: [*:0]const u8, buf: *Stat) callconv(.c) c_int {
@@ -1262,6 +1271,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var __fxstat64: *const @TypeOf(Sub.__fxstat64) = undefined;
             pub var __fxstatat: *const @TypeOf(Sub.__fxstatat) = undefined;
             pub var __fxstatat64: *const @TypeOf(Sub.__fxstatat64) = undefined;
+            pub var __getdirentries64: *const @TypeOf(Sub.__getdirentries64) = undefined;
             pub var __lxstat: *const @TypeOf(Sub.__lxstat) = undefined;
             pub var __lxstat64: *const @TypeOf(Sub.__lxstat64) = undefined;
             pub var __xstat: *const @TypeOf(Sub.__xstat) = undefined;
@@ -1533,7 +1543,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
                 }
                 switch (@typeInfo(stdio_h.fpos_t)) {
                     .int => pos.* = result,
-                    .@"struct" => if (@hasField(stdio_h.fpos_h, "__pos")) {
+                    .@"struct" => if (@hasField(stdio_h.fpos_t, "__pos")) {
                         @field(pos, "__pos") = result;
                     },
                     else => @compileError("Unexpected fpos_t type"),
@@ -1629,7 +1639,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
                 if (flush(file) < 0) return -1;
                 const offset = switch (@typeInfo(stdio_h.fpos_t)) {
                     .int => pos.*,
-                    .@"struct" => if (@hasField(stdio_h.fpos_h, "__pos"))
+                    .@"struct" => if (@hasField(stdio_h.fpos_t, "__pos"))
                         @field(pos, "__pos"),
                     else => @compileError("Unexpected fpos_t type"),
                 };

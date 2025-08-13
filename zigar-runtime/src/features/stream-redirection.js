@@ -147,9 +147,6 @@ export default mixin({
     }
   },
   flushStreams() {
-    if (this.libc) {
-      this.flushStdout?.();
-    }
     const map = this.flushRequestMap;
     if (map.size > 0) {
       for (const [ stream, timeout ] of map) {
@@ -159,13 +156,8 @@ export default mixin({
       map.clear();
     }
   },
-  ...(process.env.TARGET === 'wasm' ? {
+  ...(process.env.TARGET === 'node' ? {
     imports: {
-      flushStdout: { argType: '', returnType: '' },
-    },
-  } : process.env.TARGET === 'node' ? {
-    imports: {
-      flushStdout: {},
       setRedirectionMask: {},
       setSyscallTrap: {},
     },

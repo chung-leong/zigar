@@ -136,15 +136,6 @@ export fn destroyJsThunk(controller_address: usize, thunk_address: usize) usize 
     return fn_id;
 }
 
-export fn flushStdout() void {
-    if (builtin.link_libc) {
-        const c = @cImport({
-            @cInclude("stdio.h");
-        });
-        _ = c.fflush(c.stdout);
-    }
-}
-
 export fn getModuleAttributes() i32 {
     return @bitCast(exporter.getModuleAttributes());
 }
