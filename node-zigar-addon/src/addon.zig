@@ -961,78 +961,29 @@ const ModuleHost = struct {
 
     fn handleAccess(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        const lflags: std.os.wasi.lookupflags_t = .{
-            .SYMLINK_FOLLOW = (args.flags & std.c.AT.SYMLINK_NOFOLLOW) == 0,
-        };
-        const rights: std.os.wasi.rights_t = set: {
-            var r: std.os.wasi.rights_t = .{};
-            if (args.mode & std.c.X_OK != 0) {
-                r.FD_READDIR = true;
-            } else {
-                if (args.mode & std.c.R_OK != 0) {
-                    r.FD_READ = true;
-                }
-                if (args.mode & std.c.W_OK != 0) {
-                    r.FD_WRITE = true;
-                }
-            }
-            break :set r;
-        };
         const path_len: u32 = @truncate(std.mem.len(args.path));
         return try self.callPosixFunction(self.js.path_access, &.{
             try env.createInt32(args.dirfd),
-            try env.createUint32(@as(u32, @bitCast(lflags))),
+            try env.createUint32(@as(u32, @bitCast(args.lookup_flags))),
             try env.createUsize(@intFromPtr(args.path)),
             try env.createUint32(path_len),
-            try env.createBigintUint64(@as(u64, @bitCast(rights))),
+            try env.createBigintUint64(@as(u64, @bitCast(args.rights))),
             futex,
         });
     }
 
     fn handleOpen(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        const oflags_posix: std.c.O = @bitCast(args.oflags);
-        const lflags: std.os.wasi.lookupflags_t = .{
-            .SYMLINK_FOLLOW = !oflags_posix.NOFOLLOW,
-        };
-        const oflags: std.os.wasi.oflags_t = .{
-            .CREAT = oflags_posix.CREAT,
-            .DIRECTORY = oflags_posix.DIRECTORY,
-            .EXCL = oflags_posix.EXCL,
-            .TRUNC = oflags_posix.TRUNC,
-        };
-        const rights: std.os.wasi.rights_t = set: {
-            var r: std.os.wasi.rights_t = .{};
-            if (oflags_posix.DIRECTORY) {
-                r.FD_READDIR = true;
-            } else {
-                if (oflags_posix.ACCMODE == .RDWR) {
-                    r.FD_READ = true;
-                    r.FD_WRITE = true;
-                } else if (oflags_posix.ACCMODE == .WRONLY) {
-                    r.FD_WRITE = true;
-                } else {
-                    r.FD_READ = true;
-                }
-            }
-            break :set r;
-        };
-        const fdflags: std.os.wasi.fdflags_t = .{
-            .APPEND = oflags_posix.APPEND,
-            .DSYNC = oflags_posix.DSYNC,
-            .NONBLOCK = oflags_posix.NONBLOCK,
-            .SYNC = oflags_posix.SYNC,
-        };
         const path_len: u32 = @truncate(std.mem.len(args.path));
         return try self.callPosixFunction(self.js.path_open, &.{
             try env.createInt32(args.dirfd),
-            try env.createUint32(@as(u32, @bitCast(lflags))),
+            try env.createUint32(@as(u32, @bitCast(args.lookup_flags))),
             try env.createUsize(@intFromPtr(args.path)),
             try env.createUint32(path_len),
-            try env.createUint32(@as(u16, @bitCast(oflags))),
-            try env.createBigintUint64(@as(u64, @bitCast(rights))),
+            try env.createUint32(@as(u16, @bitCast(args.open_flags))),
+            try env.createBigintUint64(@as(u64, @bitCast(args.rights))),
             try env.createBigintUint64(0),
-            try env.createUint32(@as(u16, @bitCast(fdflags))),
+            try env.createUint32(@as(u16, @bitCast(args.descriptor_flags))),
             try env.createUsize(@intFromPtr(&args.fd)),
             futex,
         });
@@ -1119,33 +1070,24 @@ const ModuleHost = struct {
 
     fn handleSettimes(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        const flags: std.os.wasi.fstflags_t = .{ .ATIM = true, .MTIM = true };
-        var times: [2]u64 = undefined;
-        for (&times, 0..) |*ptr, index| {
-            const t = args.times[index];
-            ptr.* = @as(u64, @intCast(t.sec)) * 1_000_000_000 + @as(u64, @intCast(t.nsec));
-        }
         if (@hasField(@TypeOf(args.*), "fd")) {
             return try self.callPosixFunction(self.js.fd_filestat_set_times, &.{
                 try env.createInt32(args.fd),
-                try env.createBigintUint64(times[0]),
-                try env.createBigintUint64(times[1]),
-                try env.createUint32(@as(u16, @bitCast(flags))),
+                try env.createBigintUint64(args.atime),
+                try env.createBigintUint64(args.mtime),
+                try env.createUint32(@as(u16, @bitCast(args.time_flags))),
                 futex,
             });
         } else {
-            const lflags: std.os.wasi.lookupflags_t = .{
-                .SYMLINK_FOLLOW = (args.flags & std.c.AT.SYMLINK_NOFOLLOW) == 0,
-            };
             const path_len: u32 = @truncate(std.mem.len(args.path));
             return try self.callPosixFunction(self.js.path_filestat_set_times, &.{
                 try env.createInt32(args.dirfd),
-                try env.createUint32(@as(u32, @bitCast(lflags))),
+                try env.createUint32(@as(u32, @bitCast(args.lookup_flags))),
                 try env.createUsize(@intFromPtr(args.path)),
                 try env.createUint32(path_len),
-                try env.createBigintUint64(times[0]),
-                try env.createBigintUint64(times[1]),
-                try env.createUint32(@as(u16, @bitCast(flags))),
+                try env.createBigintUint64(args.atime),
+                try env.createBigintUint64(args.mtime),
+                try env.createUint32(@as(u16, @bitCast(args.time_flags))),
                 futex,
             });
         }
@@ -1160,13 +1102,10 @@ const ModuleHost = struct {
                 futex,
             });
         } else {
-            const lflags: std.os.wasi.lookupflags_t = .{
-                .SYMLINK_FOLLOW = (args.flags & std.c.AT.SYMLINK_NOFOLLOW) == 0,
-            };
             const path_len: u32 = @truncate(std.mem.len(args.path));
             return try self.callPosixFunction(self.js.path_filestat_get, &.{
                 try env.createInt32(args.dirfd),
-                try env.createUint32(@as(u32, @bitCast(lflags))),
+                try env.createUint32(@as(u32, @bitCast(args.lookup_flags))),
                 try env.createUsize(@intFromPtr(args.path)),
                 try env.createUint32(path_len),
                 try env.createUsize(@intFromPtr(&args.stat)),
@@ -1186,10 +1125,9 @@ const ModuleHost = struct {
 
     fn handleSetDescriptorFlags(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        const flags_int: u16 = @bitCast(args.fdflags);
         return try self.callPosixFunction(self.js.fd_fdstat_set_flags, &.{
             try env.createInt32(args.fd),
-            try env.createUint32(flags_int),
+            try env.createUint32(@as(u16, @bitCast(args.fdflags))),
             futex,
         });
     }
@@ -1215,22 +1153,11 @@ const ModuleHost = struct {
 
     fn handleAdvise(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        // the POSIX enum is different from the WASI one; using a switch here because using
-        // std.c.POSIX_FADV here would somehow pull in Solaris code leading to an assert
-        const advice: std.os.wasi.advice_t = switch (args.advice) {
-            0 => .NORMAL,
-            1 => .RANDOM,
-            2 => .SEQUENTIAL,
-            3 => .WILLNEED,
-            4 => .DONTNEED,
-            5 => .NOREUSE,
-            else => .NORMAL,
-        };
         return try self.callPosixFunction(self.js.fd_advise, &.{
             try env.createInt32(args.fd),
             try env.createBigintUint64(args.offset),
             try env.createBigintUint64(args.len),
-            try env.createInt32(@intFromEnum(advice)),
+            try env.createInt32(@intFromEnum(args.advice)),
             futex,
         });
     }

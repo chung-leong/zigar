@@ -31,12 +31,14 @@ pub const Syscall = extern struct {
             path: [*:0]const u8,
             mode: u32,
             flags: u32,
+            lookup_flags: std.os.wasi.lookupflags_t,
+            rights: std.os.wasi.rights_t,
         },
         advise: extern struct {
             fd: i32,
             offset: usize,
             len: usize,
-            advice: u32,
+            advice: std.os.wasi.advice_t,
         },
         allocate: extern struct {
             fd: i32,
@@ -64,7 +66,9 @@ pub const Syscall = extern struct {
         },
         futimes: extern struct {
             fd: i32,
-            times: [*]const Timespec,
+            atime: u64,
+            mtime: u64,
+            time_flags: std.os.wasi.fstflags_t = .{ .ATIM = true, .MTIM = true },
         },
         getdents: extern struct {
             dirfd: i32,
@@ -80,8 +84,10 @@ pub const Syscall = extern struct {
         open: extern struct {
             dirfd: i32,
             path: [*:0]const u8,
-            oflags: u32,
-            mode: u32,
+            lookup_flags: std.os.wasi.lookupflags_t,
+            descriptor_flags: std.os.wasi.fdflags_t,
+            open_flags: std.os.wasi.oflags_t,
+            rights: std.os.wasi.rights_t,
             fd: i32 = undefined,
         },
         pread: extern struct {
@@ -126,7 +132,7 @@ pub const Syscall = extern struct {
         stat: extern struct {
             dirfd: i32,
             path: [*:0]const u8,
-            flags: u32,
+            lookup_flags: std.os.wasi.lookupflags_t,
             stat: Filestat = undefined,
         },
         sync: extern struct {
@@ -144,8 +150,10 @@ pub const Syscall = extern struct {
         utimes: extern struct {
             dirfd: i32,
             path: [*:0]const u8,
-            flags: u32,
-            times: [*]const Timespec,
+            lookup_flags: std.os.wasi.lookupflags_t,
+            time_flags: std.os.wasi.fstflags_t = .{ .ATIM = true, .MTIM = true },
+            atime: u64,
+            mtime: u64,
         },
         write: extern struct {
             fd: i32,
@@ -203,7 +211,6 @@ pub const Syscall = extern struct {
         pub const WRLCK = 1;
         pub const UNLCK = 2;
     };
-    pub const Timespec = std.c.timespec;
     pub const Fdstat = std.os.wasi.fdstat_t;
     pub const Filestat = std.os.wasi.filestat_t;
     pub const Fdflags = std.os.wasi.fdflags_t;
@@ -290,6 +297,14 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     .access = .{
                         .dirfd = remapDirFD(dirfd),
                         .path = path,
+                        .lookup_flags = convertLookupFlags(flags),
+                        .rights = if (mode & std.c.X_OK != 0)
+                            .{ .FD_READDIR = true }
+                        else
+                            .{
+                                .FD_READ = (mode & std.c.R_OK) != 0,
+                                .FD_WRITE = (mode & std.c.W_OK) != 0,
+                            },
                         .mode = @intCast(mode),
                         .flags = @intCast(flags),
                     },
@@ -314,7 +329,15 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         .fd = @intCast(fd),
                         .offset = @intCast(offset),
                         .len = @intCast(len),
-                        .advice = @intCast(advice),
+                        .advice = switch (advice) {
+                            0 => .NORMAL,
+                            1 => .RANDOM,
+                            2 => .SEQUENTIAL,
+                            3 => .WILLNEED,
+                            4 => .DONTNEED,
+                            5 => .NOREUSE,
+                            else => .NORMAL,
+                        },
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
@@ -541,7 +564,8 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 var call: Syscall = .{ .cmd = .futimes, .u = .{
                     .futimes = .{
                         .fd = @intCast(fd),
-                        .times = times,
+                        .atime = getNanoseconds(times[0]),
+                        .mtime = getNanoseconds(times[1]),
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
@@ -727,7 +751,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     .stat = .{
                         .dirfd = @intCast(dirfd),
                         .path = path,
-                        .flags = @intCast(flags),
+                        .lookup_flags = convertLookupFlags(flags),
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
@@ -742,15 +766,34 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return openat(-1, path, oflags, mode, result);
         }
 
-        pub fn openat(dirfd: c_int, path: [*:0]const u8, oflags: c_int, mode: c_int, result: *c_int) callconv(.c) bool {
+        pub fn openat(dirfd: c_int, path: [*:0]const u8, oflags: c_int, _: c_int, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.open))) {
                 const o: std.c.O = @bitCast(@as(i32, @intCast(oflags)));
                 var call: Syscall = .{ .cmd = .open, .u = .{
                     .open = .{
                         .dirfd = remapDirFD(dirfd),
                         .path = path,
-                        .oflags = @intCast(oflags),
-                        .mode = if (o.CREAT) @intCast(mode) else 0,
+                        .lookup_flags = .{ .SYMLINK_FOLLOW = !o.NOFOLLOW },
+                        .descriptor_flags = .{
+                            .APPEND = o.APPEND,
+                            .DSYNC = o.DSYNC,
+                            .NONBLOCK = o.NONBLOCK,
+                            .SYNC = o.SYNC,
+                        },
+                        .open_flags = .{
+                            .CREAT = o.CREAT,
+                            .DIRECTORY = o.DIRECTORY,
+                            .EXCL = o.EXCL,
+                            .TRUNC = o.TRUNC,
+                        },
+                        .rights = if (o.DIRECTORY)
+                            .{ .FD_READDIR = true }
+                        else if (o.ACCMODE == .RDWR)
+                            .{ .FD_READ = true, .FD_WRITE = true }
+                        else if (o.ACCMODE == .WRONLY)
+                            .{ .FD_WRITE = true }
+                        else
+                            .{ .FD_READ = true },
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
@@ -864,7 +907,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         .stat = .{
                             .dirfd = remapDirFD(dirfd),
                             .path = path,
-                            .flags = @intCast(flags),
+                            .lookup_flags = convertLookupFlags(flags),
                         },
                     } };
                     const err = Host.redirectSyscall(&call);
@@ -909,8 +952,9 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     .utimes = .{
                         .dirfd = remapDirFD(dirfd),
                         .path = path,
-                        .flags = @intCast(flags),
-                        .times = times,
+                        .lookup_flags = convertLookupFlags(flags),
+                        .atime = getNanoseconds(times[0]),
+                        .mtime = getNanoseconds(times[1]),
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
@@ -967,6 +1011,16 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 };
             }
             return times;
+        }
+
+        fn getNanoseconds(ts: std.c.timespec) u64 {
+            return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
+        }
+
+        fn convertLookupFlags(flags: c_int) std.os.wasi.lookupflags_t {
+            return .{
+                .SYMLINK_FOLLOW = (flags & std.c.AT.SYMLINK_NOFOLLOW) == 0,
+            };
         }
 
         fn copyStat(dest: *Stat, src: *const std.os.wasi.filestat_t) void {
