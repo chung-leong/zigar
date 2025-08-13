@@ -217,6 +217,46 @@ const Stat = switch (os) {
     .windows => std.os.wasi.filestat_t,
     else => std.c.Stat,
 };
+const StatFs = switch (os) {
+    .linux => extern struct {
+        type: usize,
+        bsize: usize,
+        blocks: c_ulong,
+        bfree: c_ulong,
+        bavail: c_ulong,
+        files: c_ulong,
+        ffree: c_ulong,
+        fsid: [2]i32,
+        namelen: usize,
+        frsize: usize,
+        flags: usize,
+        spare: [4]u8,
+    },
+    .darwin => extern struct {
+        bsize: u32,
+        iosize: i32,
+        blocks: u64,
+        bfree: u64,
+        bavail: u64,
+        files: u64,
+        ffree: i64,
+        fsid: [2]i32,
+        owner: u32,
+        type: u32,
+        flags: u32,
+        fssubtype: u32,
+        fstypename: [mfsyuprnamelen]u8,
+        mntfromname: [maxpathlen]u8,
+        mntonname: [maxpathlen]u8,
+        flags_ext: u32,
+        reserved: [7]u32,
+
+        pub const mfsyuprnamelen = 15;
+        pub const maxpathlen = 1024;
+    },
+    .windows => extern struct {},
+    else => @compileError("Unsupported platform"),
+};
 
 const fd_min = 0xfffff;
 
@@ -449,6 +489,34 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 const err = Host.redirectSyscall(&call);
                 if (err == .SUCCESS) copyStat(buf, &call.u.fstat.stat);
                 result.* = intFromError(err);
+                return true;
+            }
+            return false;
+        }
+
+        pub fn fstatfs(fd: c_int, buf: *StatFs, result: *c_int) callconv(.c) bool {
+            return fstatfs64(fd, buf, result);
+        }
+
+        pub fn fstatfs64(fd: c_int, buf: *StatFs, result: *c_int) callconv(.c) bool {
+            if (isApplicableHandle(fd)) {
+                buf.* = std.mem.zeroes(StatFs);
+                buf.blocks = 1_000_000;
+                buf.bavail = 1_000_000;
+                buf.bfree = 1_000_000;
+                buf.ffree = 1_000_000;
+                buf.bsize = 8192;
+                switch (os) {
+                    .linux => {
+                        buf.type = 0x01021994; // tmpfs
+                    },
+                    .darwin => {
+                        buf.iosize = @intCast(buf.bsize);
+                        @memcpy(buf.fstypename[0..5], "tmpfs");
+                    },
+                    else => {},
+                }
+                result.* = 0;
                 return true;
             }
             return false;
@@ -973,6 +1041,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const fstat64 = makeStdHookUsing("fstat64", "fstat");
         pub const fstatat = makeStdHookUsing("fstatat", "newfstatat");
         pub const fstatat64 = makeStdHookUsing("fstatat64", "newfstatat");
+        pub const fstatfs = makeStdHook("fstatfs");
+        pub const fstatfs64 = makeStdHook("fstatfs64");
         pub const fsync = makeStdHook("fsync");
         pub const futimens = makeStdHook("futimens");
         pub const futimes = makeStdHook("futimes");
@@ -1289,6 +1359,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var fstat64: *const @TypeOf(Sub.fstat64) = undefined;
             pub var fstatat: *const @TypeOf(Sub.fstatat) = undefined;
             pub var fstatat64: *const @TypeOf(Sub.fstatat64) = undefined;
+            pub var fstatfs: *const @TypeOf(Sub.fstatfs) = undefined;
+            pub var fstatfs64: *const @TypeOf(Sub.fstatfs64) = undefined;
             pub var fsync: *const @TypeOf(Sub.fsync) = undefined;
             pub var futimes: *const @TypeOf(Sub.futimes) = undefined;
             pub var futimens: *const @TypeOf(Sub.futimens) = undefined;
