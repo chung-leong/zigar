@@ -1378,14 +1378,13 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         var errno_ptr: ?*c_int = null;
 
         fn getErrnoPtr() *c_int {
-            return errno_ptr orelse get: {
-                if (@hasDecl(errno_h, "__errno_location")) {
-                    errno_ptr = errno_h.__errno_location();
-                } else if (@hasDecl(errno_h, "__error")) {
-                    errno_ptr = errno_h.__error();
+            return errno_ptr orelse inline for (.{ "__errno_location", "__error", "_errno" }) |name| {
+                if (@hasDecl(errno_h, name)) {
+                    const func = @field(errno_h, name);
+                    errno_ptr = func();
+                    break errno_ptr.?;
                 }
-                break :get errno_ptr.?;
-            };
+            } else @compileError("Unable to get error number pointer");
         }
 
         const ThreadInfo = struct {

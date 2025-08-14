@@ -273,7 +273,14 @@ fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
             name_s.len = suffic_index;
         }
     }
-    const entry = hook_table.get(name_s) orelse return .NOENT;
+    const entry = hook_table.get(name_s) orelse alt: {
+        if (os == .windows and name_s[0] == '_') {
+            if (hook_table.get(name_s[1..])) |alt_entry| {
+                break :alt alt_entry;
+            }
+        }
+        return .NOENT;
+    };
     dest.* = entry;
     return .SUCCESS;
 }
