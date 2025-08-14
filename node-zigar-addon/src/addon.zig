@@ -1136,7 +1136,7 @@ const ModuleHost = struct {
         const env = self.env;
         return try self.callPosixFunction(self.js.fd_lock_set, &.{
             try env.createInt32(args.fd),
-            try env.createUsize(@intFromPtr(&args.flock)),
+            try env.createUsize(@intFromPtr(&args.lock)),
             try env.getBoolean(args.wait),
             futex,
         });
@@ -1146,7 +1146,7 @@ const ModuleHost = struct {
         const env = self.env;
         return try self.callPosixFunction(self.js.fd_lock_get, &.{
             try env.createInt32(args.fd),
-            try env.createUsize(@intFromPtr(&args.flock)),
+            try env.createUsize(@intFromPtr(&args.lock)),
             futex,
         });
     }

@@ -58,7 +58,7 @@ pub const Syscall = extern struct {
         },
         getlk: extern struct {
             fd: i32,
-            flock: Flock,
+            lock: Lock,
         },
         fstat: extern struct {
             fd: i32,
@@ -127,7 +127,7 @@ pub const Syscall = extern struct {
         setlk: extern struct {
             fd: i32,
             wait: bool,
-            flock: Flock,
+            lock: Lock,
         },
         stat: extern struct {
             dirfd: i32,
@@ -200,7 +200,7 @@ pub const Syscall = extern struct {
         unlink: bool = false,
         _: u2 = 0,
     };
-    pub const Flock = extern struct {
+    pub const Lock = extern struct {
         type: i16,
         whence: i16,
         pid: i32,
@@ -263,6 +263,22 @@ const StatFs = switch (os) {
     },
     .windows => extern struct {},
     else => @compileError("Unsupported platform"),
+};
+const Flock = switch (os) {
+    .windows => std.os.linux.Flock,
+    else => std.c.Flock,
+};
+const AT = switch (os) {
+    .windows => std.os.linux.AT,
+    else => std.c.AT,
+};
+const F = switch (os) {
+    .windows => std.os.linux.F,
+    else => std.c.F,
+};
+const O = switch (os) {
+    .windows => std.os.linux.O,
+    else => std.c.O,
 };
 
 const fd_min = 0xfffff;
@@ -367,7 +383,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         pub fn fcntl(fd: c_int, op: c_int, arg: usize, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
                 switch (op) {
-                    std.c.F.GETFL => {
+                    F.GETFL => {
                         var call: Syscall = .{ .cmd = .getfl, .u = .{
                             .getfl = .{
                                 .fd = @intCast(fd),
@@ -376,7 +392,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         const err = Host.redirectSyscall(&call);
                         if (err == .SUCCESS) {
                             const fdstat = call.u.getfl.fdstat;
-                            var oflags: std.c.O = .{};
+                            var oflags: O = .{};
                             if (fdstat.fs_rights_base.FD_READ) {
                                 if (fdstat.fs_rights_base.FD_WRITE) {
                                     oflags.ACCMODE = .RDWR;
@@ -389,15 +405,15 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                                 oflags.DIRECTORY = true;
                                 oflags.ACCMODE = .RDONLY;
                             }
-                            const oflags_int: @typeInfo(std.c.O).@"struct".backing_integer.? = @bitCast(oflags);
+                            const oflags_int: @typeInfo(O).@"struct".backing_integer.? = @bitCast(oflags);
                             result.* = @intCast(oflags_int);
                         } else {
                             result.* = intFromError(err);
                         }
                     },
-                    std.c.F.SETFL => {
-                        const oflags_int: @typeInfo(std.c.O).@"struct".backing_integer.? = @truncate(arg);
-                        const oflags: std.c.O = @bitCast(oflags_int);
+                    F.SETFL => {
+                        const oflags_int: @typeInfo(O).@"struct".backing_integer.? = @truncate(arg);
+                        const oflags: O = @bitCast(oflags_int);
                         var call: Syscall = .{ .cmd = .setfl, .u = .{
                             .setfl = .{
                                 .fd = @intCast(fd),
@@ -410,17 +426,17 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         const err = Host.redirectSyscall(&call);
                         result.* = intFromError(err);
                     },
-                    std.c.F.SETLK, std.c.F.SETLKW => {
-                        const lock: *const std.c.Flock = @ptrFromInt(arg);
+                    F.SETLK, F.SETLKW => {
+                        const lock: *const Flock = @ptrFromInt(arg);
                         var call: Syscall = .{ .cmd = .setlk, .u = .{
                             .setlk = .{
                                 .fd = @intCast(fd),
-                                .wait = op == std.c.F.SETLKW,
-                                .flock = .{
+                                .wait = op == F.SETLKW,
+                                .lock = .{
                                     .type = switch (lock.type) {
-                                        std.c.F.RDLCK => Syscall.Flock.RDLCK,
-                                        std.c.F.WRLCK => Syscall.Flock.WRLCK,
-                                        std.c.F.UNLCK => Syscall.Flock.UNLCK,
+                                        F.RDLCK => Syscall.Lock.RDLCK,
+                                        F.WRLCK => Syscall.Lock.WRLCK,
+                                        F.UNLCK => Syscall.Lock.UNLCK,
                                         else => 0,
                                     },
                                     .whence = lock.whence,
@@ -433,12 +449,12 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         const err = Host.redirectSyscall(&call);
                         result.* = intFromError(err);
                     },
-                    std.c.F.GETLK => {
-                        const lock: *std.c.Flock = @ptrFromInt(arg);
+                    F.GETLK => {
+                        const lock: *Flock = @ptrFromInt(arg);
                         var call: Syscall = .{ .cmd = .getlk, .u = .{
                             .getlk = .{
                                 .fd = @intCast(fd),
-                                .flock = .{
+                                .lock = .{
                                     .type = lock.type,
                                     .whence = lock.whence,
                                     .start = @intCast(lock.start),
@@ -448,11 +464,11 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                             },
                         } };
                         const err = Host.redirectSyscall(&call);
-                        lock.type = call.u.getlk.flock.type;
-                        lock.whence = call.u.getlk.flock.whence;
-                        lock.start = @intCast(call.u.getlk.flock.start);
-                        lock.len = @intCast(call.u.getlk.flock.len);
-                        lock.pid = @intCast(call.u.getlk.flock.pid);
+                        lock.type = call.u.getlk.lock.type;
+                        lock.whence = call.u.getlk.lock.whence;
+                        lock.start = @intCast(call.u.getlk.lock.start);
+                        lock.len = @intCast(call.u.getlk.lock.len);
+                        lock.pid = @intCast(call.u.getlk.lock.pid);
                         result.* = intFromError(err);
                     },
                     else => result.* = intFromError(.INVAL),
@@ -478,11 +494,11 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn flock(fd: c_int, op: c_int, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
-                const lock: std.c.Flock = .{
+                const lock: Flock = .{
                     .type = switch (op & ~@as(c_int, std.c.LOCK.NB)) {
-                        std.c.LOCK.SH => std.c.F.RDLCK,
-                        std.c.LOCK.EX => std.c.F.WRLCK,
-                        std.c.LOCK.UN => std.c.F.UNLCK,
+                        std.c.LOCK.SH => F.RDLCK,
+                        std.c.LOCK.EX => F.WRLCK,
+                        std.c.LOCK.UN => F.UNLCK,
                         else => {
                             result.* = intFromError(std.c.E.INVAL);
                             return true;
@@ -494,8 +510,8 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     .pid = 0,
                 };
                 const fcntl_op: c_int = switch (op & std.c.LOCK.NB) {
-                    0 => std.c.F.SETLKW,
-                    else => std.c.F.SETLK,
+                    0 => F.SETLKW,
+                    else => F.SETLK,
                 };
                 return fcntl(fd, fcntl_op, @intFromPtr(&lock), result);
             }
@@ -586,7 +602,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         pub fn futimesat(dirfd: c_int, path: [*:0]const u8, tv: [*]const std.c.timeval, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.set_times))) {
                 const times = convertTimeval(tv);
-                return utimensat(dirfd, path, &times, std.c.AT.SYMLINK_FOLLOW, result);
+                return utimensat(dirfd, path, &times, AT.SYMLINK_FOLLOW, result);
             }
             return false;
         }
@@ -715,12 +731,12 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn lstat(path: [*:0]const u8, buf: *Stat, result: *c_int) callconv(.c) bool {
-            return newfstatat(-1, path, buf, std.c.AT.SYMLINK_NOFOLLOW, result);
+            return newfstatat(-1, path, buf, AT.SYMLINK_NOFOLLOW, result);
         }
 
         pub fn lutimes(path: [*:0]const u8, tv: [*]const std.c.timeval, result: *c_int) callconv(.c) bool {
             const times = convertTimeval(tv);
-            return utimensat(-1, path, &times, std.c.AT.SYMLINK_NOFOLLOW, result);
+            return utimensat(-1, path, &times, AT.SYMLINK_NOFOLLOW, result);
         }
 
         pub fn mkdir(path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
@@ -768,7 +784,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn openat(dirfd: c_int, path: [*:0]const u8, oflags: c_int, _: c_int, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.open))) {
-                const o: std.c.O = @bitCast(@as(i32, @intCast(oflags)));
+                const o: O = @bitCast(@as(i32, @intCast(oflags)));
                 var call: Syscall = .{ .cmd = .open, .u = .{
                     .open = .{
                         .dirfd = remapDirFD(dirfd),
@@ -943,7 +959,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn utimes(path: [*:0]const u8, tv: [*]const std.c.timeval, result: *c_int) callconv(.c) bool {
             const times = convertTimeval(tv);
-            return utimensat(-1, path, &times, std.c.AT.SYMLINK_FOLLOW, result);
+            return utimensat(-1, path, &times, AT.SYMLINK_FOLLOW, result);
         }
 
         pub fn utimensat(dirfd: c_int, path: [*:0]const u8, times: [*]const std.c.timespec, flags: c_int, result: *c_int) callconv(.c) bool {
@@ -997,7 +1013,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         fn remapDirFD(dirfd: isize) i32 {
             return switch (dirfd) {
-                std.c.AT.FDCWD => -1,
+                AT.FDCWD => -1,
                 else => @intCast(dirfd),
             };
         }
@@ -1019,7 +1035,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         fn convertLookupFlags(flags: c_int) std.os.wasi.lookupflags_t {
             return .{
-                .SYMLINK_FOLLOW = (flags & std.c.AT.SYMLINK_NOFOLLOW) == 0,
+                .SYMLINK_FOLLOW = (flags & AT.SYMLINK_NOFOLLOW) == 0,
             };
         }
 
@@ -1145,7 +1161,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         pub fn __fxstatat(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *Stat) callconv(.c) c_int {
             var result: c_int = undefined;
-            if (redirector.newfstatat(dirfd, path, buf, std.c.AT.SYMLINK_FOLLOW, &result)) {
+            if (redirector.newfstatat(dirfd, path, buf, AT.SYMLINK_FOLLOW, &result)) {
                 return saveError(result);
             }
             return Original.__fxstatat(ver, dirfd, path, buf);
@@ -1153,7 +1169,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         pub fn __fxstatat64(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *Stat) callconv(.c) c_int {
             var result: c_int = undefined;
-            if (redirector.newfstatat(dirfd, path, buf, std.c.AT.SYMLINK_FOLLOW, &result)) {
+            if (redirector.newfstatat(dirfd, path, buf, AT.SYMLINK_FOLLOW, &result)) {
                 return saveError(result);
             }
             return Original.__fxstatat64(ver, dirfd, path, buf);
@@ -1210,8 +1226,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         pub fn opendir(path: [*:0]const u8) callconv(.c) ?*std.c.DIR {
             var result: c_int = undefined;
-            const flags: std.c.O = .{ .DIRECTORY = true };
-            const flags_int: @typeInfo(std.c.O).@"struct".backing_integer.? = @bitCast(flags);
+            const flags: O = .{ .DIRECTORY = true };
+            const flags_int: @typeInfo(O).@"struct".backing_integer.? = @bitCast(flags);
             if (redirector.open(path, flags_int, 0, &result)) {
                 if (result > 0) {
                     if (c_allocator.create(RedirectedDir)) |dir| {
@@ -1486,7 +1502,7 @@ const RedirectedFile = struct {
     buf_start: usize = 0,
     buf_end: usize = 0,
     buf_mode: BufferMode = .read,
-    flags: std.c.O,
+    flags: O,
     eof: bool = false,
     proxy: bool = false,
 
@@ -2046,15 +2062,15 @@ pub fn LibCSubstitute(comptime redirector: type) type {
         }
 
         fn setNonBlocking(file: *RedirectedFile, nonblocking: bool) callconv(.c) c_int {
-            const oflags: std.c.O = .{ .NONBLOCK = nonblocking };
-            const oflags_int: @typeInfo(std.c.O).@"struct".backing_integer.? = @bitCast(oflags);
-            if (posix.fcntl(file.fd, std.c.F.SETFL, oflags_int) != 0) {
+            const oflags: O = .{ .NONBLOCK = nonblocking };
+            const oflags_int: @typeInfo(O).@"struct".backing_integer.? = @bitCast(oflags);
+            if (posix.fcntl(file.fd, F.SETFL, oflags_int) != 0) {
                 return saveFileError(file, posix.getError());
             }
             return 0;
         }
 
-        fn addRedirectedFile(fd: c_int, oflags: std.c.O) !*std.c.FILE {
+        fn addRedirectedFile(fd: c_int, oflags: O) !*std.c.FILE {
             if (fd <= 0) return error.InvalidFileDescriptor;
             const file = try c_allocator.create(RedirectedFile);
             errdefer c_allocator.destroy(file);
@@ -2109,8 +2125,8 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             return -1;
         }
 
-        fn decodeOpenMode(mode: [*:0]const u8) std.c.O {
-            var oflags: std.c.O = .{};
+        fn decodeOpenMode(mode: [*:0]const u8) O {
+            var oflags: O = .{};
             if (mode[0] == 'r') {
                 oflags.ACCMODE = if (mode[1] == '+') .RDWR else .RDONLY;
             } else if (mode[0] == 'w') {
@@ -2213,7 +2229,34 @@ pub fn GNUSubstitute(comptime redirector: type) type {
 pub fn Win32SubstituteS(comptime redirector: type) type {
     _ = redirector;
     return struct {
-        pub fn WriteFile(handle: HANDLE, buffer: LPCVOID, len: DWORD, written: *DWORD, overlapped: *OVERLAPPED) callconv(.c) c_int {
+        pub fn ReadFile(
+            handle: HANDLE,
+            buffer: LPVOID,
+            len: DWORD,
+            read: *DWORD,
+            overlapped: *OVERLAPPED,
+        ) callconv(WINAPI) BOOL {
+            return Original.ReadFile(handle, buffer, len, read, overlapped);
+        }
+
+        pub fn ReadFileEx(
+            handle: HANDLE,
+            buffer: LPVOID,
+            len: DWORD,
+            read: *DWORD,
+            overlapped: *OVERLAPPED,
+            complete: LPOVERLAPPED_COMPLETION_ROUTINE,
+        ) callconv(WINAPI) BOOL {
+            return Original.ReadFileEx(handle, buffer, len, read, overlapped, complete);
+        }
+
+        pub fn WriteFile(
+            handle: HANDLE,
+            buffer: LPCVOID,
+            len: DWORD,
+            written: *DWORD,
+            overlapped: *OVERLAPPED,
+        ) callconv(WINAPI) BOOL {
             // if (is_applicable_handle(handle)) {
             //     if (redirect_write(handle, buffer, len)) {
             //         *written = len;
@@ -2227,14 +2270,32 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return Original.WriteFile(handle, buffer, len, written, overlapped);
         }
 
+        pub fn WriteFileEx(
+            handle: HANDLE,
+            buffer: LPCVOID,
+            len: DWORD,
+            written: *DWORD,
+            overlapped: *OVERLAPPED,
+            complete: LPOVERLAPPED_COMPLETION_ROUTINE,
+        ) callconv(WINAPI) BOOL {
+            return Original.WriteFileEx(handle, buffer, len, written, overlapped, complete);
+        }
+
+        const BOOL = std.os.windows.BOOL;
         const DWORD = std.os.windows.DWORD;
         const HANDLE = std.os.windows.HANDLE;
+        const LPVOID = std.os.windows.LPVOID;
         const LPCVOID = std.os.windows.LPCVOID;
+        const LPOVERLAPPED_COMPLETION_ROUTINE = std.os.windows.LPOVERLAPPED_COMPLETION_ROUTINE;
         const OVERLAPPED = std.os.windows.OVERLAPPED;
+        const WINAPI: std.builtin.CallingConvention = if (builtin.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c;
 
         const Self = @This();
         pub const Original = struct {
+            pub var ReadFile: *const @TypeOf(Self.ReadFile) = undefined;
+            pub var ReadFileEx: *const @TypeOf(Self.ReadFileEx) = undefined;
             pub var WriteFile: *const @TypeOf(Self.WriteFile) = undefined;
+            pub var WriteFileEx: *const @TypeOf(Self.WriteFileEx) = undefined;
         };
     };
 }
