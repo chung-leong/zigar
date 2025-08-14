@@ -1,14 +1,18 @@
 const std = @import("std");
 
+const c = @cImport({
+    @cInclude("fcntl.h");
+});
+
 pub fn hash(path: [*:0]const u8) ![std.crypto.hash.Sha1.digest_length * 2]u8 {
-    const fd = std.c.open(path, .{ .ACCMODE = .RDONLY });
+    const fd = c.open(path, c.O_RDONLY);
     if (fd <= 0) return error.UnableTOpenFile;
-    defer _ = std.c.close(fd);
+    defer _ = c.close(fd);
     var buffer: [128]u8 = undefined;
     var sha1: std.crypto.hash.Sha1 = .init(.{});
     var count: u32 = 0;
     while (true) {
-        const read = std.c.read(fd, &buffer, buffer.len);
+        const read = c.read(fd, &buffer, buffer.len);
         if (read == 0) break;
         sha1.update(buffer[0..@intCast(read)]);
         count += 1;

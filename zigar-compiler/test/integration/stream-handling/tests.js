@@ -5,7 +5,6 @@ import 'mocha-skip-if';
 import { platform } from 'os';
 import { fileURLToPath } from 'url';
 import { InvalidArgument } from '../../../../zigar-runtime/src/errors.js';
-import { usize } from '../../../../zigar-runtime/src/utils.js';
 import { capture, captureError, delay } from '../test-utils.js';
 
 use(chaiAsPromised);
@@ -483,6 +482,7 @@ export function addTests(importModule, options) {
       expect(check('/readwritable.txt', { execute: true, read: true })).to.be.false;
       expect(check('/subdirectory', { execute: true })).to.be.true;
     })
+    skip.entirely.if(target == 'win32').
     it('should check access of file in directory using posix function', async function() {
       this.timeout(0);
       const { __zigar, check } = await importTest('check-access-at-dir-with-posix-function');
@@ -514,6 +514,7 @@ export function addTests(importModule, options) {
       expect(check(dir, 'readable.txt', { write: true })).to.be.true;
       expect(check(dir, 'subdirectory', { execute: true })).to.be.true;
     })
+    skip.entirely.if(target === 'win32').
     it('should open file in directory using posix function', async function() {
       this.timeout(0);
       const { __zigar, write } = await importTest('open-file-at-dir-with-posix-function');
@@ -543,6 +544,7 @@ export function addTests(importModule, options) {
         flags: { symlinkFollow: true }
       });
     })
+    skip.entirely.if(target === 'win32').
     it('should print stat of file in directory using posix function', async function() {
       this.timeout(0);
       const { __zigar, stat } = await importTest('stat-file-at-dir-with-posix-function');
@@ -878,6 +880,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    skip.entirely.if(target === 'win32').
     it('should perform sync operation using posix function', async function() {
       this.timeout(0);
       const { __zigar, save } = await importTest('perform-sync-with-posix-function');
@@ -1019,6 +1022,7 @@ export function addTests(importModule, options) {
       ]);
       let event;
       __zigar.on('open', (evt) => {
+        console.error(evt);
         if (evt.path === 'somewhere/directory') {
           event = evt;
           return map;
@@ -1026,7 +1030,8 @@ export function addTests(importModule, options) {
           return false;
         }
       });
-      const lines = await capture(() => print('/somewhere/directory'));
+      print('/somewhere/directory');
+      const lines = await capture(() => {});
       expect(lines).to.eql([
         '. (dir)',
         '.. (dir)',
@@ -1170,6 +1175,7 @@ export function addTests(importModule, options) {
       const lock = check(file3).valueOf();
       expect(lock).to.eql({ type: 0, whence: 0, start: 1234n, len: 8000n, pid: 123 });
     })
+    skip.entirely.if(target === 'win32').
     it('should set lock on file using posix function', async function() {
       this.timeout(0);
       const { lock, unlock } = await importTest('set-lock-with-posix-function');
@@ -1315,7 +1321,7 @@ export function addTests(importModule, options) {
       }
       reader.close();
     })
-    skip.entirely.unless(target == 'windows').
+    skip.entirely.unless(target === 'win32').
     it('should read lines from stdin using gets_s', async function() {
       this.timeout(0);
       const { __zigar, print, startup, shutdown } = await importTest('read-line-from-stdin-with-gets_s', { multithreaded: true });

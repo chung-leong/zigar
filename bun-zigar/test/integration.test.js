@@ -1,5 +1,5 @@
 import 'mocha-skip-if';
-import { arch, endianness } from 'os';
+import { arch, endianness, platform } from 'os';
 import { addTests } from '../../zigar-compiler/test/integration/index.js';
 
 for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]) {
@@ -8,7 +8,7 @@ for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]
     addTests((path, options) => importModule(path, { optimize, ...options }), {
       littleEndian: endianness() === 'LE',
       addressSize: /64/.test(arch()) ? 64 : 32,
-      target: 'native',
+      target: platform(),
       optimize,
     });
   })
