@@ -216,16 +216,16 @@ pub const Syscall = extern struct {
     pub const Fdflags = std.os.wasi.fdflags_t;
 };
 const Dirent = switch (os) {
-    .windows => std.os.wasi.dirent_t,
+    .windows => std.os.linux.dirent64,
     .linux => std.c.dirent64,
     else => std.c.dirent,
 };
 const Stat = switch (os) {
-    .windows => std.os.wasi.filestat_t,
+    .windows => std.os.linux.Stat,
     else => std.c.Stat,
 };
 const StatFs = switch (os) {
-    .linux => extern struct {
+    .linux, .windows => extern struct {
         type: usize,
         bsize: usize,
         blocks: c_ulong,
@@ -261,7 +261,6 @@ const StatFs = switch (os) {
         pub const mfsyuprnamelen = 15;
         pub const maxpathlen = 1024;
     },
-    .windows => extern struct {},
     else => @compileError("Unsupported platform"),
 };
 const Flock = switch (os) {
@@ -271,6 +270,10 @@ const Flock = switch (os) {
 const AT = switch (os) {
     .windows => std.os.linux.AT,
     else => std.c.AT,
+};
+const DT = switch (os) {
+    .windows => std.os.linux.DT,
+    else => std.c.DT,
 };
 const F = switch (os) {
     .windows => std.os.linux.F,
@@ -672,14 +675,14 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         }
                         if (@hasField(Dirent, "type")) {
                             entry.type = switch (src_entry.type) {
-                                .BLOCK_DEVICE => std.c.DT.BLK,
-                                .CHARACTER_DEVICE => std.c.DT.CHR,
-                                .DIRECTORY => std.c.DT.DIR,
-                                .REGULAR_FILE => std.c.DT.REG,
-                                .SOCKET_DGRAM => std.c.DT.SOCK,
-                                .SOCKET_STREAM => std.c.DT.SOCK,
-                                .SYMBOLIC_LINK => std.c.DT.LNK,
-                                else => std.c.DT.UNKNOWN,
+                                .BLOCK_DEVICE => DT.BLK,
+                                .CHARACTER_DEVICE => DT.CHR,
+                                .DIRECTORY => DT.DIR,
+                                .REGULAR_FILE => DT.REG,
+                                .SOCKET_DGRAM => DT.SOCK,
+                                .SOCKET_STREAM => DT.SOCK,
+                                .SYMBOLIC_LINK => DT.LNK,
+                                else => DT.UNKNOWN,
                             };
                         }
                         const src_name: [*]const u8 = @ptrCast(&src_buffer[src_offset + src_name_offset]);
@@ -1302,7 +1305,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         pub fn telldir(d: *std.c.DIR) callconv(.c) c_ulong {
             if (RedirectedDir.cast(d)) |dir| {
-                return dir.cookie;
+                return @intCast(dir.cookie);
             }
             return Original.telldir(d);
         }
@@ -1467,6 +1470,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var utimes: *const @TypeOf(Sub.utimes) = undefined;
             pub var write: *const @TypeOf(Sub.write) = undefined;
         };
+        pub const calling_convention = std.builtin.CallingConvention.c;
     };
 }
 
@@ -1785,7 +1789,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
                         @field(pos, "__pos"),
                     else => @compileError("Unexpected fpos_t type"),
                 };
-                const result = posix.lseek64(file.fd, offset, std.c.SEEK.SET);
+                const result = posix.lseek64(file.fd, @intCast(offset), std.c.SEEK.SET);
                 if (result < 0) return saveFileError(file, posix.getError());
                 return 0;
             }
@@ -1919,10 +1923,10 @@ pub fn LibCSubstitute(comptime redirector: type) type {
 
         // function required by C hooks
         comptime {
-            @export(&getRedirectedFile, .{ .name = "get_redirected_file", .visibility = .hidden });
-            @export(&read, .{ .name = "redirected_read", .visibility = .hidden });
-            @export(&write, .{ .name = "redirected_write", .visibility = .hidden });
-            @export(&getLine, .{ .name = "get_line", .visibility = .hidden });
+            @export(&getRedirectedFile, .{ .name = "get_redirected_file", .visibility = .protected });
+            @export(&read, .{ .name = "redirected_read", .visibility = .protected });
+            @export(&write, .{ .name = "redirected_write", .visibility = .protected });
+            @export(&getLine, .{ .name = "get_line", .visibility = .protected });
         }
 
         fn read(file: *RedirectedFile, dest: [*]u8, len: isize) callconv(.c) isize {
@@ -2195,6 +2199,7 @@ pub fn LibCSubstitute(comptime redirector: type) type {
             pub extern var fprintf_s_orig: *const @TypeOf(Self.fprintf_s_hook);
             pub extern var printf_s_orig: *const @TypeOf(Self.printf_s_hook);
         };
+        pub const calling_convention = std.builtin.CallingConvention.c;
     };
 }
 
@@ -2223,12 +2228,80 @@ pub fn GNUSubstitute(comptime redirector: type) type {
             pub extern var __isoc99_fscanf_orig: *const @TypeOf(Self.__isoc99_fscanf_hook);
             pub extern var __isoc99_scanf_orig: *const @TypeOf(Self.__isoc99_scanf_hook);
         };
+        pub const calling_convention = std.builtin.CallingConvention.c;
     };
 }
 
 pub fn Win32SubstituteS(comptime redirector: type) type {
     _ = redirector;
     return struct {
+        pub fn CloseHandle(handle: HANDLE) callconv(WINAPI) BOOL {
+            return Original.CloseHandle(handle);
+        }
+
+        pub fn CreateDirectoryA(
+            path: LPCSTR,
+            security_attributes: *SECURITY_ATTRIBUTES,
+        ) callconv(WINAPI) BOOL {
+            return Original.CreateDirectoryA(path, security_attributes);
+        }
+
+        pub fn CreateDirectoryW(
+            path: LPCWSTR,
+            security_attributes: *SECURITY_ATTRIBUTES,
+        ) callconv(WINAPI) BOOL {
+            return Original.CreateDirectoryW(path, security_attributes);
+        }
+
+        pub fn DeleteFileA(path: LPCSTR) callconv(WINAPI) BOOL {
+            return Original.DeleteFileA(path);
+        }
+
+        pub fn DeleteFileW(path: LPCWSTR) callconv(WINAPI) BOOL {
+            return Original.DeleteFileW(path);
+        }
+
+        pub fn GetFileAttributesA(path: LPCSTR) callconv(WINAPI) DWORD {
+            return Original.GetFileAttributesA(path);
+        }
+
+        pub fn GetFileAttributesW(path: LPCWSTR) callconv(WINAPI) DWORD {
+            return Original.GetFileAttributesW(path);
+        }
+
+        pub fn GetFileSize(handle: HANDLE, size_high: *DWORD) callconv(WINAPI) DWORD {
+            return Original.GetFileSize(handle, size_high);
+        }
+
+        pub fn GetFileSizeEx(handle: HANDLE, size: *LARGE_INTEGER) callconv(WINAPI) BOOL {
+            return Original.GetFileSizeEx(handle, size);
+        }
+
+        pub fn GetHandleInformation(handle: HANDLE, flags: *DWORD) callconv(WINAPI) BOOL {
+            return Original.GetHandleInformation(handle, flags);
+        }
+
+        pub fn LockFile(
+            handle: HANDLE,
+            offset_low: DWORD,
+            offset_high: DWORD,
+            len_low: DWORD,
+            len_high: DWORD,
+        ) callconv(WINAPI) BOOL {
+            return Original.LockFile(handle, offset_low, offset_high, len_low, len_high);
+        }
+
+        pub fn LockFileEx(
+            handle: HANDLE,
+            flags: DWORD,
+            reserved: DWORD,
+            len_low: DWORD,
+            len_high: DWORD,
+            overlapped: *OVERLAPPED,
+        ) callconv(WINAPI) BOOL {
+            return Original.LockFileEx(handle, flags, reserved, len_low, len_high, overlapped);
+        }
+
         pub fn ReadFile(
             handle: HANDLE,
             buffer: LPVOID,
@@ -2248,6 +2321,57 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             complete: LPOVERLAPPED_COMPLETION_ROUTINE,
         ) callconv(WINAPI) BOOL {
             return Original.ReadFileEx(handle, buffer, len, read, overlapped, complete);
+        }
+
+        pub fn RemoveDirectoryA(path: LPCSTR) callconv(WINAPI) BOOL {
+            return Original.RemoveDirectoryA(path);
+        }
+
+        pub fn RemoveDirectoryW(path: LPCWSTR) callconv(WINAPI) BOOL {
+            return Original.RemoveDirectoryW(path);
+        }
+
+        pub fn SetFilePointer(
+            handle: HANDLE,
+            offset: LONG,
+            offset_high: *LONG,
+            method: DWORD,
+        ) callconv(WINAPI) DWORD {
+            return Original.SetFilePointer(handle, offset, offset_high, method);
+        }
+
+        pub fn SetFilePointerEx(
+            handle: HANDLE,
+            offset: LARGE_INTEGER,
+            new_pos: *LARGE_INTEGER,
+            method: DWORD,
+        ) callconv(WINAPI) DWORD {
+            return Original.SetFilePointerEx(handle, offset, new_pos, method);
+        }
+
+        pub fn SetHandleInformation(handle: HANDLE, mask: DWORD, flags: DWORD) callconv(WINAPI) BOOL {
+            return Original.SetHandleInformation(handle, mask, flags);
+        }
+
+        pub fn UnlockFile(
+            handle: HANDLE,
+            offset_low: DWORD,
+            offset_high: DWORD,
+            len_low: DWORD,
+            len_high: DWORD,
+        ) callconv(WINAPI) BOOL {
+            return Original.UnlockFile(handle, offset_low, offset_high, len_low, len_high);
+        }
+
+        pub fn UnlockFileEx(
+            handle: HANDLE,
+            flags: DWORD,
+            reserved: DWORD,
+            len_low: DWORD,
+            len_high: DWORD,
+            overlapped: *OVERLAPPED,
+        ) callconv(WINAPI) BOOL {
+            return Original.UnlockFileEx(handle, flags, reserved, len_low, len_high, overlapped);
         }
 
         pub fn WriteFile(
@@ -2284,19 +2408,44 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         const BOOL = std.os.windows.BOOL;
         const DWORD = std.os.windows.DWORD;
         const HANDLE = std.os.windows.HANDLE;
-        const LPVOID = std.os.windows.LPVOID;
+        const LARGE_INTEGER = std.os.windows.LARGE_INTEGER;
+        const LONG = std.os.windows.LONG;
+        const LPCSTR = std.os.windows.LPCSTR;
         const LPCVOID = std.os.windows.LPCVOID;
         const LPOVERLAPPED_COMPLETION_ROUTINE = std.os.windows.LPOVERLAPPED_COMPLETION_ROUTINE;
+        const LPCWSTR = std.os.windows.LPCWSTR;
+        const LPVOID = std.os.windows.LPVOID;
         const OVERLAPPED = std.os.windows.OVERLAPPED;
+        const SECURITY_ATTRIBUTES = std.os.windows.SECURITY_ATTRIBUTES;
         const WINAPI: std.builtin.CallingConvention = if (builtin.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c;
 
         const Self = @This();
         pub const Original = struct {
+            pub var CloseHandle: *const @TypeOf(Self.CloseHandle) = undefined;
+            pub var CreateDirectoryA: *const @TypeOf(Self.CreateDirectoryA) = undefined;
+            pub var CreateDirectoryW: *const @TypeOf(Self.CreateDirectoryW) = undefined;
+            pub var DeleteFileA: *const @TypeOf(Self.DeleteFileA) = undefined;
+            pub var DeleteFileW: *const @TypeOf(Self.DeleteFileW) = undefined;
+            pub var GetFileAttributesA: *const @TypeOf(Self.GetFileAttributesA) = undefined;
+            pub var GetFileAttributesW: *const @TypeOf(Self.GetFileAttributesW) = undefined;
+            pub var GetFileSize: *const @TypeOf(Self.GetFileSize) = undefined;
+            pub var GetFileSizeEx: *const @TypeOf(Self.GetFileSizeEx) = undefined;
+            pub var GetHandleInformation: *const @TypeOf(Self.GetHandleInformation) = undefined;
+            pub var LockFile: *const @TypeOf(Self.LockFile) = undefined;
+            pub var LockFileEx: *const @TypeOf(Self.LockFileEx) = undefined;
             pub var ReadFile: *const @TypeOf(Self.ReadFile) = undefined;
             pub var ReadFileEx: *const @TypeOf(Self.ReadFileEx) = undefined;
+            pub var RemoveDirectoryA: *const @TypeOf(Self.RemoveDirectoryA) = undefined;
+            pub var RemoveDirectoryW: *const @TypeOf(Self.RemoveDirectoryW) = undefined;
+            pub var SetFilePointer: *const @TypeOf(Self.SetFilePointer) = undefined;
+            pub var SetFilePointerEx: *const @TypeOf(Self.SetFilePointerEx) = undefined;
+            pub var SetHandleInformation: *const @TypeOf(Self.SetHandleInformation) = undefined;
+            pub var UnlockFile: *const @TypeOf(Self.UnlockFile) = undefined;
+            pub var UnlockFileEx: *const @TypeOf(Self.UnlockFileEx) = undefined;
             pub var WriteFile: *const @TypeOf(Self.WriteFile) = undefined;
             pub var WriteFileEx: *const @TypeOf(Self.WriteFileEx) = undefined;
         };
+        pub const calling_convention = WINAPI;
     };
 }
 
@@ -2305,22 +2454,22 @@ pub const HandlerVTable = init: {
     const len = count: {
         var count: usize = 0;
         for (std.meta.declarations(redirector)) |decl| {
-            const DT = @TypeOf(@field(redirector, decl.name));
-            if (@typeInfo(DT) == .@"fn") count += 1;
+            const T = @TypeOf(@field(redirector, decl.name));
+            if (@typeInfo(T) == .@"fn") count += 1;
         }
         break :count count;
     };
     var fields: [len]std.builtin.Type.StructField = undefined;
     var index: usize = 0;
     for (std.meta.declarations(redirector)) |decl| {
-        const DT = @TypeOf(@field(redirector, decl.name));
-        if (@typeInfo(DT) == .@"fn") {
+        const T = @TypeOf(@field(redirector, decl.name));
+        if (@typeInfo(T) == .@"fn") {
             fields[index] = .{
                 .name = decl.name,
-                .type = *const DT,
+                .type = *const T,
                 .default_value_ptr = null,
                 .is_comptime = false,
-                .alignment = @alignOf(DT),
+                .alignment = @alignOf(T),
             };
             index += 1;
         }
@@ -2339,8 +2488,8 @@ pub fn getHandlerVtable(comptime Host: type) HandlerVTable {
     var vtable: HandlerVTable = undefined;
     const redirector = SyscallRedirector(Host);
     inline for (std.meta.declarations(redirector)) |decl| {
-        const DT = @TypeOf(@field(redirector, decl.name));
-        if (@typeInfo(DT) == .@"fn") {
+        const T = @TypeOf(@field(redirector, decl.name));
+        if (@typeInfo(T) == .@"fn") {
             @field(vtable, decl.name) = &@field(redirector, decl.name);
         }
     }
@@ -2358,6 +2507,11 @@ pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
         .darwin => .{
             PosixSubstitute(redirector),
             LibCSubstitute(redirector),
+        },
+        .windows => .{
+            PosixSubstitute(redirector),
+            LibCSubstitute(redirector),
+            Win32SubstituteS(redirector),
         },
         else => .{},
     };
@@ -2383,7 +2537,8 @@ pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
             const name = if (w_suffix) decl.name[0 .. decl.name.len - 5] else decl.name;
             const handler_name = if (w_suffix) name ++ "_hook" else name;
             const HandlerType = @TypeOf(@field(Sub, handler_name));
-            if (!std.meta.eql(@typeInfo(HandlerType).@"fn".calling_convention, std.builtin.CallingConvention.c)) {
+            const handle_cc = @typeInfo(HandlerType).@"fn".calling_convention;
+            if (!std.meta.eql(handle_cc, Sub.calling_convention)) {
                 @compileError("Handler with wrong calling convention: " ++ handler_name);
             }
             table[index] = .{ name, .{

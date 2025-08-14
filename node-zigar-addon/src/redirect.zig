@@ -301,8 +301,9 @@ pub fn Controller(comptime Host: type) type {
                 hook.original.* = ptr.*;
                 if (read_only) {
                     const page = getPageSlice(address);
-                    if (std.c.mprotect(page.ptr, page.len, std.c.PROT.READ | std.c.PROT.WRITE) < 0) return error.UnableToInstallHooks;
-                    defer _ = std.c.mprotect(page.ptr, page.len, std.c.PROT.READ);
+                    // std.posix.mprotect() does support Windows
+                    try std.posix.mprotect(page, std.c.PROT.READ | std.c.PROT.WRITE);
+                    defer std.posix.mprotect(page, std.c.PROT.READ) catch {};
                     ptr.* = hook.handler;
                 } else {
                     ptr.* = hook.handler;
@@ -442,6 +443,7 @@ pub fn Controller(comptime Host: type) type {
         var previous_signal_handler: ?std.c.Sigaction = null;
 
         pub fn installSignalHandler() !void {
+            if (os != .linux) return;
             // don't do anything if the trap is already set
             if (sig_handler_count.fetchAdd(1, .monotonic) > 0) return;
             const act: std.c.Sigaction = .{
@@ -459,6 +461,7 @@ pub fn Controller(comptime Host: type) type {
         }
 
         pub fn uninstallSignalHandler() void {
+            if (os != .linux) return;
             if (sig_handler_count.fetchSub(1, .monotonic) > 1) return;
             if (previous_signal_handler) |prev_act| {
                 _ = std.c.sigaction(std.c.SIG.SYS, &prev_act, null);
@@ -469,6 +472,7 @@ pub fn Controller(comptime Host: type) type {
         var libc_extent: ?LibcExtent = null;
 
         fn getLibcExtend() !LibcExtent {
+            if (os != .linux) @compileError("Unsupported");
             return libc_extent orelse {
                 const dlfcn_h = @cImport({
                     @cDefine("_GNU_SOURCE", {});
@@ -506,6 +510,7 @@ pub fn Controller(comptime Host: type) type {
         }
 
         fn handleSigsysSignal(_: i32, info: *const std.c.siginfo_t, ucontext: ?*anyopaque) callconv(.c) void {
+            if (os != .linux) @compileError("Unsupported");
             const syscall = @import("./syscall.zig");
             if (@TypeOf(syscall.table) == void) return;
             @setEvalBranchQuota(100000);
