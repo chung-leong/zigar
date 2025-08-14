@@ -1601,7 +1601,7 @@ comptime {
     if (@offsetOf(RedirectedFile, "sig") != 0) @compileError("Signature is not at offset 0");
 }
 
-pub fn LibCSubstitute(comptime redirector: type) type {
+pub fn LibcSubstitute(comptime redirector: type) type {
     return struct {
         const posix = PosixSubstitute(redirector);
 
@@ -2203,9 +2203,9 @@ pub fn LibCSubstitute(comptime redirector: type) type {
     };
 }
 
-pub fn GNUSubstitute(comptime redirector: type) type {
+pub fn LinuxLibcSubstitute(comptime redirector: type) type {
     return struct {
-        const libc = LibCSubstitute(redirector);
+        const libc = LibcSubstitute(redirector);
 
         // hooks implemented in C
         pub extern fn __vfprintf_chk_hook() callconv(.c) void;
@@ -2227,6 +2227,19 @@ pub fn GNUSubstitute(comptime redirector: type) type {
             pub extern var __isoc99_vscanf_orig: *const @TypeOf(Self.__isoc99_vscanf_hook);
             pub extern var __isoc99_fscanf_orig: *const @TypeOf(Self.__isoc99_fscanf_hook);
             pub extern var __isoc99_scanf_orig: *const @TypeOf(Self.__isoc99_scanf_hook);
+        };
+        pub const calling_convention = std.builtin.CallingConvention.c;
+    };
+}
+
+pub fn Win32LibcSubsitute(comptime redirector: type) type {
+    return struct {
+        const libc = LibcSubstitute(redirector);
+
+        pub extern fn __stdio_common_vfprintf_hook() callconv(.c) void;
+        const Self = @This();
+        pub const Original = struct {
+            pub extern var __stdio_common_vfprintf_orig: *const @TypeOf(Self.__stdio_common_vfprintf_hook);
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
     };
@@ -2419,7 +2432,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         fn print(comptime fmt: []const u8, args: anytype) void {
             var msg_buf: [1024]u8 = undefined;
             const message = std.fmt.bufPrintZ(&msg_buf, fmt, args) catch unreachable;
-            _ = LibCSubstitute(redirector).puts(message);
+            _ = LibcSubstitute(redirector).puts(message);
         }
 
         fn saveError(result: anytype) BOOL {
@@ -2570,16 +2583,17 @@ pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
     const list = switch (os) {
         .linux => .{
             PosixSubstitute(redirector),
-            LibCSubstitute(redirector),
-            GNUSubstitute(redirector),
+            LibcSubstitute(redirector),
+            LinuxLibcSubstitute(redirector),
         },
         .darwin => .{
             PosixSubstitute(redirector),
-            LibCSubstitute(redirector),
+            LibcSubstitute(redirector),
         },
         .windows => .{
             PosixSubstitute(redirector),
-            LibCSubstitute(redirector),
+            LibcSubstitute(redirector),
+            Win32LibcSubsitute(redirector),
             Win32SubstituteS(redirector),
         },
         else => .{},

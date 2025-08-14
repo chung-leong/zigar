@@ -5,10 +5,11 @@
 #include <stdarg.h>
 #ifdef _WIN32
     #include <windows.h>
+    #define MODULE_VISIBILITY  
 #else
     #include <dlfcn.h>
+    #define MODULE_VISIBILITY  __attribute__ ((visibility ("hidden")))
 #endif
-#define MODULE_VISIBILITY  __attribute__ ((visibility ("hidden")))
 
 int redirected_read(void*, char*, int);
 int redirected_write(void*, const char*, int);
@@ -93,6 +94,7 @@ MODULE_VISIBILITY int fprintf_s_hook(FILE* s, const char* f, ...) {
 
 MODULE_VISIBILITY int (*printf_s_orig)(const char* f, ...) = NULL;
 MODULE_VISIBILITY int printf_s_hook(const char* f, ...) {
+    printf_s_orig("printf()\n");
     if (!load_vfprintf(printf_s_orig)) return -1;
     va_list argptr;
     va_start(argptr, f);
@@ -152,7 +154,7 @@ MODULE_VISIBILITY int vscanf_hook(FILE* s, const char *f, va_list arg) {
     return vfscanf_hook(stdin, f, arg);
 }
 
-MODULE_VISIBILITY int (*fscanf_orig)(FILE* s, const char *f, ...)  = NULL;
+MODULE_VISIBILITY int (*fscanf_orig)(FILE* s, const char *f, ...) = NULL;
 MODULE_VISIBILITY int fscanf_hook(FILE* s, const char *f, ...) {
     if (!load_vfscanf(fscanf_orig)) {
         return -1;
@@ -164,7 +166,7 @@ MODULE_VISIBILITY int fscanf_hook(FILE* s, const char *f, ...) {
     return n;
 }
 
-MODULE_VISIBILITY int (*scanf_orig)(const char *f, ...)  = NULL;
+MODULE_VISIBILITY int (*scanf_orig)(const char *f, ...) = NULL;
 MODULE_VISIBILITY int scanf_hook(const char *f, ...) {
     if (!load_vfscanf(scanf_orig)) return -1;
     va_list argptr;
@@ -186,7 +188,7 @@ MODULE_VISIBILITY int __isoc99_vscanf_hook(FILE* s, const char *f, va_list arg) 
     return vfscanf_hook(stdin, f, arg);
 }
 
-MODULE_VISIBILITY int (*__isoc99_fscanf_orig)(FILE* s, const char *f, ...)  = NULL;
+MODULE_VISIBILITY int (*__isoc99_fscanf_orig)(FILE* s, const char *f, ...) = NULL;
 MODULE_VISIBILITY int __isoc99_fscanf_hook(FILE* s, const char *f, ...) {
     if (!load_vfscanf(__isoc99_fscanf_orig)) return -1;
     va_list argptr;
@@ -196,7 +198,7 @@ MODULE_VISIBILITY int __isoc99_fscanf_hook(FILE* s, const char *f, ...) {
     return n;
 }
 
-MODULE_VISIBILITY int (*__isoc99_scanf_orig)(const char *f, ...)  = NULL;
+MODULE_VISIBILITY int (*__isoc99_scanf_orig)(const char *f, ...) = NULL;
 MODULE_VISIBILITY int __isoc99_scanf_hook(const char *f, ...) {
     if (!load_vfscanf(__isoc99_scanf_orig)) return -1;
     va_list argptr;
@@ -204,6 +206,33 @@ MODULE_VISIBILITY int __isoc99_scanf_hook(const char *f, ...) {
     int n = vfscanf_hook(stdin, f, argptr);
     va_end(argptr);
     return n;
+}
+
+
+MODULE_VISIBILITY int (*__stdio_common_vfprintf_orig)(unsigned __int64 options, FILE* s, char const* f, _locale_t locale, va_list arg) = NULL;
+MODULE_VISIBILITY int __stdio_common_vfprintf_hook(unsigned __int64 options, FILE* s, char const* f, _locale_t locale, va_list arg) {
+    void* file = get_redirected_file(s);
+    if (file) {
+        // attempt with fixed-size buffer, using a copy of arg
+        va_list arg_copy;
+        va_copy(arg_copy, arg);
+        char fixed_buffer[1024];
+        char* buffer = fixed_buffer;
+        int len = __stdio_common_vsnprintf_s(options, fixed_buffer, sizeof(fixed_buffer), sizeof(fixed_buffer) - 1, f, locale, arg_copy);
+        bool too_large = len + 1 > sizeof(fixed_buffer);
+        if (too_large) {
+            va_copy(arg_copy, arg);
+            buffer = malloc(len + 1);
+            __stdio_common_vsnprintf_s(options, fixed_buffer, len + 1, len, f, locale, arg_copy);
+            vsnprintf(buffer, len + 1, f, arg_copy);
+        }
+        int written = redirected_write(file, buffer, len);
+        if (too_large) {
+            free(buffer);
+        }
+        return written;
+    }
+    return __stdio_common_vfprintf_orig(options, s, f, locale, arg);
 }
 
 bool load_orig_func(void** orig_ptr, void* other_fn, const char* name) {
