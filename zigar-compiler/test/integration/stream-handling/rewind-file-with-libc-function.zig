@@ -4,7 +4,7 @@ const c = @cImport({
     @cInclude("stdio.h");
 });
 
-pub fn getStartingPos(path: [:0]const u8) !c_long {
+pub fn getStartingPos(path: [:0]const u8) !isize {
     const file = c.fopen(path, "r") orelse return error.UnableToOpenFile;
     defer _ = c.fclose(file);
     var buffer: [128]u8 = undefined;

@@ -242,7 +242,7 @@ export function addTests(importModule, options) {
       const content = new TextEncoder().encode('Hello world!');
       __zigar.on('open', () => content);
       const pos = seek('/hello/world', -2);
-      expect(pos).to.equal(BigInt(content.length - 2));
+      expect(pos).to.equal(content.length - 2);
     })
     it('should save and restore file position using using libc functions', async function() {
       this.timeout(0);
@@ -435,7 +435,7 @@ export function addTests(importModule, options) {
         return new Uint8Array(256);
       });
       const result = getStartingPos('/hello/world');
-      expect(result).to.equal(usize(0));
+      expect(result).to.equal(0);
     })
     it('should check file access using posix function', async function() {
       this.timeout(0);

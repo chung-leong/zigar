@@ -8,7 +8,7 @@ const c = @cImport({
 pub fn printTwice(path: [*:0]const u8, offset: isize, len: usize) !void {
     const file = c.fopen(path, "r") orelse return error.UnableToOpenFile;
     defer _ = c.fclose(file);
-    _ = c.fseek(file, offset, c.SEEK_SET);
+    _ = c.fseek(file, @intCast(offset), c.SEEK_SET);
     var pos: c.fpos_t = undefined;
     _ = c.fgetpos(file, &pos);
     var buffer: []u8 = try allocator.alloc(u8, len);
