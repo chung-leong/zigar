@@ -2233,7 +2233,6 @@ pub fn GNUSubstitute(comptime redirector: type) type {
 }
 
 pub fn Win32SubstituteS(comptime redirector: type) type {
-    _ = redirector;
     return struct {
         pub fn CloseHandle(handle: HANDLE) callconv(WINAPI) BOOL {
             return Original.CloseHandle(handle);
@@ -2379,18 +2378,16 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             buffer: LPCVOID,
             len: DWORD,
             written: *DWORD,
-            overlapped: *OVERLAPPED,
+            overlapped: ?*OVERLAPPED,
         ) callconv(WINAPI) BOOL {
-            // if (is_applicable_handle(handle)) {
-            //     if (redirect_write(handle, buffer, len)) {
-            //         *written = len;
-            //         if (overlapped) {
-            //             SetEvent(overlapped->hEvent);
-            //         }
-            //         return TRUE;
-            //     }
-            // }
-            // return write_file_orig(handle, buffer, len, written, overlapped);
+            const fd = toDescriptor(handle);
+            var result: isize = undefined;
+            if (redirector.write(fd, @ptrCast(buffer), @intCast(len), &result)) {
+                if (result < 0) return saveError(result);
+                written.* = @intCast(result);
+                if (overlapped) |o| _ = windows_h.SetEvent(o.hEvent);
+                return TRUE;
+            }
             return Original.WriteFile(handle, buffer, len, written, overlapped);
         }
 
@@ -2399,11 +2396,81 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             buffer: LPCVOID,
             len: DWORD,
             written: *DWORD,
-            overlapped: *OVERLAPPED,
+            overlapped: ?*OVERLAPPED,
             complete: LPOVERLAPPED_COMPLETION_ROUTINE,
         ) callconv(WINAPI) BOOL {
             return Original.WriteFileEx(handle, buffer, len, written, overlapped, complete);
         }
+
+        fn toDescriptor(handle: HANDLE) c_int {
+            if (handle == std.os.windows.INVALID_HANDLE_VALUE) return -1;
+            return inline for (0..3) |i| {
+                if (handle == std_stream.get(i)) break @intCast(i);
+            } else @intCast(@intFromPtr(handle) >> 1);
+        }
+
+        fn fromDescriptor(fd: c_int) HANDLE {
+            if (fd < 0) return std.os.windows.INVALID_HANDLE_VALUE;
+            return inline for (0..3) |i| {
+                if (fd == @as(c_int, @intCast(i))) break std_stream.get(i);
+            } else @ptrFromInt(@as(usize, @intCast(fd)) << 1);
+        }
+
+        fn print(comptime fmt: []const u8, args: anytype) void {
+            var msg_buf: [1024]u8 = undefined;
+            const message = std.fmt.bufPrintZ(&msg_buf, fmt, args) catch unreachable;
+            _ = LibCSubstitute(redirector).puts(message);
+        }
+
+        fn saveError(result: anytype) BOOL {
+            const T = @TypeOf(result);
+            const err: std.c.E = switch (@typeInfo(T)) {
+                .@"enum" => result,
+                .int => if (result >= 0) return TRUE else convert: {
+                    const num: u16 = @intCast(-result);
+                    break :convert std.meta.intToEnum(std.c.E, num) catch .FAULT;
+                },
+                else => @compileError("Unexpected"),
+            };
+            const code: DWORD = switch (err) {
+                .PERM => windows_h.ERROR_ACCESS_DENIED,
+                .NOENT => windows_h.ERROR_FILE_NOT_FOUND,
+                .BADF => windows_h.ERROR_INVALID_HANDLE,
+                .NOMEM => windows_h.ERROR_NOT_ENOUGH_MEMORY,
+                .ACCES => windows_h.ERROR_INVALID_ACCESS,
+                .FAULT => windows_h.ERROR_INVALID_ADDRESS,
+                .BUSY => windows_h.ERROR_BUSY,
+                .NOTDIR => windows_h.ERROR_DIRECTORY,
+                .NODEV => windows_h.ERROR_DEV_NOT_EXIST,
+                .EXIST => windows_h.ERROR_FILE_EXISTS,
+                .INVAL => windows_h.ERROR_BAD_ARGUMENTS,
+                .NFILE, .MFILE => windows_h.ERROR_TOO_MANY_OPEN_FILES,
+                .FBIG => windows_h.ERROR_FILE_TOO_LARGE,
+                .NOSPC => windows_h.ERROR_DISK_FULL,
+                .SPIPE => windows_h.ERROR_SEEK_ON_DEVICE,
+                .NAMETOOLONG => windows_h.ERROR_INVALID_NAME,
+                .NOLCK => windows_h.ERROR_LOCK_FAILED,
+                .NOTEMPTY => windows_h.ERROR_DIR_NOT_EMPTY,
+                else => windows_h.ERROR_BAD_ARGUMENTS,
+            };
+            _ = windows_h.SetLastError(code);
+            return FALSE;
+        }
+
+        const std_stream = struct {
+            var handles: [3]?HANDLE = .{ null, null, null };
+            fn get(comptime index: usize) HANDLE {
+                const ids = .{ std.os.windows.STD_INPUT_HANDLE, std.os.windows.STD_OUTPUT_HANDLE, std.os.windows.STD_ERROR_HANDLE };
+                return handles[index] orelse find: {
+                    const handle = std.os.windows.GetStdHandle(ids[index]) catch std.os.windows.INVALID_HANDLE_VALUE;
+                    handles[index] = handle;
+                    break :find handle;
+                };
+            }
+        };
+        const windows_h = @cImport({
+            @cInclude("windows.h");
+        });
 
         const BOOL = std.os.windows.BOOL;
         const DWORD = std.os.windows.DWORD;
@@ -2417,6 +2484,8 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         const LPVOID = std.os.windows.LPVOID;
         const OVERLAPPED = std.os.windows.OVERLAPPED;
         const SECURITY_ATTRIBUTES = std.os.windows.SECURITY_ATTRIBUTES;
+        const FALSE = std.os.windows.FALSE;
+        const TRUE = std.os.windows.TRUE;
         const WINAPI: std.builtin.CallingConvention = if (builtin.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c;
 
         const Self = @This();
