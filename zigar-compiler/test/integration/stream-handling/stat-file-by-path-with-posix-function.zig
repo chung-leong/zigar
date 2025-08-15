@@ -19,11 +19,17 @@ pub fn print(path: [*:0]const u8) !void {
         std.debug.print("ctime = {d},{d}\n", .{ info.st_ctimespec.tv_sec, info.st_ctimespec.tv_nsec });
         std.debug.print("mtime = {d},{d}\n", .{ info.st_mtimespec.tv_sec, info.st_mtimespec.tv_nsec });
         std.debug.print("atime = {d},{d}\n", .{ info.st_atimespec.tv_sec, info.st_atimespec.tv_nsec });
+    } else if (@hasField(c.struct_stat, "st_ctime")) {
+        // Windows
+        std.debug.print("ctime = {d},{d}\n", .{ info.st_ctime, 0 });
+        std.debug.print("mtime = {d},{d}\n", .{ info.st_mtime, 0 });
+        std.debug.print("atime = {d},{d}\n", .{ info.st_atime, 0 });
     }
 }
 
 pub fn printLink(path: [*:0]const u8) !void {
     var info: c.struct_stat = undefined;
+    if (!@hasDecl(c, "lstat")) return error.Unsupported;
     const result = c.lstat(path, &info);
     if (result != 0) return error.UnableToGetStat;
     std.debug.print("size = {d}\n", .{info.st_size});
@@ -36,5 +42,10 @@ pub fn printLink(path: [*:0]const u8) !void {
         std.debug.print("ctime = {d},{d}\n", .{ info.st_ctimespec.tv_sec, info.st_ctimespec.tv_nsec });
         std.debug.print("mtime = {d},{d}\n", .{ info.st_mtimespec.tv_sec, info.st_mtimespec.tv_nsec });
         std.debug.print("atime = {d},{d}\n", .{ info.st_atimespec.tv_sec, info.st_atimespec.tv_nsec });
+    } else if (@hasField(c.struct_stat, "st_ctime")) {
+        // Windows
+        std.debug.print("ctime = {d},{d}\n", .{ info.st_ctime, 0 });
+        std.debug.print("mtime = {d},{d}\n", .{ info.st_mtime, 0 });
+        std.debug.print("atime = {d},{d}\n", .{ info.st_atime, 0 });
     }
 }

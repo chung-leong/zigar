@@ -233,7 +233,7 @@ export function addTests(importModule, options) {
       const content = new TextEncoder().encode('Hello world!');
       __zigar.on('open', () => content);
       const pos = seek('/hello/world', -2);
-      expect(pos).to.equal(BigInt(content.length - 2));
+      expect(pos).to.equal(content.length - 2);
     })
     it('should obtain the expected position after a seek operation using libc function', async function() {
       this.timeout(0);
@@ -661,12 +661,22 @@ export function addTests(importModule, options) {
         target: array,
         flags: {},
       });
-      expect(lines2).to.eql([
-        'size = 17',
-        'ctime = 2,500000000',
-        'mtime = 123,1',
-        'atime = 1,0',
-      ]);
+      if (target === 'win32') {
+        // resolution is limited to seconds in Windows
+        expect(lines2).to.eql([
+          'size = 17',
+          'ctime = 2,0',
+          'mtime = 123,0',
+          'atime = 1,0',
+        ]);
+      } else {
+        expect(lines2).to.eql([
+          'size = 17',
+          'ctime = 2,500000000',
+          'mtime = 123,1',
+          'atime = 1,0',
+        ]);
+      }
     })
     it('should print stats of file referenced by path using posix function', async function() {
       this.timeout(0);
@@ -677,9 +687,9 @@ export function addTests(importModule, options) {
         event = evt;
         return {
           size: 34,
-          ctime: 1234,
-          mtime: 4567,
-          atime: 9999,
+          ctime: 1234 + 1_000_000_000 * 1,
+          mtime: 4567 + 1_000_000_000 * 2,
+          atime: 9999 + 1_000_000_000 * 3,
         }
       });
       const lines1 = await capture(() => print(path));
@@ -688,12 +698,21 @@ export function addTests(importModule, options) {
         path: 'hello.txt', 
         flags: { symlinkFollow: true } 
       });
-      expect(lines1).to.eql([
-        'size = 34',
-        'ctime = 0,1234',
-        'mtime = 0,4567',
-        'atime = 0,9999',
-      ]);
+      if (target === 'win32') {
+        expect(lines1).to.eql([
+          'size = 34',
+          'ctime = 1,0',
+          'mtime = 2,0',
+          'atime = 3,0',
+        ]);
+      } else {
+        expect(lines1).to.eql([
+          'size = 34',
+          'ctime = 1,1234',
+          'mtime = 2,4567',
+          'atime = 3,9999',
+        ]);
+      }
       __zigar.on('stat', () => false);
       expect(() => print(path)).to.throw(Error)
         .with.property('message', 'Unable to get stat');
@@ -713,18 +732,20 @@ export function addTests(importModule, options) {
           atime: 999_000_000_000n,
         }
       });
-      const lines2 = await capture(() => printLink(path));
-      expect(event).to.eql({ 
-        parent: null,
-        path: 'hello.txt', 
-        flags: {} 
-      });
-      expect(lines2).to.eql([
-        'size = 4',
-        'ctime = 123,0',
-        'mtime = 456,0',
-        'atime = 999,0',
-      ]);
+      if (target !== 'win32') {
+        const lines2 = await capture(() => printLink(path));
+        expect(event).to.eql({ 
+          parent: null,
+          path: 'hello.txt', 
+          flags: {} 
+        });
+        expect(lines2).to.eql([
+          'size = 4',
+          'ctime = 123,0',
+          'mtime = 456,0',
+          'atime = 999,0',
+        ]);
+      }
     })
     skip.entirely.if(target === 'win32').
     it('should set access and last modified time of an opened file using posix function', async function() {

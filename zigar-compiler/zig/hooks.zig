@@ -79,7 +79,6 @@ pub const Syscall = extern struct {
         mkdir: extern struct {
             dirfd: i32,
             path: [*:0]const u8,
-            mode: u32,
         },
         open: extern struct {
             dirfd: i32,
@@ -215,24 +214,77 @@ pub const Syscall = extern struct {
     pub const Filestat = std.os.wasi.filestat_t;
     pub const Fdflags = std.os.wasi.fdflags_t;
 };
+const ssize_t = c_long;
+const off_t = c_long;
+const off64_t = i64;
 const Dirent = switch (os) {
-    .windows => std.os.linux.dirent64,
+    .windows => std.os.linux.dirent64, // TODO
+    .linux => std.c.dirent,
+    else => std.c.dirent,
+};
+const Dirent64 = switch (os) {
+    .windows => std.os.linux.dirent64, // TODO
     .linux => std.c.dirent64,
     else => std.c.dirent,
 };
 const Stat = switch (os) {
-    .windows => std.os.linux.Stat,
+    .windows => extern struct {
+        dev: c_uint,
+        ino: c_ushort,
+        mode: c_ushort,
+        nlink: c_ushort,
+        uid: c_short,
+        gid: c_short,
+        rdev: c_uint,
+        size: c_long,
+        atime: c_longlong,
+        mtime: c_longlong,
+        ctime: c_longlong,
+    },
+    else => std.c.Stat,
+};
+const Stat64 = switch (os) {
+    .windows => extern struct {
+        dev: c_uint,
+        ino: c_ushort,
+        mode: c_ushort,
+        nlink: c_ushort,
+        uid: c_short,
+        gid: c_short,
+        rdev: c_uint,
+        size: c_longlong,
+        atime: c_longlong,
+        mtime: c_longlong,
+        ctime: c_longlong,
+    },
     else => std.c.Stat,
 };
 const StatFs = switch (os) {
     .linux, .windows => extern struct {
-        type: usize,
-        bsize: usize,
+        type: c_long,
+        bsize: c_long,
         blocks: c_ulong,
         bfree: c_ulong,
         bavail: c_ulong,
         files: c_ulong,
         ffree: c_ulong,
+        fsid: [2]i32,
+        namelen: usize,
+        frsize: usize,
+        flags: usize,
+        spare: [4]u8,
+    },
+    else => StatFs64,
+};
+const StatFs64 = switch (os) {
+    .linux, .windows => extern struct {
+        type: c_long,
+        bsize: c_long,
+        blocks: u64,
+        bfree: u64,
+        bavail: u64,
+        files: u64,
+        ffree: u64,
         fsid: [2]i32,
         namelen: usize,
         frsize: usize,
@@ -280,9 +332,43 @@ const F = switch (os) {
     else => std.c.F,
 };
 const O = switch (os) {
-    .windows => std.os.linux.O,
+    .windows => packed struct(u32) {
+        ACCMODE: std.posix.ACCMODE = .RDONLY,
+        _2: u2 = 0,
+        RANDOM: bool = false,
+        SEQUENTIAL: bool = false,
+        TEMPORARY: bool = false,
+        NOINHERIT: bool = false,
+        CREAT: bool = false,
+        TRUNC: bool = false,
+        EXCL: bool = false,
+        _3: u3 = 0,
+        TEXT: bool = false,
+        BINARY: bool = false,
+        DIRECTORY: bool = false, // custom flags to match *nix
+        APPEND: bool = false,
+        SYNC: bool = false,
+        DSYNC: bool = false,
+        NONBLOCK: bool = false,
+        NOFOLLOW: bool = false,
+        _: u10 = 0,
+    },
     else => std.c.O,
 };
+const win_c_import = @cImport({
+    @cInclude("sys/stat.h");
+    @cInclude("unistd.h");
+    @cInclude("fcntl.h");
+});
+// comptime {
+//     @setEvalBranchQuota(2_000_000);
+//     for (std.meta.declarations(win_c_import)) |decl| {
+//         if (std.mem.startsWith(u8, decl.name, "O_")) {
+//             const s = std.fmt.comptimePrint("{s} = {x}", .{ decl.name, @field(win_c_import, decl.name) });
+//             @compileLog(s);
+//         }
+//     }
+// }
 
 const fd_min = 0xfffff;
 
@@ -337,11 +423,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn fadvise(fd: c_int, offset: isize, len: isize, advice: c_int, result: *c_int) callconv(.c) bool {
-            return fadvise64(fd, offset, len, advice, result);
-        }
-
-        pub fn fadvise64(fd: c_int, offset: isize, len: isize, advice: c_int, result: *c_int) callconv(.c) bool {
+        pub fn fadvise64(fd: c_int, offset: off64_t, len: off64_t, advice: c_int, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
                 var call: Syscall = .{ .cmd = .advise, .u = .{
                     .advise = .{
@@ -366,7 +448,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn fallocate(fd: c_int, mode: c_int, offset: isize, len: isize, result: *c_int) callconv(.c) bool {
+        pub fn fallocate(fd: c_int, mode: c_int, offset: off_t, len: off_t, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
                 var call: Syscall = .{ .cmd = .allocate, .u = .{
                     .allocate = .{
@@ -384,6 +466,11 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn fcntl(fd: c_int, op: c_int, arg: usize, result: *c_int) callconv(.c) bool {
+            // don't think we're handling cases where there's a difference between 32-bit and 64-bit
+            return fcntl64(fd, op, arg, result);
+        }
+
+        pub fn fcntl64(fd: c_int, op: c_int, arg: usize, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
                 switch (op) {
                     F.GETFL => {
@@ -522,6 +609,14 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn fstat(fd: c_int, buf: *Stat, result: *c_int) callconv(.c) bool {
+            return fstatT(Stat, fd, buf, result);
+        }
+
+        pub fn fstat64(fd: c_int, buf: *Stat64, result: *c_int) callconv(.c) bool {
+            return fstatT(Stat64, fd, buf, result);
+        }
+
+        fn fstatT(comptime T: type, fd: c_int, buf: *T, result: *c_int) bool {
             if (isApplicableHandle(fd)) {
                 var call: Syscall = .{ .cmd = .fstat, .u = .{
                     .fstat = .{
@@ -536,13 +631,42 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn fstatfs(fd: c_int, buf: *StatFs, result: *c_int) callconv(.c) bool {
-            return fstatfs64(fd, buf, result);
+        pub fn fstatat(dirfd: c_int, path: [*:0]const u8, buf: *Stat, flags: c_int, result: *c_int) callconv(.c) bool {
+            return fstatatT(Stat, dirfd, path, buf, flags, result);
         }
 
-        pub fn fstatfs64(fd: c_int, buf: *StatFs, result: *c_int) callconv(.c) bool {
+        pub fn fstatat64(dirfd: c_int, path: [*:0]const u8, buf: *Stat64, flags: c_int, result: *c_int) callconv(.c) bool {
+            return fstatatT(Stat64, dirfd, path, buf, flags, result);
+        }
+
+        fn fstatatT(comptime T: type, dirfd: c_int, path: [*:0]const u8, buf: *T, flags: c_int, result: *c_int) bool {
+            if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.stat))) {
+                var call: Syscall = .{ .cmd = .stat, .u = .{
+                    .stat = .{
+                        .dirfd = @intCast(dirfd),
+                        .path = path,
+                        .lookup_flags = convertLookupFlags(flags),
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS) copyStat(buf, &call.u.stat.stat);
+                result.* = intFromError(err);
+                return true;
+            }
+            return false;
+        }
+
+        pub fn fstatfs(fd: c_int, buf: *StatFs, result: *c_int) callconv(.c) bool {
+            return fstatfsT(StatFs, fd, buf, result);
+        }
+
+        pub fn fstatfs64(fd: c_int, buf: *StatFs64, result: *c_int) callconv(.c) bool {
+            return fstatfsT(StatFs64, fd, buf, result);
+        }
+
+        fn fstatfsT(comptime T: type, fd: c_int, buf: *T, result: *c_int) bool {
             if (isApplicableHandle(fd)) {
-                buf.* = std.mem.zeroes(StatFs);
+                buf.* = std.mem.zeroes(T);
                 buf.blocks = 1_000_000;
                 buf.bavail = 1_000_000;
                 buf.bfree = 1_000_000;
@@ -611,14 +735,18 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn getdents(dirfd: c_int, buffer: [*]u8, len: c_uint, result: *c_int) callconv(.c) bool {
-            return getdents64(dirfd, buffer, len, result);
+            return getdentsT(Dirent, dirfd, buffer, len, result);
         }
 
         pub fn getdents64(dirfd: c_int, buffer: [*]u8, len: c_uint, result: *c_int) callconv(.c) bool {
+            return getdentsT(Dirent64, dirfd, buffer, len, result);
+        }
+
+        fn getdentsT(comptime T: type, dirfd: c_int, buffer: [*]u8, len: c_uint, result: *c_int) bool {
             if (isApplicableHandle(dirfd)) {
                 // get offset to name in the wasi struct and in the system struct
                 const src_name_offset = @sizeOf(std.os.wasi.dirent_t);
-                const name_offset = @offsetOf(Dirent, "name");
+                const name_offset = @offsetOf(T, "name");
                 // adjust the amount of data to retrieve if the posix struct is bigger than the wasi struct
                 const diff = switch (name_offset > src_name_offset) {
                     true => (name_offset - src_name_offset) * (len / 64),
@@ -644,36 +772,36 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     const src_used = call.u.getdents.read;
                     var src_offset: usize = 0;
                     var offset: usize = 0;
-                    var next_pos: isize = 0;
+                    var next_pos: off_t = 0;
                     while (src_offset + src_name_offset < src_used) {
                         const src_entry: *align(1) std.os.wasi.dirent_t = @ptrCast(&src_buffer[src_offset]);
-                        const entry: *align(1) Dirent = @ptrCast(&buffer[offset]);
+                        const entry: *align(1) T = @ptrCast(&buffer[offset]);
                         const name_len: usize = src_entry.namlen;
                         const reclen = name_offset + name_len + 1;
                         if (offset + reclen >= len) {
                             // retrieved too much data--reposition cursor before exiting
-                            var seek_result: isize = undefined;
+                            var seek_result: off_t = undefined;
                             _ = lseek(dirfd, next_pos, std.c.SEEK.SET, &seek_result);
                             break;
                         }
-                        if (@hasField(Dirent, "ino")) {
+                        if (@hasField(T, "ino")) {
                             entry.ino = @intCast(src_entry.ino);
                             if (os == .darwin and entry.ino == 0) entry.ino = 1;
-                        } else if (@hasField(Dirent, "fileno")) {
+                        } else if (@hasField(T, "fileno")) {
                             entry.fileno = @intCast(src_entry.ino);
                         }
-                        if (@hasField(Dirent, "off")) {
+                        if (@hasField(T, "off")) {
                             entry.off = @intCast(src_entry.next);
-                        } else if (@hasField(Dirent, "seekoff")) {
+                        } else if (@hasField(T, "seekoff")) {
                             entry.seekoff = @intCast(src_entry.next);
                         }
-                        if (@hasField(Dirent, "reclen")) {
+                        if (@hasField(T, "reclen")) {
                             entry.reclen = @intCast(reclen);
                         }
-                        if (@hasField(Dirent, "namlen")) {
+                        if (@hasField(T, "namlen")) {
                             entry.namlen = @intCast(name_len);
                         }
-                        if (@hasField(Dirent, "type")) {
+                        if (@hasField(T, "type")) {
                             entry.type = switch (src_entry.type) {
                                 .BLOCK_DEVICE => DT.BLK,
                                 .CHARACTER_DEVICE => DT.CHR,
@@ -702,7 +830,15 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn lseek(fd: c_int, offset: isize, whence: c_int, result: *isize) callconv(.c) bool {
+        pub fn lseek(fd: c_int, offset: off_t, whence: c_int, result: *off_t) callconv(.c) bool {
+            return lseekT(off_t, fd, offset, whence, result);
+        }
+
+        pub fn lseek64(fd: c_int, offset: off64_t, whence: c_int, result: *off64_t) callconv(.c) bool {
+            return lseekT(off64_t, fd, offset, whence, result);
+        }
+
+        fn lseekT(comptime T: type, fd: c_int, offset: T, whence: c_int, result: *T) bool {
             if (isApplicableHandle(fd)) {
                 const tell = offset == 0 and whence == std.c.SEEK.CUR;
                 var call: Syscall = switch (tell) {
@@ -734,7 +870,11 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn lstat(path: [*:0]const u8, buf: *Stat, result: *c_int) callconv(.c) bool {
-            return newfstatat(-1, path, buf, AT.SYMLINK_NOFOLLOW, result);
+            return fstatat(-1, path, buf, AT.SYMLINK_NOFOLLOW, result);
+        }
+
+        pub fn lstat64(path: [*:0]const u8, buf: *Stat64, result: *c_int) callconv(.c) bool {
+            return fstatat64(-1, path, buf, AT.SYMLINK_NOFOLLOW, result);
         }
 
         pub fn lutimes(path: [*:0]const u8, tv: [*]const std.c.timeval, result: *c_int) callconv(.c) bool {
@@ -746,13 +886,12 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return mkdirat(-1, path, mode, result);
         }
 
-        pub fn mkdirat(dirfd: c_int, path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
+        pub fn mkdirat(dirfd: c_int, path: [*:0]const u8, _: c_int, result: *c_int) callconv(.c) bool {
             if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.mkdir))) {
                 var call: Syscall = .{ .cmd = .mkdir, .u = .{
                     .mkdir = .{
                         .dirfd = remapDirFD(dirfd),
                         .path = path,
-                        .mode = @intCast(mode),
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
@@ -764,22 +903,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn newfstatat(dirfd: c_int, path: [*:0]const u8, buf: *Stat, flags: c_int, result: *c_int) callconv(.c) bool {
-            if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.stat))) {
-                var call: Syscall = .{ .cmd = .stat, .u = .{
-                    .stat = .{
-                        .dirfd = @intCast(dirfd),
-                        .path = path,
-                        .lookup_flags = convertLookupFlags(flags),
-                    },
-                } };
-                const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) copyStat(buf, &call.u.stat.stat);
-                result.* = intFromError(err);
-                return true;
-            }
-            return false;
-        }
+        pub const newfstatat = fstatat;
 
         pub fn open(path: [*:0]const u8, oflags: c_int, mode: c_int, result: *c_int) callconv(.c) bool {
             return openat(-1, path, oflags, mode, result);
@@ -827,7 +951,15 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn pread(fd: c_int, buffer: [*]u8, len: isize, offset: isize, result: *isize) callconv(.c) bool {
+        pub fn pread(fd: c_int, buffer: [*]u8, len: off_t, offset: off_t, result: *off_t) callconv(.c) bool {
+            return preadT(off_t, fd, buffer, len, offset, result);
+        }
+
+        pub fn pread64(fd: c_int, buffer: [*]u8, len: off64_t, offset: off64_t, result: *off64_t) callconv(.c) bool {
+            return preadT(off64_t, fd, buffer, len, offset, result);
+        }
+
+        fn preadT(comptime T: type, fd: c_int, buffer: [*]u8, len: T, offset: T, result: *T) bool {
             if (isApplicableHandle(fd)) {
                 var call: Syscall = .{ .cmd = .pread, .u = .{
                     .pread = .{
@@ -848,7 +980,15 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn pwrite(fd: c_int, buffer: [*]const u8, len: isize, offset: isize, result: *isize) callconv(.c) bool {
+        pub fn pwrite(fd: c_int, buffer: [*]const u8, len: c_long, offset: c_long, result: *c_long) callconv(.c) bool {
+            return pwriteT(c_long, fd, buffer, len, offset, result);
+        }
+
+        pub fn pwrite64(fd: c_int, buffer: [*]const u8, len: i64, offset: i64, result: *i64) callconv(.c) bool {
+            return pwriteT(i64, fd, buffer, len, offset, result);
+        }
+
+        fn pwriteT(comptime T: type, fd: c_int, buffer: [*]const u8, len: T, offset: T, result: *T) bool {
             if (isApplicableHandle(fd)) {
                 var call: Syscall = .{ .cmd = .pwrite, .u = .{
                     .pwrite = .{
@@ -869,7 +1009,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn read(fd: c_int, buffer: [*]u8, len: isize, result: *isize) callconv(.c) bool {
+        pub fn read(fd: c_int, buffer: [*]u8, len: off_t, result: *off_t) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
                 var call: Syscall = .{ .cmd = .read, .u = .{
                     .read = .{
@@ -907,7 +1047,11 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn stat(path: [*:0]const u8, buf: *Stat, result: *c_int) callconv(.c) bool {
-            return newfstatat(-1, path, buf, 0, result);
+            return fstatat(-1, path, buf, 0, result);
+        }
+
+        pub fn stat64(path: [*:0]const u8, buf: *Stat64, result: *c_int) callconv(.c) bool {
+            return fstatat64(-1, path, buf, 0, result);
         }
 
         pub fn statx(dirfd: c_int, path: [*:0]const u8, flags: c_int, mask: c_uint, buf: *std.os.linux.Statx, result: *c_int) callconv(.c) bool {
@@ -985,7 +1129,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn write(fd: c_int, buffer: [*]const u8, len: isize, result: *isize) callconv(.c) bool {
+        pub fn write(fd: c_int, buffer: [*]const u8, len: off_t, result: *off_t) callconv(.c) bool {
             if (isApplicableHandle(fd)) {
                 var call: Syscall = .{ .cmd = .write, .u = .{
                     .write = .{
@@ -1007,14 +1151,14 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         const Host = ModuleHost;
 
-        fn isApplicableHandle(fd: isize) bool {
+        fn isApplicableHandle(fd: c_int) bool {
             return switch (fd) {
                 0, 1, 2 => true,
                 else => fd >= fd_min,
             };
         }
 
-        fn remapDirFD(dirfd: isize) i32 {
+        fn remapDirFD(dirfd: c_int) i32 {
             return switch (dirfd) {
                 AT.FDCWD => -1,
                 else => @intCast(dirfd),
@@ -1042,20 +1186,26 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             };
         }
 
-        fn copyStat(dest: *Stat, src: *const std.os.wasi.filestat_t) void {
-            dest.* = std.mem.zeroes(Stat);
-            dest.ino = src.ino;
-            dest.size = @truncate(@as(i64, @intCast(src.size)));
+        fn copyStat(dest: anytype, src: *const std.os.wasi.filestat_t) void {
+            const T = @typeInfo(@TypeOf(dest)).pointer.child;
+            dest.* = std.mem.zeroes(T);
+            dest.ino = @intCast(src.ino);
+            dest.size = @intCast(src.size);
             dest.mode = @intFromEnum(src.filetype);
-            if (@hasField(Stat, "atim")) {
+            if (@hasField(T, "atim")) {
                 copyTime(&dest.atim, src.atim);
                 copyTime(&dest.mtim, src.mtim);
                 copyTime(&dest.ctim, src.ctim);
-            } else if (@hasField(Stat, "atimespec")) {
+            } else if (@hasField(T, "atimespec")) {
                 // MacOS
                 copyTime(&dest.atimespec, src.atim);
                 copyTime(&dest.mtimespec, src.mtim);
                 copyTime(&dest.ctimespec, src.ctim);
+            } else if (@hasField(T, "atime")) {
+                // Windows
+                copyTime(&dest.atime, src.atim);
+                copyTime(&dest.mtime, src.mtim);
+                copyTime(&dest.ctime, src.ctim);
             }
         }
 
@@ -1094,8 +1244,17 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         fn copyTime(dest: anytype, ns: u64) void {
-            dest.sec = @intCast(ns / 1_000_000_000);
-            dest.nsec = @intCast(ns % 1_000_000_000);
+            const T = @typeInfo(@TypeOf(dest)).pointer.child;
+            switch (@typeInfo(T)) {
+                .@"struct" => {
+                    dest.sec = @intCast(ns / 1_000_000_000);
+                    dest.nsec = @intCast(ns % 1_000_000_000);
+                },
+                .int => {
+                    dest.* = @intCast(ns / 1_000_000_000);
+                },
+                else => @compileError("Unexpected"),
+            }
         }
     };
 }
@@ -1107,13 +1266,13 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const faccessat = makeStdHookUsing("faccessat", "faccessat2");
         pub const fallocate = makeStdHook("fallocate");
         pub const fcntl = makeStdHook("fcntl");
-        pub const fcntl64 = makeStdHookUsing("fcntl64", "fcntl");
+        pub const fcntl64 = makeStdHook("fcntl64");
         pub const fdatasync = makeStdHook("fdatasync");
         pub const flock = makeStdHook("flock");
         pub const fstat = makeStdHook("fstat");
-        pub const fstat64 = makeStdHookUsing("fstat64", "fstat");
-        pub const fstatat = makeStdHookUsing("fstatat", "newfstatat");
-        pub const fstatat64 = makeStdHookUsing("fstatat64", "newfstatat");
+        pub const fstat64 = makeStdHook("fstat64");
+        pub const fstatat = makeStdHook("fstatat");
+        pub const fstatat64 = makeStdHook("fstatat64");
         pub const fstatfs = makeStdHook("fstatfs");
         pub const fstatfs64 = makeStdHook("fstatfs64");
         pub const fsync = makeStdHook("fsync");
@@ -1121,9 +1280,9 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const futimes = makeStdHook("futimes");
         pub const futimesat = makeStdHook("futimesat");
         pub const lseek = makeStdHook("lseek");
-        pub const lseek64 = makeStdHookUsing("lseek64", "lseek");
+        pub const lseek64 = makeStdHook("lseek64");
         pub const lstat = makeStdHook("lstat");
-        pub const lstat64 = makeStdHookUsing("lstat64", "lstat");
+        pub const lstat64 = makeStdHook("lstat64");
         pub const lutimes = makeStdHook("lutimes");
         pub const mkdir = makeStdHook("mkdir");
         pub const mkdirat = makeStdHook("mkdirat");
@@ -1133,13 +1292,13 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const openat64 = makeStdHookUsing("openat64", "openat");
         pub const posix_fadvise = makeStdHookUsing("posix_fadvise", "fadvise64");
         pub const pread = makeStdHook("pread");
-        pub const pread64 = makeStdHookUsing("pread64", "pread");
+        pub const pread64 = makeStdHook("pread64");
         pub const pwrite = makeStdHook("pwrite");
-        pub const pwrite64 = makeStdHookUsing("pwrite64", "pwrite");
+        pub const pwrite64 = makeStdHook("pwrite64");
         pub const read = makeStdHook("read");
         pub const rmdir = makeStdHook("rmdir");
         pub const stat = makeStdHook("stat");
-        pub const stat64 = makeStdHookUsing("stat64", "stat");
+        pub const stat64 = makeStdHook("stat64");
         pub const unlink = makeStdHook("unlink");
         pub const unlinkat = makeStdHook("unlinkat");
         pub const utimensat = makeStdHook("utimensat");
@@ -1178,7 +1337,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.__fxstatat64(ver, dirfd, path, buf);
         }
 
-        pub fn __getdirentries64(dirfd: c_int, buffer: [*]u8, len: c_uint, basep: *i64) callconv(.c) isize {
+        pub fn __getdirentries64(dirfd: c_int, buffer: [*]u8, len: c_uint, basep: *i64) callconv(.c) off_t {
             var result: c_int = undefined;
             if (redirector.getdents64(dirfd, buffer, len, &result)) {
                 return saveError(result);
@@ -1473,6 +1632,20 @@ pub fn PosixSubstitute(comptime redirector: type) type {
     };
 }
 
+pub fn Win32PosixSubstitute(comptime redirector: type) type {
+    return struct {
+        const posix = PosixSubstitute(redirector);
+
+        pub const lseeki64 = posix.lseek64;
+
+        const Sub = @This();
+        pub const Original = struct {
+            pub var lseeki64: *const @TypeOf(Sub.lseeki64) = undefined;
+        };
+        pub const calling_convention = std.builtin.CallingConvention.c;
+    };
+}
+
 const RedirectedDir = struct {
     sig: u64 = signature,
     fd: c_int = undefined,
@@ -1752,7 +1925,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
 
         pub fn fputs(text: [*:0]const u8, s: *std.c.FILE) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
-                const len: isize = @intCast(std.mem.len(text));
+                const len: off_t = @intCast(std.mem.len(text));
                 return @intCast(write(file, text, len));
             }
             return Original.fputs(text, s);
@@ -1760,7 +1933,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
 
         pub fn fread(buffer: [*]u8, size: usize, n: usize, s: *std.c.FILE) callconv(.c) usize {
             if (getRedirectedFile(s)) |file| {
-                const len: isize = @intCast(size * n);
+                const len: off_t = @intCast(size * n);
                 const result = read(file, buffer, len);
                 if (result < 0) return 0;
                 if (result == 0) file.eof = true;
@@ -1806,7 +1979,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
 
         pub fn fwrite(buffer: [*]const u8, size: usize, n: usize, s: *std.c.FILE) callconv(.c) usize {
             if (getRedirectedFile(s)) |file| {
-                const len: isize = @intCast(size * n);
+                const len: off_t = @intCast(size * n);
                 const result = write(file, buffer, len);
                 if (result < 0) {
                     file.errno = posix.getError();
@@ -1822,7 +1995,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             const stderr = getStdProxy(2);
             const strings: [4][*:0]const u8 = .{ text, ": ", msg, "\n" };
             for (strings) |s| {
-                const len: isize = @intCast(std.mem.len(s));
+                const len: off_t = @intCast(std.mem.len(s));
                 const result = write(stderr, s, len);
                 if (result < 0) {
                     break;
@@ -1858,9 +2031,9 @@ pub fn LibcSubstitute(comptime redirector: type) type {
                 text,
                 "\n",
             };
-            var total: isize = 0;
+            var total: off_t = 0;
             for (strings) |s| {
-                const len: isize = @intCast(std.mem.len(s));
+                const len: off_t = @intCast(std.mem.len(s));
                 const result = write(stdout, s, len);
                 if (result < 0) return @intCast(result);
                 total += result;
@@ -1928,7 +2101,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             @export(&getLine, .{ .name = "get_line", .visibility = .protected });
         }
 
-        fn read(file: *RedirectedFile, dest: [*]u8, len: isize) callconv(.c) isize {
+        fn read(file: *RedirectedFile, dest: [*]u8, len: off_t) callconv(.c) off_t {
             const len_u: usize = @intCast(len);
             if (setBufferMode(file, .read) < 0) return -1;
             var copied = file.consumeBuffer(dest, len_u);
@@ -1936,7 +2109,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
                 // read directly into the destination when the amount is large
                 const result = readRaw(file, dest[copied..], @intCast(len_u - copied));
                 if (result < 0) return -1;
-                return @as(isize, @intCast(copied)) + result;
+                return @as(off_t, @intCast(copied)) + result;
             } else {
                 while (len_u - copied > 0) {
                     if (bufferMore(file) < 0) return -1;
@@ -1948,13 +2121,13 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             }
         }
 
-        fn readRaw(file: *RedirectedFile, dest: [*]u8, len: isize) callconv(.c) isize {
+        fn readRaw(file: *RedirectedFile, dest: [*]u8, len: off_t) callconv(.c) off_t {
             const result = posix.read(file.fd, dest, len);
             if (result < 0) return saveFileError(file, posix.getError());
             return result;
         }
 
-        fn write(file: *RedirectedFile, src: [*]const u8, len: isize) callconv(.c) isize {
+        fn write(file: *RedirectedFile, src: [*]const u8, len: off_t) callconv(.c) off_t {
             if (setBufferMode(file, .write) < 0) return -1;
             const len_u: usize = @intCast(len);
             if (len_u >= 8192 or file.fd == 1 or file.fd == 2) {
@@ -1976,23 +2149,23 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             }
         }
 
-        fn writeRaw(file: *RedirectedFile, src: [*]const u8, len: isize) callconv(.c) isize {
+        fn writeRaw(file: *RedirectedFile, src: [*]const u8, len: off_t) callconv(.c) off_t {
             const result = posix.write(file.fd, src, len);
             if (result < 0) return saveFileError(file, posix.getError());
             return result;
         }
 
-        fn setBufferMode(file: *RedirectedFile, mode: RedirectedFile.BufferMode) isize {
+        fn setBufferMode(file: *RedirectedFile, mode: RedirectedFile.BufferMode) off_t {
             if (file.buf_mode == mode) return 0;
             if (flush(file) < 0) return -1;
             file.buf_mode = mode;
             return 0;
         }
 
-        fn flush(file: *RedirectedFile) isize {
+        fn flush(file: *RedirectedFile) off_t {
             const content = file.previewBuffer();
             if (content.len == 0) return 0;
-            const result: isize = switch (file.buf_mode) {
+            const result: off_t = switch (file.buf_mode) {
                 .write => writeRaw(file, content.ptr, @intCast(content.len)),
                 .read => @intCast(content.len),
             };
@@ -2000,7 +2173,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             return result;
         }
 
-        fn bufferUntil(file: *RedirectedFile, delimiter: u8) callconv(.c) isize {
+        fn bufferUntil(file: *RedirectedFile, delimiter: u8) callconv(.c) off_t {
             if (setBufferMode(file, .read) < 0) return 0;
             var checked_len: usize = 0;
             while (true) {
@@ -2020,7 +2193,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             }
         }
 
-        fn bufferMore(file: *RedirectedFile) callconv(.c) isize {
+        fn bufferMore(file: *RedirectedFile) callconv(.c) off_t {
             if (setBufferMode(file, .read) < 0) return -1;
             // first try to get one character in blocking mode
             const buf = file.prepareBuffer() catch return 0;
@@ -2393,7 +2566,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             overlapped: ?*OVERLAPPED,
         ) callconv(WINAPI) BOOL {
             const fd = toDescriptor(handle);
-            var result: isize = undefined;
+            var result: off_t = undefined;
             if (redirector.write(fd, @ptrCast(buffer), @intCast(len), &result)) {
                 if (result < 0) return saveError(result);
                 written.* = @intCast(result);
@@ -2591,6 +2764,7 @@ pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
         },
         .windows => .{
             PosixSubstitute(redirector),
+            Win32PosixSubstitute(redirector),
             LibcSubstitute(redirector),
             Win32LibcSubsitute(redirector),
             Win32SubstituteS(redirector),

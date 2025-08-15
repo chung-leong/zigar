@@ -1,3 +1,5 @@
+const std = @import("std");
+
 const c = @cImport({
     @cInclude("fcntl.h");
     @cInclude("unistd.h");
