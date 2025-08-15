@@ -726,6 +726,7 @@ export function addTests(importModule, options) {
         'atime = 999,0',
       ]);
     })
+    skip.entirely.if(target === 'win32').
     it('should set access and last modified time of an opened file using posix function', async function() {
       this.timeout(0);
       const { __zigar, setTimes } = await importTest('set-times-of-opened-file-with-posix-function');
@@ -752,6 +753,7 @@ export function addTests(importModule, options) {
       expect(() => setTimes('/world/hello.txt', 123, 456)).to.throw(Error)
         .with.property('message', 'Unable to set times');
     })
+    skip.entirely.if(target === 'win32').
     it('should set access and last modified time of an opened file using posix function with ns precision', async function() {
       this.timeout(0);
       const { __zigar, setTimes } = await importTest('set-ns-times-of-opened-file-with-posix-function');
@@ -778,6 +780,7 @@ export function addTests(importModule, options) {
       expect(() => setTimes('/world/hello.txt', 123, 456)).to.throw(Error)
         .with.property('message', 'Unable to set times');
     })
+    skip.entirely.if(target === 'win32').
     it('should set access and last modified time of a file by using posix function', async function() {
       this.timeout(0);
       const { __zigar, setTimes, setLinkTimes } = await importTest('set-times-of-file-by-path-with-posix-function');
@@ -810,6 +813,7 @@ export function addTests(importModule, options) {
         flags: {}
       });
     })
+    skip.entirely.if(target === 'win32').
     it('should set access and last modified time of a file in directory using posix function', async function() {
       this.timeout(0);
       const { __zigar, setTimes } = await importTest('set-times-of-file-at-dir-with-posix-function');
