@@ -33,6 +33,9 @@ export default mixin({
       }
     }
   },
+  hasListener(name) {
+    return this.listenerMap.get(name);
+  },
   triggerEvent(name, event, errorCode) {
     const listener = this.listenerMap.get(name);
     if (!listener) {

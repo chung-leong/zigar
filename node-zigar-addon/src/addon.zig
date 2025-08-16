@@ -64,7 +64,6 @@ const ModuleHost = struct {
         fd_tell: ?Ref = null,
         fd_write: ?Ref = null,
         fd_write1: ?Ref = null,
-        path_access: ?Ref = null,
         path_create_directory: ?Ref = null,
         path_filestat_get: ?Ref = null,
         path_filestat_set_times: ?Ref = null,
@@ -913,7 +912,6 @@ const ModuleHost = struct {
                 else => |handle| try env.createUsize(handle),
             };
             return switch (call.cmd) {
-                .access => try self.handleAccess(futex, &call.u.access),
                 .open => try self.handleOpen(futex, &call.u.open),
                 .close => try self.handleClose(futex, &call.u.close),
                 .read => try self.handleRead(futex, &call.u.read),
@@ -957,19 +955,6 @@ const ModuleHost = struct {
         );
         const error_code = try env.getValueUint32(result);
         return try std.meta.intToEnum(E, error_code);
-    }
-
-    fn handleAccess(self: *@This(), futex: Value, args: anytype) !E {
-        const env = self.env;
-        const path_len: u32 = @truncate(std.mem.len(args.path));
-        return try self.callPosixFunction(self.js.path_access, &.{
-            try env.createInt32(args.dirfd),
-            try env.createUint32(@as(u32, @bitCast(args.lookup_flags))),
-            try env.createUsize(@intFromPtr(args.path)),
-            try env.createUint32(path_len),
-            try env.createBigintUint64(@as(u64, @bitCast(args.rights))),
-            futex,
-        });
     }
 
     fn handleOpen(self: *@This(), futex: Value, args: anytype) !E {
@@ -1243,7 +1228,10 @@ const ModuleHost = struct {
     }
 
     fn getSyscallMask(self: *@This(), ptr: *hooks.Mask) !void {
-        ptr.* = self.redirection_mask;
+        var mask = self.redirection_mask;
+        // a stat request can be handled by a 'stat' or an 'open' event handler
+        if (mask.open) mask.stat = true;
+        ptr.* = mask;
     }
 
     fn releaseFunction(self: *@This(), fn_id: usize) !void {

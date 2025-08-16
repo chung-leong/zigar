@@ -1,7 +1,7 @@
 import { PosixError, PosixFileType } from "../constants.js";
 import { mixin } from "../environment.js";
 import { InvalidEnumValue, TypeMismatch } from "../errors.js";
-import { createView, getEnumNumber } from "../utils.js";
+import { createView, getEnumNumber, hasMethod } from "../utils.js";
 
 export default mixin({
   copyStat(bufAddress, stat) {
@@ -23,11 +23,18 @@ export default mixin({
     buf.setBigUint64(0, 0n, le);  // dev
     buf.setBigUint64(8, 0n, le);  // ino
     buf.setUint8(16, type); // filetype
-    buf.setBigUint64(24, 0n, le);  // nlink
+    buf.setBigUint64(24, 1n, le);  // nlink
     buf.setBigUint64(32, BigInt(stat.size ?? 0), le);
     buf.setBigUint64(40, BigInt(stat.atime ?? 0), le);
     buf.setBigUint64(48, BigInt(stat.mtime ?? 0), le);
     buf.setBigUint64(56, BigInt(stat.ctime ?? 0), le);
     this.moveExternBytes(buf, bufAddress, le);
-  }
+  },
+  inferStat(stream) {
+    if (!stream) return;
+    return { 
+      size: stream.size, 
+      type: hasMethod(stream, 'readdir') ? 'directory' : 'file',
+    };
+  },
 });

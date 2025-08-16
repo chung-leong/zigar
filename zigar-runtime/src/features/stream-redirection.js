@@ -27,18 +27,51 @@ export default mixin({
         return null;
       },
     };
+    const rootRights = PosixDescriptorRight.fd_seek
+                     | PosixDescriptorRight.fd_fdstat_set_flags
+                     | PosixDescriptorRight.fd_tell
+                     | PosixDescriptorRight.path_create_directory
+                     | PosixDescriptorRight.path_create_file
+                     | PosixDescriptorRight.path_open
+                     | PosixDescriptorRight.fd_readdir
+                     | PosixDescriptorRight.path_filestat_get
+                     | PosixDescriptorRight.path_filestat_set_size
+                     | PosixDescriptorRight.path_filestat_set_times
+                     | PosixDescriptorRight.fd_filestat_get
+                     | PosixDescriptorRight.fd_filestat_set_times
+                     | PosixDescriptorRight.path_remove_directory
+                     | PosixDescriptorRight.path_unlink_file;
+    const rootRightsInheriting = rootRights 
+                               | PosixDescriptorRight.fd_datasync
+                               | PosixDescriptorRight.fd_read
+                               | PosixDescriptorRight.fd_seek
+                               | PosixDescriptorRight.fd_sync
+                               | PosixDescriptorRight.fd_write
+                               | PosixDescriptorRight.fd_advise
+                               | PosixDescriptorRight.fd_allocate
+                               | PosixDescriptorRight.fd_filestat_get
+                               | PosixDescriptorRight.fd_filestat_set_size;
     this.streamMap = new Map([ 
       [ 
-        PosixDescriptor.stdout, 
-        [ this.createLogWriter('stdout'), PosixDescriptorRight.fd_write, 0 ] 
+        PosixDescriptor.stdout, [ 
+          this.createLogWriter('stdout'), 
+          [ PosixDescriptorRight.fd_write, 0 ], 
+          0, // PosixDescriptorFlag
+        ] 
       ], 
       [ 
-        PosixDescriptor.stderr, 
-        [ this.createLogWriter('stderr'), PosixDescriptorRight.fd_write, 0 ]
+        PosixDescriptor.stderr, [ 
+          this.createLogWriter('stderr'), 
+          [ PosixDescriptorRight.fd_write, 0 ],
+          0,
+        ],
       ], 
       [ 
-        PosixDescriptor.root, 
-        [ root, PosixDescriptorRight.fd_readdir, 0 ], 
+        PosixDescriptor.root, [ 
+          root, 
+          [ rootRights, rootRightsInheriting ],
+          0,
+        ], 
       ] 
     ]);
     this.flushRequestMap = new Map();

@@ -26,14 +26,6 @@ pub const Mask = packed struct {
 pub const Syscall = extern struct {
     cmd: Command,
     u: extern union {
-        access: extern struct {
-            dirfd: i32,
-            path: [*:0]const u8,
-            mode: u32,
-            flags: u32,
-            lookup_flags: std.os.wasi.lookupflags_t,
-            rights: std.os.wasi.rights_t,
-        },
         advise: extern struct {
             fd: i32,
             offset: usize,
@@ -164,7 +156,6 @@ pub const Syscall = extern struct {
     futex_handle: usize = 0,
 
     pub const Command = enum(c_int) {
-        access,
         advise,
         allocate,
         close,
@@ -218,13 +209,17 @@ const ssize_t = c_long;
 const off_t = c_long;
 const off64_t = i64;
 const Dirent = switch (os) {
-    .windows => std.os.linux.dirent64, // TODO
-    .linux => std.c.dirent,
+    .windows => extern struct {
+        ino: c_long,
+        reclen: c_ushort,
+        namlen: c_ushort,
+        name: [260]u8,
+    },
     else => std.c.dirent,
 };
 const Dirent64 = switch (os) {
-    .windows => std.os.linux.dirent64, // TODO
-    .linux => std.c.dirent64,
+    .windows => Dirent,
+    .linux => std.os.linux.dirent64,
     else => std.c.dirent,
 };
 const Stat = switch (os) {
@@ -355,20 +350,32 @@ const O = switch (os) {
     },
     else => std.c.O,
 };
-const win_c_import = @cImport({
-    @cInclude("sys/stat.h");
-    @cInclude("unistd.h");
-    @cInclude("fcntl.h");
-});
-// comptime {
-//     @setEvalBranchQuota(2_000_000);
-//     for (std.meta.declarations(win_c_import)) |decl| {
-//         if (std.mem.startsWith(u8, decl.name, "O_")) {
-//             const s = std.fmt.comptimePrint("{s} = {x}", .{ decl.name, @field(win_c_import, decl.name) });
-//             @compileLog(s);
-//         }
-//     }
-// }
+const S = switch (os) {
+    .windows => struct {
+        pub const IFMT = 0xf000;
+        pub const IFDIR = 0x4000;
+        pub const IFCHR = 0x2000;
+        pub const IFREG = 0x8000;
+        pub const IREAD = 0x0100;
+        pub const IWRITE = 0x0080;
+        pub const IEXEC = 0x0040;
+        pub const IFIFO = 0x1000;
+        pub const IFBLK = 0x3000;
+        pub const IRWXU = 0x01c0;
+        pub const IXUSR = 0x0040;
+        pub const IWUSR = 0x0080;
+        pub const IRUSR = 0x0100;
+        pub const IRGRP = 0x0020;
+        pub const IWGRP = 0x0010;
+        pub const IXGRP = 0x0008;
+        pub const IRWXG = 0x0038;
+        pub const IROTH = 0x0004;
+        pub const IWOTH = 0x0002;
+        pub const IXOTH = 0x0001;
+        pub const IRWXO = 0x0007;
+    },
+    else => std.c.S,
+};
 
 const fd_min = 0xfffff;
 
@@ -397,26 +404,21 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn faccessat2(dirfd: c_int, path: [*:0]const u8, mode: c_int, flags: c_int, result: *c_int) callconv(.c) bool {
-            if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.open))) {
-                var call: Syscall = .{ .cmd = .access, .u = .{
-                    .access = .{
+            if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.stat))) {
+                var call: Syscall = .{ .cmd = .stat, .u = .{
+                    .stat = .{
                         .dirfd = remapDirFD(dirfd),
                         .path = path,
                         .lookup_flags = convertLookupFlags(flags),
-                        .rights = if (mode & std.c.X_OK != 0)
-                            .{ .FD_READDIR = true }
-                        else
-                            .{
-                                .FD_READ = (mode & std.c.R_OK) != 0,
-                                .FD_WRITE = (mode & std.c.W_OK) != 0,
-                            },
-                        .mode = @intCast(mode),
-                        .flags = @intCast(flags),
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS or err == .ACCES) {
-                    result.* = intFromError(err);
+                if (err == .SUCCESS) {
+                    const implied_mode: c_int = switch (call.u.stat.stat.filetype) {
+                        .DIRECTORY => std.c.X_OK | std.c.R_OK | std.c.W_OK,
+                        else => std.c.R_OK | std.c.W_OK,
+                    };
+                    result.* = if ((mode & implied_mode) == mode) 0 else intFromError(.ACCES);
                     return true;
                 }
             }
@@ -643,7 +645,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             if (isApplicableHandle(dirfd) or (dirfd < 0 and Host.isRedirecting(.stat))) {
                 var call: Syscall = .{ .cmd = .stat, .u = .{
                     .stat = .{
-                        .dirfd = @intCast(dirfd),
+                        .dirfd = remapDirFD(dirfd),
                         .path = path,
                         .lookup_flags = convertLookupFlags(flags),
                     },
@@ -1191,7 +1193,21 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             dest.* = std.mem.zeroes(T);
             dest.ino = @intCast(src.ino);
             dest.size = @intCast(src.size);
-            dest.mode = @intFromEnum(src.filetype);
+            dest.nlink = @intCast(src.nlink);
+            const type_flags: u32 = switch (src.filetype) {
+                .BLOCK_DEVICE => S.IFBLK,
+                .CHARACTER_DEVICE => S.IFCHR,
+                .DIRECTORY => S.IFDIR,
+                .REGULAR_FILE => S.IFREG,
+                .SOCKET_DGRAM, .SOCKET_STREAM => if (@hasDecl(S, "IFSOCK")) S.IFSOCK else 0,
+                .SYMBOLIC_LINK => if (@hasDecl(S, "IFLNK")) S.IFLNK else 0,
+                else => 0,
+            };
+            const rights: u32 = switch (src.filetype) {
+                .DIRECTORY => std.c.R_OK | std.c.W_OK | std.c.X_OK,
+                else => std.c.R_OK | std.c.W_OK,
+            };
+            dest.mode = @truncate(type_flags | rights);
             if (@hasField(T, "atim")) {
                 copyTime(&dest.atim, src.atim);
                 copyTime(&dest.mtim, src.mtim);
@@ -1388,6 +1404,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         pub fn opendir(path: [*:0]const u8) callconv(.c) ?*std.c.DIR {
             var result: c_int = undefined;
+            std.debug.print("opendir\n", .{});
             const flags: O = .{ .DIRECTORY = true };
             const flags_int: @typeInfo(O).@"struct".backing_integer.? = @bitCast(flags);
             if (redirector.open(path, flags_int, 0, &result)) {
@@ -1566,81 +1583,67 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             @cInclude("errno.h");
         });
 
-        const Sub = @This();
+        const Self = @This();
         pub const Original = struct {
-            pub var __fxstat: *const @TypeOf(Sub.__fxstat) = undefined;
-            pub var __fxstat64: *const @TypeOf(Sub.__fxstat64) = undefined;
-            pub var __fxstatat: *const @TypeOf(Sub.__fxstatat) = undefined;
-            pub var __fxstatat64: *const @TypeOf(Sub.__fxstatat64) = undefined;
-            pub var __getdirentries64: *const @TypeOf(Sub.__getdirentries64) = undefined;
-            pub var __lxstat: *const @TypeOf(Sub.__lxstat) = undefined;
-            pub var __lxstat64: *const @TypeOf(Sub.__lxstat64) = undefined;
-            pub var __xstat: *const @TypeOf(Sub.__xstat) = undefined;
-            pub var __xstat64: *const @TypeOf(Sub.__xstat64) = undefined;
-            pub var access: *const @TypeOf(Sub.access) = undefined;
-            pub var close: *const @TypeOf(Sub.close) = undefined;
-            pub var closedir: *const @TypeOf(Sub.closedir) = undefined;
-            pub var faccessat: *const @TypeOf(Sub.faccessat) = undefined;
-            pub var fallocate: *const @TypeOf(Sub.fallocate) = undefined;
-            pub var fcntl: *const @TypeOf(Sub.fcntl) = undefined;
-            pub var fcntl64: *const @TypeOf(Sub.fcntl64) = undefined;
-            pub var fdatasync: *const @TypeOf(Sub.fdatasync) = undefined;
-            pub var flock: *const @TypeOf(Sub.flock) = undefined;
-            pub var fstat: *const @TypeOf(Sub.fstat) = undefined;
-            pub var fstat64: *const @TypeOf(Sub.fstat64) = undefined;
-            pub var fstatat: *const @TypeOf(Sub.fstatat) = undefined;
-            pub var fstatat64: *const @TypeOf(Sub.fstatat64) = undefined;
-            pub var fstatfs: *const @TypeOf(Sub.fstatfs) = undefined;
-            pub var fstatfs64: *const @TypeOf(Sub.fstatfs64) = undefined;
-            pub var fsync: *const @TypeOf(Sub.fsync) = undefined;
-            pub var futimes: *const @TypeOf(Sub.futimes) = undefined;
-            pub var futimens: *const @TypeOf(Sub.futimens) = undefined;
-            pub var futimesat: *const @TypeOf(Sub.futimesat) = undefined;
-            pub var lseek: *const @TypeOf(Sub.lseek) = undefined;
-            pub var lseek64: *const @TypeOf(Sub.lseek64) = undefined;
-            pub var lstat: *const @TypeOf(Sub.lstat) = undefined;
-            pub var lstat64: *const @TypeOf(Sub.lstat64) = undefined;
-            pub var lutimes: *const @TypeOf(Sub.lutimes) = undefined;
-            pub var mkdir: *const @TypeOf(Sub.mkdir) = undefined;
-            pub var mkdirat: *const @TypeOf(Sub.mkdirat) = undefined;
-            pub var open: *const @TypeOf(Sub.open) = undefined;
-            pub var open64: *const @TypeOf(Sub.open64) = undefined;
-            pub var openat: *const @TypeOf(Sub.openat) = undefined;
-            pub var openat64: *const @TypeOf(Sub.openat64) = undefined;
-            pub var opendir: *const @TypeOf(Sub.opendir) = undefined;
-            pub var pread: *const @TypeOf(Sub.pread) = undefined;
-            pub var pread64: *const @TypeOf(Sub.pread64) = undefined;
-            pub var pwrite: *const @TypeOf(Sub.pwrite) = undefined;
-            pub var pwrite64: *const @TypeOf(Sub.pwrite64) = undefined;
-            pub var posix_fadvise: *const @TypeOf(Sub.posix_fadvise) = undefined;
-            pub var pthread_create: *const @TypeOf(Sub.pthread_create) = undefined;
-            pub var read: *const @TypeOf(Sub.read) = undefined;
-            pub var readdir: *const @TypeOf(Sub.readdir) = undefined;
-            pub var rewinddir: *const @TypeOf(Sub.rewinddir) = undefined;
-            pub var rmdir: *const @TypeOf(Sub.rmdir) = undefined;
-            pub var seekdir: *const @TypeOf(Sub.seekdir) = undefined;
-            pub var stat: *const @TypeOf(Sub.stat) = undefined;
-            pub var stat64: *const @TypeOf(Sub.stat64) = undefined;
-            pub var telldir: *const @TypeOf(Sub.telldir) = undefined;
-            pub var unlink: *const @TypeOf(Sub.unlink) = undefined;
-            pub var unlinkat: *const @TypeOf(Sub.unlinkat) = undefined;
-            pub var utimensat: *const @TypeOf(Sub.utimensat) = undefined;
-            pub var utimes: *const @TypeOf(Sub.utimes) = undefined;
-            pub var write: *const @TypeOf(Sub.write) = undefined;
-        };
-        pub const calling_convention = std.builtin.CallingConvention.c;
-    };
-}
-
-pub fn Win32PosixSubstitute(comptime redirector: type) type {
-    return struct {
-        const posix = PosixSubstitute(redirector);
-
-        pub const lseeki64 = posix.lseek64;
-
-        const Sub = @This();
-        pub const Original = struct {
-            pub var lseeki64: *const @TypeOf(Sub.lseeki64) = undefined;
+            pub var __fxstat: *const @TypeOf(Self.__fxstat) = undefined;
+            pub var __fxstat64: *const @TypeOf(Self.__fxstat64) = undefined;
+            pub var __fxstatat: *const @TypeOf(Self.__fxstatat) = undefined;
+            pub var __fxstatat64: *const @TypeOf(Self.__fxstatat64) = undefined;
+            pub var __getdirentries64: *const @TypeOf(Self.__getdirentries64) = undefined;
+            pub var __lxstat: *const @TypeOf(Self.__lxstat) = undefined;
+            pub var __lxstat64: *const @TypeOf(Self.__lxstat64) = undefined;
+            pub var __xstat: *const @TypeOf(Self.__xstat) = undefined;
+            pub var __xstat64: *const @TypeOf(Self.__xstat64) = undefined;
+            pub var access: *const @TypeOf(Self.access) = undefined;
+            pub var close: *const @TypeOf(Self.close) = undefined;
+            pub var closedir: *const @TypeOf(Self.closedir) = undefined;
+            pub var faccessat: *const @TypeOf(Self.faccessat) = undefined;
+            pub var fallocate: *const @TypeOf(Self.fallocate) = undefined;
+            pub var fcntl: *const @TypeOf(Self.fcntl) = undefined;
+            pub var fcntl64: *const @TypeOf(Self.fcntl64) = undefined;
+            pub var fdatasync: *const @TypeOf(Self.fdatasync) = undefined;
+            pub var flock: *const @TypeOf(Self.flock) = undefined;
+            pub var fstat: *const @TypeOf(Self.fstat) = undefined;
+            pub var fstat64: *const @TypeOf(Self.fstat64) = undefined;
+            pub var fstatat: *const @TypeOf(Self.fstatat) = undefined;
+            pub var fstatat64: *const @TypeOf(Self.fstatat64) = undefined;
+            pub var fstatfs: *const @TypeOf(Self.fstatfs) = undefined;
+            pub var fstatfs64: *const @TypeOf(Self.fstatfs64) = undefined;
+            pub var fsync: *const @TypeOf(Self.fsync) = undefined;
+            pub var futimes: *const @TypeOf(Self.futimes) = undefined;
+            pub var futimens: *const @TypeOf(Self.futimens) = undefined;
+            pub var futimesat: *const @TypeOf(Self.futimesat) = undefined;
+            pub var lseek: *const @TypeOf(Self.lseek) = undefined;
+            pub var lseek64: *const @TypeOf(Self.lseek64) = undefined;
+            pub var lstat: *const @TypeOf(Self.lstat) = undefined;
+            pub var lstat64: *const @TypeOf(Self.lstat64) = undefined;
+            pub var lutimes: *const @TypeOf(Self.lutimes) = undefined;
+            pub var mkdir: *const @TypeOf(Self.mkdir) = undefined;
+            pub var mkdirat: *const @TypeOf(Self.mkdirat) = undefined;
+            pub var open: *const @TypeOf(Self.open) = undefined;
+            pub var open64: *const @TypeOf(Self.open64) = undefined;
+            pub var openat: *const @TypeOf(Self.openat) = undefined;
+            pub var openat64: *const @TypeOf(Self.openat64) = undefined;
+            pub var opendir: *const @TypeOf(Self.opendir) = undefined;
+            pub var pread: *const @TypeOf(Self.pread) = undefined;
+            pub var pread64: *const @TypeOf(Self.pread64) = undefined;
+            pub var pwrite: *const @TypeOf(Self.pwrite) = undefined;
+            pub var pwrite64: *const @TypeOf(Self.pwrite64) = undefined;
+            pub var posix_fadvise: *const @TypeOf(Self.posix_fadvise) = undefined;
+            pub var pthread_create: *const @TypeOf(Self.pthread_create) = undefined;
+            pub var read: *const @TypeOf(Self.read) = undefined;
+            pub var readdir: *const @TypeOf(Self.readdir) = undefined;
+            pub var rewinddir: *const @TypeOf(Self.rewinddir) = undefined;
+            pub var rmdir: *const @TypeOf(Self.rmdir) = undefined;
+            pub var seekdir: *const @TypeOf(Self.seekdir) = undefined;
+            pub var stat: *const @TypeOf(Self.stat) = undefined;
+            pub var stat64: *const @TypeOf(Self.stat64) = undefined;
+            pub var telldir: *const @TypeOf(Self.telldir) = undefined;
+            pub var unlink: *const @TypeOf(Self.unlink) = undefined;
+            pub var unlinkat: *const @TypeOf(Self.unlinkat) = undefined;
+            pub var utimensat: *const @TypeOf(Self.utimensat) = undefined;
+            pub var utimes: *const @TypeOf(Self.utimes) = undefined;
+            pub var write: *const @TypeOf(Self.write) = undefined;
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
     };
@@ -2406,11 +2409,17 @@ pub fn LinuxLibcSubstitute(comptime redirector: type) type {
 
 pub fn Win32LibcSubsitute(comptime redirector: type) type {
     return struct {
+        const posix = PosixSubstitute(redirector);
         const libc = LibcSubstitute(redirector);
 
+        pub const lseeki64 = posix.lseek64;
+
         pub extern fn __stdio_common_vfprintf_hook() callconv(.c) void;
+
         const Self = @This();
         pub const Original = struct {
+            pub var lseeki64: *const @TypeOf(Self.lseeki64) = undefined;
+
             pub extern var __stdio_common_vfprintf_orig: *const @TypeOf(Self.__stdio_common_vfprintf_hook);
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
@@ -2446,10 +2455,25 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         }
 
         pub fn GetFileAttributesA(path: LPCSTR) callconv(WINAPI) DWORD {
+            var result: c_int = undefined;
+            var stat: Stat = undefined;
+            if (redirector.stat(path, &stat, &result)) {
+                if (result == 0) {
+                    return inferAttributes(stat);
+                } else {
+                    return std.os.windows.INVALID_FILE_ATTRIBUTES;
+                }
+            }
             return Original.GetFileAttributesA(path);
         }
 
         pub fn GetFileAttributesW(path: LPCWSTR) callconv(WINAPI) DWORD {
+            if (redirector.Host.isRedirecting(.stat)) {
+                if (std.unicode.wtf16LeToWtf8Alloc(c_allocator, path)) |path_wtf8| {
+                    defer c_allocator.free(path_wtf8);
+                    return GetFileAttributesA(path_wtf8);
+                } else |_| {}
+            }
             return Original.GetFileAttributesW(path);
         }
 
@@ -2642,6 +2666,20 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return FALSE;
         }
 
+        fn inferAttributes(stat: Stat) DWORD {
+            var attributes: DWORD = 0;
+            if ((stat.mode & std.c.W_OK) == 0) {
+                attributes |= std.os.windows.FILE_ATTRIBUTE_READONLY;
+            }
+            if ((stat.mode & S.IFDIR) != 0) {
+                attributes |= std.os.windows.FILE_ATTRIBUTE_DIRECTORY;
+            }
+            if (attributes == 0) {
+                attributes = std.os.windows.FILE_ATTRIBUTE_NORMAL;
+            }
+            return attributes;
+        }
+
         const std_stream = struct {
             var handles: [3]?HANDLE = .{ null, null, null };
             fn get(comptime index: usize) HANDLE {
@@ -2764,7 +2802,6 @@ pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
         },
         .windows => .{
             PosixSubstitute(redirector),
-            Win32PosixSubstitute(redirector),
             LibcSubstitute(redirector),
             Win32LibcSubsitute(redirector),
             Win32SubstituteS(redirector),

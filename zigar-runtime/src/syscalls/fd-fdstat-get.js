@@ -23,8 +23,8 @@ export default mixin({
       const dv = createView(24);
       dv.setUint8(0, type);
       dv.setUint16(2, flags, true);
-      dv.setBigUint64(8, BigInt(rights), true);
-      dv.setBigUint64(16, 0n, true);
+      dv.setBigUint64(8, BigInt(rights[0]), true);
+      dv.setBigUint64(16, BigInt(rights[1]), true);
       this.moveExternBytes(dv, bufAddress, true)
     });
   },

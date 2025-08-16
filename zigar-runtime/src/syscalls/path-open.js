@@ -12,11 +12,11 @@ const Right = {
 
 export default mixin({
   pathOpen(dirFd, lFlags, pathAddress, pathLen, oFlags, rightsBase, rightsInheriting, fdFlags, fdAddress, canWait) {
-    let fdRights = Number(rightsBase | rightsInheriting);
-    if (!(fdRights & PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write | PosixDescriptorRight.fd_readdir)) {
-      fdRights |= PosixDescriptorRight.fd_read;
+    const fdRights = [ Number(rightsBase), Number(rightsInheriting) ];
+    if (!(fdRights[0] & PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write | PosixDescriptorRight.fd_readdir)) {
+      fdRights[0] |= PosixDescriptorRight.fd_read;
     }
-    const rights = decodeFlags(fdRights, Right);
+    const rights = decodeFlags(fdRights[0], Right);
     const flags = {
       ...decodeFlags(lFlags, PosixLookupFlag),
       ...decodeFlags(oFlags, PosixOpenFlag),

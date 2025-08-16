@@ -460,26 +460,28 @@ export function addTests(importModule, options) {
       expect(event).to.eql({
         parent: null,
         path: 'readable.txt',
-        rights: { read: true },
-        flags: { symlinkFollow: true, accessCheck: true }
+        rights: {},
+        flags: { symlinkFollow: true, dryrun: true }
       });
       expect(check('/readable.txt', { write: true })).to.be.true;
       expect(check('/writable.txt', { write: true })).to.be.true;
       expect(event).to.eql({
         parent: null,
         path: 'writable.txt',
-        rights: { write: true },
-        flags: { symlinkFollow: true, accessCheck: true }
+        rights: {},
+        flags: { symlinkFollow: true, dryrun: true }
       });
-      expect(check('/writable.txt', { write: true, read: true })).to.be.false;
+      expect(check('/writable.txt', { write: true, read: true })).to.be.true;
       expect(check('/readwritable.txt', { write: true, read: true })).to.be.true;
       expect(event).to.eql({
         parent: null,
         path: 'readwritable.txt',
-        rights: { read: true, write: true },
-        flags: { symlinkFollow: true, accessCheck: true }
+        rights: {},
+        flags: { symlinkFollow: true, dryrun: true }
       });
-      expect(check('/readwritable.txt', { execute: true, read: true })).to.be.false;
+      if (target !== 'win32') {
+        expect(check('/readwritable.txt', { execute: true, read: true })).to.be.false;
+      }
       expect(check('/subdirectory', { execute: true })).to.be.true;
     })
     skip.entirely.if(target == 'win32').

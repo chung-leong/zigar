@@ -590,7 +590,7 @@ export function catchPosixError(canWait = false, defErrorCode, run, resolve, rej
 }
 
 export function checkAccessRight(rights, required) {
-  if (!(rights & required)) {
+  if (!(rights[0] & required)) {
     throw new InvalidFileDescriptor();
   }
 }
