@@ -1,6 +1,6 @@
-import { PosixError, PosixLookupFlag } from '../constants.js';
+import { PosixDescriptorRight, PosixError, PosixLookupFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { catchPosixError } from '../errors.js';
+import { catchPosixError, InvalidStream } from '../errors.js';
 import { decodeFlags } from '../utils.js';
 import './copy-stat.js';
 
@@ -22,15 +22,9 @@ export default mixin({
     }, (arg) => {
       let stat;
       if (infer) {
-        let stream;
-        try {
-          stream = this.convertReader(arg);
-        } catch {
-          try {
-            stream = this.convertWriter(arg);
-          } catch {
-            stream = this.convertDirectory(arg);
-          }
+        const stream = this.convertReader(arg) ?? this.convertWriter(arg) ?? this.convertDirectory(arg);
+        if (stream) {
+          throw new InvalidStream(PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write | PosixDescriptorRight.fd_readdir, arg);
         }
         stat = this.inferStat(stream);
       } else {

@@ -1,4 +1,4 @@
-import { memberNames, PosixError, StructureType } from './constants.js';
+import { memberNames, PosixDescriptorRight, PosixError, StructureType } from './constants.js';
 import { TYPED_ARRAY, UPDATE } from './symbols.js';
 import { defineProperty, getPrimitiveName, hasMethod, isPromise } from './utils.js';
 
@@ -302,6 +302,23 @@ export class TypeMismatch extends TypeError {
   constructor(expected, arg) {
     const received = getDescription(arg);
     super(`Expected ${addArticle(expected)}, received ${received}`);
+  }
+}
+
+export class InvalidStream extends TypeError {
+  constructor(rights, arg) {
+    const types = [];
+    if (rights & PosixDescriptorRight.fd_read) {
+      types.push('ReadableStreamDefaultReader', 'ReadableStreamBYOBReader', 'Blob', 'Uint8Array');
+    }
+    if (rights & PosixDescriptorRight.fd_write) {
+      types.push('WritableStreamDefaultWriter', 'array', 'null');
+    }
+    if (rights & PosixDescriptorRight.fd_readdir) {
+      types.push('map');
+    }
+    const list = types.join(', ');
+    super(`Expected ${list}, or an object with the appropriate stream interface, received ${arg}`);
   }
 }
 

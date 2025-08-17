@@ -1,6 +1,6 @@
 import { PosixDescriptorFlag, PosixDescriptorRight, PosixError, PosixLookupFlag, PosixOpenFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { catchPosixError } from '../errors.js';
+import { catchPosixError, InvalidStream } from '../errors.js';
 import { decodeFlags } from '../utils.js';
 import './copy-int.js';
 
@@ -16,27 +16,23 @@ export default mixin({
     if (!(fdRights[0] & PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write | PosixDescriptorRight.fd_readdir)) {
       fdRights[0] |= PosixDescriptorRight.fd_read;
     }
-    const rights = decodeFlags(fdRights[0], Right);
-    const flags = {
-      ...decodeFlags(lFlags, PosixLookupFlag),
-      ...decodeFlags(oFlags, PosixOpenFlag),
-      ...decodeFlags(fdFlags, PosixDescriptorFlag),
-    };
     let loc;
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
+      const rights = decodeFlags(fdRights[0], Right);
+      const flags = {
+        ...decodeFlags(lFlags, PosixLookupFlag),
+        ...decodeFlags(oFlags, PosixOpenFlag),
+        ...decodeFlags(fdFlags, PosixDescriptorFlag),
+      };
       return this.triggerEvent('open', { ...loc, rights, flags }, PosixError.ENOENT);
     }, (arg) => {
       if (arg === false) {
         return PosixError.ENOENT;
       }
-      let resource;
-      if (rights.read) {
-        resource = this.convertReader(arg);
-      } else if (rights.write) {
-        resource = this.convertWriter(arg);
-      } else if (rights.readdir) {
-        resource = this.convertDirectory(arg);
+      const resource = this.convertReader(arg) ?? this.convertWriter(arg) ?? this.convertDirectory(arg);
+      if (!resource) {
+        throw new InvalidStream(fdRights[0], arg);
       }
       const fd = this.createStreamHandle(resource, fdRights, fdFlags);
       this.setStreamLocation?.(fd, loc);

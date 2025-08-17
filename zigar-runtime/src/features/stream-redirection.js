@@ -1,7 +1,35 @@
 import { PosixDescriptor, PosixDescriptorRight } from '../constants.js';
 import { mixin } from '../environment.js';
-import { InvalidFileDescriptor } from '../errors.js';
+import { InvalidFileDescriptor, InvalidStream } from '../errors.js';
 import { decodeText } from '../utils.js';
+
+const stdinRights = PosixDescriptorRight.fd_right;
+const stdoutRights = PosixDescriptorRight.fd_write;
+
+const rootRights = PosixDescriptorRight.fd_seek
+                 | PosixDescriptorRight.fd_fdstat_set_flags
+                 | PosixDescriptorRight.fd_tell
+                 | PosixDescriptorRight.path_create_directory
+                 | PosixDescriptorRight.path_create_file
+                 | PosixDescriptorRight.path_open
+                 | PosixDescriptorRight.fd_readdir
+                 | PosixDescriptorRight.path_filestat_get
+                 | PosixDescriptorRight.path_filestat_set_size
+                 | PosixDescriptorRight.path_filestat_set_times
+                 | PosixDescriptorRight.fd_filestat_get
+                 | PosixDescriptorRight.fd_filestat_set_times
+                 | PosixDescriptorRight.path_remove_directory
+                 | PosixDescriptorRight.path_unlink_file;
+const rootRightsInheriting = rootRights 
+                           | PosixDescriptorRight.fd_datasync
+                           | PosixDescriptorRight.fd_read
+                           | PosixDescriptorRight.fd_seek
+                           | PosixDescriptorRight.fd_sync
+                           | PosixDescriptorRight.fd_write
+                           | PosixDescriptorRight.fd_advise
+                           | PosixDescriptorRight.fd_allocate
+                           | PosixDescriptorRight.fd_filestat_get
+                           | PosixDescriptorRight.fd_filestat_set_size;
 
 export default mixin({
   init() {
@@ -27,42 +55,18 @@ export default mixin({
         return null;
       },
     };
-    const rootRights = PosixDescriptorRight.fd_seek
-                     | PosixDescriptorRight.fd_fdstat_set_flags
-                     | PosixDescriptorRight.fd_tell
-                     | PosixDescriptorRight.path_create_directory
-                     | PosixDescriptorRight.path_create_file
-                     | PosixDescriptorRight.path_open
-                     | PosixDescriptorRight.fd_readdir
-                     | PosixDescriptorRight.path_filestat_get
-                     | PosixDescriptorRight.path_filestat_set_size
-                     | PosixDescriptorRight.path_filestat_set_times
-                     | PosixDescriptorRight.fd_filestat_get
-                     | PosixDescriptorRight.fd_filestat_set_times
-                     | PosixDescriptorRight.path_remove_directory
-                     | PosixDescriptorRight.path_unlink_file;
-    const rootRightsInheriting = rootRights 
-                               | PosixDescriptorRight.fd_datasync
-                               | PosixDescriptorRight.fd_read
-                               | PosixDescriptorRight.fd_seek
-                               | PosixDescriptorRight.fd_sync
-                               | PosixDescriptorRight.fd_write
-                               | PosixDescriptorRight.fd_advise
-                               | PosixDescriptorRight.fd_allocate
-                               | PosixDescriptorRight.fd_filestat_get
-                               | PosixDescriptorRight.fd_filestat_set_size;
     this.streamMap = new Map([ 
       [ 
         PosixDescriptor.stdout, [ 
           this.createLogWriter('stdout'), 
-          [ PosixDescriptorRight.fd_write, 0 ], 
+          [ stdoutRights, 0 ], 
           0, // PosixDescriptorFlag
         ] 
       ], 
       [ 
         PosixDescriptor.stderr, [ 
           this.createLogWriter('stderr'), 
-          [ PosixDescriptorRight.fd_write, 0 ],
+          [ stdoutRights, 0 ],
           0,
         ],
       ], 
@@ -110,21 +114,24 @@ export default mixin({
   },
   redirectStream(num, arg) {
     const map = this.streamMap;
-    const fd = (num === 3) ? PosixDescriptor.root : num;
+    const fd = (num === -1) ? PosixDescriptor.root : num;
     const previous = map.get(fd);
     if (arg !== undefined) {
       let stream, rights;
       if (num === 0) {
         stream = this.convertReader(arg);
-        rights = PosixDescriptorRight.fd_read;
+        rights = [ stdinRights, 0 ];
       } else if (num === 1 || num === 2) {
         stream = this.convertWriter(arg);
-        rights = PosixDescriptorRight.fd_write;
-      } else if (num === 3) {
+        rights = [ stdoutRights, 0 ];
+      } else if (num === -1) {
         stream = this.convertDirectory(arg);
-        rights = PosixDescriptorRight.fd_readdir;
+        rights = [ rootRights, rootRightsInheriting ];
       } else {
-        throw new Error(`Expecting 0, 1, 2, or 3, received ${fd}`);
+        throw new Error(`Expecting 0, 1, 2, or -1, received ${fd}`);
+      }
+      if (!stream) {
+        throw new InvalidStream(rights[0], arg);
       }
       map.set(fd, [ stream, rights, 0 ]);
     } else {

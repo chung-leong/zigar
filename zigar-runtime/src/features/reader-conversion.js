@@ -1,5 +1,4 @@
 import { mixin } from '../environment.js';
-import { TypeMismatch } from '../errors.js';
 import { BlobReader, NullStream, Uint8ArrayReadWriter, WebStreamReader, WebStreamReaderBYOB } from '../streams.js';
 import { hasMethod } from '../utils.js';
 
@@ -17,8 +16,6 @@ export default mixin({
       return new NullStream();
     } else if (hasMethod(arg, 'read')) {
       return arg;
-    } else {
-      throw new TypeMismatch('ReadableStreamDefaultReader, ReadableStreamBYOBReader, Blob, Uint8Array, or object with reader interface', arg);
     }
   }
 });
