@@ -1,6 +1,7 @@
 import { PosixDescriptorRight } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidStream } from '../errors.js';
+import { usize } from '../utils.js';
 
 export default mixin({
   // create Dir struct for outbound call
@@ -17,7 +18,11 @@ export default mixin({
                    | PosixDescriptorRight.fd_tell
                    | PosixDescriptorRight.fd_filestat_get 
                    | PosixDescriptorRight.fd_filestat_set_times;
-    const fd = this.createStreamHandle(dir, fdRights);
+    let fd = this.createStreamHandle(dir, fdRights);
+    if (process.env.TARGET === 'node' && process.platform === 'win32') {
+      // needs to be handle
+      fd = this.obtainZigView(usize(fd << 1), 0);
+    }
     return { fd };
   },
 });

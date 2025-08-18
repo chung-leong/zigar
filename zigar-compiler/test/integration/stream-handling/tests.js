@@ -341,6 +341,7 @@ export function addTests(importModule, options) {
       const chunks = [];
       let event;
       __zigar.on('open', (evt) => {
+        console.log(evt);
         event = evt;
         return chunks;
       });
@@ -1016,10 +1017,11 @@ export function addTests(importModule, options) {
       expect(called).to.be.true;
       expect(args).to.eql([ 0n, 1000n ]);
     })
-    it('should print contents of files in directory', async function() {
+    it('should open file in directory', async function() {
       this.timeout(0);
-      const { __zigar, print } = await importTest('open-file-from-directory');
-      __zigar.on('open', ({ parent, path }) => {
+      const { __zigar, print } = await importTest('open-file-at-dir');
+      __zigar.on('open', (evt) => {
+        const { parent, path } = evt;
         if (!parent) return null;
         const entry = parent?.get(path);
         const text = entry.content;
@@ -1031,13 +1033,44 @@ export function addTests(importModule, options) {
         [ 'test.txt', { type: 'file', content: 'This is a test and this is only a test' } ],
         [ 'world', { type: 'directory' } ],
       ]);
-      const lines = await capture(() => print(map));
+      const lines = await capture(() => print(map, 'test.txt'));
       expect(lines).to.eql([
-        'hello.txt:',
-        'Hello world',
-        'test.txt:',
-        'This is a test and this is only a test',        
+        'This is a test and this is only a test',
       ])
+    })
+    it('should print names of files in directory using posix functions', async function() {
+      this.timeout(0);
+      const { __zigar, print } = await importTest('scan-directory');
+      const map = new Map([
+        [ 'hello.txt', { type: 'file', content: 'Hello world' } ],
+        [ 'test.txt', { type: 'file', content: 'This is a test and this is only a test' } ],
+        [ 'world', { type: 'directory' } ],
+      ]);
+      let event;
+      __zigar.on('open', (evt) => {
+        console.error(evt);
+        if (evt.path === 'somewhere/directory') {
+          event = evt;
+          return map;
+        } else {
+          return false;
+        }
+      });
+      print('/somewhere/directory');
+      const lines = await capture(() => {});
+      expect(lines).to.eql([
+        '. (dir)',
+        '.. (dir)',
+        'hello.txt (file)',
+        'test.txt (file)',
+        'world (dir)',
+      ]);
+      expect(event).to.eql({
+        parent: null,
+        path: 'somewhere/directory',
+        rights: { readdir: true },
+        flags: { symlinkFollow: true, directory: true }
+      });
     })
     it('should print names of files in directory using posix functions', async function() {
       this.timeout(0);
@@ -1470,6 +1503,48 @@ export function addTests(importModule, options) {
       }
       expect(array).to.have.lengthOf(3);
     })
+    it('should delete file using win32 function', async function() {
+      this.timeout(0);
+      const { __zigar, remove, removeW } = await importTest('delete-file-with-win32-function');
+      let event;
+      __zigar.on('unlink', (evt) => {
+        event = evt;
+        return true;
+      });
+      remove('/hello/world.txt');
+      expect(event).to.eql({ 
+        parent: null, 
+        path: 'hello/world.txt',
+      });
+      removeW('/cześć/świecie.txt');
+      expect(event).to.eql({ 
+        parent: null, 
+        path: 'cześć/świecie.txt' 
+      });
+    })
+    it('should delete file in directory', async function() {
+      this.timeout(0);
+      const { __zigar, remove } = await importTest('delete-file-at-dir');
+      let event;
+      __zigar.on('unlink', (evt) => {
+        event = evt;
+        return true;
+      });
+      const map = new Map([
+        [ 'hello.txt', { type: 'file', content: 'Hello world' } ],
+        [ 'test.txt', { type: 'file', content: 'This is a test and this is only a test' } ],
+        [ 'world', { type: 'directory' } ],
+      ]);
+      expect(() => remove(map, 'test.txt')).to.not.throw();
+      expect(event).to.eql({
+        parent: map,
+        path: 'test.txt',
+      });
+      __zigar.on('unlink', (evt) => {
+        return false;
+      });
+      expect(() => remove(map, 'test.txt')).to.throw();
+    });
   })
 }
 

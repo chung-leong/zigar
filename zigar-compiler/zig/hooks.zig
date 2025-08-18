@@ -2429,6 +2429,7 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
 pub fn Win32SubstituteS(comptime redirector: type) type {
     return struct {
         pub fn CloseHandle(handle: HANDLE) callconv(WINAPI) BOOL {
+            if (handle == unlinked_object_handle) return TRUE;
             const fd = toDescriptor(handle);
             var result: c_int = undefined;
             if (redirector.close(fd, &result)) {
@@ -2448,14 +2449,28 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             path: LPCWSTR,
             security_attributes: *SECURITY_ATTRIBUTES,
         ) callconv(WINAPI) BOOL {
+            if (redirector.Host.isRedirecting(.mkdir)) {
+                const path_wtf8 = allocWtf8(path, true) catch return FALSE;
+                defer freeWtf8(path_wtf8);
+                return CreateDirectoryA(path_wtf8, security_attributes);
+            }
             return Original.CreateDirectoryW(path, security_attributes);
         }
 
         pub fn DeleteFileA(path: LPCSTR) callconv(WINAPI) BOOL {
+            var result: c_int = undefined;
+            if (redirector.unlink(path, &result)) {
+                return saveError(result);
+            }
             return Original.DeleteFileA(path);
         }
 
         pub fn DeleteFileW(path: LPCWSTR) callconv(WINAPI) BOOL {
+            if (redirector.Host.isRedirecting(.unlink)) {
+                const path_wtf8 = allocWtf8(path, true) catch return FALSE;
+                defer freeWtf8(path_wtf8);
+                return DeleteFileA(path_wtf8);
+            }
             return Original.DeleteFileW(path);
         }
 
@@ -2528,6 +2543,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         }
 
         fn NtClose(handle: HANDLE) callconv(WINAPI) NTSTATUS {
+            if (handle == unlinked_object_handle) return .SUCCESS;
             const fd = toDescriptor(handle);
             var result: c_int = undefined;
             if (redirector.close(fd, &result)) {
@@ -2550,44 +2566,55 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             ea_length: ULONG,
         ) callconv(WINAPI) NTSTATUS {
             const dirfd: c_int = if (object_attributes.RootDirectory) |dh| toDescriptor(dh) else -1;
-            if (redirector.isPrivateDescriptor(dirfd) or (dirfd < 0 and redirector.Host.isRedirecting(.open))) {
+            const delete_op = (desired_access & std.os.windows.DELETE) != 0;
+            const redirecting = if (delete_op) redirector.Host.isRedirecting(.unlink) else redirector.Host.isRedirecting(.open);
+            if (redirector.isPrivateDescriptor(dirfd) or (dirfd < 0 and redirecting)) {
                 const object_name = object_attributes.ObjectName;
-                const path = object_name.Buffer.?[0..object_name.Length];
+                const name_len = @divExact(object_name.Length, 2);
+                const path = object_name.Buffer.?[0..name_len];
                 const path_wtf8 = allocWtf8(path, false) catch return .NO_MEMORY;
                 defer freeWtf8(path_wtf8);
-                const mode = 0;
-                var oflags: O = switch (create_disposition) {
-                    std.os.windows.FILE_SUPERSEDE => .{ .CREAT = true, .TRUNC = true },
-                    std.os.windows.FILE_CREATE => .{ .CREAT = true },
-                    std.os.windows.FILE_OPEN => .{},
-                    std.os.windows.FILE_OPEN_IF => .{ .CREAT = true },
-                    std.os.windows.FILE_OVERWRITE => .{ .CREAT = true, .TRUNC = true },
-                    std.os.windows.FILE_OVERWRITE_IF => .{ .CREAT = true, .TRUNC = true },
-                    else => .{},
-                };
-                const r_access = (desired_access & std.os.windows.GENERIC_READ) != 0;
-                const w_access = (desired_access & std.os.windows.GENERIC_WRITE) != 0;
-                if (r_access) {
-                    oflags.ACCMODE = if (w_access) .RDWR else .RDONLY;
-                } else if (w_access) {
-                    oflags.ACCMODE = .WRONLY;
-                }
-                const oflags_int: u32 = @bitCast(oflags);
-                var fd: c_int = undefined;
-                if (redirector.openat(dirfd, path_wtf8, @intCast(oflags_int), mode, &fd)) {
-                    if (fd < 0) {
-                        // io_status_block.Information.* = std.os.windows.FILE_DOE;
-                        return .NO_SUCH_FILE;
+                if (delete_op) {
+                    // an unlink operation actually
+                    var result: c_int = undefined;
+                    if (redirector.unlinkat(dirfd, path_wtf8, 0, &result)) {
+                        if (result < 0) return .OBJECT_PATH_NOT_FOUND;
+                        handle.* = unlinked_object_handle;
+                        io_status_block.Information = windows_h.FILE_CREATED;
+                        return .SUCCESS;
                     }
-                    handle.* = fromDescriptor(fd);
-                    io_status_block.Information = switch (create_disposition) {
-                        std.os.windows.FILE_SUPERSEDE => windows_h.FILE_SUPERSEDED,
-                        std.os.windows.FILE_CREATE => windows_h.FILE_CREATED,
-                        std.os.windows.FILE_OPEN, std.os.windows.FILE_OPEN_IF => windows_h.FILE_OPENED,
-                        std.os.windows.FILE_OVERWRITE, std.os.windows.FILE_OVERWRITE_IF => windows_h.FILE_OVERWRITTEN,
-                        else => windows_h.FILE_OPENED,
+                } else {
+                    var oflags: O = switch (create_disposition) {
+                        std.os.windows.FILE_SUPERSEDE => .{ .CREAT = true, .TRUNC = true },
+                        std.os.windows.FILE_CREATE => .{ .CREAT = true },
+                        std.os.windows.FILE_OPEN => .{},
+                        std.os.windows.FILE_OPEN_IF => .{ .CREAT = true },
+                        std.os.windows.FILE_OVERWRITE => .{ .CREAT = true, .TRUNC = true },
+                        std.os.windows.FILE_OVERWRITE_IF => .{ .CREAT = true, .TRUNC = true },
+                        else => .{},
                     };
-                    return .SUCCESS;
+                    const r_access = (desired_access & std.os.windows.GENERIC_READ) != 0;
+                    const w_access = (desired_access & std.os.windows.GENERIC_WRITE) != 0;
+                    if (r_access) {
+                        oflags.ACCMODE = if (w_access) .RDWR else .RDONLY;
+                    } else if (w_access) {
+                        oflags.ACCMODE = .WRONLY;
+                    }
+                    const oflags_int: u32 = @bitCast(oflags);
+                    const mode = 0;
+                    var fd: c_int = undefined;
+                    if (redirector.openat(dirfd, path_wtf8, @intCast(oflags_int), mode, &fd)) {
+                        if (fd < 0) return .OBJECT_PATH_NOT_FOUND;
+                        handle.* = fromDescriptor(fd);
+                        io_status_block.Information = switch (create_disposition) {
+                            std.os.windows.FILE_SUPERSEDE => windows_h.FILE_SUPERSEDED,
+                            std.os.windows.FILE_CREATE => windows_h.FILE_CREATED,
+                            std.os.windows.FILE_OPEN, std.os.windows.FILE_OPEN_IF => windows_h.FILE_OPENED,
+                            std.os.windows.FILE_OVERWRITE, std.os.windows.FILE_OVERWRITE_IF => windows_h.FILE_OVERWRITTEN,
+                            else => windows_h.FILE_OPENED,
+                        };
+                        return .SUCCESS;
+                    }
                 }
             }
             return Original.NtCreateFile(handle, desired_access, object_attributes, io_status_block, allocation_size, file_attributes, share_access, create_disposition, create_options, ea_buffer, ea_length);
@@ -2620,6 +2647,56 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return Original.NtLockFile(handle, event, apc_routine, apc_context, io_status_block, offset, len, key, fail_immediately, exclusive);
         }
 
+        pub fn NtQueryObject(
+            handle: HANDLE,
+            object_information_class: OBJECT_INFORMATION_CLASS,
+            object_information: LPVOID,
+            object_information_length: ULONG,
+            return_length: ?*ULONG,
+        ) callconv(WINAPI) NTSTATUS {
+            const fd = toDescriptor(handle);
+            if (redirector.isPrivateDescriptor(fd)) {
+                switch (object_information_class) {
+                    .ObjectNameInformation => {
+                        var wtf8_buf: [128]u8 = undefined;
+                        const name = std.fmt.bufPrintZ(&wtf8_buf, "\\\\??\\UNC\\@zigar\\fd\\{d}", .{fd}) catch unreachable;
+                        const name_offset = @sizeOf(OBJECT_NAME_INFORMATION);
+                        if (object_information_length > @sizeOf(OBJECT_NAME_INFORMATION)) {
+                            const info: *OBJECT_NAME_INFORMATION = @ptrCast(@alignCast(object_information));
+                            const info_bytes: [*]u8 = @ptrCast(object_information);
+                            const name_buf: [*]WCHAR = @ptrCast(@alignCast(info_bytes[name_offset..]));
+                            const max_len: usize = object_information_length - name_offset - 2;
+                            const len = @max(name.len * 2, max_len);
+                            _ = std.unicode.wtf8ToWtf16Le(name_buf[0..name.len], name) catch unreachable;
+                            name_buf[name.len] = 0;
+                            info.Name = .{
+                                .Buffer = name_buf,
+                                .Length = @intCast(len),
+                                .MaximumLength = @intCast(max_len),
+                            };
+                        }
+                        if (return_length) |ptr| ptr.* = @intCast(name_offset + (name.len + 1) * 2);
+                        return .SUCCESS;
+                    },
+                    else => return .INVALID_HANDLE,
+                }
+            }
+            return Original.NtQueryObject(handle, object_information_class, object_information, object_information_length, return_length);
+        }
+
+        pub fn NtSetInformationFile(
+            handle: HANDLE,
+            io_status_block: *IO_STATUS_BLOCK,
+            file_information: LPVOID,
+            length: ULONG,
+            file_information_class: FILE_INFORMATION_CLASS,
+        ) callconv(WINAPI) NTSTATUS {
+            if (handle == unlinked_object_handle or isPrivateHandle(handle)) {
+                return .SUCCESS;
+            }
+            return Original.NtSetInformationFile(handle, io_status_block, file_information, length, file_information_class);
+        }
+
         pub fn NtUnlockFile(
             handle: HANDLE,
             io_status_block: *IO_STATUS_BLOCK,
@@ -2645,18 +2722,15 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             read: *DWORD,
             overlapped: *OVERLAPPED,
         ) callconv(WINAPI) BOOL {
+            const fd = toDescriptor(handle);
+            var result: off_t = undefined;
+            if (redirector.read(fd, @ptrCast(buffer), @intCast(len), &result)) {
+                if (result < 0) return saveError(result);
+                read.* = @intCast(result);
+                signalCompletion(overlapped);
+                return TRUE;
+            }
             return Original.ReadFile(handle, buffer, len, read, overlapped);
-        }
-
-        pub fn ReadFileEx(
-            handle: HANDLE,
-            buffer: LPVOID,
-            len: DWORD,
-            read: *DWORD,
-            overlapped: *OVERLAPPED,
-            complete: LPOVERLAPPED_COMPLETION_ROUTINE,
-        ) callconv(WINAPI) BOOL {
-            return Original.ReadFileEx(handle, buffer, len, read, overlapped, complete);
         }
 
         pub fn RemoveDirectoryA(path: LPCSTR) callconv(WINAPI) BOOL {
@@ -2664,6 +2738,11 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         }
 
         pub fn RemoveDirectoryW(path: LPCWSTR) callconv(WINAPI) BOOL {
+            if (redirector.Host.isRedirecting(.rmdir)) {
+                const path_wtf8 = allocWtf8(path, true) catch return FALSE;
+                defer freeWtf8(path_wtf8);
+                return RemoveDirectoryA(path_wtf8);
+            }
             return Original.RemoveDirectoryW(path);
         }
 
@@ -2741,31 +2820,6 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return Original.WriteFile(handle, buffer, len, written, overlapped);
         }
 
-        fn signalCompletion(overlapped: ?*OVERLAPPED) void {
-            if (overlapped) |o| _ = windows_h.SetEvent(o.hEvent);
-        }
-
-        fn createLockStruct(offset: anytype, len: anytype, lock_type: i16) Flock {
-            return .{
-                .type = lock_type,
-                .whence = std.c.SEEK.SET,
-                .start = decodeOffset(offset),
-                .len = decodeOffset(len),
-                .pid = 0,
-            };
-        }
-
-        fn decodeOffset(offset: anytype) i64 {
-            const T = @TypeOf(offset);
-            const value = switch (@typeInfo(T)) {
-                .int => offset,
-                .pointer => offset.*,
-                .@"struct" => @as(u64, offset[0]) | @as(u64, offset[1]) << 32,
-                else => @compileError("Unexpected: " ++ @typeName(T)),
-            };
-            return @intCast(value);
-        }
-
         fn toDescriptor(handle: HANDLE) c_int {
             if (handle == std.os.windows.INVALID_HANDLE_VALUE) return -1;
             return inline for (0..3) |i| {
@@ -2780,20 +2834,9 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             } else @ptrFromInt(@as(usize, @intCast(fd)) << 1);
         }
 
-        fn print(comptime fmt: []const u8, args: anytype) void {
-            var msg_buf: [1024]u8 = undefined;
-            const message = std.fmt.bufPrintZ(&msg_buf, fmt, args) catch unreachable;
-            _ = LibcSubstitute(redirector).puts(message);
-        }
-
-        fn saveError(result: anytype) BOOL {
-            const code = translateError(result);
-            if (code == 0) {
-                return TRUE;
-            } else {
-                _ = windows_h.SetLastError(code);
-                return FALSE;
-            }
+        fn isPrivateHandle(handle: HANDLE) bool {
+            const fd = toDescriptor(handle);
+            return redirector.isPrivateDescriptor(fd);
         }
 
         fn allocWtf8(string: anytype, save_err: bool) ![:0]u8 {
@@ -2811,6 +2854,16 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
 
         fn freeWtf8(string: [:0]u8) void {
             c_allocator.free(string);
+        }
+
+        fn saveError(result: anytype) BOOL {
+            const code = translateError(result);
+            if (code == 0) {
+                return TRUE;
+            } else {
+                _ = windows_h.SetLastError(code);
+                return FALSE;
+            }
         }
 
         fn translateError(result: anytype) DWORD {
@@ -2847,6 +2900,31 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             };
         }
 
+        fn signalCompletion(overlapped: ?*OVERLAPPED) void {
+            if (overlapped) |o| _ = windows_h.SetEvent(o.hEvent);
+        }
+
+        fn createLockStruct(offset: anytype, len: anytype, lock_type: i16) Flock {
+            return .{
+                .type = lock_type,
+                .whence = std.c.SEEK.SET,
+                .start = decodeOffset(offset),
+                .len = decodeOffset(len),
+                .pid = 0,
+            };
+        }
+
+        fn decodeOffset(offset: anytype) i64 {
+            const T = @TypeOf(offset);
+            const value = switch (@typeInfo(T)) {
+                .int => offset,
+                .pointer => offset.*,
+                .@"struct" => @as(u64, offset[0]) | @as(u64, offset[1]) << 32,
+                else => @compileError("Unexpected: " ++ @typeName(T)),
+            };
+            return @intCast(value);
+        }
+
         fn inferAttributes(stat: Stat) DWORD {
             var attributes: DWORD = 0;
             if ((stat.mode & std.c.W_OK) == 0) {
@@ -2860,6 +2938,8 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             }
             return attributes;
         }
+
+        const unlinked_object_handle: HANDLE = @ptrFromInt(0x1fff_ffff);
 
         const std_stream = struct {
             var handles: [3]?HANDLE = .{ null, null, null };
@@ -2881,6 +2961,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         const BOOL = std.os.windows.BOOL;
         const BOOLEAN = std.os.windows.BOOLEAN;
         const DWORD = std.os.windows.DWORD;
+        const FILE_INFORMATION_CLASS = std.os.windows.FILE_INFORMATION_CLASS;
         const HANDLE = std.os.windows.HANDLE;
         const IO_STATUS_BLOCK = std.os.windows.IO_STATUS_BLOCK;
         const IO_APC_ROUTINE = std.os.windows.IO_APC_ROUTINE;
@@ -2893,9 +2974,12 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         const LPVOID = std.os.windows.LPVOID;
         const NTSTATUS = std.os.windows.NTSTATUS;
         const OBJECT_ATTRIBUTES = std.os.windows.OBJECT_ATTRIBUTES;
+        const OBJECT_NAME_INFORMATION = std.os.windows.OBJECT_NAME_INFORMATION;
+        const OBJECT_INFORMATION_CLASS = std.os.windows.OBJECT_INFORMATION_CLASS;
         const OVERLAPPED = std.os.windows.OVERLAPPED;
         const SECURITY_ATTRIBUTES = std.os.windows.SECURITY_ATTRIBUTES;
         const ULONG = std.os.windows.ULONG;
+        const WCHAR = std.os.windows.WCHAR;
         const FALSE = std.os.windows.FALSE;
         const TRUE = std.os.windows.TRUE;
         const WINAPI: std.builtin.CallingConvention = if (builtin.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c;
@@ -2917,6 +3001,8 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             pub var NtClose: *const @TypeOf(Self.NtClose) = undefined;
             pub var NtCreateFile: *const @TypeOf(Self.NtCreateFile) = undefined;
             pub var NtLockFile: *const @TypeOf(Self.NtLockFile) = undefined;
+            pub var NtQueryObject: *const @TypeOf(Self.NtQueryObject) = undefined;
+            pub var NtSetInformationFile: *const @TypeOf(Self.NtSetInformationFile) = undefined;
             pub var NtUnlockFile: *const @TypeOf(Self.NtUnlockFile) = undefined;
             pub var ReadFile: *const @TypeOf(Self.ReadFile) = undefined;
             pub var RemoveDirectoryA: *const @TypeOf(Self.RemoveDirectoryA) = undefined;
