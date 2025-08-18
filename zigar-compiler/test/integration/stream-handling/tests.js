@@ -1503,6 +1503,7 @@ export function addTests(importModule, options) {
       }
       expect(array).to.have.lengthOf(3);
     })
+    skip.entirely.unless(target === 'win32').
     it('should delete file using win32 function', async function() {
       this.timeout(0);
       const { __zigar, remove, removeW } = await importTest('delete-file-with-win32-function');
@@ -1544,6 +1545,49 @@ export function addTests(importModule, options) {
         return false;
       });
       expect(() => remove(map, 'test.txt')).to.throw();
+    });
+    skip.entirely.unless(target === 'win32').
+    it('should remove directory using win32 function', async function() {
+      this.timeout(0);
+      const { __zigar, remove, removeW } = await importTest('remove-directory-with-win32-function');
+      let event;
+      __zigar.on('rmdir', (evt) => {
+        event = evt;
+        return true;
+      });
+      remove('/hello/world');
+      expect(event).to.eql({ 
+        parent: null, 
+        path: 'hello/world',
+      });
+      removeW('/cześć/świecie');
+      expect(event).to.eql({ 
+        parent: null, 
+        path: 'cześć/świecie'
+      });
+    })
+    it('should remove directory in directory', async function() {
+      this.timeout(0);
+      const { __zigar, remove } = await importTest('remove-directory-at-dir');
+      let event;
+      __zigar.on('rmdir', (evt) => {
+        event = evt;
+        return true;
+      });
+      const map = new Map([
+        [ 'hello.txt', { type: 'file', content: 'Hello world' } ],
+        [ 'test.txt', { type: 'file', content: 'This is a test and this is only a test' } ],
+        [ 'world', { type: 'directory' } ],
+      ]);
+      expect(() => remove(map, 'world')).to.not.throw();
+      expect(event).to.eql({
+        parent: map,
+        path: 'world',
+      });
+      __zigar.on('rmdir', (evt) => {
+        return false;
+      });
+      expect(() => remove(map, 'world')).to.throw();
     });
   })
 }

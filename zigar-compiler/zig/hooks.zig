@@ -1090,13 +1090,21 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn unlinkat(dirfd: c_int, path: [*:0]const u8, flags: c_int, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(dirfd) or (dirfd < 0 and Host.isRedirecting(.unlink))) {
-                var call: Syscall = .{ .cmd = .unlink, .u = .{
-                    .unlink = .{
-                        .dirfd = remapDirFD(dirfd),
-                        .path = path,
-                        .flags = @intCast(flags),
-                    },
-                } };
+                var call: Syscall = if ((flags & AT.REMOVEDIR) != 0)
+                    .{ .cmd = .rmdir, .u = .{
+                        .rmdir = .{
+                            .dirfd = remapDirFD(dirfd),
+                            .path = path,
+                        },
+                    } }
+                else
+                    .{ .cmd = .unlink, .u = .{
+                        .unlink = .{
+                            .dirfd = remapDirFD(dirfd),
+                            .path = path,
+                            .flags = @intCast(flags),
+                        },
+                    } };
                 const err = Host.redirectSyscall(&call);
                 if (err == .SUCCESS or isPrivateDescriptor(dirfd)) {
                     result.* = intFromError(err);
@@ -1404,7 +1412,6 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         pub fn opendir(path: [*:0]const u8) callconv(.c) ?*std.c.DIR {
             var result: c_int = undefined;
-            std.debug.print("opendir\n", .{});
             const flags: O = .{ .DIRECTORY = true };
             const flags_int: @typeInfo(O).@"struct".backing_integer.? = @bitCast(flags);
             if (redirector.open(path, flags_int, 0, &result)) {
@@ -2575,9 +2582,10 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                 const path_wtf8 = allocWtf8(path, false) catch return .NO_MEMORY;
                 defer freeWtf8(path_wtf8);
                 if (delete_op) {
-                    // an unlink operation actually
+                    // an unlink or rmdir operation actually
                     var result: c_int = undefined;
-                    if (redirector.unlinkat(dirfd, path_wtf8, 0, &result)) {
+                    const flags: c_int = if ((create_options & std.os.windows.FILE_DIRECTORY_FILE) != 0) AT.REMOVEDIR else 0;
+                    if (redirector.unlinkat(dirfd, path_wtf8, flags, &result)) {
                         if (result < 0) return .OBJECT_PATH_NOT_FOUND;
                         handle.* = unlinked_object_handle;
                         io_status_block.Information = windows_h.FILE_CREATED;
@@ -2734,6 +2742,10 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         }
 
         pub fn RemoveDirectoryA(path: LPCSTR) callconv(WINAPI) BOOL {
+            var result: c_int = undefined;
+            if (redirector.rmdir(path, &result)) {
+                return saveError(result);
+            }
             return Original.RemoveDirectoryA(path);
         }
 
