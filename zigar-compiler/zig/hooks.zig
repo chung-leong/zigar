@@ -376,7 +376,7 @@ const S = switch (os) {
     },
     else => std.c.S,
 };
-
+const fd_cwd = -100;
 const fd_min = 0xfffff;
 
 pub fn SyscallRedirector(comptime ModuleHost: type) type {
@@ -404,10 +404,10 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn faccessat2(dirfd: c_int, path: [*:0]const u8, mode: c_int, flags: c_int, result: *c_int) callconv(.c) bool {
-            if (isPrivateDescriptor(dirfd) or (dirfd < 0 and Host.isRedirecting(.stat))) {
+            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.stat))) {
                 var call: Syscall = .{ .cmd = .stat, .u = .{
                     .stat = .{
-                        .dirfd = remapDirFD(dirfd),
+                        .dirfd = remapDirDescriptor(dirfd),
                         .path = path,
                         .lookup_flags = convertLookupFlags(flags),
                     },
@@ -642,10 +642,10 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         fn fstatatT(comptime T: type, dirfd: c_int, path: [*:0]const u8, buf: *T, flags: c_int, result: *c_int) bool {
-            if (isPrivateDescriptor(dirfd) or (dirfd < 0 and Host.isRedirecting(.stat))) {
+            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.stat))) {
                 var call: Syscall = .{ .cmd = .stat, .u = .{
                     .stat = .{
-                        .dirfd = remapDirFD(dirfd),
+                        .dirfd = remapDirDescriptor(dirfd),
                         .path = path,
                         .lookup_flags = convertLookupFlags(flags),
                     },
@@ -729,7 +729,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn futimesat(dirfd: c_int, path: [*:0]const u8, tv: [*]const std.c.timeval, result: *c_int) callconv(.c) bool {
-            if (isPrivateDescriptor(dirfd) or (dirfd < 0 and Host.isRedirecting(.set_times))) {
+            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.set_times))) {
                 const times = convertTimeval(tv);
                 return utimensat(dirfd, path, &times, AT.SYMLINK_FOLLOW, result);
             }
@@ -889,10 +889,10 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn mkdirat(dirfd: c_int, path: [*:0]const u8, _: c_int, result: *c_int) callconv(.c) bool {
-            if (isPrivateDescriptor(dirfd) or (dirfd < 0 and Host.isRedirecting(.mkdir))) {
+            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.mkdir))) {
                 var call: Syscall = .{ .cmd = .mkdir, .u = .{
                     .mkdir = .{
-                        .dirfd = remapDirFD(dirfd),
+                        .dirfd = remapDirDescriptor(dirfd),
                         .path = path,
                     },
                 } };
@@ -912,11 +912,11 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn openat(dirfd: c_int, path: [*:0]const u8, oflags: c_int, _: c_int, result: *c_int) callconv(.c) bool {
-            if (isPrivateDescriptor(dirfd) or (dirfd < 0 and Host.isRedirecting(.open))) {
+            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.open))) {
                 const o: O = @bitCast(@as(i32, @intCast(oflags)));
                 var call: Syscall = .{ .cmd = .open, .u = .{
                     .open = .{
-                        .dirfd = remapDirFD(dirfd),
+                        .dirfd = remapDirDescriptor(dirfd),
                         .path = path,
                         .lookup_flags = .{ .SYMLINK_FOLLOW = !o.NOFOLLOW },
                         .descriptor_flags = .{
@@ -1057,11 +1057,11 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn statx(dirfd: c_int, path: [*:0]const u8, flags: c_int, mask: c_uint, buf: *std.os.linux.Statx, result: *c_int) callconv(.c) bool {
-            if (isPrivateDescriptor(dirfd) or (dirfd < 0 and Host.isRedirecting(.stat))) {
+            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.stat))) {
                 if (flags & std.os.linux.AT.EMPTY_PATH != 0 and std.mem.len(path) == 0) {
                     var call: Syscall = .{ .cmd = .fstat, .u = .{
                         .fstat = .{
-                            .fd = remapDirFD(dirfd),
+                            .fd = remapDirDescriptor(dirfd),
                         },
                     } };
                     const err = Host.redirectSyscall(&call);
@@ -1070,7 +1070,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 } else {
                     var call: Syscall = .{ .cmd = .stat, .u = .{
                         .stat = .{
-                            .dirfd = remapDirFD(dirfd),
+                            .dirfd = remapDirDescriptor(dirfd),
                             .path = path,
                             .lookup_flags = convertLookupFlags(flags),
                         },
@@ -1089,18 +1089,18 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn unlinkat(dirfd: c_int, path: [*:0]const u8, flags: c_int, result: *c_int) callconv(.c) bool {
-            if (isPrivateDescriptor(dirfd) or (dirfd < 0 and Host.isRedirecting(.unlink))) {
+            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.unlink))) {
                 var call: Syscall = if ((flags & AT.REMOVEDIR) != 0)
                     .{ .cmd = .rmdir, .u = .{
                         .rmdir = .{
-                            .dirfd = remapDirFD(dirfd),
+                            .dirfd = remapDirDescriptor(dirfd),
                             .path = path,
                         },
                     } }
                 else
                     .{ .cmd = .unlink, .u = .{
                         .unlink = .{
-                            .dirfd = remapDirFD(dirfd),
+                            .dirfd = remapDirDescriptor(dirfd),
                             .path = path,
                             .flags = @intCast(flags),
                         },
@@ -1120,10 +1120,10 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn utimensat(dirfd: c_int, path: [*:0]const u8, times: [*]const std.c.timespec, flags: c_int, result: *c_int) callconv(.c) bool {
-            if (isPrivateDescriptor(dirfd) or (dirfd < 0 and Host.isRedirecting(.set_times))) {
+            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.set_times))) {
                 var call: Syscall = .{ .cmd = .utimes, .u = .{
                     .utimes = .{
-                        .dirfd = remapDirFD(dirfd),
+                        .dirfd = remapDirDescriptor(dirfd),
                         .path = path,
                         .lookup_flags = convertLookupFlags(flags),
                         .atime = getNanoseconds(times[0]),
@@ -1168,9 +1168,9 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             };
         }
 
-        fn remapDirFD(dirfd: c_int) i32 {
+        fn remapDirDescriptor(dirfd: c_int) i32 {
             return switch (dirfd) {
-                AT.FDCWD => -1,
+                AT.FDCWD => fd_cwd,
                 else => @intCast(dirfd),
             };
         }
@@ -1198,6 +1198,10 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         fn copyStat(dest: anytype, src: *const std.os.wasi.filestat_t) void {
             const T = @typeInfo(@TypeOf(dest)).pointer.child;
+            if (T == std.os.wasi.filestat_t) {
+                dest.* = src.*;
+                return;
+            }
             dest.* = std.mem.zeroes(T);
             dest.ino = @intCast(src.ino);
             dest.size = @intCast(src.size);
@@ -2580,7 +2584,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             const delete_op = (desired_access & std.os.windows.DELETE) != 0;
             const dir_op = (create_options & std.os.windows.FILE_DIRECTORY_FILE) != 0;
             const redirecting = if (delete_op) redirector.Host.isRedirecting(.unlink) else redirector.Host.isRedirecting(.open);
-            if (redirector.isPrivateDescriptor(dirfd) or (dirfd < 0 and redirecting)) {
+            if (redirector.isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and redirecting)) {
                 const object_name = object_attributes.ObjectName;
                 const name_len = @divExact(object_name.Length, 2);
                 const path = object_name.Buffer.?[0..name_len];
@@ -2671,6 +2675,122 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return Original.NtLockFile(handle, event, apc_routine, apc_context, io_status_block, offset, len, key, fail_immediately, exclusive);
         }
 
+        pub fn NtQueryInformationFile(
+            handle: HANDLE,
+            io_status_block: *IO_STATUS_BLOCK,
+            file_information: *anyopaque,
+            length: ULONG,
+            file_information_class: FILE_INFORMATION_CLASS,
+        ) callconv(WINAPI) NTSTATUS {
+            const fd = toDescriptor(handle);
+            var stat: std.os.wasi.filestat_t = undefined;
+            var result: c_int = undefined;
+            if (redirector.fstatT(std.os.wasi.filestat_t, fd, &stat, &result)) {
+                const copy = struct {
+                    fn basic(d: *std.os.windows.FILE_BASIC_INFORMATION, s: std.os.wasi.filestat_t) void {
+                        d.* = .{
+                            .FileAttributes = switch (s.filetype) {
+                                .DIRECTORY => std.os.windows.FILE_ATTRIBUTE_DIRECTORY,
+                                else => std.os.windows.FILE_ATTRIBUTE_NORMAL,
+                            },
+                            .LastAccessTime = std.os.windows.toSysTime(s.atim),
+                            .LastWriteTime = std.os.windows.toSysTime(s.mtim),
+                            .ChangeTime = std.os.windows.toSysTime(s.ctim),
+                            .CreationTime = std.os.windows.toSysTime(s.ctim),
+                        };
+                    }
+
+                    fn internal(d: *std.os.windows.FILE_INTERNAL_INFORMATION, s: std.os.wasi.filestat_t) void {
+                        d.* = .{ .IndexNumber = @intCast(s.ino) };
+                    }
+
+                    fn name(d: *std.os.windows.FILE_NAME_INFORMATION, n: []const u8) void {
+                        d.FileNameLength = @intCast(n.len);
+                        const buf: [*]u16 = @ptrCast(&d.FileName[0]);
+                        _ = std.unicode.wtf8ToWtf16Le(buf[0..n.len], n) catch unreachable;
+                        buf[n.len] = 0;
+                    }
+
+                    fn standard(d: *std.os.windows.FILE_STANDARD_INFORMATION, s: std.os.wasi.filestat_t) void {
+                        d.* = .{
+                            .AllocationSize = @intCast(std.mem.alignForward(usize, s.size, 4096)),
+                            .EndOfFile = @intCast(s.size),
+                            .NumberOfLinks = @intCast(s.nlink),
+                            .DeletePending = TRUE,
+                            .Directory = if (s.filetype == .DIRECTORY) TRUE else FALSE,
+                        };
+                    }
+
+                    fn unsupported(d: anytype) void {
+                        d.* = std.mem.zeroes(@TypeOf(d.*));
+                    }
+                };
+                switch (file_information_class) {
+                    .FileAllInformation => {
+                        const info: *std.os.windows.FILE_ALL_INFORMATION = @ptrCast(@alignCast(file_information));
+                        copy.unsupported(&info.AccessInformation);
+                        copy.unsupported(&info.AlignmentInformation);
+                        copy.basic(&info.BasicInformation, stat);
+                        copy.unsupported(&info.EaInformation);
+                        copy.internal(&info.InternalInformation, stat);
+                        copy.unsupported(&info.ModeInformation);
+                        copy.unsupported(&info.PositionInformation);
+                        copy.standard(&info.StandardInformation, stat);
+                        const name: ?[]u8 = get: {
+                            const struct_size = @sizeOf(@TypeOf(info.*));
+                            if (length > struct_size) {
+                                var wtf8_buf: [128]u8 = undefined;
+                                const n = std.fmt.bufPrintZ(&wtf8_buf, fd_format_string, .{fd}) catch unreachable;
+                                // copy it if it fits
+                                if (n.len <= length - struct_size) break :get n;
+                            }
+                            break :get null;
+                        };
+                        if (name) |n| {
+                            copy.name(&info.NameInformation, n);
+                        } else {
+                            copy.unsupported(&info.NameInformation);
+                            return .BUFFER_OVERFLOW;
+                        }
+                    },
+                    .FileBasicInformation => {
+                        const info: *std.os.windows.FILE_BASIC_INFORMATION = @ptrCast(@alignCast(file_information));
+                        copy.basic(info, stat);
+                    },
+                    .FileInternalInformation => {
+                        const info: *std.os.windows.FILE_INTERNAL_INFORMATION = @ptrCast(@alignCast(file_information));
+                        copy.internal(info, stat);
+                    },
+                    .FileNameInformation => {
+                        const info: *std.os.windows.FILE_NAME_INFORMATION = @ptrCast(@alignCast(file_information));
+                        const name: ?[]u8 = get: {
+                            const struct_size = @sizeOf(@TypeOf(info.*));
+                            if (length > struct_size) {
+                                var wtf8_buf: [128]u8 = undefined;
+                                const n = std.fmt.bufPrintZ(&wtf8_buf, fd_format_string, .{fd}) catch unreachable;
+                                // copy it if it fits
+                                if (n.len <= length - struct_size) break :get n;
+                            }
+                            break :get null;
+                        };
+                        if (name) |n| {
+                            copy.name(info, n);
+                        } else {
+                            copy.unsupported(info);
+                            return .BUFFER_OVERFLOW;
+                        }
+                    },
+                    .FileStandardInformation => {
+                        const info: *std.os.windows.FILE_STANDARD_INFORMATION = @ptrCast(@alignCast(file_information));
+                        copy.standard(info, stat);
+                    },
+                    else => return .ACCESS_DENIED,
+                }
+                return .SUCCESS;
+            }
+            return Original.NtQueryInformationFile(handle, io_status_block, file_information, length, file_information_class);
+        }
+
         pub fn NtQueryObject(
             handle: HANDLE,
             object_information_class: OBJECT_INFORMATION_CLASS,
@@ -2683,7 +2803,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                 switch (object_information_class) {
                     .ObjectNameInformation => {
                         var wtf8_buf: [128]u8 = undefined;
-                        const name = std.fmt.bufPrintZ(&wtf8_buf, "\\\\??\\UNC\\@zigar\\fd\\{d}", .{fd}) catch unreachable;
+                        const name = std.fmt.bufPrintZ(&wtf8_buf, fd_format_string, .{fd}) catch unreachable;
                         const name_offset = @sizeOf(OBJECT_NAME_INFORMATION);
                         if (object_information_length > @sizeOf(OBJECT_NAME_INFORMATION)) {
                             const info: *OBJECT_NAME_INFORMATION = @ptrCast(@alignCast(object_information));
@@ -2852,7 +2972,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             if (handle == std.os.windows.INVALID_HANDLE_VALUE) return -1;
             return inline for (0..3) |i| {
                 if (handle == std_stream.get(i)) break @intCast(i);
-            } else @intCast(@intFromPtr(handle) >> 1);
+            } else std.math.cast(c_int, @intFromPtr(handle) >> 1) orelse -1;
         }
 
         fn fromDescriptor(fd: c_int) HANDLE {
@@ -2968,6 +3088,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         }
 
         const temporary_handle: HANDLE = @ptrFromInt(0x1fff_ffff);
+        const fd_format_string = "\\\\??\\UNC\\@zigar\\fd\\{d}";
 
         const std_stream = struct {
             var handles: [3]?HANDLE = .{ null, null, null };
@@ -3029,6 +3150,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             pub var NtClose: *const @TypeOf(Self.NtClose) = undefined;
             pub var NtCreateFile: *const @TypeOf(Self.NtCreateFile) = undefined;
             pub var NtLockFile: *const @TypeOf(Self.NtLockFile) = undefined;
+            pub var NtQueryInformationFile: *const @TypeOf(Self.NtQueryInformationFile) = undefined;
             pub var NtQueryObject: *const @TypeOf(Self.NtQueryObject) = undefined;
             pub var NtSetInformationFile: *const @TypeOf(Self.NtSetInformationFile) = undefined;
             pub var NtUnlockFile: *const @TypeOf(Self.NtUnlockFile) = undefined;

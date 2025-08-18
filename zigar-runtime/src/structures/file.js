@@ -1,5 +1,7 @@
 import { PosixDescriptorRight } from '../constants.js';
 import { mixin } from '../environment.js';
+import { InvalidStream } from '../errors.js';
+import { hasMethod, usize } from '../utils.js';
 
 export default mixin({
   // create File struct for outbound call
@@ -12,28 +14,29 @@ export default mixin({
     if (typeof(arg) === 'object' && typeof(arg?.handle) === 'number') {
       return arg;
     }
-    let file;
-    let fdRights = PosixDescriptorRight.fd_filestat_get 
-                 | PosixDescriptorRight.fd_seek
-                 | PosixDescriptorRight.fd_tell
-                 | PosixDescriptorRight.fd_advise
-                 | PosixDescriptorRight.fd_filestat_set_times;
-    try {
-      file = this.convertReader(arg);
-      fdRights |= PosixDescriptorRight.fd_read;
-    } catch (err) {
-      try {
-        file = this.convertWriter(arg);
-        fdRights |= PosixDescriptorRight.fd_write
-                  | PosixDescriptorRight.fd_sync
-                  | PosixDescriptorRight.fd_datasync
-                  | PosixDescriptorRight.fd_allocate
-                  | PosixDescriptorRight.fd_filestat_set_size;
-      } catch {
-        throw err;
+    const file = this.convertReader(arg) ?? this.convertWriter(arg);
+    if (!file) {
+      throw new InvalidStream(PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write, arg);
+    } 
+    const rights = this.getDefaultRights('file');
+    const methodRights = {
+      read: PosixDescriptorRight.fd_read,
+      write: PosixDescriptorRight.fd_write,
+      seek: PosixDescriptorRight.fd_seek,
+      tell: PosixDescriptorRight.fd_tell,
+      allocate: PosixDescriptorRight.fd_allocate,
+    }
+    // remove rights to actions that can't be performed
+    for (const [ name, right ] of Object.entries(methodRights)) {
+      if (!hasMethod(file, name)) {
+        rights[0] &= ~right;
       }
     }
-    const handle = this.createStreamHandle(file, fdRights);
-    return { handle };
+    let fd = this.createStreamHandle(file, rights);
+    if (process.env.TARGET === 'node' && process.platform === 'win32') {
+      // handle is pointer
+      fd = this.obtainZigView(usize(fd << 1), 0);
+    }
+    return { handle: fd };
   },
 });

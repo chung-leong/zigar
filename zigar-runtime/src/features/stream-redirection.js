@@ -6,30 +6,31 @@ import { decodeText } from '../utils.js';
 const stdinRights = PosixDescriptorRight.fd_right;
 const stdoutRights = PosixDescriptorRight.fd_write;
 
-const rootRights = PosixDescriptorRight.fd_seek
-                 | PosixDescriptorRight.fd_fdstat_set_flags
-                 | PosixDescriptorRight.fd_tell
-                 | PosixDescriptorRight.path_create_directory
-                 | PosixDescriptorRight.path_create_file
-                 | PosixDescriptorRight.path_open
-                 | PosixDescriptorRight.fd_readdir
-                 | PosixDescriptorRight.path_filestat_get
-                 | PosixDescriptorRight.path_filestat_set_size
-                 | PosixDescriptorRight.path_filestat_set_times
-                 | PosixDescriptorRight.fd_filestat_get
-                 | PosixDescriptorRight.fd_filestat_set_times
-                 | PosixDescriptorRight.path_remove_directory
-                 | PosixDescriptorRight.path_unlink_file;
-const rootRightsInheriting = rootRights 
-                           | PosixDescriptorRight.fd_datasync
-                           | PosixDescriptorRight.fd_read
-                           | PosixDescriptorRight.fd_seek
-                           | PosixDescriptorRight.fd_sync
-                           | PosixDescriptorRight.fd_write
-                           | PosixDescriptorRight.fd_advise
-                           | PosixDescriptorRight.fd_allocate
-                           | PosixDescriptorRight.fd_filestat_get
-                           | PosixDescriptorRight.fd_filestat_set_size;
+const defaultDirRights =  PosixDescriptorRight.fd_seek
+                        | PosixDescriptorRight.fd_fdstat_set_flags
+                        | PosixDescriptorRight.fd_tell
+                        | PosixDescriptorRight.path_create_directory
+                        | PosixDescriptorRight.path_create_file
+                        | PosixDescriptorRight.path_open
+                        | PosixDescriptorRight.fd_readdir
+                        | PosixDescriptorRight.path_filestat_get
+                        | PosixDescriptorRight.path_filestat_set_size
+                        | PosixDescriptorRight.path_filestat_set_times
+                        | PosixDescriptorRight.fd_filestat_get
+                        | PosixDescriptorRight.fd_filestat_set_times
+                        | PosixDescriptorRight.path_remove_directory
+                        | PosixDescriptorRight.path_unlink_file;
+const defaultFileRights = PosixDescriptorRight.fd_datasync
+                        | PosixDescriptorRight.fd_read
+                        | PosixDescriptorRight.fd_seek
+                        | PosixDescriptorRight.fd_sync
+                        | PosixDescriptorRight.fd_tell
+                        | PosixDescriptorRight.fd_write
+                        | PosixDescriptorRight.fd_advise
+                        | PosixDescriptorRight.fd_allocate
+                        | PosixDescriptorRight.fd_filestat_get
+                        | PosixDescriptorRight.fd_filestat_set_times
+                        | PosixDescriptorRight.fd_filestat_set_size;
 
 export default mixin({
   init() {
@@ -56,27 +57,9 @@ export default mixin({
       },
     };
     this.streamMap = new Map([ 
-      [ 
-        PosixDescriptor.stdout, [ 
-          this.createLogWriter('stdout'), 
-          [ stdoutRights, 0 ], 
-          0, // PosixDescriptorFlag
-        ] 
-      ], 
-      [ 
-        PosixDescriptor.stderr, [ 
-          this.createLogWriter('stderr'), 
-          [ stdoutRights, 0 ],
-          0,
-        ],
-      ], 
-      [ 
-        PosixDescriptor.root, [ 
-          root, 
-          [ rootRights, rootRightsInheriting ],
-          0,
-        ], 
-      ] 
+      [ PosixDescriptor.stdout, [ this.createLogWriter('stdout'), this.getDefaultRights('file'), 0 ] ], 
+      [ PosixDescriptor.stderr, [ this.createLogWriter('stderr'), this.getDefaultRights('file'), 0 ] ], 
+      [ PosixDescriptor.root, [ root, this.getDefaultRights('dir'), 0 ] ], 
     ]);
     this.flushRequestMap = new Map();
     this.nextStreamHandle = PosixDescriptor.min;
@@ -194,6 +177,13 @@ export default mixin({
         clearTimeout(timeout);
       }
       map.clear();
+    }
+  },
+  getDefaultRights(type) {
+    if (type === 'dir') {
+      return [ defaultDirRights, defaultDirRights | defaultFileRights ];
+    } else {
+      return [ defaultFileRights, 0 ];
     }
   },
   ...(process.env.TARGET === 'node' ? {

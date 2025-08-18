@@ -621,19 +621,40 @@ export function addTests(importModule, options) {
         await shutdown();
       }
     })
-    it('should print stats of an Uint8Array passed as a file', async function() {
+    it('should get stats of an Uint8Array passed as a file', async function() {
       this.timeout(0);
-      const { print } = await importTest('stat-opened-file');
+      const { __zigar, print } = await importTest('stat-opened-file');
       const array = new Uint8Array(17);
-      const lines = await capture(() => print(array));
-      expect(lines).to.eql([
+      const lines1 = await capture(() => print(array));
+      expect(lines1).to.eql([
         'size = 17',
         'ctime = 0',
         'mtime = 0',
         'atime = 0',
       ]);
+      let event;
+      __zigar.on('stat', (evt) => {
+        event = evt;
+        return {
+          size: 345,
+          ctime: 123,
+          mtime: 456,
+          atime: 1_000_000_000_000,
+        }
+      })
+      const lines2 = await capture(() => print(array));
+      expect(lines2).to.eql([
+        'size = 345',
+        'ctime = 100',
+        'mtime = 400',
+        'atime = 1000000000000',
+      ]);
+      expect(event).to.eql({
+        target: array,
+        flags: {},
+      })
     })
-    it('should print stats of an opened file using posix function', async function() {
+    it('should get stats of an opened file using posix function', async function() {
       this.timeout(0);
       const { __zigar, print } = await importTest('stat-opened-file-with-posix-function');
       const array = new Uint8Array(17);
@@ -681,7 +702,7 @@ export function addTests(importModule, options) {
         ]);
       }
     })
-    it('should print stats of file referenced by path using posix function', async function() {
+    it('should get stats of file referenced by path using posix function', async function() {
       this.timeout(0);
       const { __zigar, print, printLink } = await importTest('stat-file-by-path-with-posix-function');
       const path = '/hello.txt';
