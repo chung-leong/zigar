@@ -2511,11 +2511,32 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return Original.GetFileAttributesW(path);
         }
 
-        pub fn GetFileSize(handle: HANDLE, size_high: *DWORD) callconv(WINAPI) DWORD {
+        pub fn GetFileSize(handle: HANDLE, size_high: ?*DWORD) callconv(WINAPI) DWORD {
+            const fd = toDescriptor(handle);
+            var stat: std.os.wasi.filestat_t = undefined;
+            var result: c_int = undefined;
+            if (redirector.fstatT(std.os.wasi.filestat_t, fd, &stat, &result)) {
+                if (result < 0) {
+                    _ = saveError(result);
+                    return windows_h.INVALID_FILE_SIZE;
+                }
+                _ = windows_h.SetLastError(0);
+                if (size_high) |ptr| ptr.* = @truncate(stat.size >> 32);
+                return @truncate(stat.size);
+            }
             return Original.GetFileSize(handle, size_high);
         }
 
         pub fn GetFileSizeEx(handle: HANDLE, size: *LARGE_INTEGER) callconv(WINAPI) BOOL {
+            const fd = toDescriptor(handle);
+            var stat: std.os.wasi.filestat_t = undefined;
+            var result: c_int = undefined;
+            if (redirector.fstatT(std.os.wasi.filestat_t, fd, &stat, &result)) {
+                if (result < 0) return saveError(result);
+                _ = windows_h.SetLastError(0);
+                size.* = @intCast(stat.size);
+                return TRUE;
+            }
             return Original.GetFileSizeEx(handle, size);
         }
 

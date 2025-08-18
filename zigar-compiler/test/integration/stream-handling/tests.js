@@ -771,6 +771,14 @@ export function addTests(importModule, options) {
         ]);
       }
     })
+    skip.entirely.unless(target === 'win32').
+    it('should get size of an opened file using win32 function', async function() {
+      this.timeout(0);
+      const { get, getEx } = await importTest('get-size-with-win32-function');
+      const array = new Uint8Array(17);
+      expect(get(array)).to.equal(17n);
+      expect(getEx(array)).to.equal(17n);
+    });
     skip.entirely.if(target === 'win32').
     it('should set access and last modified time of an opened file using posix function', async function() {
       this.timeout(0);
