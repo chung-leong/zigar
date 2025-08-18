@@ -1589,6 +1589,49 @@ export function addTests(importModule, options) {
       });
       expect(() => remove(map, 'world')).to.throw();
     });
+    skip.entirely.unless(target === 'win32').
+    it('should make directory using win32 function', async function() {
+      this.timeout(0);
+      const { __zigar, mkdir, mkdirW } = await importTest('make-directory-with-win32-function');
+      let event;
+      __zigar.on('mkdir', (evt) => {
+        event = evt;
+        return true;
+      });
+      mkdir('/hello/world');
+      expect(event).to.eql({ 
+        parent: null, 
+        path: 'hello/world',
+      });
+      mkdirW('/cześć/świecie');
+      expect(event).to.eql({ 
+        parent: null, 
+        path: 'cześć/świecie'
+      });
+    })
+    it('should make directory in directory', async function() {
+      this.timeout(0);
+      const { __zigar, add } = await importTest('make-directory-at-dir');
+      let event;
+      __zigar.on('mkdir', (evt) => {
+        event = evt;
+        return true;
+      });
+      const map = new Map([
+        [ 'hello.txt', { type: 'file', content: 'Hello world' } ],
+        [ 'test.txt', { type: 'file', content: 'This is a test and this is only a test' } ],
+        [ 'world', { type: 'directory' } ],
+      ]);
+      expect(() => add(map, 'cow')).to.not.throw();
+      expect(event).to.eql({
+        parent: map,
+        path: 'cow',
+      });
+      __zigar.on('mkdir', (evt) => {
+        return false;
+      });
+      expect(() => add(map, 'world')).to.throw();
+    });
   })
 }
 

@@ -2436,7 +2436,7 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
 pub fn Win32SubstituteS(comptime redirector: type) type {
     return struct {
         pub fn CloseHandle(handle: HANDLE) callconv(WINAPI) BOOL {
-            if (handle == unlinked_object_handle) return TRUE;
+            if (handle == temporary_handle) return TRUE;
             const fd = toDescriptor(handle);
             var result: c_int = undefined;
             if (redirector.close(fd, &result)) {
@@ -2449,6 +2449,10 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             path: LPCSTR,
             security_attributes: *SECURITY_ATTRIBUTES,
         ) callconv(WINAPI) BOOL {
+            var result: c_int = undefined;
+            if (redirector.mkdir(path, 0, &result)) {
+                return saveError(result);
+            }
             return Original.CreateDirectoryA(path, security_attributes);
         }
 
@@ -2550,7 +2554,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         }
 
         fn NtClose(handle: HANDLE) callconv(WINAPI) NTSTATUS {
-            if (handle == unlinked_object_handle) return .SUCCESS;
+            if (handle == temporary_handle) return .SUCCESS;
             const fd = toDescriptor(handle);
             var result: c_int = undefined;
             if (redirector.close(fd, &result)) {
@@ -2574,6 +2578,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         ) callconv(WINAPI) NTSTATUS {
             const dirfd: c_int = if (object_attributes.RootDirectory) |dh| toDescriptor(dh) else -1;
             const delete_op = (desired_access & std.os.windows.DELETE) != 0;
+            const dir_op = (create_options & std.os.windows.FILE_DIRECTORY_FILE) != 0;
             const redirecting = if (delete_op) redirector.Host.isRedirecting(.unlink) else redirector.Host.isRedirecting(.open);
             if (redirector.isPrivateDescriptor(dirfd) or (dirfd < 0 and redirecting)) {
                 const object_name = object_attributes.ObjectName;
@@ -2584,44 +2589,55 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                 if (delete_op) {
                     // an unlink or rmdir operation actually
                     var result: c_int = undefined;
-                    const flags: c_int = if ((create_options & std.os.windows.FILE_DIRECTORY_FILE) != 0) AT.REMOVEDIR else 0;
+                    const flags: c_int = if (dir_op) AT.REMOVEDIR else 0;
                     if (redirector.unlinkat(dirfd, path_wtf8, flags, &result)) {
                         if (result < 0) return .OBJECT_PATH_NOT_FOUND;
-                        handle.* = unlinked_object_handle;
+                        handle.* = temporary_handle;
                         io_status_block.Information = windows_h.FILE_CREATED;
                         return .SUCCESS;
                     }
                 } else {
-                    var oflags: O = switch (create_disposition) {
-                        std.os.windows.FILE_SUPERSEDE => .{ .CREAT = true, .TRUNC = true },
-                        std.os.windows.FILE_CREATE => .{ .CREAT = true },
-                        std.os.windows.FILE_OPEN => .{},
-                        std.os.windows.FILE_OPEN_IF => .{ .CREAT = true },
-                        std.os.windows.FILE_OVERWRITE => .{ .CREAT = true, .TRUNC = true },
-                        std.os.windows.FILE_OVERWRITE_IF => .{ .CREAT = true, .TRUNC = true },
-                        else => .{},
-                    };
-                    const r_access = (desired_access & std.os.windows.GENERIC_READ) != 0;
-                    const w_access = (desired_access & std.os.windows.GENERIC_WRITE) != 0;
-                    if (r_access) {
-                        oflags.ACCMODE = if (w_access) .RDWR else .RDONLY;
-                    } else if (w_access) {
-                        oflags.ACCMODE = .WRONLY;
-                    }
-                    const oflags_int: u32 = @bitCast(oflags);
                     const mode = 0;
-                    var fd: c_int = undefined;
-                    if (redirector.openat(dirfd, path_wtf8, @intCast(oflags_int), mode, &fd)) {
-                        if (fd < 0) return .OBJECT_PATH_NOT_FOUND;
-                        handle.* = fromDescriptor(fd);
-                        io_status_block.Information = switch (create_disposition) {
-                            std.os.windows.FILE_SUPERSEDE => windows_h.FILE_SUPERSEDED,
-                            std.os.windows.FILE_CREATE => windows_h.FILE_CREATED,
-                            std.os.windows.FILE_OPEN, std.os.windows.FILE_OPEN_IF => windows_h.FILE_OPENED,
-                            std.os.windows.FILE_OVERWRITE, std.os.windows.FILE_OVERWRITE_IF => windows_h.FILE_OVERWRITTEN,
-                            else => windows_h.FILE_OPENED,
+                    if (dir_op) {
+                        if (create_disposition != std.os.windows.FILE_CREATE) return .ACCESS_DENIED;
+                        var result: c_int = undefined;
+                        if (redirector.mkdirat(dirfd, path_wtf8, mode, &result)) {
+                            if (result < 0) return .ACCESS_DENIED;
+                            handle.* = temporary_handle;
+                            io_status_block.Information = windows_h.FILE_CREATED;
+                            return .SUCCESS;
+                        }
+                    } else {
+                        var oflags: O = switch (create_disposition) {
+                            std.os.windows.FILE_SUPERSEDE => .{ .CREAT = true, .TRUNC = true },
+                            std.os.windows.FILE_CREATE => .{ .CREAT = true },
+                            std.os.windows.FILE_OPEN => .{},
+                            std.os.windows.FILE_OPEN_IF => .{ .CREAT = true },
+                            std.os.windows.FILE_OVERWRITE => .{ .CREAT = true, .TRUNC = true },
+                            std.os.windows.FILE_OVERWRITE_IF => .{ .CREAT = true, .TRUNC = true },
+                            else => .{},
                         };
-                        return .SUCCESS;
+                        const r_access = (desired_access & std.os.windows.GENERIC_READ) != 0;
+                        const w_access = (desired_access & std.os.windows.GENERIC_WRITE) != 0;
+                        if (r_access) {
+                            oflags.ACCMODE = if (w_access) .RDWR else .RDONLY;
+                        } else if (w_access) {
+                            oflags.ACCMODE = .WRONLY;
+                        }
+                        const oflags_int: u32 = @bitCast(oflags);
+                        var fd: c_int = undefined;
+                        if (redirector.openat(dirfd, path_wtf8, @intCast(oflags_int), mode, &fd)) {
+                            if (fd < 0) return .OBJECT_PATH_NOT_FOUND;
+                            handle.* = fromDescriptor(fd);
+                            io_status_block.Information = switch (create_disposition) {
+                                std.os.windows.FILE_SUPERSEDE => windows_h.FILE_SUPERSEDED,
+                                std.os.windows.FILE_CREATE => windows_h.FILE_CREATED,
+                                std.os.windows.FILE_OPEN, std.os.windows.FILE_OPEN_IF => windows_h.FILE_OPENED,
+                                std.os.windows.FILE_OVERWRITE, std.os.windows.FILE_OVERWRITE_IF => windows_h.FILE_OVERWRITTEN,
+                                else => windows_h.FILE_OPENED,
+                            };
+                            return .SUCCESS;
+                        }
                     }
                 }
             }
@@ -2699,7 +2715,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             length: ULONG,
             file_information_class: FILE_INFORMATION_CLASS,
         ) callconv(WINAPI) NTSTATUS {
-            if (handle == unlinked_object_handle or isPrivateHandle(handle)) {
+            if (handle == temporary_handle or isPrivateHandle(handle)) {
                 return .SUCCESS;
             }
             return Original.NtSetInformationFile(handle, io_status_block, file_information, length, file_information_class);
@@ -2951,7 +2967,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return attributes;
         }
 
-        const unlinked_object_handle: HANDLE = @ptrFromInt(0x1fff_ffff);
+        const temporary_handle: HANDLE = @ptrFromInt(0x1fff_ffff);
 
         const std_stream = struct {
             var handles: [3]?HANDLE = .{ null, null, null };
