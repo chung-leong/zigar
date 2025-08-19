@@ -205,6 +205,11 @@ pub const Syscall = extern struct {
     pub const Filestat = std.os.wasi.filestat_t;
     pub const Fdflags = std.os.wasi.fdflags_t;
 };
+const ThreadInfo = struct {
+    proc: *const anyopaque,
+    arg: ?*anyopaque,
+    instance: *anyopaque,
+};
 const ssize_t = c_long;
 const off_t = c_long;
 const off64_t = i64;
@@ -1431,11 +1436,12 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         }
 
         pub fn pthread_create(thread: *std.c.pthread_t, attr: ?*const std.c.pthread_attr_t, start_routine: *const fn (?*anyopaque) callconv(.c) ?*anyopaque, arg: ?*anyopaque) callconv(.c) c_int {
+            const instance = redirector.Host.getInstance() catch return @intFromEnum(std.c.E.FAULT);
             const info = c_allocator.create(ThreadInfo) catch return @intFromEnum(std.c.E.NOMEM);
             info.* = .{
                 .proc = start_routine,
                 .arg = arg,
-                .instance = redirector.Host.getInstance() catch return @intFromEnum(std.c.E.FAULT),
+                .instance = instance,
             };
             return Original.pthread_create(thread, attr, &setThreadContext, info);
         }
@@ -1574,15 +1580,9 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             } else @compileError("Unable to get error number pointer");
         }
 
-        const ThreadInfo = struct {
-            proc: *const fn (?*anyopaque) callconv(.c) ?*anyopaque,
-            arg: ?*anyopaque,
-            instance: *anyopaque,
-        };
-
         fn setThreadContext(ptr: ?*anyopaque) callconv(.c) ?*anyopaque {
             const info: *ThreadInfo = @ptrCast(@alignCast(ptr.?));
-            const proc = info.proc;
+            const proc: *const fn (?*anyopaque) callconv(.c) ?*anyopaque = @ptrCast(info.proc);
             const arg = info.arg;
             const instance = info.instance;
             c_allocator.destroy(info);
@@ -2472,6 +2472,26 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return Original.CreateDirectoryW(path, security_attributes);
         }
 
+        pub fn CreateThread(
+            thread_attributes: ?*SECURITY_ATTRIBUTES,
+            stack_size: SIZE_T,
+            start_address: LPTHREAD_START_ROUTINE,
+            parameter: ?LPVOID,
+            creation_flags: DWORD,
+            thread_id: ?*DWORD,
+        ) callconv(WINAPI) ?HANDLE {
+            const instance = redirector.Host.getInstance() catch {
+                _ = saveError(std.c.E.FAULT);
+                return null;
+            };
+            const info = c_allocator.create(ThreadInfo) catch {
+                _ = saveError(std.c.E.NOMEM);
+                return null;
+            };
+            info.* = .{ .proc = start_address, .arg = parameter, .instance = instance };
+            return Original.CreateThread(thread_attributes, stack_size, &setThreadContext, info, creation_flags, thread_id);
+        }
+
         pub fn DeleteFileA(path: LPCSTR) callconv(WINAPI) BOOL {
             var result: c_int = undefined;
             if (redirector.unlink(path, &result)) {
@@ -3141,6 +3161,16 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return attributes;
         }
 
+        fn setThreadContext(ptr: LPVOID) callconv(WINAPI) DWORD {
+            const info: *ThreadInfo = @ptrCast(@alignCast(ptr));
+            const proc: *const fn (?LPVOID) callconv(WINAPI) DWORD = @ptrCast(info.proc);
+            const arg = info.arg;
+            const instance = info.instance;
+            c_allocator.destroy(info);
+            redirector.Host.initializeThread(instance) catch {};
+            return proc(arg);
+        }
+
         const temporary_handle: HANDLE = @ptrFromInt(0x1fff_ffff);
         const fd_format_string = "\\\\??\\UNC\\@zigar\\fd\\{x}";
         const fd_path_prefix = fd_format_string[0 .. fd_format_string.len - 3];
@@ -3173,8 +3203,9 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         const LONG = std.os.windows.LONG;
         const LPCSTR = std.os.windows.LPCSTR;
         const LPCVOID = std.os.windows.LPCVOID;
-        const LPOVERLAPPED_COMPLETION_ROUTINE = std.os.windows.LPOVERLAPPED_COMPLETION_ROUTINE;
         const LPCWSTR = std.os.windows.LPCWSTR;
+        const LPOVERLAPPED_COMPLETION_ROUTINE = std.os.windows.LPOVERLAPPED_COMPLETION_ROUTINE;
+        const LPTHREAD_START_ROUTINE = std.os.windows.LPTHREAD_START_ROUTINE;
         const LPVOID = std.os.windows.LPVOID;
         const NTSTATUS = std.os.windows.NTSTATUS;
         const OBJECT_ATTRIBUTES = std.os.windows.OBJECT_ATTRIBUTES;
@@ -3182,6 +3213,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         const OBJECT_INFORMATION_CLASS = std.os.windows.OBJECT_INFORMATION_CLASS;
         const OVERLAPPED = std.os.windows.OVERLAPPED;
         const SECURITY_ATTRIBUTES = std.os.windows.SECURITY_ATTRIBUTES;
+        const SIZE_T = std.os.windows.SIZE_T;
         const ULONG = std.os.windows.ULONG;
         const WCHAR = std.os.windows.WCHAR;
         const FALSE = std.os.windows.FALSE;
@@ -3193,6 +3225,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             pub var CloseHandle: *const @TypeOf(Self.CloseHandle) = undefined;
             pub var CreateDirectoryA: *const @TypeOf(Self.CreateDirectoryA) = undefined;
             pub var CreateDirectoryW: *const @TypeOf(Self.CreateDirectoryW) = undefined;
+            pub var CreateThread: *const @TypeOf(Self.CreateThread) = undefined;
             pub var DeleteFileA: *const @TypeOf(Self.DeleteFileA) = undefined;
             pub var DeleteFileW: *const @TypeOf(Self.DeleteFileW) = undefined;
             pub var GetFileAttributesA: *const @TypeOf(Self.GetFileAttributesA) = undefined;
