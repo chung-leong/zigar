@@ -2623,6 +2623,36 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return Original.GetFileAttributesW(path);
         }
 
+        pub fn GetFileInformationByHandle(
+            handle: HANDLE,
+            file_information: *BY_HANDLE_FILE_INFORMATION,
+        ) callconv(WINAPI) BOOL {
+            const fd = toDescriptor(handle);
+            var stat: std.os.wasi.filestat_t = undefined;
+            var result: c_int = undefined;
+            if (redirector.fstatT(std.os.wasi.filestat_t, fd, &stat, &result)) {
+                if (result < 0) return saveError(result);
+                file_information.* = .{
+                    .dwFileAttributes = switch (stat.filetype) {
+                        .DIRECTORY => std.os.windows.FILE_ATTRIBUTE_DIRECTORY,
+                        .SYMBOLIC_LINK => std.os.windows.FILE_ATTRIBUTE_REPARSE_POINT,
+                        else => std.os.windows.FILE_ATTRIBUTE_NORMAL,
+                    },
+                    .nFileIndexLow = @truncate(stat.ino),
+                    .nFileIndexHigh = @truncate(stat.ino >> 32),
+                    .nFileSizeLow = @truncate(stat.size),
+                    .nFileSizeHigh = @truncate(stat.size >> 32),
+                    .nNumberOfLinks = @intCast(stat.nlink),
+                    .ftCreationTime = std.os.windows.nanoSecondsToFileTime(stat.ctim),
+                    .ftLastAccessTime = std.os.windows.nanoSecondsToFileTime(stat.atim),
+                    .ftLastWriteTime = std.os.windows.nanoSecondsToFileTime(stat.mtim),
+                    .dwVolumeSerialNumber = 0,
+                };
+                return TRUE;
+            }
+            return Original.GetFileInformationByHandle(handle, file_information);
+        }
+
         pub fn GetFileSize(handle: HANDLE, size_high: ?*DWORD) callconv(WINAPI) DWORD {
             const fd = toDescriptor(handle);
             var stat: std.os.wasi.filestat_t = undefined;
@@ -3386,6 +3416,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         const ACCESS_MASK = std.os.windows.ACCESS_MASK;
         const BOOL = std.os.windows.BOOL;
         const BOOLEAN = std.os.windows.BOOLEAN;
+        const BY_HANDLE_FILE_INFORMATION = std.os.windows.BY_HANDLE_FILE_INFORMATION;
         const DWORD = std.os.windows.DWORD;
         const FILE_INFORMATION_CLASS = std.os.windows.FILE_INFORMATION_CLASS;
         const HANDLE = std.os.windows.HANDLE;
@@ -3425,6 +3456,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             pub var DeleteFileW: *const @TypeOf(Self.DeleteFileW) = undefined;
             pub var GetFileAttributesA: *const @TypeOf(Self.GetFileAttributesA) = undefined;
             pub var GetFileAttributesW: *const @TypeOf(Self.GetFileAttributesW) = undefined;
+            pub var GetFileInformationByHandle: *const @TypeOf(Self.GetFileInformationByHandle) = undefined;
             pub var GetFileSize: *const @TypeOf(Self.GetFileSize) = undefined;
             pub var GetFileSizeEx: *const @TypeOf(Self.GetFileSizeEx) = undefined;
             pub var GetHandleInformation: *const @TypeOf(Self.GetHandleInformation) = undefined;

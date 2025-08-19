@@ -810,6 +810,40 @@ export function addTests(importModule, options) {
       expect(get(array)).to.equal(17n);
       expect(getEx(array)).to.equal(17n);
     });
+    skip.entirely.unless(target === 'win32').
+    it('should get stats of an opened file using win32 function', async function() {
+      this.timeout(0);
+      const { __zigar, print } = await importTest('get-info-with-win32-function');
+      const array = new Uint8Array(17);
+      const lines1 = await capture(() => print(array));
+      expect(lines1).to.eql([
+        'size = 17',
+        'ctime = 3577643008, 27111902',
+        'atime = 3577643008, 27111902',
+        'mtime = 3577643008, 27111902',
+      ]);
+      let event;
+      __zigar.on('stat', (evt) => {
+        event = evt;
+        return {
+          size: 12345,
+          ctime: 1_000_000_000 + 100,
+          atime: 1_000_000_000 + 200,
+          mtime: 1_000_000_000 + 300,
+        };
+      });
+      const lines2 = await capture(() => print(array));
+      expect(lines2).to.eql([
+        'size = 12345',
+        'ctime = 3587643009, 27111902',
+        'atime = 3587643010, 27111902',
+        'mtime = 3587643011, 27111902',
+      ]);
+      expect(event).to.eql({
+        target: array,
+        flags: {},
+      });
+    });
     skip.entirely.if(target === 'win32').
     it('should set access and last modified time of an opened file using posix function', async function() {
       this.timeout(0);
