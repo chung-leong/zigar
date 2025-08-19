@@ -751,88 +751,104 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         fn getdentsT(comptime T: type, dirfd: c_int, buffer: [*]u8, len: c_uint, result: *c_int) bool {
             if (isPrivateDescriptor(dirfd)) {
-                // get offset to name in the wasi struct and in the system struct
-                const src_name_offset = @sizeOf(std.os.wasi.dirent_t);
-                const name_offset = @offsetOf(T, "name");
-                // adjust the amount of data to retrieve if the posix struct is bigger than the wasi struct
-                const diff = switch (name_offset > src_name_offset) {
-                    true => (name_offset - src_name_offset) * (len / 64),
-                    false => 0,
-                };
-                var stb = std.heap.stackFallback(1024 * 8, c_allocator);
-                const allocator = stb.get();
-                const src_buffer = allocator.alloc(u8, len - diff) catch {
-                    result.* = intFromError(.NOMEM);
-                    return true;
-                };
-                defer allocator.free(src_buffer);
-                var call: Syscall = .{ .cmd = .getdents, .u = .{
-                    .getdents = .{
-                        .dirfd = @intCast(dirfd),
-                        .buffer = src_buffer.ptr,
-                        .len = @intCast(src_buffer.len),
-                    },
-                } };
-                const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) {
-                    // translate wasi dirents to system dirents
-                    const src_used = call.u.getdents.read;
-                    var src_offset: usize = 0;
-                    var offset: usize = 0;
-                    var next_pos: off_t = 0;
-                    while (src_offset + src_name_offset < src_used) {
-                        const src_entry: *align(1) std.os.wasi.dirent_t = @ptrCast(&src_buffer[src_offset]);
-                        const entry: *align(1) T = @ptrCast(&buffer[offset]);
-                        const name_len: usize = src_entry.namlen;
-                        const reclen = name_offset + name_len + 1;
-                        if (offset + reclen >= len) {
-                            // retrieved too much data--reposition cursor before exiting
-                            var seek_result: off_t = undefined;
-                            _ = lseek(dirfd, next_pos, std.c.SEEK.SET, &seek_result);
-                            break;
-                        }
-                        if (@hasField(T, "ino")) {
-                            entry.ino = @intCast(src_entry.ino);
-                            if (os == .darwin and entry.ino == 0) entry.ino = 1;
-                        } else if (@hasField(T, "fileno")) {
-                            entry.fileno = @intCast(src_entry.ino);
-                        }
-                        if (@hasField(T, "off")) {
-                            entry.off = @intCast(src_entry.next);
-                        } else if (@hasField(T, "seekoff")) {
-                            entry.seekoff = @intCast(src_entry.next);
-                        }
-                        if (@hasField(T, "reclen")) {
-                            entry.reclen = @intCast(reclen);
-                        }
-                        if (@hasField(T, "namlen")) {
-                            entry.namlen = @intCast(name_len);
-                        }
-                        if (@hasField(T, "type")) {
-                            entry.type = switch (src_entry.type) {
-                                .BLOCK_DEVICE => DT.BLK,
-                                .CHARACTER_DEVICE => DT.CHR,
-                                .DIRECTORY => DT.DIR,
-                                .REGULAR_FILE => DT.REG,
-                                .SOCKET_DGRAM => DT.SOCK,
-                                .SOCKET_STREAM => DT.SOCK,
-                                .SYMBOLIC_LINK => DT.LNK,
-                                else => DT.UNKNOWN,
-                            };
-                        }
-                        const src_name: [*]const u8 = @ptrCast(&src_buffer[src_offset + src_name_offset]);
-                        const name: [*]u8 = @ptrCast(&buffer[offset + name_offset]);
-                        @memcpy(name[0..name_len], src_name[0..name_len]);
-                        name[name_len] = 0;
-                        src_offset += src_name_offset + name_len;
-                        offset += reclen;
-                        next_pos = @intCast(src_entry.next);
+                if (T == std.os.wasi.dirent_t) {
+                    var call: Syscall = .{ .cmd = .getdents, .u = .{
+                        .getdents = .{
+                            .dirfd = @intCast(dirfd),
+                            .buffer = buffer,
+                            .len = @intCast(len),
+                        },
+                    } };
+                    const err = Host.redirectSyscall(&call);
+                    if (err == .SUCCESS) {
+                        result.* = @intCast(call.u.getdents.read);
+                    } else {
+                        result.* = intFromError(err);
                     }
-                    result.* = @intCast(offset);
                 } else {
-                    result.* = intFromError(err);
+                    // get offset to name in the wasi struct and in the system struct
+                    const src_name_offset = @sizeOf(std.os.wasi.dirent_t);
+                    const name_offset = @offsetOf(T, "name");
+                    // adjust the amount of data to retrieve if the posix struct is bigger than the wasi struct
+                    const diff = switch (name_offset > src_name_offset) {
+                        true => (name_offset - src_name_offset) * (len / 64),
+                        false => 0,
+                    };
+                    var stb = std.heap.stackFallback(1024 * 8, c_allocator);
+                    const allocator = stb.get();
+                    const src_buffer = allocator.alloc(u8, len - diff) catch {
+                        result.* = intFromError(.NOMEM);
+                        return true;
+                    };
+                    defer allocator.free(src_buffer);
+                    var call: Syscall = .{ .cmd = .getdents, .u = .{
+                        .getdents = .{
+                            .dirfd = @intCast(dirfd),
+                            .buffer = src_buffer.ptr,
+                            .len = @intCast(src_buffer.len),
+                        },
+                    } };
+                    const err = Host.redirectSyscall(&call);
+                    if (err == .SUCCESS) {
+                        // translate wasi dirents to system dirents
+                        const src_used = call.u.getdents.read;
+                        var src_offset: usize = 0;
+                        var offset: usize = 0;
+                        var next_pos: off_t = 0;
+                        while (src_offset + src_name_offset < src_used) {
+                            const src_entry: *align(1) std.os.wasi.dirent_t = @ptrCast(&src_buffer[src_offset]);
+                            const entry: *align(1) T = @ptrCast(&buffer[offset]);
+                            const name_len: usize = src_entry.namlen;
+                            const reclen = name_offset + name_len + 1;
+                            if (offset + reclen >= len) {
+                                // retrieved too much data--reposition cursor before exiting
+                                var seek_result: off_t = undefined;
+                                _ = lseek(dirfd, next_pos, std.c.SEEK.SET, &seek_result);
+                                break;
+                            }
+                            if (@hasField(T, "ino")) {
+                                entry.ino = @intCast(src_entry.ino);
+                                if (os == .darwin and entry.ino == 0) entry.ino = 1;
+                            } else if (@hasField(T, "fileno")) {
+                                entry.fileno = @intCast(src_entry.ino);
+                            }
+                            if (@hasField(T, "off")) {
+                                entry.off = @intCast(src_entry.next);
+                            } else if (@hasField(T, "seekoff")) {
+                                entry.seekoff = @intCast(src_entry.next);
+                            }
+                            if (@hasField(T, "reclen")) {
+                                entry.reclen = @intCast(reclen);
+                            }
+                            if (@hasField(T, "namlen")) {
+                                entry.namlen = @intCast(name_len);
+                            }
+                            if (@hasField(T, "type")) {
+                                entry.type = switch (src_entry.type) {
+                                    .BLOCK_DEVICE => DT.BLK,
+                                    .CHARACTER_DEVICE => DT.CHR,
+                                    .DIRECTORY => DT.DIR,
+                                    .REGULAR_FILE => DT.REG,
+                                    .SOCKET_DGRAM => DT.SOCK,
+                                    .SOCKET_STREAM => DT.SOCK,
+                                    .SYMBOLIC_LINK => DT.LNK,
+                                    else => DT.UNKNOWN,
+                                };
+                            }
+                            const src_name: [*]const u8 = @ptrCast(&src_buffer[src_offset + src_name_offset]);
+                            const name: [*]u8 = @ptrCast(&buffer[offset + name_offset]);
+                            @memcpy(name[0..name_len], src_name[0..name_len]);
+                            name[name_len] = 0;
+                            src_offset += src_name_offset + name_len;
+                            offset += reclen;
+                            next_pos = @intCast(src_entry.next);
+                        }
+                        result.* = @intCast(offset);
+                    } else {
+                        result.* = intFromError(err);
+                    }
+                    return true;
                 }
-                return true;
             }
             return false;
         }
@@ -2598,7 +2614,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return Original.LockFileEx(handle, flags, reserved, len_low, len_high, overlapped);
         }
 
-        fn NtClose(handle: HANDLE) callconv(WINAPI) NTSTATUS {
+        pub fn NtClose(handle: HANDLE) callconv(WINAPI) NTSTATUS {
             if (handle == temporary_handle) return .SUCCESS;
             const fd = toDescriptor(handle);
             var result: c_int = undefined;
@@ -2608,7 +2624,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return Original.NtClose(handle);
         }
 
-        fn NtCreateFile(
+        pub fn NtCreateFile(
             handle: *HANDLE,
             desired_access: ACCESS_MASK,
             object_attributes: *OBJECT_ATTRIBUTES,
@@ -2714,6 +2730,96 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                 return status;
             }
             return Original.NtLockFile(handle, event, apc_routine, apc_context, io_status_block, offset, len, key, fail_immediately, exclusive);
+        }
+
+        pub fn NtQueryDirectoryFile(
+            handle: HANDLE,
+            event: ?HANDLE,
+            apc_routine: ?IO_APC_ROUTINE,
+            apc_context: ?*anyopaque,
+            io_status_block: *IO_STATUS_BLOCK,
+            file_information: *anyopaque,
+            length: ULONG,
+            file_information_class: FILE_INFORMATION_CLASS,
+            return_single_entry: BOOLEAN,
+            file_name: ?*UNICODE_STRING,
+            restart_scan: BOOLEAN,
+        ) callconv(WINAPI) NTSTATUS {
+            if (isPrivateHandle(handle)) {
+                const file_information_classes: [3]struct { id: FILE_INFORMATION_CLASS, T: type } = .{
+                    .{ .id = .FileDirectoryInformation, .T = std.os.windows.FILE_DIRECTORY_INFORMATION },
+                    .{ .id = .FileBothDirectoryInformation, .T = std.os.windows.FILE_BOTH_DIR_INFORMATION },
+                    .{ .id = .FileNamesInformation, .T = windows_h.FILE_NAMES_INFORMATION },
+                };
+                inline for (file_information_classes) |cls| {
+                    if (cls.id == file_information_class) break;
+                } else return .NOT_IMPLEMENTED;
+                const dirfd = toDescriptor(handle);
+                if (restart_scan == TRUE) {
+                    var seek_result: off64_t = undefined;
+                    _ = redirector.lseek64(dirfd, 0, std.c.SEEK.SET, &seek_result);
+                    if (seek_result != 0) return .INVALID_HANDLE;
+                }
+                var stb = std.heap.stackFallback(1024 * 8, c_allocator);
+                const allocator = stb.get();
+                const src_buffer = allocator.alloc(u8, length) catch return .NO_MEMORY;
+                defer allocator.free(src_buffer);
+                var result: c_int = undefined;
+                _ = redirector.getdentsT(std.os.wasi.dirent_t, dirfd, src_buffer.ptr, length, &result);
+                if (result < 0) return .NO_MORE_FILES;
+                const src_used: usize = @intCast(result);
+                const src_name_offset = @sizeOf(std.os.wasi.dirent_t);
+                const buffer: [*]u8 = @ptrCast(file_information);
+                var src_offset: usize = 0;
+                var offset: usize = 0;
+                var next_pos: off64_t = 0;
+                var more: bool = false;
+                inline for (file_information_classes) |cls| {
+                    if (cls.id == file_information_class) {
+                        const NtDirent = cls.T;
+                        var prev_entry: ?*align(2) NtDirent = null;
+                        while (src_offset + src_name_offset < src_used) {
+                            const src_entry: *align(1) std.os.wasi.dirent_t = @ptrCast(&src_buffer[src_offset]);
+                            const entry: *align(2) NtDirent = @ptrCast(@alignCast(&buffer[offset]));
+                            const wtf8_name_len: usize = src_entry.namlen;
+                            const wtf8_name: [*]const u8 = @ptrCast(&src_buffer[src_offset + src_name_offset]);
+                            const src_name = std.unicode.wtf8ToWtf16LeAlloc(allocator, wtf8_name[0..wtf8_name_len]) catch continue;
+                            const reclen = @sizeOf(NtDirent) + src_name.len * 2;
+                            if (offset + reclen >= length) {
+                                // retrieved too much data--reposition cursor before exiting
+                                var seek_result: off64_t = undefined;
+                                _ = redirector.lseek64(dirfd, next_pos, std.c.SEEK.SET, &seek_result);
+                                more = true;
+                                break;
+                            }
+                            if (prev_entry) |ptr| ptr.NextEntryOffset = @intCast(@intFromPtr(entry) - @intFromPtr(ptr));
+                            entry.* = std.mem.zeroes(NtDirent);
+                            entry.FileIndex = @truncate(src_entry.next);
+                            entry.FileNameLength = @intCast(src_name.len * 2);
+                            const name: [*]u16 = @ptrCast(&entry.FileName[0]);
+                            @memcpy(name[0..src_name.len], src_name);
+                            name[src_name.len] = 0;
+                            if (@hasField(NtDirent, "FileAttributes")) {
+                                entry.FileAttributes = switch (src_entry.type) {
+                                    .DIRECTORY => std.os.windows.FILE_ATTRIBUTE_DIRECTORY,
+                                    .SYMBOLIC_LINK => std.os.windows.FILE_ATTRIBUTE_REPARSE_POINT,
+                                    else => std.os.windows.FILE_ATTRIBUTE_NORMAL,
+                                };
+                            }
+                            src_offset += src_name_offset + wtf8_name_len;
+                            offset += reclen;
+                            next_pos = @intCast(src_entry.next);
+                            prev_entry = entry;
+                        }
+                        break;
+                    }
+                } else unreachable;
+                const status: NTSTATUS = if (offset > 0) .SUCCESS else .NO_MORE_FILES;
+                io_status_block.Information = offset;
+                io_status_block.u.Status = status;
+                return status;
+            }
+            return Original.NtQueryDirectoryFile(handle, event, apc_routine, apc_context, io_status_block, file_information, length, file_information_class, return_single_entry, file_name, restart_scan);
         }
 
         pub fn NtQueryInformationFile(
@@ -3215,6 +3321,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         const SECURITY_ATTRIBUTES = std.os.windows.SECURITY_ATTRIBUTES;
         const SIZE_T = std.os.windows.SIZE_T;
         const ULONG = std.os.windows.ULONG;
+        const UNICODE_STRING = std.os.windows.UNICODE_STRING;
         const WCHAR = std.os.windows.WCHAR;
         const FALSE = std.os.windows.FALSE;
         const TRUE = std.os.windows.TRUE;
@@ -3238,6 +3345,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             pub var NtClose: *const @TypeOf(Self.NtClose) = undefined;
             pub var NtCreateFile: *const @TypeOf(Self.NtCreateFile) = undefined;
             pub var NtLockFile: *const @TypeOf(Self.NtLockFile) = undefined;
+            pub var NtQueryDirectoryFile: *const @TypeOf(Self.NtQueryDirectoryFile) = undefined;
             pub var NtQueryInformationFile: *const @TypeOf(Self.NtQueryInformationFile) = undefined;
             pub var NtQueryObject: *const @TypeOf(Self.NtQueryObject) = undefined;
             pub var NtSetInformationFile: *const @TypeOf(Self.NtSetInformationFile) = undefined;

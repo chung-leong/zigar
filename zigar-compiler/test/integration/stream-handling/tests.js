@@ -902,7 +902,7 @@ export function addTests(importModule, options) {
       expect(() => setTimes('/world', '/hello.txt', 123, 456)).to.throw(Error)
         .with.property('message', 'Unable to set times');
     })
-    it('should print directory contents', async function() {
+    it('should get directory entries', async function() {
       this.timeout(0);
       const { print } = await importTest('read-directory');
       const map1 = new Map([
@@ -922,7 +922,7 @@ export function addTests(importModule, options) {
       map2.close();
       expect(lines2).to.have.lengthOf(100);
     })
-    it('should print directory contents in thread', async function() {
+    it('should get directory entries in thread', async function() {
       this.timeout(0);
       const { startup, shutdown, print } = await importTest('read-directory-in-thread', { multithreaded: true });
       startup(1);
