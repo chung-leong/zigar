@@ -207,7 +207,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
-    it('should open a file and seek to a particular position using posix functions', async function() {
+    it('should open a file and seek to a particular position using posix function', async function() {
       this.timeout(0);
       const { __zigar, read } = await importTest('seek-file-with-posix-functions');
       const path = absolute('./data/test.txt');
@@ -217,13 +217,23 @@ export function addTests(importModule, options) {
       expect(chunk).to.have.lengthOf(16);
       expect(chunk.string).to.equal('ur fathers broug');
     })
-    it('should open a file and seek to a particular position using libc functions', async function() {
+    it('should open a file and seek to a particular position using libc function', async function() {
       this.timeout(0);
       const { __zigar, read } = await importTest('seek-file-with-libc-functions');
       const path = absolute('./data/test.txt');
       const content = await readFile(path);
       __zigar.on('open', () => content);
       const chunk = read('/hello/world', 32, 16);
+      expect(chunk).to.have.lengthOf(16);
+      expect(chunk.string).to.equal('ur fathers broug');
+    })
+    skip.entirely.unless(target === 'win32').
+    it('should open a file and seek to a particular position using win32 function', async function() {
+      this.timeout(0);
+      const { read } = await importTest('seek-file-with-win32-function');
+      const path = absolute('./data/test.txt');
+      const content = await readFile(path);
+      const chunk = read(content, 32, 16);
       expect(chunk).to.have.lengthOf(16);
       expect(chunk.string).to.equal('ur fathers broug');
     })

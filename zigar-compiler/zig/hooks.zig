@@ -2918,18 +2918,40 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         pub fn SetFilePointer(
             handle: HANDLE,
             offset: LONG,
-            offset_high: *LONG,
+            offset_high: ?*LONG,
             method: DWORD,
         ) callconv(WINAPI) DWORD {
+            const fd = toDescriptor(handle);
+            var offset_long: off64_t = offset;
+            if (offset_high) |ptr| offset_long |= @as(i64, ptr.*) << 32;
+            var result: off64_t = undefined;
+            const whence: c_int = @intCast(method);
+            if (redirector.lseek64(fd, offset_long, whence, &result)) {
+                if (result < 0) {
+                    _ = saveError(result);
+                    return windows_h.INVALID_SET_FILE_POINTER;
+                }
+                _ = windows_h.SetLastError(0);
+                if (offset_high) |ptr| ptr.* = @truncate(result >> 32);
+                return @truncate(@as(u64, @bitCast(result)));
+            }
             return Original.SetFilePointer(handle, offset, offset_high, method);
         }
 
         pub fn SetFilePointerEx(
             handle: HANDLE,
             offset: LARGE_INTEGER,
-            new_pos: *LARGE_INTEGER,
+            new_pos: ?*LARGE_INTEGER,
             method: DWORD,
-        ) callconv(WINAPI) DWORD {
+        ) callconv(WINAPI) BOOL {
+            const fd = toDescriptor(handle);
+            const whence: c_int = @intCast(method);
+            var result: off64_t = undefined;
+            if (redirector.lseek64(fd, offset, whence, &result)) {
+                if (result < 0) return saveError(result);
+                if (new_pos) |ptr| ptr.* = result;
+                return TRUE;
+            }
             return Original.SetFilePointerEx(handle, offset, new_pos, method);
         }
 
@@ -3094,6 +3116,17 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return @intCast(value);
         }
 
+        fn decodePath(path: []const u8) std.meta.Tuple(&.{ []const u8, c_int }) {
+            if (std.mem.startsWith(u8, path, fd_path_prefix)) |index| {
+                const subpath = path[index..];
+                const slash_index = std.mem.indexOfScalar(u8, subpath, '\\') orelse subpath.len;
+                const num_string = subpath[0..slash_index];
+                const dirfd = std.fmt.parseInt(u8, num_string, 16) catch -1;
+                return .{ subpath[slash_index..], dirfd };
+            }
+            return .{ path, -1 };
+        }
+
         fn inferAttributes(stat: Stat) DWORD {
             var attributes: DWORD = 0;
             if ((stat.mode & std.c.W_OK) == 0) {
@@ -3109,7 +3142,8 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         }
 
         const temporary_handle: HANDLE = @ptrFromInt(0x1fff_ffff);
-        const fd_format_string = "\\\\??\\UNC\\@zigar\\fd\\{d}";
+        const fd_format_string = "\\\\??\\UNC\\@zigar\\fd\\{x}";
+        const fd_path_prefix = fd_format_string[0 .. fd_format_string.len - 3];
 
         const std_stream = struct {
             var handles: [3]?HANDLE = .{ null, null, null };
