@@ -2499,7 +2499,6 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             flags_and_attributes: DWORD,
             template_file: HANDLE,
         ) callconv(WINAPI) ?HANDLE {
-            std.debug.print("CreateFileA\n", .{});
             if (redirector.Host.isRedirecting(.open)) {
                 var oflags: O = switch (create_disposition) {
                     std.os.windows.CREATE_ALWAYS => .{ .CREAT = true, .TRUNC = true },
@@ -2519,9 +2518,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                 const oflags_int: u32 = @bitCast(oflags);
                 const mode = 0;
                 var fd: c_int = undefined;
-                std.debug.print("oflags = {}\n", .{oflags});
                 if (redirector.open(path, @intCast(oflags_int), mode, &fd)) {
-                    std.debug.print("fd = {d}\n", .{fd});
                     if (fd < 0) {
                         _ = saveError(fd);
                         return null;
@@ -2529,7 +2526,6 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                     return fromDescriptor(fd);
                 }
             }
-            std.debug.print("CreateFileA (original)\n", .{});
             return Original.CreateFileA(path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
         }
 
@@ -2699,7 +2695,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             ea_buffer: ?*anyopaque,
             ea_length: ULONG,
         ) callconv(WINAPI) NTSTATUS {
-            const dirfd: c_int = if (object_attributes.RootDirectory) |dh| toDescriptor(dh) else -1;
+            const dirfd: c_int = if (object_attributes.RootDirectory) |dh| toDescriptor(dh) else fd_cwd;
             const delete_op = (desired_access & std.os.windows.DELETE) != 0;
             const dir_op = (create_options & std.os.windows.FILE_DIRECTORY_FILE) != 0;
             const redirecting = if (delete_op)

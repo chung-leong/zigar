@@ -19,6 +19,7 @@ fn run(promise: zigar.function.Promise(void)) !void {
     var buffer: [128]u8 = undefined;
     while (true) {
         const result = stdio.gets_s(&buffer, @intCast(buffer.len));
+        std.debug.print("{}\n", .{result});
         if (result == null) break;
         const line: [*:0]const u8 = @ptrCast(result);
         std.debug.print("> {s}", .{line});

@@ -1199,6 +1199,7 @@ export function addTests(importModule, options) {
       remove('/hello/world.txt');
       expect(event).to.eql({ parent: null, path: 'hello/world.txt' });
     })
+    skip.entirely.if(target == 'win32').
     it('should open and read from file using pread', async function() {
       this.timeout(0);
       const { __zigar, readAt } = await importTest('open-and-read-file-with-pread');
@@ -1210,6 +1211,7 @@ export function addTests(importModule, options) {
       const chunk = readAt('/hello/world', 120n, 16n);
       expect(chunk.string).to.equal('cated to the pro');
     })
+    skip.entirely.if(target == 'win32').
     it('should open and write into file using pwrite', async function() {
       this.timeout(0);
       const { __zigar, writeAt } = await importTest('open-and-write-file-with-pwrite');
@@ -1245,6 +1247,7 @@ export function addTests(importModule, options) {
       };
       expect(() => lock(file2)).to.not.throw();
     })
+    skip.entirely.if(target === 'win32').
     it('should set lock on file', async function() {
       this.timeout(0);
       const { lock, unlock } = await importTest('set-lock-on-file');
@@ -1274,6 +1277,7 @@ export function addTests(importModule, options) {
       expect(result3).to.be.true;
       expect(file.lock).to.be.null;
     })
+    skip.entirely.if(target === 'win32').
     it('should get lock on file using fcntl', async function() {
       this.timeout(0);
       const { check } = await importTest('get-lock-with-fcntl');

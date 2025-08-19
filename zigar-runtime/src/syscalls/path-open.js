@@ -30,11 +30,11 @@ export default mixin({
       if (arg === false) {
         return PosixError.ENOENT;
       }
-      const resource = this.convertReader(arg) ?? this.convertWriter(arg) ?? this.convertDirectory(arg);
-      if (!resource) {
+      const stream = this.convertReader(arg) ?? this.convertWriter(arg) ?? this.convertDirectory(arg);
+      if (!stream) {
         throw new InvalidStream(fdRights[0], arg);
       }
-      const fd = this.createStreamHandle(resource, fdRights, fdFlags);
+      const fd = this.createStreamHandle(stream, fdRights, fdFlags);
       this.setStreamLocation?.(fd, loc);
       this.copyUint32(fdAddress, fd);
     });

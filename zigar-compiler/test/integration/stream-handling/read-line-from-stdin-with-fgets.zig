@@ -1,10 +1,18 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const zigar = @import("zigar");
 
 const stdio = @cImport({
     @cInclude("stdio.h");
 });
+
+const os = switch (builtin.target.os.tag) {
+    .linux => .linux,
+    .driverkit, .ios, .macos, .tvos, .visionos, .watchos => .darwin,
+    .windows => .windows,
+    else => .unknown,
+};
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
@@ -16,8 +24,9 @@ pub fn print(promise: zigar.function.Promise(void)) !void {
 }
 
 fn run(promise: zigar.function.Promise(void)) !void {
-    const stdin = switch (@typeInfo(@TypeOf(stdio.stdin))) {
-        .@"fn" => stdio.stdin(),
+    const stdin = switch (os) {
+        .darwin => stdio.stdin(),
+        .windows => stdio.__acrt_iob_func(0),
         else => stdio.stdin,
     };
     var buffer: [128]u8 = undefined;
