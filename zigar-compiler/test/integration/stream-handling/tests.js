@@ -351,7 +351,6 @@ export function addTests(importModule, options) {
       const chunks = [];
       let event;
       __zigar.on('open', (evt) => {
-        console.log(evt);
         event = evt;
         return chunks;
       });
@@ -408,6 +407,28 @@ export function addTests(importModule, options) {
       expect(event).to.eql({ 
         parent: null,
         path: 'hello/world', 
+        rights: { write: true }, 
+        flags: { create: true, truncate: true, symlinkFollow: true },
+      });
+    })
+    it('should open and write to file using win32 functions', async function() {
+      this.timeout(0);
+      const { __zigar, save } = await importTest('open-and-write-to-file-with-win32-functions');
+      const chunks = [];
+      let event;
+      __zigar.on('open', (evt) => {
+        event = evt;
+        return chunks;
+      });
+      const len = save('\\hello\\world', 'This is a test');
+      expect(len).to.equal(14);
+      expect(chunks).to.have.lengthOf(1);
+      const blob = new Blob(chunks);
+      const string = await blob.text();
+      expect(string).to.equal('This is a test');
+      expect(event).to.eql({ 
+        parent: null,
+        path: '\\hello\\world', 
         rights: { write: true }, 
         flags: { create: true, truncate: true, symlinkFollow: true },
       });

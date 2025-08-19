@@ -205,6 +205,11 @@ pub const Syscall = extern struct {
     pub const Filestat = std.os.wasi.filestat_t;
     pub const Fdflags = std.os.wasi.fdflags_t;
 };
+const ThreadInfo = struct {
+    proc: *const anyopaque,
+    arg: ?*anyopaque,
+    instance: *anyopaque,
+};
 const ssize_t = c_long;
 const off_t = c_long;
 const off64_t = i64;
@@ -382,7 +387,7 @@ const fd_min = 0xfffff;
 pub fn SyscallRedirector(comptime ModuleHost: type) type {
     return struct {
         pub fn access(path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
-            return faccessat(-1, path, mode, result);
+            return faccessat(fd_cwd, path, mode, result);
         }
 
         pub fn close(fd: c_int, result: *c_int) callconv(.c) bool {
@@ -746,88 +751,104 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         fn getdentsT(comptime T: type, dirfd: c_int, buffer: [*]u8, len: c_uint, result: *c_int) bool {
             if (isPrivateDescriptor(dirfd)) {
-                // get offset to name in the wasi struct and in the system struct
-                const src_name_offset = @sizeOf(std.os.wasi.dirent_t);
-                const name_offset = @offsetOf(T, "name");
-                // adjust the amount of data to retrieve if the posix struct is bigger than the wasi struct
-                const diff = switch (name_offset > src_name_offset) {
-                    true => (name_offset - src_name_offset) * (len / 64),
-                    false => 0,
-                };
-                var stb = std.heap.stackFallback(1024 * 8, c_allocator);
-                const allocator = stb.get();
-                const src_buffer = allocator.alloc(u8, len - diff) catch {
-                    result.* = intFromError(.NOMEM);
-                    return true;
-                };
-                defer allocator.free(src_buffer);
-                var call: Syscall = .{ .cmd = .getdents, .u = .{
-                    .getdents = .{
-                        .dirfd = @intCast(dirfd),
-                        .buffer = src_buffer.ptr,
-                        .len = @intCast(src_buffer.len),
-                    },
-                } };
-                const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) {
-                    // translate wasi dirents to system dirents
-                    const src_used = call.u.getdents.read;
-                    var src_offset: usize = 0;
-                    var offset: usize = 0;
-                    var next_pos: off_t = 0;
-                    while (src_offset + src_name_offset < src_used) {
-                        const src_entry: *align(1) std.os.wasi.dirent_t = @ptrCast(&src_buffer[src_offset]);
-                        const entry: *align(1) T = @ptrCast(&buffer[offset]);
-                        const name_len: usize = src_entry.namlen;
-                        const reclen = name_offset + name_len + 1;
-                        if (offset + reclen >= len) {
-                            // retrieved too much data--reposition cursor before exiting
-                            var seek_result: off_t = undefined;
-                            _ = lseek(dirfd, next_pos, std.c.SEEK.SET, &seek_result);
-                            break;
-                        }
-                        if (@hasField(T, "ino")) {
-                            entry.ino = @intCast(src_entry.ino);
-                            if (os == .darwin and entry.ino == 0) entry.ino = 1;
-                        } else if (@hasField(T, "fileno")) {
-                            entry.fileno = @intCast(src_entry.ino);
-                        }
-                        if (@hasField(T, "off")) {
-                            entry.off = @intCast(src_entry.next);
-                        } else if (@hasField(T, "seekoff")) {
-                            entry.seekoff = @intCast(src_entry.next);
-                        }
-                        if (@hasField(T, "reclen")) {
-                            entry.reclen = @intCast(reclen);
-                        }
-                        if (@hasField(T, "namlen")) {
-                            entry.namlen = @intCast(name_len);
-                        }
-                        if (@hasField(T, "type")) {
-                            entry.type = switch (src_entry.type) {
-                                .BLOCK_DEVICE => DT.BLK,
-                                .CHARACTER_DEVICE => DT.CHR,
-                                .DIRECTORY => DT.DIR,
-                                .REGULAR_FILE => DT.REG,
-                                .SOCKET_DGRAM => DT.SOCK,
-                                .SOCKET_STREAM => DT.SOCK,
-                                .SYMBOLIC_LINK => DT.LNK,
-                                else => DT.UNKNOWN,
-                            };
-                        }
-                        const src_name: [*]const u8 = @ptrCast(&src_buffer[src_offset + src_name_offset]);
-                        const name: [*]u8 = @ptrCast(&buffer[offset + name_offset]);
-                        @memcpy(name[0..name_len], src_name[0..name_len]);
-                        name[name_len] = 0;
-                        src_offset += src_name_offset + name_len;
-                        offset += reclen;
-                        next_pos = @intCast(src_entry.next);
+                if (T == std.os.wasi.dirent_t) {
+                    var call: Syscall = .{ .cmd = .getdents, .u = .{
+                        .getdents = .{
+                            .dirfd = @intCast(dirfd),
+                            .buffer = buffer,
+                            .len = @intCast(len),
+                        },
+                    } };
+                    const err = Host.redirectSyscall(&call);
+                    if (err == .SUCCESS) {
+                        result.* = @intCast(call.u.getdents.read);
+                    } else {
+                        result.* = intFromError(err);
                     }
-                    result.* = @intCast(offset);
                 } else {
-                    result.* = intFromError(err);
+                    // get offset to name in the wasi struct and in the system struct
+                    const src_name_offset = @sizeOf(std.os.wasi.dirent_t);
+                    const name_offset = @offsetOf(T, "name");
+                    // adjust the amount of data to retrieve if the posix struct is bigger than the wasi struct
+                    const diff = switch (name_offset > src_name_offset) {
+                        true => (name_offset - src_name_offset) * (len / 64),
+                        false => 0,
+                    };
+                    var stb = std.heap.stackFallback(1024 * 8, c_allocator);
+                    const allocator = stb.get();
+                    const src_buffer = allocator.alloc(u8, len - diff) catch {
+                        result.* = intFromError(.NOMEM);
+                        return true;
+                    };
+                    defer allocator.free(src_buffer);
+                    var call: Syscall = .{ .cmd = .getdents, .u = .{
+                        .getdents = .{
+                            .dirfd = @intCast(dirfd),
+                            .buffer = src_buffer.ptr,
+                            .len = @intCast(src_buffer.len),
+                        },
+                    } };
+                    const err = Host.redirectSyscall(&call);
+                    if (err == .SUCCESS) {
+                        // translate wasi dirents to system dirents
+                        const src_used = call.u.getdents.read;
+                        var src_offset: usize = 0;
+                        var offset: usize = 0;
+                        var next_pos: off_t = 0;
+                        while (src_offset + src_name_offset < src_used) {
+                            const src_entry: *align(1) std.os.wasi.dirent_t = @ptrCast(&src_buffer[src_offset]);
+                            const entry: *align(1) T = @ptrCast(&buffer[offset]);
+                            const name_len: usize = src_entry.namlen;
+                            const reclen = name_offset + name_len + 1;
+                            if (offset + reclen >= len) {
+                                // retrieved too much data--reposition cursor before exiting
+                                var seek_result: off_t = undefined;
+                                _ = lseek(dirfd, next_pos, std.c.SEEK.SET, &seek_result);
+                                break;
+                            }
+                            if (@hasField(T, "ino")) {
+                                entry.ino = @intCast(src_entry.ino);
+                                if (os == .darwin and entry.ino == 0) entry.ino = 1;
+                            } else if (@hasField(T, "fileno")) {
+                                entry.fileno = @intCast(src_entry.ino);
+                            }
+                            if (@hasField(T, "off")) {
+                                entry.off = @intCast(src_entry.next);
+                            } else if (@hasField(T, "seekoff")) {
+                                entry.seekoff = @intCast(src_entry.next);
+                            }
+                            if (@hasField(T, "reclen")) {
+                                entry.reclen = @intCast(reclen);
+                            }
+                            if (@hasField(T, "namlen")) {
+                                entry.namlen = @intCast(name_len);
+                            }
+                            if (@hasField(T, "type")) {
+                                entry.type = switch (src_entry.type) {
+                                    .BLOCK_DEVICE => DT.BLK,
+                                    .CHARACTER_DEVICE => DT.CHR,
+                                    .DIRECTORY => DT.DIR,
+                                    .REGULAR_FILE => DT.REG,
+                                    .SOCKET_DGRAM => DT.SOCK,
+                                    .SOCKET_STREAM => DT.SOCK,
+                                    .SYMBOLIC_LINK => DT.LNK,
+                                    else => DT.UNKNOWN,
+                                };
+                            }
+                            const src_name: [*]const u8 = @ptrCast(&src_buffer[src_offset + src_name_offset]);
+                            const name: [*]u8 = @ptrCast(&buffer[offset + name_offset]);
+                            @memcpy(name[0..name_len], src_name[0..name_len]);
+                            name[name_len] = 0;
+                            src_offset += src_name_offset + name_len;
+                            offset += reclen;
+                            next_pos = @intCast(src_entry.next);
+                        }
+                        result.* = @intCast(offset);
+                    } else {
+                        result.* = intFromError(err);
+                    }
+                    return true;
                 }
-                return true;
             }
             return false;
         }
@@ -872,20 +893,20 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn lstat(path: [*:0]const u8, buf: *Stat, result: *c_int) callconv(.c) bool {
-            return fstatat(-1, path, buf, AT.SYMLINK_NOFOLLOW, result);
+            return fstatat(fd_cwd, path, buf, AT.SYMLINK_NOFOLLOW, result);
         }
 
         pub fn lstat64(path: [*:0]const u8, buf: *Stat64, result: *c_int) callconv(.c) bool {
-            return fstatat64(-1, path, buf, AT.SYMLINK_NOFOLLOW, result);
+            return fstatat64(fd_cwd, path, buf, AT.SYMLINK_NOFOLLOW, result);
         }
 
         pub fn lutimes(path: [*:0]const u8, tv: [*]const std.c.timeval, result: *c_int) callconv(.c) bool {
             const times = convertTimeval(tv);
-            return utimensat(-1, path, &times, AT.SYMLINK_NOFOLLOW, result);
+            return utimensat(fd_cwd, path, &times, AT.SYMLINK_NOFOLLOW, result);
         }
 
         pub fn mkdir(path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
-            return mkdirat(-1, path, mode, result);
+            return mkdirat(fd_cwd, path, mode, result);
         }
 
         pub fn mkdirat(dirfd: c_int, path: [*:0]const u8, _: c_int, result: *c_int) callconv(.c) bool {
@@ -908,7 +929,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         pub const newfstatat = fstatat;
 
         pub fn open(path: [*:0]const u8, oflags: c_int, mode: c_int, result: *c_int) callconv(.c) bool {
-            return openat(-1, path, oflags, mode, result);
+            return openat(fd_cwd, path, oflags, mode, result);
         }
 
         pub fn openat(dirfd: c_int, path: [*:0]const u8, oflags: c_int, _: c_int, result: *c_int) callconv(.c) bool {
@@ -1035,7 +1056,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             if (Host.isRedirecting(.rmdir)) {
                 var call: Syscall = .{ .cmd = .rmdir, .u = .{
                     .rmdir = .{
-                        .dirfd = -1,
+                        .dirfd = fd_cwd,
                         .path = path,
                     },
                 } };
@@ -1049,11 +1070,11 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn stat(path: [*:0]const u8, buf: *Stat, result: *c_int) callconv(.c) bool {
-            return fstatat(-1, path, buf, 0, result);
+            return fstatat(fd_cwd, path, buf, 0, result);
         }
 
         pub fn stat64(path: [*:0]const u8, buf: *Stat64, result: *c_int) callconv(.c) bool {
-            return fstatat64(-1, path, buf, 0, result);
+            return fstatat64(fd_cwd, path, buf, 0, result);
         }
 
         pub fn statx(dirfd: c_int, path: [*:0]const u8, flags: c_int, mask: c_uint, buf: *std.os.linux.Statx, result: *c_int) callconv(.c) bool {
@@ -1085,7 +1106,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn unlink(path: [*:0]const u8, result: *c_int) callconv(.c) bool {
-            return unlinkat(-1, path, 0, result);
+            return unlinkat(fd_cwd, path, 0, result);
         }
 
         pub fn unlinkat(dirfd: c_int, path: [*:0]const u8, flags: c_int, result: *c_int) callconv(.c) bool {
@@ -1116,7 +1137,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn utimes(path: [*:0]const u8, tv: [*]const std.c.timeval, result: *c_int) callconv(.c) bool {
             const times = convertTimeval(tv);
-            return utimensat(-1, path, &times, AT.SYMLINK_FOLLOW, result);
+            return utimensat(fd_cwd, path, &times, AT.SYMLINK_FOLLOW, result);
         }
 
         pub fn utimensat(dirfd: c_int, path: [*:0]const u8, times: [*]const std.c.timespec, flags: c_int, result: *c_int) callconv(.c) bool {
@@ -1431,11 +1452,12 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         }
 
         pub fn pthread_create(thread: *std.c.pthread_t, attr: ?*const std.c.pthread_attr_t, start_routine: *const fn (?*anyopaque) callconv(.c) ?*anyopaque, arg: ?*anyopaque) callconv(.c) c_int {
+            const instance = redirector.Host.getInstance() catch return @intFromEnum(std.c.E.FAULT);
             const info = c_allocator.create(ThreadInfo) catch return @intFromEnum(std.c.E.NOMEM);
             info.* = .{
                 .proc = start_routine,
                 .arg = arg,
-                .instance = redirector.Host.getInstance() catch return @intFromEnum(std.c.E.FAULT),
+                .instance = instance,
             };
             return Original.pthread_create(thread, attr, &setThreadContext, info);
         }
@@ -1574,15 +1596,9 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             } else @compileError("Unable to get error number pointer");
         }
 
-        const ThreadInfo = struct {
-            proc: *const fn (?*anyopaque) callconv(.c) ?*anyopaque,
-            arg: ?*anyopaque,
-            instance: *anyopaque,
-        };
-
         fn setThreadContext(ptr: ?*anyopaque) callconv(.c) ?*anyopaque {
             const info: *ThreadInfo = @ptrCast(@alignCast(ptr.?));
-            const proc = info.proc;
+            const proc: *const fn (?*anyopaque) callconv(.c) ?*anyopaque = @ptrCast(info.proc);
             const arg = info.arg;
             const instance = info.instance;
             c_allocator.destroy(info);
@@ -2453,9 +2469,11 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             path: LPCSTR,
             security_attributes: *SECURITY_ATTRIBUTES,
         ) callconv(WINAPI) BOOL {
-            var result: c_int = undefined;
-            if (redirector.mkdir(path, 0, &result)) {
-                return saveError(result);
+            if (redirector.Host.isRedirecting(.mkdir)) {
+                var result: c_int = undefined;
+                if (redirector.mkdir(path, 0, &result)) {
+                    return saveError(result);
+                }
             }
             return Original.CreateDirectoryA(path, security_attributes);
         }
@@ -2470,6 +2488,86 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                 return CreateDirectoryA(path_wtf8, security_attributes);
             }
             return Original.CreateDirectoryW(path, security_attributes);
+        }
+
+        pub fn CreateFileA(
+            path: LPCSTR,
+            desired_access: DWORD,
+            share_mode: DWORD,
+            security_attributes: *SECURITY_ATTRIBUTES,
+            create_disposition: DWORD,
+            flags_and_attributes: DWORD,
+            template_file: HANDLE,
+        ) callconv(WINAPI) ?HANDLE {
+            std.debug.print("CreateFileA\n", .{});
+            if (redirector.Host.isRedirecting(.open)) {
+                var oflags: O = switch (create_disposition) {
+                    std.os.windows.CREATE_ALWAYS => .{ .CREAT = true, .TRUNC = true },
+                    std.os.windows.CREATE_NEW => .{ .CREAT = true, .EXCL = true },
+                    std.os.windows.OPEN_ALWAYS => .{ .CREAT = true },
+                    std.os.windows.OPEN_EXISTING => .{},
+                    std.os.windows.TRUNCATE_EXISTING => .{ .TRUNC = true },
+                    else => .{},
+                };
+                const r_access = (desired_access & std.os.windows.GENERIC_READ) != 0;
+                const w_access = (desired_access & std.os.windows.GENERIC_WRITE) != 0;
+                if (r_access) {
+                    oflags.ACCMODE = if (w_access) .RDWR else .RDONLY;
+                } else if (w_access) {
+                    oflags.ACCMODE = .WRONLY;
+                }
+                const oflags_int: u32 = @bitCast(oflags);
+                const mode = 0;
+                var fd: c_int = undefined;
+                std.debug.print("oflags = {}\n", .{oflags});
+                if (redirector.open(path, @intCast(oflags_int), mode, &fd)) {
+                    std.debug.print("fd = {d}\n", .{fd});
+                    if (fd < 0) {
+                        _ = saveError(fd);
+                        return null;
+                    }
+                    return fromDescriptor(fd);
+                }
+            }
+            std.debug.print("CreateFileA (original)\n", .{});
+            return Original.CreateFileA(path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
+        }
+
+        pub fn CreateFileW(
+            path: LPCWSTR,
+            desired_access: DWORD,
+            share_mode: DWORD,
+            security_attributes: *SECURITY_ATTRIBUTES,
+            create_disposition: DWORD,
+            flags_and_attributes: DWORD,
+            template_file: HANDLE,
+        ) callconv(WINAPI) ?HANDLE {
+            if (redirector.Host.isRedirecting(.mkdir)) {
+                const path_wtf8 = allocWtf8(path, true) catch return null;
+                defer freeWtf8(path_wtf8);
+                return CreateFileA(path_wtf8, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
+            }
+            return Original.CreateFileW(path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
+        }
+
+        pub fn CreateThread(
+            thread_attributes: ?*SECURITY_ATTRIBUTES,
+            stack_size: SIZE_T,
+            start_address: LPTHREAD_START_ROUTINE,
+            parameter: ?LPVOID,
+            creation_flags: DWORD,
+            thread_id: ?*DWORD,
+        ) callconv(WINAPI) ?HANDLE {
+            const instance = redirector.Host.getInstance() catch {
+                _ = saveError(std.c.E.FAULT);
+                return null;
+            };
+            const info = c_allocator.create(ThreadInfo) catch {
+                _ = saveError(std.c.E.NOMEM);
+                return null;
+            };
+            info.* = .{ .proc = start_address, .arg = parameter, .instance = instance };
+            return Original.CreateThread(thread_attributes, stack_size, &setThreadContext, info, creation_flags, thread_id);
         }
 
         pub fn DeleteFileA(path: LPCSTR) callconv(WINAPI) BOOL {
@@ -2511,11 +2609,32 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return Original.GetFileAttributesW(path);
         }
 
-        pub fn GetFileSize(handle: HANDLE, size_high: *DWORD) callconv(WINAPI) DWORD {
+        pub fn GetFileSize(handle: HANDLE, size_high: ?*DWORD) callconv(WINAPI) DWORD {
+            const fd = toDescriptor(handle);
+            var stat: std.os.wasi.filestat_t = undefined;
+            var result: c_int = undefined;
+            if (redirector.fstatT(std.os.wasi.filestat_t, fd, &stat, &result)) {
+                if (result < 0) {
+                    _ = saveError(result);
+                    return windows_h.INVALID_FILE_SIZE;
+                }
+                _ = windows_h.SetLastError(0);
+                if (size_high) |ptr| ptr.* = @truncate(stat.size >> 32);
+                return @truncate(stat.size);
+            }
             return Original.GetFileSize(handle, size_high);
         }
 
         pub fn GetFileSizeEx(handle: HANDLE, size: *LARGE_INTEGER) callconv(WINAPI) BOOL {
+            const fd = toDescriptor(handle);
+            var stat: std.os.wasi.filestat_t = undefined;
+            var result: c_int = undefined;
+            if (redirector.fstatT(std.os.wasi.filestat_t, fd, &stat, &result)) {
+                if (result < 0) return saveError(result);
+                _ = windows_h.SetLastError(0);
+                size.* = @intCast(stat.size);
+                return TRUE;
+            }
             return Original.GetFileSizeEx(handle, size);
         }
 
@@ -2557,7 +2676,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return Original.LockFileEx(handle, flags, reserved, len_low, len_high, overlapped);
         }
 
-        fn NtClose(handle: HANDLE) callconv(WINAPI) NTSTATUS {
+        pub fn NtClose(handle: HANDLE) callconv(WINAPI) NTSTATUS {
             if (handle == temporary_handle) return .SUCCESS;
             const fd = toDescriptor(handle);
             var result: c_int = undefined;
@@ -2567,7 +2686,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return Original.NtClose(handle);
         }
 
-        fn NtCreateFile(
+        pub fn NtCreateFile(
             handle: *HANDLE,
             desired_access: ACCESS_MASK,
             object_attributes: *OBJECT_ATTRIBUTES,
@@ -2583,7 +2702,10 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             const dirfd: c_int = if (object_attributes.RootDirectory) |dh| toDescriptor(dh) else -1;
             const delete_op = (desired_access & std.os.windows.DELETE) != 0;
             const dir_op = (create_options & std.os.windows.FILE_DIRECTORY_FILE) != 0;
-            const redirecting = if (delete_op) redirector.Host.isRedirecting(.unlink) else redirector.Host.isRedirecting(.open);
+            const redirecting = if (delete_op)
+                if (dir_op) redirector.Host.isRedirecting(.rmdir) else redirector.Host.isRedirecting(.unlink)
+            else
+                redirector.Host.isRedirecting(.open);
             if (redirector.isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and redirecting)) {
                 const object_name = object_attributes.ObjectName;
                 const name_len = @divExact(object_name.Length, 2);
@@ -2675,6 +2797,96 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return Original.NtLockFile(handle, event, apc_routine, apc_context, io_status_block, offset, len, key, fail_immediately, exclusive);
         }
 
+        pub fn NtQueryDirectoryFile(
+            handle: HANDLE,
+            event: ?HANDLE,
+            apc_routine: ?IO_APC_ROUTINE,
+            apc_context: ?*anyopaque,
+            io_status_block: *IO_STATUS_BLOCK,
+            file_information: *anyopaque,
+            length: ULONG,
+            file_information_class: FILE_INFORMATION_CLASS,
+            return_single_entry: BOOLEAN,
+            file_name: ?*UNICODE_STRING,
+            restart_scan: BOOLEAN,
+        ) callconv(WINAPI) NTSTATUS {
+            if (isPrivateHandle(handle)) {
+                const file_information_classes: [3]struct { id: FILE_INFORMATION_CLASS, T: type } = .{
+                    .{ .id = .FileDirectoryInformation, .T = std.os.windows.FILE_DIRECTORY_INFORMATION },
+                    .{ .id = .FileBothDirectoryInformation, .T = std.os.windows.FILE_BOTH_DIR_INFORMATION },
+                    .{ .id = .FileNamesInformation, .T = windows_h.FILE_NAMES_INFORMATION },
+                };
+                inline for (file_information_classes) |cls| {
+                    if (cls.id == file_information_class) break;
+                } else return .NOT_IMPLEMENTED;
+                const dirfd = toDescriptor(handle);
+                if (restart_scan == TRUE) {
+                    var seek_result: off64_t = undefined;
+                    _ = redirector.lseek64(dirfd, 0, std.c.SEEK.SET, &seek_result);
+                    if (seek_result != 0) return .INVALID_HANDLE;
+                }
+                var stb = std.heap.stackFallback(1024 * 8, c_allocator);
+                const allocator = stb.get();
+                const src_buffer = allocator.alloc(u8, length) catch return .NO_MEMORY;
+                defer allocator.free(src_buffer);
+                var result: c_int = undefined;
+                _ = redirector.getdentsT(std.os.wasi.dirent_t, dirfd, src_buffer.ptr, length, &result);
+                if (result < 0) return .NO_MORE_FILES;
+                const src_used: usize = @intCast(result);
+                const src_name_offset = @sizeOf(std.os.wasi.dirent_t);
+                const buffer: [*]u8 = @ptrCast(file_information);
+                var src_offset: usize = 0;
+                var offset: usize = 0;
+                var next_pos: off64_t = 0;
+                var more: bool = false;
+                inline for (file_information_classes) |cls| {
+                    if (cls.id == file_information_class) {
+                        const NtDirent = cls.T;
+                        var prev_entry: ?*align(2) NtDirent = null;
+                        while (src_offset + src_name_offset < src_used) {
+                            const src_entry: *align(1) std.os.wasi.dirent_t = @ptrCast(&src_buffer[src_offset]);
+                            const entry: *align(2) NtDirent = @ptrCast(@alignCast(&buffer[offset]));
+                            const wtf8_name_len: usize = src_entry.namlen;
+                            const wtf8_name: [*]const u8 = @ptrCast(&src_buffer[src_offset + src_name_offset]);
+                            const src_name = std.unicode.wtf8ToWtf16LeAlloc(allocator, wtf8_name[0..wtf8_name_len]) catch continue;
+                            const reclen = @sizeOf(NtDirent) + src_name.len * 2;
+                            if (offset + reclen >= length) {
+                                // retrieved too much data--reposition cursor before exiting
+                                var seek_result: off64_t = undefined;
+                                _ = redirector.lseek64(dirfd, next_pos, std.c.SEEK.SET, &seek_result);
+                                more = true;
+                                break;
+                            }
+                            if (prev_entry) |ptr| ptr.NextEntryOffset = @intCast(@intFromPtr(entry) - @intFromPtr(ptr));
+                            entry.* = std.mem.zeroes(NtDirent);
+                            entry.FileIndex = @truncate(src_entry.next);
+                            entry.FileNameLength = @intCast(src_name.len * 2);
+                            const name: [*]u16 = @ptrCast(&entry.FileName[0]);
+                            @memcpy(name[0..src_name.len], src_name);
+                            name[src_name.len] = 0;
+                            if (@hasField(NtDirent, "FileAttributes")) {
+                                entry.FileAttributes = switch (src_entry.type) {
+                                    .DIRECTORY => std.os.windows.FILE_ATTRIBUTE_DIRECTORY,
+                                    .SYMBOLIC_LINK => std.os.windows.FILE_ATTRIBUTE_REPARSE_POINT,
+                                    else => std.os.windows.FILE_ATTRIBUTE_NORMAL,
+                                };
+                            }
+                            src_offset += src_name_offset + wtf8_name_len;
+                            offset += reclen;
+                            next_pos = @intCast(src_entry.next);
+                            prev_entry = entry;
+                        }
+                        break;
+                    }
+                } else unreachable;
+                const status: NTSTATUS = if (offset > 0) .SUCCESS else .NO_MORE_FILES;
+                io_status_block.Information = offset;
+                io_status_block.u.Status = status;
+                return status;
+            }
+            return Original.NtQueryDirectoryFile(handle, event, apc_routine, apc_context, io_status_block, file_information, length, file_information_class, return_single_entry, file_name, restart_scan);
+        }
+
         pub fn NtQueryInformationFile(
             handle: HANDLE,
             io_status_block: *IO_STATUS_BLOCK,
@@ -2682,13 +2894,10 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             length: ULONG,
             file_information_class: FILE_INFORMATION_CLASS,
         ) callconv(WINAPI) NTSTATUS {
-            std.debug.print("NtQueryInformationFile {d}\n", .{length});
             const fd = toDescriptor(handle);
             var stat: std.os.wasi.filestat_t = undefined;
             var result: c_int = undefined;
-            std.debug.print("fstatT\n", .{});
             if (redirector.fstatT(std.os.wasi.filestat_t, fd, &stat, &result)) {
-                std.debug.print("stat = {}\n", .{stat});
                 const copy = struct {
                     fn basic(d: *std.os.windows.FILE_BASIC_INFORMATION, s: std.os.wasi.filestat_t) void {
                         d.* = .{
@@ -2704,18 +2913,17 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                     }
 
                     fn internal(d: *std.os.windows.FILE_INTERNAL_INFORMATION, s: std.os.wasi.filestat_t) void {
-                        std.debug.print("internal\n", .{});
                         d.* = .{ .IndexNumber = @intCast(s.ino) };
                     }
 
                     fn name(d: *std.os.windows.FILE_NAME_INFORMATION, n: []const u8) void {
+                        d.FileNameLength = @intCast(n.len);
                         const buf: [*]u16 = @ptrCast(&d.FileName[0]);
                         _ = std.unicode.wtf8ToWtf16Le(buf[0..n.len], n) catch unreachable;
                         buf[n.len] = 0;
                     }
 
                     fn standard(d: *std.os.windows.FILE_STANDARD_INFORMATION, s: std.os.wasi.filestat_t) void {
-                        std.debug.print("standard\n", .{});
                         d.* = .{
                             .AllocationSize = @intCast(std.mem.alignForward(usize, s.size, 4096)),
                             .EndOfFile = @intCast(s.size),
@@ -2732,18 +2940,30 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                 switch (file_information_class) {
                     .FileAllInformation => {
                         const info: *std.os.windows.FILE_ALL_INFORMATION = @ptrCast(@alignCast(file_information));
-                        var wtf8_buf: [128]u8 = undefined;
-                        const name = std.fmt.bufPrintZ(&wtf8_buf, fd_format_string, .{fd}) catch unreachable;
-                        if (length < @sizeOf(@TypeOf(info.*)) + name.len) return .BUFFER_OVERFLOW;
                         copy.unsupported(&info.AccessInformation);
                         copy.unsupported(&info.AlignmentInformation);
                         copy.basic(&info.BasicInformation, stat);
                         copy.unsupported(&info.EaInformation);
                         copy.internal(&info.InternalInformation, stat);
                         copy.unsupported(&info.ModeInformation);
-                        copy.name(&info.NameInformation, name);
                         copy.unsupported(&info.PositionInformation);
                         copy.standard(&info.StandardInformation, stat);
+                        const name: ?[]u8 = get: {
+                            const struct_size = @sizeOf(@TypeOf(info.*));
+                            if (length > struct_size) {
+                                var wtf8_buf: [128]u8 = undefined;
+                                const n = std.fmt.bufPrintZ(&wtf8_buf, fd_format_string, .{fd}) catch unreachable;
+                                // copy it if it fits
+                                if (n.len <= length - struct_size) break :get n;
+                            }
+                            break :get null;
+                        };
+                        if (name) |n| {
+                            copy.name(&info.NameInformation, n);
+                        } else {
+                            copy.unsupported(&info.NameInformation);
+                            return .BUFFER_OVERFLOW;
+                        }
                     },
                     .FileBasicInformation => {
                         const info: *std.os.windows.FILE_BASIC_INFORMATION = @ptrCast(@alignCast(file_information));
@@ -2755,10 +2975,22 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                     },
                     .FileNameInformation => {
                         const info: *std.os.windows.FILE_NAME_INFORMATION = @ptrCast(@alignCast(file_information));
-                        var wtf8_buf: [128]u8 = undefined;
-                        const name = std.fmt.bufPrintZ(&wtf8_buf, fd_format_string, .{fd}) catch unreachable;
-                        if (length < @sizeOf(@TypeOf(info.*)) + name.len) return .BUFFER_OVERFLOW;
-                        copy.name(info, name);
+                        const name: ?[]u8 = get: {
+                            const struct_size = @sizeOf(@TypeOf(info.*));
+                            if (length > struct_size) {
+                                var wtf8_buf: [128]u8 = undefined;
+                                const n = std.fmt.bufPrintZ(&wtf8_buf, fd_format_string, .{fd}) catch unreachable;
+                                // copy it if it fits
+                                if (n.len <= length - struct_size) break :get n;
+                            }
+                            break :get null;
+                        };
+                        if (name) |n| {
+                            copy.name(info, n);
+                        } else {
+                            copy.unsupported(info);
+                            return .BUFFER_OVERFLOW;
+                        }
                     },
                     .FileStandardInformation => {
                         const info: *std.os.windows.FILE_STANDARD_INFORMATION = @ptrCast(@alignCast(file_information));
@@ -2877,22 +3109,47 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         pub fn SetFilePointer(
             handle: HANDLE,
             offset: LONG,
-            offset_high: *LONG,
+            offset_high: ?*LONG,
             method: DWORD,
         ) callconv(WINAPI) DWORD {
+            const fd = toDescriptor(handle);
+            var offset_long: off64_t = offset;
+            if (offset_high) |ptr| offset_long |= @as(i64, ptr.*) << 32;
+            var result: off64_t = undefined;
+            const whence: c_int = @intCast(method);
+            if (redirector.lseek64(fd, offset_long, whence, &result)) {
+                if (result < 0) {
+                    _ = saveError(result);
+                    return windows_h.INVALID_SET_FILE_POINTER;
+                }
+                _ = windows_h.SetLastError(0);
+                if (offset_high) |ptr| ptr.* = @truncate(result >> 32);
+                return @truncate(@as(u64, @bitCast(result)));
+            }
             return Original.SetFilePointer(handle, offset, offset_high, method);
         }
 
         pub fn SetFilePointerEx(
             handle: HANDLE,
             offset: LARGE_INTEGER,
-            new_pos: *LARGE_INTEGER,
+            new_pos: ?*LARGE_INTEGER,
             method: DWORD,
-        ) callconv(WINAPI) DWORD {
+        ) callconv(WINAPI) BOOL {
+            const fd = toDescriptor(handle);
+            const whence: c_int = @intCast(method);
+            var result: off64_t = undefined;
+            if (redirector.lseek64(fd, offset, whence, &result)) {
+                if (result < 0) return saveError(result);
+                if (new_pos) |ptr| ptr.* = result;
+                return TRUE;
+            }
             return Original.SetFilePointerEx(handle, offset, new_pos, method);
         }
 
         pub fn SetHandleInformation(handle: HANDLE, mask: DWORD, flags: DWORD) callconv(WINAPI) BOOL {
+            if (handle == temporary_handle or isPrivateHandle(handle)) {
+                return FALSE;
+            }
             return Original.SetHandleInformation(handle, mask, flags);
         }
 
@@ -3053,6 +3310,17 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return @intCast(value);
         }
 
+        fn decodePath(path: []const u8) std.meta.Tuple(&.{ []const u8, c_int }) {
+            if (std.mem.startsWith(u8, path, fd_path_prefix)) |index| {
+                const subpath = path[index..];
+                const slash_index = std.mem.indexOfScalar(u8, subpath, '\\') orelse subpath.len;
+                const num_string = subpath[0..slash_index];
+                const dirfd = std.fmt.parseInt(u8, num_string, 16) catch -1;
+                return .{ subpath[slash_index..], dirfd };
+            }
+            return .{ path, -1 };
+        }
+
         fn inferAttributes(stat: Stat) DWORD {
             var attributes: DWORD = 0;
             if ((stat.mode & std.c.W_OK) == 0) {
@@ -3067,8 +3335,19 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return attributes;
         }
 
+        fn setThreadContext(ptr: LPVOID) callconv(WINAPI) DWORD {
+            const info: *ThreadInfo = @ptrCast(@alignCast(ptr));
+            const proc: *const fn (?LPVOID) callconv(WINAPI) DWORD = @ptrCast(info.proc);
+            const arg = info.arg;
+            const instance = info.instance;
+            c_allocator.destroy(info);
+            redirector.Host.initializeThread(instance) catch {};
+            return proc(arg);
+        }
+
         const temporary_handle: HANDLE = @ptrFromInt(0x1fff_ffff);
-        const fd_format_string = "\\\\??\\UNC\\@zigar\\fd\\{d}";
+        const fd_format_string = "\\\\??\\UNC\\@zigar\\fd\\{x}";
+        const fd_path_prefix = fd_format_string[0 .. fd_format_string.len - 3];
 
         const std_stream = struct {
             var handles: [3]?HANDLE = .{ null, null, null };
@@ -3098,8 +3377,9 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         const LONG = std.os.windows.LONG;
         const LPCSTR = std.os.windows.LPCSTR;
         const LPCVOID = std.os.windows.LPCVOID;
-        const LPOVERLAPPED_COMPLETION_ROUTINE = std.os.windows.LPOVERLAPPED_COMPLETION_ROUTINE;
         const LPCWSTR = std.os.windows.LPCWSTR;
+        const LPOVERLAPPED_COMPLETION_ROUTINE = std.os.windows.LPOVERLAPPED_COMPLETION_ROUTINE;
+        const LPTHREAD_START_ROUTINE = std.os.windows.LPTHREAD_START_ROUTINE;
         const LPVOID = std.os.windows.LPVOID;
         const NTSTATUS = std.os.windows.NTSTATUS;
         const OBJECT_ATTRIBUTES = std.os.windows.OBJECT_ATTRIBUTES;
@@ -3107,7 +3387,9 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         const OBJECT_INFORMATION_CLASS = std.os.windows.OBJECT_INFORMATION_CLASS;
         const OVERLAPPED = std.os.windows.OVERLAPPED;
         const SECURITY_ATTRIBUTES = std.os.windows.SECURITY_ATTRIBUTES;
+        const SIZE_T = std.os.windows.SIZE_T;
         const ULONG = std.os.windows.ULONG;
+        const UNICODE_STRING = std.os.windows.UNICODE_STRING;
         const WCHAR = std.os.windows.WCHAR;
         const FALSE = std.os.windows.FALSE;
         const TRUE = std.os.windows.TRUE;
@@ -3118,6 +3400,9 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             pub var CloseHandle: *const @TypeOf(Self.CloseHandle) = undefined;
             pub var CreateDirectoryA: *const @TypeOf(Self.CreateDirectoryA) = undefined;
             pub var CreateDirectoryW: *const @TypeOf(Self.CreateDirectoryW) = undefined;
+            pub var CreateFileA: *const @TypeOf(Self.CreateFileA) = undefined;
+            pub var CreateFileW: *const @TypeOf(Self.CreateFileW) = undefined;
+            pub var CreateThread: *const @TypeOf(Self.CreateThread) = undefined;
             pub var DeleteFileA: *const @TypeOf(Self.DeleteFileA) = undefined;
             pub var DeleteFileW: *const @TypeOf(Self.DeleteFileW) = undefined;
             pub var GetFileAttributesA: *const @TypeOf(Self.GetFileAttributesA) = undefined;
@@ -3130,6 +3415,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             pub var NtClose: *const @TypeOf(Self.NtClose) = undefined;
             pub var NtCreateFile: *const @TypeOf(Self.NtCreateFile) = undefined;
             pub var NtLockFile: *const @TypeOf(Self.NtLockFile) = undefined;
+            pub var NtQueryDirectoryFile: *const @TypeOf(Self.NtQueryDirectoryFile) = undefined;
             pub var NtQueryInformationFile: *const @TypeOf(Self.NtQueryInformationFile) = undefined;
             pub var NtQueryObject: *const @TypeOf(Self.NtQueryObject) = undefined;
             pub var NtSetInformationFile: *const @TypeOf(Self.NtSetInformationFile) = undefined;

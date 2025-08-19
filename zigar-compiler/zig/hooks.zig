@@ -387,7 +387,7 @@ const fd_min = 0xfffff;
 pub fn SyscallRedirector(comptime ModuleHost: type) type {
     return struct {
         pub fn access(path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
-            return faccessat(-1, path, mode, result);
+            return faccessat(fd_cwd, path, mode, result);
         }
 
         pub fn close(fd: c_int, result: *c_int) callconv(.c) bool {
@@ -893,20 +893,20 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn lstat(path: [*:0]const u8, buf: *Stat, result: *c_int) callconv(.c) bool {
-            return fstatat(-1, path, buf, AT.SYMLINK_NOFOLLOW, result);
+            return fstatat(fd_cwd, path, buf, AT.SYMLINK_NOFOLLOW, result);
         }
 
         pub fn lstat64(path: [*:0]const u8, buf: *Stat64, result: *c_int) callconv(.c) bool {
-            return fstatat64(-1, path, buf, AT.SYMLINK_NOFOLLOW, result);
+            return fstatat64(fd_cwd, path, buf, AT.SYMLINK_NOFOLLOW, result);
         }
 
         pub fn lutimes(path: [*:0]const u8, tv: [*]const std.c.timeval, result: *c_int) callconv(.c) bool {
             const times = convertTimeval(tv);
-            return utimensat(-1, path, &times, AT.SYMLINK_NOFOLLOW, result);
+            return utimensat(fd_cwd, path, &times, AT.SYMLINK_NOFOLLOW, result);
         }
 
         pub fn mkdir(path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
-            return mkdirat(-1, path, mode, result);
+            return mkdirat(fd_cwd, path, mode, result);
         }
 
         pub fn mkdirat(dirfd: c_int, path: [*:0]const u8, _: c_int, result: *c_int) callconv(.c) bool {
@@ -929,7 +929,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         pub const newfstatat = fstatat;
 
         pub fn open(path: [*:0]const u8, oflags: c_int, mode: c_int, result: *c_int) callconv(.c) bool {
-            return openat(-1, path, oflags, mode, result);
+            return openat(fd_cwd, path, oflags, mode, result);
         }
 
         pub fn openat(dirfd: c_int, path: [*:0]const u8, oflags: c_int, _: c_int, result: *c_int) callconv(.c) bool {
@@ -1056,7 +1056,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             if (Host.isRedirecting(.rmdir)) {
                 var call: Syscall = .{ .cmd = .rmdir, .u = .{
                     .rmdir = .{
-                        .dirfd = -1,
+                        .dirfd = fd_cwd,
                         .path = path,
                     },
                 } };
@@ -1070,11 +1070,11 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn stat(path: [*:0]const u8, buf: *Stat, result: *c_int) callconv(.c) bool {
-            return fstatat(-1, path, buf, 0, result);
+            return fstatat(fd_cwd, path, buf, 0, result);
         }
 
         pub fn stat64(path: [*:0]const u8, buf: *Stat64, result: *c_int) callconv(.c) bool {
-            return fstatat64(-1, path, buf, 0, result);
+            return fstatat64(fd_cwd, path, buf, 0, result);
         }
 
         pub fn statx(dirfd: c_int, path: [*:0]const u8, flags: c_int, mask: c_uint, buf: *std.os.linux.Statx, result: *c_int) callconv(.c) bool {
@@ -1106,7 +1106,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn unlink(path: [*:0]const u8, result: *c_int) callconv(.c) bool {
-            return unlinkat(-1, path, 0, result);
+            return unlinkat(fd_cwd, path, 0, result);
         }
 
         pub fn unlinkat(dirfd: c_int, path: [*:0]const u8, flags: c_int, result: *c_int) callconv(.c) bool {
@@ -1137,7 +1137,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn utimes(path: [*:0]const u8, tv: [*]const std.c.timeval, result: *c_int) callconv(.c) bool {
             const times = convertTimeval(tv);
-            return utimensat(-1, path, &times, AT.SYMLINK_FOLLOW, result);
+            return utimensat(fd_cwd, path, &times, AT.SYMLINK_FOLLOW, result);
         }
 
         pub fn utimensat(dirfd: c_int, path: [*:0]const u8, times: [*]const std.c.timespec, flags: c_int, result: *c_int) callconv(.c) bool {
@@ -2469,9 +2469,11 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             path: LPCSTR,
             security_attributes: *SECURITY_ATTRIBUTES,
         ) callconv(WINAPI) BOOL {
-            var result: c_int = undefined;
-            if (redirector.mkdir(path, 0, &result)) {
-                return saveError(result);
+            if (redirector.Host.isRedirecting(.mkdir)) {
+                var result: c_int = undefined;
+                if (redirector.mkdir(path, 0, &result)) {
+                    return saveError(result);
+                }
             }
             return Original.CreateDirectoryA(path, security_attributes);
         }
@@ -2486,6 +2488,62 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                 return CreateDirectoryA(path_wtf8, security_attributes);
             }
             return Original.CreateDirectoryW(path, security_attributes);
+        }
+
+        pub fn CreateFileA(
+            path: LPCSTR,
+            desired_access: DWORD,
+            share_mode: DWORD,
+            security_attributes: *SECURITY_ATTRIBUTES,
+            create_disposition: DWORD,
+            flags_and_attributes: DWORD,
+            template_file: HANDLE,
+        ) callconv(WINAPI) ?HANDLE {
+            if (redirector.Host.isRedirecting(.open)) {
+                var oflags: O = switch (create_disposition) {
+                    std.os.windows.CREATE_ALWAYS => .{ .CREAT = true, .TRUNC = true },
+                    std.os.windows.CREATE_NEW => .{ .CREAT = true, .EXCL = true },
+                    std.os.windows.OPEN_ALWAYS => .{ .CREAT = true },
+                    std.os.windows.OPEN_EXISTING => .{},
+                    std.os.windows.TRUNCATE_EXISTING => .{ .TRUNC = true },
+                    else => .{},
+                };
+                const r_access = (desired_access & std.os.windows.GENERIC_READ) != 0;
+                const w_access = (desired_access & std.os.windows.GENERIC_WRITE) != 0;
+                if (r_access) {
+                    oflags.ACCMODE = if (w_access) .RDWR else .RDONLY;
+                } else if (w_access) {
+                    oflags.ACCMODE = .WRONLY;
+                }
+                const oflags_int: u32 = @bitCast(oflags);
+                const mode = 0;
+                var fd: c_int = undefined;
+                if (redirector.open(path, @intCast(oflags_int), mode, &fd)) {
+                    if (fd < 0) {
+                        _ = saveError(fd);
+                        return null;
+                    }
+                    return fromDescriptor(fd);
+                }
+            }
+            return Original.CreateFileA(path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
+        }
+
+        pub fn CreateFileW(
+            path: LPCWSTR,
+            desired_access: DWORD,
+            share_mode: DWORD,
+            security_attributes: *SECURITY_ATTRIBUTES,
+            create_disposition: DWORD,
+            flags_and_attributes: DWORD,
+            template_file: HANDLE,
+        ) callconv(WINAPI) ?HANDLE {
+            if (redirector.Host.isRedirecting(.mkdir)) {
+                const path_wtf8 = allocWtf8(path, true) catch return null;
+                defer freeWtf8(path_wtf8);
+                return CreateFileA(path_wtf8, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
+            }
+            return Original.CreateFileW(path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
         }
 
         pub fn CreateThread(
@@ -2640,7 +2698,10 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             const dirfd: c_int = if (object_attributes.RootDirectory) |dh| toDescriptor(dh) else -1;
             const delete_op = (desired_access & std.os.windows.DELETE) != 0;
             const dir_op = (create_options & std.os.windows.FILE_DIRECTORY_FILE) != 0;
-            const redirecting = if (delete_op) redirector.Host.isRedirecting(.unlink) else redirector.Host.isRedirecting(.open);
+            const redirecting = if (delete_op)
+                if (dir_op) redirector.Host.isRedirecting(.rmdir) else redirector.Host.isRedirecting(.unlink)
+            else
+                redirector.Host.isRedirecting(.open);
             if (redirector.isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and redirecting)) {
                 const object_name = object_attributes.ObjectName;
                 const name_len = @divExact(object_name.Length, 2);
@@ -3082,6 +3143,9 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         }
 
         pub fn SetHandleInformation(handle: HANDLE, mask: DWORD, flags: DWORD) callconv(WINAPI) BOOL {
+            if (handle == temporary_handle or isPrivateHandle(handle)) {
+                return FALSE;
+            }
             return Original.SetHandleInformation(handle, mask, flags);
         }
 
@@ -3332,6 +3396,8 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             pub var CloseHandle: *const @TypeOf(Self.CloseHandle) = undefined;
             pub var CreateDirectoryA: *const @TypeOf(Self.CreateDirectoryA) = undefined;
             pub var CreateDirectoryW: *const @TypeOf(Self.CreateDirectoryW) = undefined;
+            pub var CreateFileA: *const @TypeOf(Self.CreateFileA) = undefined;
+            pub var CreateFileW: *const @TypeOf(Self.CreateFileW) = undefined;
             pub var CreateThread: *const @TypeOf(Self.CreateThread) = undefined;
             pub var DeleteFileA: *const @TypeOf(Self.DeleteFileA) = undefined;
             pub var DeleteFileW: *const @TypeOf(Self.DeleteFileW) = undefined;
