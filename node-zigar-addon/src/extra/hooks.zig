@@ -1822,16 +1822,6 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             return buf[0];
         }
 
-        pub fn gets_s(buf: [*]u8, len: usize) callconv(.c) ?[*:0]u8 {
-            const stdin = getStdProxy(0);
-            const result = bufferUntil(stdin, '\n');
-            if (result <= 0) return null;
-            const end: usize = @intCast(result);
-            const used = stdin.consumeBuffer(buf, @max(end, len - 1));
-            buf[used] = 0;
-            return @ptrCast(buf);
-        }
-
         pub fn fclose(s: *std.c.FILE) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
                 if (flush(file) < 0) return -1;
@@ -2118,10 +2108,6 @@ pub fn LibcSubstitute(comptime redirector: type) type {
         pub extern fn vscanf_hook() callconv(.c) void;
         pub extern fn fscanf_hook() callconv(.c) void;
         pub extern fn scanf_hook() callconv(.c) void;
-        pub extern fn vfprintf_s_hook() callconv(.c) void;
-        pub extern fn vprintf_s_hook() callconv(.c) void;
-        pub extern fn fprintf_s_hook() callconv(.c) void;
-        pub extern fn printf_s_hook() callconv(.c) void;
 
         // function required by C hooks
         comptime {
@@ -2362,7 +2348,6 @@ pub fn LibcSubstitute(comptime redirector: type) type {
         pub const Original = struct {
             pub var clearerr: *const @TypeOf(Self.clearerr) = undefined;
             pub var getchar: *const @TypeOf(Self.getchar) = undefined;
-            pub var gets_s: *const @TypeOf(Self.gets_s) = undefined;
             pub var fclose: *const @TypeOf(Self.fclose) = undefined;
             pub var fdopen: *const @TypeOf(Self.fdopen) = undefined;
             pub var feof: *const @TypeOf(Self.feof) = undefined;
@@ -2396,10 +2381,6 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             pub extern var vscanf_orig: *const @TypeOf(Self.vscanf_hook);
             pub extern var fscanf_orig: *const @TypeOf(Self.fscanf_hook);
             pub extern var scanf_orig: *const @TypeOf(Self.scanf_hook);
-            pub extern var vfprintf_s_orig: *const @TypeOf(Self.vfprintf_s_hook);
-            pub extern var vprintf_s_orig: *const @TypeOf(Self.vprintf_s_hook);
-            pub extern var fprintf_s_orig: *const @TypeOf(Self.fprintf_s_hook);
-            pub extern var printf_s_orig: *const @TypeOf(Self.printf_s_hook);
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
     };
@@ -2438,14 +2419,32 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
     return struct {
         const posix = PosixSubstitute(redirector);
         const libc = LibcSubstitute(redirector);
+        const win32 = Win32SubstituteS(redirector);
 
         pub const lseeki64 = posix.lseek64;
+
+        pub fn _open_osfhandle(handle: win32.HANDLE) callconv(.c) c_int {
+            const fd = win32.toDescriptor(handle);
+            if (win32.isPrivateDescriptor(fd)) {
+                return fd;
+            }
+            return Original._open_osfhandle(handle);
+        }
+
+        pub fn _get_osfhandle(fd: c_int) callconv(.c) win32.HANDLE {
+            if (win32.isPrivateDescriptor(fd)) {
+                return win32.fromDescriptor(fd);
+            }
+            return Original._get_osfhandle(fd);
+        }
 
         pub extern fn __stdio_common_vfprintf_hook() callconv(.c) void;
 
         const Self = @This();
         pub const Original = struct {
             pub var lseeki64: *const @TypeOf(Self.lseeki64) = undefined;
+            pub var _open_osfhandle: *const @TypeOf(Self._open_osfhandle) = undefined;
+            pub var _get_osfhandle: *const @TypeOf(Self._get_osfhandle) = undefined;
 
             pub extern var __stdio_common_vfprintf_orig: *const @TypeOf(Self.__stdio_common_vfprintf_hook);
         };
@@ -2605,6 +2604,36 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return Original.GetFileAttributesW(path);
         }
 
+        pub fn GetFileInformationByHandle(
+            handle: HANDLE,
+            file_information: *BY_HANDLE_FILE_INFORMATION,
+        ) callconv(WINAPI) BOOL {
+            const fd = toDescriptor(handle);
+            var stat: std.os.wasi.filestat_t = undefined;
+            var result: c_int = undefined;
+            if (redirector.fstatT(std.os.wasi.filestat_t, fd, &stat, &result)) {
+                if (result < 0) return saveError(result);
+                file_information.* = .{
+                    .dwFileAttributes = switch (stat.filetype) {
+                        .DIRECTORY => std.os.windows.FILE_ATTRIBUTE_DIRECTORY,
+                        .SYMBOLIC_LINK => std.os.windows.FILE_ATTRIBUTE_REPARSE_POINT,
+                        else => std.os.windows.FILE_ATTRIBUTE_NORMAL,
+                    },
+                    .nFileIndexLow = @truncate(stat.ino),
+                    .nFileIndexHigh = @truncate(stat.ino >> 32),
+                    .nFileSizeLow = @truncate(stat.size),
+                    .nFileSizeHigh = @truncate(stat.size >> 32),
+                    .nNumberOfLinks = @intCast(stat.nlink),
+                    .ftCreationTime = std.os.windows.nanoSecondsToFileTime(stat.ctim),
+                    .ftLastAccessTime = std.os.windows.nanoSecondsToFileTime(stat.atim),
+                    .ftLastWriteTime = std.os.windows.nanoSecondsToFileTime(stat.mtim),
+                    .dwVolumeSerialNumber = 0,
+                };
+                return TRUE;
+            }
+            return Original.GetFileInformationByHandle(handle, file_information);
+        }
+
         pub fn GetFileSize(handle: HANDLE, size_high: ?*DWORD) callconv(WINAPI) DWORD {
             const fd = toDescriptor(handle);
             var stat: std.os.wasi.filestat_t = undefined;
@@ -2702,7 +2731,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                 if (dir_op) redirector.Host.isRedirecting(.rmdir) else redirector.Host.isRedirecting(.unlink)
             else
                 redirector.Host.isRedirecting(.open);
-            if (redirector.isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and redirecting)) {
+            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and redirecting)) {
                 const object_name = object_attributes.ObjectName;
                 const name_len = @divExact(object_name.Length, 2);
                 const path = object_name.Buffer.?[0..name_len];
@@ -2806,7 +2835,8 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             file_name: ?*UNICODE_STRING,
             restart_scan: BOOLEAN,
         ) callconv(WINAPI) NTSTATUS {
-            if (isPrivateHandle(handle)) {
+            const dirfd = toDescriptor(handle);
+            if (isPrivateDescriptor(dirfd)) {
                 const file_information_classes: [3]struct { id: FILE_INFORMATION_CLASS, T: type } = .{
                     .{ .id = .FileDirectoryInformation, .T = std.os.windows.FILE_DIRECTORY_INFORMATION },
                     .{ .id = .FileBothDirectoryInformation, .T = std.os.windows.FILE_BOTH_DIR_INFORMATION },
@@ -2815,7 +2845,6 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                 inline for (file_information_classes) |cls| {
                     if (cls.id == file_information_class) break;
                 } else return .NOT_IMPLEMENTED;
-                const dirfd = toDescriptor(handle);
                 if (restart_scan == TRUE) {
                     var seek_result: off64_t = undefined;
                     _ = redirector.lseek64(dirfd, 0, std.c.SEEK.SET, &seek_result);
@@ -3007,7 +3036,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return_length: ?*ULONG,
         ) callconv(WINAPI) NTSTATUS {
             const fd = toDescriptor(handle);
-            if (redirector.isPrivateDescriptor(fd)) {
+            if (isPrivateDescriptor(fd)) {
                 switch (object_information_class) {
                     .ObjectNameInformation => {
                         var wtf8_buf: [128]u8 = undefined;
@@ -3217,6 +3246,10 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
 
         fn isPrivateHandle(handle: HANDLE) bool {
             const fd = toDescriptor(handle);
+            return isPrivateDescriptor(fd);
+        }
+
+        fn isPrivateDescriptor(fd: c_int) bool {
             return redirector.isPrivateDescriptor(fd);
         }
 
@@ -3364,6 +3397,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         const ACCESS_MASK = std.os.windows.ACCESS_MASK;
         const BOOL = std.os.windows.BOOL;
         const BOOLEAN = std.os.windows.BOOLEAN;
+        const BY_HANDLE_FILE_INFORMATION = std.os.windows.BY_HANDLE_FILE_INFORMATION;
         const DWORD = std.os.windows.DWORD;
         const FILE_INFORMATION_CLASS = std.os.windows.FILE_INFORMATION_CLASS;
         const HANDLE = std.os.windows.HANDLE;
@@ -3403,6 +3437,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             pub var DeleteFileW: *const @TypeOf(Self.DeleteFileW) = undefined;
             pub var GetFileAttributesA: *const @TypeOf(Self.GetFileAttributesA) = undefined;
             pub var GetFileAttributesW: *const @TypeOf(Self.GetFileAttributesW) = undefined;
+            pub var GetFileInformationByHandle: *const @TypeOf(Self.GetFileInformationByHandle) = undefined;
             pub var GetFileSize: *const @TypeOf(Self.GetFileSize) = undefined;
             pub var GetFileSizeEx: *const @TypeOf(Self.GetFileSizeEx) = undefined;
             pub var GetHandleInformation: *const @TypeOf(Self.GetHandleInformation) = undefined;

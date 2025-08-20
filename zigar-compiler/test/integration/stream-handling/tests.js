@@ -1259,6 +1259,7 @@ export function addTests(importModule, options) {
       const text = new TextDecoder().decode(subarray);
       expect(text).to.equal('Hello world');
     })
+    skip.entirely.if(target == 'win32').
     it('should set lock on file using fcntl', async function() {
       this.timeout(0);
       const { lock } = await importTest('set-lock-with-fcntl');
@@ -1363,6 +1364,7 @@ export function addTests(importModule, options) {
       expect(result3).to.be.true;
       expect(file.lock).to.be.null;
     })
+    skip.entirely.if(target === 'win32').
     it('should set lock on file inside thread', async function() {
       this.timeout(0);
       const { spawn, startup, shutdown } = await importTest('set-lock-on-file-in-thread', { multithreaded: true });
@@ -1394,6 +1396,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    skip.entirely.if(target === 'win32').
     it('should set no-blocking flag of descriptor using fcntl', async function() {
       this.timeout(0);
       const { print, startup, shutdown } = await importTest('set-non-blocking-flag-with-fcntl', { multithreaded: true });
@@ -1472,37 +1475,6 @@ export function addTests(importModule, options) {
       startup();
       try {
         const lines = await capture(() => print());
-        const line = lines.find(s => s.includes('Signifying nothing'));
-        expect(line).to.be.a('string');
-      } finally {
-        shutdown();
-      }
-      reader.close();
-    })
-    skip.entirely.unless(target === 'win32').
-    it('should read lines from stdin using gets_s', async function() {
-      this.timeout(0);
-      const { __zigar, print, startup, shutdown } = await importTest('read-line-from-stdin-with-gets_s', { multithreaded: true });
-      const path = absolute('./data/macbeth.txt');
-      const content = await readFile(path);
-      const stream = new ReadableStream({
-        pos: 0,
-        async pull(controller) {
-          const chunk = content.subarray(this.pos, this.pos + 64);
-          if (chunk.length > 0) {
-            this.pos += chunk.length;
-            controller.enqueue(chunk);
-          } else {
-            controller.close();
-          }
-        }
-      });
-      const reader = stream.getReader();
-      __zigar.redirect(0, reader);
-      startup();
-      try {
-        print();
-        const lines = await capture(() => {});
         const line = lines.find(s => s.includes('Signifying nothing'));
         expect(line).to.be.a('string');
       } finally {

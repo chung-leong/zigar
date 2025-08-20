@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import { InvalidFileDescriptor, InvalidStream } from '../errors.js';
 import { decodeText } from '../utils.js';
 
-const stdinRights = PosixDescriptorRight.fd_right;
+const stdinRights = PosixDescriptorRight.fd_read;
 const stdoutRights = PosixDescriptorRight.fd_write;
 
 const defaultDirRights =  PosixDescriptorRight.fd_seek
@@ -67,6 +67,7 @@ export default mixin({
   getStream(fd) {
     const entry = this.streamMap.get(fd);
     if (!entry) {
+      console.error('getStream', { fd });
       throw new InvalidFileDescriptor();
     }
     return entry;

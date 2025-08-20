@@ -1822,16 +1822,6 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             return buf[0];
         }
 
-        pub fn gets_s(buf: [*]u8, len: usize) callconv(.c) ?[*:0]u8 {
-            const stdin = getStdProxy(0);
-            const result = bufferUntil(stdin, '\n');
-            if (result <= 0) return null;
-            const end: usize = @intCast(result);
-            const used = stdin.consumeBuffer(buf, @max(end, len - 1));
-            buf[used] = 0;
-            return @ptrCast(buf);
-        }
-
         pub fn fclose(s: *std.c.FILE) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
                 if (flush(file) < 0) return -1;
@@ -2118,10 +2108,6 @@ pub fn LibcSubstitute(comptime redirector: type) type {
         pub extern fn vscanf_hook() callconv(.c) void;
         pub extern fn fscanf_hook() callconv(.c) void;
         pub extern fn scanf_hook() callconv(.c) void;
-        pub extern fn vfprintf_s_hook() callconv(.c) void;
-        pub extern fn vprintf_s_hook() callconv(.c) void;
-        pub extern fn fprintf_s_hook() callconv(.c) void;
-        pub extern fn printf_s_hook() callconv(.c) void;
 
         // function required by C hooks
         comptime {
@@ -2362,7 +2348,6 @@ pub fn LibcSubstitute(comptime redirector: type) type {
         pub const Original = struct {
             pub var clearerr: *const @TypeOf(Self.clearerr) = undefined;
             pub var getchar: *const @TypeOf(Self.getchar) = undefined;
-            pub var gets_s: *const @TypeOf(Self.gets_s) = undefined;
             pub var fclose: *const @TypeOf(Self.fclose) = undefined;
             pub var fdopen: *const @TypeOf(Self.fdopen) = undefined;
             pub var feof: *const @TypeOf(Self.feof) = undefined;
@@ -2396,10 +2381,6 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             pub extern var vscanf_orig: *const @TypeOf(Self.vscanf_hook);
             pub extern var fscanf_orig: *const @TypeOf(Self.fscanf_hook);
             pub extern var scanf_orig: *const @TypeOf(Self.scanf_hook);
-            pub extern var vfprintf_s_orig: *const @TypeOf(Self.vfprintf_s_hook);
-            pub extern var vprintf_s_orig: *const @TypeOf(Self.vprintf_s_hook);
-            pub extern var fprintf_s_orig: *const @TypeOf(Self.fprintf_s_hook);
-            pub extern var printf_s_orig: *const @TypeOf(Self.printf_s_hook);
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
     };

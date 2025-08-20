@@ -70,39 +70,6 @@ MODULE_VISIBILITY int printf_hook(const char* f, ...) {
     return n;
 }
 
-MODULE_VISIBILITY int (*vfprintf_s_orig)(FILE* s, const char* f, va_list arg) = NULL;
-MODULE_VISIBILITY int vfprintf_s_hook(FILE* s, const char* f, va_list arg) {
-    if (!load_vfprintf(vfprintf_s_orig)) return -1;
-    return vfprintf_hook(s, f, arg);
-}
-
-MODULE_VISIBILITY int (*vprintf_s_orig)(const char* f, va_list arg) = NULL;
-MODULE_VISIBILITY int vprintf_s_hook(const char* f, va_list arg) {
-    if (!load_vfprintf(vprintf_s_orig)) return -1;
-    return vfprintf_hook(stdout, f, arg);
-}
-
-MODULE_VISIBILITY int (*fprintf_s_orig)(FILE* s, const char* f, ...) = NULL;
-MODULE_VISIBILITY int fprintf_s_hook(FILE* s, const char* f, ...) {
-    if (!load_vfprintf(fprintf_s_orig)) return -1;
-    va_list argptr;
-    va_start(argptr, f);
-    int n = vfprintf_hook(s, f, argptr);
-    va_end(argptr);
-    return n;
-}
-
-MODULE_VISIBILITY int (*printf_s_orig)(const char* f, ...) = NULL;
-MODULE_VISIBILITY int printf_s_hook(const char* f, ...) {
-    printf_s_orig("printf()\n");
-    if (!load_vfprintf(printf_s_orig)) return -1;
-    va_list argptr;
-    va_start(argptr, f);
-    int n = vfprintf_hook(stdout, f, argptr);
-    va_end(argptr);
-    return n;
-}
-
 MODULE_VISIBILITY int (*__vfprintf_chk_orig)(FILE* s, int flag, const char* f, va_list arg) = NULL;
 MODULE_VISIBILITY int __vfprintf_chk_hook(FILE* s, int flag, const char* f, va_list arg) {
     if (!load_vfprintf(__vfprintf_chk_orig)) return -1;
