@@ -1683,7 +1683,6 @@ const RedirectedDir = struct {
     cookie: u64 = 0,
     data_next: usize = 0,
     data_len: usize = 0,
-    dirent: dirent_h.struct_dirent = undefined,
     buffer: [4096]u8 = undefined,
 
     const dirent_h = @cImport({
@@ -2424,6 +2423,65 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
 
         pub const lseeki64 = posix.lseek64;
 
+        pub fn _findclose(handle: isize) callconv(.c) c_int {
+            const dir: *std.c.DIR = @ptrFromInt(@as(usize, @bitCast(handle)));
+            if (RedirectedDir.cast(dir)) |_| {
+                posix.closedir(dir);
+                return 0;
+            }
+            return Original._findclose(handle);
+        }
+
+        pub fn _findfirst32(filespec: [*:0]const u8, info: *FindData32) callconv(.c) isize {
+            if (redirector.Host.isRedirecting(.open)) {
+                if (getPath(filespec) catch return -1) |path| {
+                    defer c_allocator.free(path);
+                    const dir = posix.opendir(path) orelse return -1;
+                    const handle: isize = @bitCast(@intFromPtr(dir));
+                    if (_findnext32(handle, info) == 0) {
+                        return @bitCast(handle);
+                    } else {
+                        posix.closedir(dir);
+                        return -1;
+                    }
+                }
+            }
+            return Original._findfirst32(filespec, info);
+        }
+
+        pub fn _findfirst64(filespec: [*:0]const u8, info: *FindData64) callconv(.c) isize {
+            if (redirector.Host.isRedirecting(.open)) {
+                if (getPath(filespec) catch return -1) |path| {
+                    defer c_allocator.free(path);
+                    const dir = posix.opendir(path) orelse return -1;
+                    const handle: isize = @bitCast(@intFromPtr(dir));
+                    if (_findnext64(handle, info) == 0) {
+                        return @bitCast(handle);
+                    } else {
+                        posix.closedir(dir);
+                        return -1;
+                    }
+                }
+            }
+            return Original._findfirst64(filespec, info);
+        }
+
+        pub fn _findnext32(handle: isize, info: *FindData32) callconv(.c) c_int {
+            const dir: *std.c.DIR = @ptrFromInt(@as(usize, @bitCast(handle)));
+            if (RedirectedDir.cast(dir)) |_| {
+                return readdirT(FindData32, dir, info);
+            }
+            return Original._findnext32(handle, info);
+        }
+
+        pub fn _findnext64(handle: isize, info: *FindData64) callconv(.c) c_int {
+            const dir: *std.c.DIR = @ptrFromInt(@as(usize, @bitCast(handle)));
+            if (RedirectedDir.cast(dir)) |_| {
+                return readdirT(FindData64, dir, info);
+            }
+            return Original._findnext64(handle, info);
+        }
+
         pub fn _open_osfhandle(handle: win32.HANDLE) callconv(.c) c_int {
             const fd = win32.toDescriptor(handle);
             if (win32.isPrivateDescriptor(fd)) {
@@ -2442,9 +2500,57 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
         pub extern fn __stdio_common_vfprintf_hook() callconv(.c) void;
         pub extern fn __stdio_common_vfscanf_hook() callconv(.c) void;
 
+        fn getPath(filespec: [*:0]const u8) !?[:0]const u8 {
+            const len = std.mem.len(filespec);
+            if (std.mem.endsWith(u8, filespec[0..len], "\\*")) {
+                return try c_allocator.dupeZ(u8, filespec[0 .. len - 2]);
+            }
+            return null;
+        }
+
+        fn readdirT(comptime T: type, dir: *std.c.DIR, info: *T) c_int {
+            if (posix.readdir(dir)) |dirent| {
+                const name: [*:0]const u8 = @ptrCast(&dirent.name[0]);
+                const len = @min(std.mem.len(name), @sizeOf(@FieldType(T, "name")) - 1);
+                @memcpy(info.name[0 .. len + 1], name[0 .. len + 1]);
+                return 0;
+            } else {
+                return -1;
+            }
+        }
+
+        const FindData32 = extern struct {
+            attributes: u32,
+            time_create: i32 = 0,
+            time_access: i32 = 0,
+            time_write: i32 = 0,
+            size: i64 = 0,
+            name: [260]u8,
+        };
+        const FindData64 = extern struct {
+            attributes: u32,
+            time_create: i64 = 0,
+            time_access: i64 = 0,
+            time_write: i64 = 0,
+            size: i64 = 0,
+            name: [260]u8,
+        };
+
+        const A_NORMAL = 0x00;
+        const A_RDONLY = 0x01;
+        const A_HIDDEN = 0x02;
+        const A_SYSTEM = 0x04;
+        const A_SUBDIR = 0x10;
+        const A_ARCH = 0x20;
+
         const Self = @This();
         pub const Original = struct {
             pub var lseeki64: *const @TypeOf(Self.lseeki64) = undefined;
+            pub var _findclose: *const @TypeOf(Self._findclose) = undefined;
+            pub var _findfirst32: *const @TypeOf(Self._findfirst32) = undefined;
+            pub var _findfirst64: *const @TypeOf(Self._findfirst64) = undefined;
+            pub var _findnext32: *const @TypeOf(Self._findnext32) = undefined;
+            pub var _findnext64: *const @TypeOf(Self._findnext64) = undefined;
             pub var _open_osfhandle: *const @TypeOf(Self._open_osfhandle) = undefined;
             pub var _get_osfhandle: *const @TypeOf(Self._get_osfhandle) = undefined;
 

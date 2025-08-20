@@ -1132,41 +1132,22 @@ export function addTests(importModule, options) {
         'This is a test and this is only a test',
       ])
     })
-    it('should print names of files in directory using posix functions', async function() {
+    it('should retrieve names of files in directory', async function() {
       this.timeout(0);
-      const { __zigar, print } = await importTest('scan-directory');
+      const { print } = await importTest('scan-directory');
       const map = new Map([
         [ 'hello.txt', { type: 'file', content: 'Hello world' } ],
         [ 'test.txt', { type: 'file', content: 'This is a test and this is only a test' } ],
         [ 'world', { type: 'directory' } ],
       ]);
-      let event;
-      __zigar.on('open', (evt) => {
-        console.error(evt);
-        if (evt.path === 'somewhere/directory') {
-          event = evt;
-          return map;
-        } else {
-          return false;
-        }
-      });
-      print('/somewhere/directory');
-      const lines = await capture(() => {});
+      const lines = await capture(() => print(map));
       expect(lines).to.eql([
-        '. (dir)',
-        '.. (dir)',
         'hello.txt (file)',
         'test.txt (file)',
         'world (dir)',
       ]);
-      expect(event).to.eql({
-        parent: null,
-        path: 'somewhere/directory',
-        rights: { readdir: true },
-        flags: { symlinkFollow: true, directory: true }
-      });
     })
-    it('should print names of files in directory using posix functions', async function() {
+    it('should retrieve names of files in directory using posix functions', async function() {
       this.timeout(0);
       const { __zigar, print } = await importTest('scan-directory-with-posix-functions');
       const map = new Map([
@@ -1176,23 +1157,31 @@ export function addTests(importModule, options) {
       ]);
       let event;
       __zigar.on('open', (evt) => {
-        console.error(evt);
-        if (evt.path === 'somewhere/directory') {
+        if (evt.path.endsWith('directory')) {
           event = evt;
           return map;
         } else {
           return false;
         }
       });
-      print('/somewhere/directory');
-      const lines = await capture(() => {});
-      expect(lines).to.eql([
-        '. (dir)',
-        '.. (dir)',
-        'hello.txt (file)',
-        'test.txt (file)',
-        'world (dir)',
-      ]);
+      const lines = await capture(() => print('/somewhere/directory'));
+      if (target === 'win32') {
+        expect(lines).to.eql([
+          '. (unknown)',
+          '.. (unknown)',
+          'hello.txt (unknown)',
+          'test.txt (unknown)',
+          'world (unknown)',
+        ]);
+      } else {
+        expect(lines).to.eql([
+          '. (dir)',
+          '.. (dir)',
+          'hello.txt (file)',
+          'test.txt (file)',
+          'world (dir)',
+        ]);
+      }
       expect(event).to.eql({
         parent: null,
         path: 'somewhere/directory',
