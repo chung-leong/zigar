@@ -2699,10 +2699,12 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             overlapped: ?*OVERLAPPED,
         ) callconv(WINAPI) BOOL {
             const fd = toDescriptor(handle);
-            const lock = createLockStruct(.{ 0, 0 }, .{ len_low, len_high }, if ((flags & windows_h.LOCKFILE_EXCLUSIVE_LOCK) != 0) F.WRLCK else F.RDLCK);
-            var result: c_int = undefined;
-            if (redirector.fcntl(fd, F.SETLK, @intFromPtr(&lock), &result)) {
-                signalCompletion(overlapped);
+            if (isPrivateDescriptor(fd)) {
+                signalBeginning(overlapped);
+                defer signalCompletion(overlapped);
+                const lock = createLockStruct(.{ 0, 0 }, .{ len_low, len_high }, if ((flags & windows_h.LOCKFILE_EXCLUSIVE_LOCK) != 0) F.WRLCK else F.RDLCK);
+                var result: c_int = undefined;
+                _ = redirector.fcntl(fd, F.SETLK, @intFromPtr(&lock), &result);
                 return saveError(result);
             }
             return Original.LockFileEx(handle, flags, reserved, len_low, len_high, overlapped);
@@ -3108,14 +3110,20 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             buffer: LPVOID,
             len: DWORD,
             read: *DWORD,
-            overlapped: *OVERLAPPED,
+            overlapped: ?*OVERLAPPED,
         ) callconv(WINAPI) BOOL {
             const fd = toDescriptor(handle);
-            var result: off_t = undefined;
-            if (redirector.read(fd, @ptrCast(buffer), @intCast(len), &result)) {
+            if (isPrivateDescriptor(fd)) {
+                var result: off_t = undefined;
+                if (extractOffset(overlapped)) |offset| {
+                    signalBeginning(overlapped);
+                    defer signalCompletion(overlapped);
+                    _ = redirector.pread(fd, @ptrCast(buffer), @intCast(len), @intCast(offset), &result);
+                } else {
+                    _ = redirector.read(fd, @ptrCast(buffer), @intCast(len), &result);
+                }
                 if (result < 0) return saveError(result);
                 read.* = @intCast(result);
-                signalCompletion(overlapped);
                 return TRUE;
             }
             return Original.ReadFile(handle, buffer, len, read, overlapped);
@@ -3209,10 +3217,12 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             overlapped: *OVERLAPPED,
         ) callconv(WINAPI) BOOL {
             const fd = toDescriptor(handle);
-            const lock = createLockStruct(.{ 0, 0 }, .{ len_low, len_high }, F.UNLCK);
-            var result: c_int = undefined;
-            if (redirector.fcntl(fd, F.SETLK, @intFromPtr(&lock), &result)) {
-                signalCompletion(overlapped);
+            if (isPrivateDescriptor(fd)) {
+                signalBeginning(overlapped);
+                defer signalCompletion(overlapped);
+                const lock = createLockStruct(.{ 0, 0 }, .{ len_low, len_high }, F.UNLCK);
+                var result: c_int = undefined;
+                _ = redirector.fcntl(fd, F.SETLK, @intFromPtr(&lock), &result);
                 return saveError(result);
             }
             return Original.UnlockFileEx(handle, flags, len_low, len_high, overlapped);
@@ -3226,11 +3236,17 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             overlapped: ?*OVERLAPPED,
         ) callconv(WINAPI) BOOL {
             const fd = toDescriptor(handle);
-            var result: off_t = undefined;
-            if (redirector.write(fd, @ptrCast(buffer), @intCast(len), &result)) {
+            if (isPrivateDescriptor(fd)) {
+                var result: off_t = undefined;
+                if (extractOffset(overlapped)) |offset| {
+                    signalBeginning(overlapped);
+                    defer signalCompletion(overlapped);
+                    _ = redirector.pwrite(fd, @ptrCast(buffer), @intCast(len), @intCast(offset), &result);
+                } else {
+                    _ = redirector.write(fd, @ptrCast(buffer), @intCast(len), &result);
+                }
                 if (result < 0) return saveError(result);
                 written.* = @intCast(result);
-                signalCompletion(overlapped);
                 return TRUE;
             }
             return Original.WriteFile(handle, buffer, len, written, overlapped);
@@ -3247,7 +3263,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             if (fd < 0) return std.os.windows.INVALID_HANDLE_VALUE;
             return inline for (0..3) |i| {
                 if (fd == @as(c_int, @intCast(i))) break std_stream.get(i);
-            } else @ptrFromInt(@as(usize, @intCast(fd)) << 1);
+            } else @ptrFromInt(@as(usize, @intCast(fd << 1)));
         }
 
         fn isPrivateHandle(handle: HANDLE) bool {
@@ -3320,8 +3336,21 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             };
         }
 
+        fn extractOffset(overlapped: ?*OVERLAPPED) ?usize {
+            const ptr = overlapped orelse return null;
+            return @as(u64, ptr.DUMMYUNIONNAME.DUMMYSTRUCTNAME.Offset) | @as(u64, ptr.DUMMYUNIONNAME.DUMMYSTRUCTNAME.OffsetHigh) << 32;
+        }
+
+        fn signalBeginning(overlapped: ?*OVERLAPPED) void {
+            if (overlapped) |o| {
+                if (o.hEvent) |e| _ = windows_h.ResetEvent(e);
+            }
+        }
+
         fn signalCompletion(overlapped: ?*OVERLAPPED) void {
-            if (overlapped) |o| _ = windows_h.SetEvent(o.hEvent);
+            if (overlapped) |o| {
+                if (o.hEvent) |e| _ = windows_h.SetEvent(e);
+            }
         }
 
         fn createLockStruct(offset: anytype, len: anytype, lock_type: i16) Flock {
