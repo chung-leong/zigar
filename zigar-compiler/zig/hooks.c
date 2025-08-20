@@ -123,9 +123,7 @@ MODULE_VISIBILITY int vscanf_hook(FILE* s, const char *f, va_list arg) {
 
 MODULE_VISIBILITY int (*fscanf_orig)(FILE* s, const char *f, ...) = NULL;
 MODULE_VISIBILITY int fscanf_hook(FILE* s, const char *f, ...) {
-    if (!load_vfscanf(fscanf_orig)) {
-        return -1;
-    }
+    if (!load_vfscanf(fscanf_orig)) return -1;
     va_list argptr;
     va_start(argptr, f);
     int n = vfscanf_hook(s, f, argptr);
@@ -200,6 +198,20 @@ MODULE_VISIBILITY int __stdio_common_vfprintf_hook(unsigned __int64 options, FIL
         return written;
     }
     return __stdio_common_vfprintf_orig(options, s, f, locale, arg);
+}
+
+MODULE_VISIBILITY int (*__stdio_common_vfscanf_orig)(unsigned __int64 options, FILE* s, char const* f, _locale_t locale, va_list arg) = NULL;
+MODULE_VISIBILITY int __stdio_common_vfscanf_hook(unsigned __int64 options, FILE* s, char const* f, _locale_t locale, va_list arg) {
+    void* file = get_redirected_file(s);
+    if (file) {
+        char* line = get_line(file);
+        if (!line) {
+            return EOF;
+        }
+        size_t len = strlen(line);
+        return __stdio_common_vsscanf(options, line, len, f, locale, arg);
+    }
+    return __stdio_common_vfscanf_orig(options, s, f, locale, arg);
 }
 
 bool load_orig_func(void** orig_ptr, void* other_fn, const char* name) {
