@@ -173,7 +173,7 @@ MODULE_VISIBILITY int __isoc99_scanf_hook(const char *f, ...) {
     return n;
 }
 
-
+#if defined(_WIN32)
 MODULE_VISIBILITY int (*__stdio_common_vfprintf_orig)(unsigned __int64 options, FILE* s, char const* f, _locale_t locale, va_list arg) = NULL;
 MODULE_VISIBILITY int __stdio_common_vfprintf_hook(unsigned __int64 options, FILE* s, char const* f, _locale_t locale, va_list arg) {
     void* file = get_redirected_file(s);
@@ -213,6 +213,7 @@ MODULE_VISIBILITY int __stdio_common_vfscanf_hook(unsigned __int64 options, FILE
     }
     return __stdio_common_vfscanf_orig(options, s, f, locale, arg);
 }
+#endif
 
 bool load_orig_func(void** orig_ptr, void* other_fn, const char* name) {
     if (*orig_ptr) return true;
