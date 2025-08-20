@@ -1568,7 +1568,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         fn saveError(result: anytype) @TypeOf(result) {
             if (result < 0) {
-                setError(@intCast(-result));
+                const value = std.math.cast(c_int, -result) orelse -1;
+                setError(value);
                 return -1;
             }
             return result;
@@ -2666,6 +2667,10 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         }
 
         pub fn GetHandleInformation(handle: HANDLE, flags: *DWORD) callconv(WINAPI) BOOL {
+            if (isPrivateHandle(handle)) {
+                flags.* = 0;
+                return TRUE;
+            }
             return Original.GetHandleInformation(handle, flags);
         }
 
@@ -2691,7 +2696,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             reserved: DWORD,
             len_low: DWORD,
             len_high: DWORD,
-            overlapped: *OVERLAPPED,
+            overlapped: ?*OVERLAPPED,
         ) callconv(WINAPI) BOOL {
             const fd = toDescriptor(handle);
             const lock = createLockStruct(.{ 0, 0 }, .{ len_low, len_high }, if ((flags & windows_h.LOCKFILE_EXCLUSIVE_LOCK) != 0) F.WRLCK else F.RDLCK);
@@ -3199,7 +3204,6 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         pub fn UnlockFileEx(
             handle: HANDLE,
             flags: DWORD,
-            reserved: DWORD,
             len_low: DWORD,
             len_high: DWORD,
             overlapped: *OVERLAPPED,
@@ -3211,7 +3215,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                 signalCompletion(overlapped);
                 return saveError(result);
             }
-            return Original.UnlockFileEx(handle, flags, reserved, len_low, len_high, overlapped);
+            return Original.UnlockFileEx(handle, flags, len_low, len_high, overlapped);
         }
 
         pub fn WriteFile(
