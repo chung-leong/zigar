@@ -2439,6 +2439,7 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
         }
 
         pub extern fn __stdio_common_vfprintf_hook() callconv(.c) void;
+        pub extern fn __stdio_common_vfscanf_hook() callconv(.c) void;
 
         const Self = @This();
         pub const Original = struct {
@@ -2447,6 +2448,7 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
             pub var _get_osfhandle: *const @TypeOf(Self._get_osfhandle) = undefined;
 
             pub extern var __stdio_common_vfprintf_orig: *const @TypeOf(Self.__stdio_common_vfprintf_hook);
+            pub extern var __stdio_common_vfscanf_orig: *const @TypeOf(Self.__stdio_common_vfscanf_hook);
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
     };

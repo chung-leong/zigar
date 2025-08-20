@@ -9,13 +9,13 @@ export default mixin({
     let infer = false;
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
-      const flags = {
+      let flags = {
         ...decodeFlags(lFlags, PosixLookupFlag),
-        dryrun: true,
       };
       if (this.hasListener('stat')) {
         return this.triggerEvent('stat', { ...loc, flags }, PosixError.ENOENT);
       } else {
+        flags = { ...flags, dryrun: true };
         infer = true;
         return this.triggerEvent('open', { ...loc, rights: {}, flags }, PosixError.ENOENT);
       }
