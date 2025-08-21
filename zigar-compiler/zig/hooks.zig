@@ -220,6 +220,7 @@ const Dirent = switch (os) {
         namlen: c_ushort,
         name: [260]u8,
     },
+    .linux => std.c.dirent64, // as std.os.linux.dirent64 in 64-bit OS
     else => std.c.dirent,
 };
 const Dirent64 = switch (os) {
@@ -1464,30 +1465,47 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         pub fn readdir(d: *std.c.DIR) callconv(.c) ?*align(1) const Dirent {
             if (RedirectedDir.cast(d)) |dir| {
-                if (dir.data_next == dir.data_len) {
-                    var result: c_int = undefined;
-                    if (redirector.getdents(dir.fd, &dir.buffer, dir.buffer.len, &result) and result > 0) {
-                        dir.data_next = 0;
-                        dir.data_len = @intCast(result);
-                    }
-                }
-                if (dir.data_next < dir.data_len) {
-                    const dirent: *align(1) const Dirent = @ptrCast(&dir.buffer[dir.data_next]);
-                    if (@hasField(Dirent, "reclen")) {
-                        dir.data_next += dirent.reclen;
-                    } else if (@hasField(Dirent, "namlen")) {
-                        dir.data_next += @offsetOf(Dirent, "name") + dirent.namlen;
-                    }
-                    if (@hasField(Dirent, "off")) {
-                        dir.cookie = dirent.off;
-                    } else if (@hasField(Dirent, "seekoff")) {
-                        dir.cookie = dirent.seekoff;
-                    }
-                    return dirent;
-                }
-                return null;
+                return readdirT(Dirent, dir);
             }
             return Original.readdir(d);
+        }
+
+        pub fn readdir64(d: *std.c.DIR) callconv(.c) ?*align(1) const Dirent64 {
+            if (RedirectedDir.cast(d)) |dir| {
+                return readdirT(Dirent64, dir);
+            }
+            return Original.readdir64(d);
+        }
+
+        pub fn readdirT(comptime T: type, dir: *RedirectedDir) ?*align(1) const T {
+            if (dir.data_next == dir.data_len) {
+                var result: c_int = undefined;
+                const f = switch (T) {
+                    Dirent => redirector.getdents,
+                    Dirent64 => redirector.getdents64,
+                    else => unreachable,
+                };
+                _ = f(dir.fd, &dir.buffer, dir.buffer.len, &result);
+                if (result > 0) {
+                    dir.data_next = 0;
+                    dir.data_len = @intCast(result);
+                }
+            }
+            if (dir.data_next < dir.data_len) {
+                const dirent: *align(1) const T = @ptrCast(&dir.buffer[dir.data_next]);
+                if (@hasField(T, "reclen")) {
+                    dir.data_next += dirent.reclen;
+                } else if (@hasField(T, "namlen")) {
+                    dir.data_next += @offsetOf(T, "name") + dirent.namlen;
+                }
+                if (@hasField(T, "off")) {
+                    dir.cookie = dirent.off;
+                } else if (@hasField(T, "seekoff")) {
+                    dir.cookie = dirent.seekoff;
+                }
+                return dirent;
+            }
+            return null;
         }
 
         pub fn rewinddir(d: *std.c.DIR) callconv(.c) void {
@@ -1661,6 +1679,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var pthread_create: *const @TypeOf(Self.pthread_create) = undefined;
             pub var read: *const @TypeOf(Self.read) = undefined;
             pub var readdir: *const @TypeOf(Self.readdir) = undefined;
+            pub var readdir64: *const @TypeOf(Self.readdir64) = undefined;
             pub var rewinddir: *const @TypeOf(Self.rewinddir) = undefined;
             pub var rmdir: *const @TypeOf(Self.rmdir) = undefined;
             pub var seekdir: *const @TypeOf(Self.seekdir) = undefined;
