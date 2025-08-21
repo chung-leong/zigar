@@ -1,5 +1,6 @@
 const c = @cImport({
     @cInclude("fcntl.h");
+    @cInclude("unistd.h");
 });
 
 pub fn write(dir_path: [*:0]const u8, path: [*:0]const u8, text: []const u8) !isize {

@@ -5,7 +5,7 @@ const c = @cImport({
     @cInclude("unistd.h");
 });
 
-pub fn seek(path: [*:0]const u8, offset: isize) !c.off_t {
+pub fn seek(path: [*:0]const u8, offset: isize) !isize {
     const fd = c.open(path, c.O_RDONLY);
     if (fd < 0) return error.UnableToOpenFile;
     defer _ = c.close(fd);

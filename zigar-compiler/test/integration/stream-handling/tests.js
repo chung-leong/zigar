@@ -411,6 +411,7 @@ export function addTests(importModule, options) {
         flags: { create: true, truncate: true, symlinkFollow: true },
       });
     })
+    skip.entirely.unless(target === 'win32').
     it('should open and write to file using win32 functions', async function() {
       this.timeout(0);
       const { __zigar, save } = await importTest('open-and-write-to-file-with-win32-functions');
@@ -542,8 +543,8 @@ export function addTests(importModule, options) {
       expect(event).to.eql({
         parent: map,
         path: 'readable.txt',
-        rights: { read: true },
-        flags: { accessCheck: true }
+        rights: {},
+        flags: { dryrun: true }
       });
       expect(check(dir, 'readable.txt', { write: true })).to.be.true;
       expect(check(dir, 'subdirectory', { execute: true })).to.be.true;
@@ -676,8 +677,8 @@ export function addTests(importModule, options) {
       const lines2 = await capture(() => print(array));
       expect(lines2).to.eql([
         'size = 345',
-        'ctime = 100',
-        'mtime = 400',
+        'ctime = 123',
+        'mtime = 456',
         'atime = 1000000000000',
       ]);
       expect(event).to.eql({

@@ -1,5 +1,6 @@
 const c = @cImport({
     @cInclude("fcntl.h");
+    @cInclude("unistd.h");
 });
 
 pub fn save(path: [*:0]const u8, data: []const u8) !usize {

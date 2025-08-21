@@ -1,4 +1,5 @@
 const c = @cImport({
+    @cInclude("sys/stat.h");
     @cInclude("unistd.h");
 });
 

@@ -1,6 +1,7 @@
 const c = @cImport({
     @cInclude("sys/time.h");
     @cInclude("fcntl.h");
+    @cInclude("unistd.h");
 });
 
 pub fn setTimes(path: [*:0]const u8, atime: u32, mtime: u32) !void {
