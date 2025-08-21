@@ -275,8 +275,14 @@ fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
     }
     const entry = hook_table.get(name_s) orelse alt: {
         if (os == .windows and name_s[0] == '_') {
-            if (hook_table.get(name_s[1..])) |alt_entry| {
+            name_s = name_s[1..];
+            if (hook_table.get(name_s)) |alt_entry| {
                 break :alt alt_entry;
+            } else if (std.mem.endsWith(u8, name_s, "32")) {
+                name_s.len -= 2;
+                if (hook_table.get(name_s)) |alt_entry| {
+                    break :alt alt_entry;
+                }
             }
         }
         return .NOENT;

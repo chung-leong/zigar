@@ -2510,6 +2510,11 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
 
         fn readdirT(comptime T: type, dir: *std.c.DIR, info: *T) c_int {
             if (posix.readdir(dir)) |dirent| {
+                info.attributes = 0;
+                info.time_create = 0;
+                info.time_access = 0;
+                info.time_write = 0;
+                info.size = 0;
                 const name: [*:0]const u8 = @ptrCast(&dirent.name[0]);
                 const len = @min(std.mem.len(name), @sizeOf(@FieldType(T, "name")) - 1);
                 @memcpy(info.name[0 .. len + 1], name[0 .. len + 1]);
@@ -2521,18 +2526,18 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
 
         const FindData32 = extern struct {
             attributes: u32,
-            time_create: i32 = 0,
-            time_access: i32 = 0,
-            time_write: i32 = 0,
-            size: i64 = 0,
+            time_create: i32,
+            time_access: i32,
+            time_write: i32,
+            size: u32,
             name: [260]u8,
         };
         const FindData64 = extern struct {
             attributes: u32,
-            time_create: i64 = 0,
-            time_access: i64 = 0,
-            time_write: i64 = 0,
-            size: i64 = 0,
+            time_create: i64,
+            time_access: i64,
+            time_write: i64,
+            size: u64,
             name: [260]u8,
         };
 
@@ -3065,7 +3070,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
 
                     fn standard(d: *std.os.windows.FILE_STANDARD_INFORMATION, s: std.os.wasi.filestat_t) void {
                         d.* = .{
-                            .AllocationSize = @intCast(std.mem.alignForward(usize, s.size, 4096)),
+                            .AllocationSize = @intCast(std.mem.alignForward(u64, s.size, 4096)),
                             .EndOfFile = @intCast(s.size),
                             .NumberOfLinks = @intCast(s.nlink),
                             .DeletePending = TRUE,
@@ -3162,6 +3167,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                             const info_bytes: [*]u8 = @ptrCast(object_information);
                             const name_buf: [*]WCHAR = @ptrCast(@alignCast(info_bytes[name_offset..]));
                             const max_len: usize = object_information_length - name_offset - 2;
+                            if (name.len * 2 > max_len) return .BUFFER_OVERFLOW;
                             const len = @max(name.len * 2, max_len);
                             _ = std.unicode.wtf8ToWtf16Le(name_buf[0..name.len], name) catch unreachable;
                             name_buf[name.len] = 0;
@@ -3220,16 +3226,19 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         ) callconv(WINAPI) BOOL {
             const fd = toDescriptor(handle);
             if (isPrivateDescriptor(fd)) {
+                const len_s = cast(off_t, len, true) catch return FALSE;
                 var result: off_t = undefined;
-                if (extractOffset(overlapped)) |offset| {
+                if (extractOffset(overlapped) catch return FALSE) |offset| {
                     signalBeginning(overlapped);
                     defer signalCompletion(overlapped);
-                    _ = redirector.pread(fd, @ptrCast(buffer), @intCast(len), @intCast(offset), &result);
+                    var result64: off64_t = undefined;
+                    _ = redirector.pread64(fd, @ptrCast(buffer), len_s, offset, &result64);
+                    result = @intCast(result64);
                 } else {
-                    _ = redirector.read(fd, @ptrCast(buffer), @intCast(len), &result);
+                    _ = redirector.read(fd, @ptrCast(buffer), len_s, &result);
                 }
                 if (result < 0) return saveError(result);
-                read.* = @intCast(result);
+                read.* = cast(DWORD, result, true) catch return FALSE;
                 return TRUE;
             }
             return Original.ReadFile(handle, buffer, len, read, overlapped);
@@ -3343,16 +3352,19 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         ) callconv(WINAPI) BOOL {
             const fd = toDescriptor(handle);
             if (isPrivateDescriptor(fd)) {
+                const len_s = cast(off_t, len, true) catch return FALSE;
                 var result: off_t = undefined;
-                if (extractOffset(overlapped)) |offset| {
+                if (extractOffset(overlapped) catch return FALSE) |offset| {
                     signalBeginning(overlapped);
                     defer signalCompletion(overlapped);
-                    _ = redirector.pwrite(fd, @ptrCast(buffer), @intCast(len), @intCast(offset), &result);
+                    var result64: off64_t = undefined;
+                    _ = redirector.pwrite64(fd, @ptrCast(buffer), len_s, offset, &result64);
+                    result = @intCast(result64);
                 } else {
-                    _ = redirector.write(fd, @ptrCast(buffer), @intCast(len), &result);
+                    _ = redirector.write(fd, @ptrCast(buffer), len_s, &result);
                 }
                 if (result < 0) return saveError(result);
-                written.* = @intCast(result);
+                written.* = cast(DWORD, result, true) catch return FALSE;
                 return TRUE;
             }
             return Original.WriteFile(handle, buffer, len, written, overlapped);
@@ -3379,6 +3391,15 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
 
         fn isPrivateDescriptor(fd: c_int) bool {
             return redirector.isPrivateDescriptor(fd);
+        }
+
+        fn cast(comptime T: type, value: anytype, comptime set_error: bool) !T {
+            return std.math.cast(T, value) orelse fail: {
+                if (set_error) {
+                    _ = windows_h.SetLastError(windows_h.ERROR_INVALID_PARAMETER);
+                }
+                break :fail error.IntegerOverflow;
+            };
         }
 
         fn allocWtf8(string: anytype, save_err: bool) ![:0]u8 {
@@ -3442,9 +3463,11 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             };
         }
 
-        fn extractOffset(overlapped: ?*OVERLAPPED) ?usize {
+        fn extractOffset(overlapped: ?*OVERLAPPED) !?off64_t {
             const ptr = overlapped orelse return null;
-            return @as(u64, ptr.DUMMYUNIONNAME.DUMMYSTRUCTNAME.Offset) | @as(u64, ptr.DUMMYUNIONNAME.DUMMYSTRUCTNAME.OffsetHigh) << 32;
+            const low = @as(u64, ptr.DUMMYUNIONNAME.DUMMYSTRUCTNAME.Offset);
+            const high = @as(u64, ptr.DUMMYUNIONNAME.DUMMYSTRUCTNAME.OffsetHigh);
+            return try cast(off64_t, low | high << 32, true);
         }
 
         fn signalBeginning(overlapped: ?*OVERLAPPED) void {
