@@ -7,12 +7,7 @@ export default mixin({
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
       return this.triggerEvent('unlink', loc, PosixError.ENOENT);
-    }, (result) => {
-      if (result === undefined) {
-        return PosixError.ENOTSUP;
-      }
-      expectBoolean(result, PosixError.ENOENT);
-    });
+    }, (result) => (result === undefined) ? PosixError.ENOTSUP : expectBoolean(result, PosixError.ENOENT));
   },
   ...(process.env.TARGET === 'node' ? {
     exports: {

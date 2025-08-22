@@ -10,12 +10,7 @@ export default mixin({
       const times = extractTimes(atime, mtime, tFlags);
       const flags = decodeFlags(lFlags, PosixLookupFlag) ;
       return this.triggerEvent('set_times', { ...loc, times, flags });
-    }, (result) => {
-      if (result === undefined) {
-        return PosixError.ENOTSUP;
-      }
-      expectBoolean(result, PosixError.ENOENT)
-    });
+    }, (result) => (result === undefined) ? PosixError.ENOTSUP : expectBoolean(result, PosixError.ENOENT));
   },
   ...(process.env.TARGET === 'node' ? {
     exports: {

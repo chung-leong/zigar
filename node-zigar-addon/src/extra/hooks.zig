@@ -956,7 +956,6 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
-                std.debug.print("err = {}\n", .{err});
                 if (err != .OPNOTSUPP) {
                     result.* = if (err == .SUCCESS) call.u.open.fd else intFromError(err);
                     return true;
@@ -1397,6 +1396,18 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.closedir(d);
         }
 
+        pub fn futime(fd: c_int, tb: *const utimbuf) callconv(.c) c_int {
+            const tv: [2]std.c.timeval = .{
+                .{ .sec = tb.actime, .usec = 0 },
+                .{ .sec = tb.modtime, .usec = 0 },
+            };
+            var result: c_int = undefined;
+            if (redirector.futimes(fd, &tv, &result)) {
+                return saveError(result);
+            }
+            return Original.futime(fd, tb);
+        }
+
         pub fn opendir(path: [*:0]const u8) callconv(.c) ?*std.c.DIR {
             var result: c_int = undefined;
             const flags: O = .{ .DIRECTORY = true };
@@ -1497,6 +1508,23 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             }
             return Original.telldir(d);
         }
+
+        pub fn utime(path: [*:0]const u8, tb: *const utimbuf) callconv(.c) c_int {
+            const tv: [2]std.c.timeval = .{
+                .{ .sec = tb.actime, .usec = 0 },
+                .{ .sec = tb.modtime, .usec = 0 },
+            };
+            var result: c_int = undefined;
+            if (redirector.utimes(path, &tv, &result)) {
+                return saveError(result);
+            }
+            return Original.utime(path, tb);
+        }
+
+        const utimbuf = extern struct {
+            actime: isize,
+            modtime: isize,
+        };
 
         fn makeStdHook(comptime name: []const u8) StdHook(@TypeOf(@field(redirector, name))) {
             // default case where the name of the handler matches the name of the function being hooked
@@ -1617,6 +1645,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var fstatfs: *const @TypeOf(Self.fstatfs) = undefined;
             pub var fstatfs64: *const @TypeOf(Self.fstatfs64) = undefined;
             pub var fsync: *const @TypeOf(Self.fsync) = undefined;
+            pub var futime: *const @TypeOf(Self.futime) = undefined;
             pub var futimes: *const @TypeOf(Self.futimes) = undefined;
             pub var futimens: *const @TypeOf(Self.futimens) = undefined;
             pub var futimesat: *const @TypeOf(Self.futimesat) = undefined;
@@ -1650,6 +1679,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var unlink: *const @TypeOf(Self.unlink) = undefined;
             pub var unlinkat: *const @TypeOf(Self.unlinkat) = undefined;
             pub var utimensat: *const @TypeOf(Self.utimensat) = undefined;
+            pub var utime: *const @TypeOf(Self.utime) = undefined;
             pub var utimes: *const @TypeOf(Self.utimes) = undefined;
             pub var write: *const @TypeOf(Self.write) = undefined;
         };
@@ -3657,7 +3687,6 @@ pub fn getHandlerVtable(comptime Host: type) HandlerVTable {
 }
 
 pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
-    @compileLog("getHookTable");
     const redirector = SyscallRedirector(Host);
     const list = switch (os) {
         .linux => .{

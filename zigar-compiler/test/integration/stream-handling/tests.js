@@ -899,6 +899,33 @@ export function addTests(importModule, options) {
       expect(() => setTimes('/world/hello.txt', 123, 456)).to.throw(Error)
         .with.property('message', 'Unable to set times');
     })
+    skip.entirely.unless(target === 'win32').
+    it('should set access and last modified time of an opened file using futime', async function() {
+      this.timeout(0);
+      const { __zigar, setTimes } = await importTest('set-times-of-opened-file-with-futime');
+      const array = new Uint8Array(17);
+      __zigar.on('open', () => {
+        return array;
+      });
+      let event;
+      __zigar.on('set_times', (evt) => {
+        event = evt;
+        return true;
+      })
+      setTimes('/world/hello.txt', 123, 456);
+      expect(event).to.eql({
+        parent: null,
+        path: 'world/hello.txt',
+        target: array,
+        times: { atime: 123000000000n, mtime: 456000000000n },
+        flags: {},
+      });
+      __zigar.on('set_times', (evt) => {
+        return false;
+      })
+      expect(() => setTimes('/world/hello.txt', 123, 456)).to.throw(Error)
+        .with.property('message', 'Unable to set times');
+    })
     skip.entirely.if(target === 'win32').
     it('should set access and last modified time of an opened file using posix function with ns precision', async function() {
       this.timeout(0);
@@ -958,6 +985,27 @@ export function addTests(importModule, options) {
         times: { atime: 123000025000n, mtime: 456000055000n },
         flags: {}
       });
+    })
+    it('should set access and last modified time of a file by using utime', async function() {
+      this.timeout(0);
+      const { __zigar, setTimes } = await importTest('set-times-of-file-by-path-with-utime');
+      let event;
+      __zigar.on('set_times', (evt) => {
+        event = evt;
+        return true;
+      });
+      setTimes('/world/hello.txt', 123, 456);
+      expect(event).to.eql({
+        parent: null,
+        path: 'world/hello.txt',
+        times: { atime: 123000000000n, mtime: 456000000000n },
+        flags: { symlinkFollow: true }
+      });
+      __zigar.on('set_times', (evt) => {
+        return false;
+      })
+      expect(() => setTimes('/world/hello.txt', 123, 456)).to.throw(Error)
+        .with.property('message', 'Unable to set times');
     })
     skip.entirely.if(target === 'win32').
     it('should set access and last modified time of a file in directory using posix function', async function() {

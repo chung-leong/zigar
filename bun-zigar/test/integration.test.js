@@ -22,6 +22,7 @@ async function importModule(path, options) {
     multithreaded,
     omitFunctions,
     omitVariables,
+    useRedirection = true,
   } = options;
   currentModule?.__zigar?.abandon();
   const query = `optimize=${optimize}&`

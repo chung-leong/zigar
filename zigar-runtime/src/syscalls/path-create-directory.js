@@ -11,7 +11,9 @@ export default mixin({
       if (result === undefined) {
         return PosixError.ENOTSUP;
       }
-      if (result instanceof Map) return PosixError.EEXIST;
+      if (result instanceof Map) {
+        return PosixError.EEXIST;
+      }
       return expectBoolean(result, PosixError.ENOENT);
     });
   },
