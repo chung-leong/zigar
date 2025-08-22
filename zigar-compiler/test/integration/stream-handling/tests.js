@@ -121,6 +121,33 @@ export function addTests(importModule, options) {
         flags: { symlinkFollow: true }, 
       });
     })
+    it('should fallback to the system when open handler returns undefined', async function() {
+      this.timeout(0);
+      const { __zigar, hash } = await importTest('open-and-read-from-file-system');
+      const correct = (platform() === 'win32') 
+      ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
+      : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+      const path = absolute('./data/test.txt');
+      let event;
+      __zigar.on('open', (evt) => {
+        event = evt;
+        return undefined;
+      });
+      const digest = hash(path);
+      expect(digest.string).to.equal(correct);
+    })
+    it('should not attempt io redirection when feature is disabled', async function() {
+      this.timeout(0);
+      const { __zigar, check } = await importTest('open-and-close-file', { useRedirection: false });
+      const path = absolute('./data/test.txt');
+      let event;
+      __zigar.on('open', (evt) => {
+        event = evt;
+        return undefined;
+      });
+      check(path);
+      expect(event).to.be.undefined;
+    })
     skip.entirely.if(target !== 'linux').
     it('should open file through direct syscall', async function() {
       this.timeout(0);

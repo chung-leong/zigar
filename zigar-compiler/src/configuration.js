@@ -28,6 +28,10 @@ export const optionsForCompile = {
     type: 'boolean',
     title: 'Link in C standard library',
   },
+  useRedirection: {
+    type: 'boolean',
+    title: 'Redirect IO operations to JavaScript handlers',
+  },
   topLevelAwait: {
     type: 'boolean',
     title: 'Use top-level await to load WASM file',

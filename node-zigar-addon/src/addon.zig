@@ -273,7 +273,7 @@ const ModuleHost = struct {
             }
         };
         try self.exportFunctionsToModule();
-        if (env.getValueBool(redirectIO) catch true) {
+        if (env.getValueBool(redirectIO) catch true and module.attributes.io_redirection) {
             try redirection_controller.installHooks(&lib, path_s, self);
             self.redirecting_io = true;
         }

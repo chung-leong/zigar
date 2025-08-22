@@ -43,14 +43,15 @@ pub fn build(b: *std.Build) void {
         lib.import_table = true;
         lib.stack_size = cfg.stack_size;
         lib.max_memory = cfg.max_memory;
-    } else {
+    } else if (cfg.use_redirection) {
         lib.addCSourceFile(.{ .file = .{ .cwd_relative = cfg.zigar_src_path ++ "hooks.c" } });
     }
     const options = b.addOptions();
     options.addOption(comptime_int, "eval_branch_quota", cfg.eval_branch_quota);
     options.addOption(bool, "omit_functions", cfg.omit_functions);
     options.addOption(bool, "omit_variables", cfg.omit_variables);
-    lib.root_module.addOptions("export-options.zig", options);
+    options.addOption(bool, "use_redirection", cfg.use_redirection);
+    lib.root_module.addOptions("./export-options.zig", options);
     const wf = b.addUpdateSourceFiles();
     wf.addCopyFileToSource(lib.getEmittedBin(), cfg.output_path);
     if (@TypeOf(cfg.pdb_path) != @TypeOf(null) and optimize == .Debug) {

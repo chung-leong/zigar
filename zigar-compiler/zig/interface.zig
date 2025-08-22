@@ -14,7 +14,8 @@ pub fn Module(comptime Value: type) type {
             little_endian: bool,
             runtime_safety: bool,
             libc: bool,
-            _: u29 = 0,
+            io_redirection: bool,
+            _: u28 = 0,
         };
         pub const Imports = extern struct { // vtable that's filled by the addon
             create_bool: *const fn (bool, *Value) callconv(.C) E,

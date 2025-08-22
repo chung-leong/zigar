@@ -261,6 +261,7 @@ fn destroyJsThunk(
 const hook_table = hooks.getHookTable(@This());
 
 fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
+    if (!exporter.options.use_redirection) unreachable;
     const os = switch (builtin.target.os.tag) {
         .linux => .linux,
         .driverkit, .ios, .macos, .tvos, .visionos, .watchos => .darwin,
@@ -294,6 +295,7 @@ fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
 }
 
 pub fn redirectSyscall(call: *hooks.Syscall) std.c.E {
+    if (!exporter.options.use_redirection) unreachable;
     const result = imports.handle_syscall(call);
     // translate from WASI enum to the current system's
     return inline for (std.meta.fields(E)) |field| {
@@ -308,6 +310,7 @@ pub fn redirectSyscall(call: *hooks.Syscall) std.c.E {
 }
 
 pub fn isRedirecting(comptime literal: @TypeOf(.enum_literal)) bool {
+    if (!exporter.options.use_redirection) unreachable;
     var mask: hooks.Mask = undefined;
     if (imports.get_syscall_mask(&mask) != .SUCCESS) return false;
     const name = @tagName(literal);
@@ -331,6 +334,7 @@ pub fn createModule(comptime module_ns: type) Module {
                 else => false,
             },
             .libc = builtin.link_libc,
+            .io_redirection = exporter.options.use_redirection,
         },
         .imports = &imports,
         .exports = &.{

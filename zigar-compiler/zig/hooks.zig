@@ -761,11 +761,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         },
                     } };
                     const err = Host.redirectSyscall(&call);
-                    if (err == .SUCCESS) {
-                        result.* = @intCast(call.u.getdents.read);
-                    } else {
-                        result.* = intFromError(err);
-                    }
+                    result.* = if (err == .SUCCESS) @intCast(call.u.getdents.read) else intFromError(err);
                 } else {
                     // get offset to name in the wasi struct and in the system struct
                     const src_name_offset = @sizeOf(std.os.wasi.dirent_t);
@@ -880,14 +876,10 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     } },
                 };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) {
-                    result.* = switch (tell) {
-                        true => @intCast(call.u.tell.position),
-                        false => @intCast(call.u.seek.position),
-                    };
-                } else {
-                    result.* = intFromError(err);
-                }
+                result.* = if (err == .SUCCESS) switch (tell) {
+                    true => @intCast(call.u.tell.position),
+                    false => @intCast(call.u.seek.position),
+                } else intFromError(err);
                 return true;
             }
             return false;
@@ -919,7 +911,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS or err == .EXIST or isPrivateDescriptor(dirfd)) {
+                if (err != .OPNOTSUPP or isPrivateDescriptor(dirfd)) {
                     result.* = intFromError(err);
                     return true;
                 }
@@ -964,11 +956,8 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) {
-                    result.* = call.u.open.fd;
-                    return true;
-                } else if (err != .NOENT) {
-                    result.* = intFromError(err);
+                if (err != .OPNOTSUPP) {
+                    result.* = if (err == .SUCCESS) call.u.open.fd else intFromError(err);
                     return true;
                 }
             }
@@ -994,11 +983,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) {
-                    result.* = @intCast(call.u.pread.read);
-                } else {
-                    result.* = intFromError(err);
-                }
+                result.* = if (err == .SUCCESS) @intCast(call.u.pread.read) else intFromError(err);
                 return true;
             }
             return false;
@@ -1023,11 +1008,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) {
-                    result.* = @intCast(call.u.pwrite.written);
-                } else {
-                    result.* = intFromError(err);
-                }
+                result.* = if (err == .SUCCESS) @intCast(call.u.pwrite.written) else intFromError(err);
                 return true;
             }
             return false;
@@ -1043,31 +1024,14 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) {
-                    result.* = @intCast(call.u.read.read);
-                } else {
-                    result.* = intFromError(err);
-                }
+                result.* = if (err == .SUCCESS) @intCast(call.u.read.read) else intFromError(err);
                 return true;
             }
             return false;
         }
 
         pub fn rmdir(path: [*:0]const u8, result: *c_int) callconv(.c) bool {
-            if (Host.isRedirecting(.rmdir)) {
-                var call: Syscall = .{ .cmd = .rmdir, .u = .{
-                    .rmdir = .{
-                        .dirfd = fd_cwd,
-                        .path = path,
-                    },
-                } };
-                const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS or err != .NOENT) {
-                    result.* = intFromError(err);
-                    return true;
-                }
-            }
-            return false;
+            return unlinkat(fd_cwd, path, AT.REMOVEDIR, result);
         }
 
         pub fn stat(path: [*:0]const u8, buf: *Stat, result: *c_int) callconv(.c) bool {
@@ -1080,28 +1044,26 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn statx(dirfd: c_int, path: [*:0]const u8, flags: c_int, mask: c_uint, buf: *std.os.linux.Statx, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.stat))) {
-                if (flags & std.os.linux.AT.EMPTY_PATH != 0 and std.mem.len(path) == 0) {
-                    var call: Syscall = .{ .cmd = .fstat, .u = .{
+                var call: Syscall = if (flags & std.os.linux.AT.EMPTY_PATH != 0 and std.mem.len(path) == 0)
+                    .{ .cmd = .fstat, .u = .{
                         .fstat = .{
                             .fd = remapDirDescriptor(dirfd),
                         },
-                    } };
-                    const err = Host.redirectSyscall(&call);
-                    if (err == .SUCCESS) copyStatx(buf, &call.u.fstat.stat, mask);
-                    result.* = intFromError(err);
-                } else {
-                    var call: Syscall = .{ .cmd = .stat, .u = .{
+                    } }
+                else
+                    .{ .cmd = .stat, .u = .{
                         .stat = .{
                             .dirfd = remapDirDescriptor(dirfd),
                             .path = path,
                             .lookup_flags = convertLookupFlags(flags),
                         },
                     } };
-                    const err = Host.redirectSyscall(&call);
-                    if (err == .SUCCESS) copyStatx(buf, &call.u.stat.stat, mask);
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS) copyStatx(buf, &call.u.fstat.stat, mask);
+                if (err != .OPNOTSUPP or isPrivateDescriptor(dirfd)) {
                     result.* = intFromError(err);
+                    return true;
                 }
-                return true;
             }
             return false;
         }
@@ -1111,8 +1073,10 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn unlinkat(dirfd: c_int, path: [*:0]const u8, flags: c_int, result: *c_int) callconv(.c) bool {
-            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.unlink))) {
-                var call: Syscall = if ((flags & AT.REMOVEDIR) != 0)
+            const rmdir_op = (flags & AT.REMOVEDIR) != 0;
+            const redirecting = if (rmdir_op) Host.isRedirecting(.rmdir) else Host.isRedirecting(.unlink);
+            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and redirecting)) {
+                var call: Syscall = if (rmdir_op)
                     .{ .cmd = .rmdir, .u = .{
                         .rmdir = .{
                             .dirfd = remapDirDescriptor(dirfd),
@@ -1128,7 +1092,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         },
                     } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS or isPrivateDescriptor(dirfd)) {
+                if (err != .OPNOTSUPP) {
                     result.* = intFromError(err);
                     return true;
                 }
@@ -1153,7 +1117,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS or isPrivateDescriptor(dirfd)) {
+                if (err != .OPNOTSUPP or isPrivateDescriptor(dirfd)) {
                     result.* = intFromError(err);
                     return true;
                 }
@@ -1171,11 +1135,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) {
-                    result.* = @intCast(call.u.write.written);
-                } else {
-                    result.* = intFromError(err);
-                }
+                result.* = if (err == .SUCCESS) @intCast(call.u.write.written) else intFromError(err);
                 return true;
             }
             return false;

@@ -140,6 +140,7 @@ export default mixin({
     const attrs = this.getModuleAttributes();
     this.littleEndian = !!(attrs & ModuleAttribute.LittleEndian);
     this.runtimeSafety = !!(attrs & ModuleAttribute.RuntimeSafety);
+    this.ioDirection = !!(attrs & ModuleAttribute.ioRedirection);
     this.libc = !!(attrs & ModuleAttribute.LibC);
     const thunkAddress = this.getFactoryThunk();
     const thunk = { [MEMORY]: this.obtainZigView(thunkAddress, 0) };

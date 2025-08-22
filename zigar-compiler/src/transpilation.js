@@ -27,7 +27,7 @@ export async function transpile(srcPath, options) {
   const { outputPath, sourcePaths } = await compile(srcPath, null, compileOptions);
   const content = await readFile(outputPath);
   const { memoryMax, memoryInitial, tableInitial } = extractLimits(new DataView(content.buffer));
-  const multithreaded = compileOptions.multithreaded ?? false;
+  const { multithreaded = false } = compileOptions;
   const moduleOptions = {
     memoryMax,
     memoryInitial,

@@ -220,6 +220,7 @@ const Dirent = switch (os) {
         namlen: c_ushort,
         name: [260]u8,
     },
+    .linux => std.c.dirent64, // as std.os.linux.dirent64 in 64-bit OS
     else => std.c.dirent,
 };
 const Dirent64 = switch (os) {
@@ -760,11 +761,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         },
                     } };
                     const err = Host.redirectSyscall(&call);
-                    if (err == .SUCCESS) {
-                        result.* = @intCast(call.u.getdents.read);
-                    } else {
-                        result.* = intFromError(err);
-                    }
+                    result.* = if (err == .SUCCESS) @intCast(call.u.getdents.read) else intFromError(err);
                 } else {
                     // get offset to name in the wasi struct and in the system struct
                     const src_name_offset = @sizeOf(std.os.wasi.dirent_t);
@@ -879,14 +876,10 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     } },
                 };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) {
-                    result.* = switch (tell) {
-                        true => @intCast(call.u.tell.position),
-                        false => @intCast(call.u.seek.position),
-                    };
-                } else {
-                    result.* = intFromError(err);
-                }
+                result.* = if (err == .SUCCESS) switch (tell) {
+                    true => @intCast(call.u.tell.position),
+                    false => @intCast(call.u.seek.position),
+                } else intFromError(err);
                 return true;
             }
             return false;
@@ -918,7 +911,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS or err == .EXIST or isPrivateDescriptor(dirfd)) {
+                if (err != .OPNOTSUPP or isPrivateDescriptor(dirfd)) {
                     result.* = intFromError(err);
                     return true;
                 }
@@ -963,11 +956,9 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) {
-                    result.* = call.u.open.fd;
-                    return true;
-                } else if (err != .NOENT) {
-                    result.* = intFromError(err);
+                std.debug.print("err = {}\n", .{err});
+                if (err != .OPNOTSUPP) {
+                    result.* = if (err == .SUCCESS) call.u.open.fd else intFromError(err);
                     return true;
                 }
             }
@@ -993,11 +984,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) {
-                    result.* = @intCast(call.u.pread.read);
-                } else {
-                    result.* = intFromError(err);
-                }
+                result.* = if (err == .SUCCESS) @intCast(call.u.pread.read) else intFromError(err);
                 return true;
             }
             return false;
@@ -1022,11 +1009,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) {
-                    result.* = @intCast(call.u.pwrite.written);
-                } else {
-                    result.* = intFromError(err);
-                }
+                result.* = if (err == .SUCCESS) @intCast(call.u.pwrite.written) else intFromError(err);
                 return true;
             }
             return false;
@@ -1042,31 +1025,14 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) {
-                    result.* = @intCast(call.u.read.read);
-                } else {
-                    result.* = intFromError(err);
-                }
+                result.* = if (err == .SUCCESS) @intCast(call.u.read.read) else intFromError(err);
                 return true;
             }
             return false;
         }
 
         pub fn rmdir(path: [*:0]const u8, result: *c_int) callconv(.c) bool {
-            if (Host.isRedirecting(.rmdir)) {
-                var call: Syscall = .{ .cmd = .rmdir, .u = .{
-                    .rmdir = .{
-                        .dirfd = fd_cwd,
-                        .path = path,
-                    },
-                } };
-                const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS or err != .NOENT) {
-                    result.* = intFromError(err);
-                    return true;
-                }
-            }
-            return false;
+            return unlinkat(fd_cwd, path, AT.REMOVEDIR, result);
         }
 
         pub fn stat(path: [*:0]const u8, buf: *Stat, result: *c_int) callconv(.c) bool {
@@ -1079,28 +1045,26 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn statx(dirfd: c_int, path: [*:0]const u8, flags: c_int, mask: c_uint, buf: *std.os.linux.Statx, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.stat))) {
-                if (flags & std.os.linux.AT.EMPTY_PATH != 0 and std.mem.len(path) == 0) {
-                    var call: Syscall = .{ .cmd = .fstat, .u = .{
+                var call: Syscall = if (flags & std.os.linux.AT.EMPTY_PATH != 0 and std.mem.len(path) == 0)
+                    .{ .cmd = .fstat, .u = .{
                         .fstat = .{
                             .fd = remapDirDescriptor(dirfd),
                         },
-                    } };
-                    const err = Host.redirectSyscall(&call);
-                    if (err == .SUCCESS) copyStatx(buf, &call.u.fstat.stat, mask);
-                    result.* = intFromError(err);
-                } else {
-                    var call: Syscall = .{ .cmd = .stat, .u = .{
+                    } }
+                else
+                    .{ .cmd = .stat, .u = .{
                         .stat = .{
                             .dirfd = remapDirDescriptor(dirfd),
                             .path = path,
                             .lookup_flags = convertLookupFlags(flags),
                         },
                     } };
-                    const err = Host.redirectSyscall(&call);
-                    if (err == .SUCCESS) copyStatx(buf, &call.u.stat.stat, mask);
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS) copyStatx(buf, &call.u.fstat.stat, mask);
+                if (err != .OPNOTSUPP or isPrivateDescriptor(dirfd)) {
                     result.* = intFromError(err);
+                    return true;
                 }
-                return true;
             }
             return false;
         }
@@ -1110,8 +1074,10 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn unlinkat(dirfd: c_int, path: [*:0]const u8, flags: c_int, result: *c_int) callconv(.c) bool {
-            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.unlink))) {
-                var call: Syscall = if ((flags & AT.REMOVEDIR) != 0)
+            const rmdir_op = (flags & AT.REMOVEDIR) != 0;
+            const redirecting = if (rmdir_op) Host.isRedirecting(.rmdir) else Host.isRedirecting(.unlink);
+            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and redirecting)) {
+                var call: Syscall = if (rmdir_op)
                     .{ .cmd = .rmdir, .u = .{
                         .rmdir = .{
                             .dirfd = remapDirDescriptor(dirfd),
@@ -1127,7 +1093,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         },
                     } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS or isPrivateDescriptor(dirfd)) {
+                if (err != .OPNOTSUPP) {
                     result.* = intFromError(err);
                     return true;
                 }
@@ -1152,7 +1118,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS or isPrivateDescriptor(dirfd)) {
+                if (err != .OPNOTSUPP or isPrivateDescriptor(dirfd)) {
                     result.* = intFromError(err);
                     return true;
                 }
@@ -1170,11 +1136,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
-                if (err == .SUCCESS) {
-                    result.* = @intCast(call.u.write.written);
-                } else {
-                    result.* = intFromError(err);
-                }
+                result.* = if (err == .SUCCESS) @intCast(call.u.write.written) else intFromError(err);
                 return true;
             }
             return false;
@@ -1464,30 +1426,47 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         pub fn readdir(d: *std.c.DIR) callconv(.c) ?*align(1) const Dirent {
             if (RedirectedDir.cast(d)) |dir| {
-                if (dir.data_next == dir.data_len) {
-                    var result: c_int = undefined;
-                    if (redirector.getdents(dir.fd, &dir.buffer, dir.buffer.len, &result) and result > 0) {
-                        dir.data_next = 0;
-                        dir.data_len = @intCast(result);
-                    }
-                }
-                if (dir.data_next < dir.data_len) {
-                    const dirent: *align(1) const Dirent = @ptrCast(&dir.buffer[dir.data_next]);
-                    if (@hasField(Dirent, "reclen")) {
-                        dir.data_next += dirent.reclen;
-                    } else if (@hasField(Dirent, "namlen")) {
-                        dir.data_next += @offsetOf(Dirent, "name") + dirent.namlen;
-                    }
-                    if (@hasField(Dirent, "off")) {
-                        dir.cookie = dirent.off;
-                    } else if (@hasField(Dirent, "seekoff")) {
-                        dir.cookie = dirent.seekoff;
-                    }
-                    return dirent;
-                }
-                return null;
+                return readdirT(Dirent, dir);
             }
             return Original.readdir(d);
+        }
+
+        pub fn readdir64(d: *std.c.DIR) callconv(.c) ?*align(1) const Dirent64 {
+            if (RedirectedDir.cast(d)) |dir| {
+                return readdirT(Dirent64, dir);
+            }
+            return Original.readdir64(d);
+        }
+
+        pub fn readdirT(comptime T: type, dir: *RedirectedDir) ?*align(1) const T {
+            if (dir.data_next == dir.data_len) {
+                var result: c_int = undefined;
+                const f = switch (T) {
+                    Dirent => redirector.getdents,
+                    Dirent64 => redirector.getdents64,
+                    else => unreachable,
+                };
+                _ = f(dir.fd, &dir.buffer, dir.buffer.len, &result);
+                if (result > 0) {
+                    dir.data_next = 0;
+                    dir.data_len = @intCast(result);
+                }
+            }
+            if (dir.data_next < dir.data_len) {
+                const dirent: *align(1) const T = @ptrCast(&dir.buffer[dir.data_next]);
+                if (@hasField(T, "reclen")) {
+                    dir.data_next += dirent.reclen;
+                } else if (@hasField(T, "namlen")) {
+                    dir.data_next += @offsetOf(T, "name") + dirent.namlen;
+                }
+                if (@hasField(T, "off")) {
+                    dir.cookie = dirent.off;
+                } else if (@hasField(T, "seekoff")) {
+                    dir.cookie = dirent.seekoff;
+                }
+                return dirent;
+            }
+            return null;
         }
 
         pub fn rewinddir(d: *std.c.DIR) callconv(.c) void {
@@ -1568,7 +1547,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         fn saveError(result: anytype) @TypeOf(result) {
             if (result < 0) {
-                setError(@intCast(-result));
+                const value = std.math.cast(c_int, -result) orelse -1;
+                setError(value);
                 return -1;
             }
             return result;
@@ -1660,6 +1640,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var pthread_create: *const @TypeOf(Self.pthread_create) = undefined;
             pub var read: *const @TypeOf(Self.read) = undefined;
             pub var readdir: *const @TypeOf(Self.readdir) = undefined;
+            pub var readdir64: *const @TypeOf(Self.readdir64) = undefined;
             pub var rewinddir: *const @TypeOf(Self.rewinddir) = undefined;
             pub var rmdir: *const @TypeOf(Self.rmdir) = undefined;
             pub var seekdir: *const @TypeOf(Self.seekdir) = undefined;
@@ -1682,7 +1663,6 @@ const RedirectedDir = struct {
     cookie: u64 = 0,
     data_next: usize = 0,
     data_len: usize = 0,
-    dirent: dirent_h.struct_dirent = undefined,
     buffer: [4096]u8 = undefined,
 
     const dirent_h = @cImport({
@@ -2423,6 +2403,65 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
 
         pub const lseeki64 = posix.lseek64;
 
+        pub fn _findclose(handle: isize) callconv(.c) c_int {
+            const dir: *std.c.DIR = @ptrFromInt(@as(usize, @bitCast(handle)));
+            if (RedirectedDir.cast(dir)) |_| {
+                posix.closedir(dir);
+                return 0;
+            }
+            return Original._findclose(handle);
+        }
+
+        pub fn _findfirst32(filespec: [*:0]const u8, info: *FindData32) callconv(.c) isize {
+            if (redirector.Host.isRedirecting(.open)) {
+                if (getPath(filespec) catch return -1) |path| {
+                    defer c_allocator.free(path);
+                    const dir = posix.opendir(path) orelse return -1;
+                    const handle: isize = @bitCast(@intFromPtr(dir));
+                    if (_findnext32(handle, info) == 0) {
+                        return @bitCast(handle);
+                    } else {
+                        posix.closedir(dir);
+                        return -1;
+                    }
+                }
+            }
+            return Original._findfirst32(filespec, info);
+        }
+
+        pub fn _findfirst64(filespec: [*:0]const u8, info: *FindData64) callconv(.c) isize {
+            if (redirector.Host.isRedirecting(.open)) {
+                if (getPath(filespec) catch return -1) |path| {
+                    defer c_allocator.free(path);
+                    const dir = posix.opendir(path) orelse return -1;
+                    const handle: isize = @bitCast(@intFromPtr(dir));
+                    if (_findnext64(handle, info) == 0) {
+                        return @bitCast(handle);
+                    } else {
+                        posix.closedir(dir);
+                        return -1;
+                    }
+                }
+            }
+            return Original._findfirst64(filespec, info);
+        }
+
+        pub fn _findnext32(handle: isize, info: *FindData32) callconv(.c) c_int {
+            const dir: *std.c.DIR = @ptrFromInt(@as(usize, @bitCast(handle)));
+            if (RedirectedDir.cast(dir)) |_| {
+                return readdirT(FindData32, dir, info);
+            }
+            return Original._findnext32(handle, info);
+        }
+
+        pub fn _findnext64(handle: isize, info: *FindData64) callconv(.c) c_int {
+            const dir: *std.c.DIR = @ptrFromInt(@as(usize, @bitCast(handle)));
+            if (RedirectedDir.cast(dir)) |_| {
+                return readdirT(FindData64, dir, info);
+            }
+            return Original._findnext64(handle, info);
+        }
+
         pub fn _open_osfhandle(handle: win32.HANDLE) callconv(.c) c_int {
             const fd = win32.toDescriptor(handle);
             if (win32.isPrivateDescriptor(fd)) {
@@ -2441,9 +2480,62 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
         pub extern fn __stdio_common_vfprintf_hook() callconv(.c) void;
         pub extern fn __stdio_common_vfscanf_hook() callconv(.c) void;
 
+        fn getPath(filespec: [*:0]const u8) !?[:0]const u8 {
+            const len = std.mem.len(filespec);
+            if (std.mem.endsWith(u8, filespec[0..len], "\\*")) {
+                return try c_allocator.dupeZ(u8, filespec[0 .. len - 2]);
+            }
+            return null;
+        }
+
+        fn readdirT(comptime T: type, dir: *std.c.DIR, info: *T) c_int {
+            if (posix.readdir(dir)) |dirent| {
+                info.attributes = 0;
+                info.time_create = 0;
+                info.time_access = 0;
+                info.time_write = 0;
+                info.size = 0;
+                const name: [*:0]const u8 = @ptrCast(&dirent.name[0]);
+                const len = @min(std.mem.len(name), @sizeOf(@FieldType(T, "name")) - 1);
+                @memcpy(info.name[0 .. len + 1], name[0 .. len + 1]);
+                return 0;
+            } else {
+                return -1;
+            }
+        }
+
+        const FindData32 = extern struct {
+            attributes: u32,
+            time_create: i32,
+            time_access: i32,
+            time_write: i32,
+            size: u32,
+            name: [260]u8,
+        };
+        const FindData64 = extern struct {
+            attributes: u32,
+            time_create: i64,
+            time_access: i64,
+            time_write: i64,
+            size: u64,
+            name: [260]u8,
+        };
+
+        const A_NORMAL = 0x00;
+        const A_RDONLY = 0x01;
+        const A_HIDDEN = 0x02;
+        const A_SYSTEM = 0x04;
+        const A_SUBDIR = 0x10;
+        const A_ARCH = 0x20;
+
         const Self = @This();
         pub const Original = struct {
             pub var lseeki64: *const @TypeOf(Self.lseeki64) = undefined;
+            pub var _findclose: *const @TypeOf(Self._findclose) = undefined;
+            pub var _findfirst32: *const @TypeOf(Self._findfirst32) = undefined;
+            pub var _findfirst64: *const @TypeOf(Self._findfirst64) = undefined;
+            pub var _findnext32: *const @TypeOf(Self._findnext32) = undefined;
+            pub var _findnext64: *const @TypeOf(Self._findnext64) = undefined;
             pub var _open_osfhandle: *const @TypeOf(Self._open_osfhandle) = undefined;
             pub var _get_osfhandle: *const @TypeOf(Self._get_osfhandle) = undefined;
 
@@ -2666,6 +2758,10 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         }
 
         pub fn GetHandleInformation(handle: HANDLE, flags: *DWORD) callconv(WINAPI) BOOL {
+            if (isPrivateHandle(handle)) {
+                flags.* = 0;
+                return TRUE;
+            }
             return Original.GetHandleInformation(handle, flags);
         }
 
@@ -2691,13 +2787,15 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             reserved: DWORD,
             len_low: DWORD,
             len_high: DWORD,
-            overlapped: *OVERLAPPED,
+            overlapped: ?*OVERLAPPED,
         ) callconv(WINAPI) BOOL {
             const fd = toDescriptor(handle);
-            const lock = createLockStruct(.{ 0, 0 }, .{ len_low, len_high }, if ((flags & windows_h.LOCKFILE_EXCLUSIVE_LOCK) != 0) F.WRLCK else F.RDLCK);
-            var result: c_int = undefined;
-            if (redirector.fcntl(fd, F.SETLK, @intFromPtr(&lock), &result)) {
-                signalCompletion(overlapped);
+            if (isPrivateDescriptor(fd)) {
+                signalBeginning(overlapped);
+                defer signalCompletion(overlapped);
+                const lock = createLockStruct(.{ 0, 0 }, .{ len_low, len_high }, if ((flags & windows_h.LOCKFILE_EXCLUSIVE_LOCK) != 0) F.WRLCK else F.RDLCK);
+                var result: c_int = undefined;
+                _ = redirector.fcntl(fd, F.SETLK, @intFromPtr(&lock), &result);
                 return saveError(result);
             }
             return Original.LockFileEx(handle, flags, reserved, len_low, len_high, overlapped);
@@ -2952,7 +3050,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
 
                     fn standard(d: *std.os.windows.FILE_STANDARD_INFORMATION, s: std.os.wasi.filestat_t) void {
                         d.* = .{
-                            .AllocationSize = @intCast(std.mem.alignForward(usize, s.size, 4096)),
+                            .AllocationSize = @intCast(std.mem.alignForward(u64, s.size, 4096)),
                             .EndOfFile = @intCast(s.size),
                             .NumberOfLinks = @intCast(s.nlink),
                             .DeletePending = TRUE,
@@ -3049,6 +3147,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                             const info_bytes: [*]u8 = @ptrCast(object_information);
                             const name_buf: [*]WCHAR = @ptrCast(@alignCast(info_bytes[name_offset..]));
                             const max_len: usize = object_information_length - name_offset - 2;
+                            if (name.len * 2 > max_len) return .BUFFER_OVERFLOW;
                             const len = @max(name.len * 2, max_len);
                             _ = std.unicode.wtf8ToWtf16Le(name_buf[0..name.len], name) catch unreachable;
                             name_buf[name.len] = 0;
@@ -3103,14 +3202,23 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             buffer: LPVOID,
             len: DWORD,
             read: *DWORD,
-            overlapped: *OVERLAPPED,
+            overlapped: ?*OVERLAPPED,
         ) callconv(WINAPI) BOOL {
             const fd = toDescriptor(handle);
-            var result: off_t = undefined;
-            if (redirector.read(fd, @ptrCast(buffer), @intCast(len), &result)) {
+            if (isPrivateDescriptor(fd)) {
+                const len_s = cast(off_t, len, true) catch return FALSE;
+                var result: off_t = undefined;
+                if (extractOffset(overlapped) catch return FALSE) |offset| {
+                    signalBeginning(overlapped);
+                    defer signalCompletion(overlapped);
+                    var result64: off64_t = undefined;
+                    _ = redirector.pread64(fd, @ptrCast(buffer), len_s, offset, &result64);
+                    result = @intCast(result64);
+                } else {
+                    _ = redirector.read(fd, @ptrCast(buffer), len_s, &result);
+                }
                 if (result < 0) return saveError(result);
-                read.* = @intCast(result);
-                signalCompletion(overlapped);
+                read.* = cast(DWORD, result, true) catch return FALSE;
                 return TRUE;
             }
             return Original.ReadFile(handle, buffer, len, read, overlapped);
@@ -3199,19 +3307,20 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         pub fn UnlockFileEx(
             handle: HANDLE,
             flags: DWORD,
-            reserved: DWORD,
             len_low: DWORD,
             len_high: DWORD,
             overlapped: *OVERLAPPED,
         ) callconv(WINAPI) BOOL {
             const fd = toDescriptor(handle);
-            const lock = createLockStruct(.{ 0, 0 }, .{ len_low, len_high }, F.UNLCK);
-            var result: c_int = undefined;
-            if (redirector.fcntl(fd, F.SETLK, @intFromPtr(&lock), &result)) {
-                signalCompletion(overlapped);
+            if (isPrivateDescriptor(fd)) {
+                signalBeginning(overlapped);
+                defer signalCompletion(overlapped);
+                const lock = createLockStruct(.{ 0, 0 }, .{ len_low, len_high }, F.UNLCK);
+                var result: c_int = undefined;
+                _ = redirector.fcntl(fd, F.SETLK, @intFromPtr(&lock), &result);
                 return saveError(result);
             }
-            return Original.UnlockFileEx(handle, flags, reserved, len_low, len_high, overlapped);
+            return Original.UnlockFileEx(handle, flags, len_low, len_high, overlapped);
         }
 
         pub fn WriteFile(
@@ -3222,11 +3331,20 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             overlapped: ?*OVERLAPPED,
         ) callconv(WINAPI) BOOL {
             const fd = toDescriptor(handle);
-            var result: off_t = undefined;
-            if (redirector.write(fd, @ptrCast(buffer), @intCast(len), &result)) {
+            if (isPrivateDescriptor(fd)) {
+                const len_s = cast(off_t, len, true) catch return FALSE;
+                var result: off_t = undefined;
+                if (extractOffset(overlapped) catch return FALSE) |offset| {
+                    signalBeginning(overlapped);
+                    defer signalCompletion(overlapped);
+                    var result64: off64_t = undefined;
+                    _ = redirector.pwrite64(fd, @ptrCast(buffer), len_s, offset, &result64);
+                    result = @intCast(result64);
+                } else {
+                    _ = redirector.write(fd, @ptrCast(buffer), len_s, &result);
+                }
                 if (result < 0) return saveError(result);
-                written.* = @intCast(result);
-                signalCompletion(overlapped);
+                written.* = cast(DWORD, result, true) catch return FALSE;
                 return TRUE;
             }
             return Original.WriteFile(handle, buffer, len, written, overlapped);
@@ -3243,7 +3361,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             if (fd < 0) return std.os.windows.INVALID_HANDLE_VALUE;
             return inline for (0..3) |i| {
                 if (fd == @as(c_int, @intCast(i))) break std_stream.get(i);
-            } else @ptrFromInt(@as(usize, @intCast(fd)) << 1);
+            } else @ptrFromInt(@as(usize, @intCast(fd << 1)));
         }
 
         fn isPrivateHandle(handle: HANDLE) bool {
@@ -3253,6 +3371,15 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
 
         fn isPrivateDescriptor(fd: c_int) bool {
             return redirector.isPrivateDescriptor(fd);
+        }
+
+        fn cast(comptime T: type, value: anytype, comptime set_error: bool) !T {
+            return std.math.cast(T, value) orelse fail: {
+                if (set_error) {
+                    _ = windows_h.SetLastError(windows_h.ERROR_INVALID_PARAMETER);
+                }
+                break :fail error.IntegerOverflow;
+            };
         }
 
         fn allocWtf8(string: anytype, save_err: bool) ![:0]u8 {
@@ -3316,8 +3443,23 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             };
         }
 
+        fn extractOffset(overlapped: ?*OVERLAPPED) !?off64_t {
+            const ptr = overlapped orelse return null;
+            const low = @as(u64, ptr.DUMMYUNIONNAME.DUMMYSTRUCTNAME.Offset);
+            const high = @as(u64, ptr.DUMMYUNIONNAME.DUMMYSTRUCTNAME.OffsetHigh);
+            return try cast(off64_t, low | high << 32, true);
+        }
+
+        fn signalBeginning(overlapped: ?*OVERLAPPED) void {
+            if (overlapped) |o| {
+                if (o.hEvent) |e| _ = windows_h.ResetEvent(e);
+            }
+        }
+
         fn signalCompletion(overlapped: ?*OVERLAPPED) void {
-            if (overlapped) |o| _ = windows_h.SetEvent(o.hEvent);
+            if (overlapped) |o| {
+                if (o.hEvent) |e| _ = windows_h.SetEvent(e);
+            }
         }
 
         fn createLockStruct(offset: anytype, len: anytype, lock_type: i16) Flock {
@@ -3515,6 +3657,7 @@ pub fn getHandlerVtable(comptime Host: type) HandlerVTable {
 }
 
 pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
+    @compileLog("getHookTable");
     const redirector = SyscallRedirector(Host);
     const list = switch (os) {
         .linux => .{

@@ -10,7 +10,7 @@ export default mixin({
       if (this.hasListener('stat')) {
         const target = stream.valueOf();
         const loc = this.getStreamLocation?.(fd);
-        return this.triggerEvent('stat', { ...loc, target, flags: {} }, PosixError.ENOENT);
+        return this.triggerEvent('stat', { ...loc, target, flags: {} });
       } else {
         return this.inferStat(stream);
       }

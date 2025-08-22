@@ -11,8 +11,14 @@ export default mixin({
       const loc = this.getStreamLocation?.(fd);
       const times = extractTimes(atime, mtime, tFlags);
       const flags = {};
-      return this.triggerEvent('set_times', { ...loc, target, times, flags }, PosixError.EBADF);
-    }, (result) => expectBoolean(result, PosixError.EBADF));
+      return this.triggerEvent('set_times', { ...loc, target, times, flags });
+    }, (result) => {
+      if (result === undefined) {
+        // ENOTCAPABLE means failing with no fallback
+        return PosixError.ENOTCAPABLE;
+      }
+      expectBoolean(result, PosixError.EBADF)
+    });
   },
   ...(process.env.TARGET === 'node' ? {
     exports: {

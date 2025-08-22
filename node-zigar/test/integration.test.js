@@ -22,12 +22,14 @@ async function importModule(path, options) {
     multithreaded,
     omitFunctions,
     omitVariables,
+    useRedirection,
   } = options;
   currentModule?.__zigar?.abandon();
   const query = `optimize=${optimize}&`
               + `multithreaded=${multithreaded ? 1 : 0}&`
               + `omit-functions=${omitFunctions ? 1 : 0}&`
-              + `omit-variables=${omitVariables ? 1 : 0}&`;
+              + `omit-variables=${omitVariables ? 1 : 0}&`
+              + `use-redirection=${useRedirection ? 1 : 0}&`;
   currentModule = await import(path + '?' + query);
   return currentModule;
 }

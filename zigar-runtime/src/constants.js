@@ -123,6 +123,7 @@ export const ModuleAttribute = {
   LittleEndian:     0x0001,
   RuntimeSafety:    0x0002,
   LibC:             0x0004,
+  IoRedirection:    0x0008,
 };
 
 export const VisitorFlag = {
@@ -149,6 +150,7 @@ export const PosixError = {
   ENOENT: 44,
   ENOTSUP: 58,
   ESPIPE: 70,
+  ENOTCAPABLE: 76,
 };
 export const PosixFileType = {
   unknown: 0,

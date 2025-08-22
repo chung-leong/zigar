@@ -13,24 +13,26 @@ export default mixin({
         ...decodeFlags(lFlags, PosixLookupFlag),
       };
       if (this.hasListener('stat')) {
-        return this.triggerEvent('stat', { ...loc, flags }, PosixError.ENOENT);
+        return this.triggerEvent('stat', { ...loc, flags });
       } else {
         flags = { ...flags, dryrun: true };
         infer = true;
-        return this.triggerEvent('open', { ...loc, rights: {}, flags }, PosixError.ENOENT);
+        return this.triggerEvent('open', { ...loc, rights: {}, flags });
       }
-    }, (arg) => {
-      let stat;
+    }, (result) => {
+      if (result === undefined) {
+        return PosixError.ENOTSUP;
+      } else if (result === false) {
+        return PosixError.ENOENT;
+      }
       if (infer) {
-        const stream = this.convertReader(arg) ?? this.convertWriter(arg) ?? this.convertDirectory(arg);
+        const stream = this.convertReader(result) ?? this.convertWriter(result) ?? this.convertDirectory(result);
         if (!stream) {
           throw new InvalidStream(PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write | PosixDescriptorRight.fd_readdir, arg);
         }
-        stat = this.inferStat(stream);
-      } else {
-        stat = arg;
+        result = this.inferStat(stream);
       }
-      return this.copyStat(bufAddress, stat);
+      return this.copyStat(bufAddress, result);
     });
   },
   ...(process.env.TARGET === 'node' ? {

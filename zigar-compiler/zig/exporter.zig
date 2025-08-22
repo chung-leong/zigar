@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const export_options = @import("./export-options.zig");
+pub const options = export_options;
 const fn_transform = @import("./fn-transform.zig");
 const meta = @import("./meta.zig");
 const thunk_js = @import("./thunk-js.zig");

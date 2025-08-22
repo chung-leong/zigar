@@ -16,6 +16,7 @@ export default mixin({
       this.table = null;
       this.initialTableLength = 0;
       this.exportedFunctions = null;
+      this.customWASI = null;
     }
   },
   abandonModule() {
@@ -145,6 +146,7 @@ export default mixin({
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
+        this.customWASI = await this.triggerEvent('wasi', {});
         const instance = await this.instantiateWebAssembly(source, options);
         const { exports } = instance;
         this.importFunctions(exports);
@@ -155,11 +157,19 @@ export default mixin({
             get(inst, name) {
               return (name === 'exports') ? exportsPlusMemory : /* c8 ignore next */ inst[name];
             }
-          })
+          });
           this.customWASI.initialize?.(instanceProxy);
         }
         this.initialize();
       })();
+    },
+    getWASIHandler(name) {
+      return this.getBuiltinHandler?.(name)
+          ?? this.customWASI?.wasiImport?.[name]
+          ?? (() => {
+            console.error(`Not implemented: ${name}`);
+            return PosixError.ENOTSUP;
+          });
     },
     displayPanic(address, len) {
       const array = new Uint8Array(this.memory.buffer, address, len);

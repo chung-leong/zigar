@@ -17,9 +17,8 @@ const MemberType = {
   Void: 0};
 const MemberFlag = {
   IsReadOnly:       0x0002};
-
 ({
-  root: (process.env.TARGET === 'wasm') ? 3 : -1});
+  root: (process.env.TARGET === 'wasm') ? 3 : -100});
 
 const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
 
@@ -956,8 +955,8 @@ function formatProjectConfig(config) {
   const lines = [];
   const fields = [
     'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath', 'useLibc', 
-    'isWASM', 'multithreaded', 'stackSize', 'maxMemory', 'evalBranchQuota', 'omitFunctions',
-    'omitVariables',
+    'useRedirection', 'isWASM', 'multithreaded', 'stackSize', 'maxMemory', 'evalBranchQuota', 
+    'omitFunctions', 'omitVariables',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -1007,6 +1006,7 @@ function createConfig(srcPath, modPath, options = {}) {
     optimize = 'Debug',
     isWASM = false,
     useLibc = isWASM ? false : true,
+    useRedirection = true,
     clean = false,
     buildDir = join(os.tmpdir(), 'zigar-build'),
     buildDirSize = 4294967296,
@@ -1103,6 +1103,7 @@ function createConfig(srcPath, modPath, options = {}) {
     zigPath,
     zigArgs,
     useLibc,
+    useRedirection,
     isWASM,
     multithreaded,
     stackSize,
@@ -1233,6 +1234,10 @@ const optionsForCompile = {
   useLibc: {
     type: 'boolean',
     title: 'Link in C standard library',
+  },
+  useRedirection: {
+    type: 'boolean',
+    title: 'Redirect IO operations to JavaScript handlers',
   },
   topLevelAwait: {
     type: 'boolean',
