@@ -22,15 +22,23 @@ export async function compile(srcPath, modPath, options) {
   let changed = false;
   let sourcePaths = [];
   if (srcPath) {
-    // add custom build file
     try {
+      // add custom build file if one is found
       const path = moduleDir + 'build.zig';
       await stat(path);
       config.buildFilePath = path;
     } catch (err) {
     }
-    // add custom package manager manifest
     try {
+      // add path to build.extra.zig if it exists
+      const path = moduleDir + 'build.extra.zig';
+      await stat(path);
+      config.extraFilePath = path;
+      config.hasExtra = true;
+    } catch (err) {
+    }
+    try {
+    // add package manager manifest
       const path = moduleDir + 'build.zig.zon';
       await stat(path);
       config.packageConfigPath = path;
@@ -133,7 +141,7 @@ export function formatProjectConfig(config) {
   const fields = [
     'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath', 'useLibc', 
     'useRedirection', 'isWASM', 'multithreaded', 'stackSize', 'maxMemory', 'evalBranchQuota', 
-    'omitFunctions', 'omitVariables',
+    'omitFunctions', 'omitVariables', 'hasExtra'
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -147,10 +155,14 @@ export function formatProjectConfig(config) {
 export async function createProject(config, dir) {
   await createDirectory(dir);
   const content = formatProjectConfig(config);
-  const cfgFilePath = join(dir, 'build-cfg.zig');
+  const cfgFilePath = join(dir, 'build.cfg.zig');
   await writeFile(cfgFilePath, content);
   const buildFilePath = join(dir, 'build.zig');
   await copyFile(config.buildFilePath, buildFilePath);
+  if (config.extraFilePath) {
+    const extraFilePath = join(dir, 'build.extra.zig');
+    await copyFile(config.extraFilePath, extraFilePath)
+  }
   if (config.packageConfigPath) {
     const packageConfigPath = join(dir, 'build.zig.zon');
     await copyZonFile(config.packageConfigPath, packageConfigPath);
@@ -288,6 +300,8 @@ export function createConfig(srcPath, modPath, options = {}) {
     evalBranchQuota,
     omitFunctions,
     omitVariables,
+    hasExtra: false,
+    extraFilePath: undefined,
   };
 }
 

@@ -419,36 +419,62 @@ function findSortedIndex(array, value, cb) {
   return high;
 }
 
-const isMisaligned = function(address, align) {
+function isMisaligned(address, align) {
+  {
     return (align) ? !!(address & (align - 1)) : false;
   }
-;
+}
 
-const alignForward = function(address, align) {
+function alignForward(address, align) {
+  {
     return (address + (align - 1)) & ~(align - 1);
   }
-;
+}
 
 const usizeMin = 0;
 const usizeMax = 0xFFFF_FFFF;
 const usizeInvalid = -1;
-
-const usize = function(arg) {
-    return Number(arg);
-  }
-;
-
 const usizeByteSize = 4;
 
-const isInvalidAddress = function(address) {
+function usize(number) {
+  {
+    return Number(number);
+  }
+}
+
+const maxSafeInteger = BigInt(Number.MAX_SAFE_INTEGER);
+const minSafeInteger = BigInt(Number.MIN_SAFE_INTEGER);
+
+function safeInt(bigInt) {
+  if (bigInt > maxSafeInteger || bigInt < minSafeInteger) {
+    throw new RangeError('Number is too big/small');
+  }
+  return Number(bigInt);
+}
+
+function readUsize(dv, offset, le) {
+  {
+    return dv.getUint32(offset, le);
+  }
+}
+
+function readUsizeSafe(dv, offset, le) {
+  {
+    return size;
+  }
+}
+
+function isInvalidAddress(address) {
+  {
     return address === 0xaaaa_aaaa || address === -1431655766;
   }
-;
+}
 
-const adjustAddress = function(address, addend) {
+function adjustAddress(address, addend) {
+  {
     return address + addend;
   }
-;
+}
 
 function transformIterable(arg) {
   if (typeof(arg.length) === 'number') {
@@ -1338,15 +1364,23 @@ async function compile(srcPath, modPath, options) {
   let changed = false;
   let sourcePaths = [];
   if (srcPath) {
-    // add custom build file
     try {
+      // add custom build file if one is found
       const path = moduleDir + 'build.zig';
       await stat(path);
       config.buildFilePath = path;
     } catch (err) {
     }
-    // add custom package manager manifest
     try {
+      // add path to build.extra.zig if it exists
+      const path = moduleDir + 'build.extra.zig';
+      await stat(path);
+      config.extraFilePath = path;
+      config.hasExtra = true;
+    } catch (err) {
+    }
+    try {
+    // add package manager manifest
       const path = moduleDir + 'build.zig.zon';
       await stat(path);
       config.packageConfigPath = path;
@@ -1448,7 +1482,7 @@ function formatProjectConfig(config) {
   const fields = [
     'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath', 'useLibc', 
     'useRedirection', 'isWASM', 'multithreaded', 'stackSize', 'maxMemory', 'evalBranchQuota', 
-    'omitFunctions', 'omitVariables',
+    'omitFunctions', 'omitVariables', 'hasExtra'
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -1462,10 +1496,14 @@ function formatProjectConfig(config) {
 async function createProject(config, dir) {
   await createDirectory(dir);
   const content = formatProjectConfig(config);
-  const cfgFilePath = join(dir, 'build-cfg.zig');
+  const cfgFilePath = join(dir, 'build.cfg.zig');
   await writeFile(cfgFilePath, content);
   const buildFilePath = join(dir, 'build.zig');
   await copyFile(config.buildFilePath, buildFilePath);
+  if (config.extraFilePath) {
+    const extraFilePath = join(dir, 'build.extra.zig');
+    await copyFile(config.extraFilePath, extraFilePath);
+  }
   if (config.packageConfigPath) {
     const packageConfigPath = join(dir, 'build.zig.zon');
     await copyZonFile(config.packageConfigPath, packageConfigPath);
@@ -1603,6 +1641,8 @@ function createConfig(srcPath, modPath, options = {}) {
     evalBranchQuota,
     omitFunctions,
     omitVariables,
+    hasExtra: false,
+    extraFilePath: undefined,
   };
 }
 
@@ -4060,25 +4100,24 @@ class WebStreamWriter extends AsyncWriter {
 }
 
 class BlobReader extends AsyncReader {
-  pos = 0n;
+  pos = 0;
   onClose = null;
 
   constructor(blob) {
     super();
     this.blob = blob;
-    this.size = BigInt(blob.size);
+    this.size = blob.size;
     blob.close = () => this.onClose?.();
   }
 
   async fetch(len) {
     const chunk = await this.pread(len, this.pos);
-    this.pos += BigInt(chunk.length);
+    this.pos += chunk.length;
     this.store(chunk.length > 0 ? chunk : null);
   }
 
   async pread(len, offset) {
-    const start = Number(offset);
-    const slice = this.blob.slice(start, start + len);
+    const slice = this.blob.slice(offset, offset + len);
     const response = new Response(slice);
     const buffer = await response.arrayBuffer();
     return new Uint8Array(buffer);
@@ -4099,12 +4138,12 @@ class BlobReader extends AsyncReader {
 }
 
 class Uint8ArrayReadWriter {
-  pos = 0n;
+  pos = 0;
   onClose = null;
 
   constructor(array) {
     this.array = array;
-    this.size = BigInt(array.length);    
+    this.size = array.length;    
     array.close = () => this.onClose?.();
   }
 
@@ -4114,7 +4153,7 @@ class Uint8ArrayReadWriter {
 
   read(len) {
     const buf = this.pread(len, this.pos);
-    this.pos += BigInt(buf.length);
+    this.pos += buf.length;
     return buf;
   }
 
@@ -4124,18 +4163,15 @@ class Uint8ArrayReadWriter {
 
   write(buf) {
     this.pwrite(buf, this.pos);
-    this.pos += BigInt(buf.length);
+    this.pos += buf.length;
   }
 
   pread(len, offset) {
-    const start = Number(offset);
-    const end = start + len;
-    return this.array.subarray(start, end);
+    return this.array.subarray(offset, offset + len);
   }
 
   pwrite(buf, offset) {
-    const start = Number(offset);
-    this.array.set(buf, start);
+    this.array.set(buf, offset);
   }
 
   tell() {
@@ -5867,11 +5903,6 @@ var environGet = mixin({
 });
 
 var copyInt = mixin({
-  copyUsize(bufAddress, value) {
-    {
-      this.copyUint32(bufAddress, value);
-    }
-  },
   copyUint64(bufAddress, value) {
     const buf = createView(8);
     buf.setBigUint64(0, BigInt(value), this.littleEndian);
@@ -5886,8 +5917,7 @@ var copyInt = mixin({
 
 var environSizesGet = mixin({
   environSizesGet(environCountAddress, environBufSizeAddress) {
-    const listener = this.listenerMap.get('env');
-    const result = listener?.() ?? {};
+    const result = this.triggerEvent('env') ?? {};
     if (typeof(result) !== 'object') {
       throw new TypeMismatch('object', result);
     }
@@ -5899,9 +5929,9 @@ var environSizesGet = mixin({
     let size = 0;
     for (const array of env) {
       size += array.length;
-    }
-    this.copyUsize(environCountAddress, env.length);
-    this.copyUsize(environBufSizeAddress, size);
+    }    
+    this.copyUint32(environCountAddress, env.length);
+    this.copyUint32(environBufSizeAddress, size);
     return PosixError.NONE;
   },
 });
@@ -6087,46 +6117,37 @@ var fdFileStatSetTimes = mixin({
       const times = extractTimes(atime, mtime, tFlags);
       const flags = {};
       return this.triggerEvent('set_times', { ...loc, target, times, flags });
-    }, (result) => {
-      if (result === undefined) {
-        // ENOTCAPABLE means failing with no fallback
-        return PosixError.ENOTCAPABLE;
-      }
-      expectBoolean(result, PosixError.EBADF);
-    });
+    }, (result) => (result === undefined) ? PosixError.ENOTCAPABLE : expectBoolean(result, PosixError.EBADF));
   },
 });
 
 var fdPread = mixin({
   fdPread(fd, iovsAddress, iovsCount, offset, readAddress, canWait) {
-    const iovsSize = usizeByteSize * 2;
     const le = this.littleEndian;
-    let iovs, reader, rights, i = 0;
-    let total = 0, ptr, len;
-    const next = () => {
-      return catchPosixError(canWait, PosixError.EIO, () => {
-        if (!iovs) {
-          [ reader, rights ] = this.getStream(fd);
-          checkAccessRight(rights, PosixDescriptorRight.fd_read);
-          iovs = createView(iovsSize * iovsCount);
-          this.moveExternBytes(iovs, iovsAddress, false);
-        }
-        len = ("32" == 64) ? iovs.getBigUint64(i * iovsSize + 8, le) : iovs.getUint32(i * iovsSize + 4, le);
-        return reader.pread("32" == 64 ? Number(len) : len, offset);
-      }, (chunk) => {
-        ptr = iovs.getUint32(i * iovsSize, le);
-        this.moveExternBytes(chunk, ptr, true);
-        const read = chunk.length;
-        total += read;
-        if (++i < iovsCount && read === len) {
-          offset += read;
-          return next();
-        } else {
-          this.copyUsize(readAddress, total);
-        }
-      });
-    };
-    return next();
+    const iovsSize = usizeByteSize * 2;
+    const ops = [];
+    let total = 0;
+    return catchPosixError(canWait, PosixError.EIO, () => {        
+      const[ reader, rights, flags ] = this.getStream(fd);
+      checkAccessRight(rights, PosixDescriptorRight.fd_read);
+      const iovs = createView(iovsSize * iovsCount);
+      this.moveExternBytes(iovs, iovsAddress, false);
+      for (let i = 0; i < iovsCount; i++) {
+        const ptr = readUsize(iovs, i * iovsSize, le);
+        const len = readUsizeSafe(iovs, i * iovsSize + usizeByteSize, le);
+        ops.push({ ptr, len });
+        total += len;
+      }
+      return reader.pread(total, offset);
+    }, (chunk) => {
+      let { byteOffset: pos, buffer } = chunk;
+      for (const { ptr, len } of ops) {
+        const part = new DataView(buffer, pos, len);
+        this.moveExternBytes(part, ptr, true);
+        pos += len;
+      }
+      this.copyUint32(readAddress, chunk.length);
+    });
   },
 });
 
@@ -6156,67 +6177,62 @@ var fdPrestatGet = mixin({
 
 var fdPwrite = mixin({
   fdPwrite(fd, iovsAddress, iovsCount, offset, writtenAddress, canWait) {
-    const iovsSize = usizeByteSize * 2;
     const le = this.littleEndian;
-    let iovs, writer, rights, i = 0;
-    let total = 0, ptr, len;
-    const next = () => {
-      return catchPosixError(canWait, PosixError.EIO, () => {
-        if (!iovs) {
-          [ writer, rights ] = this.getStream(fd, 'write');
-          checkAccessRight(rights, PosixDescriptorRight.fd_write);
-          iovs = createView(iovsSize * iovsCount);
-          this.moveExternBytes(iovs, iovsAddress, false);
-        }
-        ptr = ("32" == 64) ? iovs.getBigUint64(i * iovsSize, le) : iovs.getUint32(i * iovsSize, le);
-        len = ("32" == 64) ? iovs.getBigUint64(i * iovsSize + 8, le) : iovs.getUint32(i * iovsSize + 4, le);
-        const chunk = new Uint8Array("32" == 64 ? Number(len) : len);
-        const pos = offset;
-        this.moveExternBytes(chunk, ptr, false);
+    const iovsSize = usizeByteSize * 2;
+    let total = 0;
+    return catchPosixError(canWait, PosixError.EIO, () => {        
+      const[ writer, rights ] = this.getStream(fd);
+      checkAccessRight(rights, PosixDescriptorRight.fd_write);
+      const iovs = createView(iovsSize * iovsCount);
+      this.moveExternBytes(iovs, iovsAddress, false);
+      const ops = [];
+      for (let i = 0; i < iovsCount; i++) {
+        const ptr = readUsize(iovs, i * iovsSize, le);
+        const len = readUsizeSafe(iovs, i * iovsSize + usizeByteSize, le);
+        ops.push({ ptr, len });
         total += len;
-        offset += len;
-        return writer.pwrite(chunk, pos);
-      }, () => {
-        if (++i < iovsCount) {
-          return next();
-        } else {
-          this.copyUsize(writtenAddress, total);
-        }
-      });
-    };
-    return next();
+      }
+      const buffer = new ArrayBuffer(total);
+      let pos = 0;
+      for (const { ptr, len } of ops) {
+        const part = new DataView(buffer, pos, len);
+        this.moveExternBytes(part, ptr, false);
+        pos += len;
+      }
+      const chunk = new Uint8Array(buffer);
+      return writer.pwrite(chunk, offset);
+    }, () => this.copyUint32(writtenAddress, total));
   },
 });
 
 var fdRead = mixin({
   fdRead(fd, iovsAddress, iovsCount, readAddress, canWait) {
-    const iovsSize = usizeByteSize * 2;
     const le = this.littleEndian;
-    let iovs, reader, flags, rights, method, i = 0;
-    let ptr, len;
-    const next = () => {
-      return catchPosixError(canWait, PosixError.EIO, () => {
-        if (!iovs) {
-          [ reader, rights, flags ] = this.getStream(fd);
-          checkAccessRight(rights, PosixDescriptorRight.fd_read);
-          method = (flags & PosixDescriptorFlag.nonblock) ? reader.readnb : reader.read;
-          iovs = createView(iovsSize * iovsCount);
-          this.moveExternBytes(iovs, iovsAddress, false);
-        }
-        len = ("32" == 64) ? iovs.getBigUint64(i * iovsSize + 8, le) : iovs.getUint32(i * iovsSize + 4, le);
-        return method.call(reader, "32" == 64 ? Number(len) : len);
-      }, (chunk) => {
-        ptr = iovs.getUint32(i * iovsSize, le);
-        this.moveExternBytes(chunk, ptr, true);
-        const read = chunk.length;
-        if (++i < iovsCount && read === len) {
-          return next();
-        } else {
-          this.copyUsize(readAddress, read);
-        }
-      });
-    };
-    return next();
+    const iovsSize = usizeByteSize * 2;
+    const ops = [];
+    let total = 0;
+    return catchPosixError(canWait, PosixError.EIO, () => {        
+      const[ reader, rights, flags ] = this.getStream(fd);
+      checkAccessRight(rights, PosixDescriptorRight.fd_read);
+      const iovs = createView(iovsSize * iovsCount);
+      this.moveExternBytes(iovs, iovsAddress, false);
+      for (let i = 0; i < iovsCount; i++) {
+        const ptr = readUsize(iovs, i * iovsSize, le);
+        const len = readUsizeSafe(iovs, i * iovsSize + usizeByteSize, le);
+        ops.push({ ptr, len });
+        total += len;
+      }
+      const method = (flags & PosixDescriptorFlag.nonblock) ? reader.readnb : reader.read;
+      return method.call(reader, total);
+    }, (chunk) => {
+      let { byteOffset: pos, buffer } = chunk;
+      for (const { ptr, len } of ops) {
+        const part = new DataView(buffer, pos, len);
+        this.moveExternBytes(part, ptr, true);
+        pos += len;
+      }
+      this.copyUint32(readAddress, chunk.length);
+    });
   },
 });
 
@@ -6225,21 +6241,19 @@ var fdReaddir = mixin({
     if (bufLen < 24) {
       return PosixError.EINVAL;
     }
+    let dir, async;
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      const [ dir ] = this.getStream(fd);
+      [ dir ] = this.getStream(fd);
       if ("wasm" === 'node') ; else {
-        if (cookie !== dir.tell()) {
-          cookie = dir.seek(cookie);
-        }
+        return dir.seek(cookie);
       }
-      const result = dir.readdir();      
-      if (isPromise$1(result)) {
-        // don't pass the dir object when call is async
-        return result.then((dent) => [ dent ]);
-      } else {
-        return [ result, dir ];
-      }
-    }, ([ dent, dir ]) => {
+    }, (pos) => catchPosixError(canWait, PosixError.EBADF, () => {      
+      cookie = pos;
+      // retrieve the first entry, checking if the call is async
+      const result = dir.readdir();
+      async = isPromise$1(result);
+      return result;
+    }, (dent) => {
       const dv = createView(bufLen);
       let remaining = bufLen;
       let p = 0;
@@ -6251,10 +6265,9 @@ var fdReaddir = mixin({
           throw new InvalidEnumValue(PosixFileType, type);
         }
         if (remaining < 24 + nameArray.length) {
-          dir.seek(cookie);
           break;
         }
-        dv.setBigUint64(p, ++cookie, true);
+        dv.setBigUint64(p, BigInt(++cookie), true);
         dv.setBigUint64(p + 8, BigInt(ino), true);
         dv.setUint32(p + 16, nameArray.length, true);
         dv.setUint8(p + 20, typeIndex);
@@ -6265,11 +6278,11 @@ var fdReaddir = mixin({
         }
         remaining -= nameArray.length;
         // get next entry if call is sync
-        dent = (remaining > 24 + 16 && dir) ? dir.readdir() : null;
+        dent = (remaining > 24 + 16 && async) ? dir.readdir() : null;
       }
       this.moveExternBytes(dv, bufAddress, true);
-      this.copyUsize(bufusedAddress, p);
-    })
+      this.copyUint32(bufusedAddress, p);
+    }));
   },
 });
 
@@ -6279,11 +6292,7 @@ var fdSeek = mixin({
       const [ stream ] = this.getStream(fd);
       checkStreamMethod(stream, 'seek');
       return stream.seek(offset, whence);
-    }, (pos) => {
-      const offsetDV = createView(8);
-      offsetDV.setBigUint64(0, BigInt(pos), this.littleEndian);
-      this.moveExternBytes(offsetDV, newOffsetAddress, true); 
-    });
+    }, (pos) => this.copyUint64(newOffsetAddress, pos));
   },
 });
 
@@ -6304,48 +6313,38 @@ var fdTell = mixin({
       const [ stream ] = this.getStream(fd);
       checkStreamMethod(stream, 'tell');
       return stream.tell();
-    }, (pos) => {
-      const offsetDV = createView(8);
-      offsetDV.setBigUint64(0, BigInt(pos), this.littleEndian);
-      this.moveExternBytes(offsetDV, newOffsetAddress, true); 
-    });
+    }, (pos) => this.copyUint64(newOffsetAddress, pos));
   },
 });
 
 var fdWrite = mixin({
   fdWrite(fd, iovsAddress, iovsCount, writtenAddress, canWait) {
-    const iovsSize = usizeByteSize * 2;
     const le = this.littleEndian;
-    let iovs, writer, flags, rights, method, i = 0;
-    let written = 0;
-    const next = () => {
-      return catchPosixError(canWait, PosixError.EIO, () => {
-        if (!iovs) {
-          [ writer, rights, flags ] = this.getStream(fd, 'write');
-          checkAccessRight(rights, PosixDescriptorRight.fd_write);
-          method = (flags & PosixDescriptorFlag.nonblock) ? writer.writenb : writer.write;
-          iovs = createView(iovsSize * iovsCount);
-          this.moveExternBytes(iovs, iovsAddress, false);
-        }
-        const ptr = ("32" == 64) 
-                  ? iovs.getBigUint64(i * iovsSize, le) 
-                  : iovs.getUint32(i * iovsSize, le);
-        const len = ("32" == 64) 
-                  ? iovs.getBigUint64(i * iovsSize + 8, le)
-                  : iovs.getUint32(i * iovsSize + 4, le);
-        const chunk = new Uint8Array("32" == 64 ? Number(len) : len);
-        this.moveExternBytes(chunk, ptr, false);
-        written += len;
-        return method.call(writer, chunk);
-      }, () => {
-        if (++i < iovsCount) {
-          return next();
-        } else {
-          this.copyUsize(writtenAddress, written);
-        }
-      });
-    };
-    return next();
+    const iovsSize = usizeByteSize * 2;
+    let total = 0;
+    return catchPosixError(canWait, PosixError.EIO, () => {        
+      const[ writer, rights, flags ] = this.getStream(fd);
+      checkAccessRight(rights, PosixDescriptorRight.fd_write);
+      const iovs = createView(iovsSize * iovsCount);
+      this.moveExternBytes(iovs, iovsAddress, false);
+      const ops = [];
+      for (let i = 0; i < iovsCount; i++) {
+        const ptr = readUsize(iovs, i * iovsSize, le);
+        const len = readUsizeSafe(iovs, i * iovsSize + usizeByteSize, le);
+        ops.push({ ptr, len });
+        total += len;
+      }
+      const buffer = new ArrayBuffer(total);
+      let pos = 0;
+      for (const { ptr, len } of ops) {
+        const part = new DataView(buffer, pos, len);
+        this.moveExternBytes(part, ptr, false);
+        pos += len;
+      }
+      const chunk = new Uint8Array(buffer);
+      const method = (flags & PosixDescriptorFlag.nonblock) ? writer.writenb : writer.write;
+      return method.call(writer, chunk);
+    }, () => this.copyUint32(writtenAddress, total));
   },
 });
 
@@ -6358,7 +6357,9 @@ var pathCreateDirectory = mixin({
       if (result === undefined) {
         return PosixError.ENOTSUP;
       }
-      if (result instanceof Map) return PosixError.EEXIST;
+      if (result instanceof Map) {
+        return PosixError.EEXIST;
+      }
       return expectBoolean(result, PosixError.ENOENT);
     });
   },
@@ -6404,12 +6405,7 @@ var pathFilestatSetTimes = mixin({
       const times = extractTimes(atime, mtime, tFlags);
       const flags = decodeFlags(lFlags, PosixLookupFlag) ;
       return this.triggerEvent('set_times', { ...loc, times, flags });
-    }, (result) => {
-      if (result === undefined) {
-        return PosixError.ENOTSUP;
-      }
-      expectBoolean(result, PosixError.ENOENT);
-    });
+    }, (result) => (result === undefined) ? PosixError.ENOTSUP : expectBoolean(result, PosixError.ENOENT));
   },
 });
 
@@ -6457,12 +6453,7 @@ var pathRemoveDirectory = mixin({
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
       return this.triggerEvent('rmdir', loc, PosixError.ENOENT);
-    }, (result) => {
-      if (result === undefined) {
-        return PosixError.ENOTSUP;
-      }
-      expectBoolean(result, PosixError.ENOENT);
-    });
+    }, (result) => (result === undefined) ? PosixError.ENOTSUP : expectBoolean(result, PosixError.ENOENT));
   },
 });
 
@@ -6471,12 +6462,7 @@ var pathUnlinkFile = mixin({
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
       return this.triggerEvent('unlink', loc, PosixError.ENOENT);
-    }, (result) => {
-      if (result === undefined) {
-        return PosixError.ENOTSUP;
-      }
-      expectBoolean(result, PosixError.ENOENT);
-    });
+    }, (result) => (result === undefined) ? PosixError.ENOTSUP : expectBoolean(result, PosixError.ENOENT));
   },
 });
 
@@ -10279,8 +10265,8 @@ var fdLockGet = mixin({
         const type = flock.getUint16(0, le);
         const whence = flock.getUint16(2, le);
         const pid = flock.getUint32(4, le);
-        const start = flock.getBigInt64(8, le);
-        const length = flock.getBigUint64(16, le);
+        const start = safeInt(flock.getBigInt64(8, le));
+        const length = safeInt(flock.getBigUint64(16, le));
         return stream.getlock({ type, whence, start, length, pid });
       } 
     }, (lock) => {
@@ -10291,8 +10277,8 @@ var fdLockGet = mixin({
         flock.setUint16(0, lock.type ?? 0, le);
         flock.setUint16(2, lock.whence ?? 0, le);
         flock.setUint32(4, lock.pid ?? 0, le);
-        flock.setBigInt64(8, lock.start ?? 0n, le);
-        flock.setBigUint64(16, lock.length ?? 0n, le);
+        flock.setBigInt64(8, BigInt(lock.start ?? 0), le);
+        flock.setBigUint64(16, BigInt(lock.length ?? 0), le);
       } else {
         // change type to unlock (2)
         flock = createView(2);
@@ -10314,8 +10300,8 @@ var fdLockSet = mixin({
         const type = flock.getUint16(0, le);
         const whence = flock.getUint16(2, le);
         const pid = flock.getUint32(4, le);
-        const start = flock.getBigUint64(8, le);
-        const len = flock.getBigUint64(16, le);
+        const start = safeInt(flock.getBigUint64(8, le));
+        const len = safeInt(flock.getBigUint64(16, le));
         return stream.setlock({ type, whence, start, len, pid }, wait);
       } else {
         return true;
