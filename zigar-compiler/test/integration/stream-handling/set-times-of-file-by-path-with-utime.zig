@@ -5,7 +5,7 @@ const c = @cImport({
 });
 
 pub fn setTimes(path: [*:0]const u8, atime: u32, mtime: u32) !void {
-    const times: c.utimbuf = .{
+    var times: c.utimbuf = .{
         .actime = atime,
         .modtime = mtime,
     };

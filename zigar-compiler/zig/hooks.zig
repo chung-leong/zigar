@@ -1497,15 +1497,27 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         }
 
         pub fn futime(fd: c_int, tb: *const utimbuf) callconv(.c) c_int {
-            const tv: [2]std.c.timeval = .{
-                .{ .sec = tb.actime, .usec = 0 },
-                .{ .sec = tb.modtime, .usec = 0 },
+            const ts: [2]std.c.timespec = .{
+                .{ .sec = tb.actime, .nsec = 0 },
+                .{ .sec = tb.modtime, .nsec = 0 },
             };
             var result: c_int = undefined;
-            if (redirector.futimes(fd, &tv, &result)) {
+            if (redirector.futimens(fd, &ts, &result)) {
                 return saveError(result);
             }
             return Original.futime(fd, tb);
+        }
+
+        pub fn futime64(fd: c_int, tb: *const utimbuf64) callconv(.c) c_int {
+            const ts: [2]std.c.timespec = .{
+                .{ .sec = tb.actime, .nsec = 0 },
+                .{ .sec = tb.modtime, .nsec = 0 },
+            };
+            var result: c_int = undefined;
+            if (redirector.futimens(fd, &ts, &result)) {
+                return saveError(result);
+            }
+            return Original.futime64(fd, tb);
         }
 
         pub fn opendir(path: [*:0]const u8) callconv(.c) ?*std.c.DIR {
@@ -1552,11 +1564,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub fn readdirT(comptime T: type, dir: *RedirectedDir) ?*align(1) const T {
             if (dir.data_next == dir.data_len) {
                 var result: c_int = undefined;
-                const f = switch (T) {
-                    Dirent => redirector.getdents,
-                    Dirent64 => redirector.getdents64,
-                    else => unreachable,
-                };
+                const f = if (T == Dirent) redirector.getdents else redirector.getdents64;
                 _ = f(dir.fd, &dir.buffer, dir.buffer.len, &result);
                 if (result > 0) {
                     dir.data_next = 0;
@@ -1610,20 +1618,37 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         }
 
         pub fn utime(path: [*:0]const u8, tb: *const utimbuf) callconv(.c) c_int {
-            const tv: [2]std.c.timeval = .{
-                .{ .sec = tb.actime, .usec = 0 },
-                .{ .sec = tb.modtime, .usec = 0 },
+            const ts: [2]std.c.timespec = .{
+                .{ .sec = tb.actime, .nsec = 0 },
+                .{ .sec = tb.modtime, .nsec = 0 },
             };
             var result: c_int = undefined;
-            if (redirector.utimes(path, &tv, &result)) {
+            if (redirector.utimensat(fd_cwd, path, &ts, 0, &result)) {
                 return saveError(result);
             }
             return Original.utime(path, tb);
         }
 
+        pub fn utime64(path: [*:0]const u8, tb: *const utimbuf64) callconv(.c) c_int {
+            const ts: [2]std.c.timespec = .{
+                .{ .sec = tb.actime, .nsec = 0 },
+                .{ .sec = tb.modtime, .nsec = 0 },
+            };
+            var result: c_int = undefined;
+            if (redirector.utimensat(fd_cwd, path, &ts, 0, &result)) {
+                return saveError(result);
+            }
+            return Original.utime64(path, tb);
+        }
+
         const utimbuf = extern struct {
-            actime: isize,
-            modtime: isize,
+            actime: c_long,
+            modtime: c_long,
+        };
+
+        const utimbuf64 = extern struct {
+            actime: c_longlong,
+            modtime: c_longlong,
         };
 
         fn makeStdHook(comptime name: []const u8) StdHook(@TypeOf(@field(redirector, name))) {
@@ -1746,6 +1771,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var fstatfs64: *const @TypeOf(Self.fstatfs64) = undefined;
             pub var fsync: *const @TypeOf(Self.fsync) = undefined;
             pub var futime: *const @TypeOf(Self.futime) = undefined;
+            pub var futime64: *const @TypeOf(Self.futime64) = undefined;
             pub var futimes: *const @TypeOf(Self.futimes) = undefined;
             pub var futimens: *const @TypeOf(Self.futimens) = undefined;
             pub var futimesat: *const @TypeOf(Self.futimesat) = undefined;
@@ -1783,6 +1809,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var unlinkat: *const @TypeOf(Self.unlinkat) = undefined;
             pub var utimensat: *const @TypeOf(Self.utimensat) = undefined;
             pub var utime: *const @TypeOf(Self.utime) = undefined;
+            pub var utime64: *const @TypeOf(Self.utime64) = undefined;
             pub var utimes: *const @TypeOf(Self.utimes) = undefined;
             pub var write: *const @TypeOf(Self.write) = undefined;
             pub var writev: *const @TypeOf(Self.writev) = undefined;
