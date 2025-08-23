@@ -150,60 +150,76 @@ export function findSortedIndex(array, value, cb) {
   return high;
 }
 
-export const isMisaligned = (process.env.BITS == 64)
-? function(address, align) {
+export function isMisaligned(address, align) {
+  if (process.env.BITS == 64) {
     return (align) ? !!(address & BigInt(align - 1)) : false;
-  }
-: function(address, align) {
+  } else {
     return (align) ? !!(address & (align - 1)) : false;
   }
-;
+}
 
-export const alignForward = (process.env.BITS == 64)
-? function(address, align) {
+export function alignForward(address, align) {
+  if (process.env.BITS == 64) {
     return (address + BigInt(align - 1)) & ~BigInt(align - 1);
-  }
-: function(address, align) {
+  } else {
     return (address + (align - 1)) & ~(align - 1);
   }
-;
+}
 
 export const usizeMin = (process.env.BITS == 64) ? 0n : 0;
 export const usizeMax = (process.env.BITS == 64) ? 0xFFFF_FFFF_FFFF_FFFFn : 0xFFFF_FFFF;
 export const usizeInvalid = (process.env.BITS == 64) ? -1n : -1;
-
-export const usize = (process.env.BITS == 64)
-? function(arg) {
-    return BigInt(arg);
-  }
-: function(arg) {
-    return Number(arg);
-  }
-;
-
 export const usizeByteSize = (process.env.BITS == 64) ? 8 : 4;
 
-export const isInvalidAddress = (process.env.BITS == 64)
-? function(address) {
-    return address === 0xaaaa_aaaa_aaaa_aaaan;
+export function usize(number) {
+  if (process.env.BITS == 64) {
+    return BigInt(number);
+  } else {
+    return Number(number);
   }
-: (process.env.BITS === '32')
-? function(address) {
+}
+
+export const maxSafeInteger = BigInt(Number.MAX_SAFE_INTEGER);
+export const minSafeInteger = BigInt(Number.MIN_SAFE_INTEGER);
+
+export function safeInt(bigInt) {
+  if (bigInt > maxSafeInteger || bigInt < minSafeInteger) {
+    throw new RangeError('Number is too big/small');
+  }
+  return Number(bigInt);
+}
+
+export function readUsize(dv, offset, le) {
+  if (process.env.BITS == 64) {
+    return dv.getBigUint64(offset, le);
+  } else {
+    return dv.getUint32(offset, le);
+  }
+}
+
+export function readUsizeSafe(dv, offset, le) {
+  if (process.env.BITS == 64) {
+    return safeInt(readUsize(dv, offset, le));
+  } else {
+    return size;
+  }
+}
+
+export function isInvalidAddress(address) {
+  if (process.env.BITS == 64) {
+    return address === 0xaaaa_aaaa_aaaa_aaaan;
+  } else {
     return address === 0xaaaa_aaaa || address === -0x5555_5556;
   }
-  /* c8 ignore next */
-: undefined;
+}
 
-export const adjustAddress = (process.env.BITS == 64)
-? function(address, addend) {
+export function adjustAddress(address, addend) {
+  if (process.env.BITS == 64) {
     return address + BigInt(addend);
-  }
-: (process.env.BITS === '32')
-? function(address, addend) {
+  } else {
     return address + addend;
   }
-  /* c8 ignore next */
-: undefined;
+}
 
 export function transformIterable(arg) {
   if (typeof(arg.length) === 'number') {

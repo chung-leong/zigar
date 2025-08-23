@@ -1156,7 +1156,7 @@ export function addTests(importModule, options) {
       });
       save('/hello/world', 'This is a test');
       expect(called).to.be.true;
-      expect(args).to.eql([ 5n, 1000n, 'random' ]);
+      expect(args).to.eql([ 5, 1000, 'random' ]);
     })
     skip.entirely.unless(target === 'linux').
     it('should perform allocate operation using posix function', async function() {
@@ -1185,7 +1185,7 @@ export function addTests(importModule, options) {
       });
       save('/hello/world', 'This is a test');
       expect(called).to.be.true;
-      expect(args).to.eql([ 0n, 1000n ]);
+      expect(args).to.eql([ 0, 1000 ]);
     })
     it('should open file in directory', async function() {
       this.timeout(0);
@@ -1311,6 +1311,46 @@ export function addTests(importModule, options) {
       expect(chunk.string).to.equal('cated to the pro');
     })
     skip.entirely.if(target == 'win32').
+    it('should open and read from file using preadv', async function() {
+      this.timeout(0);
+      const { __zigar, readAt } = await importTest('open-and-read-file-with-preadv');
+      const path = absolute('./data/test.txt');
+      const content = await readFile(path);
+      __zigar.on('open', (evt) => {
+        return content;
+      });
+      const vectors = [
+        new Uint8Array(16),
+        new Uint8Array(8),
+        new Uint8Array(4),
+      ];
+      const count = readAt('/hello/world', vectors, 76);
+      expect(count).to.equal(28);
+      const ta = new TextDecoder();
+      const strings = vectors.map(a => ta.decode(a));
+      expect(strings).to.eql([ 'a new nation, co', 'nceived ', 'in L' ]);
+    })
+    skip.entirely.if(target == 'win32').
+    it('should open and read from file using readv', async function() {
+      this.timeout(0);
+      const { __zigar, read } = await importTest('open-and-read-file-with-readv');
+      const path = absolute('./data/test.txt');
+      const content = await readFile(path);
+      __zigar.on('open', (evt) => {
+        return content;
+      });
+      const vectors = [
+        new Uint8Array(16),
+        new Uint8Array(8),
+        new Uint8Array(4),
+      ];
+      const count = read('/hello/world', vectors);
+      expect(count).to.equal(28);
+      const ta = new TextDecoder();
+      const strings = vectors.map(a => ta.decode(a));
+      expect(strings).to.eql([ 'Four score and s', 'even yea', 'rs a' ]);
+    })
+    skip.entirely.if(target == 'win32').
     it('should open and write into file using pwrite', async function() {
       this.timeout(0);
       const { __zigar, writeAt } = await importTest('open-and-write-file-with-pwrite');
@@ -1323,6 +1363,34 @@ export function addTests(importModule, options) {
       const subarray = array.slice(120, 120 + 11);
       const text = new TextDecoder().decode(subarray);
       expect(text).to.equal('Hello world');
+    })
+    skip.entirely.if(target == 'win32').
+    it('should open and write into file using pwritev', async function() {
+      this.timeout(0);
+      const { __zigar, writeAt } = await importTest('open-and-write-file-with-pwritev');
+      const array = new Uint8Array(256);
+      __zigar.on('open', (evt) => {
+        return array;
+      });
+      const written = writeAt('/hello/world', [ 'Hello', ' world', '???' ], 120n);
+      expect(written).to.equal(14);
+      const subarray = array.slice(120, 120 + 14);
+      const text = new TextDecoder().decode(subarray);
+      expect(text).to.equal('Hello world???');
+    })
+    skip.entirely.if(target == 'win32').
+    it('should open and write into file using writev', async function() {
+      this.timeout(0);
+      const { __zigar, write } = await importTest('open-and-write-file-with-writev');
+      const array = [];
+      __zigar.on('open', (evt) => {
+        return array;
+      });
+      const written = write('/hello/world', [ 'Hello', ' world', '???' ]);
+      expect(written).to.equal(14);
+      const [ subarray ] = array;
+      const text = new TextDecoder().decode(subarray);
+      expect(text).to.equal('Hello world???');
     })
     skip.entirely.if(target == 'win32').
     it('should set lock on file using fcntl', async function() {
@@ -1340,7 +1408,7 @@ export function addTests(importModule, options) {
         }
       };
       lock(file1);
-      expect(file1.lock).to.eql({ type: 1, whence: 0, start: 1234n, len: 8000n, pid: 123 });
+      expect(file1.lock).to.eql({ type: 1, whence: 0, start: 1234, len: 8000, pid: 123 });
       expect(() => lock(file1)).to.throw(Error).with.property('message').that.equal('Unable to set lock');
       const file2 = {
         read() {},
@@ -1370,7 +1438,7 @@ export function addTests(importModule, options) {
       };
       const result1 = lock(file);
       expect(result1).to.be.true;
-      expect(file.lock).to.eql({ type: 1, whence: 0, start: 0n, len: 0n, pid: 0 });
+      expect(file.lock).to.eql({ type: 1, whence: 0, start: 0, len: 0, pid: 0 });
       const result2 = lock(file);
       expect(result2).to.be.false;
       const result3 = unlock(file);
@@ -1422,7 +1490,7 @@ export function addTests(importModule, options) {
       };
       const result1 = lock(file);
       expect(result1).to.be.true;
-      expect(file.lock).to.eql({ type: 1, whence: 0, start: 0n, len: 0n, pid: 0 });
+      expect(file.lock).to.eql({ type: 1, whence: 0, start: 0, len: 0, pid: 0 });
       const result2 = lock(file);
       expect(result2).to.be.false;
       const result3 = unlock(file);

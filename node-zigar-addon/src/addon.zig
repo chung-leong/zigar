@@ -915,9 +915,13 @@ const ModuleHost = struct {
                 .open => try self.handleOpen(futex, &call.u.open),
                 .close => try self.handleClose(futex, &call.u.close),
                 .read => try self.handleRead(futex, &call.u.read),
-                .pread => try self.handlePread(futex, &call.u.pread),
+                .readv => try self.handleVectorRead(futex, &call.u.readv),
+                .pread => try self.handlePositionalRead(futex, &call.u.pread),
+                .preadv => try self.handlePositionalVectorRead(futex, &call.u.preadv),
                 .write => try self.handleWrite(futex, &call.u.write),
-                .pwrite => try self.handlePwrite(futex, &call.u.pwrite),
+                .writev => try self.handleVectorWrite(futex, &call.u.writev),
+                .pwrite => try self.handlePositionalWrite(futex, &call.u.pwrite),
+                .pwritev => try self.handlePositionalVectorWrite(futex, &call.u.pwritev),
                 .seek => try self.handleSeek(futex, &call.u.seek),
                 .tell => try self.handleTell(futex, &call.u.tell),
                 .getfl => try self.handleGetDescriptorFlags(futex, &call.u.getfl),
@@ -984,25 +988,47 @@ const ModuleHost = struct {
 
     fn handleRead(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        const len: u32 = @intCast(args.len);
         const result = try self.callPosixFunction(self.js.fd_read1, &.{
             try env.createInt32(args.fd),
             try env.createUsize(@intFromPtr(args.bytes)),
-            try env.createUint32(len),
+            try env.createUint32(args.len),
             try env.createUsize(@intFromPtr(&args.read)),
             futex,
         });
         return result;
     }
 
-    fn handlePread(self: *@This(), futex: Value, args: anytype) !E {
+    fn handleVectorRead(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        const len: u32 = @intCast(args.len);
+        const result = try self.callPosixFunction(self.js.fd_read, &.{
+            try env.createInt32(args.fd),
+            try env.createUsize(@intFromPtr(args.iovs)),
+            try env.createUint32(args.count),
+            try env.createUsize(@intFromPtr(&args.read)),
+            futex,
+        });
+        return result;
+    }
+
+    fn handlePositionalRead(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
         return try self.callPosixFunction(self.js.fd_pread1, &.{
             try env.createInt32(args.fd),
             try env.createUsize(@intFromPtr(args.bytes)),
-            try env.createUint32(len),
-            try env.createUsize(args.offset),
+            try env.createUint32(args.len),
+            try env.createDouble(@floatFromInt(args.offset)),
+            try env.createUsize(@intFromPtr(&args.read)),
+            futex,
+        });
+    }
+
+    fn handlePositionalVectorRead(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        return try self.callPosixFunction(self.js.fd_pread, &.{
+            try env.createInt32(args.fd),
+            try env.createUsize(@intFromPtr(args.iovs)),
+            try env.createUint32(args.count),
+            try env.createDouble(@floatFromInt(args.offset)),
             try env.createUsize(@intFromPtr(&args.read)),
             futex,
         });
@@ -1010,24 +1036,45 @@ const ModuleHost = struct {
 
     fn handleWrite(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        const len: u32 = @intCast(args.len);
         return try self.callPosixFunction(self.js.fd_write1, &.{
             try env.createInt32(args.fd),
             try env.createUsize(@intFromPtr(args.bytes)),
-            try env.createUint32(len),
+            try env.createUint32(args.len),
             try env.createUsize(@intFromPtr(&args.written)),
             futex,
         });
     }
 
-    fn handlePwrite(self: *@This(), futex: Value, args: anytype) !E {
+    fn handleVectorWrite(self: *@This(), futex: Value, args: anytype) !E {
         const env = self.env;
-        const len: u32 = @intCast(args.len);
+        return try self.callPosixFunction(self.js.fd_write, &.{
+            try env.createInt32(args.fd),
+            try env.createUsize(@intFromPtr(args.iovs)),
+            try env.createUint32(args.count),
+            try env.createUsize(@intFromPtr(&args.written)),
+            futex,
+        });
+    }
+
+    fn handlePositionalWrite(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
         return try self.callPosixFunction(self.js.fd_pwrite1, &.{
             try env.createInt32(args.fd),
             try env.createUsize(@intFromPtr(args.bytes)),
-            try env.createUint32(len),
-            try env.createUsize(args.offset),
+            try env.createUint32(args.len),
+            try env.createDouble(@floatFromInt(args.offset)),
+            try env.createUsize(@intFromPtr(&args.written)),
+            futex,
+        });
+    }
+
+    fn handlePositionalVectorWrite(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        return try self.callPosixFunction(self.js.fd_pwrite, &.{
+            try env.createInt32(args.fd),
+            try env.createUsize(@intFromPtr(args.iovs)),
+            try env.createUint32(args.count),
+            try env.createDouble(@floatFromInt(args.offset)),
             try env.createUsize(@intFromPtr(&args.written)),
             futex,
         });
@@ -1037,7 +1084,7 @@ const ModuleHost = struct {
         const env = self.env;
         return try self.callPosixFunction(self.js.fd_seek, &.{
             try env.createInt32(args.fd),
-            try env.createBigintInt64(args.offset),
+            try env.createDouble(@floatFromInt(args.offset)),
             try env.createUint32(args.whence),
             try env.createUsize(@intFromPtr(&args.position)),
             futex,
@@ -1140,8 +1187,8 @@ const ModuleHost = struct {
         const env = self.env;
         return try self.callPosixFunction(self.js.fd_advise, &.{
             try env.createInt32(args.fd),
-            try env.createBigintUint64(args.offset),
-            try env.createBigintUint64(args.len),
+            try env.createDouble(@floatFromInt(args.offset)),
+            try env.createUint32(args.len),
             try env.createInt32(@intFromEnum(args.advice)),
             futex,
         });
@@ -1151,8 +1198,8 @@ const ModuleHost = struct {
         const env = self.env;
         return try self.callPosixFunction(self.js.fd_allocate, &.{
             try env.createInt32(args.fd),
-            try env.createBigintUint64(args.offset),
-            try env.createBigintUint64(args.len),
+            try env.createDouble(@floatFromInt(args.offset)),
+            try env.createUint32(args.len),
             futex,
         });
     }
@@ -1212,7 +1259,7 @@ const ModuleHost = struct {
             try env.createInt32(args.dirfd),
             try env.createUsize(@intFromPtr(args.buffer)),
             try env.createUint32(@intCast(args.len)),
-            try env.createBigintUint64(0),
+            try env.createUint32(0),
             try env.createUsize(@intFromPtr(&args.read)),
             futex,
         });

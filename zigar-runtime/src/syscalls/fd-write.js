@@ -1,43 +1,37 @@
 import { PosixDescriptorFlag, PosixDescriptorRight, PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, checkAccessRight } from '../errors.js';
-import { createView, usizeByteSize } from '../utils.js';
+import { createView, readUsize, readUsizeSafe, usizeByteSize } from '../utils.js';
 import './copy-int.js';
 
 export default mixin({
   fdWrite(fd, iovsAddress, iovsCount, writtenAddress, canWait) {
-    const iovsSize = usizeByteSize * 2;
     const le = this.littleEndian;
-    let iovs, writer, flags, rights, method, i = 0;
-    let written = (process.env.BITS == 64) ? 0n : 0;
-    const next = () => {
-      return catchPosixError(canWait, PosixError.EIO, () => {
-        if (!iovs) {
-          [ writer, rights, flags ] = this.getStream(fd, 'write');
-          checkAccessRight(rights, PosixDescriptorRight.fd_write);
-          method = (flags & PosixDescriptorFlag.nonblock) ? writer.writenb : writer.write;
-          iovs = createView(iovsSize * iovsCount);
-          this.moveExternBytes(iovs, iovsAddress, false);
-        }
-        const ptr = (process.env.BITS == 64) 
-                  ? iovs.getBigUint64(i * iovsSize, le) 
-                  : iovs.getUint32(i * iovsSize, le);
-        const len = (process.env.BITS == 64) 
-                  ? iovs.getBigUint64(i * iovsSize + 8, le)
-                  : iovs.getUint32(i * iovsSize + 4, le);
-        const chunk = new Uint8Array(process.env.BITS == 64 ? Number(len) : len);
-        this.moveExternBytes(chunk, ptr, false);
-        written += len;
-        return method.call(writer, chunk);
-      }, () => {
-        if (++i < iovsCount) {
-          return next();
-        } else {
-          this.copyUsize(writtenAddress, written);
-        }
-      });
-    };
-    return next();
+    const iovsSize = usizeByteSize * 2;
+    let total = 0;
+    return catchPosixError(canWait, PosixError.EIO, () => {        
+      const[ writer, rights, flags ] = this.getStream(fd);
+      checkAccessRight(rights, PosixDescriptorRight.fd_write);
+      const iovs = createView(iovsSize * iovsCount);
+      this.moveExternBytes(iovs, iovsAddress, false);
+      const ops = [];
+      for (let i = 0; i < iovsCount; i++) {
+        const ptr = readUsize(iovs, i * iovsSize, le);
+        const len = readUsizeSafe(iovs, i * iovsSize + usizeByteSize, le);
+        ops.push({ ptr, len });
+        total += len;
+      }
+      const buffer = new ArrayBuffer(total);
+      let pos = 0;
+      for (const { ptr, len } of ops) {
+        const part = new DataView(buffer, pos, len);
+        this.moveExternBytes(part, ptr, false);
+        pos += len;
+      }
+      const chunk = new Uint8Array(buffer);
+      const method = (flags & PosixDescriptorFlag.nonblock) ? writer.writenb : writer.write;
+      return method.call(writer, chunk);
+    }, () => this.copyUint32(writtenAddress, total));
   },
   ...(process.env.TARGET === 'node' ? {
     exports: {
@@ -50,10 +44,10 @@ export default mixin({
         const [ writer, rights, flags ] = this.getStream(fd);
         checkAccessRight(rights, PosixDescriptorRight.fd_write);
         const method = (flags & PosixDescriptorFlag.nonblock) ? writer.writenb : writer.write;
-        const chunk = new Uint8Array(process.env.BITS == 64 ? Number(len) : len);
+        const chunk = new Uint8Array(len);
         this.moveExternBytes(chunk, address, false);
         return method.call(writer, chunk);
-      }, () => this.copyUsize(writtenAddress, len));
+      }, () => this.copyUint32(writtenAddress, len));
     },
     /* c8 ignore next */
   } : undefined),

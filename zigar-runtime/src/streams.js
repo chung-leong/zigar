@@ -149,25 +149,24 @@ export class WebStreamWriter extends AsyncWriter {
 }
 
 export class BlobReader extends AsyncReader {
-  pos = 0n;
+  pos = 0;
   onClose = null;
 
   constructor(blob) {
     super();
     this.blob = blob;
-    this.size = BigInt(blob.size);
+    this.size = blob.size;
     blob.close = () => this.onClose?.();
   }
 
   async fetch(len) {
     const chunk = await this.pread(len, this.pos);
-    this.pos += BigInt(chunk.length);
+    this.pos += chunk.length;
     this.store(chunk.length > 0 ? chunk : null);
   }
 
   async pread(len, offset) {
-    const start = Number(offset);
-    const slice = this.blob.slice(start, start + len);
+    const slice = this.blob.slice(offset, offset + len);
     const response = new Response(slice);
     const buffer = await response.arrayBuffer();
     return new Uint8Array(buffer);
@@ -188,12 +187,12 @@ export class BlobReader extends AsyncReader {
 }
 
 export class Uint8ArrayReadWriter {
-  pos = 0n;
+  pos = 0;
   onClose = null;
 
   constructor(array) {
     this.array = array;
-    this.size = BigInt(array.length);    
+    this.size = array.length;    
     array.close = () => this.onClose?.();
   }
 
@@ -203,7 +202,7 @@ export class Uint8ArrayReadWriter {
 
   read(len) {
     const buf = this.pread(len, this.pos);
-    this.pos += BigInt(buf.length);
+    this.pos += buf.length;
     return buf;
   }
 
@@ -213,18 +212,15 @@ export class Uint8ArrayReadWriter {
 
   write(buf) {
     this.pwrite(buf, this.pos);
-    this.pos += BigInt(buf.length);
+    this.pos += buf.length;
   }
 
   pread(len, offset) {
-    const start = Number(offset);
-    const end = start + len;
-    return this.array.subarray(start, end);
+    return this.array.subarray(offset, offset + len);
   }
 
   pwrite(buf, offset) {
-    const start = Number(offset);
-    this.array.set(buf, start);
+    this.array.set(buf, offset);
   }
 
   tell() {

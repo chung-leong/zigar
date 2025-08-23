@@ -5,8 +5,7 @@ import './copy-int.js';
 
 export default mixin({
   environSizesGet(environCountAddress, environBufSizeAddress) {
-    const listener = this.listenerMap.get('env');
-    const result = listener?.() ?? {};
+    const result = this.triggerEvent('env') ?? {};
     if (typeof(result) !== 'object') {
       throw new TypeMismatch('object', result);
     }
@@ -18,9 +17,9 @@ export default mixin({
     let size = 0;
     for (const array of env) {
       size += array.length;
-    }
-    this.copyUsize(environCountAddress, env.length);
-    this.copyUsize(environBufSizeAddress, size);
+    }    
+    this.copyUint32(environCountAddress, env.length);
+    this.copyUint32(environBufSizeAddress, size);
     return PosixError.NONE;
   },
   ...(process.env.TARGET === 'node' ? {

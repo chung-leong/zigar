@@ -1,7 +1,7 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError } from '../errors.js';
-import { createView, hasMethod } from '../utils.js';
+import { createView, hasMethod, safeInt } from '../utils.js';
 
 export default mixin({
   fdLockGet(fd, flockAddress, canWait) {
@@ -12,10 +12,10 @@ export default mixin({
         const flock = createView(24);
         this.moveExternBytes(flock, flockAddress, false);
         const type = flock.getUint16(0, le);
-        const whence = flock.getUint16(2, le)
-        const pid = flock.getUint32(4, le)
-        const start = flock.getBigInt64(8, le)
-        const length = flock.getBigUint64(16, le)
+        const whence = flock.getUint16(2, le);
+        const pid = flock.getUint32(4, le);
+        const start = safeInt(flock.getBigInt64(8, le));
+        const length = safeInt(flock.getBigUint64(16, le));
         return stream.getlock({ type, whence, start, length, pid });
       } 
     }, (lock) => {
@@ -26,8 +26,8 @@ export default mixin({
         flock.setUint16(0, lock.type ?? 0, le);
         flock.setUint16(2, lock.whence ?? 0, le);
         flock.setUint32(4, lock.pid ?? 0, le);
-        flock.setBigInt64(8, lock.start ?? 0n, le);
-        flock.setBigUint64(16, lock.length ?? 0n, le);
+        flock.setBigInt64(8, BigInt(lock.start ?? 0), le);
+        flock.setBigUint64(16, BigInt(lock.length ?? 0), le);
       } else {
         // change type to unlock (2)
         flock = createView(2);

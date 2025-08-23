@@ -28,15 +28,15 @@ pub const Syscall = extern struct {
     u: extern union {
         advise: extern struct {
             fd: i32,
-            offset: usize,
-            len: usize,
+            offset: u64,
+            len: u32,
             advice: std.os.wasi.advice_t,
         },
         allocate: extern struct {
             fd: i32,
             mode: i32,
-            offset: usize,
-            len: usize,
+            offset: u64,
+            len: u32,
         },
         close: extern struct {
             fd: i32,
@@ -65,8 +65,8 @@ pub const Syscall = extern struct {
         getdents: extern struct {
             dirfd: i32,
             buffer: [*]u8,
-            len: usize,
-            read: usize = undefined,
+            len: u32,
+            read: u32 = undefined,
         },
         mkdir: extern struct {
             dirfd: i32,
@@ -84,22 +84,42 @@ pub const Syscall = extern struct {
         pread: extern struct {
             fd: i32,
             bytes: [*]const u8,
-            len: usize,
-            offset: usize,
-            read: usize = undefined,
+            len: u32,
+            offset: u64,
+            read: u32 = undefined,
+        },
+        preadv: extern struct {
+            fd: i32,
+            iovs: [*]const std.os.wasi.iovec_t,
+            count: u32,
+            offset: u64,
+            read: u32 = undefined,
         },
         pwrite: extern struct {
             fd: i32,
             bytes: [*]const u8,
-            len: usize,
-            offset: usize,
-            written: usize = undefined,
+            len: u32,
+            offset: u64,
+            written: u32 = undefined,
+        },
+        pwritev: extern struct {
+            fd: i32,
+            iovs: [*]const std.os.wasi.iovec_t,
+            count: u32,
+            offset: u64,
+            written: u32 = undefined,
         },
         read: extern struct {
             fd: i32,
             bytes: [*]const u8,
-            len: usize,
-            read: usize = undefined,
+            len: u32,
+            read: u32 = undefined,
+        },
+        readv: extern struct {
+            fd: i32,
+            iovs: [*]const std.os.wasi.iovec_t,
+            count: u32,
+            read: u32 = undefined,
         },
         rmdir: extern struct {
             dirfd: i32,
@@ -107,7 +127,7 @@ pub const Syscall = extern struct {
         },
         seek: extern struct {
             fd: i32,
-            offset: isize,
+            offset: i64,
             whence: u32,
             position: u64 = undefined,
         },
@@ -149,8 +169,14 @@ pub const Syscall = extern struct {
         write: extern struct {
             fd: i32,
             bytes: [*]const u8,
-            len: usize,
-            written: usize = undefined,
+            len: u32,
+            written: u32 = undefined,
+        },
+        writev: extern struct {
+            fd: i32,
+            iovs: [*]const std.os.wasi.iovec_t,
+            count: u32,
+            written: u32 = undefined,
         },
     },
     futex_handle: usize = 0,
@@ -168,8 +194,11 @@ pub const Syscall = extern struct {
         mkdir,
         open,
         pread,
+        preadv,
         pwrite,
+        pwritev,
         read,
+        readv,
         rmdir,
         seek,
         setfl,
@@ -180,6 +209,7 @@ pub const Syscall = extern struct {
         unlink,
         utimes,
         write,
+        writev,
     };
     pub const Mask = packed struct(u8) {
         mkdir: bool = false,
@@ -989,6 +1019,23 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
+        pub fn preadv(fd: c_int, iovs: [*]const std.c.iovec, count: c_int, offset: off_t, result: *off_t) callconv(.c) bool {
+            if (isPrivateDescriptor(fd)) {
+                var call: Syscall = .{ .cmd = .preadv, .u = .{
+                    .preadv = .{
+                        .fd = @intCast(fd),
+                        .iovs = @ptrCast(iovs),
+                        .count = @intCast(count),
+                        .offset = @intCast(offset),
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                result.* = if (err == .SUCCESS) @intCast(call.u.pread.read) else intFromError(err);
+                return true;
+            }
+            return false;
+        }
+
         pub fn pwrite(fd: c_int, buffer: [*]const u8, len: c_long, offset: c_long, result: *c_long) callconv(.c) bool {
             return pwriteT(c_long, fd, buffer, len, offset, result);
         }
@@ -1014,6 +1061,23 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
+        pub fn pwritev(fd: c_int, iovs: [*]const std.c.iovec_const, count: c_int, offset: off_t, result: *off_t) callconv(.c) bool {
+            if (isPrivateDescriptor(fd)) {
+                var call: Syscall = .{ .cmd = .pwritev, .u = .{
+                    .pwritev = .{
+                        .fd = @intCast(fd),
+                        .iovs = @ptrCast(iovs),
+                        .count = @intCast(count),
+                        .offset = @intCast(offset),
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                result.* = if (err == .SUCCESS) @intCast(call.u.pwrite.written) else intFromError(err);
+                return true;
+            }
+            return false;
+        }
+
         pub fn read(fd: c_int, buffer: [*]u8, len: off_t, result: *off_t) callconv(.c) bool {
             if (isPrivateDescriptor(fd)) {
                 var call: Syscall = .{ .cmd = .read, .u = .{
@@ -1025,6 +1089,22 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 } };
                 const err = Host.redirectSyscall(&call);
                 result.* = if (err == .SUCCESS) @intCast(call.u.read.read) else intFromError(err);
+                return true;
+            }
+            return false;
+        }
+
+        pub fn readv(fd: c_int, iovs: [*]const std.c.iovec, count: c_int, result: *off_t) callconv(.c) bool {
+            if (isPrivateDescriptor(fd)) {
+                var call: Syscall = .{ .cmd = .readv, .u = .{
+                    .readv = .{
+                        .fd = @intCast(fd),
+                        .iovs = @ptrCast(iovs),
+                        .count = @intCast(count),
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                result.* = if (err == .SUCCESS) @intCast(call.u.readv.read) else intFromError(err);
                 return true;
             }
             return false;
@@ -1132,6 +1212,22 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         .fd = @intCast(fd),
                         .bytes = buffer,
                         .len = @intCast(len),
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                result.* = if (err == .SUCCESS) @intCast(call.u.write.written) else intFromError(err);
+                return true;
+            }
+            return false;
+        }
+
+        pub fn writev(fd: c_int, iovs: [*]const std.c.iovec_const, count: c_int, result: *off_t) callconv(.c) bool {
+            if (isPrivateDescriptor(fd)) {
+                var call: Syscall = .{ .cmd = .writev, .u = .{
+                    .writev = .{
+                        .fd = @intCast(fd),
+                        .iovs = @ptrCast(iovs),
+                        .count = @intCast(count),
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
@@ -1303,9 +1399,12 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const posix_fadvise = makeStdHookUsing("posix_fadvise", "fadvise64");
         pub const pread = makeStdHook("pread");
         pub const pread64 = makeStdHook("pread64");
+        pub const preadv = makeStdHook("preadv");
         pub const pwrite = makeStdHook("pwrite");
         pub const pwrite64 = makeStdHook("pwrite64");
+        pub const pwritev = makeStdHook("pwritev");
         pub const read = makeStdHook("read");
+        pub const readv = makeStdHook("readv");
         pub const rmdir = makeStdHook("rmdir");
         pub const stat = makeStdHook("stat");
         pub const stat64 = makeStdHook("stat64");
@@ -1314,6 +1413,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const utimensat = makeStdHook("utimensat");
         pub const utimes = makeStdHook("utimes");
         pub const write = makeStdHook("write");
+        pub const writev = makeStdHook("writev");
 
         pub fn __fxstat(ver: c_int, fd: c_int, buf: *Stat) callconv(.c) c_int {
             var result: c_int = undefined;
@@ -1663,11 +1763,14 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var opendir: *const @TypeOf(Self.opendir) = undefined;
             pub var pread: *const @TypeOf(Self.pread) = undefined;
             pub var pread64: *const @TypeOf(Self.pread64) = undefined;
+            pub var preadv: *const @TypeOf(Self.preadv) = undefined;
             pub var pwrite: *const @TypeOf(Self.pwrite) = undefined;
+            pub var pwritev: *const @TypeOf(Self.pwritev) = undefined;
             pub var pwrite64: *const @TypeOf(Self.pwrite64) = undefined;
             pub var posix_fadvise: *const @TypeOf(Self.posix_fadvise) = undefined;
             pub var pthread_create: *const @TypeOf(Self.pthread_create) = undefined;
             pub var read: *const @TypeOf(Self.read) = undefined;
+            pub var readv: *const @TypeOf(Self.readv) = undefined;
             pub var readdir: *const @TypeOf(Self.readdir) = undefined;
             pub var readdir64: *const @TypeOf(Self.readdir64) = undefined;
             pub var rewinddir: *const @TypeOf(Self.rewinddir) = undefined;
@@ -1682,6 +1785,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var utime: *const @TypeOf(Self.utime) = undefined;
             pub var utimes: *const @TypeOf(Self.utimes) = undefined;
             pub var write: *const @TypeOf(Self.write) = undefined;
+            pub var writev: *const @TypeOf(Self.writev) = undefined;
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
     };
