@@ -2737,9 +2737,9 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             security_attributes: *SECURITY_ATTRIBUTES,
         ) callconv(WINAPI) BOOL {
             if (redirector.Host.isRedirecting(.mkdir)) {
-                const path_wtf8 = allocWtf8(path, true) catch return FALSE;
-                defer freeWtf8(path_wtf8);
-                return CreateDirectoryA(path_wtf8, security_attributes);
+                const converter = try Wtf8PathConverter.init(path, true) catch return FALSE;
+                defer converter.deinit();
+                return CreateDirectoryA(converter.path, security_attributes);
             }
             return Original.CreateDirectoryW(path, security_attributes);
         }
@@ -2793,9 +2793,9 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             template_file: HANDLE,
         ) callconv(WINAPI) ?HANDLE {
             if (redirector.Host.isRedirecting(.mkdir)) {
-                const path_wtf8 = allocWtf8(path, true) catch return null;
-                defer freeWtf8(path_wtf8);
-                return CreateFileA(path_wtf8, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
+                const converter = try Wtf8PathConverter.init(path, true) catch return FALSE;
+                defer converter.deinit();
+                return CreateFileA(converter.path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
             }
             return Original.CreateFileW(path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
         }
@@ -2830,9 +2830,9 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
 
         pub fn DeleteFileW(path: LPCWSTR) callconv(WINAPI) BOOL {
             if (redirector.Host.isRedirecting(.unlink)) {
-                const path_wtf8 = allocWtf8(path, true) catch return FALSE;
-                defer freeWtf8(path_wtf8);
-                return DeleteFileA(path_wtf8);
+                const converter = try Wtf8PathConverter.init(path, true) catch return FALSE;
+                defer converter.deinit();
+                return DeleteFileA(converter.path);
             }
             return Original.DeleteFileW(path);
         }
@@ -2852,9 +2852,9 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
 
         pub fn GetFileAttributesW(path: LPCWSTR) callconv(WINAPI) DWORD {
             if (redirector.Host.isRedirecting(.stat)) {
-                const path_wtf8 = allocWtf8(path, true) catch return std.os.windows.INVALID_FILE_ATTRIBUTES;
-                defer freeWtf8(path_wtf8);
-                return GetFileAttributesA(path_wtf8);
+                const converter = try Wtf8PathConverter.init(path, true) catch return FALSE;
+                defer converter.deinit();
+                return GetFileAttributesA(converter.path);
             }
             return Original.GetFileAttributesW(path);
         }
@@ -2996,13 +2996,13 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                 const object_name = object_attributes.ObjectName;
                 const name_len = @divExact(object_name.Length, 2);
                 const path = object_name.Buffer.?[0..name_len];
-                const path_wtf8 = allocWtf8(path, false) catch return .NO_MEMORY;
-                defer freeWtf8(path_wtf8);
+                const converter = try Wtf8PathConverter.init(path, false) catch return .NO_MEMORY;
+                defer converter.deinit();
                 if (delete_op) {
                     // an unlink or rmdir operation actually
                     var result: c_int = undefined;
                     const flags: c_int = if (dir_op) AT.REMOVEDIR else 0;
-                    if (redirector.unlinkat(dirfd, path_wtf8, flags, &result)) {
+                    if (redirector.unlinkat(dirfd, converter.path, flags, &result)) {
                         if (result < 0) return .OBJECT_PATH_NOT_FOUND;
                         handle.* = temporary_handle;
                         io_status_block.Information = windows_h.FILE_CREATED;
@@ -3013,7 +3013,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                     if (dir_op) {
                         if (create_disposition != std.os.windows.FILE_CREATE) return .ACCESS_DENIED;
                         var result: c_int = undefined;
-                        if (redirector.mkdirat(dirfd, path_wtf8, mode, &result)) {
+                        if (redirector.mkdirat(dirfd, converter.path, mode, &result)) {
                             if (result < 0) return .ACCESS_DENIED;
                             handle.* = temporary_handle;
                             io_status_block.Information = windows_h.FILE_CREATED;
@@ -3038,7 +3038,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                         }
                         const oflags_int: u32 = @bitCast(oflags);
                         var fd: c_int = undefined;
-                        if (redirector.openat(dirfd, path_wtf8, @intCast(oflags_int), mode, &fd)) {
+                        if (redirector.openat(dirfd, converter.path, @intCast(oflags_int), mode, &fd)) {
                             if (fd < 0) return .OBJECT_PATH_NOT_FOUND;
                             handle.* = fromDescriptor(fd);
                             io_status_block.Information = switch (create_disposition) {
@@ -3395,9 +3395,9 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
 
         pub fn RemoveDirectoryW(path: LPCWSTR) callconv(WINAPI) BOOL {
             if (redirector.Host.isRedirecting(.rmdir)) {
-                const path_wtf8 = allocWtf8(path, true) catch return FALSE;
-                defer freeWtf8(path_wtf8);
-                return RemoveDirectoryA(path_wtf8);
+                const converter = try Wtf8PathConverter.init(path, false) catch return .NO_MEMORY;
+                defer converter.deinit();
+                return RemoveDirectoryA(converter.path);
             }
             return Original.RemoveDirectoryW(path);
         }
@@ -3541,23 +3541,6 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                 }
                 break :fail error.IntegerOverflow;
             };
-        }
-
-        fn allocWtf8(string: anytype, save_err: bool) ![:0]u8 {
-            const T = @TypeOf(string);
-            const s: []const u16 = switch (T) {
-                [*:0]u16, [*:0]const u16 => string[0..std.mem.len(string)],
-                []u16, []const u16 => string,
-                else => @compileError("Unexpected: " ++ @typeName(T)),
-            };
-            return std.unicode.wtf16LeToWtf8AllocZ(c_allocator, s) catch |err| {
-                if (save_err) _ = windows_h.SetLastError(windows_h.ERROR_NOT_ENOUGH_MEMORY);
-                return err;
-            };
-        }
-
-        fn freeWtf8(string: [:0]u8) void {
-            c_allocator.free(string);
         }
 
         fn saveError(result: anytype) BOOL {
@@ -3729,6 +3712,33 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         const FALSE = std.os.windows.FALSE;
         const TRUE = std.os.windows.TRUE;
         const WINAPI: std.builtin.CallingConvention = if (builtin.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c;
+
+        const Wtf8PathConverter = struct {
+            sfa: std.heap.StackFallbackAllocator(max_stack_size),
+            allocator: std.mem.Allocator,
+            path: [*:0]u8,
+            path_allocated: [*:0]u8,
+            len: usize,
+
+            const max_stack_size = 1024;
+
+            pub fn init(path: [*:0]const u16, save_err: bool) !@This() {
+                var self: @This() = undefined;
+                self.sfa = std.heap.stackFallback(max_stack_size, c_allocator);
+                self.allcator = self.sfa.get();
+                self.len = std.mem.len(path);
+                self.path = std.unicode.wtf16LeToWtf8AllocZ(self.allocator, path[0..self.len]) catch |err| {
+                    if (save_err) _ = windows_h.SetLastError(windows_h.ERROR_NOT_ENOUGH_MEMORY);
+                    return err;
+                };
+                self.path_allocated = path;
+                return self;
+            }
+
+            pub fn deinit(self: *@This()) void {
+                self.allocator.free(self.path_allocated);
+            }
+        };
 
         const Self = @This();
         pub const Original = struct {
