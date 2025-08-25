@@ -1,5 +1,5 @@
 (async () => {
-  const { buildAddon } = require('node-zigar-addon') ;
+  const { buildAddon, optionsForAddon } = require('node-zigar-addon') ;
   const { dirname, extname, join, parse } = require('path');
   const { URL } = require('url');
   const { workerData } = require('worker_threads');
@@ -22,29 +22,35 @@
       platform,
       arch,
     };
-    const configPath = !archive
-    ? await findConfigFile('node-zigar.config.json', dirname(path))
-    /* c8 ignore next */
+    const availableOptions = { ...optionsForCompile,  ...optionsForAddon };
+    const configPath = !archive 
+    ? await findConfigFile('node-zigar.config.json', dirname(path)) 
+    /* c8 ignore next */ 
     : null;
     if (configPath) {
       // add options from config file
-      Object.assign(options, await loadConfigFile(configPath, optionsForCompile));
+      Object.assign(options, await loadConfigFile(configPath, availableOptions));
     }
     // allow overriding of options using query variables
-    Object.assign(options, extractOptions(new URL(url).searchParams, optionsForCompile));
+    Object.assign(options, extractOptions(new URL(url).searchParams, availableOptions));
     const ext = extname(path);
     const useCode = ext === '.zig';
     const srcPath = (useCode) ? path : findSourceFile(path, options);
     const modPath = (useCode) ? getModuleCachePath(path, options) : path;
     const addonParentDir = (useCode) ? getCachePath(options) : dirname(path);
     const addonDir = join(addonParentDir, 'node-zigar-addon');
-    // try recompiling the Node-API addon only if app is not stored in an archive
-    // and we're loading a .zig or if there's a config file
-    const recompile = !archive && (useCode || !!configPath) && options.recompile != false;
-    const addonOptions = { recompile };
+    const { optimizeAddon, ...compileOptions } = options;
+    const addonOptions = { 
+      // try recompiling the Node-API addon only if app is not stored in an archive
+      // and we're loading a .zig or if there's a config file
+      recompileAddon: !archive && (useCode || !!configPath) && options.recompile != false, 
+      optimizeAddon,
+      platform,
+      arch,
+    };
     if (!options.quiet) {
       const modName = parse(path).name;
-      Object.assign(options, {
+      Object.assign(compileOptions, {
         onStart: () => showStatus(`Building module "${modName}"`),
         onEnd: () => hideStatus(),
       });
@@ -57,7 +63,7 @@
     // srcPath can be undefined, in which case compile() will simply return the path to
     // the matching so/dylib/dll file in modPath; basically, when node-zigar.config.json
     // is absent, compilation does not occur
-    const { outputPath: modulePath } = await compile(srcPath, modPath, options);
+    const { outputPath: modulePath } = await compile(srcPath, modPath, compileOptions);
     result = { addonPath, modulePath };
     status = 1;
   } catch (err) {

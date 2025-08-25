@@ -1,5 +1,5 @@
 import { plugin } from 'bun';
-import { buildAddon, createEnvironment, getLibraryPath } from 'node-zigar-addon';
+import { buildAddon, createEnvironment, getLibraryPath, optionsForAddon } from 'node-zigar-addon';
 import { dirname, extname, join, parse } from 'path';
 import { pathToFileURL } from 'url';
 import {
@@ -29,26 +29,31 @@ await plugin({
         platform,
         arch,
       };
+      const availableOptions = { ...optionsForCompile,  ...optionsForAddon };
       const configPath = await findConfigFile('bun-zigar.toml', dirname(path));
       if (configPath) {
         // add options from config file
         const cfgModule = await import(configPath);
-        Object.assign(options, processConfig(cfgModule.default, configPath, optionsForCompile));
+        Object.assign(options, processConfig(cfgModule.default, configPath, availableOptions));
       }
       const ext = extname(path);
-      const srcPath = (ext === '.zig') ? path : findSourceFile(path, options);
-      const modPath = (ext === '.zig') ? getModuleCachePath(path, options) : path;
-      const addonParentDir = (ext === '.zig') ? getCachePath(options) : dirname(path);
+      const useCode = ext === '.zig';
+      const srcPath = (useCode) ? path : findSourceFile(path, options);
+      const modPath = (useCode) ? getModuleCachePath(path, options) : path;
+      const addonParentDir = (useCode) ? getCachePath(options) : dirname(path);
       const addonDir = join(addonParentDir, 'node-zigar-addon');
-      // build the Node-API addon if necessary
+      const { optimizeAddon, ...compileOptions } = options;
       const addonOptions = { 
-        recompile: options.recompile !== false,
+        // try recompiling the Node-API addon only if we're loading a .zig or if there's 
+        // a config file
+        recompileAddon: (useCode || !!configPath) && options.recompile != false, 
+        optimizeAddon,
         platform,
         arch,
       };
       if (!options.quiet) {
         const modName = parse(path).name;
-        Object.assign(options, {
+        Object.assign(compileOptions, {
           onStart: () => showStatus(`Building module "${modName}"`),
           onEnd: () => hideStatus(),
         });
@@ -61,7 +66,7 @@ await plugin({
       // compile the module if srcPath isn't undefined; if it is, then compile() will simply return
       // the path to the matching so/dylib/dll file in modPath; basically, when node-zigar.config.json
       // is absent, compilation does not occur
-      const { outputPath } = await compile(srcPath, modPath, options);
+      const { outputPath } = await compile(srcPath, modPath, compileOptions);
       process.env.ADDON_PATH = addonPath;
       const env = createEnvironment();
       env.loadModule(outputPath);

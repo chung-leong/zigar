@@ -3,8 +3,7 @@ const Import = std.Build.Module.Import;
 const builtin = @import("builtin");
 
 const cfg = @import("build.cfg.zig");
-
-const extra = if (cfg.has_extra) @import("build.extra.zig") else struct {};
+const extra = @import("build.extra.zig");
 
 pub fn build(b: *std.Build) !void {
     if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 14) {

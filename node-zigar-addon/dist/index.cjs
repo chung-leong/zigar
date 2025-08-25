@@ -26,9 +26,18 @@ function getLibraryPath() {
   return __filename;
 }
 
+const optionsForAddon = {
+  optimizeAddon: {
+    type: 'string',
+    enum: [ 'Debug', 'ReleaseSmall', 'ReleaseFast', 'ReleaseSafe' ],
+    title: 'Zig optimization mode for Node.js addon',
+  },
+}
+
 async function buildAddon(addonDir, options) {
   const {
-    recompile = true,
+    recompileAddon = true,
+    optimizeAddon = 'ReleaseSmall',
     arch,
     platform,
     zigPath = 'zig',
@@ -38,8 +47,8 @@ async function buildAddon(addonDir, options) {
   const outputPath = join(addonDir, `${platform}.${arch}.node`);
   const baseDir = resolve(__dirname, '../');
   let changed = false;
-  if (recompile) {
-    const args = [ 'build', `-Doptimize=ReleaseSmall`, `-Doutput=${outputPath}` ];
+  if (recompileAddon) {
+    const args = [ 'build', `-Doptimize=${optimizeAddon}`, `-Doutput=${outputPath}` ];
     if (platform && arch) {
       // translate from names used by Node to those used by Zig
       const cpuArchs = {
@@ -146,4 +155,5 @@ module.exports = {
   getGCStatistics,
   getLibraryPath,
   buildAddon,
+  optionsForAddon,
 };

@@ -2,7 +2,7 @@
 
 import { copyFile, writeFile } from 'fs/promises';
 import { createRequire } from 'module';
-import { buildAddon } from 'node-zigar-addon';
+import { buildAddon, optionsForAddon } from 'node-zigar-addon';
 import os from 'os';
 import { dirname, extname, join, parse, relative, resolve } from 'path';
 import {
@@ -26,7 +26,8 @@ async function buildModules() {
   if (!configPath) {
     throw new Error('Unable to find node-zigar.config.json');
   }
-  const config = await loadConfigFile(configPath, optionsForCompile);
+  const availableOptions = { ...optionsForCompile, ...optionsForAddon };
+  const config = await loadConfigFile(configPath, availableOptions);
   config.recompile = true;
   if (!Array.isArray(config.targets)) {
     throw new Error('Unable to find array "targets" in node-zigar.config.json');
@@ -34,6 +35,7 @@ async function buildModules() {
   if (!config.modules) {
     throw new Error('Unable to find "modules" in node-zigar.config.json');
   }
+  const { optimizeAddon, ...compileOptions } = config;
   // make sure targets are valid
   for (const { arch, platform } of config.targets) {
     let msg;
@@ -84,7 +86,7 @@ async function buildModules() {
     const modName = parse(modPath).name;
     for (const { platform, arch } of config.targets) {
       const { outputPath, changed } = await compile(module.source, modPath, {
-        ...config,
+        ...compileOptions,
         platform,
         arch,
         onStart: () => showStatus(`Building module "${modName}" (${platform}/${arch})`),
@@ -107,6 +109,8 @@ async function buildModules() {
     const addonDir = join(parentDir, 'node-zigar-addon');
     for (const { platform, arch } of config.targets) {
       const { outputPath, changed } = await buildAddon(addonDir, {
+        recompileAddon: true,
+        optimizeAddon,
         platform,
         arch,
         onStart: () => showStatus(`Building Node.js addon (${platform}/${arch})`),

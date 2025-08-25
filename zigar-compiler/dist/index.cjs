@@ -813,7 +813,6 @@ async function compile(srcPath, modPath, options) {
       const path = moduleDir + 'build.extra.zig';
       await fs.stat(path);
       config.extraFilePath = path;
-      config.hasExtra = true;
     } catch (err) {
     }
     try {
@@ -920,7 +919,7 @@ function formatProjectConfig(config) {
   const fields = [
     'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath', 'useLibc', 
     'useRedirection', 'isWASM', 'multithreaded', 'stackSize', 'maxMemory', 'evalBranchQuota', 
-    'omitFunctions', 'omitVariables', 'hasExtra'
+    'omitFunctions', 'omitVariables',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -928,7 +927,7 @@ function formatProjectConfig(config) {
       lines.push(`pub const ${snakeCase} = ${JSON.stringify(value ?? null)};`);
     }
   }
-  return lines.join('\n');
+  return lines.join('\n') + '\n';
 }
 
 async function createProject(config, dir) {
@@ -937,10 +936,12 @@ async function createProject(config, dir) {
   const cfgFilePath = node_path.join(dir, 'build.cfg.zig');
   await fs.writeFile(cfgFilePath, content);
   const buildFilePath = node_path.join(dir, 'build.zig');
-  await copyFile(config.buildFilePath, buildFilePath);
+  await copyFile(buildFilePath, config.buildFilePath);
+  const extraFilePath = node_path.join(dir, 'build.extra.zig');
   if (config.extraFilePath) {
-    const extraFilePath = node_path.join(dir, 'build.extra.zig');
-    await copyFile(config.extraFilePath, extraFilePath);
+    await copyFile(extraFilePath, config.extraFilePath);
+  } else {
+    await fs.writeFile(extraFilePath, '');
   }
   if (config.packageConfigPath) {
     const packageConfigPath = node_path.join(dir, 'build.zig.zon');
@@ -1079,7 +1080,6 @@ function createConfig(srcPath, modPath, options = {}) {
     evalBranchQuota,
     omitFunctions,
     omitVariables,
-    hasExtra: false,
     extraFilePath: undefined,
   };
 }
