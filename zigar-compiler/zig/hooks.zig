@@ -412,7 +412,8 @@ const S = switch (os) {
     },
     else => std.c.S,
 };
-const fd_cwd = -100;
+const fd_cwd = AT.FDCWD;
+const fd_root = -1;
 const fd_min = 0xfffff;
 
 pub fn SyscallRedirector(comptime ModuleHost: type) type {
@@ -441,10 +442,15 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn faccessat2(dirfd: c_int, path: [*:0]const u8, mode: c_int, flags: c_int, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.stat))) {
+                var resolver = PathResolver.init(dirfd, path) catch {
+                    result.* = intFromError(.NOMEM);
+                    return true;
+                };
+                defer resolver.deinit();
                 var call: Syscall = .{ .cmd = .stat, .u = .{
                     .stat = .{
-                        .dirfd = remapDirDescriptor(dirfd),
-                        .path = path,
+                        .dirfd = resolver.dirfd,
+                        .path = resolver.path,
                         .lookup_flags = convertLookupFlags(flags),
                     },
                 } };
@@ -679,10 +685,15 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         fn fstatatT(comptime T: type, dirfd: c_int, path: [*:0]const u8, buf: *T, flags: c_int, result: *c_int) bool {
             if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.stat))) {
+                var resolver = PathResolver.init(dirfd, path) catch {
+                    result.* = intFromError(.NOMEM);
+                    return true;
+                };
+                defer resolver.deinit();
                 var call: Syscall = .{ .cmd = .stat, .u = .{
                     .stat = .{
-                        .dirfd = remapDirDescriptor(dirfd),
-                        .path = path,
+                        .dirfd = resolver.dirfd,
+                        .path = resolver.path,
                         .lookup_flags = convertLookupFlags(flags),
                     },
                 } };
@@ -934,10 +945,15 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn mkdirat(dirfd: c_int, path: [*:0]const u8, _: c_int, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.mkdir))) {
+                var resolver = PathResolver.init(dirfd, path) catch {
+                    result.* = intFromError(.NOMEM);
+                    return true;
+                };
+                defer resolver.deinit();
                 var call: Syscall = .{ .cmd = .mkdir, .u = .{
                     .mkdir = .{
-                        .dirfd = remapDirDescriptor(dirfd),
-                        .path = path,
+                        .dirfd = resolver.dirfd,
+                        .path = resolver.path,
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
@@ -958,10 +974,15 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         pub fn openat(dirfd: c_int, path: [*:0]const u8, oflags: c_int, _: c_int, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.open))) {
                 const o: O = @bitCast(@as(i32, @intCast(oflags)));
+                var resolver = PathResolver.init(dirfd, path) catch {
+                    result.* = intFromError(.NOMEM);
+                    return true;
+                };
+                defer resolver.deinit();
                 var call: Syscall = .{ .cmd = .open, .u = .{
                     .open = .{
-                        .dirfd = remapDirDescriptor(dirfd),
-                        .path = path,
+                        .dirfd = resolver.dirfd,
+                        .path = resolver.path,
                         .lookup_flags = .{ .SYMLINK_FOLLOW = !o.NOFOLLOW },
                         .descriptor_flags = .{
                             .APPEND = o.APPEND,
@@ -1124,17 +1145,22 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn statx(dirfd: c_int, path: [*:0]const u8, flags: c_int, mask: c_uint, buf: *std.os.linux.Statx, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.stat))) {
+                var resolver = PathResolver.init(dirfd, path) catch {
+                    result.* = intFromError(.NOMEM);
+                    return true;
+                };
+                defer resolver.deinit();
                 var call: Syscall = if (flags & std.os.linux.AT.EMPTY_PATH != 0 and std.mem.len(path) == 0)
                     .{ .cmd = .fstat, .u = .{
                         .fstat = .{
-                            .fd = remapDirDescriptor(dirfd),
+                            .fd = resolver.dirfd,
                         },
                     } }
                 else
                     .{ .cmd = .stat, .u = .{
                         .stat = .{
-                            .dirfd = remapDirDescriptor(dirfd),
-                            .path = path,
+                            .dirfd = resolver.dirfd,
+                            .path = resolver.path,
                             .lookup_flags = convertLookupFlags(flags),
                         },
                     } };
@@ -1156,18 +1182,23 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             const rmdir_op = (flags & AT.REMOVEDIR) != 0;
             const redirecting = if (rmdir_op) Host.isRedirecting(.rmdir) else Host.isRedirecting(.unlink);
             if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and redirecting)) {
+                var resolver = PathResolver.init(dirfd, path) catch {
+                    result.* = intFromError(.NOMEM);
+                    return true;
+                };
+                defer resolver.deinit();
                 var call: Syscall = if (rmdir_op)
                     .{ .cmd = .rmdir, .u = .{
                         .rmdir = .{
-                            .dirfd = remapDirDescriptor(dirfd),
-                            .path = path,
+                            .dirfd = resolver.dirfd,
+                            .path = resolver.path,
                         },
                     } }
                 else
                     .{ .cmd = .unlink, .u = .{
                         .unlink = .{
-                            .dirfd = remapDirDescriptor(dirfd),
-                            .path = path,
+                            .dirfd = resolver.dirfd,
+                            .path = resolver.path,
                             .flags = @intCast(flags),
                         },
                     } };
@@ -1187,10 +1218,15 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn utimensat(dirfd: c_int, path: [*:0]const u8, times: [*]const std.c.timespec, flags: c_int, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.set_times))) {
+                var resolver = PathResolver.init(dirfd, path) catch {
+                    result.* = intFromError(.NOMEM);
+                    return true;
+                };
+                defer resolver.deinit();
                 var call: Syscall = .{ .cmd = .utimes, .u = .{
                     .utimes = .{
-                        .dirfd = remapDirDescriptor(dirfd),
-                        .path = path,
+                        .dirfd = resolver.dirfd,
+                        .path = resolver.path,
                         .lookup_flags = convertLookupFlags(flags),
                         .atime = getNanoseconds(times[0]),
                         .mtime = getNanoseconds(times[1]),
@@ -1243,13 +1279,6 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return switch (fd) {
                 0, 1, 2 => true,
                 else => fd >= fd_min,
-            };
-        }
-
-        fn remapDirDescriptor(dirfd: c_int) i32 {
-            return switch (dirfd) {
-                AT.FDCWD => fd_cwd,
-                else => @intCast(dirfd),
             };
         }
 
@@ -1362,6 +1391,83 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 else => @compileError("Unexpected"),
             }
         }
+
+        const PathResolver = struct {
+            sfa: std.heap.StackFallbackAllocator(max_buffer_size),
+            allocator: std.mem.Allocator,
+            dirfd: c_int,
+            buffer: ?[]u8,
+            path: [*:0]const u8,
+
+            const max_buffer_size = 4096;
+
+            pub fn init(dirfd: c_int, path: [*:0]const u8) !@This() {
+                var self: @This() = undefined;
+                const len = std.mem.len(path);
+                const path_s = path[0..len];
+                const absolute = std.fs.path.isAbsolute(path_s);
+                const relative = dirfd == fd_cwd and !absolute;
+                const backslashes = if (os != .windows) false else for (path_s) |c| {
+                    if (c == '\\') break true;
+                } else false;
+                if (relative or backslashes) {
+                    self.sfa = std.heap.stackFallback(max_buffer_size, c_allocator);
+                    self.allocator = self.sfa.get();
+                }
+                if (relative) {
+                    self.dirfd = fd_root;
+                    // resolve the path
+                    const cwd = try std.process.getCwdAlloc(self.allocator);
+                    defer self.allocator.free(cwd);
+                    var buf = try std.fs.path.resolve(self.allocator, &.{ cwd, path_s });
+                    // add sentinel
+                    buf = try self.allocator.realloc(buf, buf.len + 1);
+                    buf.len += 1;
+                    buf[buf.len - 1] = 0;
+                    self.buffer = buf;
+                    self.path = @ptrCast(buf.ptr);
+                } else {
+                    self.dirfd = if (dirfd == fd_cwd) fd_root else dirfd;
+                    if (backslashes) {
+                        const buf = self.allocator.dupeZ(path_s);
+                        self.buffer = buf;
+                        self.path = buf.ptr;
+                    } else {
+                        self.buffer = null;
+                        self.path = path;
+                    }
+                }
+                if (os == .windows) {
+                    if (self.buffer) |buf| {
+                        // convert back-slashes to forward-slashes
+                        for (buf, 0..) |c, i| {
+                            if (c == '\\') buf[i] = '/';
+                        }
+                    }
+                    if (std.ascii.isAlphabetic(self.path[0]) and self.path[1] == ':') {
+                        // omit drive letter
+                        self.path = self.path[2..];
+                    } else if (self.path[0] == '/' and self.path[1] == '/') {
+                        // omit server name and share name
+                        var i: usize = 2;
+                        var slash_count: usize = 0;
+                        while (self.path[i] != 0) {
+                            if (self.path[i] == '/') {
+                                slash_count += 1;
+                                if (slash_count == 2) break;
+                            }
+                            i += 1;
+                        }
+                        self.path = self.path[i..];
+                    }
+                }
+                return self;
+            }
+
+            pub fn deinit(self: *@This()) void {
+                if (self.buffer) |buf| self.allocator.free(buf);
+            }
+        };
     };
 }
 
@@ -3714,29 +3820,28 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         const WINAPI: std.builtin.CallingConvention = if (builtin.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c;
 
         const Wtf8PathConverter = struct {
-            sfa: std.heap.StackFallbackAllocator(max_stack_size),
+            sfa: std.heap.StackFallbackAllocator(max_buffer_size),
             allocator: std.mem.Allocator,
-            path: [*:0]u8,
-            path_allocated: [*:0]u8,
-            len: usize,
+            buffer: []const u8,
+            path: [*:0]const u8,
 
-            const max_stack_size = 1024;
+            const max_buffer_size = 1024;
 
             pub fn init(path: [*:0]const u16, save_err: bool) !@This() {
+                const len = std.mem.len(path);
                 var self: @This() = undefined;
-                self.sfa = std.heap.stackFallback(max_stack_size, c_allocator);
+                self.sfa = std.heap.stackFallback(max_buffer_size, c_allocator);
                 self.allcator = self.sfa.get();
-                self.len = std.mem.len(path);
-                self.path = std.unicode.wtf16LeToWtf8AllocZ(self.allocator, path[0..self.len]) catch |err| {
+                self.buffer = std.unicode.wtf16LeToWtf8AllocZ(self.allocator, path[0..len]) catch |err| {
                     if (save_err) _ = windows_h.SetLastError(windows_h.ERROR_NOT_ENOUGH_MEMORY);
                     return err;
                 };
-                self.path_allocated = path;
+                self.path = self.buffer.ptr;
                 return self;
             }
 
             pub fn deinit(self: *@This()) void {
-                self.allocator.free(self.path_allocated);
+                self.allocator.free(self.buffer);
             }
         };
 

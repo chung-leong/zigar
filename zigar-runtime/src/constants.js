@@ -219,7 +219,7 @@ export const PosixDescriptor = {
   stdin: 0,
   stdout: 1,
   stderr: 2,
-  root: (process.env.TARGET === 'wasm') ? 3 : -100,
+  root: (process.env.TARGET === 'wasm') ? 3 : -1,
 
   min: 0x000f_ffff,
   max: 0x07ff_ffff, 

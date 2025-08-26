@@ -18,7 +18,7 @@ const MemberType = {
 const MemberFlag = {
   IsReadOnly:       0x0002};
 ({
-  root: (process.env.TARGET === 'wasm') ? 3 : -100});
+  root: (process.env.TARGET === 'wasm') ? 3 : -1});
 
 const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
 
@@ -125,7 +125,7 @@ async function checkPidFile(pidPath, staleTime) {
   return !stale;
 }
 
-async function copyFile(srcPath, dstPath) {
+async function copyFile(dstPath, srcPath) {
   const info = await stat(srcPath);
   const data = await readFile(srcPath);
   await writeFile(dstPath, data);

@@ -691,7 +691,7 @@ async function checkPidFile(pidPath, staleTime) {
   return !stale;
 }
 
-async function copyFile(srcPath, dstPath) {
+async function copyFile(dstPath, srcPath) {
   const info = await stat(srcPath);
   const data = await readFile(srcPath);
   await writeFile(dstPath, data);
