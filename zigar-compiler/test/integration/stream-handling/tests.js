@@ -456,7 +456,7 @@ export function addTests(importModule, options) {
       expect(string).to.equal('This is a test');
       expect(event).to.eql({ 
         parent: null,
-        path: '\\hello\\world', 
+        path: 'hello/world', 
         rights: { write: true }, 
         flags: { create: true, truncate: true, symlinkFollow: true },
       });
