@@ -696,16 +696,16 @@ export function addTests(importModule, options) {
         event = evt;
         return {
           size: 345,
-          ctime: 123,
-          mtime: 456,
+          ctime: 123_000,
+          mtime: 456_000,
           atime: 1_000_000_000_000,
         }
       })
       const lines2 = await capture(() => print(array));
       expect(lines2).to.eql([
         'size = 345',
-        'ctime = 123',
-        'mtime = 456',
+        'ctime = 123000',
+        'mtime = 456000',
         'atime = 1000000000000',
       ]);
       expect(event).to.eql({
