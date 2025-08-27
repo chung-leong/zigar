@@ -1,7 +1,7 @@
 import { PosixDescriptorRight, PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, checkAccessRight } from '../errors.js';
-import { createView, readUsize, readUsizeSafe, usizeByteSize } from '../utils.js';
+import { createView, readUsize, readUsizeSafe, safeInt, usizeByteSize } from '../utils.js';
 import './copy-int.js';
 
 export default mixin({
@@ -29,7 +29,7 @@ export default mixin({
         pos += len;
       }
       const chunk = new Uint8Array(buffer);
-      return writer.pwrite(chunk, offset);
+      return writer.pwrite(chunk, safeInt(offset));
     }, () => this.copyUint32(writtenAddress, total));
   },
   ...(process.env.TARGET === 'node' ? {
@@ -44,7 +44,7 @@ export default mixin({
         checkAccessRight(rights, PosixDescriptorRight.fd_write);
         const chunk = new Uint8Array(len);
         this.moveExternBytes(chunk, address, false);
-        return writer.pwrite(chunk, offset);
+        return writer.pwrite(chunk, safeInt(offset));
       }, () => this.copyUint32(writtenAddress, len));
     },
     /* c8 ignore next */

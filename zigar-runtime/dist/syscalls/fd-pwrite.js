@@ -1,7 +1,7 @@
 import { PosixError, PosixDescriptorRight } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, checkAccessRight } from '../errors.js';
-import { createView, readUsize, readUsizeSafe, usizeByteSize } from '../utils.js';
+import { createView, readUsize, readUsizeSafe, usizeByteSize, safeInt } from '../utils.js';
 import './copy-int.js';
 
 var fdPwrite = mixin({
@@ -29,7 +29,7 @@ var fdPwrite = mixin({
         pos += len;
       }
       const chunk = new Uint8Array(buffer);
-      return writer.pwrite(chunk, offset);
+      return writer.pwrite(chunk, safeInt(offset));
     }, () => this.copyUint32(writtenAddress, total));
   },
 });

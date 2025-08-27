@@ -169,7 +169,7 @@ export function addTests(importModule, options) {
     })
     it('should open and read from file using posix functions', async function() {
       this.timeout(0);
-      const { __zigar, hash } = await importTest('open-and-read-file-with-posix-functions');
+      const { __zigar, hash } = await importTest('open-and-read-file-with-posix-functions', { useLibc: true });
       const correct = (platform() === 'win32') 
       ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
       : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
@@ -185,13 +185,13 @@ export function addTests(importModule, options) {
       expect(event).to.eql({ 
         parent: null,
         path: 'hello/world', 
-        rights: { read: true }, 
+        rights: { read: true, readdir: true }, 
         flags: { symlinkFollow: true }, 
       });
     })
     it('should open and read from file using libc functions', async function() {
       this.timeout(0);
-      const { __zigar, hash } = await importTest('open-and-read-file-with-libc-functions');
+      const { __zigar, hash } = await importTest('open-and-read-file-with-libc-functions', { useLibc: true });
       const correct = (platform() === 'win32') 
       ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
       : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
@@ -207,7 +207,7 @@ export function addTests(importModule, options) {
       expect(event).to.eql({ 
         parent: null,
         path: 'hello/world', 
-        rights: { read: true }, 
+        rights: { read: true, readdir: true }, 
         flags: { symlinkFollow: true }, 
       });
     })
@@ -236,7 +236,7 @@ export function addTests(importModule, options) {
     })
     it('should open a file and seek to a particular position using posix function', async function() {
       this.timeout(0);
-      const { __zigar, read } = await importTest('seek-file-with-posix-functions');
+      const { __zigar, read } = await importTest('seek-file-with-posix-functions', { useLibc: true });
       const path = absolute('./data/test.txt');
       const content = await readFile(path);
       __zigar.on('open', () => content);
@@ -246,7 +246,7 @@ export function addTests(importModule, options) {
     })
     it('should open a file and seek to a particular position using libc function', async function() {
       this.timeout(0);
-      const { __zigar, read } = await importTest('seek-file-with-libc-functions');
+      const { __zigar, read } = await importTest('seek-file-with-libc-functions', { useLibc: true });
       const path = absolute('./data/test.txt');
       const content = await readFile(path);
       __zigar.on('open', () => content);
@@ -266,7 +266,7 @@ export function addTests(importModule, options) {
     })
     it('should obtain the expected position after a seek operation using posix function', async function() {
       this.timeout(0);
-      const { __zigar, seek } = await importTest('return-file-position-with-posix-functions');
+      const { __zigar, seek } = await importTest('return-file-position-with-posix-functions', { useLibc: true });
       const content = new TextEncoder().encode('Hello world!');
       __zigar.on('open', () => content);
       const pos = seek('/hello/world', -2);
@@ -274,7 +274,7 @@ export function addTests(importModule, options) {
     })
     it('should obtain the expected position after a seek operation using libc function', async function() {
       this.timeout(0);
-      const { __zigar, seek } = await importTest('return-file-position-with-libc-functions');
+      const { __zigar, seek } = await importTest('return-file-position-with-libc-functions', { useLibc: true });
       const content = new TextEncoder().encode('Hello world!');
       __zigar.on('open', () => content);
       const pos = seek('/hello/world', -2);
@@ -282,7 +282,7 @@ export function addTests(importModule, options) {
     })
     it('should save and restore file position using using libc functions', async function() {
       this.timeout(0);
-      const { __zigar, printTwice } = await importTest('save-and-restore-file-position-with-libc-functions');
+      const { __zigar, printTwice } = await importTest('save-and-restore-file-position-with-libc-functions', { useLibc: true });
       const path = absolute('./data/test.txt');
       const content = await readFile(path);
       __zigar.on('open', () => content);
@@ -396,7 +396,7 @@ export function addTests(importModule, options) {
     })
     it('should open and write to file using posix functions', async function() {
       this.timeout(0);
-      const { __zigar, save } = await importTest('open-and-write-to-file-with-posix-functions');
+      const { __zigar, save } = await importTest('open-and-write-to-file-with-posix-functions', { useLibc: true });
       const chunks = [];
       let event;
       __zigar.on('open', (evt) => {
@@ -418,7 +418,7 @@ export function addTests(importModule, options) {
     })
     it('should open and write to file using libc functions', async function() {
       this.timeout(0);
-      const { __zigar, save } = await importTest('open-and-write-to-file-with-libc-functions');
+      const { __zigar, save } = await importTest('open-and-write-to-file-with-libc-functions', { useLibc: true });
       const chunks = [];
       let event;
       __zigar.on('open', (evt) => {
@@ -463,7 +463,7 @@ export function addTests(importModule, options) {
     })
     it('should obtain error code using libc function', async function() {
       this.timeout(0);
-      const { __zigar, triggerError } = await importTest('return-last-error-with-libc-function');
+      const { __zigar, triggerError } = await importTest('return-last-error-with-libc-function', { useLibc: true });
       __zigar.on('open', () => {
         return {
           read() {
@@ -480,7 +480,7 @@ export function addTests(importModule, options) {
     })
     it('should detect end of file using libc function', async function() {
       this.timeout(0);
-      const { __zigar, detectEOF } = await importTest('detect-end-of-file-with-libc-function');
+      const { __zigar, detectEOF } = await importTest('detect-end-of-file-with-libc-function', { useLibc: true });
       __zigar.on('open', () => {
         return new Uint8Array(256);
       });
@@ -489,7 +489,7 @@ export function addTests(importModule, options) {
     })
     it('should rewind file using libc function', async function() {
       this.timeout(0);
-      const { __zigar, getStartingPos } = await importTest('rewind-file-with-libc-function');
+      const { __zigar, getStartingPos } = await importTest('rewind-file-with-libc-function', { useLibc: true });
       __zigar.on('open', () => {
         return new Uint8Array(256);
       });
@@ -498,7 +498,7 @@ export function addTests(importModule, options) {
     })
     it('should check file access using posix function', async function() {
       this.timeout(0);
-      const { __zigar, check } = await importTest('check-access-with-posix-function');
+      const { __zigar, check } = await importTest('check-access-with-posix-function', { useLibc: true });
       let event;
       __zigar.on('open', (evt) => {
         const { path } = event = evt;
@@ -547,7 +547,7 @@ export function addTests(importModule, options) {
     skip.entirely.if(target == 'win32').
     it('should check access of file in directory using posix function', async function() {
       this.timeout(0);
-      const { __zigar, check } = await importTest('check-access-at-dir-with-posix-function');
+      const { __zigar, check } = await importTest('check-access-at-dir-with-posix-function', { useLibc: true });
       const uint8Array = new Uint8Array(256);
       const array = [];
       const submap = new Map();
@@ -579,7 +579,7 @@ export function addTests(importModule, options) {
     skip.entirely.if(target === 'win32').
     it('should open file in directory using posix function', async function() {
       this.timeout(0);
-      const { __zigar, write } = await importTest('open-file-at-dir-with-posix-function');
+      const { __zigar, write } = await importTest('open-file-at-dir-with-posix-function', { useLibc: true });
       const array = [];
       const map = new Map([
         [ 'writable.txt', array ],
@@ -609,7 +609,7 @@ export function addTests(importModule, options) {
     skip.entirely.if(target === 'win32').
     it('should print stat of file in directory using posix function', async function() {
       this.timeout(0);
-      const { __zigar, stat } = await importTest('stat-file-at-dir-with-posix-function');
+      const { __zigar, stat } = await importTest('stat-file-at-dir-with-posix-function', { useLibc: true });
       const typeArray = new Uint8Array(256);
       const map = new Map([
         [ 'readable.txt', typeArray ],
@@ -715,7 +715,7 @@ export function addTests(importModule, options) {
     })
     it('should get stats of an opened file using posix function', async function() {
       this.timeout(0);
-      const { __zigar, print } = await importTest('stat-opened-file-with-posix-function');
+      const { __zigar, print } = await importTest('stat-opened-file-with-posix-function', { useLibc: true });
       const array = new Uint8Array(17);
       __zigar.on('open', () => {
         return array;
@@ -763,7 +763,7 @@ export function addTests(importModule, options) {
     })
     it('should get stats of file referenced by path using posix function', async function() {
       this.timeout(0);
-      const { __zigar, print, printLink } = await importTest('stat-file-by-path-with-posix-function');
+      const { __zigar, print, printLink } = await importTest('stat-file-by-path-with-posix-function', { useLibc: true });
       const path = '/hello.txt';
       let event;
       __zigar.on('stat', (evt) => {
@@ -875,7 +875,7 @@ export function addTests(importModule, options) {
     skip.entirely.if(target === 'win32').
     it('should set access and last modified time of an opened file using posix function', async function() {
       this.timeout(0);
-      const { __zigar, setTimes } = await importTest('set-times-of-opened-file-with-posix-function');
+      const { __zigar, setTimes } = await importTest('set-times-of-opened-file-with-posix-function', { useLibc: true });
       const array = new Uint8Array(17);
       __zigar.on('open', () => {
         return array;
@@ -929,7 +929,7 @@ export function addTests(importModule, options) {
     skip.entirely.if(target === 'win32').
     it('should set access and last modified time of an opened file using posix function with ns precision', async function() {
       this.timeout(0);
-      const { __zigar, setTimes } = await importTest('set-ns-times-of-opened-file-with-posix-function');
+      const { __zigar, setTimes } = await importTest('set-ns-times-of-opened-file-with-posix-function', { useLibc: true });
       const array = new Uint8Array(17);
       __zigar.on('open', () => {
         return array;
@@ -988,7 +988,7 @@ export function addTests(importModule, options) {
     })
     it('should set access and last modified time of a file by using utime', async function() {
       this.timeout(0);
-      const { __zigar, setTimes } = await importTest('set-times-of-file-by-path-with-utime');
+      const { __zigar, setTimes } = await importTest('set-times-of-file-by-path-with-utime', { useLibc: true });
       let event;
       __zigar.on('set_times', (evt) => {
         event = evt;
@@ -1010,7 +1010,7 @@ export function addTests(importModule, options) {
     skip.entirely.if(target === 'win32').
     it('should set access and last modified time of a file in directory using posix function', async function() {
       this.timeout(0);
-      const { __zigar, setTimes } = await importTest('set-times-of-file-at-dir-with-posix-function');
+      const { __zigar, setTimes } = await importTest('set-times-of-file-at-dir-with-posix-function', { useLibc: true });
       let event;
       const map = new Map();
       __zigar.on('open', (evt) => {
@@ -1081,7 +1081,7 @@ export function addTests(importModule, options) {
     skip.entirely.if(target === 'win32').
     it('should perform sync operation using posix function', async function() {
       this.timeout(0);
-      const { __zigar, save } = await importTest('perform-sync-with-posix-function');
+      const { __zigar, save } = await importTest('perform-sync-with-posix-function', { useLibc: true });
       const chunks = [];
       __zigar.on('open', (evt) => {
         return chunks;
@@ -1107,7 +1107,7 @@ export function addTests(importModule, options) {
     skip.entirely.unless(target === 'linux').
     it('should perform datasync operation using posix function', async function() {
       this.timeout(0);
-      const { __zigar, save } = await importTest('perform-datasync-with-posix-function');
+      const { __zigar, save } = await importTest('perform-datasync-with-posix-function', { useLibc: true });
       const chunks = [];
       __zigar.on('open', (evt) => {
         return chunks;
@@ -1133,7 +1133,7 @@ export function addTests(importModule, options) {
     skip.entirely.unless(target === 'linux').
     it('should perform advise operation using posix function', async function() {
       this.timeout(0);
-      const { __zigar, save } = await importTest('perform-advise-with-posix-function');
+      const { __zigar, save } = await importTest('perform-advise-with-posix-function', { useLibc: true });
       const chunks = [];
       __zigar.on('open', (evt) => {
         return chunks;
@@ -1161,7 +1161,7 @@ export function addTests(importModule, options) {
     skip.entirely.unless(target === 'linux').
     it('should perform allocate operation using posix function', async function() {
       this.timeout(0);
-      const { __zigar, save } = await importTest('perform-allocate-with-posix-function');
+      const { __zigar, save } = await importTest('perform-allocate-with-posix-function', { useLibc: true });
       const chunks = [];
       __zigar.on('open', (evt) => {
         return chunks;
@@ -1225,7 +1225,7 @@ export function addTests(importModule, options) {
     })
     it('should retrieve names of files in directory using posix functions', async function() {
       this.timeout(0);
-      const { __zigar, print } = await importTest('scan-directory-with-posix-functions');
+      const { __zigar, print } = await importTest('scan-directory-with-posix-functions', { useLibc: true });
       const map = new Map([
         [ 'hello.txt', { type: 'file', content: 'Hello world' } ],
         [ 'test.txt', { type: 'file', content: 'This is a test and this is only a test' } ],
@@ -1267,7 +1267,7 @@ export function addTests(importModule, options) {
     })
     it('should create a directory using posix function', async function() {
       this.timeout(0);
-      const { __zigar, create } = await importTest('create-directory-with-posix-function');
+      const { __zigar, create } = await importTest('create-directory-with-posix-function', { useLibc: true });
       let event;
       __zigar.on('mkdir', (evt) => {
         event = evt;
@@ -1278,7 +1278,7 @@ export function addTests(importModule, options) {
     })
     it('should remove a directory using posix function', async function() {
       this.timeout(0);
-      const { __zigar, remove } = await importTest('remove-directory-with-posix-function');
+      const { __zigar, remove } = await importTest('remove-directory-with-posix-function', { useLibc: true });
       let event;
       __zigar.on('rmdir', (evt) => {
         event = evt;
@@ -1289,7 +1289,7 @@ export function addTests(importModule, options) {
     })
     it('should remove a file using posix function', async function() {
       this.timeout(0);
-      const { __zigar, remove } = await importTest('remove-file-with-posix-function');
+      const { __zigar, remove } = await importTest('remove-file-with-posix-function', { useLibc: true });
       let event;
       __zigar.on('unlink', (evt) => {
         event = evt;
@@ -1301,7 +1301,7 @@ export function addTests(importModule, options) {
     skip.entirely.if(target == 'win32').
     it('should open and read from file using pread', async function() {
       this.timeout(0);
-      const { __zigar, readAt } = await importTest('open-and-read-file-with-pread');
+      const { __zigar, readAt } = await importTest('open-and-read-file-with-pread', { useLibc: true });
       const path = absolute('./data/test.txt');
       const content = await readFile(path);
       __zigar.on('open', (evt) => {
@@ -1313,7 +1313,7 @@ export function addTests(importModule, options) {
     skip.entirely.if(target == 'win32').
     it('should open and read from file using preadv', async function() {
       this.timeout(0);
-      const { __zigar, readAt } = await importTest('open-and-read-file-with-preadv');
+      const { __zigar, readAt } = await importTest('open-and-read-file-with-preadv', { useLibc: true });
       const path = absolute('./data/test.txt');
       const content = await readFile(path);
       __zigar.on('open', (evt) => {
@@ -1333,7 +1333,7 @@ export function addTests(importModule, options) {
     skip.entirely.if(target == 'win32').
     it('should open and read from file using readv', async function() {
       this.timeout(0);
-      const { __zigar, read } = await importTest('open-and-read-file-with-readv');
+      const { __zigar, read } = await importTest('open-and-read-file-with-readv', { useLibc: true });
       const path = absolute('./data/test.txt');
       const content = await readFile(path);
       __zigar.on('open', (evt) => {
@@ -1470,7 +1470,7 @@ export function addTests(importModule, options) {
     skip.entirely.if(target === 'win32').
     it('should set lock on file using posix function', async function() {
       this.timeout(0);
-      const { lock, unlock } = await importTest('set-lock-with-posix-function');
+      const { lock, unlock } = await importTest('set-lock-with-posix-function', { useLibc: true });
       const file = {
         read() {},
         setlock(lock) {

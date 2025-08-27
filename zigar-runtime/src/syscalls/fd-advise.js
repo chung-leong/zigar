@@ -1,7 +1,7 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError } from '../errors.js';
-import { hasMethod } from '../utils.js';
+import { hasMethod, safeInt } from '../utils.js';
 
 const Advice = {
   normal: 0,
@@ -18,7 +18,7 @@ export default mixin({
       const [ stream ] = this.getStream(fd);
       if (hasMethod(stream, 'advise')) {
         const adviceKeys = Object.keys(Advice);
-        return stream.advise?.(offset, len, adviceKeys[advice]);
+        return stream.advise?.(safeInt(offset), len, adviceKeys[advice]);
       }
     });
   },

@@ -1016,7 +1016,7 @@ const ModuleHost = struct {
             try env.createInt32(args.fd),
             try env.createUsize(@intFromPtr(args.bytes)),
             try env.createUint32(args.len),
-            try env.createDouble(@floatFromInt(args.offset)),
+            try env.createBigintUint64(args.offset),
             try env.createUsize(@intFromPtr(&args.read)),
             futex,
         });
@@ -1028,7 +1028,7 @@ const ModuleHost = struct {
             try env.createInt32(args.fd),
             try env.createUsize(@intFromPtr(args.iovs)),
             try env.createUint32(args.count),
-            try env.createDouble(@floatFromInt(args.offset)),
+            try env.createBigintUint64(args.offset),
             try env.createUsize(@intFromPtr(&args.read)),
             futex,
         });
@@ -1074,7 +1074,7 @@ const ModuleHost = struct {
             try env.createInt32(args.fd),
             try env.createUsize(@intFromPtr(args.iovs)),
             try env.createUint32(args.count),
-            try env.createDouble(@floatFromInt(args.offset)),
+            try env.createBigintUint64(args.offset),
             try env.createUsize(@intFromPtr(&args.written)),
             futex,
         });
@@ -1084,7 +1084,7 @@ const ModuleHost = struct {
         const env = self.env;
         return try self.callPosixFunction(self.js.fd_seek, &.{
             try env.createInt32(args.fd),
-            try env.createDouble(@floatFromInt(args.offset)),
+            try env.createBigintInt64(args.offset),
             try env.createUint32(args.whence),
             try env.createUsize(@intFromPtr(&args.position)),
             futex,
@@ -1187,7 +1187,7 @@ const ModuleHost = struct {
         const env = self.env;
         return try self.callPosixFunction(self.js.fd_advise, &.{
             try env.createInt32(args.fd),
-            try env.createDouble(@floatFromInt(args.offset)),
+            try env.createBigintUint64(args.offset),
             try env.createUint32(args.len),
             try env.createInt32(@intFromEnum(args.advice)),
             futex,
@@ -1198,7 +1198,7 @@ const ModuleHost = struct {
         const env = self.env;
         return try self.callPosixFunction(self.js.fd_allocate, &.{
             try env.createInt32(args.fd),
-            try env.createDouble(@floatFromInt(args.offset)),
+            try env.createBigintUint64(args.offset),
             try env.createUint32(args.len),
             futex,
         });

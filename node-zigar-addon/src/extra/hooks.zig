@@ -1401,25 +1401,28 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
             const max_buffer_size = 4096;
 
-            pub fn init(dirfd: c_int, path: [*:0]const u8) !@This() {
+            pub inline fn init(dirfd: c_int, path: [*:0]const u8) !@This() {
                 var self: @This() = undefined;
                 const len = std.mem.len(path);
                 const path_s = path[0..len];
-                const absolute = std.fs.path.isAbsolute(path_s);
+                self.sfa = std.heap.stackFallback(max_buffer_size, c_allocator);
+                self.allocator = self.sfa.get();
+                try self._init(dirfd, @ptrCast(path_s));
+                return self;
+            }
+
+            pub fn _init(self: *@This(), dirfd: c_int, path: [:0]const u8) !void {
+                const absolute = std.fs.path.isAbsolute(path);
                 const relative = dirfd == fd_cwd and !absolute;
-                const backslashes = if (os != .windows) false else for (path_s) |c| {
+                const backslashes = if (os != .windows) false else for (path) |c| {
                     if (c == '\\') break true;
                 } else false;
-                if (relative or backslashes) {
-                    self.sfa = std.heap.stackFallback(max_buffer_size, c_allocator);
-                    self.allocator = self.sfa.get();
-                }
                 if (relative) {
                     self.dirfd = fd_root;
                     // resolve the path
                     const cwd = try std.process.getCwdAlloc(self.allocator);
                     defer self.allocator.free(cwd);
-                    var buf = try std.fs.path.resolve(self.allocator, &.{ cwd, path_s });
+                    var buf = try std.fs.path.resolve(self.allocator, &.{ cwd, path });
                     // add sentinel
                     buf = try self.allocator.realloc(buf, buf.len + 1);
                     buf.len += 1;
@@ -1427,14 +1430,14 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     self.buffer = buf;
                     self.path = @ptrCast(buf.ptr);
                 } else {
-                    self.dirfd = if (absolute) fd_root else dirfd;
+                    self.dirfd = if (dirfd == fd_cwd) fd_root else dirfd;
                     if (backslashes) {
-                        const buf = self.allocator.dupeZ(path_s);
+                        const buf = try self.allocator.dupeZ(u8, path);
                         self.buffer = buf;
                         self.path = buf.ptr;
                     } else {
                         self.buffer = null;
-                        self.path = path;
+                        self.path = path.ptr;
                     }
                 }
                 if (os == .windows) {
@@ -1461,7 +1464,6 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         self.path = self.path[i..];
                     }
                 }
-                return self;
             }
 
             pub fn deinit(self: *@This()) void {
@@ -2843,7 +2845,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             security_attributes: *SECURITY_ATTRIBUTES,
         ) callconv(WINAPI) BOOL {
             if (redirector.Host.isRedirecting(.mkdir)) {
-                const converter = try Wtf8PathConverter.init(path, true) catch return FALSE;
+                var converter = Wtf8PathConverter.init(path, true) catch return FALSE;
                 defer converter.deinit();
                 return CreateDirectoryA(converter.path, security_attributes);
             }
@@ -2899,7 +2901,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             template_file: HANDLE,
         ) callconv(WINAPI) ?HANDLE {
             if (redirector.Host.isRedirecting(.mkdir)) {
-                const converter = try Wtf8PathConverter.init(path, true) catch return FALSE;
+                var converter = Wtf8PathConverter.init(path, true) catch return std.os.windows.INVALID_HANDLE_VALUE;
                 defer converter.deinit();
                 return CreateFileA(converter.path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
             }
@@ -2936,7 +2938,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
 
         pub fn DeleteFileW(path: LPCWSTR) callconv(WINAPI) BOOL {
             if (redirector.Host.isRedirecting(.unlink)) {
-                const converter = try Wtf8PathConverter.init(path, true) catch return FALSE;
+                var converter = Wtf8PathConverter.init(path, true) catch return FALSE;
                 defer converter.deinit();
                 return DeleteFileA(converter.path);
             }
@@ -2958,7 +2960,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
 
         pub fn GetFileAttributesW(path: LPCWSTR) callconv(WINAPI) DWORD {
             if (redirector.Host.isRedirecting(.stat)) {
-                const converter = try Wtf8PathConverter.init(path, true) catch return FALSE;
+                var converter = Wtf8PathConverter.init(path, true) catch return std.os.windows.INVALID_FILE_ATTRIBUTES;
                 defer converter.deinit();
                 return GetFileAttributesA(converter.path);
             }
@@ -3102,8 +3104,9 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                 const object_name = object_attributes.ObjectName;
                 const name_len = @divExact(object_name.Length, 2);
                 const path = object_name.Buffer.?[0..name_len];
-                const converter = try Wtf8PathConverter.init(path, false) catch return .NO_MEMORY;
+                var converter = Wtf8PathConverter.init(path, false) catch return .NO_MEMORY;
                 defer converter.deinit();
+                converter.removeNtPrefix();
                 if (delete_op) {
                     // an unlink or rmdir operation actually
                     var result: c_int = undefined;
@@ -3501,7 +3504,7 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
 
         pub fn RemoveDirectoryW(path: LPCWSTR) callconv(WINAPI) BOOL {
             if (redirector.Host.isRedirecting(.rmdir)) {
-                const converter = try Wtf8PathConverter.init(path, false) catch return .NO_MEMORY;
+                var converter = Wtf8PathConverter.init(path, false) catch return FALSE;
                 defer converter.deinit();
                 return RemoveDirectoryA(converter.path);
             }
@@ -3822,26 +3825,48 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         const Wtf8PathConverter = struct {
             sfa: std.heap.StackFallbackAllocator(max_buffer_size),
             allocator: std.mem.Allocator,
-            buffer: []const u8,
+            buffer: []u8,
             path: [*:0]const u8,
 
             const max_buffer_size = 1024;
 
-            pub fn init(path: [*:0]const u16, save_err: bool) !@This() {
-                const len = std.mem.len(path);
+            pub inline fn init(path: anytype, save_err: bool) !@This() {
+                const T = @TypeOf(path);
+                const path_s: []const u16 = switch (T) {
+                    []const u16, []u16 => path,
+                    [*:0]const u16, [*:0]u16 => path[0..std.mem.len(path)],
+                    else => @compileError("Unexpected type: " ++ @typeName(T)),
+                };
                 var self: @This() = undefined;
                 self.sfa = std.heap.stackFallback(max_buffer_size, c_allocator);
-                self.allcator = self.sfa.get();
-                self.buffer = std.unicode.wtf16LeToWtf8AllocZ(self.allocator, path[0..len]) catch |err| {
+                try self._init(path_s, save_err);
+                return self;
+            }
+
+            fn _init(self: *@This(), path: []const u16, save_err: bool) !void {
+                self.allocator = self.sfa.get();
+                const buf = std.unicode.wtf16LeToWtf8AllocZ(self.allocator, path) catch |err| {
                     if (save_err) _ = windows_h.SetLastError(windows_h.ERROR_NOT_ENOUGH_MEMORY);
                     return err;
                 };
-                self.path = self.buffer.ptr;
-                return self;
+                self.buffer = buf;
+                self.path = buf.ptr;
             }
 
             pub fn deinit(self: *@This()) void {
                 self.allocator.free(self.buffer);
+            }
+
+            pub fn removeNtPrefix(self: *@This()) void {
+                if (std.mem.startsWith(u8, self.buffer, "\\??\\")) {
+                    const s = self.buffer[4..];
+                    if (std.mem.startsWith(u8, s, "UNC\\")) {
+                        s[2] = '\\';
+                        self.path = @ptrCast(s[2..]);
+                    } else {
+                        self.path = @ptrCast(s);
+                    }
+                }
             }
         };
 

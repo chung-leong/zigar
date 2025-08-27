@@ -1,7 +1,7 @@
 import { PosixError, PosixDescriptorRight } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, checkAccessRight } from '../errors.js';
-import { createView, readUsize, readUsizeSafe, usizeByteSize } from '../utils.js';
+import { createView, readUsize, readUsizeSafe, usizeByteSize, safeInt } from '../utils.js';
 import './copy-int.js';
 
 var fdPread = mixin({
@@ -11,7 +11,7 @@ var fdPread = mixin({
     const ops = [];
     let total = 0;
     return catchPosixError(canWait, PosixError.EIO, () => {        
-      const[ reader, rights, flags ] = this.getStream(fd);
+      const[ reader, rights ] = this.getStream(fd);
       checkAccessRight(rights, PosixDescriptorRight.fd_read);
       const iovs = createView(iovsSize * iovsCount);
       this.moveExternBytes(iovs, iovsAddress, false);
@@ -21,7 +21,7 @@ var fdPread = mixin({
         ops.push({ ptr, len });
         total += len;
       }
-      return reader.pread(total, offset);
+      return reader.pread(total, safeInt(offset));
     }, (chunk) => {
       let { byteOffset: pos, buffer } = chunk;
       for (const { ptr, len } of ops) {

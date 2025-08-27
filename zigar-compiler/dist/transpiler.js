@@ -6128,7 +6128,7 @@ var fdPread = mixin({
     const ops = [];
     let total = 0;
     return catchPosixError(canWait, PosixError.EIO, () => {        
-      const[ reader, rights, flags ] = this.getStream(fd);
+      const[ reader, rights ] = this.getStream(fd);
       checkAccessRight(rights, PosixDescriptorRight.fd_read);
       const iovs = createView(iovsSize * iovsCount);
       this.moveExternBytes(iovs, iovsAddress, false);
@@ -6138,7 +6138,7 @@ var fdPread = mixin({
         ops.push({ ptr, len });
         total += len;
       }
-      return reader.pread(total, offset);
+      return reader.pread(total, safeInt(offset));
     }, (chunk) => {
       let { byteOffset: pos, buffer } = chunk;
       for (const { ptr, len } of ops) {
@@ -6225,11 +6225,15 @@ var fdRead = mixin({
       const method = (flags & PosixDescriptorFlag.nonblock) ? reader.readnb : reader.read;
       return method.call(reader, total);
     }, (chunk) => {
-      let { byteOffset: pos, buffer } = chunk;
+      let { byteOffset: pos, byteLength: remaining, buffer } = chunk;
       for (const { ptr, len } of ops) {
-        const part = new DataView(buffer, pos, len);
-        this.moveExternBytes(part, ptr, true);
-        pos += len;
+        const copying = Math.min(remaining, len);
+        if (copying > 0) {
+          const part = new DataView(buffer, pos, copying);
+          this.moveExternBytes(part, ptr, true);
+          pos += copying;
+          remaining -= copying;
+        }
       }
       this.copyUint32(readAddress, chunk.length);
     });

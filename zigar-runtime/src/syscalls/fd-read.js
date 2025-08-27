@@ -24,11 +24,15 @@ export default mixin({
       const method = (flags & PosixDescriptorFlag.nonblock) ? reader.readnb : reader.read;
       return method.call(reader, total);
     }, (chunk) => {
-      let { byteOffset: pos, buffer } = chunk;
+      let { byteOffset: pos, byteLength: remaining, buffer } = chunk;
       for (const { ptr, len } of ops) {
-        const part = new DataView(buffer, pos, len);
-        this.moveExternBytes(part, ptr, true);
-        pos += len;
+        const copying = Math.min(remaining, len);
+        if (copying > 0) {
+          const part = new DataView(buffer, pos, copying);
+          this.moveExternBytes(part, ptr, true);
+          pos += copying;
+          remaining -= copying;
+        }
       }
       this.copyUint32(readAddress, chunk.length);
     });
