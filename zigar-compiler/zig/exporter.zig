@@ -1029,7 +1029,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             };
         }
 
-        fn createView(ptr: anytype, copying: bool, export_handle: ?usize) !Value {
+        fn createView(ptr: anytype, copying: bool, export_handle: anytype) !Value {
             const PtrT = @TypeOf(ptr);
             const pt = @typeInfo(PtrT).pointer;
             const child_size = switch (@typeInfo(pt.child)) {
@@ -1072,7 +1072,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             return host.createView(bytes, len, copying, export_handle);
         }
 
-        fn createInstance(structure: Value, ptr: anytype, copying: bool, export_handle: ?usize, slots: ?Value) !Value {
+        fn createInstance(structure: Value, ptr: anytype, copying: bool, export_handle: anytype, slots: ?Value) !Value {
             const dv = try createView(ptr, copying, export_handle);
             return host.createInstance(structure, dv, slots);
         }

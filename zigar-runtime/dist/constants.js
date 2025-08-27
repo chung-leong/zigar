@@ -123,6 +123,7 @@ const ModuleAttribute = {
   LittleEndian:     0x0001,
   RuntimeSafety:    0x0002,
   LibC:             0x0004,
+  IoRedirection:    0x0008,
 };
 
 const VisitorFlag = {
@@ -139,6 +140,7 @@ const VisitorFlag = {
 const PosixError = {
   NONE: 0,  
   EACCES: 2,
+  EAGAIN: 6,
   EBADF: 8,
   EDEADLK: 16,
   EEXIST: 20,
@@ -148,6 +150,7 @@ const PosixError = {
   ENOENT: 44,
   ENOTSUP: 58,
   ESPIPE: 70,
+  ENOTCAPABLE: 76,
 };
 const PosixFileType = {
   unknown: 0,

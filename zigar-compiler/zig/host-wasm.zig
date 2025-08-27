@@ -5,13 +5,9 @@ const builtin = @import("builtin");
 
 const exporter = @import("./exporter.zig");
 const thunk_js = @import("./thunk-js.zig");
-const ActionType = thunk_js.ActionType;
-const ActionResult = thunk_js.ActionResult;
 const thunk_zig = @import("./thunk-zig.zig");
 const types = @import("./types.zig");
-const Value = types.Value;
-const Memory = types.Memory;
-const Error = types.Error;
+const AnyValue = types.AnyValue;
 pub const Promise = types.Promise;
 pub const PromiseOf = types.PromiseOf;
 pub const PromiseArgOf = types.PromiseArgOf;
@@ -24,51 +20,92 @@ pub fn WorkQueue(ns: type) type {
     return types.WorkQueue(ns, struct {});
 }
 
-extern fn _captureString(bytes: ?[*]const u8, len: usize) ?Value;
-extern fn _captureView(bytes: ?[*]u8, len: usize, copy: bool) ?Value;
-extern fn _castView(bytes: ?[*]u8, len: usize, copy: bool, structure: Value) ?Value;
-extern fn _getViewAddress(dv: Value) usize;
-extern fn _readSlot(container: ?Value, slot: usize) ?Value;
-extern fn _writeSlot(container: ?Value, slot: usize, object: ?Value) void;
-extern fn _beginDefinition() Value;
-extern fn _insertInteger(container: Value, key: Value, value: i32, unsigned: bool) void;
-extern fn _insertBigInteger(container: Value, key: Value, value: i64, unsigned: bool) void;
-extern fn _insertBoolean(container: Value, key: Value, value: bool) void;
-extern fn _insertString(container: Value, key: Value, value: Value) void;
-extern fn _insertObject(container: Value, key: Value, value: ?Value) void;
-extern fn _beginStructure(def: Value) ?Value;
-extern fn _attachMember(structure: Value, def: Value, is_static: bool) void;
-extern fn _attachTemplate(structure: Value, def: Value, is_static: bool) void;
-extern fn _defineStructure(structure: Value) ?Value;
-extern fn _endStructure(structure: Value) void;
-extern fn _createTemplate(buffer: ?Value) ?Value;
-extern fn _allocateJsThunk(controller_id: usize, fn_id: usize) usize;
-extern fn _freeJsThunk(controller_id: usize, thunk_address: usize) usize;
-extern fn _handleJscall(id: usize, arg_ptr: ?*anyopaque, arg_size: usize) E;
-extern fn _releaseFunction(id: usize) void;
-extern fn _displayPanic(bytes: ?[*]const u8, len: usize) void;
-
 threadlocal var in_main_thread: bool = false;
 
-export fn initialize() void {
-    in_main_thread = true;
+pub fn createBool(initializer: bool) !AnyValue {
+    return _createBool(initializer);
 }
 
-export fn allocateScratchMemory(len: usize, byte_align: u16) ?[*]u8 {
-    const a = getScratchAllocator();
-    const alignment = std.mem.Alignment.fromByteUnits(@max(1, byte_align));
-    if (a.rawAlloc(len, alignment, 0)) |bytes| {
-        return bytes;
-    } else {
-        return null;
-    }
+pub fn createInteger(initializer: i32, is_unsigned: bool) !AnyValue {
+    return _createInteger(initializer, is_unsigned);
 }
 
-export fn freeScratchMemory(bytes: [*]u8, len: usize, byte_align: u16) void {
-    const a = getScratchAllocator();
-    const alignment = std.mem.Alignment.fromByteUnits(@max(1, byte_align));
-    a.rawFree(bytes[0..len], alignment, 0);
+pub fn createBigInteger(initializer: i64, is_unsigned: bool) !AnyValue {
+    return _createBigInteger(initializer, is_unsigned);
 }
+
+pub fn createString(initializer: []const u8) !AnyValue {
+    return _createString(initializer.ptr, initializer.len);
+}
+
+pub fn createView(bytes: ?[*]const u8, len: usize, copying: bool, _: @TypeOf(null)) !AnyValue {
+    return _createView(bytes, len, copying);
+}
+
+pub fn createInstance(structure: AnyValue, dv: AnyValue, slots: ?AnyValue) !AnyValue {
+    return _createInstance(structure, dv, slots);
+}
+
+pub fn createTemplate(dv: ?AnyValue, slots: ?AnyValue) !AnyValue {
+    return _createTemplate(dv, slots);
+}
+
+pub fn createList() !AnyValue {
+    return _createList();
+}
+
+pub fn createObject() !AnyValue {
+    return _createObject();
+}
+
+pub fn getProperty(object: AnyValue, key: []const u8) !AnyValue {
+    return _getProperty(object, key.ptr, key.len) orelse error.UnableToGetProperty;
+}
+
+pub fn setProperty(object: AnyValue, key: []const u8, value: AnyValue) !void {
+    return _setProperty(object, key.ptr, key.len, value);
+}
+
+pub fn getSlotValue(object: ?AnyValue, slot: usize) !AnyValue {
+    return _getSlotValue(object, slot) orelse error.UnableToGetSlotValue;
+}
+
+pub fn setSlotValue(object: ?AnyValue, slot: usize, value: AnyValue) !void {
+    return _setSlotValue(object, slot, value);
+}
+
+pub fn appendList(list: AnyValue, value: AnyValue) !void {
+    return _appendList(list, value);
+}
+
+pub fn getExportHandle(comptime _: anytype) @TypeOf(null) {
+    // not used on WASM side since addresses are unchanging
+    return null;
+}
+
+pub fn beginStructure(structure: AnyValue) !void {
+    return _beginStructure(structure);
+}
+
+pub fn finishStructure(structure: AnyValue) !void {
+    return _finishStructure(structure);
+}
+
+pub fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
+    return _handleJscall(fn_id, arg_ptr, arg_size);
+}
+
+pub fn releaseFunction(fn_ptr: anytype) void {
+    const thunk_address = @intFromPtr(fn_ptr);
+    const fn_id = for (js_thunk_list.items) |item| {
+        if (item.address == thunk_address) break item.fn_id;
+    } else return;
+    _releaseFunction(fn_id);
+}
+
+pub fn startMultithread() !void {}
+
+pub fn stopMultithread() void {}
 
 const empty_ptr: *anyopaque = @constCast(@ptrCast(&.{}));
 
@@ -108,7 +145,7 @@ export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
     // thunk from that
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
     const can_allocate = builtin.single_threaded and in_main_thread;
-    const thunk_address = controller(null, .create, fn_id) catch switch (can_allocate) {
+    const thunk_address = controller(.create, fn_id) catch switch (can_allocate) {
         true => _allocateJsThunk(controller_address, fn_id),
         false => 0,
     };
@@ -121,7 +158,7 @@ export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
 export fn destroyJsThunk(controller_address: usize, thunk_address: usize) usize {
     const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
     const can_allocate = builtin.single_threaded and in_main_thread;
-    const fn_id = controller(null, .destroy, thunk_address) catch switch (can_allocate) {
+    const fn_id = controller(.destroy, thunk_address) catch switch (can_allocate) {
         true => _freeJsThunk(controller_address, thunk_address),
         false => 0,
     };
@@ -136,8 +173,38 @@ export fn destroyJsThunk(controller_address: usize, thunk_address: usize) usize 
     return fn_id;
 }
 
-export fn getModuleAttributes() i32 {
-    return @bitCast(exporter.getModuleAttributes());
+export fn initialize() void {
+    in_main_thread = true;
+}
+
+export fn allocateScratchMemory(len: usize, byte_align: u16) ?[*]u8 {
+    const a = getScratchAllocator();
+    const alignment = std.mem.Alignment.fromByteUnits(@max(1, byte_align));
+    if (a.rawAlloc(len, alignment, 0)) |bytes| {
+        return bytes;
+    } else {
+        return null;
+    }
+}
+
+export fn freeScratchMemory(bytes: [*]u8, len: usize, byte_align: u16) void {
+    const a = getScratchAllocator();
+    const alignment = std.mem.Alignment.fromByteUnits(@max(1, byte_align));
+    a.rawFree(bytes[0..len], alignment, 0);
+}
+
+export fn getModuleAttributes() u32 {
+    const attributes: packed struct(u32) {
+        little_endian: bool = builtin.target.cpu.arch.endian() == .little,
+        runtime_safety: bool = switch (builtin.mode) {
+            .Debug, .ReleaseSafe => true,
+            else => false,
+        },
+        libc: bool = builtin.link_libc,
+        io_redirection: bool = exporter.options.use_redirection,
+        _: u28 = 0,
+    } = .{};
+    return @bitCast(attributes);
 }
 
 pub fn getFactoryThunk(comptime module: type) usize {
@@ -148,142 +215,6 @@ pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
     _displayPanic(msg.ptr, msg.len);
     std.process.abort();
 }
-
-pub fn captureString(memory: Memory) !Value {
-    return _captureString(memory.bytes, memory.len) orelse
-        Error.UnableToCreateString;
-}
-
-pub fn captureView(memory: Memory, _: @TypeOf(null)) !Value {
-    return _captureView(memory.bytes, memory.len, memory.attributes.is_comptime) orelse
-        Error.UnableToCreateDataView;
-}
-
-pub fn castView(memory: Memory, structure: Value, _: @TypeOf(null)) !Value {
-    return _castView(memory.bytes, memory.len, memory.attributes.is_comptime, structure) orelse
-        Error.UnableToCreateObject;
-}
-
-pub fn getExportHandle(comptime _: anytype) @TypeOf(null) {
-    // not used on WASM side since addresses are unchanging
-    return null;
-}
-
-pub fn readSlot(container: ?Value, slot: usize) !Value {
-    return _readSlot(container, slot) orelse
-        Error.UnableToRetrieveObject;
-}
-
-pub fn writeSlot(container: ?Value, slot: usize, value: ?Value) !void {
-    _writeSlot(container, slot, value);
-}
-
-fn beginDefinition() Value {
-    return _beginDefinition();
-}
-
-fn insertProperty(container: Value, key: []const u8, value: anytype) !void {
-    const T = @TypeOf(value);
-    if (@typeInfo(T) == .optional) {
-        if (value) |v| try insertProperty(container, key, v);
-        return;
-    }
-    const key_str = _captureString(key.ptr, key.len) orelse {
-        return Error.UnableToCreateString;
-    };
-    switch (@typeInfo(T)) {
-        .pointer => {
-            if (T == []const u8) {
-                const str = _captureString(value.ptr, value.len) orelse {
-                    return Error.UnableToCreateString;
-                };
-                _insertString(container, key_str, str);
-            } else if (T == Value) {
-                _insertObject(container, key_str, value);
-            } else {
-                @compileError("No support for value type: " ++ @typeName(T));
-            }
-        },
-        .int => |int| switch (int.bits) {
-            64 => _insertBigInteger(container, key_str, @bitCast(value), int.signedness == .unsigned),
-            32 => _insertInteger(container, key_str, @bitCast(value), int.signedness == .unsigned),
-            else => _insertInteger(container, key_str, @intCast(value), int.signedness == .unsigned),
-        },
-        .@"enum" => _insertInteger(container, key_str, @intCast(@intFromEnum(value)), true),
-        .bool => _insertBoolean(container, key_str, value),
-        .@"struct", .@"union" => _insertInteger(container, key_str, @bitCast(value), true),
-        else => @compileError("No support for value type: " ++ @typeName(T)),
-    }
-}
-
-pub fn beginStructure(structure: types.Structure) !Value {
-    const def = beginDefinition();
-    try insertProperty(def, "name", structure.name);
-    try insertProperty(def, "type", structure.type);
-    try insertProperty(def, "purpose", structure.purpose);
-    try insertProperty(def, "flags", structure.flags);
-    try insertProperty(def, "signature", structure.signature);
-    try insertProperty(def, "length", structure.length);
-    try insertProperty(def, "byteSize", structure.byte_size);
-    try insertProperty(def, "align", structure.alignment);
-    return _beginStructure(def) orelse
-        Error.UnableToStartStructureDefinition;
-}
-
-pub fn attachMember(structure: Value, member: types.Member, is_static: bool) !void {
-    const def = beginDefinition();
-    try insertProperty(def, "type", member.type);
-    try insertProperty(def, "flags", member.flags);
-    try insertProperty(def, "bitOffset", member.bit_offset);
-    try insertProperty(def, "bitSize", member.bit_size);
-    try insertProperty(def, "byteSize", member.byte_size);
-    try insertProperty(def, "slot", member.slot);
-    try insertProperty(def, "name", member.name);
-    try insertProperty(def, "structure", member.structure);
-    _attachMember(structure, def, is_static);
-}
-
-pub fn defineStructure(structure: Value) !Value {
-    return _defineStructure(structure) orelse
-        Error.UnableToDefineStructure;
-}
-
-pub fn attachTemplate(structure: Value, template: Value, is_static: bool) !void {
-    _attachTemplate(structure, template, is_static);
-}
-
-pub fn endStructure(structure: Value) !void {
-    _endStructure(structure);
-}
-
-pub fn createTemplate(dv: ?Value) !Value {
-    return _createTemplate(dv) orelse
-        Error.UnableToCreateStructureTemplate;
-}
-
-pub fn createMessage(err: anyerror) ?Value {
-    const err_name = @errorName(err);
-    const memory = Memory.from(err_name, true);
-    return captureString(memory) catch null;
-}
-
-pub fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
-    return _handleJscall(fn_id, arg_ptr, arg_size);
-}
-
-pub fn releaseFunction(fn_ptr: anytype) void {
-    const thunk_address = @intFromPtr(fn_ptr);
-    const fn_id = for (js_thunk_list.items) |item| {
-        if (item.address == thunk_address) break item.fn_id;
-    } else return;
-    _releaseFunction(fn_id);
-}
-
-pub fn startMultithread() !void {}
-
-pub fn stopMultithread() void {}
-
-pub fn setParentThreadId(_: std.Thread.Id) void {}
 
 const ScratchAllocator = struct {
     const Self = @This();
@@ -361,3 +292,25 @@ fn getScratchAllocator() std.mem.Allocator {
     }
     return scratch_allocator.?;
 }
+
+extern fn _createBool(initializer: bool) AnyValue;
+extern fn _createInteger(initializer: i32, is_unsigned: bool) AnyValue;
+extern fn _createBigInteger(initializer: i64, is_unsigned: bool) AnyValue;
+extern fn _createString(initializer: [*]const u8, len: usize) AnyValue;
+extern fn _createView(bytes: ?[*]const u8, len: usize, copying: bool) AnyValue;
+extern fn _createInstance(structure: AnyValue, dv: AnyValue, slots: ?AnyValue) AnyValue;
+extern fn _createTemplate(dv: ?AnyValue, slots: ?AnyValue) AnyValue;
+extern fn _createList() AnyValue;
+extern fn _createObject() AnyValue;
+extern fn _getProperty(object: AnyValue, key: [*]const u8, key_len: usize) ?AnyValue;
+extern fn _setProperty(object: AnyValue, key: [*]const u8, key_len: usize, value: AnyValue) void;
+extern fn _getSlotValue(object: ?AnyValue, slot: usize) ?AnyValue;
+extern fn _setSlotValue(object: ?AnyValue, slot: usize, value: AnyValue) void;
+extern fn _appendList(list: AnyValue, value: AnyValue) void;
+extern fn _beginStructure(structure: AnyValue) void;
+extern fn _finishStructure(structure: AnyValue) void;
+extern fn _handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E;
+extern fn _releaseFunction(fn_id: usize) void;
+extern fn _allocateJsThunk(controller_address: usize, fn_id: usize) usize;
+extern fn _freeJsThunk(controller_address: usize, thunk_address: usize) usize;
+extern fn _displayPanic(bytes: [*]const u8, len: usize) void;

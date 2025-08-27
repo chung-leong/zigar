@@ -1,37 +1,36 @@
-import { PosixError } from '../constants.js';
+import { PosixError, PosixDescriptorRight } from '../constants.js';
 import { mixin } from '../environment.js';
-import { catchPosixError } from '../errors.js';
-import { createView, usizeByteSize } from '../utils.js';
+import { catchPosixError, checkAccessRight } from '../errors.js';
+import { createView, readUsize, readUsizeSafe, usizeByteSize } from '../utils.js';
 import './copy-int.js';
 
 var fdPread = mixin({
   fdPread(fd, iovsAddress, iovsCount, offset, readAddress, canWait) {
-    const iovsSize = usizeByteSize * 2;
     const le = this.littleEndian;
-    let iovs, reader, i = 0;
-    let read = 0;
-    const next = () => {
-      return catchPosixError(canWait, PosixError.EIO, () => {
-        if (!iovs) {
-          reader = this.getStream(fd);
-          iovs = createView(iovsSize * iovsCount);
-          this.moveExternBytes(iovs, iovsAddress, false);
-        }
-        const len = iovs.getUint32(i * iovsSize + 4, le);
-        return reader.pread(len, offset);
-      }, (chunk) => {
-        const ptr = iovs.getUint32(i * iovsSize, le);
-        this.moveExternBytes(chunk, ptr, true);
-        read += chunk.length;
-        if (++i < iovsCount) {
-          offset += chunk.byteLength;
-          return next();
-        } else {
-          this.copyUsize(readAddress, read);
-        }
-      });
-    };
-    return next();
+    const iovsSize = usizeByteSize * 2;
+    const ops = [];
+    let total = 0;
+    return catchPosixError(canWait, PosixError.EIO, () => {        
+      const[ reader, rights, flags ] = this.getStream(fd);
+      checkAccessRight(rights, PosixDescriptorRight.fd_read);
+      const iovs = createView(iovsSize * iovsCount);
+      this.moveExternBytes(iovs, iovsAddress, false);
+      for (let i = 0; i < iovsCount; i++) {
+        const ptr = readUsize(iovs, i * iovsSize, le);
+        const len = readUsizeSafe(iovs, i * iovsSize + usizeByteSize, le);
+        ops.push({ ptr, len });
+        total += len;
+      }
+      return reader.pread(total, offset);
+    }, (chunk) => {
+      let { byteOffset: pos, buffer } = chunk;
+      for (const { ptr, len } of ops) {
+        const part = new DataView(buffer, pos, len);
+        this.moveExternBytes(part, ptr, true);
+        pos += len;
+      }
+      this.copyUint32(readAddress, chunk.length);
+    });
   },
 });
 

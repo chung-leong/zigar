@@ -1,5 +1,4 @@
 import { mixin } from '../environment.js';
-import { TypeMismatch } from '../errors.js';
 import { WebStreamWriter, ArrayWriter, Uint8ArrayReadWriter, NullStream } from '../streams.js';
 
 var writerConversion = mixin({
@@ -14,8 +13,6 @@ var writerConversion = mixin({
       return new NullStream();
     } else if (typeof(arg?.write) === 'function') {
       return arg;
-    } else {
-      throw new TypeMismatch('WritableStreamDefaultWriter, array, null, or object with writer interface', arg);
     }
   },
 });

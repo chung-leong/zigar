@@ -9,8 +9,8 @@ var pathFilestatSetTimes = mixin({
       const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
       const times = extractTimes(atime, mtime, tFlags);
       const flags = decodeFlags(lFlags, PosixLookupFlag) ;
-      return this.triggerEvent('set_times', { ...loc, times, flags }, PosixError.ENOENT);
-    }, (result) => expectBoolean(result, PosixError.ENOENT));
+      return this.triggerEvent('set_times', { ...loc, times, flags });
+    }, (result) => (result === undefined) ? PosixError.ENOTSUP : expectBoolean(result, PosixError.ENOENT));
   },
 });
 

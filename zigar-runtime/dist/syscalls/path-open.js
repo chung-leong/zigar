@@ -1,40 +1,42 @@
-import { PosixDescriptorRight, PosixDescriptorFlag, PosixOpenFlag, PosixLookupFlag, PosixError } from '../constants.js';
+import { PosixDescriptorRight, PosixError, PosixDescriptorFlag, PosixOpenFlag, PosixLookupFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { catchPosixError } from '../errors.js';
+import { catchPosixError, InvalidStream } from '../errors.js';
 import { decodeFlags } from '../utils.js';
 import './copy-int.js';
 
 const Right = {
-  read: BigInt(PosixDescriptorRight.fd_read),
-  write: BigInt(PosixDescriptorRight.fd_write),
-  readdir: BigInt(PosixDescriptorRight.fd_readdir),
+  read: PosixDescriptorRight.fd_read,
+  write: PosixDescriptorRight.fd_write,
+  readdir: PosixDescriptorRight.fd_readdir,
 };
 
 var pathOpen = mixin({
   pathOpen(dirFd, lFlags, pathAddress, pathLen, oFlags, rightsBase, rightsInheriting, fdFlags, fdAddress, canWait) {
-    const rights = decodeFlags(rightsBase | rightsInheriting, Right);
-    const flags = {
-      ...decodeFlags(lFlags, PosixLookupFlag),
-      ...decodeFlags(oFlags, PosixOpenFlag),
-      ...decodeFlags(fdFlags, PosixDescriptorFlag),
-    };
+    const fdRights = [ Number(rightsBase), Number(rightsInheriting) ];
+    if (!(fdRights[0] & PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write | PosixDescriptorRight.fd_readdir)) {
+      fdRights[0] |= PosixDescriptorRight.fd_read;
+    }
     let loc;
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
+      const rights = decodeFlags(fdRights[0], Right);
+      const flags = {
+        ...decodeFlags(lFlags, PosixLookupFlag),
+        ...decodeFlags(oFlags, PosixOpenFlag),
+        ...decodeFlags(fdFlags, PosixDescriptorFlag),
+      };
       return this.triggerEvent('open', { ...loc, rights, flags }, PosixError.ENOENT);
     }, (arg) => {
-      if (arg === false) {
+      if (arg === undefined) {
+        return PosixError.ENOTSUP;
+      } else if (arg === false) {
         return PosixError.ENOENT;
       }
-      let resource;
-      if (rights.read || Object.values(rights).length === 0) {
-        resource = this.convertReader(arg);
-      } else if (rights.write) {
-        resource = this.convertWriter(arg);
-      } else if (rights.readdir) {
-        resource = this.convertDirectory(arg);
+      const stream = this.convertReader(arg) ?? this.convertWriter(arg) ?? this.convertDirectory(arg);
+      if (!stream) {
+        throw new InvalidStream(fdRights[0], arg);
       }
-      const fd = this.createStreamHandle(resource);
+      const fd = this.createStreamHandle(stream, fdRights, fdFlags);
       this.setStreamLocation?.(fd, loc);
       this.copyUint32(fdAddress, fd);
     });

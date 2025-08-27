@@ -9,21 +9,19 @@ var fdReaddir = mixin({
     if (bufLen < 24) {
       return PosixError.EINVAL;
     }
+    let dir, async;
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      const dir = this.getStream(fd);
+      [ dir ] = this.getStream(fd);
       {
-        if (cookie !== dir.tell()) {
-          cookie = dir.seek(cookie);
-        }
+        return dir.seek(cookie);
       }
-      const result = dir.readdir();      
-      if (isPromise(result)) {
-        // don't pass the dir object when call is async
-        return result.then((dent) => [ dent ]);
-      } else {
-        return [ result, dir ];
-      }
-    }, ([ dent, dir ]) => {
+    }, (pos) => catchPosixError(canWait, PosixError.EBADF, () => {      
+      cookie = pos;
+      // retrieve the first entry, checking if the call is async
+      const result = dir.readdir();
+      async = isPromise(result);
+      return result;
+    }, (dent) => {
       const dv = createView(bufLen);
       let remaining = bufLen;
       let p = 0;
@@ -35,10 +33,9 @@ var fdReaddir = mixin({
           throw new InvalidEnumValue(PosixFileType, type);
         }
         if (remaining < 24 + nameArray.length) {
-          dir.seek(cookie);
           break;
         }
-        dv.setBigUint64(p, ++cookie, true);
+        dv.setBigUint64(p, BigInt(++cookie), true);
         dv.setBigUint64(p + 8, BigInt(ino), true);
         dv.setUint32(p + 16, nameArray.length, true);
         dv.setUint8(p + 20, typeIndex);
@@ -49,11 +46,11 @@ var fdReaddir = mixin({
         }
         remaining -= nameArray.length;
         // get next entry if call is sync
-        dent = (remaining > 24 + 16 && dir) ? dir.readdir() : null;
+        dent = (remaining > 24 + 16 && async) ? dir.readdir() : null;
       }
       this.moveExternBytes(dv, bufAddress, true);
-      this.copyUsize(bufusedAddress, p);
-    })
+      this.copyUint32(bufusedAddress, p);
+    }));
   },
 });
 

@@ -1,7 +1,36 @@
-import { PosixDescriptor } from '../constants.js';
+import { PosixDescriptorRight, PosixDescriptor } from '../constants.js';
 import { mixin } from '../environment.js';
-import { InvalidFileDescriptor } from '../errors.js';
-import { decodeText, hasMethod } from '../utils.js';
+import { InvalidStream, InvalidFileDescriptor } from '../errors.js';
+import { decodeText } from '../utils.js';
+
+const stdinRights = PosixDescriptorRight.fd_read;
+const stdoutRights = PosixDescriptorRight.fd_write;
+
+const defaultDirRights =  PosixDescriptorRight.fd_seek
+                        | PosixDescriptorRight.fd_fdstat_set_flags
+                        | PosixDescriptorRight.fd_tell
+                        | PosixDescriptorRight.path_create_directory
+                        | PosixDescriptorRight.path_create_file
+                        | PosixDescriptorRight.path_open
+                        | PosixDescriptorRight.fd_readdir
+                        | PosixDescriptorRight.path_filestat_get
+                        | PosixDescriptorRight.path_filestat_set_size
+                        | PosixDescriptorRight.path_filestat_set_times
+                        | PosixDescriptorRight.fd_filestat_get
+                        | PosixDescriptorRight.fd_filestat_set_times
+                        | PosixDescriptorRight.path_remove_directory
+                        | PosixDescriptorRight.path_unlink_file;
+const defaultFileRights = PosixDescriptorRight.fd_datasync
+                        | PosixDescriptorRight.fd_read
+                        | PosixDescriptorRight.fd_seek
+                        | PosixDescriptorRight.fd_sync
+                        | PosixDescriptorRight.fd_tell
+                        | PosixDescriptorRight.fd_write
+                        | PosixDescriptorRight.fd_advise
+                        | PosixDescriptorRight.fd_allocate
+                        | PosixDescriptorRight.fd_filestat_get
+                        | PosixDescriptorRight.fd_filestat_set_times
+                        | PosixDescriptorRight.fd_filestat_set_size;
 
 var streamRedirection = mixin({
   init() {
@@ -28,47 +57,57 @@ var streamRedirection = mixin({
       },
     };
     this.streamMap = new Map([ 
-      [ PosixDescriptor.stdout, this.createLogWriter('stdout') ], 
-      [ PosixDescriptor.stderr, this.createLogWriter('stderr') ], 
-      [ PosixDescriptor.root, root ] 
+      [ PosixDescriptor.stdout, [ this.createLogWriter('stdout'), this.getDefaultRights('file'), 0 ] ], 
+      [ PosixDescriptor.stderr, [ this.createLogWriter('stderr'), this.getDefaultRights('file'), 0 ] ], 
+      [ PosixDescriptor.root, [ root, this.getDefaultRights('dir'), 0 ] ], 
     ]);
     this.flushRequestMap = new Map();
     this.nextStreamHandle = PosixDescriptor.min;
   },
-  getStream(fd, method) {
-    const stream = this.streamMap.get(fd);
-    if (!stream || (method && !hasMethod(stream, method))) {
+  getStream(fd) {
+    const entry = this.streamMap.get(fd);
+    if (!entry) {
+      console.error('getStream', { fd });
       throw new InvalidFileDescriptor();
     }
-    return stream;
+    return entry;
   },
-  createStreamHandle(stream) {
+  createStreamHandle(stream, rights, flags = 0) {
     const fd = this.nextStreamHandle++;
-    this.streamMap.set(fd, stream);
+    this.streamMap.set(fd, [ stream, rights, flags ]);
     stream.onClose = () => this.destroyStreamHandle(fd);
     return fd;
   },
   destroyStreamHandle(fd) {
-    const stream = this.streamMap.get(fd);
-    stream?.destroy?.();
-    this.streamMap.delete(fd);
+    const entry = this.streamMap.get(fd);
+    if (entry) {
+      const [ stream ] = entry;
+      stream?.destroy?.();
+      this.streamMap.delete(fd);
+    }
   },
   redirectStream(num, arg) {
     const map = this.streamMap;
-    const fd = (num === 3) ? PosixDescriptor.root : num;
+    const fd = (num === -1) ? PosixDescriptor.root : num;
     const previous = map.get(fd);
     if (arg !== undefined) {
-      let stream;
+      let stream, rights;
       if (num === 0) {
         stream = this.convertReader(arg);
+        rights = [ stdinRights, 0 ];
       } else if (num === 1 || num === 2) {
         stream = this.convertWriter(arg);
-      } else if (num === 3) {
+        rights = [ stdoutRights, 0 ];
+      } else if (num === -1) {
         stream = this.convertDirectory(arg);
+        rights = [ rootRights, rootRightsInheriting ];
       } else {
-        throw new Error(`Expecting 0, 1, 2, or 3, received ${fd}`);
+        throw new Error(`Expecting 0, 1, 2, or -1, received ${fd}`);
       }
-      map.set(fd, stream);
+      if (!stream) {
+        throw new InvalidStream(rights[0], arg);
+      }
+      map.set(fd, [ stream, rights, 0 ]);
     } else {
       map.delete(fd);
     }
@@ -122,9 +161,6 @@ var streamRedirection = mixin({
     }
   },
   flushStreams() {
-    if (this.libc) {
-      this.flushStdout?.();
-    }
     const map = this.flushRequestMap;
     if (map.size > 0) {
       for (const [ stream, timeout ] of map) {
@@ -134,11 +170,13 @@ var streamRedirection = mixin({
       map.clear();
     }
   },
-  ...({
-    imports: {
-      flushStdout: { argType: '', returnType: '' },
-    },
-  } ),
+  getDefaultRights(type) {
+    if (type === 'dir') {
+      return [ defaultDirRights, defaultDirRights | defaultFileRights ];
+    } else {
+      return [ defaultFileRights, 0 ];
+    }
+  },
 });
 
 export { streamRedirection as default };

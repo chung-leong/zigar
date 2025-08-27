@@ -2,11 +2,6 @@ import { mixin } from '../environment.js';
 import { createView } from '../utils.js';
 
 var copyInt = mixin({
-  copyUsize(bufAddress, value) {
-    {
-      this.copyUint32(bufAddress, value);
-    }
-  },
   copyUint64(bufAddress, value) {
     const buf = createView(8);
     buf.setBigUint64(0, BigInt(value), this.littleEndian);

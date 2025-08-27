@@ -1,24 +1,34 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
+import { isPromise } from '../utils.js';
 
 var wasiSupport = mixin({
-  init() {
-    this.customWASI = null;
-  },
-  setCustomWASI(wasi) {
-    if (wasi && this.executable) {
-      throw new Error('Cannot set WASI interface after compilation has already begun');
-    }
-    this.customWASI = wasi;
-  },
-  getWASIHandler(name) {
+  getBuiltinHandler(name) {
     const nameCamelized = name.replace(/_./g, m => m.charAt(1).toUpperCase());
-    return this.customWASI?.wasiImport?.[name] 
-        ?? this[nameCamelized]?.bind?.(this)
-        ?? (() => {
-          console.error(`Not implemented: ${name}`);
-          return PosixError.ENOTSUP;
-        });
+    const handler = this[nameCamelized];
+    if (handler) {
+      const custom = this.customWASI?.wasiImport?.[name];
+      return (...args) => {
+        const result = handler.call(this, ...args);
+        const onResult = (result) => {
+          if (result === PosixError.ENOTSUP && custom) {
+            // the handler has declined to deal with it, use the method from the custom WASI interface
+            return custom(...args);
+          } else if (result === PosixError.ENOTSUP && result === PosixError.ENOTCAPABLE) {
+            // if we can't fallback onto a custom handler, explain the failure
+            const evtName = this.lastEvent;
+            if (this.hasListener(evtName)) {
+              console.error(`WASI method '${name}' failed because the handler for '${evtName}' declined to handle the event`);
+            } else {
+              console.error(`WASI method '${name}' requires the handling of the '${evtName}' event`);
+            }
+            return PosixError.ENOTSUP;
+          }
+          return result;
+        };
+        return isPromise(result) ? result.then(onResult) : onResult(result);
+      };
+    }
   },
 }) ;
 

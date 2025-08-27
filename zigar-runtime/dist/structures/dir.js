@@ -1,4 +1,7 @@
+import { PosixDescriptorRight } from '../constants.js';
 import { mixin } from '../environment.js';
+import { InvalidStream } from '../errors.js';
+import '../utils.js';
 
 var dir = mixin({
   // create Dir struct for outbound call
@@ -7,7 +10,10 @@ var dir = mixin({
       return arg;
     }
     const dir = this.convertDirectory(arg);
-    const fd = this.createStreamHandle(dir);
+    if (!dir) {
+      throw new InvalidStream(PosixDescriptorRight.fd_readdir, arg);
+    }
+    let fd = this.createStreamHandle(dir, this.getDefaultRights('dir'));
     return { fd };
   },
 });

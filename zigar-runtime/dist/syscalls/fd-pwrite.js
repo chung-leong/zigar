@@ -1,39 +1,36 @@
-import { PosixError } from '../constants.js';
+import { PosixError, PosixDescriptorRight } from '../constants.js';
 import { mixin } from '../environment.js';
-import { catchPosixError } from '../errors.js';
-import { createView, usizeByteSize } from '../utils.js';
+import { catchPosixError, checkAccessRight } from '../errors.js';
+import { createView, readUsize, readUsizeSafe, usizeByteSize } from '../utils.js';
 import './copy-int.js';
 
 var fdPwrite = mixin({
   fdPwrite(fd, iovsAddress, iovsCount, offset, writtenAddress, canWait) {
-    const iovsSize = usizeByteSize * 2;
     const le = this.littleEndian;
-    let iovs, writer, i = 0;
-    let written = 0;
-    const next = () => {
-      return catchPosixError(canWait, PosixError.EIO, () => {
-        if (!iovs) {
-          writer = this.getStream(fd, 'write');
-          iovs = createView(iovsSize * iovsCount);
-          this.moveExternBytes(iovs, iovsAddress, false);
-        }
-        const ptr = iovs.getUint32(i * iovsSize, le);
-        const len = iovs.getUint32(i * iovsSize + 4, le);
-        const chunk = new Uint8Array(len);
-        const pos = offset;
-        this.moveExternBytes(chunk, ptr, false);
-        written += len;
-        offset += len;
-        return writer.pwrite(chunk, pos);
-      }, () => {
-        if (++i < iovsCount) {
-          return next();
-        } else {
-          this.copyUsize(writtenAddress, written);
-        }
-      });
-    };
-    return next();
+    const iovsSize = usizeByteSize * 2;
+    let total = 0;
+    return catchPosixError(canWait, PosixError.EIO, () => {        
+      const[ writer, rights ] = this.getStream(fd);
+      checkAccessRight(rights, PosixDescriptorRight.fd_write);
+      const iovs = createView(iovsSize * iovsCount);
+      this.moveExternBytes(iovs, iovsAddress, false);
+      const ops = [];
+      for (let i = 0; i < iovsCount; i++) {
+        const ptr = readUsize(iovs, i * iovsSize, le);
+        const len = readUsizeSafe(iovs, i * iovsSize + usizeByteSize, le);
+        ops.push({ ptr, len });
+        total += len;
+      }
+      const buffer = new ArrayBuffer(total);
+      let pos = 0;
+      for (const { ptr, len } of ops) {
+        const part = new DataView(buffer, pos, len);
+        this.moveExternBytes(part, ptr, false);
+        pos += len;
+      }
+      const chunk = new Uint8Array(buffer);
+      return writer.pwrite(chunk, offset);
+    }, () => this.copyUint32(writtenAddress, total));
   },
 });
 

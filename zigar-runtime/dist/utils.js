@@ -139,36 +139,62 @@ function findSortedIndex(array, value, cb) {
   return high;
 }
 
-const isMisaligned = function(address, align) {
+function isMisaligned(address, align) {
+  {
     return (align) ? !!(address & (align - 1)) : false;
   }
-;
+}
 
-const alignForward = function(address, align) {
+function alignForward(address, align) {
+  {
     return (address + (align - 1)) & ~(align - 1);
   }
-;
+}
 
 const usizeMin = 0;
 const usizeMax = 0xFFFF_FFFF;
 const usizeInvalid = -1;
-
-const usize = function(arg) {
-    return Number(arg);
-  }
-;
-
 const usizeByteSize = 4;
 
-const isInvalidAddress = function(address) {
+function usize(number) {
+  {
+    return Number(number);
+  }
+}
+
+const maxSafeInteger = BigInt(Number.MAX_SAFE_INTEGER);
+const minSafeInteger = BigInt(Number.MIN_SAFE_INTEGER);
+
+function safeInt(bigInt) {
+  if (bigInt > maxSafeInteger || bigInt < minSafeInteger) {
+    throw new RangeError('Number is too big/small');
+  }
+  return Number(bigInt);
+}
+
+function readUsize(dv, offset, le) {
+  {
+    return dv.getUint32(offset, le);
+  }
+}
+
+function readUsizeSafe(dv, offset, le) {
+  {
+    return readUsize(dv, offset, le);
+  }
+}
+
+function isInvalidAddress(address) {
+  {
     return address === 0xaaaa_aaaa || address === -1431655766;
   }
-;
+}
 
-const adjustAddress = function(address, addend) {
+function adjustAddress(address, addend) {
+  {
     return address + addend;
   }
-;
+}
 
 function transformIterable(arg) {
   if (typeof(arg.length) === 'number') {
@@ -346,4 +372,4 @@ function extractTimes(st_atim, st_mtim, fst_flags) {
   return times;
 }
 
-export { ObjectCache, adjustAddress, alignForward, always, createView, decodeBase64, decodeEnum, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, extractTimes, findElements, findObjects, findSortedIndex, getEnumNumber, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, never, toString, transformIterable, usize, usizeByteSize, usizeInvalid, usizeMax, usizeMin };
+export { ObjectCache, adjustAddress, alignForward, always, createView, decodeBase64, decodeEnum, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, extractTimes, findElements, findObjects, findSortedIndex, getEnumNumber, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, maxSafeInteger, minSafeInteger, never, readUsize, readUsizeSafe, safeInt, toString, transformIterable, usize, usizeByteSize, usizeInvalid, usizeMax, usizeMin };

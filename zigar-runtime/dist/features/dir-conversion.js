@@ -1,5 +1,4 @@
 import { mixin } from '../environment.js';
-import { TypeMismatch } from '../errors.js';
 import { MapDirectory } from '../streams.js';
 import { hasMethod } from '../utils.js';
 
@@ -9,8 +8,6 @@ var dirConversion = mixin({
       return new MapDirectory(arg);
     } else if (hasMethod(arg, 'readdir')) {
       return arg;
-    } else {
-      throw new TypeMismatch('map or object with directory interface', arg);
     }
   }
 });

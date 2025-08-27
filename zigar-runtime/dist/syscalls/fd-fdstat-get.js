@@ -1,22 +1,13 @@
-import { PosixError, PosixDescriptorRight, PosixFileType } from '../constants.js';
+import { PosixError, PosixFileType, PosixDescriptorRight } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, InvalidEnumValue } from '../errors.js';
-import { hasMethod, getEnumNumber, createView } from '../utils.js';
+import { getEnumNumber, createView } from '../utils.js';
 
 var fdFdstatGet = mixin({
   fdFdstatGet(fd, bufAddress, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      const stream = this.getStream(fd);
-      let rights = 0, flags = 0, type;
-      rights = PosixDescriptorRight.fd_filestat_get;
-      if (this.listenerMap.get('set_times') && this.getStreamLocation?.(fd)) {
-        rights |= PosixDescriptorRight.fd_filestat_set_times;
-      }
-      for (const name of [ 'read', 'write', 'seek', 'tell', 'advise', 'allocate', 'datasync', 'sync', 'readdir' ]) {
-        if (hasMethod(stream, name)) {
-          rights |= PosixDescriptorRight[`fd_${name}`];
-        }
-      }
+      const [ stream, rights, flags ] = this.getStream(fd);
+      let type;
       if (stream.type) {
         type = getEnumNumber(stream.type, PosixFileType);
         if (type === undefined) {
@@ -29,14 +20,11 @@ var fdFdstatGet = mixin({
           type = PosixFileType.directory;
         }
       }
-      if (type === PosixFileType.directory) {
-        rights |= PosixDescriptorRight.path_open | PosixDescriptorRight.path_filestat_get;
-      }
       const dv = createView(24);
       dv.setUint8(0, type);
       dv.setUint16(2, flags, true);
-      dv.setBigUint64(8, BigInt(rights), true);
-      dv.setBigUint64(16, 0n, true);
+      dv.setBigUint64(8, BigInt(rights[0]), true);
+      dv.setBigUint64(16, BigInt(rights[1]), true);
       this.moveExternBytes(dv, bufAddress, true);
     });
   },

@@ -1,4 +1,4 @@
-import '../constants.js';
+import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { decodeText, empty, defineProperty, defineValue } from '../utils.js';
 
@@ -16,6 +16,7 @@ var moduleLoading = mixin({
       this.table = null;
       this.initialTableLength = 0;
       this.exportedFunctions = null;
+      this.customWASI = null;
     }
   },
   abandonModule() {
@@ -145,6 +146,7 @@ var moduleLoading = mixin({
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
+        this.customWASI = await this.triggerEvent('wasi', {});
         const instance = await this.instantiateWebAssembly(source, options);
         const { exports } = instance;
         this.importFunctions(exports);
@@ -160,6 +162,14 @@ var moduleLoading = mixin({
         }
         this.initialize();
       })();
+    },
+    getWASIHandler(name) {
+      return this.getBuiltinHandler?.(name)
+          ?? this.customWASI?.wasiImport?.[name]
+          ?? (() => {
+            console.error(`Not implemented: ${name}`);
+            return PosixError.ENOTSUP;
+          });
     },
     displayPanic(address, len) {
       const array = new Uint8Array(this.memory.buffer, address, len);

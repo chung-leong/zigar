@@ -201,7 +201,7 @@ export function readUsizeSafe(dv, offset, le) {
   if (process.env.BITS == 64) {
     return safeInt(readUsize(dv, offset, le));
   } else {
-    return size;
+    return readUsize(dv, offset, le);
   }
 }
 

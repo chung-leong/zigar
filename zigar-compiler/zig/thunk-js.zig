@@ -114,7 +114,7 @@ const wasm = struct {
                 break :init array;
             };
 
-            fn control(_: ?*anyopaque, action: Action, arg: usize) !usize {
+            fn control(action: Action, arg: usize) !usize {
                 switch (action) {
                     .create => {
                         const fn_id = arg;
@@ -134,7 +134,6 @@ const wasm = struct {
                             }
                         } else Error.UnableToFindThunk;
                     },
-                    else => unreachable,
                 }
             }
         };

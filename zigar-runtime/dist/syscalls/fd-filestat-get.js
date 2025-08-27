@@ -6,17 +6,14 @@ import './copy-stat.js';
 var fdFilestatGet = mixin({
   fdFilestatGet(fd, bufAddress, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
-      const stream = this.getStream(fd);
-      const target = stream.valueOf();
-      const loc = this.getStreamLocation?.(fd);
-      try {
-        return this.triggerEvent('stat', { ...loc, target, flags: {} }, PosixError.ENOENT);
-      } catch (err) {
-        if (err.code !== PosixError.ENOENT) {
-          throw err;
-        }
+      const [ stream ] = this.getStream(fd);
+      if (this.hasListener('stat')) {
+        const target = stream.valueOf();
+        const loc = this.getStreamLocation?.(fd);
+        return this.triggerEvent('stat', { ...loc, target, flags: {} });
+      } else {
+        return this.inferStat(stream);
       }
-      return { size: stream.size, type: 'file' };
     }, (stat) => this.copyStat(bufAddress, stat));
   },
 });

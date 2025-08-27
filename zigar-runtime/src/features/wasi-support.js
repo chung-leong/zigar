@@ -1,5 +1,6 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
+import { isPromise } from '../utils.js';
 
 export default (process.env.TARGET === 'wasm') ? mixin({
   getBuiltinHandler(name) {

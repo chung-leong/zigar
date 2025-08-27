@@ -1,6 +1,6 @@
-import { StructureType, PosixError, memberNames } from './constants.js';
+import { StructureType, PosixError, PosixDescriptorRight, memberNames } from './constants.js';
 import { TYPED_ARRAY, UPDATE } from './symbols.js';
-import { getPrimitiveName, defineProperty, isPromise } from './utils.js';
+import { getPrimitiveName, defineProperty, isPromise, hasMethod } from './utils.js';
 
 class MustBeOverridden extends Error {
   constructor() {
@@ -305,6 +305,23 @@ class TypeMismatch extends TypeError {
   }
 }
 
+class InvalidStream extends TypeError {
+  constructor(rights, arg) {
+    const types = [];
+    if (rights & PosixDescriptorRight.fd_read) {
+      types.push('ReadableStreamDefaultReader', 'ReadableStreamBYOBReader', 'Blob', 'Uint8Array');
+    }
+    if (rights & PosixDescriptorRight.fd_write) {
+      types.push('WritableStreamDefaultWriter', 'array', 'null');
+    }
+    if (rights & PosixDescriptorRight.fd_readdir) {
+      types.push('map');
+    }
+    const list = types.join(', ');
+    super(`Expected ${list}, or an object with the appropriate stream interface, received ${arg}`);
+  }
+}
+
 class InaccessiblePointer extends TypeError {
   constructor() {
     super(`Pointers within an untagged union are not accessible`);
@@ -421,6 +438,14 @@ class InvalidFileDescriptor extends Error {
   }
 }
 
+class MissingStreamMethod extends Error {
+  code = PosixError.EBADF;
+
+  constructor(name) {
+    super(`Missing stream method '${name}'`);
+  }
+}
+
 class InvalidArgument extends Error {
   code = PosixError.EINVAL;
 
@@ -434,6 +459,14 @@ class IllegalSeek extends Error {
 
   constructor() {
     super(`Illegal seek`);
+  }
+}
+
+class WouldBlock extends Error {
+  code = PosixError.EAGAIN;
+
+  constructor() {
+    super(`Would block`);
   }
 }
 
@@ -542,7 +575,14 @@ function deanimalizeErrorName(name) {
 
 function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
   const fail = (err) => {
-    const result = (reject) ? reject(err) : console.error(err);
+    let result;
+    if (reject) {
+      result = reject(err);
+    } else {
+      if (err.code !== PosixError.EAGAIN) {
+        console.error(err);
+      }
+    }
     return result ?? err.code ?? defErrorCode;
   };
   const done = (value) => {
@@ -561,6 +601,18 @@ function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
     }
   } catch (err) {
     return fail(err);
+  }
+}
+
+function checkAccessRight(rights, required) {
+  if (!(rights[0] & required)) {
+    throw new InvalidFileDescriptor();
+  }
+}
+
+function checkStreamMethod(stream, name) {
+  if (!hasMethod(stream, name)) {
+    throw new MissingStreamMethod(name);
   }
 }
 
@@ -602,4 +654,4 @@ function formatList(list, conj = 'or') {
   }
 }
 
-export { AccessingOpaque, AlignmentConflict, ArgumentCountMismatch, ArrayLengthMismatch, AssigningToConstant, BufferExpected, BufferSizeMismatch, ConstantConstraint, CreatingOpaque, Deadlock, EnumExpected, ErrorExpected, Exit, IllegalSeek, InaccessiblePointer, InactiveUnionProperty, InvalidArgument, InvalidArrayInitializer, InvalidEnumValue, InvalidFileDescriptor, InvalidInitializer, InvalidIntConversion, InvalidPointerTarget, InvalidSliceLength, InvalidType, InvalidVariadicArgument, MisplacedSentinel, MissingEventListener, MissingInitializers, MissingSentinel, MissingUnionInitializer, MultipleUnionInitializers, MustBeOverridden, NoCastingToFunction, NoCastingToPointer, NoInitializer, NoProperty, NotInErrorSet, NotOnByteBoundary, NotUndefined, NullPointer, OutOfBound, Overflow, PreviouslyFreed, ReadOnly, ReadOnlyTarget, TypeMismatch, UndefinedArgument, UnexpectedGenerator, Unsupported, ZigError, ZigMemoryTargetRequired, addArticle, adjustArgumentError, article, catchPosixError, checkInefficientAccess, deanimalizeErrorName, expectBoolean, formatList, getDescription, isErrorJSON, replaceRangeError, throwReadOnly };
+export { AccessingOpaque, AlignmentConflict, ArgumentCountMismatch, ArrayLengthMismatch, AssigningToConstant, BufferExpected, BufferSizeMismatch, ConstantConstraint, CreatingOpaque, Deadlock, EnumExpected, ErrorExpected, Exit, IllegalSeek, InaccessiblePointer, InactiveUnionProperty, InvalidArgument, InvalidArrayInitializer, InvalidEnumValue, InvalidFileDescriptor, InvalidInitializer, InvalidIntConversion, InvalidPointerTarget, InvalidSliceLength, InvalidStream, InvalidType, InvalidVariadicArgument, MisplacedSentinel, MissingEventListener, MissingInitializers, MissingSentinel, MissingStreamMethod, MissingUnionInitializer, MultipleUnionInitializers, MustBeOverridden, NoCastingToFunction, NoCastingToPointer, NoInitializer, NoProperty, NotInErrorSet, NotOnByteBoundary, NotUndefined, NullPointer, OutOfBound, Overflow, PreviouslyFreed, ReadOnly, ReadOnlyTarget, TypeMismatch, UndefinedArgument, UnexpectedGenerator, Unsupported, WouldBlock, ZigError, ZigMemoryTargetRequired, addArticle, adjustArgumentError, article, catchPosixError, checkAccessRight, checkInefficientAccess, checkStreamMethod, deanimalizeErrorName, expectBoolean, formatList, getDescription, isErrorJSON, replaceRangeError, throwReadOnly };

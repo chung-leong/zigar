@@ -1,6 +1,5 @@
 import { structureNames } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MissingEventListener } from '../errors.js';
 import { MEMORY, SLOTS, TYPE, ALIGN, SIZE, ENVIRONMENT } from '../symbols.js';
 
 var baseline = mixin({
@@ -9,6 +8,7 @@ var baseline = mixin({
     this.listenerMap = new Map([
       [ 'log', (e) => console.log(e.message) ],
     ]);
+    this.lastEvent = '';
   },
   getSpecialExports() {
     const check = (v) => {
@@ -28,16 +28,13 @@ var baseline = mixin({
   addListener(name, cb) {
     this.listenerMap.set(name, cb);
   },
-  triggerEvent(name, event, errorCode) {
+  hasListener(name) {
+    return this.listenerMap.get(name);
+  },
+  triggerEvent(name, event) {
     const listener = this.listenerMap.get(name);
-    if (!listener) {
-      if (errorCode) {
-        throw new MissingEventListener(name, errorCode);
-      } else {
-        return;
-      }
-    }
-    return listener(event);
+    this.lastEvent = name;
+    return listener?.(event);
   },
   recreateStructures(structures, settings) {
     Object.assign(this, settings);

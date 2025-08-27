@@ -460,7 +460,7 @@ function readUsize(dv, offset, le) {
 
 function readUsizeSafe(dv, offset, le) {
   {
-    return size;
+    return readUsize(dv, offset, le);
   }
 }
 
@@ -550,7 +550,7 @@ function hasMethod(object, name) {
   return typeof(object?.[name]) === 'function';
 }
 
-function isPromise$1(object) {
+function isPromise(object) {
   return typeof(object?.then) === 'function';
 }
 
@@ -3188,7 +3188,7 @@ function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
   };
   try {
     const result = run();
-    if (isPromise$1(result)) {
+    if (isPromise(result)) {
       if (!canWait) {
         throw new Deadlock();
       }
@@ -5805,7 +5805,7 @@ var reader = mixin({
             checkInefficientAccess(progress, 'read', len);
           }
           const result = reader.read(len);          
-          return isPromise$1(result) ? result.then(onResult).catch(onError) : onResult(result);
+          return isPromise(result) ? result.then(onResult).catch(onError) : onResult(result);
         } catch (err) {
           onError(err);
         }
@@ -5867,7 +5867,7 @@ var writer = mixin({
           const src = new Uint8Array(dv.buffer, dv.byteOffset, len);
           const copy = new Uint8Array(src);
           const result = writer.write(copy);
-          return isPromise$1(result) ? result.then(() => len, onError) : len;
+          return isPromise(result) ? result.then(() => len, onError) : len;
         } catch (err) {
           onError(err);
         }
@@ -6251,7 +6251,7 @@ var fdReaddir = mixin({
       cookie = pos;
       // retrieve the first entry, checking if the call is async
       const result = dir.readdir();
-      async = isPromise$1(result);
+      async = isPromise(result);
       return result;
     }, (dent) => {
       const dv = createView(bufLen);
@@ -6548,7 +6548,7 @@ var workerSupport = mixin({
             Atomics.notify(array, 0, 1);
           }
         };
-        if (isPromise$1(result)) {
+        if (isPromise(result)) {
           result.then(finish);
         } else {
           finish(result);
@@ -7035,50 +7035,60 @@ var structureAcquisition = mixin({
   },
   ...({
     exports: {
-      captureString: { argType: 'ii', returnType: 'v' },
-      captureView: { argType: 'iib', returnType: 'v' },
-      castView: { argType: 'iibv', returnType: 'v' },
-      readSlot: { argType: 'vi', returnType: 'v' },
-      writeSlot: { argType: 'viv' },
-      beginDefinition: { returnType: 'v' },
-      insertInteger: { argType: 'vsib' },
-      insertBigInteger: { argType: 'vsib' },
-      insertBoolean: { argType: 'vsb', alias: 'insertProperty' },
-      insertString: { argType: 'vss', alias: 'insertProperty' },
-      insertObject: { argType: 'vsv', alias: 'insertProperty' },
-      beginStructure: { argType: 'v', returnType: 'v' },
-      attachMember: { argType: 'vvb' },
-      createTemplate: { argType: 'v', returnType: 'v' },
-      attachTemplate: { argType: 'vvb' },
-      defineStructure: { argType: 'v', returnType: 'v' },
-      endStructure: { argType: 'v' },
+      createBool: { argType: 'b', returnType: 'v' },
+      createInteger: { argType: 'ib', returnType: 'v' },
+      createBigInteger: { argType: 'ib', returnType: 'v' },
+      createString: { argType: 'ii', returnType: 'v' },
+      createView: { argType: 'iib', returnType: 'v' },
+      createInstance: { argType: 'vvv', returnType: 'v' },
+      createTemplate: { argType: 'vv', returnType: 'v' },
+      createList: { argType: '', returnType: 'v' },
+      createObject: { argType: '', returnType: 'v' },
+      getProperty: { argType: 'vii', returnType: 'v' },
+      setProperty: { argType: 'viiv' },
+      getSlotValue: { argType: 'vi', returnType: 'v' },
+      setSlotValue: { argType: 'viv' },
+      appendList: { argType: 'vv' },
+      beginStructure: { argType: 'v' },
+      finishStructure: { argType: 'v' },
     },
     imports: {
       getFactoryThunk: { argType: '', returnType: 'i' },
       getModuleAttributes: { argType: '', returnType: 'i' },
     },
-    beginDefinition() {
-      return {};
+    createBool(initializer) {
+      return initializer;
     },
-    insertProperty(def, name, value) {
-      def[name] = value;
-    },
-    insertInteger(def, name, value, unsigned) {
-      if (unsigned && value < 0) {
-        value = 0x1_0000_0000 + value;
+    createInteger(initializer, unsigned) {
+      if (unsigned && initializer < 0) {
+        return 0x1_0000_0000 + initializer;
       }
-      def[name] = value;
+      return initializer
     },
-    insertBigInteger(def, name, value, unsigned) {
-      if (unsigned && value < 0n) {
-        value = 0x1_0000_0000_0000_0000n + value;
+    createBigInteger(initializer, unsigned) {
+      if (unsigned && initializer < 0) {
+        return 0x1_0000_0000_0000_0000n + initializer;
       }
-      def[name] = value;
+      return initializer
     },
-    captureString(address, len) {
+    createString(address, len) {
       const { buffer } = this.memory;
       const ta = new Uint8Array(buffer, address, len);
       return decodeText(ta);
+    },
+    createList() {
+      return [];
+    },
+    createObject() {
+      return {};
+    },
+    getProperty(object, address, len) {
+      const key = this.createString(address, len);
+      return object[key];
+    },
+    setProperty(object, address, len, value) {
+      const key = this.createString(address, len);
+      object[key] = value;
     },
   } ),
 });
