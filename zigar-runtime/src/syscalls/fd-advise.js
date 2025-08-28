@@ -18,7 +18,7 @@ export default mixin({
       const [ stream ] = this.getStream(fd);
       if (hasMethod(stream, 'advise')) {
         const adviceKeys = Object.keys(Advice);
-        return stream.advise?.(safeInt(offset), len, adviceKeys[advice]);
+        return stream.advise?.(safeInt(offset), safeInt(len), adviceKeys[advice]);
       }
     });
   },

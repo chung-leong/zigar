@@ -1,6 +1,6 @@
 import { PosixDescriptor, PosixDescriptorRight } from '../constants.js';
 import { mixin } from '../environment.js';
-import { InvalidFileDescriptor, InvalidStream } from '../errors.js';
+import { InvalidFileDescriptor, InvalidStream, Unsupported } from '../errors.js';
 import { decodeText } from '../utils.js';
 
 const stdinRights = PosixDescriptorRight.fd_read;
@@ -65,6 +65,11 @@ export default mixin({
     this.nextStreamHandle = PosixDescriptor.min;
   },
   getStream(fd) {
+    if (process.env.TARGET === 'wasm') {
+      if (PosixDescriptor.root < fd && fd < PosixDescriptor.min) {
+        throw new Unsupported();
+      }
+    }
     const entry = this.streamMap.get(fd);
     if (!entry) {
       console.error('getStream', { fd });

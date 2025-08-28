@@ -29,14 +29,14 @@ pub const Syscall = extern struct {
         advise: extern struct {
             fd: i32,
             offset: u64,
-            len: u32,
+            len: u64,
             advice: std.os.wasi.advice_t,
         },
         allocate: extern struct {
             fd: i32,
             mode: i32,
             offset: u64,
-            len: u32,
+            len: u64,
         },
         close: extern struct {
             fd: i32,
@@ -1644,6 +1644,14 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.opendir(path);
         }
 
+        pub fn posix_fallocate(fd: c_int, offset: off_t, len: off_t) callconv(.c) c_int {
+            var result: c_int = undefined;
+            if (redirector.fallocate(fd, 0, offset, len, &result)) {
+                return saveError(result);
+            }
+            return Original.posix_fallocate(fd, offset, len);
+        }
+
         pub fn pthread_create(thread: *std.c.pthread_t, attr: ?*const std.c.pthread_attr_t, start_routine: *const fn (?*anyopaque) callconv(.c) ?*anyopaque, arg: ?*anyopaque) callconv(.c) c_int {
             const instance = redirector.Host.getInstance() catch return @intFromEnum(std.c.E.FAULT);
             const info = c_allocator.create(ThreadInfo) catch return @intFromEnum(std.c.E.NOMEM);
@@ -1902,6 +1910,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var pwritev: *const @TypeOf(Self.pwritev) = undefined;
             pub var pwrite64: *const @TypeOf(Self.pwrite64) = undefined;
             pub var posix_fadvise: *const @TypeOf(Self.posix_fadvise) = undefined;
+            pub var posix_fallocate: *const @TypeOf(Self.posix_fallocate) = undefined;
             pub var pthread_create: *const @TypeOf(Self.pthread_create) = undefined;
             pub var read: *const @TypeOf(Self.read) = undefined;
             pub var readv: *const @TypeOf(Self.readv) = undefined;

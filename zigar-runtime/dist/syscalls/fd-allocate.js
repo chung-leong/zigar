@@ -8,7 +8,7 @@ var fdAllocate = mixin({
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const [ stream ] = this.getStream(fd);
       checkStreamMethod(stream, 'allocate');
-      return stream.allocate(safeInt(offset), len);
+      return stream.allocate(safeInt(offset), safeInt(len));
     });
   },
 });

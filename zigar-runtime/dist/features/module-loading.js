@@ -146,6 +146,10 @@ var moduleLoading = mixin({
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
+        if (options.delay) {
+          // a small delay to allow for setting of event handler
+          await new Promise(r => setTimeout(r, 0));
+        }
         this.customWASI = await this.triggerEvent('wasi', {});
         const instance = await this.instantiateWebAssembly(source, options);
         const { exports } = instance;

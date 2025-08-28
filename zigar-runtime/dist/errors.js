@@ -1,4 +1,4 @@
-import { StructureType, PosixError, PosixDescriptorRight, memberNames } from './constants.js';
+import { PosixError, StructureType, PosixDescriptorRight, memberNames } from './constants.js';
 import { TYPED_ARRAY, UPDATE } from './symbols.js';
 import { getPrimitiveName, defineProperty, isPromise, hasMethod } from './utils.js';
 
@@ -15,6 +15,8 @@ class InvalidIntConversion extends SyntaxError {
 }
 
 class Unsupported extends TypeError {
+  code = PosixError.ENOTSUP;
+
   constructor() {
     super(`Unsupported`);
   }
@@ -579,7 +581,7 @@ function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
     if (reject) {
       result = reject(err);
     } else {
-      if (err.code !== PosixError.EAGAIN) {
+      if (err.code !== PosixError.EAGAIN && err.code !== PosixError.ENOTSUP) {
         console.error(err);
       }
     }

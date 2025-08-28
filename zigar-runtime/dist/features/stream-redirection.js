@@ -1,6 +1,6 @@
 import { PosixDescriptorRight, PosixDescriptor } from '../constants.js';
 import { mixin } from '../environment.js';
-import { InvalidStream, InvalidFileDescriptor } from '../errors.js';
+import { InvalidStream, Unsupported, InvalidFileDescriptor } from '../errors.js';
 import { decodeText } from '../utils.js';
 
 const stdinRights = PosixDescriptorRight.fd_read;
@@ -65,6 +65,11 @@ var streamRedirection = mixin({
     this.nextStreamHandle = PosixDescriptor.min;
   },
   getStream(fd) {
+    {
+      if (PosixDescriptor.root < fd && fd < PosixDescriptor.min) {
+        throw new Unsupported();
+      }
+    }
     const entry = this.streamMap.get(fd);
     if (!entry) {
       console.error('getStream', { fd });

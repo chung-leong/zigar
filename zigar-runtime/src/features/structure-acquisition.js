@@ -140,7 +140,7 @@ export default mixin({
     const attrs = this.getModuleAttributes();
     this.littleEndian = !!(attrs & ModuleAttribute.LittleEndian);
     this.runtimeSafety = !!(attrs & ModuleAttribute.RuntimeSafety);
-    this.ioDirection = !!(attrs & ModuleAttribute.ioRedirection);
+    this.ioRedirection = !!(attrs & ModuleAttribute.IoRedirection);
     this.libc = !!(attrs & ModuleAttribute.LibC);
     const thunkAddress = this.getFactoryThunk();
     const thunk = { [MEMORY]: this.obtainZigView(thunkAddress, 0) };
@@ -227,54 +227,53 @@ export default mixin({
           case 'thread-spawn': this.use(workerSupport); break;
         }
       }
-      for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
-        this.use(wasiSupport);
-        switch (name) {
-          case 'environ_get': this.use(environGet); break;
-          case 'environ_sizes_get': this.use(environSizesGet); break;
-          case 'fd_advise': this.use(fdAdvise); break;
-          case 'fd_allocate': this.use(fdAllocate); break;
-          case 'fd_close': this.use(fdClose); break;
-          case 'fd_datasync': this.use(fdDatasync); break;
-          case 'fd_fdstat_get': this.use(fdFdstatGet); break;
-          case 'fd_fdstat_set_flags': this.use(fdFdstatSetFlags); break;
-          case 'fd_fdstat_set_rights': this.use(fdFdstatSetRights); break;
-          case 'fd_filestat_get':this.use(fdFilestatGet); break;
-          case 'fd_filestat_set_times': this.use(fdFileStatSetTimes); break;
-          case 'fd_pread': this.use(fdPread); break;
-          case 'fd_prestat_get': this.use(fdPrestatGet); break;
-          case 'fd_prestat_dir_name': this.use(fdPrestatDirName); break;
-          case 'fd_pwrite': this.use(fdPwrite); break;
-          case 'fd_read': this.use(fdRead); break;
-          case 'fd_readdir': this.use(fdReaddir); break;
-          case 'fd_seek': this.use(fdSeek); break;
-          case 'fd_sync': this.use(fdSync); break;
-          case 'fd_tell': this.use(fdTell); break;
-          case 'fd_write': this.use(fdWrite); break;
-          case 'path_create_directory': this.use(pathCreateDirectory); break;
-          case 'path_filestat_get': 
-            this.use(pathFilestatGet); 
+      if (this.ioRedirection) {
+        for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
+          this.use(wasiSupport);
+          switch (name) {
+            case 'environ_get': this.use(environGet); break;
+            case 'environ_sizes_get': this.use(environSizesGet); break;
+            case 'fd_advise': this.use(fdAdvise); break;
+            case 'fd_allocate': this.use(fdAllocate); break;
+            case 'fd_close': this.use(fdClose); break;
+            case 'fd_datasync': this.use(fdDatasync); break;
+            case 'fd_fdstat_get': this.use(fdFdstatGet); break;
+            case 'fd_fdstat_set_flags': this.use(fdFdstatSetFlags); break;
+            case 'fd_fdstat_set_rights': this.use(fdFdstatSetRights); break;
+            case 'fd_filestat_get':this.use(fdFilestatGet); break;
+            case 'fd_filestat_set_times': this.use(fdFileStatSetTimes); break;
+            case 'fd_pread': this.use(fdPread); break;
+            case 'fd_prestat_get': this.use(fdPrestatGet); break;
+            case 'fd_prestat_dir_name': this.use(fdPrestatDirName); break;
+            case 'fd_pwrite': this.use(fdPwrite); break;
+            case 'fd_read': this.use(fdRead); break;
+            case 'fd_readdir': this.use(fdReaddir); break;
+            case 'fd_seek': this.use(fdSeek); break;
+            case 'fd_sync': this.use(fdSync); break;
+            case 'fd_tell': this.use(fdTell); break;
+            case 'fd_write': this.use(fdWrite); break;
+            case 'path_create_directory': this.use(pathCreateDirectory); break;
+            case 'path_filestat_get': this.use(pathFilestatGet); break;
+            case 'path_remove_directory': this.use(pathRemoveDirectory); break;
+            case 'path_filestat_set_times': this.use(pathFilestatSetTimes); break;
+            case 'path_open': this.use(pathOpen); break;
+            case 'path_unlink_file': this.use(pathUnlinkFile); break;
+            case 'proc_exit': this.use(procExit); break;
+            case 'random_get': this.use(randomGet); break;
+          }
+          const isPathFunc = name.startsWith('path_');
+          const isFdFunc = name.startsWith('fd_');
+          if (isPathFunc || isFdFunc) {
+            if (isPathFunc) {
+              this.use(streamLocation);
+            }
+            if (isFdFunc) {
+              this.use(streamRedirection);
+            }
             this.use(readerConversion);
             this.use(writerConversion);
             this.use(dirConversion);
-            break;
-          case 'path_remove_directory': this.use(pathRemoveDirectory); break;
-          case 'path_filestat_set_times': this.use(pathFilestatSetTimes); break;
-          case 'path_open': 
-            this.use(pathOpen); 
-            this.use(readerConversion);
-            this.use(writerConversion);
-            this.use(dirConversion);
-            break;
-          case 'path_unlink_file': this.use(pathUnlinkFile); break;
-          case 'proc_exit': this.use(procExit); break;
-          case 'random_get': this.use(randomGet); break;
-        }
-        if (name.startsWith('path_')) {
-          this.use(streamLocation);
-        }
-        if (name.startsWith('fd_')) {
-          this.use(streamRedirection);
+          }
         }
       }
       for (const structure of this.structures) {

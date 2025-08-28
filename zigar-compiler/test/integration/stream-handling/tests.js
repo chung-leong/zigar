@@ -114,16 +114,39 @@ export function addTests(importModule, options) {
       });
       const digest = hash('/hello/world');
       expect(digest.string).to.equal(correct);
-      expect(event).to.eql({ 
-        parent: null,
-        path: 'hello/world', 
-        rights: { read: true }, 
-        flags: { symlinkFollow: true }, 
-      });
+      if (target === 'wasm32') {
+        expect(event).to.eql({ 
+          parent: null,
+          path: 'hello/world', 
+          rights: { read: true }, 
+          flags: {}, 
+        });
+      } else {
+        expect(event).to.eql({ 
+          parent: null,
+          path: 'hello/world', 
+          rights: { read: true }, 
+          flags: { symlinkFollow: true }, 
+        });
+      }
     })
     it('should fallback to the system when open handler returns undefined', async function() {
       this.timeout(0);
-      const { __zigar, hash } = await importTest('open-and-read-from-file-system');
+      const { __zigar, hash } = await importTest('open-and-read-from-file-system', { topLevelAwait: false });
+      if (target === 'wasm32') {
+        __zigar.on('wasi', async () => {
+          const { WASI } = await import('wasi');
+          return new WASI({
+            version: 'preview1',
+            args: [],
+            env: {},
+            preopens: {
+              '/': '/',
+            },
+          });
+        });
+      }
+      await __zigar.init();
       const correct = (platform() === 'win32') 
       ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
       : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
@@ -135,13 +158,29 @@ export function addTests(importModule, options) {
       });
       const digest = hash(path);
       expect(digest.string).to.equal(correct);
+      expect(event).to.be.an('object');
     })
     it('should not attempt io redirection when feature is disabled', async function() {
       this.timeout(0);
-      const { __zigar, check } = await importTest('open-and-close-file', { useRedirection: false });
+      const { __zigar, check } = await importTest('open-and-close-file', { useRedirection: false, topLevelAwait: false });
+      if (target === 'wasm32') {
+        __zigar.on('wasi', async () => {
+          const { WASI } = await import('wasi');
+          return new WASI({
+            version: 'preview1',
+            args: [],
+            env: {},
+            preopens: {
+              '/': '/',
+            },
+          });
+        });
+      }
+      await __zigar.init();
       const path = absolute('./data/test.txt');
       let event;
       __zigar.on('open', (evt) => {
+        console.log(evt);
         event = evt;
         return undefined;
       });
@@ -387,12 +426,21 @@ export function addTests(importModule, options) {
       const blob = new Blob(chunks);
       const string = await blob.text();
       expect(string).to.equal('This is a test');
-      expect(event).to.eql({ 
-        parent: null,
-        path: 'hello/world', 
-        rights: { write: true }, 
-        flags: { create: true, truncate: true, symlinkFollow: true },
-      });
+      if (target === 'wasm32') {
+        expect(event).to.eql({ 
+          parent: null,
+          path: 'hello/world', 
+          rights: { write: true }, 
+          flags: { create: true, truncate: true },
+        });
+      } else {
+        expect(event).to.eql({ 
+          parent: null,
+          path: 'hello/world', 
+          rights: { write: true }, 
+          flags: { create: true, truncate: true, symlinkFollow: true },
+        });
+      }
     })
     it('should open and write to file using posix functions', async function() {
       this.timeout(0);
@@ -475,7 +523,11 @@ export function addTests(importModule, options) {
       const [ error ] = await captureError(() => {
         result = triggerError('/hello/world');
       });
-      expect(`${result}`).to.equal('INVAL');
+      if (target === 'wasm32') {
+        expect(`${result}`).to.equal('2BIG');
+      } else {
+        expect(`${result}`).to.equal('INVAL');
+      }
       expect(error).to.contain('Invalid argument');
     })
     it('should detect end of file using libc function', async function() {
@@ -1064,7 +1116,7 @@ export function addTests(importModule, options) {
           initializers.push([ name, { type: 'file' } ]);
         }
         const map2 = new Map(initializers);
-        const lines2 = await capture(() => print(map2));
+        const lines2 = await capture(async () => await print(map2));
         map2.close();
         expect(lines2).to.have.lengthOf(100);
       } finally {
@@ -1097,7 +1149,7 @@ export function addTests(importModule, options) {
       save('/hello/world', 'This is a test');
       expect(called).to.be.true;
     })
-    skip.entirely.unless(target === 'linux').
+    skip.entirely.unless(target === 'linux').or(target === 'wasm32').
     it('should perform datasync operation using posix function', async function() {
       this.timeout(0);
       const { __zigar, save } = await importTest('perform-datasync-with-posix-function', { useLibc: true });
@@ -1123,7 +1175,7 @@ export function addTests(importModule, options) {
       save('/hello/world', 'This is a test');
       expect(called).to.be.true;
     })
-    skip.entirely.unless(target === 'linux').
+    skip.entirely.unless(target === 'linux').or(target === 'wasm32').
     it('should perform advise operation using posix function', async function() {
       this.timeout(0);
       const { __zigar, save } = await importTest('perform-advise-with-posix-function', { useLibc: true });
@@ -1151,7 +1203,7 @@ export function addTests(importModule, options) {
       expect(called).to.be.true;
       expect(args).to.eql([ 5, 1000, 'random' ]);
     })
-    skip.entirely.unless(target === 'linux').
+    skip.entirely.unless(target === 'linux').or(target === 'wasm32').
     it('should perform allocate operation using posix function', async function() {
       this.timeout(0);
       const { __zigar, save } = await importTest('perform-allocate-with-posix-function', { useLibc: true });

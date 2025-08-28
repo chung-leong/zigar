@@ -15,6 +15,8 @@ export class InvalidIntConversion extends SyntaxError {
 }
 
 export class Unsupported extends TypeError {
+  code = PosixError.ENOTSUP;
+
   constructor() {
     super(`Unsupported`);
   }
@@ -581,7 +583,7 @@ export function catchPosixError(canWait = false, defErrorCode, run, resolve, rej
     if (reject) {
       result = reject(err);
     } else {
-      if (err.code !== PosixError.EAGAIN) {
+      if (err.code !== PosixError.EAGAIN && err.code !== PosixError.ENOTSUP) {
         console.error(err);
       }
     }

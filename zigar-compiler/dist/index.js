@@ -408,7 +408,11 @@ function generateCode(definition, params) {
       add(`\n// load shared library`);
     }
     add(`const source = ${binarySource};`);
-    add(`env.loadModule(source, ${moduleOptions ? JSON.stringify(moduleOptions) : null});`);
+    const loadOptions = (moduleOptions) ? {
+      delay: !topLevelAwait,
+      ...moduleOptions,
+    } : null;
+    add(`env.loadModule(source, ${loadOptions ? JSON.stringify(loadOptions) : null});`);
     // if top level await is used, we don't need to write changes into Zig memory buffers
     add(`env.linkVariables(${!topLevelAwait});`);
   } else if (standaloneLoader?.moduleDir) {

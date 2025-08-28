@@ -1188,7 +1188,7 @@ const ModuleHost = struct {
         return try self.callPosixFunction(self.js.fd_advise, &.{
             try env.createInt32(args.fd),
             try env.createBigintUint64(args.offset),
-            try env.createUint32(args.len),
+            try env.createBigintUint64(args.len),
             try env.createInt32(@intFromEnum(args.advice)),
             futex,
         });
@@ -1199,7 +1199,7 @@ const ModuleHost = struct {
         return try self.callPosixFunction(self.js.fd_allocate, &.{
             try env.createInt32(args.fd),
             try env.createBigintUint64(args.offset),
-            try env.createUint32(args.len),
+            try env.createBigintUint64(args.len),
             futex,
         });
     }
