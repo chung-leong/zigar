@@ -9,6 +9,9 @@ var streamLocation = mixin({
   obtainStreamLocation(dirFd, pathAddress, pathLen) {
     const pathArray = this.obtainZigArray(pathAddress, pathLen);
     let path = decodeText(pathArray).trim();
+    if (path === '.') {
+      return this.getStreamLocation(dirFd);
+    }
     if (path.endsWith('/')) {
       path = path.slice(0, -1);
     }

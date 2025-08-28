@@ -11,5 +11,5 @@ pub fn seek(path: [*:0]const u8, offset: isize) !isize {
     defer _ = c.close(fd);
     const pos = c.lseek(fd, @intCast(offset), c.SEEK_END);
     if (pos < 0) return error.UnableToSeekFile;
-    return c.lseek(fd, 0, c.SEEK_CUR);
+    return @intCast(c.lseek(fd, 0, c.SEEK_CUR));
 }

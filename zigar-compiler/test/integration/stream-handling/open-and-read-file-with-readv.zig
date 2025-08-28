@@ -1,7 +1,11 @@
 const std = @import("std");
 
 pub fn read(path: [*:0]const u8, vectors: [3][]u8) !usize {
-    const fd = std.c.open(path, .{ .ACCMODE = .RDONLY });
+    const oflags: std.c.O = if (@hasField(std.c.O, "ACCMODE"))
+        .{ .ACCMODE = .RDONLY }
+    else
+        .{ .read = true };
+    const fd = std.c.open(path, oflags);
     if (fd < 0) return error.UnableToOpenFile;
     defer _ = std.c.close(fd);
     var iovs: [3]std.c.iovec = undefined;

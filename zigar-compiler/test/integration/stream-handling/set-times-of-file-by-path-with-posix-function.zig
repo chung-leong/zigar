@@ -16,6 +16,7 @@ pub fn setLinkTimes(path: [*:0]const u8, atime: u32, mtime: u32) !void {
         .{ .tv_sec = atime, .tv_usec = 25 },
         .{ .tv_sec = mtime, .tv_usec = 55 },
     };
+    if (!@hasDecl(c, "lutimes")) return error.UnableToSetTimes;
     const result = c.lutimes(path, &tv);
     if (result != 0) return error.UnableToSetTimes;
 }

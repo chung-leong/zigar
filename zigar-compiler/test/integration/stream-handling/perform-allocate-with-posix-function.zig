@@ -7,7 +7,11 @@ const c = @cImport({
 });
 
 pub fn save(path: [*:0]const u8, data: []const u8) !usize {
-    const fd = std.c.open(path, .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }, @as(c_uint, 0o666));
+    const oflags: std.c.O = if (@hasField(std.c.O, "ACCMODE"))
+        .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true }
+    else
+        .{ .write = true, .CREAT = true, .TRUNC = true };
+    const fd = std.c.open(path, oflags, @as(c_uint, 0o666));
     if (fd < 0) return error.UnableToOpenFile;
     defer _ = std.c.close(fd);
     if (c.fallocate(fd, 0, 0, 1000) != 0) return error.AllocationFailed;

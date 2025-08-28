@@ -26,7 +26,7 @@ var fdReaddir = mixin({
       let remaining = bufLen;
       let p = 0;
       while (dent) {
-        const { name, type = 'unknown', ino = 0 } = dent;
+        const { name, type = 'unknown', ino = 1 } = dent;
         const nameArray = encodeText(name);
         const typeIndex = getEnumNumber(type, PosixFileType);
         if (typeIndex === undefined) {
@@ -46,7 +46,7 @@ var fdReaddir = mixin({
         }
         remaining -= nameArray.length;
         // get next entry if call is sync
-        dent = (remaining > 24 + 16 && async) ? dir.readdir() : null;
+        dent = (remaining > 24 + 16 && !async) ? dir.readdir() : null;
       }
       this.moveExternBytes(dv, bufAddress, true);
       this.copyUint32(bufusedAddress, p);

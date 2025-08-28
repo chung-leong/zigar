@@ -6,12 +6,9 @@ const c = @cImport({
     @cInclude("sys/stat.h");
 });
 
-pub fn stat(dir_path: [*:0]const u8, path: [*:0]const u8) !void {
-    const dirfd = c.open(dir_path, c.O_DIRECTORY);
-    if (dirfd == -1) return error.UnableToOpenDirectory;
-    defer _ = c.close(dirfd);
+pub fn stat(dir: std.fs.Dir, path: [*:0]const u8) !void {
     var info: c.struct_stat = undefined;
-    if (c.fstatat(dirfd, path, &info, 0) != 0) return error.UnableToGetStat;
+    if (c.fstatat(dir.fd, path, &info, 0) != 0) return error.UnableToGetStat;
     std.debug.print("size = {d}\n", .{info.st_size});
     if (@hasField(c.struct_stat, "st_ctim")) {
         std.debug.print("ctime = {d},{d}\n", .{ info.st_ctim.tv_sec, info.st_ctim.tv_nsec });

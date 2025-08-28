@@ -5008,6 +5008,9 @@ var streamLocation = mixin({
   obtainStreamLocation(dirFd, pathAddress, pathLen) {
     const pathArray = this.obtainZigArray(pathAddress, pathLen);
     let path = decodeText(pathArray).trim();
+    if (path === '.') {
+      return this.getStreamLocation(dirFd);
+    }
     if (path.endsWith('/')) {
       path = path.slice(0, -1);
     }
@@ -5951,7 +5954,7 @@ var fdAdvise = mixin({
       const [ stream ] = this.getStream(fd);
       if (hasMethod(stream, 'advise')) {
         const adviceKeys = Object.keys(Advice);
-        return stream.advise?.(offset, len, adviceKeys[advice]);
+        return stream.advise?.(safeInt(offset), len, adviceKeys[advice]);
       }
     });
   },
@@ -5962,7 +5965,7 @@ var fdAllocate = mixin({
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const [ stream ] = this.getStream(fd);
       checkStreamMethod(stream, 'allocate');
-      return stream.allocate(offset, len);
+      return stream.allocate(safeInt(offset), len);
     });
   },
 });
@@ -6065,23 +6068,21 @@ var copyStat = mixin({
     if (typeof(stat) !== 'object' || !stat) {
       throw new TypeMismatch$1('object or false', stat);
     }
-    let type = getEnumNumber(stat.type, PosixFileType);
-    if (type === undefined) {
-      if (stat.type) {
-        throw new InvalidEnumValue(PosixFileType, stat.type);
-      }
-      type = PosixFileType.unknown;
+    const { ino = 1, type = 'unknown', size = 0, atime = 0, mtime = 0, ctime = 0 } = stat;
+    const typeNum = getEnumNumber(type, PosixFileType);
+    if (typeNum === undefined) {
+      throw new InvalidEnumValue(PosixFileType, type);
     }
     const le = this.littleEndian;
     const buf = createView(64);
-    buf.setBigUint64(0, 0n, le);  // dev
-    buf.setBigUint64(8, 0n, le);  // ino
-    buf.setUint8(16, type); // filetype
+    buf.setBigUint64(0, 0n, le); // dev
+    buf.setBigUint64(8, BigInt(ino), le);  
+    buf.setUint8(16, typeNum);
     buf.setBigUint64(24, 1n, le);  // nlink
-    buf.setBigUint64(32, BigInt(stat.size ?? 0), le);
-    buf.setBigUint64(40, BigInt(stat.atime ?? 0), le);
-    buf.setBigUint64(48, BigInt(stat.mtime ?? 0), le);
-    buf.setBigUint64(56, BigInt(stat.ctime ?? 0), le);
+    buf.setBigUint64(32, BigInt(size), le);
+    buf.setBigUint64(40, BigInt(atime), le);
+    buf.setBigUint64(48, BigInt(mtime), le);
+    buf.setBigUint64(56, BigInt(ctime), le);
     this.moveExternBytes(buf, bufAddress, le);
   },
   inferStat(stream) {
@@ -6200,7 +6201,7 @@ var fdPwrite = mixin({
         pos += len;
       }
       const chunk = new Uint8Array(buffer);
-      return writer.pwrite(chunk, offset);
+      return writer.pwrite(chunk, safeInt(offset));
     }, () => this.copyUint32(writtenAddress, total));
   },
 });
@@ -6262,7 +6263,7 @@ var fdReaddir = mixin({
       let remaining = bufLen;
       let p = 0;
       while (dent) {
-        const { name, type = 'unknown', ino = 0 } = dent;
+        const { name, type = 'unknown', ino = 1 } = dent;
         const nameArray = encodeText(name);
         const typeIndex = getEnumNumber(type, PosixFileType);
         if (typeIndex === undefined) {
@@ -6282,7 +6283,7 @@ var fdReaddir = mixin({
         }
         remaining -= nameArray.length;
         // get next entry if call is sync
-        dent = (remaining > 24 + 16 && async) ? dir.readdir() : null;
+        dent = (remaining > 24 + 16 && !async) ? dir.readdir() : null;
       }
       this.moveExternBytes(dv, bufAddress, true);
       this.copyUint32(bufusedAddress, p);
@@ -6295,7 +6296,7 @@ var fdSeek = mixin({
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const [ stream ] = this.getStream(fd);
       checkStreamMethod(stream, 'seek');
-      return stream.seek(offset, whence);
+      return stream.seek(safeInt(offset), whence);
     }, (pos) => this.copyUint64(newOffsetAddress, pos));
   },
 });
@@ -6833,15 +6834,21 @@ var structureAcquisition = mixin({
           case 'fd_tell': this.use(fdTell); break;
           case 'fd_write': this.use(fdWrite); break;
           case 'path_create_directory': this.use(pathCreateDirectory); break;
-          case 'path_filestat_get': this.use(pathFilestatGet); break;
+          case 'path_filestat_get': 
+            this.use(pathFilestatGet); 
+            this.use(readerConversion);
+            this.use(writerConversion);
+            this.use(dirConversion);
+            break;
           case 'path_remove_directory': this.use(pathRemoveDirectory); break;
           case 'path_filestat_set_times': this.use(pathFilestatSetTimes); break;
           case 'path_open': 
             this.use(pathOpen); 
             this.use(readerConversion);
             this.use(writerConversion);
+            this.use(dirConversion);
             break;
-          case 'path_unlink': this.use(pathUnlinkFile); break;
+          case 'path_unlink_file': this.use(pathUnlinkFile); break;
           case 'proc_exit': this.use(procExit); break;
           case 'random_get': this.use(randomGet); break;
         }
