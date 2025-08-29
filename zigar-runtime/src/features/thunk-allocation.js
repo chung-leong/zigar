@@ -6,6 +6,7 @@ export default mixin({
     exports: {
       allocateJsThunk: { argType: 'ii', returnType: 'i' },
       freeJsThunk: { argType: 'ii', returnType: 'i' },
+      findJsThunk: { argType: 'ii', returnType: 'i' },
     },
     init() {
       this.thunkSources = [];
@@ -96,6 +97,17 @@ export default mixin({
           }
         }
         this.thunkMap.delete(thunkObject);
+      }
+      return fnId;
+    },
+    findJsThunk(controllerAddress, thunkAddress) {
+      let fnId = 0;
+      const thunkObject = this.table.get(thunkAddress);
+      this.table.set(thunkAddress, null);
+      const entry = this.thunkMap.get(thunkObject);
+      if (entry) {
+        const { source, sourceAddress } = entry;
+        fnId = source.identifyJsThunk(controllerAddress, sourceAddress);
       }
       return fnId;
     },

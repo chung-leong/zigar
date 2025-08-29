@@ -118,14 +118,14 @@ export function addTests(importModule, options) {
         expect(event).to.eql({ 
           parent: null,
           path: 'hello/world', 
-          rights: { read: true }, 
+          rights: { read: true, readdir: true }, 
           flags: {}, 
         });
       } else {
         expect(event).to.eql({ 
           parent: null,
           path: 'hello/world', 
-          rights: { read: true }, 
+          rights: { read: true, readdir: true }, 
           flags: { symlinkFollow: true }, 
         });
       }
@@ -202,7 +202,7 @@ export function addTests(importModule, options) {
       expect(event).to.eql({
         parent: null,
         path: 'hello/world.txt',
-        rights: { read: true },
+        rights: { read: true, readdir: true },
         flags: { symlinkFollow: true }
       });
     })

@@ -12,6 +12,7 @@ const Memory = types.Memory;
 pub const Action = enum(u32) {
     create,
     destroy,
+    identify,
 };
 pub const Error = error{ UnableToCreateThunk, UnableToFindThunk };
 
@@ -45,6 +46,14 @@ const native = struct {
                         const thunk: *const BFT = @ptrFromInt(arg);
                         if (fn_binding.bound(CT, thunk)) |ctx| {
                             defer fn_binding.unbind(thunk);
+                            return ctx.@"-1";
+                        } else {
+                            return Error.UnableToFindThunk;
+                        }
+                    },
+                    .identify => {
+                        const thunk: *const BFT = @ptrFromInt(arg);
+                        if (fn_binding.bound(CT, thunk)) |ctx| {
                             return ctx.@"-1";
                         } else {
                             return Error.UnableToFindThunk;
@@ -130,6 +139,14 @@ const wasm = struct {
                         return for (thunks, &fn_ids) |f, *id_ptr| {
                             if (f == thunk) {
                                 defer id_ptr.* = 0;
+                                break id_ptr.*;
+                            }
+                        } else Error.UnableToFindThunk;
+                    },
+                    .identify => {
+                        const thunk: *const BFT = @ptrFromInt(arg);
+                        return for (thunks, &fn_ids) |f, *id_ptr| {
+                            if (f == thunk) {
                                 break id_ptr.*;
                             }
                         } else Error.UnableToFindThunk;

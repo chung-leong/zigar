@@ -177,7 +177,7 @@ pub fn releaseFunction(fn_ptr: anytype) void {
     const FT = types.FnPointerTarget(@TypeOf(fn_ptr));
     const thunk_address = @intFromPtr(fn_ptr);
     const control = thunk_js.createThunkController(@This(), FT);
-    const fn_id = control(null, .get_id, thunk_address) catch return;
+    const fn_id = control(.identify, thunk_address) catch return;
     _ = imports.release_function(fn_id);
 }
 

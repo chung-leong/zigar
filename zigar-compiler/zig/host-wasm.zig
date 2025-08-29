@@ -96,10 +96,11 @@ pub fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
 }
 
 pub fn releaseFunction(fn_ptr: anytype) void {
+    const FT = types.FnPointerTarget(@TypeOf(fn_ptr));
     const thunk_address = @intFromPtr(fn_ptr);
-    const fn_id = for (js_thunk_list.items) |item| {
-        if (item.address == thunk_address) break item.fn_id;
-    } else return;
+    const control = thunk_js.createThunkController(@This(), FT);
+    const controller_address = @intFromPtr(control);
+    const fn_id = identifyJsThunk(controller_address, thunk_address);
     _releaseFunction(fn_id);
 }
 
@@ -134,11 +135,6 @@ export fn runVariadicThunk(
     return if (thunk(fn_ptr, arg_ptr, attr_ptr, arg_count)) true else |_| false;
 }
 
-var js_thunk_list = std.ArrayList(struct {
-    fn_id: usize,
-    address: usize,
-}).init(allocator);
-
 export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
     // try to use preallocated thunks within module first; if they've been used up,
     // ask JavaScript to create a new instance of this module and get a new
@@ -149,9 +145,6 @@ export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
         true => _allocateJsThunk(controller_address, fn_id),
         false => 0,
     };
-    if (in_main_thread and thunk_address > 0) {
-        js_thunk_list.append(.{ .fn_id = fn_id, .address = thunk_address }) catch {};
-    }
     return thunk_address;
 }
 
@@ -162,14 +155,16 @@ export fn destroyJsThunk(controller_address: usize, thunk_address: usize) usize 
         true => _freeJsThunk(controller_address, thunk_address),
         false => 0,
     };
-    if (in_main_thread and fn_id > 0) {
-        for (js_thunk_list.items, 0..) |item, i| {
-            if (item.address == thunk_address) {
-                _ = js_thunk_list.swapRemove(i);
-                break;
-            }
-        }
-    }
+    return fn_id;
+}
+
+export fn identifyJsThunk(controller_address: usize, thunk_address: usize) usize {
+    const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
+    const can_allocate = builtin.single_threaded and in_main_thread;
+    const fn_id = controller(.identify, thunk_address) catch switch (can_allocate) {
+        true => _findJsThunk(controller_address, thunk_address),
+        false => 0,
+    };
     return fn_id;
 }
 
@@ -319,4 +314,5 @@ extern fn _handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E;
 extern fn _releaseFunction(fn_id: usize) void;
 extern fn _allocateJsThunk(controller_address: usize, fn_id: usize) usize;
 extern fn _freeJsThunk(controller_address: usize, thunk_address: usize) usize;
+extern fn _findJsThunk(controller_address: usize, thunk_address: usize) usize;
 extern fn _displayPanic(bytes: [*]const u8, len: usize) void;
