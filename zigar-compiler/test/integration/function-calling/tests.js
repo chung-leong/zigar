@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import 'mocha-skip-if';
 import { arch, platform } from 'os';
 import { fileURLToPath } from 'url';
-import { capture, captureWarning } from '../test-utils.js';
+import { capture } from '../test-utils.js';
 
 export function addTests(importModule, options) {
   const { target, optimize } = options;
@@ -895,6 +895,21 @@ export function addTests(importModule, options) {
         new Double(1.23),
       );
       expect(result3).to.equal(20);
+    })
+    it('should correctly handle immediate fulfillment of a promise', async function() {
+      this.timeout(0);
+      const { fulfillInt, fulfillVoid, reduceColorDepthOfRgba8888ToArgb1555 } = await importTest('handle-immediate-promise-fulfillment');
+      const promise1 = fulfillInt();
+      expect(promise1).to.be.a('promise');
+      const result1 = await promise1;
+      expect(result1).to.equal(1234);
+      const promise2 = fulfillVoid();
+      expect(promise2).to.be.a('promise');
+      const result2 = await promise2;
+      expect(result2).to.equal(undefined);
+      const copiedBytesArray = new Uint8ClampedArray(36);
+      const result3 = await reduceColorDepthOfRgba8888ToArgb1555(copiedBytesArray, 128);
+      expect(result3).to.equal(1234);
     })
   })
 }

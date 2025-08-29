@@ -119,6 +119,7 @@ export default mixin({
     ? (attrs) ? this.getShadowAddress(context, attrs) : 0
     : (attrs) ? this.getViewAddress(attrs[MEMORY]) : 0;
     this.updateShadows(context);
+    let finalized = false;
     const finalize = () => {
       this.updateShadowTargets(context);
       // create objects that pointers point to
@@ -127,6 +128,7 @@ export default mixin({
       }
       this.flushStreams?.();
       this.endContext();
+      finalized = true;
     };
     if (isAsync) {
       argStruct[FINALIZE] = finalize;
@@ -140,20 +142,27 @@ export default mixin({
     ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
     if (!success) {
-      finalize();
+      if (!finalized) {
+        finalize();
+      }
       throw new ZigError();
     }
     if (process.env.TARGET === 'wasm') {
-      // copy retval from shadow view
-      argStruct[COPY]?.(this.findShadowView(argStruct[MEMORY]));
+      // finalized can be true here, if a function chooses to immediately invoke a promise's resolve method
+      if (!finalized) {
+        // copy retval from shadow view
+        argStruct[COPY]?.(this.findShadowView(argStruct[MEMORY]));
+      }
     }
     if (isAsync) {
       let retval = null;
       // if a function has returned a value or failed synchronmously, the promise is resolved immediately
-      try {
-        retval = argStruct.retval;
-      } catch (err) {
-        retval = new ZigError(err, 1);
+      if (!finalized) {
+        try {
+          retval = argStruct.retval;
+        } catch (err) {
+          retval = new ZigError(err, 1);
+        }
       }
       if (retval != null) {
         if (fn[STRING_RETVAL] && retval) {
