@@ -270,7 +270,7 @@ export function addTests(importModule, options) {
         expect(chunk).to.have.lengthOf(16);
         expect(chunk.string).to.equal('ur fathers broug');       
       } finally {
-        shutdown();
+        await shutdown();;
       }
     })
     it('should open a file and seek to a particular position using posix function', async function() {
@@ -1120,7 +1120,7 @@ export function addTests(importModule, options) {
         map2.close();
         expect(lines2).to.have.lengthOf(100);
       } finally {
-        shutdown();
+        await shutdown();;
       }
     })
     skip.entirely.if(target === 'win32').
@@ -1581,7 +1581,7 @@ export function addTests(importModule, options) {
         await delay(50);
         expect(file.lock).to.be.null;
       } finally {
-        shutdown();
+        await shutdown();;
       }
     })
     skip.entirely.if(target === 'win32').
@@ -1609,7 +1609,7 @@ export function addTests(importModule, options) {
         const line = lines.find(s => s.includes('Signifying nothing'));
         expect(line).to.be.a('string');
       } finally {
-        shutdown();
+        await shutdown();;
       }
       reader.close();
     })
@@ -1637,7 +1637,7 @@ export function addTests(importModule, options) {
         const line = lines.find(s => s.includes('Signifying nothing'));
         expect(line).to.be.a('string');
       } finally {
-        shutdown();
+        await shutdown();;
       }
       reader.close();
     })
@@ -1666,7 +1666,7 @@ export function addTests(importModule, options) {
         const line = lines.find(s => s.includes('Signifying nothing'));
         expect(line).to.be.a('string');
       } finally {
-        shutdown();
+        await shutdown();;
       }
       reader.close();
     })

@@ -175,6 +175,12 @@ export fn destroyJsThunk(controller_address: usize, thunk_address: usize) usize 
 
 export fn initialize() void {
     in_main_thread = true;
+    if (builtin.link_libc) {
+        const stdio_h = @cImport({
+            @cInclude("stdio.h");
+        });
+        stdio_h.setbuf(stdio_h.stdout, null);
+    }
 }
 
 export fn allocateScratchMemory(len: usize, byte_align: u16) ?[*]u8 {
