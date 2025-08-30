@@ -296,12 +296,11 @@ export default mixin({
   getTypedArray(structure) {
     const { type, instance } = structure;
     if (type !== undefined && instance) {
-      const [ member ] = instance.members;
       switch (type) {
         case StructureType.Enum:
         case StructureType.ErrorSet:
         case StructureType.Primitive: {
-          const { byteSize, type } = member;
+          const { byteSize, type } = instance.members[0];
           const intType = (type === MemberType.Float)
                         ? 'Float'
                         : (type === MemberType.Int) ? 'Int' : 'Uint';
@@ -312,7 +311,7 @@ export default mixin({
         case StructureType.Array:
         case StructureType.Slice:
         case StructureType.Vector:
-          return this.getTypedArray(member.structure);
+          return this.getTypedArray(instance.members[0].structure);
       }
     }
   },
