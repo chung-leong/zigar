@@ -997,13 +997,13 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                             .TRUNC = o.TRUNC,
                         },
                         .rights = if (o.DIRECTORY)
-                            .{ .FD_READDIR = true }
+                            .{ .FD_READ = true, .FD_READDIR = true }
                         else if (o.ACCMODE == .RDWR)
                             .{ .FD_READ = true, .FD_WRITE = true }
                         else if (o.ACCMODE == .WRONLY)
                             .{ .FD_WRITE = true }
                         else
-                            .{ .FD_READ = true },
+                            .{ .FD_READ = true, .FD_READDIR = true },
                     },
                 } };
                 const err = Host.redirectSyscall(&call);

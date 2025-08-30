@@ -304,14 +304,15 @@ export default mixin({
         } else {
           // cannot obtain zero-length buffer
           buffer = (len > 0) ? this.obtainExternBuffer(address, len, FALLBACK) : new ArrayBuffer(0);
-          this.externBufferList.splice(index, 0, { address, len, buffer })
+          buffer[ZIG] = { address, len };
           offset = 0;
+          this.externBufferList.splice(index, 0, { address, len, buffer })
         }
       } else {
         buffer = (len > 0) ? this.obtainExternBuffer(address, len, FALLBACK) : new ArrayBuffer(0);
+        buffer[ZIG] = { address, len };
         offset = 0;
       }
-      buffer[ZIG] = { address, len };
       return this.obtainView(buffer, offset, len);  
     },
     unregisterBuffer(address) {
