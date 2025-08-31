@@ -104,17 +104,26 @@ export function addTests(importModule, options) {
       const [ line3 ] = await capture(() => call(f3));
       expect(line3).to.equal('number = 1234, error = Unexpected');
       const f4 = async () => 123;
-      call(f4);
       const [ line4 ] = await capture(() => call(f4));
       expect(line4).to.equal('number = 1234, value = 123');
       const f5 = async () => { throw JSError.Unexpected };
-      const [ line5 ] = await capture(() => call(f5));
+      const [ line5 ] = await capture(async () => {
+        call(f5);
+        // wait for invocation of promise callback
+        await delay(10);
+      });
       expect(line5).to.equal('number = 1234, error = Unexpected');
       const f6 = async () => { throw new Error('Unexpected') };
-      const [ line6 ] = await capture(() => call(f6));
+      const [ line6 ] = await capture(async () => {
+        call(f6);
+        await delay(10);
+      });
       expect(line6).to.equal('number = 1234, error = Unexpected');
       const f7 = async () => { throw new Error('Doh!') };
-      const [ line7 ] = await capture(() => call(f7));
+      const [ line7 ] = await capture(async () => {
+        call(f7);
+        await delay(10);
+      });
       expect(line7).to.equal('number = 1234, error = Unexpected');
     })
     it('should correctly pass allocator and promise as arguments', async function() {

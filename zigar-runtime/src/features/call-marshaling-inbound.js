@@ -50,10 +50,12 @@ export default mixin({
           this.updateShadowTargets(context);
           this.endContext();
         }
+        // obtain argument list so that argStruct[RETURN] gets set when there's a promise
+        const args = [ ...argStruct ];
         const hasCallback = argStruct.hasOwnProperty(RETURN);
         // promise is acceptable when we can wait for it or its result is sent to a callback
         const result = catchPosixError(canWait || hasCallback, PosixError.EFAULT, () => {
-          return fn(...argStruct);
+          return fn(...args);
         }, (retval) => {
             if (retval?.[Symbol.asyncIterator]) {
               // send contents through [YIELD]
