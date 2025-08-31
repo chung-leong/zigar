@@ -648,7 +648,11 @@ fn Factory(comptime host: type, comptime module: type) type {
             var memory: ?Value = null;
             var slots: ?Value = null;
             switch (@typeInfo(td.type)) {
-                .@"struct" => |st| if (!td.isArguments()) {
+                .@"struct" => |st| if (comptime td.isSlice()) {
+                    if (comptime td.getSentinel()) |sentinel| {
+                        memory = try self.exportPointerTarget(&sentinel.value, false);
+                    }
+                } else if (!comptime td.isArguments()) {
                     if (@sizeOf(td.type) > 0) {
                         const default_values = comptime init: {
                             var values: td.type = undefined;
@@ -685,13 +689,12 @@ fn Factory(comptime host: type, comptime module: type) type {
                     memory = try self.exportPointerTarget(thunk, false);
                 },
                 .array => if (comptime td.getSentinel()) |sentinel| {
-                    _ = sentinel;
-                    // memory = try self.exportPointerTarget(&sentinel.value, false);
+                    memory = try self.exportPointerTarget(&sentinel.value, false);
                 },
                 .pointer => if (comptime td.isSlice()) {
-                    // if (comptime td.getSentinel()) |sentinel| {
-                    //     memory = try self.exportPointerTarget(&sentinel.value, false);
-                    // }
+                    if (comptime td.getSentinel()) |sentinel| {
+                        memory = try self.exportPointerTarget(&sentinel.value, false);
+                    }
                 },
                 else => {},
             }

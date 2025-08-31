@@ -3752,6 +3752,7 @@ var callMarshalingOutbound = mixin({
     const attrAddress = (attrs) ? this.getShadowAddress(context, attrs) : 0
     ;
     this.updateShadows(context);
+    let finalized = false;
     const finalize = () => {
       this.updateShadowTargets(context);
       // create objects that pointers point to
@@ -3760,6 +3761,7 @@ var callMarshalingOutbound = mixin({
       }
       this.flushStreams?.();
       this.endContext();
+      finalized = true;
     };
     if (isAsync) {
       argStruct[FINALIZE] = finalize;
@@ -3771,20 +3773,27 @@ var callMarshalingOutbound = mixin({
     ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
     if (!success) {
-      finalize();
+      if (!finalized) {
+        finalize();
+      }
       throw new ZigError();
     }
     {
-      // copy retval from shadow view
-      argStruct[COPY]?.(this.findShadowView(argStruct[MEMORY]));
+      // finalized can be true here, if a function chooses to immediately invoke a promise's resolve method
+      if (!finalized) {
+        // copy retval from shadow view
+        argStruct[COPY]?.(this.findShadowView(argStruct[MEMORY]));
+      }
     }
     if (isAsync) {
       let retval = null;
       // if a function has returned a value or failed synchronmously, the promise is resolved immediately
-      try {
-        retval = argStruct.retval;
-      } catch (err) {
-        retval = new ZigError(err, 1);
+      if (!finalized) {
+        try {
+          retval = argStruct.retval;
+        } catch (err) {
+          retval = new ZigError(err, 1);
+        }
       }
       if (retval != null) {
         if (fn[STRING_RETVAL] && retval) {
@@ -5237,6 +5246,7 @@ var thunkAllocation = mixin({
     exports: {
       allocateJsThunk: { argType: 'ii', returnType: 'i' },
       freeJsThunk: { argType: 'ii', returnType: 'i' },
+      findJsThunk: { argType: 'ii', returnType: 'i' },
     },
     init() {
       this.thunkSources = [];
@@ -5327,6 +5337,17 @@ var thunkAllocation = mixin({
           }
         }
         this.thunkMap.delete(thunkObject);
+      }
+      return fnId;
+    },
+    findJsThunk(controllerAddress, thunkAddress) {
+      let fnId = 0;
+      const thunkObject = this.table.get(thunkAddress);
+      this.table.set(thunkAddress, null);
+      const entry = this.thunkMap.get(thunkObject);
+      if (entry) {
+        const { source, sourceAddress } = entry;
+        fnId = source.identifyJsThunk(controllerAddress, sourceAddress);
       }
       return fnId;
     },
@@ -6698,12 +6719,8 @@ var structureAcquisition = mixin({
     }
   },
   createInstance(structure, dv, slots) {
-    const { constructor, flags } = structure;
+    const { constructor } = structure;
     const object = constructor.call(ENVIRONMENT, dv);
-    if (flags & StructureFlag.HasPointer) {
-      // acquire targets of pointers
-      this.updatePointerTargets(null, object);
-    }
     if (slots) {
       Object.assign(object[SLOTS], slots);
     }
@@ -8383,12 +8400,11 @@ var all$1 = mixin({
   getTypedArray(structure) {
     const { type, instance } = structure;
     if (type !== undefined && instance) {
-      const [ member ] = instance.members;
       switch (type) {
         case StructureType.Enum:
         case StructureType.ErrorSet:
         case StructureType.Primitive: {
-          const { byteSize, type } = member;
+          const { byteSize, type } = instance.members[0];
           const intType = (type === MemberType.Float)
                         ? 'Float'
                         : (type === MemberType.Int) ? 'Int' : 'Uint';
@@ -8398,7 +8414,7 @@ var all$1 = mixin({
         }        case StructureType.Array:
         case StructureType.Slice:
         case StructureType.Vector:
-          return this.getTypedArray(member.structure);
+          return this.getTypedArray(instance.members[0].structure);
       }
     }
   },

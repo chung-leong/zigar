@@ -91,12 +91,8 @@ var structureAcquisition = mixin({
     }
   },
   createInstance(structure, dv, slots) {
-    const { constructor, flags } = structure;
+    const { constructor } = structure;
     const object = constructor.call(ENVIRONMENT, dv);
-    if (flags & StructureFlag.HasPointer) {
-      // acquire targets of pointers
-      this.updatePointerTargets(null, object);
-    }
     if (slots) {
       Object.assign(object[SLOTS], slots);
     }

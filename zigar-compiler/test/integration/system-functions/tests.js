@@ -1,12 +1,15 @@
 import { expect } from 'chai';
+import 'mocha-skip-if';
 import { capture } from '../test-utils.js';
 
 export function addTests(importModule, options) {
+  const { target } = options;
   const importTest = async (name) => {
     const url = new URL(`./${name}.zig`, import.meta.url).href;
     return importModule(url);
   };
   describe('System functions', function() {
+    skip.entirely.unless(target === 'wasm32').
     it('should print environment variables', async function () {
       this.timeout(0);
       const { __zigar, print } = await importTest('print-env');
