@@ -219,7 +219,7 @@ const PosixDescriptor = {
   stdin: 0,
   stdout: 1,
   stderr: 2,
-  root: 3 ,
+  root: -1,
 
   min: 0x000f_ffff,
   max: 0x07ff_ffff, 

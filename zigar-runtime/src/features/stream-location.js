@@ -24,6 +24,10 @@ export default mixin({
         list.push(part);
       }
     }
+    if (!parts[0]) {
+      // absolute path
+      dirFd = PosixDescriptor.root;
+    }
     const [ stream ] = this.getStream(dirFd);
     return { parent: stream.valueOf(), path: list.join('/') };
   },

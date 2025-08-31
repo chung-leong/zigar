@@ -2212,6 +2212,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
         pub fn fread(buffer: [*]u8, size: usize, n: usize, s: *std.c.FILE) callconv(.c) usize {
             if (getRedirectedFile(s)) |file| {
                 const len: off_t = @intCast(size * n);
+                if (len == 0) return 0;
                 const result = read(file, buffer, len);
                 if (result < 0) return 0;
                 return if (len == result) n else @as(usize, @intCast(result)) / size;
@@ -2257,6 +2258,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
         pub fn fwrite(buffer: [*]const u8, size: usize, n: usize, s: *std.c.FILE) callconv(.c) usize {
             if (getRedirectedFile(s)) |file| {
                 const len: off_t = @intCast(size * n);
+                if (len == 0) return 0;
                 const result = write(file, buffer, len);
                 if (result < 0) {
                     file.errno = posix.getError();

@@ -585,7 +585,7 @@ function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
         console.error(err);
       }
     }
-    return result ?? err.code ?? defErrorCode;
+    return result ?? -err.code ?? -defErrorCode;
   };
   const done = (value) => {
     const result = resolve?.(value);

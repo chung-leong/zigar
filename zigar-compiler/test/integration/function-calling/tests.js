@@ -657,15 +657,17 @@ export function addTests(importModule, options) {
       const { WASI } = await import('wasi');
       const { __zigar, fwrite, fopen, fclose } = await importTest('call-fwrite', { useLibc: true, topLevelAwait: false });
       if (target == 'wasm32') {
-        const wasi = new WASI({
-          version: 'preview1',
-          args: [],
-          env: {},
-          preopens: {
-            '/local': fileURLToPath(new URL('./test-data', import.meta.url)),
-          },
+        __zigar.on('wasi', async() => {
+          return new WASI({
+            version: 'preview1',
+            args: [],
+            env: {},
+            preopens: {
+              '/local': fileURLToPath(new URL('./test-data', import.meta.url)),
+            },
+          });
         });
-        await __zigar.init(wasi);
+        await __zigar.init();
       }
       const path = (target == 'wasm32')
       ? '/local/hello-wasm.txt'
@@ -683,16 +685,18 @@ export function addTests(importModule, options) {
       this.timeout(0);
       const { __zigar, fread, fopen, fclose } = await importTest('call-fread', { useLibc: true, topLevelAwait: false });
       if (target == 'wasm32') {
-        const { WASI } = await import('wasi');
-        const wasi = new WASI({
-          version: 'preview1',
-          args: [],
-          env: {},
-          preopens: {
-            '/local': fileURLToPath(new URL('./test-data', import.meta.url)),
-          },
+        __zigar.on('wasi', async () => {
+          const { WASI } = await import('wasi');
+          return new WASI({
+            version: 'preview1',
+            args: [],
+            env: {},
+            preopens: {
+              '/local': fileURLToPath(new URL('./test-data', import.meta.url)),
+            },
+          });
         });
-        await __zigar.init(wasi);
+        await __zigar.init();
       }
       const path = (target == 'wasm32')
       ? '/local/donuts.txt'

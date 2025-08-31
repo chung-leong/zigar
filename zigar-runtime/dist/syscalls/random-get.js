@@ -1,4 +1,3 @@
-import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { createView } from '../utils.js';
 
@@ -9,7 +8,7 @@ var randomGet = mixin({
       dv.setUint8(i, Math.floor(256 * Math.random()));
     }
     this.moveExternBytes(dv, bufAddress, true);
-    return PosixError.NONE;
+    return 0;
   }
 }) ;
 

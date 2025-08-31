@@ -6,7 +6,7 @@ import { hasMethod, getEnumNumber, createView } from '../utils.js';
 var copyStat = mixin({
   copyStat(bufAddress, stat) {
     if (stat === false) {
-      return PosixError.ENOENT;
+      return -PosixError.ENOENT;
     }
     if (typeof(stat) !== 'object' || !stat) {
       throw new TypeMismatch('object or false', stat);

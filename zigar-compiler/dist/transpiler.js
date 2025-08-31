@@ -215,7 +215,7 @@ const PosixDescriptorFlag = {
 const PosixDescriptor = {
   stdout: 1,
   stderr: 2,
-  root: 3 ,
+  root: -1,
 
   min: 0x000f_ffff};
 
@@ -3188,7 +3188,7 @@ function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
         console.error(err);
       }
     }
-    return result ?? err.code ?? defErrorCode;
+    return result ?? -err.code ?? -defErrorCode;
   };
   const done = (value) => {
     const result = resolve?.(value);
@@ -3364,7 +3364,7 @@ var baseline = mixin({
       return v;
     };
     return {
-      init: (...args) => this.initialize?.(...args),
+      init: () => this.initPromise,
       abandon: () => this.abandonModule?.(),
       redirect: (fd, stream) => this.redirectStream(fd, stream),
       sizeOf: (T) => check(T?.[SIZE]),
@@ -3374,6 +3374,13 @@ var baseline = mixin({
     };
   },
   addListener(name, cb) {
+    {
+      if (name === 'wasi') {
+        if (this.table) {
+          throw new Error(`WASI event handler cannot be set after compilation has begun. Disable topLevelAwait and await __zigar.init().`);
+        }
+      }
+    }
     this.listenerMap.set(name, cb);
   },
   hasListener(name) {
@@ -3502,10 +3509,12 @@ var callMarshalingInbound = mixin({
           this.updateShadowTargets(context);
           this.endContext();
         }
+        // obtain argument list so that argStruct[RETURN] gets set when there's a promise
+        const args = [ ...argStruct ];
         const hasCallback = argStruct.hasOwnProperty(RETURN);
         // promise is acceptable when we can wait for it or its result is sent to a callback
         const result = catchPosixError(canWait || hasCallback, PosixError.EFAULT, () => {
-          return fn(...argStruct);
+          return fn(...args);
         }, (retval) => {
             if (retval?.[Symbol.asyncIterator]) {
               // send contents through [YIELD]
@@ -3531,6 +3540,8 @@ var callMarshalingInbound = mixin({
             } catch (_) {
               console.error(err);
             }
+            // catchPosixError by default return negative errno, whereas here we want to actual value 
+            return err.code ?? PosixError.EFAULT;
         });
         // don't return promise when a callback is used
         return (hasCallback) ? PosixError.NONE : result;
@@ -3989,8 +4000,7 @@ class AsyncReader {
       // wait for outstanding non-blocking retrieval
       await this.promise;
     }
-    // keep reading until there's enough bytes to cover the request length
-    while ((!this.bytes || this.bytes.length < len) && !this.done) {
+    if (!this.bytes && !this.done) {
       await this.fetch(len - (this.bytes?.length ?? 0));
     }
     return this.shift(len);
@@ -4621,10 +4631,6 @@ var moduleLoading = mixin({
       displayPanic: { argType: 'ii' },
     },
 
-    async initialize(wasi) {
-      this.setCustomWASI?.(wasi);
-      await this.initPromise;
-    },
     getObjectIndex(object) {
       if (object != null) {
         let index = this.valueIndices.get(object);
@@ -5044,6 +5050,10 @@ var streamLocation = mixin({
         list.push(part);
       }
     }
+    if (!parts[0]) {
+      // absolute path
+      dirFd = PosixDescriptor.root;
+    }
     const [ stream ] = this.getStream(dirFd);
     return { parent: stream.valueOf(), path: list.join('/') };
   },
@@ -5114,9 +5124,9 @@ var streamRedirection = mixin({
       },
     };
     this.streamMap = new Map([ 
+      [ PosixDescriptor.root, [ root, this.getDefaultRights('dir'), 0 ] ], 
       [ PosixDescriptor.stdout, [ this.createLogWriter('stdout'), this.getDefaultRights('file'), 0 ] ], 
       [ PosixDescriptor.stderr, [ this.createLogWriter('stderr'), this.getDefaultRights('file'), 0 ] ], 
-      [ PosixDescriptor.root, [ root, this.getDefaultRights('dir'), 0 ] ], 
     ]);
     this.flushRequestMap = new Map();
     this.nextStreamHandle = PosixDescriptor.min;
@@ -5939,7 +5949,7 @@ var environGet = mixin({
     }
     this.moveExternBytes(ptrDV, environAddress, true);
     this.moveExternBytes(bytes, environBufAddress, true);
-    return PosixError.NONE;
+    return 0;
   },
 });
 
@@ -5973,7 +5983,7 @@ var environSizesGet = mixin({
     }    
     this.copyUint32(environCountAddress, env.length);
     this.copyUint32(environBufSizeAddress, size);
-    return PosixError.NONE;
+    return 0;
   },
 });
 
@@ -6101,7 +6111,7 @@ var fdFdstatSetRights = mixin({
 var copyStat = mixin({
   copyStat(bufAddress, stat) {
     if (stat === false) {
-      return PosixError.ENOENT;
+      return -44;
     }
     if (typeof(stat) !== 'object' || !stat) {
       throw new TypeMismatch$1('object or false', stat);
@@ -6192,26 +6202,36 @@ var fdPread = mixin({
 
 var fdPrestatDirName = mixin({
   fdPrestatDirName(fd, pathAddress, pathLen) {
-    return PosixError.NONE;
+    if (!this.customPreopened) {
+      if (fd === 3) {
+        return 0;
+      } else {
+        return -8;
+      }
+    } else {
+      return -58;
+    }
   }
 }) ;
 
 var fdPrestatGet = mixin({
   fdPrestatGet(fd, bufAddress) {
-    if (fd === 3) {
-      // descriptor 3 is the root directory, I think
-      const dv = createView(8);      
-      dv.setUint8(0, 0);
-      dv.setUint32(4, 0, this.littleEndian);
-      this.moveExternBytes(dv, bufAddress, true);
-      return PosixError.NONE;
+    if (!this.customPreopened) {
+      if (fd === 3) {
+        // descriptor 3 is the root directory, I think
+        this.streamMap.set(fd, this.streamMap.get(PosixDescriptor.root));
+        const dv = createView(8);      
+        dv.setUint8(0, 0);
+        dv.setUint32(4, 0, this.littleEndian);
+        this.moveExternBytes(dv, bufAddress, true);
+        return 0;
+      } else {
+        return -8;
+      }
     } else {
-      return PosixError.EBADF;
+      return -58;
     }
   },
-  fdPrestatDirName(fd, path_address, path_len) {
-    return PosixError.NONE;
-  }
 }) ;
 
 var fdPwrite = mixin({
@@ -6250,7 +6270,7 @@ var fdRead = mixin({
     const iovsSize = usizeByteSize * 2;
     const ops = [];
     let total = 0;
-    return catchPosixError(canWait, PosixError.EIO, () => {        
+    return catchPosixError(canWait, PosixError.EIO, () => {
       const[ reader, rights, flags ] = this.getStream(fd);
       checkAccessRight(rights, PosixDescriptorRight.fd_read);
       const iovs = createView(iovsSize * iovsCount);
@@ -6282,7 +6302,7 @@ var fdRead = mixin({
 var fdReaddir = mixin({
   fdReaddir(fd, bufAddress, bufLen, cookie, bufusedAddress, canWait) {
     if (bufLen < 24) {
-      return PosixError.EINVAL;
+      return -28;
     }
     let dir, async;
     return catchPosixError(canWait, PosixError.EBADF, () => {
@@ -6398,10 +6418,10 @@ var pathCreateDirectory = mixin({
       return this.triggerEvent('mkdir', loc, PosixError.ENOENT);
     }, (result) => {
       if (result === undefined) {
-        return PosixError.ENOTSUP;
+        return -58;
       }
       if (result instanceof Map) {
-        return PosixError.EEXIST;
+        return -20;
       }
       return expectBoolean(result, PosixError.ENOENT);
     });
@@ -6425,9 +6445,9 @@ var pathFilestatGet = mixin({
       }
     }, (result) => {
       if (result === undefined) {
-        return PosixError.ENOTSUP;
+        return -58;
       } else if (result === false) {
-        return PosixError.ENOENT;
+        return -44;
       }
       if (infer) {
         const stream = this.convertReader(result) ?? this.convertWriter(result) ?? this.convertDirectory(result);
@@ -6473,12 +6493,12 @@ var pathOpen = mixin({
         ...decodeFlags(oFlags, PosixOpenFlag),
         ...decodeFlags(fdFlags, PosixDescriptorFlag),
       };
-      return this.triggerEvent('open', { ...loc, rights, flags }, PosixError.ENOENT);
+      return this.triggerEvent('open', { ...loc, rights, flags });
     }, (arg) => {
       if (arg === undefined) {
-        return PosixError.ENOTSUP;
+        return -58;
       } else if (arg === false) {
-        return PosixError.ENOENT;
+        return -44;
       }
       const stream = this.convertReader(arg) ?? this.convertWriter(arg) ?? this.convertDirectory(arg);
       if (!stream) {
@@ -6522,7 +6542,7 @@ var randomGet = mixin({
       dv.setUint8(i, Math.floor(256 * Math.random()));
     }
     this.moveExternBytes(dv, bufAddress, true);
-    return PosixError.NONE;
+    return 0;
   }
 }) ;
 
@@ -6532,21 +6552,27 @@ var wasiSupport = mixin({
     const handler = this[nameCamelized];
     if (handler) {
       const custom = this.customWASI?.wasiImport?.[name];
+      if (custom && name === 'fd_prestat_get') {
+        this.customPreopened = true;
+      }
       return (...args) => {
         const result = handler.call(this, ...args);
         const onResult = (result) => {
-          if (result === PosixError.ENOTSUP && custom) {
-            // the handler has declined to deal with it, use the method from the custom WASI interface
-            return custom(...args);
-          } else if (result === PosixError.ENOTSUP && result === PosixError.ENOTCAPABLE) {
-            // if we can't fallback onto a custom handler, explain the failure
-            const evtName = this.lastEvent;
-            if (this.hasListener(evtName)) {
-              console.error(`WASI method '${name}' failed because the handler for '${evtName}' declined to handle the event`);
-            } else {
-              console.error(`WASI method '${name}' requires the handling of the '${evtName}' event`);
+          if (result < 0) {
+            const errno = -result;
+            if (errno === PosixError.ENOTSUP && custom) {
+              // the handler has declined to deal with it, use the method from the custom WASI interface
+              return custom(...args);
+            } else if (errno === PosixError.ENOTSUP || errno === PosixError.ENOTCAPABLE) {
+              // if we can't fallback onto a custom handler, explain the failure
+              const evtName = this.lastEvent;
+              if (this.hasListener(evtName)) {
+                console.error(`WASI method '${name}' failed because the handler for '${evtName}' declined to handle the event`);
+              } else {
+                console.error(`WASI method '${name}' requires the handling of the '${evtName}' event`);
+              }
+              return -8;
             }
-            return PosixError.ENOTSUP;
           }
           return result;
         };

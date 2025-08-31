@@ -57,9 +57,9 @@ export default mixin({
       },
     };
     this.streamMap = new Map([ 
+      [ PosixDescriptor.root, [ root, this.getDefaultRights('dir'), 0 ] ], 
       [ PosixDescriptor.stdout, [ this.createLogWriter('stdout'), this.getDefaultRights('file'), 0 ] ], 
       [ PosixDescriptor.stderr, [ this.createLogWriter('stderr'), this.getDefaultRights('file'), 0 ] ], 
-      [ PosixDescriptor.root, [ root, this.getDefaultRights('dir'), 0 ] ], 
     ]);
     this.flushRequestMap = new Map();
     this.nextStreamHandle = PosixDescriptor.min;

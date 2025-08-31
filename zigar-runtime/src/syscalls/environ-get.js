@@ -1,4 +1,3 @@
-import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { createView, usizeByteSize } from '../utils.js';
 
@@ -25,7 +24,7 @@ export default mixin({
     }
     this.moveExternBytes(ptrDV, environAddress, true);
     this.moveExternBytes(bytes, environBufAddress, true);
-    return PosixError.NONE;
+    return 0;
   },
   ...(process.env.TARGET === 'node' ? {
     exports: {

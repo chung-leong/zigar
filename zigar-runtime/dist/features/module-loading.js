@@ -35,10 +35,6 @@ var moduleLoading = mixin({
       displayPanic: { argType: 'ii' },
     },
 
-    async initialize(wasi) {
-      this.setCustomWASI?.(wasi);
-      await this.initPromise;
-    },
     getObjectIndex(object) {
       if (object != null) {
         let index = this.valueIndices.get(object);

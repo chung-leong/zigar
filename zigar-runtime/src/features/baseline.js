@@ -16,7 +16,7 @@ export default mixin({
       return v;
     };
     return {
-      init: (...args) => this.initialize?.(...args),
+      init: () => this.initPromise,
       abandon: () => this.abandonModule?.(),
       redirect: (fd, stream) => this.redirectStream(fd, stream),
       sizeOf: (T) => check(T?.[SIZE]),
@@ -26,12 +26,18 @@ export default mixin({
     };
   },
   addListener(name, cb) {
-    this.listenerMap.set(name, cb);
     if (process.env.TARGET === 'node') {
       if ([ 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink' ].includes(name)) {
         this.setRedirectionMask(name, !!cb);
       }
+    } else if (process.env.TARGET === 'wasm') {
+      if (name === 'wasi') {
+        if (this.table) {
+          throw new Error(`WASI event handler cannot be set after compilation has begun. Disable topLevelAwait and await __zigar.init().`);
+        }
+      }
     }
+    this.listenerMap.set(name, cb);
   },
   hasListener(name) {
     return this.listenerMap.get(name);

@@ -21,9 +21,9 @@ var pathFilestatGet = mixin({
       }
     }, (result) => {
       if (result === undefined) {
-        return PosixError.ENOTSUP;
+        return -PosixError.ENOTSUP;
       } else if (result === false) {
-        return PosixError.ENOENT;
+        return -PosixError.ENOENT;
       }
       if (infer) {
         const stream = this.convertReader(result) ?? this.convertWriter(result) ?? this.convertDirectory(result);

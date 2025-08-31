@@ -1,4 +1,3 @@
-import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { encodeText } from '../utils.js';
 import './copy-int.js';
@@ -20,7 +19,7 @@ var environSizesGet = mixin({
     }    
     this.copyUint32(environCountAddress, env.length);
     this.copyUint32(environBufSizeAddress, size);
-    return PosixError.NONE;
+    return 0;
   },
 });
 

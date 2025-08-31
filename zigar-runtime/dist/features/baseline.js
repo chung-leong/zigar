@@ -16,7 +16,7 @@ var baseline = mixin({
       return v;
     };
     return {
-      init: (...args) => this.initialize?.(...args),
+      init: () => this.initPromise,
       abandon: () => this.abandonModule?.(),
       redirect: (fd, stream) => this.redirectStream(fd, stream),
       sizeOf: (T) => check(T?.[SIZE]),
@@ -26,6 +26,13 @@ var baseline = mixin({
     };
   },
   addListener(name, cb) {
+    {
+      if (name === 'wasi') {
+        if (this.table) {
+          throw new Error(`WASI event handler cannot be set after compilation has begun. Disable topLevelAwait and await __zigar.init().`);
+        }
+      }
+    }
     this.listenerMap.set(name, cb);
   },
   hasListener(name) {
