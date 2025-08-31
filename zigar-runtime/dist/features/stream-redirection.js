@@ -65,14 +65,13 @@ var streamRedirection = mixin({
     this.nextStreamHandle = PosixDescriptor.min;
   },
   getStream(fd) {
-    {
-      if (PosixDescriptor.root < fd && fd < PosixDescriptor.min) {
-        throw new Unsupported();
-      }
-    }
     const entry = this.streamMap.get(fd);
     if (!entry) {
-      console.error('getStream', { fd });
+      {
+        if (2 < fd && fd < PosixDescriptor.min) {
+          throw new Unsupported();
+        }
+      }
       throw new InvalidFileDescriptor();
     }
     return entry;

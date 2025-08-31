@@ -7,7 +7,7 @@ import './copy-int.js';
 export default mixin({
   fdReaddir(fd, bufAddress, bufLen, cookie, bufusedAddress, canWait) {
     if (bufLen < 24) {
-      return -PosixError.EINVAL;
+      return PosixError.EINVAL;
     }
     let dir, async;
     return catchPosixError(canWait, PosixError.EBADF, () => {

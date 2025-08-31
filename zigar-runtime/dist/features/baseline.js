@@ -41,7 +41,9 @@ var baseline = mixin({
   triggerEvent(name, event) {
     const listener = this.listenerMap.get(name);
     this.lastEvent = name;
-    return listener?.(event);
+    const result = listener?.(event);
+    this.lastEvent = null;
+    return result;
   },
   recreateStructures(structures, settings) {
     Object.assign(this, settings);

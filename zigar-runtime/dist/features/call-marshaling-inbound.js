@@ -78,8 +78,6 @@ var callMarshalingInbound = mixin({
             } catch (_) {
               console.error(err);
             }
-            // catchPosixError by default return negative errno, whereas here we want to actual value 
-            return err.code ?? PosixError.EFAULT;
         });
         // don't return promise when a callback is used
         return (hasCallback) ? PosixError.NONE : result;

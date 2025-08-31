@@ -28,9 +28,9 @@ var pathOpen = mixin({
       return this.triggerEvent('open', { ...loc, rights, flags });
     }, (arg) => {
       if (arg === undefined) {
-        return -PosixError.ENOTSUP;
+        return PosixError.ENOTSUP;
       } else if (arg === false) {
-        return -PosixError.ENOENT;
+        return PosixError.ENOENT;
       }
       const stream = this.convertReader(arg) ?? this.convertWriter(arg) ?? this.convertDirectory(arg);
       if (!stream) {

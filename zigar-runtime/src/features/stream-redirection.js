@@ -65,14 +65,13 @@ export default mixin({
     this.nextStreamHandle = PosixDescriptor.min;
   },
   getStream(fd) {
-    if (process.env.TARGET === 'wasm') {
-      if (PosixDescriptor.root < fd && fd < PosixDescriptor.min) {
-        throw new Unsupported();
-      }
-    }
     const entry = this.streamMap.get(fd);
     if (!entry) {
-      console.error('getStream', { fd });
+      if (process.env.TARGET === 'wasm') {
+        if (2 < fd && fd < PosixDescriptor.min) {
+          throw new Unsupported();
+        }
+      }
       throw new InvalidFileDescriptor();
     }
     return entry;

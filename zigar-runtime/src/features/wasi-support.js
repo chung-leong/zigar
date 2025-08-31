@@ -14,21 +14,20 @@ export default (process.env.TARGET === 'wasm') ? mixin({
       return (...args) => {
         const result = handler.call(this, ...args);
         const onResult = (result) => {
-          if (result < 0) {
-            const errno = -result;
-            if (errno === PosixError.ENOTSUP && custom) {
-              // the handler has declined to deal with it, use the method from the custom WASI interface
-              return custom(...args);
-            } else if (errno === PosixError.ENOTSUP || errno === PosixError.ENOTCAPABLE) {
-              // if we can't fallback onto a custom handler, explain the failure
-              const evtName = this.lastEvent;
+          if (result === PosixError.ENOTSUP && custom) {
+            // the handler has declined to deal with it, use the method from the custom WASI interface
+            return custom(...args);
+          } else if (result === PosixError.ENOTSUP || result === PosixError.ENOTCAPABLE) {
+            // if we can't fallback onto a custom handler, explain the failure
+            const evtName = this.lastEvent;
+            if (evtName) {
               if (this.hasListener(evtName)) {
                 console.error(`WASI method '${name}' failed because the handler for '${evtName}' declined to handle the event`);
               } else {
                 console.error(`WASI method '${name}' requires the handling of the '${evtName}' event`);
               }
-              return -PosixError.EBADF;
             }
+            return PosixError.ENOTSUP;
           }
           return result;
         };

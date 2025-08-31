@@ -7,10 +7,10 @@ export default (process.env.TARGET === 'wasm') ? mixin({
       if (fd === 3) {
         return 0;
       } else {
-        return -PosixError.EBADF;
+        return PosixError.EBADF;
       }
     } else {
-      return -PosixError.ENOTSUP;
+      return PosixError.ENOTSUP;
     }
   }
 }) : undefined;

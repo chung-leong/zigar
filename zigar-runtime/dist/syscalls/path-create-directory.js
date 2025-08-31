@@ -9,10 +9,10 @@ var pathCreateDirectory = mixin({
       return this.triggerEvent('mkdir', loc, PosixError.ENOENT);
     }, (result) => {
       if (result === undefined) {
-        return -PosixError.ENOTSUP;
+        return PosixError.ENOTSUP;
       }
       if (result instanceof Map) {
-        return -PosixError.EEXIST;
+        return PosixError.EEXIST;
       }
       return expectBoolean(result, PosixError.ENOENT);
     });
