@@ -2212,9 +2212,9 @@ pub fn LibcSubstitute(comptime redirector: type) type {
         pub fn fread(buffer: [*]u8, size: usize, n: usize, s: *std.c.FILE) callconv(.c) usize {
             if (getRedirectedFile(s)) |file| {
                 const len: off_t = @intCast(size * n);
+                if (len == 0) return 0;
                 const result = read(file, buffer, len);
                 if (result < 0) return 0;
-                if (result == 0) file.eof = true;
                 return if (len == result) n else @as(usize, @intCast(result)) / size;
             }
             return Original.fread(buffer, size, n, s);
@@ -2258,6 +2258,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
         pub fn fwrite(buffer: [*]const u8, size: usize, n: usize, s: *std.c.FILE) callconv(.c) usize {
             if (getRedirectedFile(s)) |file| {
                 const len: off_t = @intCast(size * n);
+                if (len == 0) return 0;
                 const result = write(file, buffer, len);
                 if (result < 0) {
                     file.errno = posix.getError();
@@ -2379,25 +2380,27 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             const len_u: usize = @intCast(len);
             if (setBufferMode(file, .read) < 0) return -1;
             var copied = file.consumeBuffer(dest, len_u);
-            if (len_u - copied >= 8192) {
-                // read directly into the destination when the amount is large
-                const result = readRaw(file, dest[copied..], @intCast(len_u - copied));
-                if (result < 0) return -1;
-                return @as(off_t, @intCast(copied)) + result;
-            } else {
-                while (len_u - copied > 0) {
+            while (len_u - copied > 0) {
+                var amount: usize = undefined;
+                if (len_u >= 8192) {
+                    // read directly into the destination when the amount is large
+                    const result = readRaw(file, dest[copied..], @intCast(len_u - copied));
+                    if (result < 0) return -1;
+                    amount = @intCast(result);
+                } else {
                     if (bufferMore(file) < 0) return -1;
-                    const amount = file.consumeBuffer(dest[copied..], len_u - copied);
-                    if (amount == 0) break;
-                    copied += amount;
+                    amount = file.consumeBuffer(dest[copied..], len_u - copied);
                 }
-                return @intCast(copied);
+                if (amount == 0) break;
+                copied += amount;
             }
+            return @intCast(copied);
         }
 
         fn readRaw(file: *RedirectedFile, dest: [*]u8, len: off_t) callconv(.c) off_t {
             const result = posix.read(file.fd, dest, len);
             if (result < 0) return saveFileError(file, posix.getError());
+            if (result == 0) file.eof = true;
             return result;
         }
 
@@ -2468,31 +2471,12 @@ pub fn LibcSubstitute(comptime redirector: type) type {
         }
 
         fn bufferMore(file: *RedirectedFile) callconv(.c) off_t {
-            if (setBufferMode(file, .read) < 0) return -1;
-            // first try to get one character in blocking mode
+            if (setBufferMode(file, .read) < 0) return 0;
             const buf = file.prepareBuffer() catch return 0;
-            const result1 = readRaw(file, buf.ptr, 1);
-            var len: usize = 0;
-            if (result1 < 0) return -1;
-            if (result1 > 0) {
-                _ = file.replenishBuffer(null, 1);
-                len += 1;
-                // switch into non-blocking mode and read the rest of the available bytes
-                const in_non_blocking_mode = setNonBlocking(file, true) == 0;
-                defer if (in_non_blocking_mode) {
-                    _ = setNonBlocking(file, false);
-                };
-                const buf2 = buf[1..];
-                const result2 = readRaw(file, buf2.ptr, @intCast(buf2.len));
-                if (result2 < 0) {
-                    if (posix.getError() != @intFromEnum(std.c.E.AGAIN)) return -1;
-                }
-                _ = file.replenishBuffer(null, @intCast(result2));
-                len += @intCast(result2);
-            } else {
-                file.eof = true;
-            }
-            return @intCast(len);
+            const result = readRaw(file, buf.ptr, @intCast(buf.len));
+            if (result < 0) return -1;
+            _ = file.replenishBuffer(null, @intCast(result));
+            return result;
         }
 
         fn getLine(file: *RedirectedFile) callconv(.c) ?[*:0]u8 {
@@ -2509,15 +2493,6 @@ pub fn LibcSubstitute(comptime redirector: type) type {
                 buf[end - 1] = 0;
             }
             return @ptrCast(buf.ptr);
-        }
-
-        fn setNonBlocking(file: *RedirectedFile, nonblocking: bool) callconv(.c) c_int {
-            const oflags: O = .{ .NONBLOCK = nonblocking };
-            const oflags_int: @typeInfo(O).@"struct".backing_integer.? = @bitCast(oflags);
-            if (posix.fcntl(file.fd, F.SETFL, oflags_int) != 0) {
-                return saveFileError(file, posix.getError());
-            }
-            return 0;
         }
 
         fn addRedirectedFile(fd: c_int, oflags: O) !*std.c.FILE {

@@ -33,3 +33,15 @@ void scan_stdin_with_scanf() {
         }
     } while (count > 0);
 }
+
+void scan_stdin_with_scanf_once() {
+    int a, b, c;
+    char buffer[128];
+    int count;
+    count = scanf("%d %d %d %s", &a, &b, &c, buffer);
+    if (count == 4) {
+        printf("%d %d %d %s\n", a, b, c, buffer);
+    } else if (count > 0) {
+        printf("count = %d\n", count);
+    }
+}

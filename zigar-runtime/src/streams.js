@@ -21,8 +21,7 @@ export class AsyncReader {
       // wait for outstanding non-blocking retrieval
       await this.promise;
     }
-    // keep reading until there's enough bytes to cover the request length
-    while ((!this.bytes || this.bytes.length < len) && !this.done) {
+    if (!this.bytes && !this.done) {
       await this.fetch(len - (this.bytes?.length ?? 0));
     }
     return this.shift(len);

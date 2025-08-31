@@ -118,7 +118,7 @@ export function addTests(importModule, options) {
         expect(event).to.eql({ 
           parent: null,
           path: 'hello/world', 
-          rights: { read: true, readdir: true }, 
+          rights: { read: true }, 
           flags: {}, 
         });
       } else {
@@ -1704,6 +1704,43 @@ export function addTests(importModule, options) {
         '4 5 6 world',
         'count = 2',
       ]);
+    })
+    it('should scan variables from a web stream using scanf', async function() {
+      // ditto
+      this.timeout(0);
+      const { __zigar, startup, shutdown, scan } = await importTest('c/scan-web-stream-with-scanf', { multithreaded: true, useLibc: true });
+      const input = [
+        '1 2 3 hello',
+        '4 5 6 world',
+        '123 456',
+      ];      
+      const stream = new ReadableStream({
+        async pull(controller) {
+          await delay(25);
+          const text = input.shift();
+          if (text) {
+            const chunk = new TextEncoder().encode(text + '\n');
+            controller.enqueue(chunk);
+          } else {
+            controller.close();
+          }
+        }
+      });
+      const reader = stream.getReader();
+      __zigar.redirect(0, reader);
+      startup(1);
+      try {
+        const [ line1 ] = await capture(() => scan());
+        expect(line1).to.equal('1 2 3 hello');
+        const [ line2 ] = await capture(() => scan());
+        expect(line2).to.equal('4 5 6 world');
+        const [ line3 ] = await capture(() => scan());
+        expect(line3).to.equal('count = 2');
+        const [ line4 ] = await capture(() => scan());
+        expect(line4).to.be.undefined;
+      } finally {
+        await shutdown();
+      }
     })
     it('should get characters from a file using fgetc', async function() {
       this.timeout(0);

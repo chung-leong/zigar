@@ -3,6 +3,7 @@ import { platform } from 'os';
 import { capture } from '../test-utils.js';
 
 export function addTests(importModule, options) {
+  const { target } = options;
   const importTest = async (name, options) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url, options);
@@ -23,6 +24,7 @@ export function addTests(importModule, options) {
     it('should capture output from C code', async function() {
       this.timeout(0);
       const {
+        __zigar,
         test_printf,
         test_fprintf,
         test_putc,
@@ -49,6 +51,9 @@ export function addTests(importModule, options) {
       expect(await capture(() => test_puts())).eql([ 'Hello world' ]);
       expect(await capture(() => test_fwrite())).eql([ 'Hello world' ]);
       expect(await capture(() => test_write())).eql([ 'Hello world' ]);
+      if (target === 'wasm32') {
+        __zigar.on('open', () => false);
+      }
       const errorMsg = (platform() === 'win32')
       ? 'Hello: Permission denied'
       : 'Hello: No such file or directory';
