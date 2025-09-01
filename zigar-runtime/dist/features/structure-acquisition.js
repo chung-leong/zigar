@@ -1,4 +1,4 @@
-import { SENTINEL, SLOTS, MEMORY, ZIG, ENVIRONMENT } from '../symbols.js';
+import { SENTINEL, SLOTS, MEMORY, ZIG, PROPS, VISIT, ENVIRONMENT } from '../symbols.js';
 import '../accessors/all.js';
 import '../accessors/int.js';
 import { SliceFlag, StructureType, PointerFlag, ErrorSetFlag, StructFlag, MemberType, PrimitiveFlag, structureNames, ModuleAttribute, StructureFlag } from '../constants.js';
@@ -137,9 +137,17 @@ var structureAcquisition = mixin({
     this.mixinUsage = new Map();
     this.invokeThunk(thunk, thunk, thunk);
     this.comptime = false;
-    // acquire default pointers now that we have all constructors
+    // acquire pointer targets now that we have all constructors
     for (const structure of this.structures) {
       const { constructor, flags, instance: { template } } = structure;
+      // update decls that are pointers
+      for (const name of constructor[PROPS]) {
+        const decl = constructor[name];
+        if (decl?.[VISIT]) {
+          this.updatePointerTargets(null, decl);
+        }
+      }
+      // update default values held in template
       if (flags & StructureFlag.HasPointer && template && template[MEMORY]) {
         // create a placeholder object
         const placeholder = Object.create(constructor.prototype);

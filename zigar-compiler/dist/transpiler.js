@@ -3188,7 +3188,7 @@ function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
         console.error(err);
       }
     }
-    return result ?? -err.code ?? -defErrorCode;
+    return result ?? err.code ?? defErrorCode;
   };
   const done = (value) => {
     const result = resolve?.(value);
@@ -3389,7 +3389,9 @@ var baseline = mixin({
   triggerEvent(name, event) {
     const listener = this.listenerMap.get(name);
     this.lastEvent = name;
-    return listener?.(event);
+    const result = listener?.(event);
+    this.lastEvent = null;
+    return result;
   },
   recreateStructures(structures, settings) {
     Object.assign(this, settings);
@@ -3540,8 +3542,6 @@ var callMarshalingInbound = mixin({
             } catch (_) {
               console.error(err);
             }
-            // catchPosixError by default return negative errno, whereas here we want to actual value 
-            return err.code ?? PosixError.EFAULT;
         });
         // don't return promise when a callback is used
         return (hasCallback) ? PosixError.NONE : result;
@@ -5132,14 +5132,13 @@ var streamRedirection = mixin({
     this.nextStreamHandle = PosixDescriptor.min;
   },
   getStream(fd) {
-    {
-      if (PosixDescriptor.root < fd && fd < PosixDescriptor.min) {
-        throw new Unsupported();
-      }
-    }
     const entry = this.streamMap.get(fd);
     if (!entry) {
-      console.error('getStream', { fd });
+      {
+        if (2 < fd && fd < PosixDescriptor.min) {
+          throw new Unsupported();
+        }
+      }
       throw new InvalidFileDescriptor();
     }
     return entry;
@@ -6111,7 +6110,7 @@ var fdFdstatSetRights = mixin({
 var copyStat = mixin({
   copyStat(bufAddress, stat) {
     if (stat === false) {
-      return -44;
+      return PosixError.ENOENT;
     }
     if (typeof(stat) !== 'object' || !stat) {
       throw new TypeMismatch$1('object or false', stat);
@@ -6206,10 +6205,10 @@ var fdPrestatDirName = mixin({
       if (fd === 3) {
         return 0;
       } else {
-        return -8;
+        return PosixError.EBADF;
       }
     } else {
-      return -58;
+      return PosixError.ENOTSUP;
     }
   }
 }) ;
@@ -6226,10 +6225,10 @@ var fdPrestatGet = mixin({
         this.moveExternBytes(dv, bufAddress, true);
         return 0;
       } else {
-        return -8;
+        return PosixError.EBADF;
       }
     } else {
-      return -58;
+      return PosixError.ENOTSUP;
     }
   },
 }) ;
@@ -6302,7 +6301,7 @@ var fdRead = mixin({
 var fdReaddir = mixin({
   fdReaddir(fd, bufAddress, bufLen, cookie, bufusedAddress, canWait) {
     if (bufLen < 24) {
-      return -28;
+      return PosixError.EINVAL;
     }
     let dir, async;
     return catchPosixError(canWait, PosixError.EBADF, () => {
@@ -6418,10 +6417,10 @@ var pathCreateDirectory = mixin({
       return this.triggerEvent('mkdir', loc, PosixError.ENOENT);
     }, (result) => {
       if (result === undefined) {
-        return -58;
+        return PosixError.ENOTSUP;
       }
       if (result instanceof Map) {
-        return -20;
+        return PosixError.EEXIST;
       }
       return expectBoolean(result, PosixError.ENOENT);
     });
@@ -6445,9 +6444,9 @@ var pathFilestatGet = mixin({
       }
     }, (result) => {
       if (result === undefined) {
-        return -58;
+        return PosixError.ENOTSUP;
       } else if (result === false) {
-        return -44;
+        return PosixError.ENOENT;
       }
       if (infer) {
         const stream = this.convertReader(result) ?? this.convertWriter(result) ?? this.convertDirectory(result);
@@ -6496,9 +6495,9 @@ var pathOpen = mixin({
       return this.triggerEvent('open', { ...loc, rights, flags });
     }, (arg) => {
       if (arg === undefined) {
-        return -58;
+        return PosixError.ENOTSUP;
       } else if (arg === false) {
-        return -44;
+        return PosixError.ENOENT;
       }
       const stream = this.convertReader(arg) ?? this.convertWriter(arg) ?? this.convertDirectory(arg);
       if (!stream) {
@@ -6558,21 +6557,20 @@ var wasiSupport = mixin({
       return (...args) => {
         const result = handler.call(this, ...args);
         const onResult = (result) => {
-          if (result < 0) {
-            const errno = -result;
-            if (errno === PosixError.ENOTSUP && custom) {
-              // the handler has declined to deal with it, use the method from the custom WASI interface
-              return custom(...args);
-            } else if (errno === PosixError.ENOTSUP || errno === PosixError.ENOTCAPABLE) {
-              // if we can't fallback onto a custom handler, explain the failure
-              const evtName = this.lastEvent;
+          if (result === PosixError.ENOTSUP && custom) {
+            // the handler has declined to deal with it, use the method from the custom WASI interface
+            return custom(...args);
+          } else if (result === PosixError.ENOTSUP || result === PosixError.ENOTCAPABLE) {
+            // if we can't fallback onto a custom handler, explain the failure
+            const evtName = this.lastEvent;
+            if (evtName) {
               if (this.hasListener(evtName)) {
                 console.error(`WASI method '${name}' failed because the handler for '${evtName}' declined to handle the event`);
               } else {
                 console.error(`WASI method '${name}' requires the handling of the '${evtName}' event`);
               }
-              return -8;
             }
+            return PosixError.ENOTSUP;
           }
           return result;
         };
@@ -6791,9 +6789,17 @@ var structureAcquisition = mixin({
     this.mixinUsage = new Map();
     this.invokeThunk(thunk, thunk, thunk);
     this.comptime = false;
-    // acquire default pointers now that we have all constructors
+    // acquire pointer targets now that we have all constructors
     for (const structure of this.structures) {
       const { constructor, flags, instance: { template } } = structure;
+      // update decls that are pointers
+      for (const name of constructor[PROPS]) {
+        const decl = constructor[name];
+        if (decl?.[VISIT]) {
+          this.updatePointerTargets(null, decl);
+        }
+      }
+      // update default values held in template
       if (flags & StructureFlag.HasPointer && template && template[MEMORY]) {
         // create a placeholder object
         const placeholder = Object.create(constructor.prototype);

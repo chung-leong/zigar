@@ -1,5 +1,5 @@
 import {
-  ENVIRONMENT, MEMORY, SENTINEL, SLOTS, ZIG
+  ENVIRONMENT, MEMORY, PROPS, SENTINEL, SLOTS, VISIT, ZIG
 } from '../../src/symbols.js';
 import accessorAll from '../accessors/all.js';
 import accessorInt from '../accessors/int.js';
@@ -144,9 +144,17 @@ export default mixin({
     this.mixinUsage = new Map();
     this.invokeThunk(thunk, thunk, thunk);
     this.comptime = false;
-    // acquire default pointers now that we have all constructors
+    // acquire pointer targets now that we have all constructors
     for (const structure of this.structures) {
       const { constructor, flags, instance: { template } } = structure;
+      // update decls that are pointers
+      for (const name of constructor[PROPS]) {
+        const decl = constructor[name];
+        if (decl?.[VISIT]) {
+          this.updatePointerTargets(null, decl);
+        }
+      }
+      // update default values held in template
       if (flags & StructureFlag.HasPointer && template && template[MEMORY]) {
         // create a placeholder object
         const placeholder = Object.create(constructor.prototype);
