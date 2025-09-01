@@ -825,16 +825,18 @@ export function addTests(importModule, options) {
       this.timeout(0);
       const { __zigar, fprintf, fopen, fclose, Int, StrPtr } = await importTest('call-fprintf', { useLibc: true, topLevelAwait: false });
       if (target == 'wasm32') {
-        const { WASI } = await import('wasi');
-        const wasi = new WASI({
-          version: 'preview1',
-          args: [],
-          env: {},
-          preopens: {
-            '/local': fileURLToPath(new URL('./test-data', import.meta.url)),
-          },
+        __zigar.on('wasi', async () => {
+          const { WASI } = await import('wasi');
+          return new WASI({
+            version: 'preview1',
+            args: [],
+            env: {},
+            preopens: {
+              '/local': fileURLToPath(new URL('./test-data', import.meta.url)),
+            },
+          });
         });
-        await __zigar.init(wasi);
+        await __zigar.init();
       }
       const path = (target == 'wasm32')
       ? '/local/world-wasm.txt'

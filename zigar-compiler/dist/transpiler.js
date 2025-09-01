@@ -3505,7 +3505,7 @@ var callMarshalingInbound = mixin({
         if (VISIT in argStruct) {
           // reset pointers in arg so we don't pick up old pointers
           // objects in stack memory really shouldn't be cached
-          argStruct[VISIT]('reset');
+          argStruct[VISIT]('reset', VisitorFlag.IgnoreUncreated);
           const context = this.startContext();
           this.updatePointerTargets(context, argStruct, true);
           this.updateShadowTargets(context);
@@ -4924,7 +4924,7 @@ var pointerSynchronization = mixin({
         }
       }
     };
-    const flags = (inbound) ? VisitorFlag.IgnoreRetval : 0;
+    const flags = ((inbound) ? VisitorFlag.IgnoreRetval : 0) | VisitorFlag.IgnoreInactive;
     object[VISIT](callback, flags);
   },
   findTargetClusters(potentialClusters) {
@@ -6794,10 +6794,12 @@ var structureAcquisition = mixin({
       const { constructor, flags, instance: { template } } = structure;
       // update decls that are pointers
       for (const name of constructor[PROPS]) {
-        const decl = constructor[name];
-        if (decl?.[VISIT]) {
-          this.updatePointerTargets(null, decl);
-        }
+        try {
+          const decl = constructor[name];
+          if (decl?.[VISIT]) {
+            this.updatePointerTargets(null, decl);
+          }
+        } catch {}
       }
       // update default values held in template
       if (flags & StructureFlag.HasPointer && template && template[MEMORY]) {
@@ -9029,7 +9031,7 @@ var errorUnion = mixin({
     const ErrorSet = errorMember.structure.constructor;
     const clearValue = function() {
       this[RESET]();
-      this[VISIT]?.('clear');
+      this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
     };
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
@@ -9184,7 +9186,7 @@ var optional = mixin({
       if (present) {
         return getValue.call(this);
       } else {
-        this[VISIT]?.('clear');
+        this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
         return null;
       }
     };
@@ -9202,7 +9204,7 @@ var optional = mixin({
         setPresent.call(this, 0);
         this[RESET]?.();
         // clear references so objects can be garbage-collected
-        this[VISIT]?.('clear');
+        this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
       } else if (arg !== undefined || isValueVoid) {
         // call setValue() first, in case it throws
         setValue.call(this, arg, allocator);
@@ -9747,7 +9749,6 @@ var slice = mixin({
       align,
       flags,
       byteSize,
-      name,
       instance: {
         members: [ member ],
       },
@@ -10072,7 +10073,6 @@ var union = mixin({
               throw new InactiveUnionProperty(structure, name, currentName);
             }
           }
-          this[VISIT]?.('clear');
           return getValue.call(this);
         }
       : getValue;
@@ -10088,8 +10088,8 @@ var union = mixin({
       const init = (exclusion && setValue)
       ? function(value) {
           setActiveField.call(this, name);
+          this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
           setValue.call(this, value);
-          this[VISIT]?.('clear');
         }
       : setValue;
       descriptors[name] = { get, set };

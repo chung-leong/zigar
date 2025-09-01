@@ -1,4 +1,4 @@
-import { MemberType, PosixError, StructurePurpose, StructureType } from '../constants.js';
+import { MemberType, PosixError, StructurePurpose, StructureType, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, UnexpectedGenerator } from '../errors.js';
 import { ALLOCATOR, MEMORY, RETURN, THROWING, VISIT, YIELD, ZIG } from '../symbols.js';

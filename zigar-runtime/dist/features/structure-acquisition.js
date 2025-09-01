@@ -142,10 +142,12 @@ var structureAcquisition = mixin({
       const { constructor, flags, instance: { template } } = structure;
       // update decls that are pointers
       for (const name of constructor[PROPS]) {
-        const decl = constructor[name];
-        if (decl?.[VISIT]) {
-          this.updatePointerTargets(null, decl);
-        }
+        try {
+          const decl = constructor[name];
+          if (decl?.[VISIT]) {
+            this.updatePointerTargets(null, decl);
+          }
+        } catch {}
       }
       // update default values held in template
       if (flags & StructureFlag.HasPointer && template && template[MEMORY]) {
