@@ -16,7 +16,7 @@ var optional = mixin({
       if (present) {
         return getValue.call(this);
       } else {
-        this[VISIT]?.('clear');
+        this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
         return null;
       }
     };
@@ -34,7 +34,7 @@ var optional = mixin({
         setPresent.call(this, 0);
         this[RESET]?.();
         // clear references so objects can be garbage-collected
-        this[VISIT]?.('clear');
+        this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
       } else if (arg !== undefined || isValueVoid) {
         // call setValue() first, in case it throws
         setValue.call(this, arg, allocator);

@@ -78,9 +78,9 @@ export default [
 ]
 
 function ExtractIIFE() {
-  // place JS code into a C++ raw string
+  // extract iife from statement
   return {
-    name: 'cpp_string',
+    name: 'extract_iife',
     renderChunk (code) {
       return code.replace(/var variable\s*=\s*([\s\S]*);/, '($1)');
     }

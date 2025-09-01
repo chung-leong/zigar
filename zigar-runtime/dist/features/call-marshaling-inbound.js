@@ -41,7 +41,7 @@ var callMarshalingInbound = mixin({
         if (VISIT in argStruct) {
           // reset pointers in arg so we don't pick up old pointers
           // objects in stack memory really shouldn't be cached
-          argStruct[VISIT]('reset');
+          argStruct[VISIT]('reset', VisitorFlag.IgnoreUncreated);
           const context = this.startContext();
           this.updatePointerTargets(context, argStruct, true);
           this.updateShadowTargets(context);

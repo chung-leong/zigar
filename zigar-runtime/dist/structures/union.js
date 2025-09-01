@@ -79,7 +79,6 @@ var union = mixin({
               throw new InactiveUnionProperty(structure, name, currentName);
             }
           }
-          this[VISIT]?.('clear');
           return getValue.call(this);
         }
       : getValue;
@@ -95,8 +94,8 @@ var union = mixin({
       const init = (exclusion && setValue)
       ? function(value) {
           setActiveField.call(this, name);
+          this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
           setValue.call(this, value);
-          this[VISIT]?.('clear');
         }
       : setValue;
       descriptors[name] = { get, set };
