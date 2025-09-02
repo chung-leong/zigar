@@ -5,6 +5,7 @@ const expectError = std.testing.expectError;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
+const fn_binding = @import("./fn-binding.zig");
 const fn_transform = @import("./fn-transform.zig");
 const types = @import("./types.zig");
 const Memory = types.Memory;
@@ -18,16 +19,9 @@ pub const Error = error{ UnableToCreateThunk, UnableToFindThunk };
 
 pub const ThunkController = *const fn (Action, usize) anyerror!usize;
 
-pub usingnamespace switch (builtin.target.cpu.arch.isWasm()) {
-    true => wasm,
-    false => native,
-};
-
-const native = struct {
-    const fn_binding = @import("fn-binding.zig");
-
-    pub fn createThunkController(comptime host: type, comptime BFT: type) ThunkController {
-        const ft_ns = struct {
+pub fn createThunkController(comptime host: type, comptime BFT: type) ThunkController {
+    const tc_ns = switch (comptime builtin.target.cpu.arch.isWasm()) {
+        false => struct {
             fn control(action: Action, arg: usize) anyerror!usize {
                 const vars = .{
                     .@"-1" = arg,
@@ -61,40 +55,10 @@ const native = struct {
                     },
                 }
             }
-        };
-        return &ft_ns.control;
-    }
+        },
+        true => struct {
+            const count = 16;
 
-    test "createThunkController" {
-        const BFT = fn (i32, f64) usize;
-        const ArgStruct = types.ArgumentStruct(BFT);
-        const host = struct {
-            fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
-                if (arg_size == @sizeOf(ArgStruct)) {
-                    @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = fn_id;
-                    return .SUCCESS;
-                } else {
-                    return .FAULT;
-                }
-            }
-        };
-        const tc = createThunkController(host, BFT);
-        const thunk_address = try tc(.create, 1234);
-        const thunk: *const BFT = @ptrFromInt(thunk_address);
-        const result = thunk(777, 3.14);
-        try expectEqual(1234, result);
-    }
-};
-
-test {
-    _ = native;
-}
-
-const wasm = struct {
-    const count = 16;
-
-    pub fn createThunkController(comptime host: type, comptime BFT: type) ThunkController {
-        const tc_ns = struct {
             var fn_ids: [count]usize = init: {
                 var array: [count]usize = undefined;
                 for (&array) |*ptr| ptr.* = 0;
@@ -153,33 +117,29 @@ const wasm = struct {
                     },
                 }
             }
-        };
-        return &tc_ns.control;
-    }
+        },
+    };
+    return &tc_ns.control;
+}
 
-    test "createThunkController" {
-        const BFT = fn (i32, f64) usize;
-        const ArgStruct = types.ArgumentStruct(BFT);
-        const host = struct {
-            fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
-                if (arg_size == @sizeOf(ArgStruct)) {
-                    @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = fn_id;
-                    return .SUCCESS;
-                } else {
-                    return .FAULT;
-                }
+test "createThunkController" {
+    const BFT = fn (i32, f64) usize;
+    const ArgStruct = types.ArgumentStruct(BFT);
+    const host = struct {
+        fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
+            if (arg_size == @sizeOf(ArgStruct)) {
+                @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = fn_id;
+                return .SUCCESS;
+            } else {
+                return .FAULT;
             }
-        };
-        const tc = createThunkController(host, BFT);
-        const thunk_address = try tc(null, .create, 1234);
-        const thunk: *const BFT = @ptrFromInt(thunk_address);
-        const result = thunk(777, 3.14);
-        try expectEqual(1234, result);
-    }
-};
-
-test {
-    _ = wasm;
+        }
+    };
+    const tc = createThunkController(host, BFT);
+    const thunk_address = try tc(.create, 1234);
+    const thunk: *const BFT = @ptrFromInt(thunk_address);
+    const result = thunk(777, 3.14);
+    try expectEqual(1234, result);
 }
 
 fn CallHandler(comptime BFT: type) type {
