@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <string.h>
 #ifdef _WIN32
     #include <windows.h>
     #define MODULE_VISIBILITY  
@@ -215,9 +216,10 @@ MODULE_VISIBILITY int __stdio_common_vfscanf_hook(unsigned __int64 options, FILE
 }
 #endif
 
-bool load_orig_func(void** orig_ptr, void *other_fn, const char* name) {
+bool load_orig_func(void** orig_ptr, const char* name) {
     if (*orig_ptr) return true;
     void* addr = NULL;
+    void *other_fn = memset;
 #if defined(_WIN32)
     HMODULE handle;
     if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, other_fn, &handle)) {
@@ -240,10 +242,10 @@ bool load_orig_func(void** orig_ptr, void *other_fn, const char* name) {
 
 // set vfprintf_orig when vfprintf itself isn't begin hooked
 bool load_vfprintf(void) {
-    return load_orig_func(&vfprintf_orig, vsnprintf, "vfprintf");
+    return load_orig_func(&vfprintf_orig, "vfprintf");
 }
 
 // set vfscanf_orig when vfscanf itself isn't begin hooked
 bool load_vfscanf(void) {
-    return load_orig_func(&vfscanf_orig, vsscanf, "vfscanf");
+    return load_orig_func(&vfscanf_orig, "vfscanf");
 }
