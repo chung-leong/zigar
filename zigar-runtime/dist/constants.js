@@ -224,5 +224,10 @@ const PosixDescriptor = {
   min: 0x000f_ffff,
   max: 0x07ff_ffff, 
 };
+const PosixPollEventType = {
+  CLOCK: 0,
+  FD_READ: 0,
+  FD_WRITE: 0,
+};
 
-export { ArgStructFlag, ArrayFlag, EnumFlag, ErrorSetFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PosixDescriptor, PosixDescriptorFlag, PosixDescriptorRight, PosixError, PosixFileType, PosixLockType, PosixLookupFlag, PosixOpenFlag, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };
+export { ArgStructFlag, ArrayFlag, EnumFlag, ErrorSetFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PosixDescriptor, PosixDescriptorFlag, PosixDescriptorRight, PosixError, PosixFileType, PosixLockType, PosixLookupFlag, PosixOpenFlag, PosixPollEventType, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };

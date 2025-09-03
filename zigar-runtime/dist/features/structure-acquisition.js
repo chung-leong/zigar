@@ -46,6 +46,7 @@ import '../syscalls/path-filestat-set-times.js';
 import '../syscalls/path-open.js';
 import '../syscalls/path-remove-directory.js';
 import '../syscalls/path-unlink-file.js';
+import '../syscalls/poll-oneoff.js';
 import '../syscalls/proc-exit.js';
 import '../syscalls/random-get.js';
 import { decodeText, findObjects, adjustAddress } from '../utils.js';

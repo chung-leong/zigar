@@ -223,4 +223,9 @@ export const PosixDescriptor = {
 
   min: 0x000f_ffff,
   max: 0x07ff_ffff, 
-}
+};
+export const PosixPollEventType = {
+  CLOCK: 0,
+  FD_READ: 0,
+  FD_WRITE: 0,
+};

@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const zigar = @import("zigar");
 
 pub const Callback = *const fn (signal: zigar.function.AbortSignal) void;

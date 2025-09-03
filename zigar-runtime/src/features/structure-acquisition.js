@@ -51,6 +51,7 @@ import pathFilestatSetTimes from '../syscalls/path-filestat-set-times.js';
 import pathOpen from '../syscalls/path-open.js';
 import pathRemoveDirectory from '../syscalls/path-remove-directory.js';
 import pathUnlinkFile from '../syscalls/path-unlink-file.js';
+import pollOneoff from '../syscalls/poll-oneoff.js';
 import procExit from '../syscalls/proc-exit.js';
 import randomGet from '../syscalls/random-get.js';
 import { adjustAddress, decodeText, findObjects } from '../utils.js';
@@ -258,6 +259,7 @@ export default mixin({
             case 'fd_sync': this.use(fdSync); break;
             case 'fd_tell': this.use(fdTell); break;
             case 'fd_write': this.use(fdWrite); break;
+            case 'poll_oneoff': this.use(pollOneoff); break;
             case 'path_create_directory': this.use(pathCreateDirectory); break;
             case 'path_filestat_get': this.use(pathFilestatGet); break;
             case 'path_remove_directory': this.use(pathRemoveDirectory); break;
