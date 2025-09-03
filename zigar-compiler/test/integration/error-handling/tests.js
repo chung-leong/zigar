@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
-import { captureError } from '../test-utils.js';
+import { capture, captureError } from '../test-utils.js';
 
 export function addTests(importModule, options) {
   const { target, optimize } = options;
@@ -23,7 +23,18 @@ export function addTests(importModule, options) {
         expect(lines[2]).to.contain('tests.js');
       }
     });
-    skip.permanently.unless(target === 'wasm32').and(runtimeSafety).
+    skip.entirely.if(target === 'wasm32').or(optimize !== 'Debug').
+    it('should print stack trace', async function() {
+      this.timeout(0);      
+      const { fail } = await importTest('stack-trace');
+      const lines = await capture(() => fail());
+      const text = lines.join('\n');
+      expect(text).to.contain('in a (stack-trace)');
+      expect(text).to.contain('in b (stack-trace)');
+      expect(text).to.contain('in c (stack-trace)');
+      expect(text).to.contain('in d (stack-trace)');
+    })
+    skip.entirely.unless(target === 'wasm32').and(runtimeSafety).
     it('should produce an error return trace', async function() {
       this.timeout(0);
       const { fail } = await importTest('wasm-error-trace');
