@@ -1927,6 +1927,7 @@ export function addTests(importModule, options) {
       });
       expect(() => add(map, 'world')).to.throw();
     });
+    skip.entirely.if(target === 'win32').
     it('should read files using poll function', async function() {
       this.timeout(0);
       const { __zigar, startup, shutdown, readBoth } = await importTest('open-and-read-files-using-poll', { multithreaded: true, useLibc: true });
