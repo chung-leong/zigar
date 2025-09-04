@@ -18,6 +18,7 @@ export default mixin({
         const userdata = subscriptions.getBigUint64(offset, le)
         const tag = subscriptions.getUint8(offset + 8);
         const result = { tag, userdata, error: PosixError.NONE };
+        results.push(result);
         let promise;
         switch (tag) {
           case PosixPollEventType.CLOCK: {
@@ -33,13 +34,13 @@ export default mixin({
           } break;
           case PosixPollEventType.FD_WRITE: 
           case PosixPollEventType.FD_READ: {
-            const fd = subscriptions.getUint32(offset + 16);
-            const stream = this.getStream(fd);  
+            const fd = subscriptions.getInt32(offset + 16, le);
+            const [ stream ] = this.getStream(fd);  
+            checkStreamMethod(stream, 'poll');
             const onResult = resolveLength.bind(result);
             const onError = resolveError.bind(result);
             try {
-              checkStreamMethod(stream, 'poll');
-              const pollResult = stream.poll();
+              const pollResult = stream.poll(tag);
               if (isPromise(pollResult)) {
                 promise = pollResult.then(onResult, onError);
               } else {
@@ -54,9 +55,9 @@ export default mixin({
         }
         if (promise) {
           promises.push(promise);
-        }
+        }        
       }
-      if (promises.length > 0) {
+      if (promises.length === results.length) {
         return Promise.any(promises);
       }
     }, () => {
@@ -73,20 +74,20 @@ export default mixin({
           const offset = index * eventSize;
           events.setBigUint64(offset, result.userdata, le);
           events.setUint16(offset + 8, result.error, le);
-          events.setUint8(offset + 10, results.tag);
+          events.setUint8(offset + 10, result.tag);          
           if (result.length !== undefined) {
             if (result.length === 0) {
               // hangup
               events.setUint16(offset + 24, 1, le);
             } else {
-              events.setBigUint64(offset + 16, BigInt(results.length), le);
+              events.setBigUint64(offset + 16, BigInt(result.length), le);
             }
           }
           index++;
         }
       }
       this.moveExternBytes(events, eventAddress, true);
-      this.copyUint32(eventCount);
+      this.copyUint32(eventCountAddress, eventCount);
     });
   },
   ...(process.env.TARGET === 'node' ? {

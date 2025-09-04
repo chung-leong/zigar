@@ -226,6 +226,6 @@ export const PosixDescriptor = {
 };
 export const PosixPollEventType = {
   CLOCK: 0,
-  FD_READ: 0,
-  FD_WRITE: 0,
+  FD_READ: 1,
+  FD_WRITE: 2,
 };

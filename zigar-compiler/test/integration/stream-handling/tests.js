@@ -1927,6 +1927,51 @@ export function addTests(importModule, options) {
       });
       expect(() => add(map, 'world')).to.throw();
     });
+    it('should read files using poll function', async function() {
+      this.timeout(0);
+      const { __zigar, startup, shutdown, readBoth } = await importTest('open-and-read-files-using-poll', { multithreaded: true, useLibc: true });
+      __zigar.on('open', ({ path }) => {
+        const m = /file(\d)$/.exec(path);
+        if (m) {
+          const num = parseInt(m[1]);
+          const timeout = (num === 1) ? 30 : 70;
+          const input = [
+            'hello',
+            'world 4 5 6',
+            '123 456 789 aaa bbb',
+          ];
+          const stream = new ReadableStream({
+            async pull(controller) {
+              await delay(timeout);
+              const text = input.shift();
+              if (text) {
+                const chunk = new TextEncoder().encode(text + '\n');
+                controller.enqueue(chunk);
+              } else {
+                controller.close();
+              }
+            }
+          });
+          return stream.getReader();
+        } else {
+          return false;
+        }
+      });
+      startup(1);
+      try {
+        const lines = await capture(() => readBoth('/file1', '/file2'));
+        expect(lines).to.eql([ 
+          'read 6 bytes from file 1',
+          'read 12 bytes from file 1',
+          'read 6 bytes from file 2',
+          'read 20 bytes from file 1',
+          'read 12 bytes from file 2',
+          'read 20 bytes from file 2',
+        ]);
+      } finally {
+        await shutdown();
+      }
+    })
   })
 }
 

@@ -226,8 +226,8 @@ const PosixDescriptor = {
 };
 const PosixPollEventType = {
   CLOCK: 0,
-  FD_READ: 0,
-  FD_WRITE: 0,
+  FD_READ: 1,
+  FD_WRITE: 2,
 };
 
 export { ArgStructFlag, ArrayFlag, EnumFlag, ErrorSetFlag, MemberFlag, MemberType, ModuleAttribute, OpaqueFlag, OptionalFlag, PointerFlag, PosixDescriptor, PosixDescriptorFlag, PosixDescriptorRight, PosixError, PosixFileType, PosixLockType, PosixLookupFlag, PosixOpenFlag, PosixPollEventType, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };
