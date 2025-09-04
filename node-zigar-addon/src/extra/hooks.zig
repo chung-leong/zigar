@@ -1,5 +1,8 @@
 const std = @import("std");
 const c_allocator = std.heap.c_allocator;
+const POLL = std.c.POLL;
+const pollfd = std.c.pollfd;
+const nfds_t = std.c.nfds_t;
 const builtin = @import("builtin");
 
 const fn_transform = @import("./fn-transform.zig");
@@ -80,6 +83,12 @@ pub const Syscall = extern struct {
             open_flags: std.os.wasi.oflags_t,
             rights: std.os.wasi.rights_t,
             fd: i32 = undefined,
+        },
+        poll: extern struct {
+            subscriptions: [*]std.os.wasi.subscription_t,
+            subscription_count: u32,
+            events: [*]std.os.wasi.event_t,
+            event_count: u32 = undefined,
         },
         pread: extern struct {
             fd: i32,
@@ -193,6 +202,7 @@ pub const Syscall = extern struct {
         getlk,
         mkdir,
         open,
+        poll,
         pread,
         preadv,
         pwrite,
@@ -1015,6 +1025,105 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
+        pub fn poll(fds: [*]pollfd, nfds: nfds_t, timeout: c_int, result: *c_int) callconv(.c) bool {
+            const all_private = for (0..nfds) |i| {
+                // negative descriptors are skipped over
+                if (fds[i].fd >= 0) {
+                    if (!isPrivateDescriptor(fds[i].fd)) break false;
+                }
+            } else true;
+            if (all_private) {
+                var stb = std.heap.stackFallback(1024, c_allocator);
+                const allocator = stb.get();
+                const timer_count: usize = if (timeout >= 0) 1 else 0;
+                var actual_fd_count: usize = 0;
+                for (0..nfds) |i| {
+                    if (fds[i].fd >= 0) actual_fd_count += 1;
+                }
+                if (actual_fd_count == 0) {
+                    result.* = intFromError(.NOSYS);
+                    return true;
+                }
+                const sub_count = actual_fd_count + timer_count;
+                const subs = allocator.alloc(std.os.wasi.subscription_t, sub_count) catch {
+                    result.* = intFromError(.NOMEM);
+                    return true;
+                };
+                defer allocator.free(subs);
+                const events = allocator.alloc(std.os.wasi.event_t, sub_count) catch {
+                    result.* = intFromError(.NOMEM);
+                    return true;
+                };
+                defer allocator.free(events);
+                var sub_index: usize = 0;
+                for (0..nfds) |i| {
+                    if (fds[i].fd >= 0) {
+                        subs[sub_index] = .{
+                            .userdata = @intFromPtr(&fds[i]),
+                            .u = .{
+                                .tag = if (fds[i].events & POLL.IN != 0) .FD_READ else .FD_WRITE,
+                                .u = .{ .fd_read = .{ .fd = fds[i].fd } },
+                            },
+                        };
+                        sub_index += 1;
+                    }
+                    fds[i].revents = 0;
+                }
+                if (timer_count != 0) {
+                    subs[sub_index] = .{
+                        .userdata = 0,
+                        .u = .{
+                            .tag = .CLOCK,
+                            .u = .{
+                                .clock = .{
+                                    .flags = 0,
+                                    .id = .REALTIME,
+                                    .precision = 0,
+                                    .timeout = @as(u64, @intCast(timeout)) * 1_000_000,
+                                },
+                            },
+                        },
+                    };
+                }
+                var call: Syscall = .{ .cmd = .poll, .u = .{
+                    .poll = .{
+                        .subscriptions = subs.ptr,
+                        .subscription_count = @intCast(subs.len),
+                        .events = events.ptr,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS) {
+                    for (events[0..call.u.poll.event_count]) |evt| {
+                        if (evt.type != .CLOCK) {
+                            const fd_ptr: *pollfd = @ptrFromInt(evt.userdata);
+                            if (evt.@"error" != .SUCCESS) {
+                                fd_ptr.revents = switch (evt.@"error") {
+                                    .INVAL => POLL.NVAL,
+                                    .PIPE => POLL.HUP,
+                                    else => POLL.ERR,
+                                };
+                            } else {
+                                fd_ptr.revents = if (evt.type == .FD_READ) POLL.IN else POLL.OUT;
+                                if (evt.fd_readwrite.flags & std.os.wasi.EVENT_FD_READWRITE_HANGUP != 0) {
+                                    fd_ptr.revents |= POLL.HUP;
+                                }
+                            }
+                        }
+                    }
+                    var event_count: c_int = 0;
+                    for (0..nfds) |i| {
+                        if (fds[i].revents != 0) event_count += 1;
+                    }
+                    result.* = event_count;
+                } else {
+                    result.* = intFromError(err);
+                }
+                return true;
+            }
+            return false;
+        }
+
         pub fn pread(fd: c_int, buffer: [*]u8, len: off_t, offset: off_t, result: *off_t) callconv(.c) bool {
             return preadT(off_t, fd, buffer, len, offset, result);
         }
@@ -1504,6 +1613,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const openat = makeStdHook("openat");
         pub const open64 = makeStdHookUsing("open64", "open");
         pub const openat64 = makeStdHookUsing("openat64", "openat");
+        pub const poll = makeStdHook("poll");
         pub const posix_fadvise = makeStdHookUsing("posix_fadvise", "fadvise64");
         pub const pread = makeStdHook("pread");
         pub const pread64 = makeStdHook("pread64");
@@ -1903,15 +2013,16 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var openat: *const @TypeOf(Self.openat) = undefined;
             pub var openat64: *const @TypeOf(Self.openat64) = undefined;
             pub var opendir: *const @TypeOf(Self.opendir) = undefined;
+            pub var poll: *const @TypeOf(Self.poll) = undefined;
+            pub var posix_fadvise: *const @TypeOf(Self.posix_fadvise) = undefined;
+            pub var posix_fallocate: *const @TypeOf(Self.posix_fallocate) = undefined;
             pub var pread: *const @TypeOf(Self.pread) = undefined;
             pub var pread64: *const @TypeOf(Self.pread64) = undefined;
             pub var preadv: *const @TypeOf(Self.preadv) = undefined;
+            pub var pthread_create: *const @TypeOf(Self.pthread_create) = undefined;
             pub var pwrite: *const @TypeOf(Self.pwrite) = undefined;
             pub var pwritev: *const @TypeOf(Self.pwritev) = undefined;
             pub var pwrite64: *const @TypeOf(Self.pwrite64) = undefined;
-            pub var posix_fadvise: *const @TypeOf(Self.posix_fadvise) = undefined;
-            pub var posix_fallocate: *const @TypeOf(Self.posix_fallocate) = undefined;
-            pub var pthread_create: *const @TypeOf(Self.pthread_create) = undefined;
             pub var read: *const @TypeOf(Self.read) = undefined;
             pub var readv: *const @TypeOf(Self.readv) = undefined;
             pub var readdir: *const @TypeOf(Self.readdir) = undefined;

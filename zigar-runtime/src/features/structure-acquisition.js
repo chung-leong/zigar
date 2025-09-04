@@ -259,13 +259,13 @@ export default mixin({
             case 'fd_sync': this.use(fdSync); break;
             case 'fd_tell': this.use(fdTell); break;
             case 'fd_write': this.use(fdWrite); break;
-            case 'poll_oneoff': this.use(pollOneoff); break;
             case 'path_create_directory': this.use(pathCreateDirectory); break;
             case 'path_filestat_get': this.use(pathFilestatGet); break;
             case 'path_remove_directory': this.use(pathRemoveDirectory); break;
             case 'path_filestat_set_times': this.use(pathFilestatSetTimes); break;
             case 'path_open': this.use(pathOpen); break;
             case 'path_unlink_file': this.use(pathUnlinkFile); break;
+            case 'poll_oneoff': this.use(pollOneoff); break;
             case 'proc_exit': this.use(procExit); break;
             case 'random_get': this.use(randomGet); break;
           }

@@ -70,6 +70,7 @@ const ModuleHost = struct {
         path_open: ?Ref = null,
         path_remove_directory: ?Ref = null,
         path_unlink_file: ?Ref = null,
+        poll_oneoff: ?Ref = null,
     } = .{},
     ts: struct {
         disable_multithread: ?ThreadsafeFunction = null,
@@ -940,6 +941,7 @@ const ModuleHost = struct {
                 .mkdir => try self.handleMkdir(futex, &call.u.mkdir),
                 .rmdir => try self.handleRmdir(futex, &call.u.rmdir),
                 .unlink => try self.handleUnlink(futex, &call.u.unlink),
+                .poll => try self.handlePoll(futex, &call.u.poll),
             };
         } else {
             const func = self.ts.handle_syscall orelse return error.Disabled;
@@ -1062,7 +1064,7 @@ const ModuleHost = struct {
             try env.createInt32(args.fd),
             try env.createUsize(@intFromPtr(args.bytes)),
             try env.createUint32(args.len),
-            try env.createDouble(@floatFromInt(args.offset)),
+            try env.createBigintUint64(args.offset),
             try env.createUsize(@intFromPtr(&args.written)),
             futex,
         });
@@ -1258,9 +1260,20 @@ const ModuleHost = struct {
         return try self.callPosixFunction(self.js.fd_readdir, &.{
             try env.createInt32(args.dirfd),
             try env.createUsize(@intFromPtr(args.buffer)),
-            try env.createUint32(@intCast(args.len)),
+            try env.createUint32(args.len),
             try env.createUint32(0),
             try env.createUsize(@intFromPtr(&args.read)),
+            futex,
+        });
+    }
+
+    fn handlePoll(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        return try self.callPosixFunction(self.js.poll_oneoff, &.{
+            try env.createUsize(@intFromPtr(args.subscriptions)),
+            try env.createUsize(@intFromPtr(args.events)),
+            try env.createUint32(args.subscription_count),
+            try env.createUsize(@intFromPtr(&args.event_count)),
             futex,
         });
     }

@@ -220,8 +220,8 @@ const PosixDescriptor = {
   min: 0x000f_ffff};
 const PosixPollEventType = {
   CLOCK: 0,
-  FD_READ: 0,
-  FD_WRITE: 0,
+  FD_READ: 1,
+  FD_WRITE: 2,
 };
 
 const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
@@ -6578,6 +6578,7 @@ var pollOneoff = mixin({
         const userdata = subscriptions.getBigUint64(offset, le);
         const tag = subscriptions.getUint8(offset + 8);
         const result = { tag, userdata, error: PosixError.NONE };
+        results.push(result);
         let promise;
         switch (tag) {
           case PosixPollEventType.CLOCK: {
@@ -6593,19 +6594,22 @@ var pollOneoff = mixin({
           } break;
           case PosixPollEventType.FD_WRITE: 
           case PosixPollEventType.FD_READ: {
-            const fd = subscriptions.getUint32(offset + 16);
-            const stream = this.getStream(fd);  
+            const fd = subscriptions.getInt32(offset + 16, le);
             const onResult = resolveLength.bind(result);
             const onError = resolveError.bind(result);
             try {
+              const [ stream ] = this.getStream(fd);  
               checkStreamMethod(stream, 'poll');
-              const pollResult = stream.poll();
+              const pollResult = stream.poll(tag);
               if (isPromise(pollResult)) {
                 promise = pollResult.then(onResult, onError);
               } else {
                 onResult(pollResult);
               }
             } catch (err) {
+              if (err.code === PosixError.ENOTSUP) {
+                throw err;
+              }
               onError(err);
             }
           } break;
@@ -6614,9 +6618,9 @@ var pollOneoff = mixin({
         }
         if (promise) {
           promises.push(promise);
-        }
+        }        
       }
-      if (promises.length > 0) {
+      if (promises.length === results.length) {
         return Promise.any(promises);
       }
     }, () => {
@@ -6631,23 +6635,22 @@ var pollOneoff = mixin({
       for (const result of results) {
         if (result.resolved) {
           const offset = index * eventSize;
-          console.error(result);
           events.setBigUint64(offset, result.userdata, le);
           events.setUint16(offset + 8, result.error, le);
-          events.setUint8(offset + 10, results.tag);
+          events.setUint8(offset + 10, result.tag);          
           if (result.length !== undefined) {
             if (result.length === 0) {
               // hangup
               events.setUint16(offset + 24, 1, le);
             } else {
-              events.setBigUint64(offset + 16, BigInt(results.length), le);
+              events.setBigUint64(offset + 16, BigInt(result.length), le);
             }
           }
           index++;
         }
       }
       this.moveExternBytes(events, eventAddress, true);
-      this.copyUint32(eventCount);
+      this.copyUint32(eventCountAddress, eventCount);
     });
   },
 });
@@ -7039,13 +7042,13 @@ var structureAcquisition = mixin({
             case 'fd_sync': this.use(fdSync); break;
             case 'fd_tell': this.use(fdTell); break;
             case 'fd_write': this.use(fdWrite); break;
-            case 'poll_oneoff': this.use(pollOneoff); break;
             case 'path_create_directory': this.use(pathCreateDirectory); break;
             case 'path_filestat_get': this.use(pathFilestatGet); break;
             case 'path_remove_directory': this.use(pathRemoveDirectory); break;
             case 'path_filestat_set_times': this.use(pathFilestatSetTimes); break;
             case 'path_open': this.use(pathOpen); break;
             case 'path_unlink_file': this.use(pathUnlinkFile); break;
+            case 'poll_oneoff': this.use(pollOneoff); break;
             case 'proc_exit': this.use(procExit); break;
             case 'random_get': this.use(randomGet); break;
           }

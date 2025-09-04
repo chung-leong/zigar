@@ -35,11 +35,11 @@ var pollOneoff = mixin({
           case PosixPollEventType.FD_WRITE: 
           case PosixPollEventType.FD_READ: {
             const fd = subscriptions.getInt32(offset + 16, le);
-            const [ stream ] = this.getStream(fd);  
-            checkStreamMethod(stream, 'poll');
             const onResult = resolveLength.bind(result);
             const onError = resolveError.bind(result);
             try {
+              const [ stream ] = this.getStream(fd);  
+              checkStreamMethod(stream, 'poll');
               const pollResult = stream.poll(tag);
               if (isPromise(pollResult)) {
                 promise = pollResult.then(onResult, onError);
@@ -47,6 +47,9 @@ var pollOneoff = mixin({
                 onResult(pollResult);
               }
             } catch (err) {
+              if (err.code === PosixError.ENOTSUP) {
+                throw err;
+              }
               onError(err);
             }
           } break;

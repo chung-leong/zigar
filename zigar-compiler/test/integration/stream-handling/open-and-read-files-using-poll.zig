@@ -35,8 +35,8 @@ const ns = struct {
         if (fd2 < 0) return error.UnableToOpenFile;
         defer _ = std.c.close(fd2);
         var files: [2]std.c.pollfd = .{
-            .{ .fd = fd1, .events = std.c.POLL.RDNORM, .revents = 0 },
-            .{ .fd = fd2, .events = std.c.POLL.RDNORM, .revents = 0 },
+            .{ .fd = fd1, .events = std.c.POLL.IN, .revents = 0 },
+            .{ .fd = fd2, .events = std.c.POLL.IN, .revents = 0 },
         };
         var hup_count: usize = 0;
         while (true) {
@@ -49,7 +49,7 @@ const ns = struct {
                 if (file.revents & std.c.POLL.HUP != 0) {
                     hup_count += 1;
                     file.fd = -1;
-                } else if (file.revents & std.c.POLL.RDNORM != 0) {
+                } else if (file.revents & std.c.POLL.IN != 0) {
                     const read = std.c.read(file.fd, &buffer, buffer.len);
                     std.debug.print("read {d} bytes from file {d}\n", .{ read, i + 1 });
                 }
