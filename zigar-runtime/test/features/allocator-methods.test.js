@@ -146,36 +146,43 @@ describe('Feature: allocator-methods', function() {
       expect(dv5.byteLength).to.equal(18);
       expect(() => struct.dupe(1)).to.throw(TypeError);
       expect(() => struct.dupe({})).to.throw(TypeError);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Struct,
         byteSize: 4 * 2,
-      });
-      env.attachMember(structure, {
-        name: 'dog',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structure, {
-        name: 'cat',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachTemplate(structure, {
-        [MEMORY]: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setInt32(0, 1234, true);
-          dv.setInt32(4, 4567, true);
-          return dv;
-        })(),
-      });
-      const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+        signature: 0n,
+        instance: { 
+          members: [
+            {
+              name: 'dog',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              name: 'cat',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            }
+          ],
+          template: {
+            [MEMORY]: (() => {
+              const dv = new DataView(new ArrayBuffer(4 * 2));
+              dv.setInt32(0, 1234, true);
+              dv.setInt32(4, 4567, true);
+              return dv;
+            })(),
+          } 
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
+      env.finishStructure(structure);
+      const Hello = structure.constructor;
       const object = new Hello({ dog: 123, cat: 456 });
       const copy = struct.dupe(object);
       expect(copy.valueOf()).to.eql({ dog: 123, cat: 456 });

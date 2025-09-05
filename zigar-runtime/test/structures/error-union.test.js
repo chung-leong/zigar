@@ -107,7 +107,7 @@ describe('Structure: error-union', function() {
           1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(errorStructure);
+      env.finishStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         flags: 0,
@@ -129,7 +129,7 @@ describe('Structure: error-union', function() {
         structure: errorStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = Hello(new ArrayBuffer(10));
       expect(object.$).to.equal(0n);
       object.$ = 1234n;
@@ -175,7 +175,7 @@ describe('Structure: error-union', function() {
           1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(errorStructure);
+      env.finishStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         name: 'Hello',
@@ -198,7 +198,7 @@ describe('Structure: error-union', function() {
         structure: errorStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello({ error: 'Unable to create object' });
       expect(() => object.$).to.throw(MyError.UnableToCreateObject);
     })
@@ -218,7 +218,7 @@ describe('Structure: error-union', function() {
         structure: anyErrorStructure,
       });
       const AnyError = env.defineStructure(anyErrorStructure);
-      env.endStructure(anyErrorStructure);
+      env.finishStructure(anyErrorStructure);
       const errorStructure = env.beginStructure({
         name: 'MyError',
         type: StructureType.ErrorSet,
@@ -252,7 +252,7 @@ describe('Structure: error-union', function() {
           1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(errorStructure);
+      env.finishStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         byteSize: 10,
@@ -276,7 +276,7 @@ describe('Structure: error-union', function() {
         structure: anyErrorStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = Hello(new ArrayBuffer(10));
       expect(object.$).to.equal(0n);
       object.$ = 1234n;
@@ -321,7 +321,7 @@ describe('Structure: error-union', function() {
           1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(errorStructure);
+      env.finishStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         byteSize: 10,
@@ -343,7 +343,7 @@ describe('Structure: error-union', function() {
         structure: errorStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const buffer = new ArrayBuffer(10);
       const object1 = Hello(buffer);
       const object2 = Hello(buffer);
@@ -383,7 +383,7 @@ describe('Structure: error-union', function() {
           1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(errorStructure);
+      env.finishStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         byteSize: 10,
@@ -405,7 +405,7 @@ describe('Structure: error-union', function() {
         structure: errorStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new Hello).to.throw(TypeError);
     })
     it('should define an error union with internal struct', function() {
@@ -443,7 +443,7 @@ describe('Structure: error-union', function() {
           1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(errorStructure);
+      env.finishStructure(errorStructure);
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         name: 'Animal',
@@ -466,7 +466,7 @@ describe('Structure: error-union', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -491,7 +491,7 @@ describe('Structure: error-union', function() {
         structure: errorStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello({ dog: 17, cat: 234 });
       expect(object).to.be.an('!Animal');
       expect(object.$).to.be.an('Animal');
@@ -536,7 +536,7 @@ describe('Structure: error-union', function() {
           1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(errorStructure);
+      env.finishStructure(errorStructure);
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
@@ -551,7 +551,7 @@ describe('Structure: error-union', function() {
         structure: {},
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -567,7 +567,7 @@ describe('Structure: error-union', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -591,7 +591,7 @@ describe('Structure: error-union', function() {
         structure: errorStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = Hello(new ArrayBuffer(16));
       object[MEMORY].setInt16(8, 16, true)
       expect(() => object.$).to.throw();
@@ -634,7 +634,7 @@ describe('Structure: error-union', function() {
           1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(errorStructure);
+      env.finishStructure(errorStructure);
       const uintStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
@@ -647,7 +647,7 @@ describe('Structure: error-union', function() {
         structure: uintStructure,
       });
       env.defineStructure(uintStructure);
-      env.endStructure(uintStructure);
+      env.finishStructure(uintStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
@@ -661,7 +661,7 @@ describe('Structure: error-union', function() {
         structure: uintStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
@@ -677,7 +677,7 @@ describe('Structure: error-union', function() {
         structure: sliceStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -701,7 +701,7 @@ describe('Structure: error-union', function() {
         structure: errorStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const encoder = new TextEncoder();
       const array = encoder.encode('This is a test');
       const object = new Hello(array);
@@ -745,7 +745,7 @@ describe('Structure: error-union', function() {
           1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(errorStructure);
+      env.finishStructure(errorStructure);
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
@@ -760,7 +760,7 @@ describe('Structure: error-union', function() {
         structure: {},
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -776,7 +776,7 @@ describe('Structure: error-union', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue,
@@ -800,7 +800,7 @@ describe('Structure: error-union', function() {
         structure: errorStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello(new Int32(777));
       const object2 = new Hello(object);
       expect(object.$['*']).to.equal(777);
@@ -841,7 +841,7 @@ describe('Structure: error-union', function() {
           1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(errorStructure);
+      env.finishStructure(errorStructure);
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
@@ -855,7 +855,7 @@ describe('Structure: error-union', function() {
         structure: {},
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -871,7 +871,7 @@ describe('Structure: error-union', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -895,7 +895,7 @@ describe('Structure: error-union', function() {
         structure: errorStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello(new Int32(777));
       const ptr = object.$;
       object.$ = MyError.UnableToCreateObject;
@@ -936,7 +936,7 @@ describe('Structure: error-union', function() {
           1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(errorStructure);
+      env.finishStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         byteSize: 10,
@@ -958,7 +958,7 @@ describe('Structure: error-union', function() {
         structure: errorStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const dv = new DataView(new ArrayBuffer(10));
       dv.setInt16(8, 32, true)
       const object = Hello(dv);
@@ -1000,7 +1000,7 @@ describe('Structure: error-union', function() {
           1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(errorStructure);
+      env.finishStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         byteSize: 10,
@@ -1022,7 +1022,7 @@ describe('Structure: error-union', function() {
         structure: errorStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello(123n);
       expect(object.$).to.equal(123n);
       expect(() => object.$ = new Error('Doh!')).to.throw(TypeError)
@@ -1063,7 +1063,7 @@ describe('Structure: error-union', function() {
           1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(errorStructure);
+      env.finishStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         byteSize: 10,
@@ -1085,7 +1085,7 @@ describe('Structure: error-union', function() {
         structure: errorStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new Hello(null)).to.throw(TypeError);
       expect(() => new Hello({})).to.throw(SyntaxError);
       expect(() => new Hello('Evil')).to.throw(SyntaxError);
@@ -1125,7 +1125,7 @@ describe('Structure: error-union', function() {
           1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(errorStructure);
+      env.finishStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         byteSize: 10,
@@ -1147,7 +1147,7 @@ describe('Structure: error-union', function() {
         structure: errorStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object1 = new Hello(123n);
       const object2 = new Hello(MyError.UnableToCreateObject);
       const object3 = new Hello({ base64: object1.base64 });
@@ -1190,7 +1190,7 @@ describe('Structure: error-union', function() {
           1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(errorStructure);
+      env.finishStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         byteSize: 10,
@@ -1212,7 +1212,7 @@ describe('Structure: error-union', function() {
         structure: errorStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello(1234n);
       expect(object.$).to.equal(1234n);
       object.$ = undefined;
@@ -1253,7 +1253,7 @@ describe('Structure: error-union', function() {
           1: MyError.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(errorStructure);
+      env.finishStructure(errorStructure);
       const structure = env.beginStructure({
         type: StructureType.ErrorUnion,
         byteSize: 10,
@@ -1275,7 +1275,7 @@ describe('Structure: error-union', function() {
         structure: errorStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello(MyError.UnableToCreateObject);
       expect(() => object.$).to.throw(MyError.UnableToCreateObject);
       object.$ = undefined;

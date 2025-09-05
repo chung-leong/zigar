@@ -118,7 +118,7 @@ describe('Structure: primitive', function() {
         structure: {},
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Hello } = structure;
       expect(Hello).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(0));
@@ -140,7 +140,7 @@ describe('Structure: primitive', function() {
         structure: {},
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const buffer = new ArrayBuffer(8);
       const object1 = Hello(buffer);
@@ -161,7 +161,7 @@ describe('Structure: primitive', function() {
         structure: {},
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Hello } = structure;
       expect(() => new Hello).to.throw(TypeError);
     })
@@ -179,7 +179,7 @@ describe('Structure: primitive', function() {
         structure: {},
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const object = new Hello(12345n);
       expect(object.$).to.equal(12345n);
@@ -201,7 +201,7 @@ describe('Structure: primitive', function() {
         structure: {},
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const object = new Hello(12345n);
       expect(object.dataView).to.be.an.instanceOf(DataView);
@@ -222,7 +222,7 @@ describe('Structure: primitive', function() {
         structure: {},
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: I64 } = structure;
       const str = '\u0001\u0000\u0000\u0000\u0000\u0000\u0000\u0000';
       const base64 = encodeBase64(Buffer.from(str));
@@ -244,7 +244,7 @@ describe('Structure: primitive', function() {
         structure: {},
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: I64 } = structure;
       const str = '\u0001\u0000\u0000\u0000\u0000\u0000\u0000\u0000';
       const int = new I64(0n);
@@ -266,7 +266,7 @@ describe('Structure: primitive', function() {
         structure: {},
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const object = new Hello(12345n);
       expect(object.dataView).to.be.an.instanceOf(DataView);
@@ -287,7 +287,7 @@ describe('Structure: primitive', function() {
         structure: {},
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: I64 } = structure;
       const typedArray = new BigInt64Array([ 1234n ]);
       const int = I64(typedArray);
@@ -310,7 +310,7 @@ describe('Structure: primitive', function() {
         structure: {},
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: I64 } = structure;
       expect(() => new I64({ dogmeat: 5 })).to.throw(TypeError);
     })
@@ -329,7 +329,7 @@ describe('Structure: primitive', function() {
         structure: {},
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: I64 } = structure;
       expect(() => new I64({})).to.throw(TypeError);
     })

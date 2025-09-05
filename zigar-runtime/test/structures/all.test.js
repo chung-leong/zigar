@@ -219,7 +219,7 @@ describe('Structure: all', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Struct,
@@ -270,7 +270,7 @@ describe('Structure: all', function() {
         },
       }, true);
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Hello.superdog).to.equal(1234);
       Hello.superdog = 43;
       expect(Hello.superdog).to.equal(43);
@@ -312,7 +312,7 @@ describe('Structure: all', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Enum,
         flags: StructureFlag.HasValue,
@@ -362,7 +362,7 @@ describe('Structure: all', function() {
         },
       }, true);
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Hello.superdog).to.equal(1234);
       Hello.superdog = 43;
       expect(Hello.superdog).to.equal(43);
@@ -419,7 +419,7 @@ describe('Structure: all', function() {
         slot: 0,
       });
       const ArgStruct = env.defineStructure(argStruct);
-      env.endStructure(argStruct);
+      env.finishStructure(argStruct);
       const fnStructure = env.beginStructure({
         type: StructureType.Function,
         byteSize: 0,
@@ -447,7 +447,7 @@ describe('Structure: all', function() {
         }
       }, true);
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Hello.merge).to.be.a('function');
       expect(Hello.merge).to.have.property('name', 'merge');
       expect(Hello.prototype.merge).to.be.a('function');
@@ -538,7 +538,7 @@ describe('Structure: all', function() {
         slot: 0,
       });
       env.defineStructure(getterArgStruct);
-      env.endStructure(getterArgStruct);
+      env.finishStructure(getterArgStruct);
       const getterStructure = env.beginStructure({
         type: StructureType.Function,
         name: 'fn (Hello) i32',
@@ -551,7 +551,7 @@ describe('Structure: all', function() {
       const getterThunk = { [MEMORY]: zig(0x1234) };
       env.attachTemplate(getterStructure, getterThunk, false);
       const Getter = env.defineStructure(getterStructure);
-      env.endStructure(getterStructure);
+      env.finishStructure(getterStructure);
       env.attachMember(structure, {
         name: 'get  apple',
         type: MemberType.Object,
@@ -592,7 +592,7 @@ describe('Structure: all', function() {
         structure: {},
       });
       env.defineStructure(setterArgStruct);
-      env.endStructure(setterArgStruct);
+      env.finishStructure(setterArgStruct);
       const setterStructure = env.beginStructure({
         type: StructureType.Function,
         name: 'fn (Hello, i32) void',
@@ -605,7 +605,7 @@ describe('Structure: all', function() {
       const setterThunk = { [MEMORY]: zig(0x4567) };
       env.attachTemplate(setterStructure, setterThunk, false);
       const Setter = env.defineStructure(setterStructure);
-      env.endStructure(setterStructure);
+      env.finishStructure(setterStructure);
       env.attachMember(structure, {
         name: 'set apple',
         type: MemberType.Object,
@@ -619,7 +619,7 @@ describe('Structure: all', function() {
           1: Setter.call(ENVIRONMENT, zig(0x45678)),
         }
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello({ dog: 1, cat: 2 });
       let apple = 123;
       const thunkAddresses = [];
@@ -667,7 +667,7 @@ describe('Structure: all', function() {
         structure: {},
       });
       env.defineStructure(getterArgStruct);
-      env.endStructure(getterArgStruct);
+      env.finishStructure(getterArgStruct);
       const getterStructure = env.beginStructure({
         type: StructureType.Function,
         name: 'fn () i32',
@@ -680,7 +680,7 @@ describe('Structure: all', function() {
       const getterThunk = { [MEMORY]: zig(0x1234) };
       env.attachTemplate(getterStructure, getterThunk, false);
       const Getter = env.defineStructure(getterStructure);
-      env.endStructure(getterStructure);
+      env.finishStructure(getterStructure);
       env.attachMember(structure, {
         name: 'get  apple',
         type: MemberType.Object,
@@ -711,7 +711,7 @@ describe('Structure: all', function() {
         structure: {},
       });
       env.defineStructure(setterArgStruct);
-      env.endStructure(setterArgStruct);
+      env.finishStructure(setterArgStruct);
       const setterStructure = env.beginStructure({
         type: StructureType.Function,
         name: 'fn (i32) void',
@@ -724,7 +724,7 @@ describe('Structure: all', function() {
       const setterThunk = { [MEMORY]: zig(0x4567) };
       env.attachTemplate(setterStructure, setterThunk, false);
       const Setter = env.defineStructure(setterStructure);
-      env.endStructure(setterStructure);
+      env.finishStructure(setterStructure);
       env.attachMember(structure, {
         name: 'set apple',
         type: MemberType.Object,
@@ -737,7 +737,7 @@ describe('Structure: all', function() {
           1: Setter.call(ENVIRONMENT, zig(0x45678)),
         }
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       let apple = 123;
       const thunkAddresses = [];
       env.invokeThunk = (thunk, fn, args) => {

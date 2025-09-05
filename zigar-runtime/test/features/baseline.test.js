@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
-import { MemberFlag, MemberType, PointerFlag, PosixError, StructureFlag, StructureType } from '../../src/constants.js';
+import { MemberFlag, MemberType, PointerFlag, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { usize, usizeByteSize } from '../../src/utils.js';
@@ -354,14 +354,9 @@ describe('Feature: baseline', function() {
       env.triggerEvent('log', { message: 'hello' });
       expect(event).to.eql({ message: 'hello' });
     })
-    it('should ignore missing listener when no error code is given', function() {
+    it('should ignore missing listener', function() {
       const env = new Env();
       env.triggerEvent('cow', { message: 'hello' });
-    })
-    it('should throw if an error code is provided', function() {
-      const env = new Env();
-      expect(() => env.triggerEvent('cow', { message: 'hello' }, PosixError.EACCES))
-        .to.throw(Error).that.has.property('code', PosixError.EACCES);
     })
   })
   describe('getSpecialExports', function() {
@@ -435,43 +430,50 @@ describe('Feature: baseline', function() {
       expect(sizeOf).to.be.a('function');
       expect(alignOf).to.be.a('function');
       expect(typeOf).to.be.a('function');
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Struct,
         flags: StructureFlag.IsPacked,
         name: 'Packed',
         byteSize: 4,
         align: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Bool,
-        name: 'nice',
-        bitSize: 1,
-        bitOffset: 0,
-        structure: {},
-      });
-      env.attachMember(structure, {
-        type: MemberType.Bool,
-        name: 'rich',
-        bitSize: 1,
-        bitOffset: 1,
-        structure: {},
-      });
-      env.attachMember(structure, {
-        type: MemberType.Bool,
-        name: 'young',
-        bitSize: 1,
-        bitOffset: 2,
-        structure: {},
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      const Packed = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Bool,
+              name: 'nice',
+              bitSize: 1,
+              bitOffset: 0,
+              structure: {},
+            },
+            {
+              type: MemberType.Bool,
+              name: 'rich',
+              bitSize: 1,
+              bitOffset: 1,
+              structure: {},
+            },
+            {
+              type: MemberType.Bool,
+              name: 'young',
+              bitSize: 1,
+              bitOffset: 2,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            }
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finalizeStructure(structure);
+      const Packed = structure.constructor;
       expect(sizeOf(Packed)).to.equal(4);
       expect(alignOf(Packed)).to.equal(2);
       expect(typeOf(Packed)).to.equal('struct');

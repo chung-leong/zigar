@@ -1,8 +1,8 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
 import {
-  ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, StructureFlag,
-  StructureType,
+    ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, StructureFlag,
+    StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
@@ -174,7 +174,7 @@ describe('Feature: structure-acquisition', function() {
       expect(s.static.template).to.equal(templ);
     })
   })
-  describe('endStructure', function() {
+  describe('finishStructure', function() {
     it('should add structure to list', function() {
       const env = new Env();
       const s = {
@@ -183,7 +183,7 @@ describe('Feature: structure-acquisition', function() {
         static: { members: [], methods: [] },
         constructor: function() {},
       };
-      env.endStructure(s);
+      env.finishStructure(s);
       expect(env.structures[0]).to.equal(s);
     })
   })
@@ -293,7 +293,7 @@ describe('Feature: structure-acquisition', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -308,7 +308,7 @@ describe('Feature: structure-acquisition', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         byteSize: addressByteSize,
@@ -324,7 +324,7 @@ describe('Feature: structure-acquisition', function() {
         structure: ptrStructure,
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const dv = new DataView(new ArrayBuffer(addressByteSize));
       if (addressSize === 32) {
         dv.setUint32(0, 0x1000, true);
@@ -354,14 +354,14 @@ describe('Feature: structure-acquisition', function() {
         static: { members: [], methods: [] },
         constructor: function() {},
       };
-      env.endStructure(s1);
+      env.finishStructure(s1);
       const s2 = {
         type: StructureType.Struct,
         instance: { members: [], methods: [] },
         static: { members: [], methods: [] },
         constructor: function() {},
       };
-      env.endStructure(s2);
+      env.finishStructure(s2);
       const constructor = env.getRootModule();
       expect(constructor).to.equal(s2.constructor);
     })
@@ -376,14 +376,14 @@ describe('Feature: structure-acquisition', function() {
         static: { members: [], methods: [] },
         constructor: function() {},
       };
-      env.endStructure(s1);
+      env.finishStructure(s1);
       const s2 = {
         type: StructureType.Struct,
         instance: { members: [], methods: [] },
         static: { members: [], methods: [] },
         constructor: function() {},
       };
-      env.endStructure(s2);
+      env.finishStructure(s2);
       const { structures, keys } = env.exportStructures();
       expect(structures[0]).to.equal(s1);
       expect(structures[1]).to.equal(s2);
@@ -557,7 +557,7 @@ describe('Feature: structure-acquisition', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
@@ -588,7 +588,7 @@ describe('Feature: structure-acquisition', function() {
         structure: intStructure,
       });
       const ArgStruct = env.defineStructure(argStructure);
-      env.endStructure(argStructure);
+      env.finishStructure(argStructure);
       const structure = env.beginStructure({
         type: StructureType.Function,
         name: 'fn(i32, i32) i32',
@@ -601,7 +601,7 @@ describe('Feature: structure-acquisition', function() {
       const thunk = { [MEMORY]: zig(0x1004) };
       env.attachTemplate(structure, thunk, false);
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(env.hasMethods()).to.be.true;
     })
   })

@@ -41,7 +41,7 @@ describe('Member: valueOf', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -56,7 +56,7 @@ describe('Member: valueOf', function() {
         structure: structStructure,
       });
       env.defineStructure(arrayStructure);
-      env.endStructure(arrayStructure);
+      env.finishStructure(arrayStructure);
       const structure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -90,7 +90,7 @@ describe('Member: valueOf', function() {
         structure: {},
       });
       const Complex = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const data = {
         animals: [
           { dog: 1, cat: 2 },
@@ -119,7 +119,7 @@ describe('Member: valueOf', function() {
         structure: floatStructure,
       });
       env.defineStructure(floatStructure);
-      env.endStructure(floatStructure);
+      env.finishStructure(floatStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasSlot | StructureFlag.HasPointer,
@@ -135,7 +135,7 @@ describe('Member: valueOf', function() {
         slot: 0,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasPointer | UnionFlag.HasInaccessible,
@@ -168,7 +168,7 @@ describe('Member: valueOf', function() {
         structure: floatStructure,
       });
       const Complex = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Complex({ donut: 3.5 });
       expect(object.valueOf().goat).to.be.a('symbol');
     })

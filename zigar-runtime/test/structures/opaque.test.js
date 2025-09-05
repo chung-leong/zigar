@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import {
-  MemberFlag, MemberType,
-  OptionalFlag, PointerFlag, StructureFlag, StructurePurpose, StructureType
+    MemberFlag, MemberType,
+    OptionalFlag, PointerFlag, StructureFlag, StructurePurpose, StructureType
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
@@ -46,7 +46,7 @@ describe('Structure: opaque', function() {
         name: 'Hello',
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Hello).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(0));
       const object = Hello.call(ENVIRONMENT, dv);
@@ -64,7 +64,7 @@ describe('Structure: opaque', function() {
         name: 'Hello',
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new Hello()).to.throw(TypeError);
     })
     it('should define an iterator opaque', function() {
@@ -91,7 +91,7 @@ describe('Structure: opaque', function() {
         slot: 0,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const optStructure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
@@ -113,7 +113,7 @@ describe('Structure: opaque', function() {
         structure: {},
       });
       env.defineStructure(optStructure);
-      env.endStructure(optStructure);
+      env.finishStructure(optStructure);
       const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -139,7 +139,7 @@ describe('Structure: opaque', function() {
         slot: 0,
       });
       env.defineStructure(argStructure);
-      env.endStructure(argStructure);
+      env.finishStructure(argStructure);
       const fnStructure = env.beginStructure({
         type: StructureType.Function,
         name: 'fn (*Hello) ?i32',
@@ -157,7 +157,7 @@ describe('Structure: opaque', function() {
       thunk[MEMORY][ZIG] = { address: usize(0x8888) };
       env.attachTemplate(fnStructure, thunk, false);
       const Next = env.defineStructure(fnStructure);
-      env.endStructure(fnStructure);
+      env.finishStructure(fnStructure);
       env.attachMember(structure, {
         name: 'next',
         type: MemberType.Object,
@@ -173,7 +173,7 @@ describe('Structure: opaque', function() {
           0: next,
         }
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       let i = 0, thunkAddress, fnAddress, argBuffer;
       env.runThunk = function(...args) {
         thunkAddress = args[0];

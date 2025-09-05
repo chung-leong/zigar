@@ -164,7 +164,7 @@ describe('Structure: enum', function() {
           1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Number(Hello.Dog)).to.equal(0);
       expect(Number(Hello.Cat)).to.equal(1);
       expect(`${Hello.Dog}`).to.equal('Dog');
@@ -218,7 +218,7 @@ describe('Structure: enum', function() {
           1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Number(Hello.Dog)).to.equal(0);
       expect(Number(Hello.Cat)).to.equal(1);
       const e1 = new Hello(3);
@@ -263,7 +263,7 @@ describe('Structure: enum', function() {
           1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const buffer = new ArrayBuffer(4);
       const object1 = Hello(buffer);
       const object2 = Hello(buffer);
@@ -303,7 +303,7 @@ describe('Structure: enum', function() {
           1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
         name: '[4]Hello',
@@ -317,7 +317,7 @@ describe('Structure: enum', function() {
         structure,
       });
       const HelloArray = env.defineStructure(arrayStructure);
-      env.endStructure(arrayStructure);
+      env.finishStructure(arrayStructure);
       const array = new HelloArray([ Hello.Dog, Hello.Cat, Hello.Dog, Hello.Dog ]);
       expect(array.valueOf()).to.eql([ 'Dog', 'Cat', 'Dog', 'Dog' ]);
       expect(array[1]).to.equal(Hello.Cat);
@@ -358,7 +358,7 @@ describe('Structure: enum', function() {
           1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Hello(0)).to.equal(Hello.Dog);
       expect(Hello(1)).to.equal(Hello.Cat);
     })
@@ -396,7 +396,7 @@ describe('Structure: enum', function() {
           1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Hello('Dog')).to.equal(Hello.Dog);
       expect(Hello('Cat')).to.equal(Hello.Cat);
     })
@@ -434,7 +434,7 @@ describe('Structure: enum', function() {
           1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => Hello({})).to.throw(TypeError);
       expect(() => Hello(undefined)).to.throw(TypeError);
       expect(() => Hello(Symbol.asyncIterator)).to.throw(TypeError);
@@ -473,7 +473,7 @@ describe('Structure: enum', function() {
           1: createInstance(env, structure, new Uint32Array([ 456 ])),
         },
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Hello(123)).to.equal(Hello.Dog);
       expect(Hello(456)).to.equal(Hello.Cat);
       expect(Number(Hello(123))).to.equal(123);
@@ -513,7 +513,7 @@ describe('Structure: enum', function() {
           1: createInstance(env, structure, new BigUint64Array([ 4567n ])),
         },
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Hello(1234n)).to.equal(Hello.Dog);
       // BigInt suffix missing on purpose
       expect(Hello(4567)).to.equal(Hello.Cat);
@@ -552,7 +552,7 @@ describe('Structure: enum', function() {
           1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(JSON.stringify(Hello.Dog)).to.equal('"Dog"');
       expect(JSON.stringify(Hello.Cat)).to.equal('"Cat"');
       const object = new Hello(undefined);
@@ -595,7 +595,7 @@ describe('Structure: enum', function() {
           1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Hello(1)).to.be.instanceOf(Hello);
       expect(Hello(5)).to.be.undefined;
     })
@@ -633,7 +633,7 @@ describe('Structure: enum', function() {
           1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Hello(1)).to.be.instanceOf(Hello);
       expect(Hello(5)).to.be.undefined;
     })
@@ -672,7 +672,7 @@ describe('Structure: enum', function() {
           1: createInstance(env, structure, new Uint32Array([ 1 ])),
         },
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Hello.name).to.equal('zig.Hello');
       const desc = Object.prototype.toString.call(Hello.Dog);
       expect(desc).to.equal('[object zig.Hello]');
@@ -694,7 +694,7 @@ describe('Structure: enum', function() {
       env.attachTemplate(structure, {
         [SLOTS]: {},
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new Hello()).to.throw(TypeError);
     })
     it('should throw when initializer is not one of the expected types', function() {
@@ -714,7 +714,7 @@ describe('Structure: enum', function() {
       env.attachTemplate(structure, {
         [SLOTS]: {},
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new Hello(false)).to.throw(TypeError);
     })
     it('should throw when initializer is empty', function() {
@@ -751,7 +751,7 @@ describe('Structure: enum', function() {
           1: createInstance(env, structure, new Uint32Array([ 123 ])),
         },
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new Hello({})).to.throw(TypeError);
     })
     it('should throw when invalid indices are encountered', function() {
@@ -788,7 +788,7 @@ describe('Structure: enum', function() {
           1: createInstance(env, structure, new Uint32Array([ 123 ])),
         },
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const dv = new DataView(new ArrayBuffer(structure.byteSize));
       dv.setUint32(0, 1234, true);
       const object = Hello(dv);

@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import {
-  MemberType, PointerFlag, StructureFlag, StructureType, UnionFlag,
+    MemberType, PointerFlag, StructureFlag, StructureType, UnionFlag,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
@@ -28,7 +28,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -44,7 +44,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -97,7 +97,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: ptrStructure,
       });
       const ArgStruct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object1 = new Int32(123);
       const object2 = new Int32(123);
       const args = new ArgStruct([ object1, object2, object1, object1 ]);
@@ -138,7 +138,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -154,7 +154,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -207,7 +207,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: ptrStructure,
       });
       const ArgStruct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const buffer = new ArrayBuffer(16);
       const object1 = Int32(new DataView(buffer, 0, 4));
       const object2 = Int32(new DataView(buffer, 4, 4));
@@ -249,7 +249,7 @@ describe('Feature: pointer-synchronization', function() {
         structure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const optionalStructure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue,
@@ -274,7 +274,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: {},
       });
       env.defineStructure(optionalStructure);
-      env.endStructure(optionalStructure);
+      env.finishStructure(optionalStructure);
       env.attachMember(structure, {
         name: 'sibling',
         type: MemberType.Object,
@@ -297,7 +297,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       env.attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
@@ -307,7 +307,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object1 = new Hello({ sibling: null });
       const object2 = new Hello({ sibling: object1 });
       const object3 = new Hello({ sibling: object2 });
@@ -344,7 +344,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -360,7 +360,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue,
@@ -384,7 +384,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: {},
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       env.getTargetAddress = function(context, target, cluster) {
         return usize(0x1000);
       };
@@ -414,7 +414,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -430,7 +430,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -456,7 +456,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: ptrStructure,
       });
       const ArgStruct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
       } else {
@@ -489,7 +489,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -505,7 +505,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -522,7 +522,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: ptrStructure,
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -537,7 +537,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: ptrStructure,
       });
       env.defineStructure(arrayStructure);
-      env.endStructure(arrayStructure);
+      env.finishStructure(arrayStructure);
       const structure = env.beginStructure({
         type: StructureType.Union,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | UnionFlag.HasInaccessible,
@@ -579,7 +579,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: {},
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello(undefined);
       let called = false;
       env.getTargetAddress = function(context, target, cluster) {
@@ -638,7 +638,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -654,7 +654,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue,
@@ -678,7 +678,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: {},
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello(new Int32(123));
       expect(object.$['*']).to.equal(123);
       object[MEMORY].setBigUint64(0, 0n);
@@ -702,7 +702,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -717,7 +717,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -742,7 +742,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: ptrStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello([ new Int32(123) ]);
       expect(object[0]['*']).to.equal(123);
       const context = env.startContext();
@@ -764,7 +764,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
@@ -779,7 +779,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -804,7 +804,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: ptrStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello([ new Int32(123) ]);
       const context = env.startContext();
       env.updatePointerTargets(context, object, true);
@@ -824,7 +824,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -840,7 +840,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       const Int32Ptr = env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const ptr = new Int32Ptr(new Int32(123));
       expect(ptr['*']).to.equal(123);
       const invalidAddress = (addressSize == 32) ? 0xaaaa_aaaa : 0xaaaa_aaaa_aaaa_aaaan;
@@ -872,7 +872,7 @@ describe('Feature: pointer-synchronization', function() {
         structure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const optionalStructure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue,
@@ -897,7 +897,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: {},
       });
       env.defineStructure(optionalStructure);
-      env.endStructure(optionalStructure);
+      env.finishStructure(optionalStructure);
       env.attachMember(structure, {
         name: 'sibling',
         type: MemberType.Object,
@@ -920,7 +920,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       env.attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
@@ -930,7 +930,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object1 = new Hello({ sibling: null });
       const object2 = new Hello({ sibling: object1 });
       const object3 = new Hello({ sibling: object2 });
@@ -983,7 +983,7 @@ describe('Feature: pointer-synchronization', function() {
         structure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const optionalStructure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue,
@@ -1008,7 +1008,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: {},
       });
       env.defineStructure(optionalStructure);
-      env.endStructure(optionalStructure);
+      env.finishStructure(optionalStructure);
       env.attachMember(structure, {
         name: 'sibling',
         type: MemberType.Object,
@@ -1031,7 +1031,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       env.attachMember(structure, {
         name: 'number',
         type: MemberType.Int,
@@ -1041,7 +1041,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: intStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object1 = new Hello({ sibling: null });
       const object2 = new Hello({ sibling: null });
       const object3 = new Hello({ sibling: null });
@@ -1069,7 +1069,7 @@ describe('Feature: pointer-synchronization', function() {
         name: 'Hello',
       });
       env.defineStructure(opaqueStructure);
-      env.endStructure(opaqueStructure);
+      env.finishStructure(opaqueStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -1085,7 +1085,7 @@ describe('Feature: pointer-synchronization', function() {
         structure: opaqueStructure,
       });
       const Ptr = env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const pointer = new Ptr(undefined);
       const dv = new DataView(new ArrayBuffer(16));
       const map = new Map([

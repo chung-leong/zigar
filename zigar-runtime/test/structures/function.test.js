@@ -24,7 +24,7 @@ describe('Structure: function', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
@@ -55,7 +55,7 @@ describe('Structure: function', function() {
         structure: intStructure,
       });
       const ArgStruct = env.defineStructure(argStructure);
-      env.endStructure(argStructure);
+      env.finishStructure(argStructure);
       const structure = env.beginStructure({
         type: StructureType.Function,
         byteSize: 8,
@@ -127,7 +127,7 @@ describe('Structure: function', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
@@ -158,7 +158,7 @@ describe('Structure: function', function() {
         structure: intStructure,
       });
       const ArgStruct = env.defineStructure(argStructure);
-      env.endStructure(argStructure);
+      env.finishStructure(argStructure);
       const structure = env.beginStructure({
         type: StructureType.Function,
         name: 'fn(i32, i32) i32',
@@ -229,7 +229,7 @@ describe('Structure: function', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
@@ -260,7 +260,7 @@ describe('Structure: function', function() {
         structure: intStructure,
       });
       env.defineStructure(argStructure);
-      env.endStructure(argStructure);
+      env.finishStructure(argStructure);
       const structure = env.beginStructure({
         type: StructureType.Function,
         byteSize: 0,
@@ -274,7 +274,7 @@ describe('Structure: function', function() {
       const jsThunkConstructor = { [MEMORY]: zig(0x8888) };
       env.attachTemplate(structure, jsThunkConstructor, true);
       const constructor = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new constructor()).to.throw(TypeError);
       expect(() => new constructor(123)).to.throw(TypeError);
     })
@@ -293,7 +293,7 @@ describe('Structure: function', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const argStructure = env.beginStructure({
         type: StructureType.VariadicStruct,
         byteSize: 4 * 3,
@@ -324,7 +324,7 @@ describe('Structure: function', function() {
         structure: intStructure,
       });
       env.defineStructure(argStructure);
-      env.endStructure(argStructure);
+      env.finishStructure(argStructure);
       const structure = env.beginStructure({
         type: StructureType.Function,
         byteSize: 8,
@@ -338,7 +338,7 @@ describe('Structure: function', function() {
       const jsThunkConstructor = { [MEMORY]: zig(0x8888) };
       env.attachTemplate(structure, jsThunkConstructor, true);
       const constructor = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new constructor(() => {})).to.throw(TypeError)
         .with.property('message').that.equal('Unsupported');
     })
@@ -357,7 +357,7 @@ describe('Structure: function', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
@@ -388,7 +388,7 @@ describe('Structure: function', function() {
         structure: intStructure,
       });
       const ArgStruct = env.defineStructure(argStructure);
-      env.endStructure(argStructure);
+      env.finishStructure(argStructure);
       const structure = env.beginStructure({
         type: StructureType.Function,
         name: 'fn(i32, i32) i32',

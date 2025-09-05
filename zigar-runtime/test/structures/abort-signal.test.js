@@ -1,8 +1,8 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
 import {
-  MemberType, PointerFlag,
-  StructureFlag, StructurePurpose, StructureType
+    MemberType, PointerFlag,
+    StructureFlag, StructurePurpose, StructureType
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
@@ -28,7 +28,7 @@ describe('Feature: abort-signal', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*const i32',
@@ -44,7 +44,7 @@ describe('Feature: abort-signal', function() {
         slot: 0,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const signalStructure = env.beginStructure({
         type: StructureType.Struct,
         purpose: StructurePurpose.AbortSignal,
@@ -62,7 +62,7 @@ describe('Feature: abort-signal', function() {
         slot: 0,
       });
       env.defineStructure(signalStructure);
-      env.endStructure(signalStructure);
+      env.finishStructure(signalStructure);
       const { ptr: int32 } = env.createSignal(signalStructure, null);
       expect(int32.$).to.equal(0);
     })
@@ -81,7 +81,7 @@ describe('Feature: abort-signal', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*const i32',
@@ -97,7 +97,7 @@ describe('Feature: abort-signal', function() {
         slot: 0,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const signalStructure = env.beginStructure({
         type: StructureType.Struct,
         purpose: StructurePurpose.AbortSignal,
@@ -115,7 +115,7 @@ describe('Feature: abort-signal', function() {
         slot: 0,
       });
       env.defineStructure(signalStructure);
-      env.endStructure(signalStructure);
+      env.finishStructure(signalStructure);
       const controller = new AbortController();
       const { signal } = controller;
       const { ptr: int32 } = env.createSignal(signalStructure, signal);
@@ -155,7 +155,7 @@ describe('Feature: abort-signal', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         name: '*const i32',
@@ -171,7 +171,7 @@ describe('Feature: abort-signal', function() {
         slot: 0,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const signalStructure = env.beginStructure({
         type: StructureType.Struct,
         purpose: StructurePurpose.AbortSignal,
@@ -189,7 +189,7 @@ describe('Feature: abort-signal', function() {
         slot: 0,
       });
       env.defineStructure(signalStructure);
-      env.endStructure(signalStructure);
+      env.finishStructure(signalStructure);
       const controller = new AbortController();
       const { signal } = controller;
       controller.abort();

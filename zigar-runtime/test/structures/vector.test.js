@@ -120,7 +120,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Vector).to.be.a('function');
       expect(Vector.child).to.equal(Uint32);
       const object = new Vector(new Uint32Array([ 1, 2, 3, 4 ]));
@@ -162,7 +162,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const buffer = new ArrayBuffer(4 * 4);
       const object1 = Vector(buffer);
       const object2 = Vector(buffer);
@@ -199,7 +199,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new Vector).to.throw(TypeError);
     })
     it('should define vector that is iterable', function() {
@@ -230,7 +230,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const dv = new DataView(new ArrayBuffer(4 * 8));
       dv.setUint32(0, 1234, true);
       dv.setUint32(16, 4567, true);
@@ -269,7 +269,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const dv = new DataView(new ArrayBuffer(4 * 8));
       dv.setUint32(0, 1234, true);
       dv.setUint32(16, 4567, true);
@@ -296,7 +296,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
         flags: VectorFlag.IsTypedArray,
@@ -310,7 +310,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const buffer = new ArrayBuffer(32);
       const dv = new DataView(buffer, 16, 16);
       dv.setUint32(0, 1234, true);
@@ -332,7 +332,7 @@ describe('Structure: vector', function() {
         structure: floatStructure,
       });
       env.defineStructure(floatStructure);
-      env.endStructure(floatStructure);
+      env.finishStructure(floatStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
         flags: VectorFlag.IsTypedArray,
@@ -347,7 +347,7 @@ describe('Structure: vector', function() {
         structure: floatStructure,
       });
       const Vector = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Vector).to.be.a('function');
       const object = new Vector(new Float32Array([ 0.25, 1.5, 2.5, 3.5 ]));
       expect(object[0]).to.equal(0.25);
@@ -372,7 +372,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
         flags: VectorFlag.IsTypedArray,
@@ -386,7 +386,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Vector([ 12345n, 12345n, 12345n ]);
       expect(object.dataView).to.be.an.instanceOf(DataView);
       expect(object.typedArray).to.be.an.instanceOf(BigInt64Array);
@@ -405,7 +405,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
         flags: 0,
@@ -419,7 +419,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Vector([ 12345n, 12345n, 12345n ]);
       expect(object.dataView).to.be.an.instanceOf(DataView);
       expect(object.typedArray).to.be.undefined;
@@ -437,7 +437,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
         flags: VectorFlag.IsTypedArray,
@@ -451,7 +451,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Vector).to.be.a('function');
       const ta = new Uint32Array([ 1, 2, 3, 4 ]);
       const object = Vector(ta);
@@ -473,7 +473,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
         flags: VectorFlag.IsTypedArray,
@@ -487,7 +487,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Vector([ 1, 2, 3, 4 ]);
       const object2 = new Vector(object);
       expect([ ...object2 ]).to.eql([ 1, 2, 3, 4 ]);
@@ -505,7 +505,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
         flags: VectorFlag.IsTypedArray,
@@ -519,7 +519,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const generate = function*() {
         for (let i = 0; i < 4; i++) {
           yield i + 1;
@@ -556,7 +556,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       const Vector = env.defineStructure(vectorStructure)
-      env.endStructure(vectorStructure)
+      env.finishStructure(vectorStructure)
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
         name: 'Array',
@@ -570,7 +570,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(arrayStructure);
-      env.endStructure(arrayStructure);
+      env.finishStructure(arrayStructure);
       const array = new Array([ 1, 2, 3, 4 ]);
       const vector = Vector(array);
       expect([ ...vector ]).to.eql([ 1, 2, 3, 4 ]);
@@ -605,7 +605,7 @@ describe('Structure: vector', function() {
         },
       });
       const Vector = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new Vector([ 1, 2, 3 ])).to.throw(TypeError)
         .with.property('message').that.contains('4 elements')
         .and.that.contains('3 initializers');
@@ -638,7 +638,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new Vector(1)).to.throw(TypeError)
         .with.property('message').that.contains('an array')
         .and.that.contains('Uint32Array');
@@ -671,7 +671,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new Vector({})).to.throw(TypeError)
         .with.property('message').that.contains('an array')
         .and.that.contains('Uint32Array');
@@ -689,7 +689,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Vector,
         flags: VectorFlag.IsTypedArray,
@@ -703,7 +703,7 @@ describe('Structure: vector', function() {
         structure: intStructure,
       });
       const Vector = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const dv = new DataView(new ArrayBuffer(4 * 4));
       dv.setUint32(0, 123, true);
       dv.setUint32(4, 234, true);

@@ -1,13 +1,13 @@
 import { expect } from 'chai';
 import {
-  MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType,
+    MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { InvalidSliceLength } from '../../src/errors.js';
 import '../../src/mixins.js';
 import {
-  ADDRESS, ENVIRONMENT, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, POINTER, TARGET,
-  UPDATE, VISIT, ZIG,
+    ADDRESS, ENVIRONMENT, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, POINTER, TARGET,
+    UPDATE, VISIT, ZIG,
 } from '../../src/symbols.js';
 import { defineValue, usize } from '../../src/utils.js';
 import { addressByteSize, addressSize, getUsize, setUsize } from '../test-utils.js';
@@ -103,7 +103,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -118,7 +118,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32Ptr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Int32Ptr.child).to.equal(Int32);
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
@@ -143,7 +143,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -158,7 +158,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32Ptr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const buffer = new ArrayBuffer(8);
       const object1 = Int32Ptr.call(ENVIRONMENT, buffer);
       const object2 = Int32Ptr.call(ENVIRONMENT, buffer);
@@ -179,7 +179,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -194,7 +194,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32Ptr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object1 = new Int32Ptr(new Int32(1234));
       expect(object1['*']).to.equal(1234);
       const object2 = Int32Ptr(object1, { writable: false });
@@ -215,7 +215,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -230,7 +230,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Int32Ptr } = structure;
       expect(() => new Int32Ptr).to.throw(TypeError);
     })
@@ -249,7 +249,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -265,7 +265,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Int32Ptr } = structure;
       expect(Int32Ptr.child).to.equal(Int32);
       const intPointer = new Int32Ptr(undefined);
@@ -287,7 +287,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -302,7 +302,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -316,7 +316,7 @@ describe('Structure: pointer', function() {
         structure: ptrStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Int32PtrArray } = structure;
       const ptrArray = new Int32PtrArray(undefined);
       expect(() => ptrArray[0]['*']).to.throw('Null pointer');
@@ -352,8 +352,8 @@ describe('Structure: pointer', function() {
       });
       const Int32A = envA.defineStructure(intStructureA);
       const Int32B = envB.defineStructure(intStructureB);
-      envA.endStructure(intStructureA);
-      envB.endStructure(intStructureB);
+      envA.finishStructure(intStructureA);
+      envB.finishStructure(intStructureB);
       const structureA = envA.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -382,8 +382,8 @@ describe('Structure: pointer', function() {
       });
       const Int32PtrA = envA.defineStructure(structureA);
       const Int32PtrB = envB.defineStructure(structureB);
-      envA.endStructure(structureA);
-      envB.endStructure(structureB);
+      envA.finishStructure(structureA);
+      envB.finishStructure(structureB);
       const int32A = new Int32A(123);
       const int32B = new Int32B(456);
       const int32PtrA = new Int32PtrA(int32A);
@@ -408,7 +408,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const argStructure = env.beginStructure({
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
@@ -439,7 +439,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(argStructure);
-      env.endStructure(argStructure);
+      env.finishStructure(argStructure);
       const fnStructure = env.beginStructure({
         type: StructureType.Function,
         byteSize: 0,
@@ -453,7 +453,7 @@ describe('Structure: pointer', function() {
       const jsThunkController = { [MEMORY]: zig(0x2004) };
       env.attachTemplate(fnStructure, jsThunkController, true);
       const Fn = env.defineStructure(fnStructure);
-      env.endStructure(fnStructure);
+      env.finishStructure(fnStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -468,7 +468,7 @@ describe('Structure: pointer', function() {
         structure: fnStructure,
       });
       const FnPtr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       env.createJsThunk = function(...args) {
         return usize(0x100);
       };
@@ -505,7 +505,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -521,7 +521,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const target = new Hello({ cat: 123, dog: 456 });
       const pointer = new HelloPtr(target);
@@ -557,7 +557,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -573,7 +573,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const object1 = new Hello({ cat: 123, dog: 456 });
       const object2 = new Hello({ cat: 101, dog: 202 });
@@ -605,7 +605,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -621,7 +621,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const object1 = new Hello({ cat: 123, dog: 456 });
       const object2 = new Hello({ cat: 101, dog: 202 });
@@ -653,7 +653,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -669,7 +669,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const pointer = new HelloPtr(new Hello({ cat: 123, dog: 456 }));
       const entries = [];
@@ -702,7 +702,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -718,7 +718,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const object = new Hello({ cat: 123, dog: 456 });
       const pointer = new HelloPtr(object);
@@ -754,7 +754,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst | PointerFlag.IsNullable,
@@ -769,7 +769,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const pointer = new HelloPtr(null);
       expect(pointer['*']).to.be.null;
@@ -797,7 +797,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -812,7 +812,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const constStructure = env.beginStructure({
         type: StructureType.Pointer,
@@ -828,7 +828,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       env.defineStructure(constStructure);
-      env.endStructure(constStructure);
+      env.finishStructure(constStructure);
       const { constructor: HelloConstPtr } = constStructure;
       const constPointer = new HelloConstPtr({ cat: 123, dog: 456 });
       const constTarget = constPointer['*'];
@@ -864,7 +864,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const { constructor: Hello } = structStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
@@ -880,7 +880,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const { constructor: HelloPtr } = ptrStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -896,7 +896,7 @@ describe('Structure: pointer', function() {
         structure: ptrStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: HelloPtrPtr } = structure;
       const target = new Hello({ cat: 123, dog: 456 });
       const pointer = new HelloPtr(target);
@@ -920,7 +920,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -936,7 +936,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Int32Ptr } = structure;
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
@@ -958,7 +958,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -974,7 +974,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Int32Ptr } = structure;
       const ptr1 = new Int32Ptr(1234);
       expect(ptr1['*']).to.equal(1234);
@@ -999,7 +999,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(boolStructure);
-      env.endStructure(boolStructure);
+      env.finishStructure(boolStructure);
       const { constructor: Bool } = boolStructure;
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -1014,7 +1014,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -1030,7 +1030,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Int32Ptr } = structure;
       // autovivification
       const ptr1 = new Int32Ptr(1234);
@@ -1054,7 +1054,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -1069,7 +1069,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Int32Ptr } = structure;
       const buffer = new ArrayBuffer(8);
       expect(() => Int32Ptr(buffer)).to.throw();
@@ -1097,7 +1097,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -1111,7 +1111,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const { constructor: HelloSlice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -1128,7 +1128,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const pointer = new HelloPtr([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
       expect(pointer['*']).to.be.instanceOf(HelloSlice);
@@ -1162,7 +1162,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]i32',
@@ -1175,7 +1175,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const { constructor: Int32Slice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -1192,7 +1192,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Int32Ptr } = structure;
       const ta = new Int32Array([ 1, 2, 3, 4 ]);
       const pointer = new Int32Ptr(ta);
@@ -1215,7 +1215,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]i32',
@@ -1228,7 +1228,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
@@ -1244,7 +1244,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Int32SlicePtr } = structure;
       const ta = new Uint32Array([ 1, 2, 3, 4 ]);
       expect(() => new Int32SlicePtr(ta)).to.throw(TypeError);
@@ -1263,7 +1263,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]i32',
@@ -1276,7 +1276,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const { constructor: Int32Slice } = sliceStructure;
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
@@ -1291,7 +1291,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(arrayStructure);
-      env.endStructure(arrayStructure);
+      env.finishStructure(arrayStructure);
       const { constructor: Int32Array } = arrayStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -1308,7 +1308,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const array = new Int32Array([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
       const pointer = new HelloPtr(array);
@@ -1331,7 +1331,7 @@ describe('Structure: pointer', function() {
         structure: uintStructure,
       });
       env.defineStructure(uintStructure);
-      env.endStructure(uintStructure);
+      env.finishStructure(uintStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
@@ -1344,7 +1344,7 @@ describe('Structure: pointer', function() {
         structure: uintStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const { constructor: U8Slice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -1361,7 +1361,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: U8SlicePtr } = structure;
       const buffer = new ArrayBuffer(8);
       const dv = new DataView(buffer);
@@ -1391,7 +1391,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]i8',
@@ -1404,7 +1404,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const { constructor: I8Slice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -1421,7 +1421,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const I8SlicePtr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const buffer = new ArrayBuffer(8);
       const dv = new DataView(buffer);
       for (let i = 0; i < dv.byteLength; i++) {
@@ -1446,7 +1446,7 @@ describe('Structure: pointer', function() {
         structure: uintStructure,
       });
       env.defineStructure(uintStructure);
-      env.endStructure(uintStructure);
+      env.finishStructure(uintStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
@@ -1459,7 +1459,7 @@ describe('Structure: pointer', function() {
         structure: uintStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const { constructor: U8Slice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -1476,7 +1476,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const U8SlicePtr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const buffer = new ArrayBuffer(16);
       const dv = env.obtainView(buffer, 0, 16);
       dv[ZIG] = { address: usize(0x1000), len: 16, js: true };
@@ -1500,7 +1500,7 @@ describe('Structure: pointer', function() {
         structure: uintStructure,
       });
       env.defineStructure(uintStructure);
-      env.endStructure(uintStructure);
+      env.finishStructure(uintStructure);
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         byteSize: 8,
@@ -1522,7 +1522,7 @@ describe('Structure: pointer', function() {
         structure: uintStructure,
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -1536,7 +1536,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const { constructor: HelloSlice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -1553,7 +1553,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const HelloPtr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const buffer = new ArrayBuffer(8 * 3);
       const dv = new DataView(buffer);
       for (let i = 0, multiplier = 1; i < 3; i++, multiplier *= 10) {
@@ -1587,7 +1587,7 @@ describe('Structure: pointer', function() {
         structure: uintStructure,
       });
       env.defineStructure(uintStructure);
-      env.endStructure(uintStructure);
+      env.finishStructure(uintStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
@@ -1600,7 +1600,7 @@ describe('Structure: pointer', function() {
         structure: uintStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const { constructor: U8Slice } = sliceStructure;
       const constStructure = env.beginStructure({
         type: StructureType.Pointer,
@@ -1617,7 +1617,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const ConstU8SlicePtr = env.defineStructure(constStructure);
-      env.endStructure(constStructure);
+      env.finishStructure(constStructure);
       const nonConstStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
@@ -1633,7 +1633,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const U8SlicePtr = env.defineStructure(nonConstStructure);
-      env.endStructure(nonConstStructure);
+      env.finishStructure(nonConstStructure);
       const buffer = new ArrayBuffer(8);
       const dv = new DataView(buffer);
       for (let i = 0; i < dv.byteLength; i++) {
@@ -1666,7 +1666,7 @@ describe('Structure: pointer', function() {
         structure: uintStructure,
       });
       env.defineStructure(uintStructure);
-      env.endStructure(uintStructure);
+      env.finishStructure(uintStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]u8',
@@ -1679,7 +1679,7 @@ describe('Structure: pointer', function() {
         structure: uintStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const constStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength | PointerFlag.IsConst,
@@ -1695,7 +1695,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const ConstU8SlicePtr = env.defineStructure(constStructure);
-      env.endStructure(constStructure);
+      env.finishStructure(constStructure);
       const nonConstStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
@@ -1711,7 +1711,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const U8SlicePtr = env.defineStructure(nonConstStructure);
-      env.endStructure(nonConstStructure);
+      env.finishStructure(nonConstStructure);
       const buffer = new ArrayBuffer(8);
       const dv = new DataView(buffer);
       for (let i = 0; i < dv.byteLength; i++) {
@@ -1739,7 +1739,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -1753,7 +1753,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const constStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength | PointerFlag.IsConst,
@@ -1769,7 +1769,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const ConstSlicePtr = env.defineStructure(constStructure);
-      env.endStructure(constStructure);
+      env.finishStructure(constStructure);
       const buffer = new ArrayBuffer(4 * 4);
       const constPointer = ConstSlicePtr(buffer);
       const element = constPointer[0];
@@ -1791,7 +1791,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -1806,7 +1806,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       const TargetPtr = env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const constStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
@@ -1821,7 +1821,7 @@ describe('Structure: pointer', function() {
         structure: ptrStructure,
       });
       const ConstPtrPtr = env.defineStructure(constStructure);
-      env.endStructure(constStructure);
+      env.finishStructure(constStructure);
       const ptr = new TargetPtr({ cow: 1234 });
       const constPointer = new ConstPtrPtr(ptr);
       const ptrRO = constPointer['*'];
@@ -1857,7 +1857,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const { constructor: Hello } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -1873,7 +1873,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       const HelloPtr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const hello = new Hello({ cat: 1, dog: 2 });
       const helloPtr = new HelloPtr(hello);
       helloPtr.world = "World";
@@ -1900,7 +1900,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -1916,7 +1916,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32Ptr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const int32 = new Int32(1234);
       const intPtr = new Int32Ptr(int32);
       expect(() => intPtr.$ = int32).to.not.throw();
@@ -1936,7 +1936,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -1952,7 +1952,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32Ptr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       env.allocateScratchMemory = function(len, align) {
         return usize(0x1000);
       };
@@ -1984,7 +1984,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
@@ -1999,7 +1999,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32Ptr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 128 });
       } else {
@@ -2029,7 +2029,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -2045,7 +2045,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32Ptr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 128 });
       } else {
@@ -2083,7 +2083,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Hello',
@@ -2096,7 +2096,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
@@ -2112,7 +2112,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const HelloPtr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 128 });
       } else {
@@ -2148,7 +2148,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -2164,7 +2164,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32Ptr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Int32Ptr.child).to.equal(Int32);
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
@@ -2186,7 +2186,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -2201,7 +2201,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32Ptr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Int32Ptr.child).to.equal(Int32);
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
@@ -2229,7 +2229,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -2244,7 +2244,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32Ptr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const pointer = new Int32Ptr(new Int32(4));
       setUsize.call(pointer[MEMORY], 0, usize(0x1000), true);
       pointer[UPDATE]();
@@ -2266,7 +2266,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -2281,7 +2281,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32Ptr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const pointer = new Int32Ptr(new Int32(4));
       pointer[ADDRESS] = usize(0x1000);
       expect(getUsize.call(pointer[MEMORY], 0, true)).to.equal(usize(0x1000));
@@ -2307,7 +2307,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]i32',
@@ -2320,7 +2320,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
@@ -2336,7 +2336,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Int32SlicePtr } = structure;
       const ta = new Int32Array([ 1, 2, 3, 4 ]);
       const pointer = new Int32SlicePtr(ta);
@@ -2361,7 +2361,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]i32',
@@ -2374,7 +2374,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
@@ -2390,7 +2390,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Int32SlicePtr } = structure;
       const ta = new Int32Array([ 1, 2, 3, 4 ]);
       const pointer = new Int32SlicePtr(ta);
@@ -2413,7 +2413,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         flags: SliceFlag.HasSentinel,
@@ -2438,7 +2438,7 @@ describe('Structure: pointer', function() {
         [MEMORY]: new DataView(new ArrayBuffer(4)),
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple,
@@ -2454,7 +2454,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const Int32SlicePtr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const ta = new Int32Array([ 1, 2, 3, 4, 0 ]);
       const pointer = new Int32SlicePtr(ta);
       pointer[ADDRESS] = usize(0x1000);
@@ -2495,7 +2495,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]i32',
@@ -2508,7 +2508,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
@@ -2524,7 +2524,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -2540,7 +2540,7 @@ describe('Structure: pointer', function() {
         structure: ptrStructure,
       });
       const Struct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
       const bufferMap = new Map();
@@ -2623,7 +2623,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -2637,7 +2637,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
@@ -2653,7 +2653,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const HelloPtr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const pointer = new HelloPtr([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
       const slice1 = pointer['*'];
       expect(slice1.length).to.equal(3);
@@ -2697,7 +2697,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -2711,7 +2711,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       const HelloSlice = env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple,
@@ -2727,7 +2727,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const HelloPtr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const buffer = new ArrayBuffer(8 * 5);
       const dv1 = new DataView(buffer);
       for (let i = 1, j = 0; i <= 5; i++, j += 8) {
@@ -2783,7 +2783,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Hello',
@@ -2796,7 +2796,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple,
@@ -2812,7 +2812,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const HelloPtr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
       const allocator = {
@@ -2860,7 +2860,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       const U8 = env.defineStructure(byteStructure);
-      env.endStructure(byteStructure);
+      env.finishStructure(byteStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -2875,7 +2875,7 @@ describe('Structure: pointer', function() {
         structure: byteStructure,
       });
       const PtrU8 = env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         flags: SliceFlag.IsOpaque,
@@ -2888,7 +2888,7 @@ describe('Structure: pointer', function() {
         structure: byteStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -2903,7 +2903,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const HelloPtr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const pointer = new HelloPtr(undefined);
       expect(() => pointer.$ = new DataView(new ArrayBuffer(8))).to.not.throw();
       expect(() => pointer.$ = new ArrayBuffer(8)).to.not.throw();
@@ -2926,7 +2926,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]i32',
@@ -2939,7 +2939,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const cpStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
@@ -2955,7 +2955,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const Int32CPtr = env.defineStructure(cpStructure);
-      env.endStructure(cpStructure);
+      env.finishStructure(cpStructure);
       const int32 = new Int32(1234);
       const intCPointer = new Int32CPtr(int32);
       expect(intCPointer['*'][0]).to.equal(1234);
@@ -2975,7 +2975,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const spStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -2990,7 +2990,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32Ptr = env.defineStructure(spStructure);
-      env.endStructure(spStructure);
+      env.finishStructure(spStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_c]i32',
@@ -3003,7 +3003,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const cpStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
@@ -3019,7 +3019,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const Int32CPtr = env.defineStructure(cpStructure);
-      env.endStructure(cpStructure);
+      env.finishStructure(cpStructure);
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
       const intCPointer = new Int32CPtr(intPointer);
@@ -3048,7 +3048,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -3062,7 +3062,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
@@ -3078,7 +3078,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const HelloPtr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const pointer = new HelloPtr({ cat: 123, dog: 456 });
       expect(pointer[0].cat).to.equal(123);
       expect(pointer[0].dog).to.equal(456);
@@ -3106,7 +3106,7 @@ describe('Structure: pointer', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]Hello',
@@ -3120,7 +3120,7 @@ describe('Structure: pointer', function() {
         structure: structStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
@@ -3136,7 +3136,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const HelloPtr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const dv = new DataView(new ArrayBuffer(8));
       dv.setUint32(0, 123, true);
       dv.setUint32(4, 456, true);
@@ -3159,7 +3159,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const spStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -3174,7 +3174,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32Ptr = env.defineStructure(spStructure);
-      env.endStructure(spStructure);
+      env.finishStructure(spStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]i32',
@@ -3187,7 +3187,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const cpStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
@@ -3203,7 +3203,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const Int32CPtr = env.defineStructure(cpStructure);
-      env.endStructure(cpStructure);
+      env.finishStructure(cpStructure);
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
       const intCPointer = Int32CPtr(intPointer);
@@ -3225,7 +3225,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]i32',
@@ -3238,7 +3238,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const spStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
@@ -3254,7 +3254,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const Int32SPtr = env.defineStructure(spStructure);
-      env.endStructure(spStructure);
+      env.finishStructure(spStructure);
       const cpStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
@@ -3270,7 +3270,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const Int32CPtr = env.defineStructure(cpStructure);
-      env.endStructure(cpStructure);
+      env.finishStructure(cpStructure);
       const intSPointer = new Int32SPtr([ 1, 2, 3, 4 ]);
       const intCPointer = new Int32CPtr(intSPointer);
       expect(intCPointer['*']).to.equal(intSPointer['*']);
@@ -3293,7 +3293,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]i32',
@@ -3306,7 +3306,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const spStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
@@ -3322,7 +3322,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const Int32SPtr = env.defineStructure(spStructure);
-      env.endStructure(spStructure);
+      env.finishStructure(spStructure);
       const cpStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
@@ -3338,7 +3338,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const Int32CPtr = env.defineStructure(cpStructure);
-      env.endStructure(cpStructure);
+      env.finishStructure(cpStructure);
       const intSPointer = new Int32SPtr([ 1, 2, 3, 4 ]);
       const intCPointer = Int32CPtr(intSPointer);
       expect(intCPointer['*']).to.equal(intSPointer['*']);
@@ -3361,7 +3361,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]i32',
@@ -3374,7 +3374,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const spStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
@@ -3390,7 +3390,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const Int32SPtr = env.defineStructure(spStructure);
-      env.endStructure(spStructure);
+      env.finishStructure(spStructure);
       const cpStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
@@ -3406,7 +3406,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const Int32CPtr = env.defineStructure(cpStructure);
-      env.endStructure(cpStructure);
+      env.finishStructure(cpStructure);
       const intSPointer = new Int32SPtr([ 1, 2, 3, 4 ]);
       const intCPointer = Int32CPtr(intSPointer);
       expect(intCPointer['*']).to.equal(intSPointer['*']);
@@ -3429,7 +3429,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]i32',
@@ -3442,7 +3442,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const cpStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
@@ -3458,7 +3458,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const Int32CPtr = env.defineStructure(cpStructure);
-      env.endStructure(cpStructure);
+      env.finishStructure(cpStructure);
       const intCPointer = new Int32CPtr(null);
       expect(intCPointer['*']).to.be.null;
       expect(intCPointer.length).to.equal(0);
@@ -3480,7 +3480,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]i32',
@@ -3493,7 +3493,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const sliceStructureWS = env.beginStructure({
         type: StructureType.Slice,
         name: '[_:0]i32',
@@ -3517,7 +3517,7 @@ describe('Structure: pointer', function() {
       };
       env.attachTemplate(sliceStructureWS, template);
       env.defineStructure(sliceStructureWS);
-      env.endStructure(sliceStructureWS);
+      env.finishStructure(sliceStructureWS);
       const spStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
@@ -3533,7 +3533,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const Int32SPtr = env.defineStructure(spStructure);
-      env.endStructure(spStructure);
+      env.finishStructure(spStructure);
       const muStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple,
@@ -3549,7 +3549,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructureWS,
       });
       const Int32MPtr = env.defineStructure(muStructure);
-      env.endStructure(muStructure);
+      env.finishStructure(muStructure);
       const intMPointer = new Int32MPtr([ 1, 2, 3, 4 ]);
       const intSPointer = new Int32SPtr(intMPointer);
       expect(intSPointer.length).to.equal(4);
@@ -3570,7 +3570,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -3585,7 +3585,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32Ptr = env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -3601,7 +3601,7 @@ describe('Structure: pointer', function() {
         structure: ptrStructure,
       });
       const Struct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
       const allocator = {
@@ -3651,7 +3651,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]i32',
@@ -3664,7 +3664,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const spStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
@@ -3680,7 +3680,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const Int32SPtr = env.defineStructure(spStructure);
-      env.endStructure(spStructure);
+      env.finishStructure(spStructure);
       const structure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -3696,7 +3696,7 @@ describe('Structure: pointer', function() {
         structure: spStructure,
       });
       const Struct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
       const allocator = {
@@ -3750,7 +3750,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: '[_]i32',
@@ -3763,7 +3763,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const cpStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
@@ -3779,7 +3779,7 @@ describe('Structure: pointer', function() {
         structure: sliceStructure,
       });
       const Int32CPtr = env.defineStructure(cpStructure);
-      env.endStructure(cpStructure);
+      env.finishStructure(cpStructure);
       const structure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -3795,7 +3795,7 @@ describe('Structure: pointer', function() {
         structure: cpStructure,
       });
       const Struct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
       const allocator = {
@@ -3845,7 +3845,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -3860,7 +3860,7 @@ describe('Structure: pointer', function() {
         structure: intStructure,
       });
       const Int32Ptr = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const dv = new DataView(new ArrayBuffer(4));
       dv[ZIG] = { address: usize(-1), len: 4 };
       const int32 = Int32(dv);
@@ -3883,7 +3883,7 @@ describe('Structure: pointer', function() {
       structure: intStructure,
     });
     const Int32 = env.defineStructure(intStructure);
-    env.endStructure(intStructure);
+    env.finishStructure(intStructure);
     const structure = env.beginStructure({
       type: StructureType.Pointer,
       flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -3898,7 +3898,7 @@ describe('Structure: pointer', function() {
       structure: intStructure,
     });
     const Int32Ptr = env.defineStructure(structure);
-    env.endStructure(structure);
+    env.finishStructure(structure);
     expect(Int32Ptr.child).to.equal(Int32);
     const int32 = new Int32(1234);
     const intPointer = new Int32Ptr(int32);

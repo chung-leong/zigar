@@ -96,7 +96,7 @@ describe('Structure: optional', function() {
         structure: {},
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const object = Hello(new ArrayBuffer(18));
       expect(object.$).to.equal(null);
@@ -132,7 +132,7 @@ describe('Structure: optional', function() {
         structure: {},
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const buffer = new ArrayBuffer(18);
       const object1 = Hello(buffer);
@@ -164,7 +164,7 @@ describe('Structure: optional', function() {
         structure: {},
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Hello } = structure;
       expect(() => new Hello).to.throw(TypeError);
     })
@@ -193,7 +193,7 @@ describe('Structure: optional', function() {
         structure: {},
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const object = new Hello(null);
       expect(object.$).to.equal(null);
@@ -225,7 +225,7 @@ describe('Structure: optional', function() {
         structure: {},
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const object = new Hello({});
       object.$ = 3.14;
@@ -256,7 +256,7 @@ describe('Structure: optional', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const { constructor: Animal } = structStructure;
       const structure = env.beginStructure({
         type: StructureType.Optional,
@@ -280,7 +280,7 @@ describe('Structure: optional', function() {
         structure: {},
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const object = Hello(new ArrayBuffer(18));
       expect(object.$).to.equal(null);
@@ -307,7 +307,7 @@ describe('Structure: optional', function() {
         structure: floatStructure,
       });
       env.defineStructure(floatStructure);
-      env.endStructure(floatStructure);
+      env.finishStructure(floatStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
@@ -329,7 +329,7 @@ describe('Structure: optional', function() {
         structure: {},
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello(3.14);
       expect(object.$).to.equal(3.14);
       object.$ = undefined;
@@ -350,7 +350,7 @@ describe('Structure: optional', function() {
         structure: voidStructure,
       });
       env.defineStructure(voidStructure);
-      env.endStructure(voidStructure);
+      env.finishStructure(voidStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
@@ -372,7 +372,7 @@ describe('Structure: optional', function() {
         structure: {},
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = Hello(new ArrayBuffer(1));
       expect(object.$).to.equal(null);
       object.$ = undefined;
@@ -398,7 +398,7 @@ describe('Structure: optional', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -414,7 +414,7 @@ describe('Structure: optional', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
@@ -437,7 +437,7 @@ describe('Structure: optional', function() {
         structure: {},
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = Hello(new ArrayBuffer(8));
       expect(object.$).to.equal(null);
       object.$ = new Int32(0);
@@ -459,7 +459,7 @@ describe('Structure: optional', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
@@ -473,7 +473,7 @@ describe('Structure: optional', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
@@ -489,7 +489,7 @@ describe('Structure: optional', function() {
         structure: sliceStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
@@ -513,7 +513,7 @@ describe('Structure: optional', function() {
         structure: {},
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const encoder = new TextEncoder();
       const array = encoder.encode('This is a test');
       const object = new Hello(array);
@@ -539,7 +539,7 @@ describe('Structure: optional', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
@@ -553,7 +553,7 @@ describe('Structure: optional', function() {
         structure: intStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.HasLength | PointerFlag.IsMultiple,
@@ -569,7 +569,7 @@ describe('Structure: optional', function() {
         structure: sliceStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
@@ -592,7 +592,7 @@ describe('Structure: optional', function() {
         structure: {},
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const encoder = new TextEncoder();
       const array = encoder.encode('This is a test');
       const object = new Hello(array);
@@ -616,7 +616,7 @@ describe('Structure: optional', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureType.IsSingle,
@@ -632,7 +632,7 @@ describe('Structure: optional', function() {
         structure: intStructure,
       });
       const Int32Ptr = env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -657,7 +657,7 @@ describe('Structure: optional', function() {
         structure: ptrStructure,
       })
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
@@ -680,7 +680,7 @@ describe('Structure: optional', function() {
         structure: {},
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello({ cat: 123 });
       const ptr = object.$.cat;
       expect(ptr[SLOTS][0]).to.not.be.undefined;
@@ -706,7 +706,7 @@ describe('Structure: optional', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
@@ -723,7 +723,7 @@ describe('Structure: optional', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const { constructor: Int32Ptr } = ptrStructure;
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
@@ -749,7 +749,7 @@ describe('Structure: optional', function() {
         structure: ptrStructure,
       })
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
@@ -772,7 +772,7 @@ describe('Structure: optional', function() {
         structure: {},
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello({ cat: 123 });
       const ptr = object.$.cat;
       expect(ptr[SLOTS][0]).to.not.be.undefined;
@@ -796,7 +796,7 @@ describe('Structure: optional', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -812,7 +812,7 @@ describe('Structure: optional', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -826,7 +826,7 @@ describe('Structure: optional', function() {
         structure: ptrStructure,
       });
       env.defineStructure(arrayStructure);
-      env.endStructure(arrayStructure);
+      env.finishStructure(arrayStructure);
       const structure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
@@ -849,7 +849,7 @@ describe('Structure: optional', function() {
         structure: {},
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello([ new Int32(1234), new Int32(4567), new Int32(7890), new Int32(12345) ]);
       const array = object.$;
       for (let i = 0; i < 4; i++) {

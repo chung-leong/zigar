@@ -41,7 +41,7 @@ describe('Feature: write-protection', function() {
         [SLOTS]: {},
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello({ dog: 123, cat: 456 });
       env.makeReadOnly(object);
       expect(object.dog).to.equal(123);
@@ -78,7 +78,7 @@ describe('Feature: write-protection', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const array = new Array([ 1, 2, 3, 4, 5, 6, 7, 8]);
       env.makeReadOnly(array);
       expect([ ...array ]).to.eql([ 1, 2, 3, 4, 5, 6, 7, 8]);
@@ -112,7 +112,7 @@ describe('Feature: write-protection', function() {
         structure: {},
       });
       env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -127,7 +127,7 @@ describe('Feature: write-protection', function() {
         structure: structStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const { constructor: HelloSlice } = sliceStructure;
       const structure = env.beginStructure({
         type: StructureType.Pointer,
@@ -144,7 +144,7 @@ describe('Feature: write-protection', function() {
         structure: sliceStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const pointer = new HelloPtr([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
       env.makeReadOnly(pointer);

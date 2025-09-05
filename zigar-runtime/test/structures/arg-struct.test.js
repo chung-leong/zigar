@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import {
-  ArgStructFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructurePurpose,
-  StructureType, VisitorFlag
+    ArgStructFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructurePurpose,
+    StructureType, VisitorFlag
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { ArgumentCountMismatch, UndefinedArgument } from '../../src/errors.js';
@@ -95,7 +95,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
@@ -126,7 +126,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       const ArgStruct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(ArgStruct).to.be.a('function');
       const object = new ArgStruct([ 123, 456 ]);
       object.retval = 777;
@@ -150,7 +150,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const childStructure = env.beginStructure({
         type: StructureType.Struct,
         byteSize: 4 * 2,
@@ -172,7 +172,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       env.defineStructure(childStructure);
-      env.endStructure(childStructure);
+      env.finishStructure(childStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -205,7 +205,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       const ArgStruct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new ArgStruct([ { dog: 1234, cat: 4567 }, 789 ]);
       object[0].valueOf();
       expect(object[0].valueOf()).to.eql({ dog: 1234, cat: 4567 });
@@ -224,7 +224,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -240,7 +240,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -266,7 +266,7 @@ describe('Structure: arg-struct', function() {
         structure: ptrStructure,
       });
       const ArgStruct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const int = new Int32(1234);
       const object = new ArgStruct([ int ]);
       const pointers = [], mutabilities = [];
@@ -294,7 +294,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
@@ -325,7 +325,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       const ArgStruct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new ArgStruct([ 123 ])).to.throw(ArgumentCountMismatch);
       expect(() => new ArgStruct([ 123, 456, 789 ])).to.throw(ArgumentCountMismatch);
       expect(() => new ArgStruct([ 123, 456 ])).to.not.throw();
@@ -344,7 +344,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
@@ -375,7 +375,7 @@ describe('Structure: arg-struct', function() {
         structure: {},
       });
       const ArgStruct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new ArgStruct([ undefined, undefined ])).to.throw(UndefinedArgument);
       expect(() => new ArgStruct([ 123, undefined ])).to.not.throw();
     })
@@ -394,7 +394,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
@@ -425,7 +425,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       const ArgStruct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new ArgStruct([ 123, -456 ])).to.throw(TypeError)
         .with.property('message').that.contains('args[1]');
     })
@@ -445,7 +445,7 @@ describe('Structure: arg-struct', function() {
         structure: voidStructure,
       });
       env.defineStructure(voidStructure);
-      env.endStructure(voidStructure);
+      env.finishStructure(voidStructure);
       const intStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'Int32',
@@ -460,7 +460,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const resolveArgStructure = env.beginStructure({
         type: StructureType.ArgStruct,
         byteSize: 4,
@@ -483,7 +483,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       env.defineStructure(resolveArgStructure);
-      env.endStructure(resolveArgStructure);
+      env.finishStructure(resolveArgStructure);
       const resolveStructure = env.beginStructure({
         type: StructureType.Function,
         byteSize: 0,
@@ -497,7 +497,7 @@ describe('Structure: arg-struct', function() {
       const jsThunkController = { [MEMORY]: zig(0x2004) };
       env.attachTemplate(resolveStructure, jsThunkController, true);
       env.defineStructure(resolveStructure);
-      env.endStructure(resolveStructure);
+      env.finishStructure(resolveStructure);
       const resolvePtrStructure = env.beginStructure({
         type: StructureType.Pointer,
         byteSize: addressByteSize,
@@ -512,7 +512,7 @@ describe('Structure: arg-struct', function() {
         slot: 0,
       });
       env.defineStructure(resolvePtrStructure);
-      env.endStructure(resolvePtrStructure);
+      env.finishStructure(resolvePtrStructure);
       const byteStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
@@ -526,7 +526,7 @@ describe('Structure: arg-struct', function() {
         structure: {},
       });
       env.defineStructure(byteStructure);
-      env.endStructure(byteStructure);
+      env.finishStructure(byteStructure);
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         flags: SliceFlag.IsOpaque,
@@ -539,7 +539,7 @@ describe('Structure: arg-struct', function() {
         structure: byteStructure,
       });
       env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -554,7 +554,7 @@ describe('Structure: arg-struct', function() {
         structure: sliceStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const optionalPtrStructure = env.beginStructure({
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -576,7 +576,7 @@ describe('Structure: arg-struct', function() {
         structure: {},
       });
       env.defineStructure(optionalPtrStructure);
-      env.endStructure(optionalPtrStructure);
+      env.finishStructure(optionalPtrStructure);
       const promiseStructure = env.beginStructure({
         type: StructureType.Struct,
         purpose: StructurePurpose.Promise,
@@ -603,7 +603,7 @@ describe('Structure: arg-struct', function() {
         slot: 1,
       });
       env.defineStructure(promiseStructure);
-      env.endStructure(promiseStructure);
+      env.finishStructure(promiseStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | ArgStructFlag.HasOptions | ArgStructFlag.IsAsync,
@@ -636,7 +636,7 @@ describe('Structure: arg-struct', function() {
         structure: intStructure,
       });
       const ArgStruct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(ArgStruct).to.be.a('function');
       env.createJsThunk = function(controllerAddress, fnId) {
         return usize(0xf000);

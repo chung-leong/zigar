@@ -179,7 +179,7 @@ describe('Structure: error-set', function() {
           1: ErrorSet.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(ErrorSet).to.be.a('function');
       expect(ErrorSet.UnableToRetrieveMemoryLocation).to.be.an.instanceOf(Error);
       expect(ErrorSet.UnableToRetrieveMemoryLocation).to.be.an('error');
@@ -243,7 +243,7 @@ describe('Structure: error-set', function() {
           1: ErrorSet1.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(errorStructure1);
+      env.finishStructure(errorStructure1);
       // define anyerror
       const structure = env.beginStructure({
         type: StructureType.ErrorSet,
@@ -258,7 +258,7 @@ describe('Structure: error-set', function() {
         structure,
       });
       const AnyError = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       // define another error afterward
       const errorStructure2 = env.beginStructure({
         type: StructureType.ErrorSet,
@@ -292,7 +292,7 @@ describe('Structure: error-set', function() {
           1: ErrorSet2.call(ENVIRONMENT, errorData(7)),
         }
       }, true);
-      env.endStructure(errorStructure2);
+      env.finishStructure(errorStructure2);
       expect(AnyError).to.be.a('function');
       expect(AnyError.UnableToRetrieveMemoryLocation).to.be.an.instanceOf(Error);
       expect(AnyError.UnableToRetrieveMemoryLocation.message).to.equal('Unable to retrieve memory location');
@@ -343,7 +343,7 @@ describe('Structure: error-set', function() {
           1: ErrorSet.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const error = new ErrorSet(5);
       expect(error.$.message).to.equal(ErrorSet.UnableToRetrieveMemoryLocation.message);
       expect(() => error.$ = new Error('Doh!')).to.throw(TypeError);
@@ -365,7 +365,7 @@ describe('Structure: error-set', function() {
         structure,
       });
       const AnyError = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const error = new AnyError(5);
       const int = error.dataView.getUint16(0, true);
       expect(error.$.number).to.equal(5);
@@ -405,7 +405,7 @@ describe('Structure: error-set', function() {
           1: ErrorSet.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
         name: '[4]ErrorSet',
@@ -420,7 +420,7 @@ describe('Structure: error-set', function() {
         structure,
       });
       const ErrorArray = env.defineStructure(arrayStructure);
-      env.endStructure(arrayStructure);
+      env.finishStructure(arrayStructure);
       const array = new ErrorArray([ 5, 8, 5, 5 ]);
       array[1] = ErrorSet.UnableToRetrieveMemoryLocation;
       for (let i = 0; i < array.length; i++) {
@@ -471,7 +471,7 @@ describe('Structure: error-set', function() {
           1: ErrorSet.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const buffer = new ArrayBuffer(2);
       const object1 = ErrorSet(buffer);
       const object2 = ErrorSet(buffer);
@@ -511,7 +511,7 @@ describe('Structure: error-set', function() {
           1: ErrorSet.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(ErrorSet(5)).to.equal(ErrorSet.UnableToRetrieveMemoryLocation);
       expect(ErrorSet(8)).to.equal(ErrorSet.UnableToCreateObject);
       expect(ErrorSet(9)).to.be.undefined;
@@ -550,7 +550,7 @@ describe('Structure: error-set', function() {
           1: ErrorSet.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const text = ErrorSet.UnableToCreateObject.toString();
       expect(text).to.equal('Error: Unable to create object');
       expect(ErrorSet(text)).to.equal(ErrorSet.UnableToCreateObject);
@@ -594,7 +594,7 @@ describe('Structure: error-set', function() {
           1: ErrorSet.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(ErrorSet({ error: 'Unable to create object' })).to.equal(ErrorSet.UnableToCreateObject);
       expect(ErrorSet(JSON.parse(JSON.stringify(ErrorSet.UnableToCreateObject)))).to.equal(ErrorSet.UnableToCreateObject);
       expect(ErrorSet({ error: 'Unable to retrieve memory location' })).to.equal(ErrorSet.unable_to_retrieve_memory_location);
@@ -635,7 +635,7 @@ describe('Structure: error-set', function() {
           1: CatError.call(ENVIRONMENT, errorData(6)),
         },
       }, true);
-      env.endStructure(catStructure);
+      env.finishStructure(catStructure);
       const dogStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'DogError',
@@ -669,7 +669,7 @@ describe('Structure: error-set', function() {
           1: DogError.call(ENVIRONMENT, errorData(8)),
         },
       }, true);
-      env.endStructure(dogStructure);
+      env.finishStructure(dogStructure);
       const petStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         name: 'PetError',
@@ -719,7 +719,7 @@ describe('Structure: error-set', function() {
           3: PetError.call(ENVIRONMENT, errorData(8)),
         },
       }, true);
-      env.endStructure(petStructure);
+      env.finishStructure(petStructure);
       expect(DogError.BathRequired in PetError).to.be.true;
       expect(DogError.BathRequired in DogError).to.be.true;
       expect(CatError.CucumberEncountered in PetError).to.be.true;
@@ -762,7 +762,7 @@ describe('Structure: error-set', function() {
           1: ErrorSet.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new ErrorSet()).to.throw(TypeError);
     })
     it('should throw when initializer is not one of the expected types', function() {
@@ -799,7 +799,7 @@ describe('Structure: error-set', function() {
           1: ErrorSet.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => ErrorSet(false)).to.throw(TypeError);
     })
     it('should throw when no special properties are found', function() {
@@ -836,7 +836,7 @@ describe('Structure: error-set', function() {
           1: ErrorSet.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new ErrorSet({})).to.throw(TypeError);
     })
     it('should initialize error object from toJSON output', function() {
@@ -873,7 +873,7 @@ describe('Structure: error-set', function() {
           1: ErrorSet.call(ENVIRONMENT, errorData(8)),
         }
       }, true);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object1 = new ErrorSet(ErrorSet.UnableToCreateObject);
       const json = object1.toJSON();
       const object2 = new ErrorSet(json);

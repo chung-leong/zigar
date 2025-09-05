@@ -113,7 +113,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(Array).to.be.a('function');
       expect(Array.child).to.equal(Uint32);
       const object = new Array(new Uint32Array(8));
@@ -152,7 +152,7 @@ describe('Structure: array', function() {
         structure: intStructure
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const buffer = new ArrayBuffer(4 * 8);
       const object1 = Array(buffer);
       const object2 = Array(buffer);
@@ -185,7 +185,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Array(new Uint32Array(8));
       object[0] = 321;
       expect(object[0]).to.equal(321);
@@ -234,7 +234,7 @@ describe('Structure: array', function() {
         structure: { constructor: function() {}, typedArray: Uint32Array }
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Array(new Uint32Array(8));
       expect(Object.getOwnPropertyNames(object)).to.eql([ '0', '1', '2', '3', '4', '5', '6', '7', 'length' ]);
       expect(Object.keys(object)).to.eql([ '0', '1', '2', '3', '4', '5', '6', '7' ]);
@@ -266,7 +266,7 @@ describe('Structure: array', function() {
         structure: { constructor: function() {}, typedArray: Uint32Array }
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Array(new Uint32Array(8));
       const { get, set, length } = object;
       for (let i = 0; i < length; i++) {
@@ -303,7 +303,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const dv = new DataView(new ArrayBuffer(4 * 8));
       dv.setUint32(0, 1234, true);
       dv.setUint32(16, 4567, true);
@@ -341,7 +341,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const dv = new DataView(new ArrayBuffer(4 * 8));
       dv.setUint32(0, 1234, true);
       dv.setUint32(16, 4567, true);
@@ -382,7 +382,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new Array).to.throw(TypeError);
     })
     it('should accept an array as initializer', function() {
@@ -412,7 +412,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Array([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
       for (let i = 0; i < 8; i++) {
         expect(object.get(i)).to.equal(i + 1);
@@ -445,7 +445,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Array([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
       const object2 = new Array(object);
       expect([ ...object2 ]).to.eql([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
@@ -477,7 +477,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Array([ 100n, 200n, 300n, 400n ]);
       for (let i = 0; i < 4; i++) {
         expect(object.get(i)).to.equal(BigInt(i + 1) * 100n);
@@ -511,7 +511,7 @@ describe('Structure: array', function() {
         structure: intStructure
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const str = 'Hello world';
       const array = new Array(str);
       expect(array).to.have.lengthOf(str.length);
@@ -547,7 +547,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const str = 'Hello world';
       const array = new Array(str);
       expect(array).to.have.lengthOf(str.length);
@@ -585,7 +585,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const str = 'Hello world';
       const array = new Array(str);
       const str2 = 'World war z';
@@ -624,7 +624,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const array = new Array(undefined);
       const str = 'Hello world';
       array.string = str;
@@ -662,7 +662,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const array = new Array(undefined);
       const str = 'Hello';
       expect(() => array.string = str).to.throw(TypeError);
@@ -696,7 +696,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new Array({ dogmeat: 5 })).to.throw();
     })
     it('should throw when given something unacceptable', function() {
@@ -729,7 +729,7 @@ describe('Structure: array', function() {
         structure: intStructure
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new Array(() => {})).to.throw();
     })
     it('should accept base64 data as initializer', function() {
@@ -760,7 +760,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const str = 'Hello world';
       const base64 = encodeBase64(Buffer.from(str));
       const array = new Array({ base64 });
@@ -797,7 +797,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const array = new Array('Hello world');
       const str = 'World war z';
       array.base64 = encodeBase64(Buffer.from(str));
@@ -833,7 +833,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const array = new Array({ typedArray });
       expect(array).to.have.lengthOf(typedArray.length);
@@ -872,7 +872,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const array = new Array(new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]));
       const typedArray = new Uint8Array([ 0, 10, 20, 30, 40, 50, 60, 70 ]);
       array.typedArray = typedArray;
@@ -908,7 +908,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const array = new Array(new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]));
       const typedArray = new Int16Array([ 0, 10, 20, 30, 40, 50, 60, 70 ]);
       expect(() => array.typedArray = typedArray).to.throw(TypeError);
@@ -940,7 +940,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const dataView = new DataView(typedArray.buffer);
       const array = new Array({ dataView });
@@ -978,7 +978,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const array = new Array(undefined);
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       array.dataView = new DataView(typedArray.buffer);
@@ -1015,7 +1015,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const typedArray = new Float32Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const array = new Array(typedArray);
       expect(array).to.have.lengthOf(typedArray.length);
@@ -1050,7 +1050,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const f = function*() {
         let i = 0;
         while (i < 8) {
@@ -1091,7 +1091,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new Hello([ 1, 2, 3, 4, 5, 6, 7, 8, 9 ])).to.throw();
     })
     it('should throw when given an object of the incorrect type', function() {
@@ -1121,7 +1121,7 @@ describe('Structure: array', function() {
         structure: intStructure
       });
       const Array = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(() => new Hello({})).to.throw();
     })
     it('should correctly initialize an array of struct pointers', function() {
@@ -1162,7 +1162,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Hello = env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -1178,7 +1178,7 @@ describe('Structure: array', function() {
         structure: structStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasPointer,
@@ -1193,7 +1193,7 @@ describe('Structure: array', function() {
         structure: ptrStructure,
       });
       const HelloPtrArray = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new HelloPtrArray([
         new Hello({ dog: 1, cat: 2 }),
         new Hello({ dog: 3, cat: 4 }),
@@ -1241,7 +1241,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       env.defineStructure(structStructure)
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -1256,7 +1256,7 @@ describe('Structure: array', function() {
         structure: structStructure,
       });
       const HelloArray = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const buffer = new ArrayBuffer(64);
       const dv = new DataView(buffer, 32, 32);
       dv.setInt32(0, 1234, true);
@@ -1293,7 +1293,7 @@ describe('Structure: array', function() {
         structure: intStructure
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello([ 100n, 200n, 300n, 400n ]);
       for (let i = 0; i < 4; i++) {
         expect(object.get(i)).to.equal(BigInt(i + 1) * 100n);
@@ -1317,7 +1317,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure)
-      env.endStructure(intStructure)
+      env.finishStructure(intStructure)
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -1332,7 +1332,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -1347,7 +1347,7 @@ describe('Structure: array', function() {
         structure: ptrStructure,
       });
       const Int32PtrArray = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const dv = new DataView(new ArrayBuffer(structure.byteSize));
       const array = Int32PtrArray(dv);
       const pointers = [], errors = [];
@@ -1386,7 +1386,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure)
-      env.endStructure(intStructure)
+      env.finishStructure(intStructure)
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -1401,7 +1401,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -1415,7 +1415,7 @@ describe('Structure: array', function() {
         structure: ptrStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Int32PtrArray } = structure;
       const array1 = new Int32PtrArray([ new Int32(1234), new Int32(4567), new Int32(7890), new Int32(12345) ]);
       const array2 = new Int32PtrArray(array1);
@@ -1439,7 +1439,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure)
-      env.endStructure(intStructure)
+      env.finishStructure(intStructure)
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -1454,7 +1454,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.Array,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -1469,7 +1469,7 @@ describe('Structure: array', function() {
         structure: ptrStructure,
       });
       env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const { constructor: Int32PtrArray } = structure;
       const array1 = new Int32PtrArray([ new Int32(1234), new Int32(4567), new Int32(7890), new Int32(12345) ]);
       const array2 = new Int32PtrArray(array1);
@@ -1493,7 +1493,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Int64 = env.defineStructure(intStructure)
-      env.endStructure(intStructure)
+      env.finishStructure(intStructure)
       const sliceStructure = env.beginStructure({
         type: StructureType.Slice,
         name: 'Int64Slice',
@@ -1506,7 +1506,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Int64Slice = env.defineStructure(sliceStructure);
-      env.endStructure(sliceStructure);
+      env.finishStructure(sliceStructure);
       const arrayStructure = env.beginStructure({
         type: StructureType.Array,
         name: 'Int64Array',
@@ -1520,7 +1520,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Int64Array = env.defineStructure(arrayStructure);
-      env.endStructure(arrayStructure);
+      env.finishStructure(arrayStructure);
       const slice = new Int64Slice([ 100n, 200n, 300n, 400n ]);
       const array = Int64Array(slice);
       expect(slice[MEMORY]).to.equal(array[MEMORY]);
@@ -1539,7 +1539,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure)
-      env.endStructure(intStructure)
+      env.finishStructure(intStructure)
       const structure = env.beginStructure({
         type: StructureType.Array,
         length: 8,
@@ -1552,7 +1552,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
       let called;
       object.get = () => { called = 'get' };
@@ -1580,7 +1580,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure)
-      env.endStructure(intStructure)
+      env.finishStructure(intStructure)
       const structure = env.beginStructure({
         type: StructureType.Array,
         length: 8,
@@ -1593,7 +1593,7 @@ describe('Structure: array', function() {
         structure: intStructure,
       });
       const Hello = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const object = new Hello([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
       delete object.get;
       expect(object.get).to.be.undefined;

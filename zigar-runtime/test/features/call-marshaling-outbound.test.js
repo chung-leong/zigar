@@ -1,15 +1,15 @@
 import { expect, use } from 'chai';
 import ChaiAsPromised from 'chai-as-promised';
 import {
-  ErrorSetFlag,
-  MemberType, PointerFlag, SliceFlag,
-  StructureFlag, StructurePurpose, StructureType
+    ErrorSetFlag,
+    MemberType, PointerFlag, SliceFlag,
+    StructureFlag, StructurePurpose, StructureType
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { Exit } from '../../src/errors.js';
 import '../../src/mixins.js';
 import {
-  ALIGN, ATTRIBUTES, COPY, FINALIZE, MEMORY, PROMISE, RETURN, SETTERS, SLOTS, VISIT, ZIG,
+    ALIGN, ATTRIBUTES, COPY, FINALIZE, MEMORY, PROMISE, RETURN, SETTERS, SLOTS, VISIT, ZIG,
 } from '../../src/symbols.js';
 import { defineProperties, defineProperty, usize } from '../../src/utils.js';
 import { addressByteSize, addressSize } from '../test-utils.js';
@@ -35,7 +35,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const structure = env.beginStructure({
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
@@ -66,7 +66,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: intStructure,
       });
       const ArgStruct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       const thunk = {
         [MEMORY]: new DataView(new ArrayBuffer(0)),
       };
@@ -257,7 +257,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const members = [
         {
           name: '0',
@@ -302,7 +302,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const members = [
         {
           name: '0',
@@ -346,7 +346,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
 
       const voidStructure = env.beginStructure({
         type: StructureType.Primitive,
@@ -362,7 +362,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: voidStructure,
       });
       env.defineStructure(voidStructure);
-      env.endStructure(voidStructure);
+      env.finishStructure(voidStructure);
       const members = [
         {
           name: '0',
@@ -406,7 +406,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const allocatorStructure = env.beginStructure({
         type: StructureType.Struct,
         purpose: StructurePurpose.Allocator,
@@ -422,7 +422,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: {},
       });
       const Allocator = env.defineStructure(allocatorStructure);
-      env.endStructure(allocatorStructure);
+      env.finishStructure(allocatorStructure);
       const members = [
         {
           name: '0',
@@ -468,7 +468,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const allocatorStructure = env.beginStructure({
         type: StructureType.Struct,
         purpose: StructurePurpose.Allocator,
@@ -484,7 +484,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: {},
       });
       const Allocator = env.defineStructure(allocatorStructure);
-      env.endStructure(allocatorStructure);
+      env.finishStructure(allocatorStructure);
       const members = [
         {
           name: '0',
@@ -531,7 +531,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const allocatorStructure = env.beginStructure({
         type: StructureType.Struct,
         purpose: StructurePurpose.Allocator,
@@ -547,7 +547,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: {},
       });
       const Allocator = env.defineStructure(allocatorStructure);
-      env.endStructure(allocatorStructure);
+      env.finishStructure(allocatorStructure);
       const members = [
         {
           name: '0',
@@ -596,7 +596,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const voidStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'void',
@@ -611,7 +611,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: voidStructure,
       });
       env.defineStructure(voidStructure);
-      env.endStructure(voidStructure);
+      env.finishStructure(voidStructure);
       const resolveArgStructure = env.beginStructure({
         type: StructureType.ArgStruct,
         name: 'Resolve',
@@ -635,7 +635,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: intStructure,
       });
       env.defineStructure(resolveArgStructure);
-      env.endStructure(resolveArgStructure);
+      env.finishStructure(resolveArgStructure);
       const resolveStructure = env.beginStructure({
         type: StructureType.Function,
         byteSize: 0,
@@ -649,7 +649,7 @@ describe('Feature: call-marshaling-outbound', function() {
       const jsThunkController = { [MEMORY]: zig(0x2004) };
       env.attachTemplate(resolveStructure, jsThunkController, true);
       env.defineStructure(resolveStructure);
-      env.endStructure(resolveStructure);
+      env.finishStructure(resolveStructure);
       const resolvePtrStructure = env.beginStructure({
         type: StructureType.Pointer,
         byteSize: 8,
@@ -664,7 +664,7 @@ describe('Feature: call-marshaling-outbound', function() {
         slot: 0,
       });
       env.defineStructure(resolvePtrStructure);
-      env.endStructure(resolvePtrStructure);
+      env.finishStructure(resolvePtrStructure);
       const promiseStructure = env.beginStructure({
         type: StructureType.Struct,
         purpose: StructurePurpose.Promise,
@@ -681,7 +681,7 @@ describe('Feature: call-marshaling-outbound', function() {
         slot: 0,
       });
       env.defineStructure(promiseStructure);
-      env.endStructure(promiseStructure);
+      env.finishStructure(promiseStructure);
       const members = [
         {
           name: '0',
@@ -731,7 +731,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const voidStructure = env.beginStructure({
         type: StructureType.Primitive,
         name: 'void',
@@ -746,7 +746,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: voidStructure,
       });
       env.defineStructure(voidStructure);
-      env.endStructure(voidStructure);
+      env.finishStructure(voidStructure);
       const yieldArgStructure = env.beginStructure({
         type: StructureType.ArgStruct,
         name: 'Resolve',
@@ -770,7 +770,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: intStructure,
       });
       env.defineStructure(yieldArgStructure);
-      env.endStructure(yieldArgStructure);
+      env.finishStructure(yieldArgStructure);
       const yieldStructure = env.beginStructure({
         type: StructureType.Function,
         byteSize: 0,
@@ -784,7 +784,7 @@ describe('Feature: call-marshaling-outbound', function() {
       const jsThunkController = { [MEMORY]: zig(0x2004) };
       env.attachTemplate(yieldStructure, jsThunkController, true);
       env.defineStructure(yieldStructure);
-      env.endStructure(yieldStructure);
+      env.finishStructure(yieldStructure);
       const yieldPtrStructure = env.beginStructure({
         type: StructureType.Pointer,
         byteSize: 8,
@@ -799,7 +799,7 @@ describe('Feature: call-marshaling-outbound', function() {
         slot: 0,
       });
       env.defineStructure(yieldPtrStructure);
-      env.endStructure(yieldPtrStructure);
+      env.finishStructure(yieldPtrStructure);
       const generatorStructure = env.beginStructure({
         type: StructureType.Struct,
         purpose: StructurePurpose.Generator,
@@ -816,7 +816,7 @@ describe('Feature: call-marshaling-outbound', function() {
         slot: 0,
       });
       env.defineStructure(generatorStructure);
-      env.endStructure(generatorStructure);
+      env.finishStructure(generatorStructure);
       const members = [
         {
           name: '0',
@@ -866,7 +866,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         byteSize: 8,
@@ -881,7 +881,7 @@ describe('Feature: call-marshaling-outbound', function() {
         slot: 0,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const signalStructure = env.beginStructure({
         type: StructureType.Struct,
         purpose: StructurePurpose.AbortSignal,
@@ -898,7 +898,7 @@ describe('Feature: call-marshaling-outbound', function() {
         slot: 0,
       });
       env.defineStructure(signalStructure);
-      env.endStructure(signalStructure);
+      env.finishStructure(signalStructure);
       const members = [
         {
           name: '0',
@@ -945,7 +945,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: usizeStructure,
       });
       env.defineStructure(usizeStructure);
-      env.endStructure(usizeStructure);
+      env.finishStructure(usizeStructure);
       const anyErrorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         flags: ErrorSetFlag.IsGlobal,
@@ -1023,7 +1023,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: sliceStructure,
       });
       env.defineStructure(slicePtrStructure);
-      env.endStructure(slicePtrStructure);
+      env.finishStructure(slicePtrStructure);
       const opaqueSliceStructure = env.beginStructure({
         type: StructureType.Slice,
         flags: SliceFlag.IsOpaque,
@@ -1036,7 +1036,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: u8Structure,
       });
       env.defineStructure(opaqueSliceStructure);
-      env.endStructure(opaqueSliceStructure);
+      env.finishStructure(opaqueSliceStructure);
       const opaquePtrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
@@ -1051,7 +1051,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: opaqueSliceStructure,
       });
       env.defineStructure(opaquePtrStructure);
-      env.endStructure(opaquePtrStructure);
+      env.finishStructure(opaquePtrStructure);
       const readArgStructure = env.beginStructure({
         type: StructureType.ArgStruct,
         byteSize: retvalStructure.byteSize + addressByteSize * 3,
@@ -1082,7 +1082,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: slicePtrStructure,
       });
       env.defineStructure(readArgStructure);
-      env.endStructure(readArgStructure);
+      env.finishStructure(readArgStructure);
       const readStructure = env.beginStructure({
         type: StructureType.Function,
         byteSize: 0,
@@ -1096,7 +1096,7 @@ describe('Feature: call-marshaling-outbound', function() {
       const jsThunkController = { [MEMORY]: zig(0x2004) };
       env.attachTemplate(readStructure, jsThunkController, true);
       env.defineStructure(readStructure);
-      env.endStructure(readStructure);
+      env.finishStructure(readStructure);
       const readPtrStructure = env.beginStructure({
         type: StructureType.Pointer,
         byteSize: 8,
@@ -1111,7 +1111,7 @@ describe('Feature: call-marshaling-outbound', function() {
         slot: 0,
       });
       env.defineStructure(readPtrStructure);
-      env.endStructure(readPtrStructure);
+      env.finishStructure(readPtrStructure);
       const readerStructure = env.beginStructure({
         type: StructureType.Struct,
         purpose: StructurePurpose.Reader,
@@ -1137,7 +1137,7 @@ describe('Feature: call-marshaling-outbound', function() {
         slot: 1,
       });
       env.defineStructure(readerStructure);
-      env.endStructure(readerStructure);
+      env.finishStructure(readerStructure);
       const members = [
         {
           name: '0',
@@ -1197,7 +1197,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: usizeStructure,
       });
       env.defineStructure(usizeStructure);
-      env.endStructure(usizeStructure);
+      env.finishStructure(usizeStructure);
       const anyErrorStructure = env.beginStructure({
         type: StructureType.ErrorSet,
         flags: ErrorSetFlag.IsGlobal,
@@ -1275,7 +1275,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: sliceStructure,
       });
       env.defineStructure(slicePtrStructure);
-      env.endStructure(slicePtrStructure);
+      env.finishStructure(slicePtrStructure);
       const opaqueSliceStructure = env.beginStructure({
         type: StructureType.Slice,
         flags: SliceFlag.IsOpaque,
@@ -1288,7 +1288,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: u8Structure,
       });
       env.defineStructure(opaqueSliceStructure);
-      env.endStructure(opaqueSliceStructure);
+      env.finishStructure(opaqueSliceStructure);
       const opaquePtrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
@@ -1303,7 +1303,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: opaqueSliceStructure,
       });
       env.defineStructure(opaquePtrStructure);
-      env.endStructure(opaquePtrStructure);
+      env.finishStructure(opaquePtrStructure);
       const writeArgStructure = env.beginStructure({
         type: StructureType.ArgStruct,
         byteSize: retvalStructure.byteSize + addressByteSize * 3,
@@ -1334,7 +1334,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: slicePtrStructure,
       });
       env.defineStructure(writeArgStructure);
-      env.endStructure(writeArgStructure);
+      env.finishStructure(writeArgStructure);
       const writeStructure = env.beginStructure({
         type: StructureType.Function,
         byteSize: 0,
@@ -1348,7 +1348,7 @@ describe('Feature: call-marshaling-outbound', function() {
       const jsThunkController = { [MEMORY]: zig(0x2004) };
       env.attachTemplate(writeStructure, jsThunkController, true);
       env.defineStructure(writeStructure);
-      env.endStructure(writeStructure);
+      env.finishStructure(writeStructure);
       const writePtrStructure = env.beginStructure({
         type: StructureType.Pointer,
         byteSize: 8,
@@ -1363,7 +1363,7 @@ describe('Feature: call-marshaling-outbound', function() {
         slot: 0,
       });
       env.defineStructure(writePtrStructure);
-      env.endStructure(writePtrStructure);
+      env.finishStructure(writePtrStructure);
       const writerStructure = env.beginStructure({
         type: StructureType.Struct,
         purpose: StructurePurpose.Writer,
@@ -1389,7 +1389,7 @@ describe('Feature: call-marshaling-outbound', function() {
         slot: 1,
       });
       env.defineStructure(writerStructure);
-      env.endStructure(writerStructure);
+      env.finishStructure(writerStructure);
       const members = [
         {
           name: '0',
@@ -1444,7 +1444,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: usizeStructure,
       });
       env.defineStructure(usizeStructure);
-      env.endStructure(usizeStructure);
+      env.finishStructure(usizeStructure);
       const fileStructure = env.beginStructure({
         type: StructureType.Struct,
         purpose: StructurePurpose.File,
@@ -1460,7 +1460,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: {},
       });
       env.defineStructure(fileStructure);
-      env.endStructure(fileStructure);
+      env.finishStructure(fileStructure);
       const members = [
         {
           name: '0',
@@ -1512,7 +1512,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: usizeStructure,
       });
       env.defineStructure(usizeStructure);
-      env.endStructure(usizeStructure);
+      env.finishStructure(usizeStructure);
       const dirStructure = env.beginStructure({
         type: StructureType.Struct,
         purpose: StructurePurpose.Directory,
@@ -1528,7 +1528,7 @@ describe('Feature: call-marshaling-outbound', function() {
         structure: {},
       });
       env.defineStructure(dirStructure);
-      env.endStructure(dirStructure);
+      env.finishStructure(dirStructure);
       const members = [
         {
           name: '0',

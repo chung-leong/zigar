@@ -93,7 +93,7 @@ describe('Structure: variadic-struct', function() {
         structure: intStructure,
       });
       const Int32 = env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const floatStructure = env.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
@@ -109,7 +109,7 @@ describe('Structure: variadic-struct', function() {
         structure: floatStructure,
       });
       const Float64 = env.defineStructure(floatStructure);
-      env.endStructure(floatStructure);
+      env.finishStructure(floatStructure);
       const structStructure = env.beginStructure({
         type: StructureType.Struct,
         flags: StructFlag.IsExtern,
@@ -126,7 +126,7 @@ describe('Structure: variadic-struct', function() {
         structure: floatStructure,
       });
       const Struct = env.defineStructure(structStructure);
-      env.endStructure(structStructure);
+      env.finishStructure(structStructure);
       const structure = env.beginStructure({
         type: StructureType.VariadicStruct,
         byteSize: 4 * 3,
@@ -158,7 +158,7 @@ describe('Structure: variadic-struct', function() {
         structure: intStructure,
       });
       const VariadicStruct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(VariadicStruct).to.be.a('function');
       const args1 = new VariadicStruct([ 123, 456 ], 'hello', 0);
       args1.retval = 777;
@@ -194,7 +194,7 @@ describe('Structure: variadic-struct', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -210,7 +210,7 @@ describe('Structure: variadic-struct', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.VariadicStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -245,7 +245,7 @@ describe('Structure: variadic-struct', function() {
         structure: intStructure,
       });
       const VariadicStruct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(VariadicStruct).to.be.a('function');
       const args1 = new VariadicStruct([ 88, -123 ], 'hello', 0);
       expect(args1[MEMORY].byteLength).to.equal(12);
@@ -276,7 +276,7 @@ describe('Structure: variadic-struct', function() {
         structure: intStructure,
       });
       env.defineStructure(intStructure);
-      env.endStructure(intStructure);
+      env.finishStructure(intStructure);
       const ptrStructure = env.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
@@ -292,7 +292,7 @@ describe('Structure: variadic-struct', function() {
         structure: intStructure,
       });
       env.defineStructure(ptrStructure);
-      env.endStructure(ptrStructure);
+      env.finishStructure(ptrStructure);
       const structure = env.beginStructure({
         type: StructureType.VariadicStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
@@ -327,7 +327,7 @@ describe('Structure: variadic-struct', function() {
         structure: intStructure,
       });
       const VariadicStruct = env.defineStructure(structure);
-      env.endStructure(structure);
+      env.finishStructure(structure);
       expect(VariadicStruct).to.be.a('function');
       const args1 = new VariadicStruct([ 88, -123 ], 'hello', 0);
       expect(args1[MEMORY].byteLength).to.equal(12);
@@ -360,7 +360,7 @@ describe('Structure: variadic-struct', function() {
       structure: intStructure,
     });
     const Int32 = env.defineStructure(intStructure);
-    env.endStructure(intStructure);
+    env.finishStructure(intStructure);
     const floatStructure = env.beginStructure({
       type: StructureType.Primitive,
       flags: StructureFlag.HasValue,
@@ -376,7 +376,7 @@ describe('Structure: variadic-struct', function() {
       structure: floatStructure,
     });
     const Float64 = env.defineStructure(floatStructure);
-    env.endStructure(floatStructure);
+    env.finishStructure(floatStructure);
     const structStructure = env.beginStructure({
       type: StructureType.Struct,
       flags: StructFlag.IsExtern,
@@ -393,7 +393,7 @@ describe('Structure: variadic-struct', function() {
       structure: floatStructure,
     });
     const Struct = env.defineStructure(structStructure);
-    env.endStructure(structStructure);
+    env.finishStructure(structStructure);
     const structure = env.beginStructure({
       type: StructureType.VariadicStruct,
       byteSize: 4 * 3,
@@ -425,7 +425,7 @@ describe('Structure: variadic-struct', function() {
       structure: intStructure,
     });
     const VariadicStruct = env.defineStructure(structure);
-    env.endStructure(structure);
+    env.finishStructure(structure);
     expect(VariadicStruct).to.be.a('function');
     const args1 = new VariadicStruct([ 123, 456 ], 'hello', 0);
     args1[RETURN](777);
