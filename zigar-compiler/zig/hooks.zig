@@ -1027,6 +1027,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn poll(fds: [*]pollfd, nfds: nfds_t, timeout: c_int, result: *c_int) callconv(.c) bool {
+            if (os == .windows) return false;
             const all_private = for (0..nfds) |i| {
                 // negative descriptors are skipped over
                 if (fds[i].fd >= 0) {
