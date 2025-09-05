@@ -25,6 +25,7 @@ pub const Mask = packed struct {
     set_times: bool = false,
     stat: bool = false,
     unlink: bool = false,
+    syscall: bool = false,
 };
 pub const Syscall = extern struct {
     cmd: Command,

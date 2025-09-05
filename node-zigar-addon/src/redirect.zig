@@ -8,12 +8,24 @@ const os = switch (builtin.target.os.tag) {
     .windows => .windows,
     else => .unknown,
 };
+const windows_h = @cImport({
+    @cInclude("windows.h");
+    @cInclude("imagehlp.h");
+});
+const dlfcn_h = @cImport({
+    @cDefine("_GNU_SOURCE", {});
+    @cInclude("dlfcn.h");
+});
+const prctl_h = @cImport({
+    @cInclude("sys/prctl.h");
+});
 
 pub fn Controller(comptime Host: type) type {
     const bits = @bitSizeOf(usize);
     const page_size = std.heap.pageSize();
+
     return struct {
-        pub fn installHooks(lib: *std.DynLib, path: []const u8, host: *Host) !void {
+        pub fn installHooks(host: *Host, lib: *std.DynLib, path: []const u8) !void {
             var sfb = std.heap.stackFallback(4096, c_allocator);
             const allocator = sfb.get();
             if (os == .linux) {
@@ -256,17 +268,13 @@ pub fn Controller(comptime Host: type) type {
                     }
                 }
             } else if (os == .windows) {
-                const c = @cImport({
-                    @cInclude("windows.h");
-                    @cInclude("imagehlp.h");
-                });
-                const ThunkData = c.IMAGE_THUNK_DATA;
-                const ImportDescriptor = c.IMAGE_IMPORT_DESCRIPTOR;
-                const ImportByName = c.IMAGE_IMPORT_BY_NAME;
-                const directoryEntryToDataEx = c.ImageDirectoryEntryToDataEx;
-                const snapByOrdinal = c.IMAGE_SNAP_BY_ORDINAL;
-                const directory_entry_import = c.IMAGE_DIRECTORY_ENTRY_IMPORT;
-                const TRUE = c.TRUE;
+                const ThunkData = windows_h.IMAGE_THUNK_DATA;
+                const ImportDescriptor = windows_h.IMAGE_IMPORT_DESCRIPTOR;
+                const ImportByName = windows_h.IMAGE_IMPORT_BY_NAME;
+                const directoryEntryToDataEx = windows_h.ImageDirectoryEntryToDataEx;
+                const snapByOrdinal = windows_h.IMAGE_SNAP_BY_ORDINAL;
+                const directory_entry_import = windows_h.IMAGE_DIRECTORY_ENTRY_IMPORT;
+                const TRUE = windows_h.TRUE;
 
                 const hmodule = lib.inner.dll;
                 const bytes: [*]u8 = @ptrCast(hmodule);
@@ -291,6 +299,35 @@ pub fn Controller(comptime Host: type) type {
                         const address = @intFromPtr(&iat_ptr.u1.Function);
                         try installHook(hook, address, true);
                     }
+                }
+            }
+        }
+
+        pub fn installHooksInLibraryOf(host: *Host, ptr: *const anyopaque) !void {
+            var lib: std.DynLib, const path: []const u8 = switch (os) {
+                .linux, .darwin => get: {
+                    var info: dlfcn_h.Dl_info = undefined;
+                    if (dlfcn_h.dladdr(ptr, &info) == 0) return error.UnableToGetLibraryInfo;
+                    const path = std.mem.sliceTo(info.dli_fname, 0);
+                    break :get .{ try std.DynLib.openZ(info.dli_fname), path };
+                },
+                .windows => get: {
+                    var handle: windows_h.HMODULE = undefined;
+                    if (windows_h.GetModuleHandleExA(windows_h.GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, @ptrCast(ptr), &handle) == 0)
+                        return error.UnableToGetLibraryInfo;
+
+                    break :get .{ .{ .inner = .{ .dll = handle } }, "" }; // path isn't needed on Windows
+                },
+                else => unreachable,
+            };
+            defer lib.close();
+            try installHooks(host, &lib, path);
+        }
+
+        pub fn uninstallHooks(host: *Host) !void {
+            if (os == .linux) {
+                if (host.getSyscallHook("__syscall")) |hook| {
+                    try removeSyscallVtable(@ptrCast(hook.handler));
                 }
             }
         }
@@ -321,10 +358,13 @@ pub fn Controller(comptime Host: type) type {
             .{ .start_address = 0, .end_address = 0, .vtable = undefined },
         };
         var syscall_vtables: [*]const HandlerEntry = empty_list;
+        var syscall_vtables_mutex: std.Thread.Mutex = .{};
 
         fn addSyscallVtable(address: usize, len: usize, vtable: *const Host.HandlerVTable) !void {
-            // the list is just a many pointer that we can update atomically
+            // the list is a many pointer that we can update atomically
             // in order to expand it we need to determine the new length first
+            syscall_vtables_mutex.lock();
+            defer syscall_vtables_mutex.unlock();
             const list = syscall_vtables;
             const old_len = count: {
                 var index: usize = 0;
@@ -354,6 +394,8 @@ pub fn Controller(comptime Host: type) type {
         }
 
         fn removeSyscallVtable(vtable: *const Host.HandlerVTable) !void {
+            syscall_vtables_mutex.lock();
+            defer syscall_vtables_mutex.unlock();
             const list = syscall_vtables;
             const old_len = count: {
                 var index: usize = 0;
@@ -363,22 +405,22 @@ pub fn Controller(comptime Host: type) type {
                 }
                 break :count index;
             };
-            const removing = find: {
+            const new_len: usize = count: {
+                var len: usize = old_len;
                 var index: usize = 0;
                 while (true) : (index += 1) {
                     const entry = list[index];
-                    if (entry.vtable == vtable) break;
-                    if (entry.start_address == 0) return;
+                    if (entry.vtable == vtable) len -= 1;
+                    if (entry.start_address == 0) break;
                 }
-                break :find index;
+                break :count len;
             };
-            const new_len = old_len - 1;
             if (new_len > 0) {
                 const new_list = try c_allocator.alloc(HandlerEntry, new_len + 1);
                 var remaining: usize = 0;
-                for (0..old_len) |index| {
-                    if (index != removing) {
-                        new_list[remaining] = list[index];
+                for (list[0..old_len]) |entry| {
+                    if (entry.vtable != vtable) {
+                        new_list[remaining] = entry;
                         remaining += 1;
                     }
                 }
@@ -405,13 +447,10 @@ pub fn Controller(comptime Host: type) type {
 
         pub fn installSyscallTrap() !void {
             if (os == .linux) {
-                const prctl_h = @cImport({
-                    @cInclude("sys/prctl.h");
-                });
                 // enable syscall user dispatch, excluding the memory region where libc sits; the signal
                 // trampoline is also inside this range, allowing us to reenable trapping from within
                 // the signal handler (otherwise sigreturn() would trigger SIGSYS inside a SIGSYS)
-                const libc = try getLibcExtend();
+                const libc = try getLibcExtent();
                 if (std.c.prctl(
                     prctl_h.PR_SET_SYSCALL_USER_DISPATCH,
                     prctl_h.PR_SYS_DISPATCH_ON,
@@ -426,9 +465,6 @@ pub fn Controller(comptime Host: type) type {
 
         pub fn uninstallSyscallTrap() void {
             if (os == .linux) {
-                const prctl_h = @cImport({
-                    @cInclude("sys/prctl.h");
-                });
                 _ = std.c.prctl(
                     prctl_h.PR_SET_SYSCALL_USER_DISPATCH,
                     prctl_h.PR_SYS_DISPATCH_OFF,
@@ -471,13 +507,9 @@ pub fn Controller(comptime Host: type) type {
         const LibcExtent = struct { address: usize, len: usize };
         var libc_extent: ?LibcExtent = null;
 
-        fn getLibcExtend() !LibcExtent {
+        fn getLibcExtent() !LibcExtent {
             if (os != .linux) @compileError("Unsupported");
             return libc_extent orelse {
-                const dlfcn_h = @cImport({
-                    @cDefine("_GNU_SOURCE", {});
-                    @cInclude("dlfcn.h");
-                });
                 const elf = std.elf;
                 const Elf_Ehdr = if (bits == 64) elf.Elf64_Ehdr else elf.Elf32_Ehdr;
                 const Elf_Phdr = if (bits == 64) elf.Elf64_Phdr else elf.Elf32_Phdr;

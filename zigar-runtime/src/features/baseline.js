@@ -27,7 +27,7 @@ export default mixin({
   },
   addListener(name, cb) {
     if (process.env.TARGET === 'node') {
-      if ([ 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink' ].includes(name)) {
+      if ([ 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink', 'syscall' ].includes(name)) {
         this.setRedirectionMask(name, !!cb);
       }
     } else if (process.env.TARGET === 'wasm') {

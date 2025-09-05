@@ -181,6 +181,7 @@ const ModuleHost = struct {
                     env.deleteReference(ref) catch {};
                 }
             }
+            if (self.redirecting_io) redirection_controller.uninstallHooks(self) catch {};
             if (self.library) |*lib| lib.close();
             self.syscall_trap_switches.deinit();
             c_allocator.destroy(self);
@@ -241,7 +242,7 @@ const ModuleHost = struct {
         function_count -= 1;
     }
 
-    fn loadModule(self: *@This(), path: Value, redirectIO: Value) !void {
+    fn loadModule(self: *@This(), path: Value, redirectingIO: Value) !void {
         const env = self.env;
         const path_len = try env.getValueStringUtf8(path, null);
         const path_bytes = try c_allocator.alloc(u8, path_len + 1);
@@ -274,8 +275,8 @@ const ModuleHost = struct {
             }
         };
         try self.exportFunctionsToModule();
-        if (env.getValueBool(redirectIO) catch true and module.attributes.io_redirection) {
-            try redirection_controller.installHooks(&lib, path_s, self);
+        if (env.getValueBool(redirectingIO) catch true and module.attributes.io_redirection) {
+            try redirection_controller.installHooks(self, &lib, path_s);
             self.redirecting_io = true;
         }
         self.library = lib;
@@ -642,35 +643,9 @@ const ModuleHost = struct {
     }
 
     fn exportFunctionsToModule(self: *@This()) !void {
-        const names = .{
-            "create_bool",
-            "create_integer",
-            "create_big_integer",
-            "create_string",
-            "create_view",
-            "create_instance",
-            "create_template",
-            "create_list",
-            "create_object",
-            "append_list",
-            "get_property",
-            "set_property",
-            "get_slot_value",
-            "set_slot_value",
-            "begin_structure",
-            "finish_structure",
-            "enable_multithread",
-            "disable_multithread",
-            "get_instance",
-            "initialize_thread",
-            "handle_jscall",
-            "handle_syscall",
-            "get_syscall_mask",
-            "release_function",
-        };
         const module = self.module orelse return error.NoLoadedModule;
-        inline for (names) |name| {
-            const name_c = comptime camelize(name);
+        inline for (std.meta.fields(Module.Imports)) |field| {
+            const name_c = comptime camelize(field.name);
             const func = @field(@This(), name_c);
             const Args = std.meta.ArgsTuple(@TypeOf(func));
             const RT = @typeInfo(@TypeOf(func)).@"fn".return_type.?;
@@ -720,7 +695,7 @@ const ModuleHost = struct {
                     }
                 }
             };
-            @field(module.imports, name) = fn_transform.spreadArgs(ns.call, .c);
+            @field(module.imports, field.name) = fn_transform.spreadArgs(ns.call, .c);
         }
     }
 
@@ -1308,6 +1283,11 @@ const ModuleHost = struct {
             const func = self.ts.release_function orelse return error.Disabled;
             try napi.callThreadsafeFunction(func, @ptrFromInt(fn_id), .nonblocking);
         }
+    }
+
+    fn redirectIo(self: *@This(), ptr: *const anyopaque) !void {
+        if (!self.redirecting_io) return error.RedirectionDisabled;
+        try redirection_controller.installHooksInLibraryOf(self, ptr);
     }
 
     fn enableMultithread(self: *@This()) !void {

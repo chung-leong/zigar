@@ -19,3 +19,7 @@ pub const thread = struct {
 
     pub const WorkQueue = host.WorkQueue;
 };
+
+pub const io = struct {
+    pub const redirect = host.redirectIO;
+};

@@ -189,6 +189,10 @@ pub fn stopMultithread() void {
     _ = imports.disable_multithread();
 }
 
+pub fn redirectIO(fn_ptr: *const anyopaque) !void {
+    if (imports.redirect_io(fn_ptr) != .SUCCESS) return error.UnableToRedirectIO;
+}
+
 pub fn getInstance() !*anyopaque {
     var ptr: *anyopaque = undefined;
     if (imports.get_instance(&ptr) != .SUCCESS) {

@@ -1,5 +1,6 @@
 import { expect, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
+import { execSync } from 'child_process';
 import { open, readFile } from 'fs/promises';
 import 'mocha-skip-if';
 import { platform } from 'os';
@@ -1971,6 +1972,22 @@ export function addTests(importModule, options) {
       } finally {
         await shutdown();
       }
+    })
+    it('should redirect io from dynamically linked library', async function() {
+      this.timeout(0);
+      const { __zigar, use } = await importTest('redirect-shared-lib');
+      let ext;
+      switch (target) {
+        case 'win32': ext = 'dll';
+        case 'darwin': ext = 'dynlib';
+        default: ext = 'so';
+      }
+      __zigar.on('syscall', true);
+      const libPath = absolute(`./data/print.${ext}`);
+      const zigPath = absolute(`./redirect-shared-lib-target.zig`);
+      execSync(`zig build-lib "${zigPath}" -dynamic -femit-bin="${libPath}"`);
+      const [ line ] = await capture(() => use(libPath));
+      expect(line).to.equal('Hello world');
     })
   })
 }

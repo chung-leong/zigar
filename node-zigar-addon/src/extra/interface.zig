@@ -42,6 +42,7 @@ pub fn Module(comptime Value: type) type {
             handle_syscall: *const fn (*Syscall) callconv(.C) E,
             get_syscall_mask: *const fn (*hooks.Mask) callconv(.C) E,
             release_function: *const fn (usize) callconv(.C) E,
+            redirect_io: *const fn (*const anyopaque) callconv(.C) E,
         };
         pub const Exports = extern struct { // vtable that's used by the addon
             get_export_address: *const fn (usize, *usize) callconv(.C) E,

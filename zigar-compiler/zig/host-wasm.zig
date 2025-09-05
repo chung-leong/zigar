@@ -108,6 +108,10 @@ pub fn startMultithread() !void {}
 
 pub fn stopMultithread() void {}
 
+pub fn redirectIO(_: *const anyopaque) !void {
+    return error.NoSupport;
+}
+
 const empty_ptr: *anyopaque = @constCast(@ptrCast(&.{}));
 
 export fn runThunk(
