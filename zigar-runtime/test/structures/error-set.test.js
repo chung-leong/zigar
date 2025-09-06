@@ -138,7 +138,7 @@ describe('Structure: error-set', function() {
       };
       const env = new Env();
       const descriptors = {};
-      env.defineStructure(structure);
+      structure.constructor;
       env.finalizeErrorSet(structure, descriptors);
       expect(descriptors.dog_ate_homework?.value).to.be.an('error');
       expect(descriptors.cat_fell_in_love?.value).to.be.an('error');
@@ -147,38 +147,48 @@ describe('Structure: error-set', function() {
   describe('defineStructure', function() {
     it('should define an error set', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ErrorSet,
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure,
-      });
-      const ErrorSet = env.defineStructure(structure);
-      env.attachMember(structure, {
-        name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure,
-      }, true);
-      env.attachMember(structure, {
-        name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure,
-      }, true);
-      env.attachTemplate(structure, {
-        [SLOTS]: {
-          0: ErrorSet.call(ENVIRONMENT, errorData(5)),
-          1: ErrorSet.call(ENVIRONMENT, errorData(8)),
-        }
-      }, true);
+        signature: 0n,
+      };
+      structure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure,
+          },
+        ],
+      };
+      env.beginStructure(structure);
+      const ErrorSet = structure.constructor;
+      structure.static = {
+        members: [
+          {
+            name: 'UnableToRetrieveMemoryLocation',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 0,
+            structure,
+          },
+          {
+            name: 'UnableToCreateObject',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 1,
+            structure,
+          },
+        ],
+        template: {
+          [SLOTS]: {
+            0: ErrorSet.call(ENVIRONMENT, errorData(5)),
+            1: ErrorSet.call(ENVIRONMENT, errorData(8)),
+          }
+        },
+      };
       env.finishStructure(structure);
       expect(ErrorSet).to.be.a('function');
       expect(ErrorSet.UnableToRetrieveMemoryLocation).to.be.an.instanceOf(Error);
@@ -211,87 +221,113 @@ describe('Structure: error-set', function() {
     it('should define anyerror', function() {
       const env = new Env();
       // define error first
-      const errorStructure1 = env.beginStructure({
+      const errorStructure1 = {
         type: StructureType.ErrorSet,
         byteSize: 2,
-      });
-      env.attachMember(errorStructure1, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: errorStructure1
-      });
-      env.attachMember(errorStructure1, {
-        name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure: errorStructure1,
-      }, true);
-      env.attachMember(errorStructure1, {
-        name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure: errorStructure1,
-      }, true);
-      const ErrorSet1 = env.defineStructure(errorStructure1);
-      env.attachTemplate(errorStructure1, {
-        [SLOTS]: {
-          0: ErrorSet1.call(ENVIRONMENT, errorData(5)),
-          1: ErrorSet1.call(ENVIRONMENT, errorData(8)),
-        }
-      }, true);
+        signature: 0n,
+      };
+      errorStructure1.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure: errorStructure1
+          },
+        ],
+      };
+      env.beginStructure(errorStructure1);
+      const ErrorSet1 = errorStructure1.constructor;
+      errorStructure1.static = {
+        members: [
+          {
+            name: 'UnableToRetrieveMemoryLocation',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 0,
+            structure: errorStructure1,
+          },
+          {
+            name: 'UnableToCreateObject',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 1,
+            structure: errorStructure1,
+          },
+        ],
+        template: {
+          [SLOTS]: {
+            0: ErrorSet1.call(ENVIRONMENT, errorData(5)),
+            1: ErrorSet1.call(ENVIRONMENT, errorData(8)),
+          }
+        },
+      };
       env.finishStructure(errorStructure1);
       // define anyerror
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ErrorSet,
         flags: ErrorSetFlag.IsGlobal,
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure,
-      });
-      const AnyError = env.defineStructure(structure);
+        signature: 0n,
+      };
+      structure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure,
+          },
+        ],       
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const AnyError = structure.constructor;
       // define another error afterward
-      const errorStructure2 = env.beginStructure({
+      const errorStructure2 = {
         type: StructureType.ErrorSet,
         byteSize: 2,
-      });
-      env.attachMember(errorStructure2, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: errorStructure2
-      });
-      env.attachMember(errorStructure2, {
-        name: 'pants_on_fire',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure: errorStructure2,
-      }, true);
-      env.attachMember(errorStructure2, {
-        name: 'jesus_showed_up',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure: errorStructure2,
-      }, true);
-      const ErrorSet2 = env.defineStructure(errorStructure2);
-      env.attachTemplate(errorStructure2, {
-        [SLOTS]: {
-          0: ErrorSet2.call(ENVIRONMENT, errorData(6)),
-          1: ErrorSet2.call(ENVIRONMENT, errorData(7)),
-        }
-      }, true);
+        signature: 0n,
+      };
+      errorStructure2.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure: errorStructure2
+          },
+        ],
+      };
+      env.beginStructure(errorStructure2);
+      const ErrorSet2 = errorStructure2.constructor;
+      errorStructure2.static = {
+        members: [
+          {
+            name: 'pants_on_fire',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 0,
+            structure: errorStructure2,
+          },
+          {
+            name: 'jesus_showed_up',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 1,
+            structure: errorStructure2,
+          },
+        ],
+        template: {
+          [SLOTS]: {
+            0: ErrorSet2.call(ENVIRONMENT, errorData(6)),
+            1: ErrorSet2.call(ENVIRONMENT, errorData(7)),
+          }
+        },
+      };
       env.finishStructure(errorStructure2);
       expect(AnyError).to.be.a('function');
       expect(AnyError.UnableToRetrieveMemoryLocation).to.be.an.instanceOf(Error);
@@ -311,38 +347,48 @@ describe('Structure: error-set', function() {
     })
     it('should create an object for storing an error', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ErrorSet,
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure,
-      });
-      const ErrorSet = env.defineStructure(structure);
-      env.attachMember(structure, {
-        name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure,
-      }, true);
-      env.attachMember(structure, {
-        name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure,
-      }, true);
-      env.attachTemplate(structure, {
-        [SLOTS]: {
-          0: ErrorSet.call(ENVIRONMENT, errorData(5)),
-          1: ErrorSet.call(ENVIRONMENT, errorData(8)),
-        }
-      }, true);
+        signature: 0n,
+      };
+      structure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure,
+          },
+        ],
+      };
+      env.beginStructure(structure);
+      const ErrorSet = structure.constructor;
+      structure.static = {
+        members: [
+          {
+            name: 'UnableToRetrieveMemoryLocation',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 0,
+            structure,
+          },
+          {
+            name: 'UnableToCreateObject',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 1,
+            structure,
+          },
+        ],
+        template: {
+          [SLOTS]: {
+            0: ErrorSet.call(ENVIRONMENT, errorData(5)),
+            1: ErrorSet.call(ENVIRONMENT, errorData(8)),
+          }
+        },
+      };
       env.finishStructure(structure);
       const error = new ErrorSet(5);
       expect(error.$.message).to.equal(ErrorSet.UnableToRetrieveMemoryLocation.message);
@@ -352,74 +398,97 @@ describe('Structure: error-set', function() {
     })
     it('should create an object for storing anyerror', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ErrorSet,
         flags: ErrorSetFlag.IsGlobal,
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure,
-      });
-      const AnyError = env.defineStructure(structure);
+        signature: 0n,
+      };
+      structure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure,
+          },
+        ],
+      }
+      env.beginStructure(structure);
+      const AnyError = structure.constructor;
       env.finishStructure(structure);
       const error = new AnyError(5);
       const int = error.dataView.getUint16(0, true);
+      expect(int).to.equal(5);
       expect(error.$.number).to.equal(5);
       expect(error.$.message).to.equal('Unknown error: 5');
     })
     it('should work correctly in an array', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ErrorSet,
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure,
-      });
-      const ErrorSet = env.defineStructure(structure);
-      env.attachMember(structure, {
-        name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure,
-      }, true);
-      env.attachMember(structure, {
-        name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure,
-      }, true);
-      env.attachTemplate(structure, {
-        [SLOTS]: {
-          0: ErrorSet.call(ENVIRONMENT, errorData(5)),
-          1: ErrorSet.call(ENVIRONMENT, errorData(8)),
-        }
-      }, true);
+        signature: 0n,
+      };
+      structure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure,
+          },
+        ],
+      }
+      env.beginStructure(structure);
+      const ErrorSet = structure.constructor;
+      structure.static = {
+        members: [
+          {
+            name: 'UnableToRetrieveMemoryLocation',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 0,
+            structure,
+          },
+          {
+            name: 'UnableToCreateObject',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 1,
+            structure,
+          },
+        ],
+        template: {
+          [SLOTS]: {
+            0: ErrorSet.call(ENVIRONMENT, errorData(5)),
+            1: ErrorSet.call(ENVIRONMENT, errorData(8)),
+          }
+        },
+      };
       env.finishStructure(structure);
-      const arrayStructure = env.beginStructure({
+      const arrayStructure = {
         type: StructureType.Array,
         name: '[4]ErrorSet',
         length: 4,
         byteSize: 2 * 4,
-
-      })
-      env.attachMember(arrayStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        byteSize: 2,
-        structure,
-      });
-      const ErrorArray = env.defineStructure(arrayStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+              structure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(arrayStructure)
+      const ErrorArray = arrayStructure.constructor;
       env.finishStructure(arrayStructure);
       const array = new ErrorArray([ 5, 8, 5, 5 ]);
       array[1] = ErrorSet.UnableToRetrieveMemoryLocation;
@@ -439,38 +508,48 @@ describe('Structure: error-set', function() {
     })
     it('should cast the same buffer to the same object', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ErrorSet,
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure,
-      });
-      const ErrorSet = env.defineStructure(structure);
-      env.attachMember(structure, {
-        name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure,
-      }, true);
-      env.attachMember(structure, {
-        name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure,
-      }, true);
-      env.attachTemplate(structure, {
-        [SLOTS]: {
-          0: ErrorSet.call(ENVIRONMENT, errorData(5)),
-          1: ErrorSet.call(ENVIRONMENT, errorData(8)),
-        }
-      }, true);
+        signature: 0n,
+      };
+      structure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure,
+          },
+        ],
+      };
+      env.beginStructure(structure);
+      const ErrorSet = structure.constructor;
+      structure.static = {
+        members: [
+          {
+            name: 'UnableToRetrieveMemoryLocation',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 0,
+            structure,
+          },
+          {
+            name: 'UnableToCreateObject',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 1,
+            structure,
+          },
+        ],
+        template: {
+          [SLOTS]: {
+            0: ErrorSet.call(ENVIRONMENT, errorData(5)),
+            1: ErrorSet.call(ENVIRONMENT, errorData(8)),
+          }
+        },
+      };
       env.finishStructure(structure);
       const buffer = new ArrayBuffer(2);
       const object1 = ErrorSet(buffer);
@@ -479,38 +558,48 @@ describe('Structure: error-set', function() {
     })
     it('should cast number to an error', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ErrorSet,
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure,
-      });
-      const ErrorSet = env.defineStructure(structure);
-      env.attachMember(structure, {
-        name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure,
-      }, true);
-      env.attachMember(structure, {
-        name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure,
-      }, true);
-      env.attachTemplate(structure, {
-        [SLOTS]: {
-          0: ErrorSet.call(ENVIRONMENT, errorData(5)),
-          1: ErrorSet.call(ENVIRONMENT, errorData(8)),
-        }
-      }, true);
+        signature: 0n,
+      };
+      structure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure,
+          },
+        ],
+      };
+      env.beginStructure(structure);
+      const ErrorSet = structure.constructor;
+      structure.static = {
+        members: [
+          {
+            name: 'UnableToRetrieveMemoryLocation',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 0,
+            structure,
+          },
+          {
+            name: 'UnableToCreateObject',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 1,
+            structure,
+          },
+        ],
+        template: {
+          [SLOTS]: {
+            0: ErrorSet.call(ENVIRONMENT, errorData(5)),
+            1: ErrorSet.call(ENVIRONMENT, errorData(8)),
+          }
+        },
+      };
       env.finishStructure(structure);
       expect(ErrorSet(5)).to.equal(ErrorSet.UnableToRetrieveMemoryLocation);
       expect(ErrorSet(8)).to.equal(ErrorSet.UnableToCreateObject);
@@ -518,38 +607,48 @@ describe('Structure: error-set', function() {
     })
     it('should cast string to an error', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ErrorSet,
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure,
-      });
-      const ErrorSet = env.defineStructure(structure);
-      env.attachMember(structure, {
-        name: 'unable_to_retrieve_memory_location',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure,
-      }, true);
-      env.attachMember(structure, {
-        name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure,
-      }, true);
-      env.attachTemplate(structure, {
-        [SLOTS]: {
-          0: ErrorSet.call(ENVIRONMENT, errorData(5)),
-          1: ErrorSet.call(ENVIRONMENT, errorData(8)),
-        }
-      }, true);
+        signature: 0n,
+      };
+      structure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure,
+          },
+        ],
+      };
+      env.beginStructure(structure);
+      const ErrorSet = structure.constructor;
+      structure.static = {
+        members: [
+          {
+            name: 'unable_to_retrieve_memory_location',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 0,
+            structure,
+          },
+          {
+            name: 'UnableToCreateObject',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 1,
+            structure,
+          },
+        ],
+        template: {
+          [SLOTS]: {
+            0: ErrorSet.call(ENVIRONMENT, errorData(5)),
+            1: ErrorSet.call(ENVIRONMENT, errorData(8)),
+          }
+        },
+      };
       env.finishStructure(structure);
       const text = ErrorSet.UnableToCreateObject.toString();
       expect(text).to.equal('Error: Unable to create object');
@@ -562,38 +661,48 @@ describe('Structure: error-set', function() {
     })
     it('should cast object to an error', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ErrorSet,
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure,
-      });
-      const ErrorSet = env.defineStructure(structure);
-      env.attachMember(structure, {
-        name: 'unable_to_retrieve_memory_location',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure,
-      }, true);
-      env.attachMember(structure, {
-        name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure,
-      }, true);
-      env.attachTemplate(structure, {
-        [SLOTS]: {
-          0: ErrorSet.call(ENVIRONMENT, errorData(5)),
-          1: ErrorSet.call(ENVIRONMENT, errorData(8)),
-        }
-      }, true);
+        signature: 0n,
+      };
+      structure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure,
+          },          
+        ]
+      };
+      env.beginStructure(structure);
+      const ErrorSet = structure.constructor;
+      structure.static = {
+        members: [
+          {
+            name: 'unable_to_retrieve_memory_location',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 0,
+            structure,
+          },
+          {
+            name: 'UnableToCreateObject',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 1,
+            structure,
+          },
+        ],
+        instance: {
+          [SLOTS]: {
+            0: ErrorSet.call(ENVIRONMENT, errorData(5)),
+            1: ErrorSet.call(ENVIRONMENT, errorData(8)),
+          }
+        },
+      };
       env.finishStructure(structure);
       expect(ErrorSet({ error: 'Unable to create object' })).to.equal(ErrorSet.UnableToCreateObject);
       expect(ErrorSet(JSON.parse(JSON.stringify(ErrorSet.UnableToCreateObject)))).to.equal(ErrorSet.UnableToCreateObject);
@@ -602,123 +711,153 @@ describe('Structure: error-set', function() {
     })
     it('should detect that set contains errors from a different set', function() {
       const env = new Env();
-      const catStructure = env.beginStructure({
+      const catStructure = {
         type: StructureType.ErrorSet,
         name: 'CatError',
         byteSize: 2,
-      });
-      env.attachMember(catStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: catStructure
-      });
-      const CatError = env.defineStructure(catStructure);
-      env.attachMember(catStructure, {
-        name: 'CucumberEncountered',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure: catStructure,
-      }, true);
-      env.attachMember(catStructure, {
-        name: 'CatnipEncountered',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure: catStructure,
-      }, true);
-      env.attachTemplate(catStructure, {
-        [SLOTS]: {
-          0: CatError.call(ENVIRONMENT, errorData(5)),
-          1: CatError.call(ENVIRONMENT, errorData(6)),
+        signature: 0n,
+      };
+      catStructure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure: catStructure
+          },
+        ],
+      };
+      env.beginStructure(catStructure);
+      const CatError = catStructure.constructor;
+      catStructure.static = {
+        members: [
+          {
+            name: 'CucumberEncountered',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 0,
+            structure: catStructure,
+          },
+          {
+            name: 'CatnipEncountered',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 1,
+            structure: catStructure,
+          },
+        ],
+        template: {
+          [SLOTS]: {
+            0: CatError.call(ENVIRONMENT, errorData(5)),
+            1: CatError.call(ENVIRONMENT, errorData(6)),
+          },
         },
-      }, true);
+      };
       env.finishStructure(catStructure);
-      const dogStructure = env.beginStructure({
+      const dogStructure = {
         type: StructureType.ErrorSet,
         name: 'DogError',
         byteSize: 2,
-      });
-      env.attachMember(dogStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: dogStructure,
-      });
-      const DogError = env.defineStructure(dogStructure);
-      env.attachMember(dogStructure, {
-        name: 'StrangerEncountered',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure: dogStructure,
-      }, true);
-      env.attachMember(dogStructure, {
-        name: 'BathRequired',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure: dogStructure,
-      }, true);
-      env.attachTemplate(dogStructure, {
-        [SLOTS]: {
-          0: DogError.call(ENVIRONMENT, errorData(7)),
-          1: DogError.call(ENVIRONMENT, errorData(8)),
+        signature: 0n,
+      };
+      dogStructure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure: dogStructure,
+          },
+        ],
+      }
+      env.beginStructure(dogStructure);
+      const DogError = dogStructure.constructor;
+      dogStructure.static = {
+        members: [
+          {
+            name: 'StrangerEncountered',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 0,
+            structure: dogStructure,
+          },
+          {
+            name: 'BathRequired',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 1,
+            structure: dogStructure,
+          },
+        ],
+        template: {
+          [SLOTS]: {
+            0: DogError.call(ENVIRONMENT, errorData(7)),
+            1: DogError.call(ENVIRONMENT, errorData(8)),
+          },
         },
-      }, true);
+      };
       env.finishStructure(dogStructure);
-      const petStructure = env.beginStructure({
+      const petStructure = {
         type: StructureType.ErrorSet,
         name: 'PetError',
         byteSize: 2,
-      });
-      env.attachMember(petStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: petStructure,
-      });
-      const PetError = env.defineStructure(petStructure);
-      env.attachMember(petStructure, {
-        name: 'CucumberEncountered',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure: petStructure,
-      }, true);
-      env.attachMember(petStructure, {
-        name: 'CatnipEncountered',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure: petStructure,
-      }, true);
-      env.attachMember(petStructure, {
-        name: 'StrangerEncountered',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 2,
-        structure: petStructure,
-      }, true);
-      env.attachMember(petStructure, {
-        name: 'BathRequired',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 3,
-        structure: petStructure,
-      }, true);
-      env.attachTemplate(petStructure, {
-        [SLOTS]: {
-          0: PetError.call(ENVIRONMENT, errorData(5)),
-          1: PetError.call(ENVIRONMENT, errorData(6)),
-          2: PetError.call(ENVIRONMENT, errorData(7)),
-          3: PetError.call(ENVIRONMENT, errorData(8)),
+        signature: 0n,
+      };
+      petStructure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure: petStructure,
+          },
+        ],
+      }
+      env.beginStructure(petStructure);
+      const PetError = petStructure.constructor;
+      petStructure.static = {
+        members: [
+          {
+            name: 'CucumberEncountered',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 0,
+            structure: petStructure,
+          },
+          {
+            name: 'CatnipEncountered',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 1,
+            structure: petStructure,
+          },
+          {
+            name: 'StrangerEncountered',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 2,
+            structure: petStructure,
+          },
+          {
+            name: 'BathRequired',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 3,
+            structure: petStructure,
+          },
+        ],
+        template: {
+          [SLOTS]: {
+            0: PetError.call(ENVIRONMENT, errorData(5)),
+            1: PetError.call(ENVIRONMENT, errorData(6)),
+            2: PetError.call(ENVIRONMENT, errorData(7)),
+            3: PetError.call(ENVIRONMENT, errorData(8)),
+          },
         },
-      }, true);
+      }
       env.finishStructure(petStructure);
       expect(DogError.BathRequired in PetError).to.be.true;
       expect(DogError.BathRequired in DogError).to.be.true;
@@ -730,149 +869,189 @@ describe('Structure: error-set', function() {
     })
     it('should throw when no initializer is provided', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ErrorSet,
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure,
-      });
-      const ErrorSet = env.defineStructure(structure);
-      env.attachMember(structure, {
-        name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure,
-      }, true);
-      env.attachMember(structure, {
-        name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure,
-      }, true);
-      env.attachTemplate(structure, {
-        [SLOTS]: {
-          0: ErrorSet.call(ENVIRONMENT, errorData(5)),
-          1: ErrorSet.call(ENVIRONMENT, errorData(8)),
-        }
-      }, true);
+        signature: 0n,
+      };
+      structure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure,
+          },
+        ],
+      };
+      env.beginStructure(structure);
+      const ErrorSet = structure.constructor;
+      structure.static = {
+        members: [
+          {
+            name: 'UnableToRetrieveMemoryLocation',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 0,
+            structure,
+          },
+          {
+            name: 'UnableToCreateObject',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 1,
+            structure,
+          },
+        ],
+        template: {
+          [SLOTS]: {
+            0: ErrorSet.call(ENVIRONMENT, errorData(5)),
+            1: ErrorSet.call(ENVIRONMENT, errorData(8)),
+          }
+        },
+      };
       env.finishStructure(structure);
       expect(() => new ErrorSet()).to.throw(TypeError);
     })
     it('should throw when initializer is not one of the expected types', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ErrorSet,
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure,
-      });
-      const ErrorSet = env.defineStructure(structure);
-      env.attachMember(structure, {
-        name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure,
-      }, true);
-      env.attachMember(structure, {
-        name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure,
-      }, true);
-      env.attachTemplate(structure, {
-        [SLOTS]: {
-          0: ErrorSet.call(ENVIRONMENT, errorData(5)),
-          1: ErrorSet.call(ENVIRONMENT, errorData(8)),
-        }
-      }, true);
+        signature: 0n,
+      };
+      structure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure,
+          },
+        ],
+      };
+      env.beginStructure(structure);
+      const ErrorSet = structure.constructor;
+      structure.static = {
+        members: [
+          {
+            name: 'UnableToRetrieveMemoryLocation',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 0,
+            structure,
+          },
+          {
+            name: 'UnableToCreateObject',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 1,
+            structure,
+          },
+        ],
+        template: {
+          [SLOTS]: {
+            0: ErrorSet.call(ENVIRONMENT, errorData(5)),
+            1: ErrorSet.call(ENVIRONMENT, errorData(8)),
+          }
+        },
+      };
       env.finishStructure(structure);
       expect(() => ErrorSet(false)).to.throw(TypeError);
     })
     it('should throw when no special properties are found', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ErrorSet,
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure,
-      });
-      const ErrorSet = env.defineStructure(structure);
-      env.attachMember(structure, {
-        name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure,
-      }, true);
-      env.attachMember(structure, {
-        name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure,
-      }, true);
-      env.attachTemplate(structure, {
-        [SLOTS]: {
-          0: ErrorSet.call(ENVIRONMENT, errorData(5)),
-          1: ErrorSet.call(ENVIRONMENT, errorData(8)),
-        }
-      }, true);
+        signature: 0n,
+      };
+      structure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure,
+          },
+        ],
+      };
+      env.beginStructure(structure);
+      const ErrorSet = structure.constructor;
+      structure.static = {
+        members: [
+          {
+            name: 'UnableToRetrieveMemoryLocation',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 0,
+            structure,
+          },
+          {
+            name: 'UnableToCreateObject',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 1,
+            structure,
+          },
+        ],
+        instance: {
+          [SLOTS]: {
+            0: ErrorSet.call(ENVIRONMENT, errorData(5)),
+            1: ErrorSet.call(ENVIRONMENT, errorData(8)),
+          }
+        },
+      };
       env.finishStructure(structure);
       expect(() => new ErrorSet({})).to.throw(TypeError);
     })
     it('should initialize error object from toJSON output', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ErrorSet,
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure,
-      });
-      const ErrorSet = env.defineStructure(structure);
-      env.attachMember(structure, {
-        name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure,
-      }, true);
-      env.attachMember(structure, {
-        name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure,
-      }, true);
-      env.attachTemplate(structure, {
-        [SLOTS]: {
-          0: ErrorSet.call(ENVIRONMENT, errorData(5)),
-          1: ErrorSet.call(ENVIRONMENT, errorData(8)),
+        signature: 0n,
+      };
+      structure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure,
+          },
+        ],
+      };
+      env.beginStructure(structure);
+      const ErrorSet = structure.constructor;
+      structure.static = {
+        members: [
+          {
+            name: 'UnableToRetrieveMemoryLocation',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 0,
+            structure,
+          },
+          {
+            name: 'UnableToCreateObject',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 1,
+            structure,
+          },
+        ],
+        template: {
+          [SLOTS]: {
+            0: ErrorSet.call(ENVIRONMENT, errorData(5)),
+            1: ErrorSet.call(ENVIRONMENT, errorData(8)),
+          },
         }
-      }, true);
+      }
       env.finishStructure(structure);
       const object1 = new ErrorSet(ErrorSet.UnableToCreateObject);
       const json = object1.toJSON();
@@ -881,7 +1060,6 @@ describe('Structure: error-set', function() {
       expect(() => new ErrorSet({ error: 'Something' })).to.throw(TypeError)
         .with.property('message').to.contain('Something');
     })
-
   })
 })
 

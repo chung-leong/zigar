@@ -12,27 +12,28 @@ describe('Structure: optional', function() {
       const structure = {
         type: StructureType.Optional,
         byteSize: 8,
-        instance: {},
-        static: { members: [] },
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
+        signature: 0n,
       };
-      structure.instance.members = [
-        {
-          type: MemberType.Int,
-          bitSize: 32,
-          bitOffset: 0,
-          byteSize: 4,
-          structure: {},
-        },
-        {
-          type: MemberType.Bool,
-          bitSize: 1,
-          bitOffset: 32,
-          byteSize: 1,
-          flags: MemberFlag.IsSelector,
-          structure: {},
-        },
-      ];
+      structure.instance = { 
+        members: [
+          {
+            type: MemberType.Int,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
+            structure: {},
+          },
+          {
+            type: MemberType.Bool,
+            bitSize: 1,
+            bitOffset: 32,
+            byteSize: 1,
+            flags: MemberFlag.IsSelector,
+            structure: {},
+          },
+        ],
+      };
       const env = new Env();
       const descriptors = {};
       const constructor = env.defineOptional(structure, descriptors);
@@ -42,8 +43,12 @@ describe('Structure: optional', function() {
       const structure = {
         type: StructureType.Optional,
         byteSize: 8,
-        instance: {},
-        static: { members: [] },
+        signature: 0n,
+        instance: {
+          members: [
+          ],
+        },
+        static: {},
       };
       structure.instance.members = [
         {
@@ -73,29 +78,35 @@ describe('Structure: optional', function() {
   describe('defineStructure', function() {
     it('should define a structure for storing an optional value', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
         byteSize: 18,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Float,
-        bitOffset: 0,
-        bitSize: 128,
-        byteSize: 16,
-        structure: {
-          type: StructureType.Primitive,
-        }
-      });
-      env.attachMember(structure, {
-        type: MemberType.Bool,
-        bitOffset: 128,
-        bitSize: 1,
-        byteSize: 1,
-        flags: MemberFlag.IsSelector,
-        structure: {},
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Float,
+              bitOffset: 0,
+              bitSize: 128,
+              byteSize: 16,
+              structure: {
+                type: StructureType.Primitive,
+              }
+            },
+            {
+              type: MemberType.Bool,
+              bitOffset: 128,
+              bitSize: 1,
+              byteSize: 1,
+              flags: MemberFlag.IsSelector,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const object = Hello(new ArrayBuffer(18));
@@ -109,29 +120,33 @@ describe('Structure: optional', function() {
     })
     it('should cast the same buffer to the same object', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
         byteSize: 18,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Float,
-        bitOffset: 0,
-        bitSize: 128,
-        byteSize: 16,
-        structure: {
-          type: StructureType.Primitive,
-        }
-      });
-      env.attachMember(structure, {
-        type: MemberType.Bool,
-        bitOffset: 128,
-        bitSize: 1,
-        byteSize: 1,
-        flags: MemberFlag.IsSelector,
-        structure: {},
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Float,
+              bitOffset: 0,
+              bitSize: 128,
+              byteSize: 16,
+              structure: {}
+            },
+            {
+              type: MemberType.Bool,
+              bitOffset: 128,
+              bitSize: 1,
+              byteSize: 1,
+              flags: MemberFlag.IsSelector,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const buffer = new ArrayBuffer(18);
@@ -141,58 +156,66 @@ describe('Structure: optional', function() {
     })
     it('should throw when no initializer is provided', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
         byteSize: 18,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Float,
-        bitOffset: 0,
-        bitSize: 128,
-        byteSize: 16,
-        structure: {
-          type: StructureType.Primitive,
-        }
-      });
-      env.attachMember(structure, {
-        type: MemberType.Bool,
-        bitOffset: 128,
-        bitSize: 1,
-        byteSize: 1,
-        flags: MemberFlag.IsSelector,
-        structure: {},
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Float,
+              bitOffset: 0,
+              bitSize: 128,
+              byteSize: 16,
+              structure: {}
+            },
+            {
+              type: MemberType.Bool,
+              bitOffset: 128,
+              bitSize: 1,
+              byteSize: 1,
+              flags: MemberFlag.IsSelector,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Hello } = structure;
       expect(() => new Hello).to.throw(TypeError);
     })
     it('should initialize an optional value based on argument given', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
         byteSize: 18,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Float,
-        bitOffset: 0,
-        bitSize: 128,
-        byteSize: 16,
-        structure: {
-          type: StructureType.Primitive,
-        }
-      });
-      env.attachMember(structure, {
-        type: MemberType.Bool,
-        bitOffset: 128,
-        bitSize: 1,
-        byteSize: 1,
-        flags: MemberFlag.IsSelector,
-        structure: {},
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Float,
+              bitOffset: 0,
+              bitSize: 128,
+              byteSize: 16,
+              structure: {}
+            },
+            {
+              type: MemberType.Bool,
+              bitOffset: 128,
+              bitSize: 1,
+              byteSize: 1,
+              flags: MemberFlag.IsSelector,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const object = new Hello(null);
@@ -202,29 +225,33 @@ describe('Structure: optional', function() {
     })
     it('should initialize an optional value from object of same type', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
         byteSize: 18,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Float,
-        bitOffset: 0,
-        bitSize: 128,
-        byteSize: 16,
-        structure: {
-          type: StructureType.Primitive,
-        }
-      });
-      env.attachMember(structure, {
-        type: MemberType.Bool,
-        bitOffset: 128,
-        bitSize: 1,
-        byteSize: 1,
-        flags: MemberFlag.IsSelector,
-        structure: {},
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Float,
+              bitOffset: 0,
+              bitSize: 128,
+              byteSize: 16,
+              structure: {}
+            },
+            {
+              type: MemberType.Bool,
+              bitOffset: 128,
+              bitSize: 1,
+              byteSize: 1,
+              flags: MemberFlag.IsSelector,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const object = new Hello({});
@@ -234,52 +261,64 @@ describe('Structure: optional', function() {
     })
     it('should define a structure for storing an optional struct', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         name: 'Animal',
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        name: 'dog',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        name: 'cat',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'dog',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              name: 'cat',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
       const { constructor: Animal } = structStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | StructureFlag.HasSlot | StructureFlag.HasObject | OptionalFlag.HasSelector,
         byteSize: 18,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitOffset: 0,
-        bitSize: 64,
-        byteSize: 8,
-        slot: 0,
-        structure: structStructure,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Bool,
-        bitOffset: 128,
-        bitSize: 1,
-        byteSize: 1,
-        flags: MemberFlag.IsSelector,
-        structure: {},
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitOffset: 0,
+              bitSize: 64,
+              byteSize: 8,
+              slot: 0,
+              structure: structStructure,
+            },
+            {
+              type: MemberType.Bool,
+              bitOffset: 128,
+              bitSize: 1,
+              byteSize: 1,
+              flags: MemberFlag.IsSelector,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const object = Hello(new ArrayBuffer(18));
@@ -294,42 +333,55 @@ describe('Structure: optional', function() {
     })
     it('should do nothing when undefined is assigned to it', function() {
       const env = new Env();
-      const floatStructure = env.beginStructure({
+      const floatStructure = {
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 16,
-      });
-      env.attachMember(floatStructure, {
-        type: MemberType.Float,
-        bitSize: 128,
-        bitOffset: 0,
-        byteSize: 16,
-        structure: floatStructure,
-      });
-      env.defineStructure(floatStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Float,
+              bitSize: 128,
+              bitOffset: 0,
+              byteSize: 16,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(floatStructure);
       env.finishStructure(floatStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
         byteSize: 18,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Float,
-        bitOffset: 0,
-        bitSize: 128,
-        byteSize: 16,
-        structure: floatStructure,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Bool,
-        flags: MemberFlag.IsSelector,
-        bitOffset: 128,
-        bitSize: 1,
-        byteSize: 1,
-        structure: {},
-      });
-      const Hello = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Float,
+              bitOffset: 0,
+              bitSize: 128,
+              byteSize: 16,
+              structure: floatStructure,
+            },
+            {
+              type: MemberType.Bool,
+              flags: MemberFlag.IsSelector,
+              bitOffset: 128,
+              bitSize: 1,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Hello = structure.constructor;
       const object = new Hello(3.14);
       expect(object.$).to.equal(3.14);
       object.$ = undefined;
@@ -337,42 +389,55 @@ describe('Structure: optional', function() {
     })
     it('should work correctly when value is void', function() {
       const env = new Env();
-      const voidStructure = env.beginStructure({
+      const voidStructure = {
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 0,
-      });
-      env.attachMember(voidStructure, {
-        type: MemberType.Void,
-        bitSize: 0,
-        bitOffset: 0,
-        byteSize: 0,
-        structure: voidStructure,
-      });
-      env.defineStructure(voidStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Void,
+              bitSize: 0,
+              bitOffset: 0,
+              byteSize: 0,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(voidStructure);
       env.finishStructure(voidStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Optional,
         flags: StructureFlag.HasValue | OptionalFlag.HasSelector,
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Void,
-        bitOffset: 0,
-        bitSize: 0,
-        byteSize: 0,
-        structure: voidStructure,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Bool,
-        flags: MemberFlag.IsSelector,
-        bitOffset: 0,
-        bitSize: 1,
-        byteSize: 1,
-        structure: {},
-      });
-      const Hello = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Void,
+              bitOffset: 0,
+              bitSize: 0,
+              byteSize: 0,
+              structure: voidStructure,
+            },
+            {
+              type: MemberType.Bool,
+              flags: MemberFlag.IsSelector,
+              bitOffset: 0,
+              bitSize: 1,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Hello = structure.constructor;
       const object = Hello(new ArrayBuffer(1));
       expect(object.$).to.equal(null);
       object.$ = undefined;
@@ -384,60 +449,80 @@ describe('Structure: optional', function() {
     })
     it('should define a structure for storing an optional pointer', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         name: 'Int32',
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const ptrStructure = env.beginStructure({
+      const Int32 = intStructure.constructor;
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Int32',
         byteSize: 8,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitOffset: 0,
-        bitSize: 64,
-        byteSize: 8,
-        slot: 0,
-        structure: ptrStructure,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Bool,
-        flags: MemberFlag.IsSelector,
-        bitOffset: 0,
-        bitSize: 1,
-        byteSize: 8,
-        structure: {},
-      });
-      const Hello = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitOffset: 0,
+              bitSize: 64,
+              byteSize: 8,
+              slot: 0,
+              structure: ptrStructure,
+            },
+            {
+              type: MemberType.Bool,
+              flags: MemberFlag.IsSelector,
+              bitOffset: 0,
+              bitSize: 1,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Hello = structure.constructor;
       const object = Hello(new ArrayBuffer(8));
       expect(object.$).to.equal(null);
       object.$ = new Int32(0);
@@ -446,74 +531,99 @@ describe('Structure: optional', function() {
     })
     it('should define a structure for storing an optional slice', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]Uint8',
         byteSize: 1,
-      })
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure)
       env.finishStructure(sliceStructure);
-      const ptrStructure = env.beginStructure({
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]Uint8',
         byteSize: 16,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: 128,
-        bitOffset: 0,
-        byteSize: 16,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 128,
+              bitOffset: 0,
+              byteSize: 16,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
         byteSize: 16,
-      });
-      env.attachMember(structure, {
-        name: 'value',
-        type: MemberType.Object,
-        bitOffset: 0,
-        bitSize: 128,
-        byteSize: 16,
-        slot: 0,
-        structure: ptrStructure,
-      });
-      env.attachMember(structure, {
-        name: 'present',
-        type: MemberType.Bool,
-        bitOffset: 0,
-        bitSize: 1,
-        byteSize: 8,
-        structure: {},
-      });
-      const Hello = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'value',
+              type: MemberType.Object,
+              bitOffset: 0,
+              bitSize: 128,
+              byteSize: 16,
+              slot: 0,
+              structure: ptrStructure,
+            },
+            {
+              name: 'present',
+              type: MemberType.Bool,
+              bitOffset: 0,
+              bitSize: 1,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Hello = structure.constructor;
       const encoder = new TextEncoder();
       const array = encoder.encode('This is a test');
       const object = new Hello(array);
@@ -526,73 +636,98 @@ describe('Structure: optional', function() {
     })
     it('should copy pointers where initialized from an optional of the same type', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
-      })
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure)
       env.finishStructure(sliceStructure);
-      const ptrStructure = env.beginStructure({
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.HasLength | PointerFlag.IsMultiple,
         name: '[]u8',
         byteSize: 16,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: 128,
-        bitOffset: 0,
-        byteSize: 16,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 128,
+              bitOffset: 0,
+              byteSize: 16,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
         byteSize: 16,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitOffset: 0,
-        bitSize: 128,
-        byteSize: 16,
-        slot: 0,
-        structure: ptrStructure,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Bool,
-        flags: MemberFlag.IsSelector,
-        bitOffset: 0,
-        bitSize: 1,
-        byteSize: 8,
-        structure: {},
-      });
-      const Hello = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitOffset: 0,
+              bitSize: 128,
+              byteSize: 16,
+              slot: 0,
+              structure: ptrStructure,
+            },
+            {
+              type: MemberType.Bool,
+              flags: MemberFlag.IsSelector,
+              bitOffset: 0,
+              bitSize: 1,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Hello = structure.constructor;
       const encoder = new TextEncoder();
       const array = encoder.encode('This is a test');
       const object = new Hello(array);
@@ -602,85 +737,110 @@ describe('Structure: optional', function() {
     })
     it('should release pointers in struct when it is set to null', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         name: 'Int32',
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const ptrStructure = env.beginStructure({
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureType.IsSingle,
         name: '*Int32',
         byteSize: 8,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         byteSize: 8 * 2,
-      });
-      env.attachMember(structStructure, {
-        name: 'dog',
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: ptrStructure,
-      });
-      env.attachMember(structStructure, {
-        name: 'cat',
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 64,
-        byteSize: 8,
-        slot: 1,
-        structure: ptrStructure,
-      })
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'dog',
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: ptrStructure,
+            },
+            {
+              name: 'cat',
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 64,
+              byteSize: 8,
+              slot: 1,
+              structure: ptrStructure,
+            }
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
         byteSize: structStructure.byteSize + 32,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitOffset: 0,
-        bitSize: structStructure.byteSize * 8,
-        byteSize: structStructure.byteSize,
-        slot: 0,
-        structure: structStructure,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Bool,
-        flags: MemberFlag.IsSelector,
-        bitOffset: structStructure.byteSize * 8,
-        bitSize: 1,
-        byteSize: 8,
-        structure: {},
-      });
-      const Hello = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitOffset: 0,
+              bitSize: structStructure.byteSize * 8,
+              byteSize: structStructure.byteSize,
+              slot: 0,
+              structure: structStructure,
+            },
+            {
+              type: MemberType.Bool,
+              flags: MemberFlag.IsSelector,
+              bitOffset: structStructure.byteSize * 8,
+              bitSize: 1,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Hello = structure.constructor;
       const object = new Hello({ cat: 123 });
       const ptr = object.$.cat;
       expect(ptr[SLOTS][0]).to.not.be.undefined;
@@ -692,87 +852,110 @@ describe('Structure: optional', function() {
     })
     it('should release pointers in struct when it is set to null externally', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         name: 'Int32',
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const { constructor: Int32 } = intStructure;
-      const ptrStructure = env.beginStructure({
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureType.IsSingle,
         name: '*Int32',
         byteSize: 8,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const { constructor: Int32Ptr } = ptrStructure;
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         byteSize: 8 * 2,
-      });
-      env.attachMember(structStructure, {
-        name: 'dog',
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: ptrStructure,
-      });
-      env.attachMember(structStructure, {
-        name: 'cat',
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 64,
-        byteSize: 8,
-        slot: 1,
-        structure: ptrStructure,
-      })
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'dog',
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: ptrStructure,
+            },
+            {
+              name: 'cat',
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 64,
+              byteSize: 8,
+              slot: 1,
+              structure: ptrStructure,
+            }          
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
         byteSize: structStructure.byteSize + 4,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitOffset: 0,
-        bitSize: structStructure.byteSize * 8,
-        byteSize: structStructure.byteSize,
-        slot: 0,
-        structure: structStructure,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Bool,
-        flags: MemberType.IsSelector,
-        bitOffset: structStructure.byteSize * 8,
-        bitSize: 1,
-        byteSize: 1,
-        structure: {},
-      });
-      const Hello = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitOffset: 0,
+              bitSize: structStructure.byteSize * 8,
+              byteSize: structStructure.byteSize,
+              slot: 0,
+              structure: structStructure,
+            },
+            {
+              type: MemberType.Bool,
+              flags: MemberType.IsSelector,
+              bitOffset: structStructure.byteSize * 8,
+              bitSize: 1,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Hello = structure.constructor;
       const object = new Hello({ cat: 123 });
       const ptr = object.$.cat;
       expect(ptr[SLOTS][0]).to.not.be.undefined;
@@ -782,74 +965,100 @@ describe('Structure: optional', function() {
     })
     it('should release pointers in array when it is set to null', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         name: 'Int32',
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const ptrStructure = env.beginStructure({
+      const Int32 = intStructure.constructor;
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Int32',
         byteSize: 8,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const arrayStructure = env.beginStructure({
+      const arrayStructure = {
         type: StructureType.Array,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         length: 4,
         byteSize: 8 * 4,
-      });
-      env.attachMember(arrayStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: ptrStructure,
-      });
-      env.defineStructure(arrayStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: ptrStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(arrayStructure);
       env.finishStructure(arrayStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasValue | OptionalFlag.HasSelector,
         byteSize: arrayStructure.byteSize + 32,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitOffset: 0,
-        bitSize: arrayStructure.byteSize * 8,
-        byteSize: arrayStructure.byteSize,
-        slot: 0,
-        structure: arrayStructure,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Bool,
-        flags: MemberFlag.IsSelector,
-        bitOffset: arrayStructure.byteSize * 8,
-        bitSize: 1,
-        byteSize: 8,
-        structure: {},
-      });
-      const Hello = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitOffset: 0,
+              bitSize: arrayStructure.byteSize * 8,
+              byteSize: arrayStructure.byteSize,
+              slot: 0,
+              structure: arrayStructure,
+            },
+            {
+              type: MemberType.Bool,
+              flags: MemberFlag.IsSelector,
+              bitOffset: arrayStructure.byteSize * 8,
+              bitSize: 1,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Hello = structure.constructor;
       const object = new Hello([ new Int32(1234), new Int32(4567), new Int32(7890), new Int32(12345) ]);
       const array = object.$;
       for (let i = 0; i < 4; i++) {

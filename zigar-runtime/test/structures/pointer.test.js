@@ -1,13 +1,13 @@
 import { expect } from 'chai';
 import {
-    MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType,
+  MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { InvalidSliceLength } from '../../src/errors.js';
 import '../../src/mixins.js';
 import {
-    ADDRESS, ENVIRONMENT, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, POINTER, TARGET,
-    UPDATE, VISIT, ZIG,
+  ADDRESS, ENVIRONMENT, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MEMORY, POINTER, TARGET,
+  UPDATE, VISIT, ZIG,
 } from '../../src/symbols.js';
 import { defineValue, usize } from '../../src/utils.js';
 import { addressByteSize, addressSize, getUsize, setUsize } from '../test-utils.js';
@@ -20,18 +20,20 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         byteSize: 8,
-        instance: {},
-        static: { members: [] },
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: {},
+            }
+          ],
+        },
+        static: {},
       };
-      structure.instance.members = [
-        {
-          type: MemberType.Int,
-          bitSize: 64,
-          bitOffset: 0,
-          byteSize: 8,
-          structure: {},
-        }
-      ];
       const env = new Env();
       const descriptors = {
         delete: defineValue(() => {}),
@@ -43,18 +45,20 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         byteSize: 8,
-        instance: {},
-        static: { members: [] },
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: {},
+            }
+          ],
+        },
+        static: {},
       };
-      structure.instance.members = [
-        {
-          type: MemberType.Int,
-          bitSize: 64,
-          bitOffset: 0,
-          byteSize: 8,
-          structure: {},
-        }
-      ];
       const env = new Env();
       const descriptors = {
         delete: defineValue(() => {}),
@@ -70,18 +74,20 @@ describe('Structure: pointer', function() {
       const structure = {
         type: StructureType.Pointer,
         byteSize: 8,
-        instance: {},
-        static: { members: [] },
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: {},
+            }
+          ],
+        },
+        static: {},
       };
-      structure.instance.members = [
-        {
-          type: MemberType.Int,
-          bitSize: 64,
-          bitOffset: 0,
-          byteSize: 8,
-          structure: {},
-        }
-      ];
       const env = new Env();
       const descriptors = {};
       env.finalizePointer(structure, descriptors);
@@ -90,35 +96,49 @@ describe('Structure: pointer', function() {
   describe('defineStructure', function() {
     it('should define a pointer for pointing to integers', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const structure = env.beginStructure({
+      const Int32 = intStructure.constructor;
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Int32Ptr = structure.constructor;
       expect(Int32Ptr.child).to.equal(Int32);
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
@@ -131,34 +151,47 @@ describe('Structure: pointer', function() {
     })
     it('should cast the same buffer to the same object', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Int32Ptr = structure.constructor;
       const buffer = new ArrayBuffer(8);
       const object1 = Int32Ptr.call(ENVIRONMENT, buffer);
       const object2 = Int32Ptr.call(ENVIRONMENT, buffer);
@@ -166,35 +199,49 @@ describe('Structure: pointer', function() {
     })
     it('should copy target when casting from writable to read-only', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const structure = env.beginStructure({
+      const Int32 = intStructure.constructor;
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Int32Ptr = structure.constructor;
       const object1 = new Int32Ptr(new Int32(1234));
       expect(object1['*']).to.equal(1234);
       const object2 = Int32Ptr(object1, { writable: false });
@@ -202,69 +249,93 @@ describe('Structure: pointer', function() {
     })
     it('should throw when no initializer is provided', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Int32Ptr } = structure;
       expect(() => new Int32Ptr).to.throw(TypeError);
     })
     it('should throw when a null pointer is dereferenced', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Int32Ptr } = structure;
       expect(Int32Ptr.child).to.equal(Int32);
@@ -274,48 +345,67 @@ describe('Structure: pointer', function() {
     })
     it('should throw when element of array of null pointers is dereferenced', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const ptrStructure = env.beginStructure({
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
+      ptrStructure.constructor;
       env.finishStructure(ptrStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[2]*Int32',
         byteSize: 16,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: ptrStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: ptrStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Int32PtrArray } = structure;
       const ptrArray = new Int32PtrArray(undefined);
@@ -329,26 +419,38 @@ describe('Structure: pointer', function() {
         flags: StructureFlag.HasValue,
         signature: 0xaaaan,
         byteSize: 4,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructureA,
+            },
+          ],
+        },
+        static: {},
       });
       const intStructureB = envB.beginStructure({
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         signature: 0xaaaan,
         byteSize: 4,
-      });
-      envA.attachMember(intStructureA, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructureA,
-      });
-      envB.attachMember(intStructureB, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructureB,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructureB,
+            },
+          ],
+        },
+        static: {},
       });
       const Int32A = envA.defineStructure(intStructureA);
       const Int32B = envB.defineStructure(intStructureB);
@@ -358,27 +460,39 @@ describe('Structure: pointer', function() {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: intStructureA,
+            },
+          ],
+        },
+        static: {},
       });
       const structureB = envB.beginStructure({
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
-      });
-      envA.attachMember(structureA, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: intStructureA,
-      });
-      envB.attachMember(structureB, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: intStructureB,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: intStructureB,
+            },
+          ],
+        },
+        static: {},
       });
       const Int32PtrA = envA.defineStructure(structureA);
       const Int32PtrB = envB.defineStructure(structureB);
@@ -395,80 +509,109 @@ describe('Structure: pointer', function() {
     })
     it('should define a pointer for pointing to functions', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
         flags: StructureFlag.HasValue,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const argStructure = env.beginStructure({
+      const argStructure = {
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
         length: 2,
-      });
-      env.attachMember(argStructure, {
-        name: 'retval',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(argStructure, {
-        name: '0',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(argStructure, {
-        name: '1',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 64,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(argStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '0',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '1',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 64,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(argStructure);
       env.finishStructure(argStructure);
-      const fnStructure = env.beginStructure({
+      const fnStructure = {
         type: StructureType.Function,
         byteSize: 0,
-      });
-      env.attachMember(fnStructure, {
-        type: MemberType.Object,
-        structure: argStructure,
-      });
-      const thunk = { [MEMORY]: zig(0x1004) };
-      env.attachTemplate(fnStructure, thunk, false);
-      const jsThunkController = { [MEMORY]: zig(0x2004) };
-      env.attachTemplate(fnStructure, jsThunkController, true);
-      const Fn = env.defineStructure(fnStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              structure: argStructure,
+            },
+          ],
+          template: { 
+            [MEMORY]: zig(0x1004),
+          },
+        },
+        static: {
+          template: {
+            [MEMORY]: zig(0x2004),
+          },
+        },
+      };
+      env.beginStructure(fnStructure);
       env.finishStructure(fnStructure);
-      const structure = env.beginStructure({
+      const Fn = fnStructure.constructor;
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: fnStructure,
-      });
-      const FnPtr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: fnStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const FnPtr = structure.constructor;
       env.createJsThunk = function(...args) {
         return usize(0x100);
       };
@@ -484,43 +627,55 @@ describe('Structure: pointer', function() {
     })
     it('should define a pointer for pointing to a structure', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cat',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              name: 'dog',
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
       const { constructor: Hello } = structStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: structStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const target = new Hello({ cat: 123, dog: 456 });
@@ -536,43 +691,55 @@ describe('Structure: pointer', function() {
     })
     it('should copy values over when pointer is dereferenced prior to assignment', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cat',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              name: 'dog',
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
       const { constructor: Hello } = structStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: structStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const object1 = new Hello({ cat: 123, dog: 456 });
@@ -584,43 +751,55 @@ describe('Structure: pointer', function() {
     })
     it('should point to new object when no dereferencing occurred prior to assignment', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cat',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              name: 'dog',
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
       const { constructor: Hello } = structStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: structStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const object1 = new Hello({ cat: 123, dog: 456 });
@@ -632,43 +811,55 @@ describe('Structure: pointer', function() {
     })
     it('should iterate through properties of target', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cat',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              name: 'dog',
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
       const { constructor: Hello } = structStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: structStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const pointer = new HelloPtr(new Hello({ cat: 123, dog: 456 }));
@@ -681,43 +872,55 @@ describe('Structure: pointer', function() {
     })
     it('should prevent modification of target when pointer is const', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cat',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              name: 'dog',
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
       const { constructor: Hello } = structStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
         byteSize: 4,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        slot: 0,
-        structure: structStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              slot: 0,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const object = new Hello({ cat: 123, dog: 456 });
@@ -733,42 +936,54 @@ describe('Structure: pointer', function() {
     })
     it('should handle const pointer correct when there is no target', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cat',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              name: 'dog',
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst | PointerFlag.IsNullable,
         byteSize: 4,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        slot: 0,
-        structure: structStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              slot: 0,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const pointer = new HelloPtr(null);
@@ -776,58 +991,76 @@ describe('Structure: pointer', function() {
     })
     it('should throw when read-only object is assigned to non-const pointer', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cat',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              name: 'dog',
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 4,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        slot: 0,
-        structure: structStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              slot: 0,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
-      const constStructure = env.beginStructure({
+      const constStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
         byteSize: 4,
-      });
-      env.attachMember(constStructure, {
-        type: MemberType.Object,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        slot: 0,
-        structure: structStructure,
-      });
-      env.defineStructure(constStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              slot: 0,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(constStructure);
       env.finishStructure(constStructure);
       const { constructor: HelloConstPtr } = constStructure;
       const constPointer = new HelloConstPtr({ cat: 123, dog: 456 });
@@ -842,60 +1075,78 @@ describe('Structure: pointer', function() {
     })
     it('should automatically dereference pointers a single-level only', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         name: 'Hello',
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cat',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              name: 'dog',
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
       const { constructor: Hello } = structStructure;
-      const ptrStructure = env.beginStructure({
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: structStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
       const { constructor: HelloPtr } = ptrStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: ptrStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: ptrStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: HelloPtrPtr } = structure;
       const target = new Hello({ cat: 123, dog: 456 });
@@ -907,35 +1158,48 @@ describe('Structure: pointer', function() {
     })
     it('should have no setter when pointer is const', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
+      structure.constructor;
       env.finishStructure(structure);
       const { constructor: Int32Ptr } = structure;
       const int32 = new Int32(1234);
@@ -945,35 +1209,47 @@ describe('Structure: pointer', function() {
     })
     it('should auto-vivificate target', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: intStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Int32Ptr } = structure;
       const ptr1 = new Int32Ptr(1234);
@@ -985,51 +1261,69 @@ describe('Structure: pointer', function() {
     })
     it('should throw when initializer is a zig object', function() {
       const env = new Env();
-      const boolStructure = env.beginStructure({
+      const boolStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         name: 'Bool',
         byteSize: 1,
-      });
-      env.attachMember(boolStructure, {
-        type: MemberType.Bool,
-        bitSize: 1,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: {},
-      });
-      env.defineStructure(boolStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Bool,
+              bitSize: 1,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(boolStructure);
       env.finishStructure(boolStructure);
       const { constructor: Bool } = boolStructure;
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Int32Ptr } = structure;
       // autovivification
@@ -1041,34 +1335,46 @@ describe('Structure: pointer', function() {
     })
     it('should throw when attempting to cast a buffer to a pointer type', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Int32Ptr } = structure;
       const buffer = new ArrayBuffer(8);
@@ -1076,58 +1382,76 @@ describe('Structure: pointer', function() {
     })
     it('should automatically create slice object', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cat',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              name: 'dog',
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[_]Hello',
         byteSize: 8,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: structStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
       const { constructor: HelloSlice } = sliceStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]Hello',
         byteSize: 16,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const pointer = new HelloPtr([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
@@ -1150,48 +1474,66 @@ describe('Structure: pointer', function() {
     })
     it('should automatically cast to slice from typed array', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]i32',
         byteSize: 16,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
       const { constructor: Int32Slice } = sliceStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: 16,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Int32Ptr } = structure;
       const ta = new Int32Array([ 1, 2, 3, 4 ]);
@@ -1203,47 +1545,65 @@ describe('Structure: pointer', function() {
     it('should throw when given a typed array is of the incorrect type', function() {
       const env = new Env();
       env.runtimeSafety = true;
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]i32',
         byteSize: 16,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: 16,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Int32SlicePtr } = structure;
       const ta = new Uint32Array([ 1, 2, 3, 4 ]);
@@ -1251,63 +1611,87 @@ describe('Structure: pointer', function() {
     })
     it('should automatically cast to slice from an array', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]i32',
         byteSize: 8,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
       const { constructor: Int32Slice } = sliceStructure;
-      const arrayStructure = env.beginStructure({
+      const arrayStructure = {
         type: StructureType.Array,
         name: '[8]i32',
         length: 8,
         byteSize: 8 * 4,
-      });
-      env.attachMember(arrayStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(arrayStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(arrayStructure);
       env.finishStructure(arrayStructure);
       const { constructor: Int32Array } = arrayStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: HelloPtr } = structure;
       const array = new Int32Array([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
@@ -1318,49 +1702,67 @@ describe('Structure: pointer', function() {
     })
     it('should allow casting of a buffer to a slice of u8', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finishStructure(uintStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
       const { constructor: U8Slice } = sliceStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]u8',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: U8SlicePtr } = structure;
       const buffer = new ArrayBuffer(8);
@@ -1377,51 +1779,70 @@ describe('Structure: pointer', function() {
     })
     it('should allow casting of a buffer to a slice of i8', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         name: 'i8',
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]i8',
         byteSize: 1,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Int,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
       const { constructor: I8Slice } = sliceStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i8',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const I8SlicePtr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const I8SlicePtr = structure.constructor;
       const buffer = new ArrayBuffer(8);
       const dv = new DataView(buffer);
       for (let i = 0; i < dv.byteLength; i++) {
@@ -1433,50 +1854,69 @@ describe('Structure: pointer', function() {
     })
     it('should correctly handle buffer from default allocator', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finishStructure(uintStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
       const { constructor: U8Slice } = sliceStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]u8',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const U8SlicePtr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const U8SlicePtr = structure.constructor;
       const buffer = new ArrayBuffer(16);
       const dv = env.obtainView(buffer, 0, 16);
       dv[ZIG] = { address: usize(0x1000), len: 16, js: true };
@@ -1487,73 +1927,98 @@ describe('Structure: pointer', function() {
     })
     it('should require explicit casting of a buffer to a slice of structs', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finishStructure(uintStructure);
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: uintStructure,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: uintStructure,
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cat',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: uintStructure,
+            },
+            {
+              type: MemberType.Uint,
+              name: 'dog',
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[_]Hello',
         byteSize: 8,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: structStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
       const { constructor: HelloSlice } = sliceStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]Hello',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const HelloPtr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const HelloPtr = structure.constructor;
       const buffer = new ArrayBuffer(8 * 3);
       const dv = new DataView(buffer);
       for (let i = 0, multiplier = 1; i < 3; i++, multiplier *= 10) {
@@ -1574,66 +2039,92 @@ describe('Structure: pointer', function() {
     })
     it('should automatically convert non-const pointer to const pointer', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finishStructure(uintStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Int,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
       const { constructor: U8Slice } = sliceStructure;
-      const constStructure = env.beginStructure({
+      const constStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength | PointerFlag.IsConst,
         name: '[]const u8',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(constStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const ConstU8SlicePtr = env.defineStructure(constStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(constStructure);
       env.finishStructure(constStructure);
-      const nonConstStructure = env.beginStructure({
+      const ConstU8SlicePtr = constStructure.constructor;
+      const nonConstStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]u8',
         byteSize: 8,
-      });
-      env.attachMember(nonConstStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const U8SlicePtr = env.defineStructure(nonConstStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(nonConstStructure);
       env.finishStructure(nonConstStructure);
+      const U8SlicePtr = nonConstStructure.constructor;
       const buffer = new ArrayBuffer(8);
       const dv = new DataView(buffer);
       for (let i = 0; i < dv.byteLength; i++) {
@@ -1653,65 +2144,91 @@ describe('Structure: pointer', function() {
     })
     it('should require explicit cast to convert const pointer to non-const pointer', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finishStructure(uintStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Int,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const constStructure = env.beginStructure({
+      const constStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength | PointerFlag.IsConst,
         name: '[]const u8',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(constStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const ConstU8SlicePtr = env.defineStructure(constStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(constStructure);
       env.finishStructure(constStructure);
-      const nonConstStructure = env.beginStructure({
+      const ConstU8SlicePtr = constStructure.constructor;
+      const nonConstStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]u8',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(nonConstStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const U8SlicePtr = env.defineStructure(nonConstStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(nonConstStructure);
       env.finishStructure(nonConstStructure);
+      const U8SlicePtr = nonConstStructure.constructor;
       const buffer = new ArrayBuffer(8);
       const dv = new DataView(buffer);
       for (let i = 0; i < dv.byteLength; i++) {
@@ -1725,51 +2242,70 @@ describe('Structure: pointer', function() {
     })
     it('should return read-only target when pointer is const', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         name: 'Target',
         byteSize: 4,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cow',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cow',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[_]Target',
         byteSize: 4,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Object,
-        bitSize: 32,
-        byteSize: 4,
-        structure: structStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 32,
+              byteSize: 4,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const constStructure = env.beginStructure({
+      const constStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength | PointerFlag.IsConst,
         name: '[]const Target',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(constStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const ConstSlicePtr = env.defineStructure(constStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(constStructure);
       env.finishStructure(constStructure);
+      const ConstSlicePtr = constStructure.constructor;
       const buffer = new ArrayBuffer(4 * 4);
       const constPointer = ConstSlicePtr(buffer);
       const element = constPointer[0];
@@ -1777,51 +2313,71 @@ describe('Structure: pointer', function() {
     })
     it('should not make pointers in read-only target const', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         name: 'Target',
         byteSize: 4,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cow',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cow',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const ptrStructure = env.beginStructure({
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: structStructure,
-      });
-      const TargetPtr = env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const constStructure = env.beginStructure({
+      const TargetPtr = ptrStructure.constructor;
+      const constStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
         byteSize: addressByteSize,
-      });
-      env.attachMember(constStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: ptrStructure,
-      });
-      const ConstPtrPtr = env.defineStructure(constStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: ptrStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(constStructure);
       env.finishStructure(constStructure);
+      const ConstPtrPtr = constStructure.constructor;
       const ptr = new TargetPtr({ cow: 1234 });
       const constPointer = new ConstPtrPtr(ptr);
       const ptrRO = constPointer['*'];
@@ -1836,44 +2392,57 @@ describe('Structure: pointer', function() {
     })
     it('should permit assignment and delete operations like regular objects', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cat',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              name: 'dog',
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
       const { constructor: Hello } = structStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: structStructure,
-      });
-      const HelloPtr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const HelloPtr = structure.constructor;
       const hello = new Hello({ cat: 1, dog: 2 });
       const helloPtr = new HelloPtr(hello);
       helloPtr.world = "World";
@@ -1887,72 +2456,98 @@ describe('Structure: pointer', function() {
     })
     it('should permit assignment to a const pointer', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
         byteSize: addressByteSize,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Int32Ptr = structure.constructor;
       const int32 = new Int32(1234);
       const intPtr = new Int32Ptr(int32);
       expect(() => intPtr.$ = int32).to.not.throw();
     })
     it('should throw when garbage collected object is assigned to a pointer in Zig memory', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
         byteSize: addressByteSize,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Int32Ptr = structure.constructor;
       env.allocateScratchMemory = function(len, align) {
         return usize(0x1000);
       };
@@ -1971,35 +2566,49 @@ describe('Structure: pointer', function() {
     })
     it('should throw when pointer to garbage collected object is assigned to a pointer in Zig memory', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const structure = env.beginStructure({
+      const Int32 = intStructure.constructor;
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
         byteSize: addressByteSize,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Int32Ptr = structure.constructor;
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 128 });
       } else {
@@ -2016,36 +2625,49 @@ describe('Structure: pointer', function() {
     })
     it('should immediately write to a pointer in Zig memory', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
         byteSize: addressByteSize,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Int32Ptr = structure.constructor;
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 128 });
       } else {
@@ -2062,57 +2684,76 @@ describe('Structure: pointer', function() {
     })
     it('should immediately write to slice pointer in Zig memory', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cat',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              name: 'dog',
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]Hello',
         byteSize: 8,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: structStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]Hello',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const HelloPtr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const HelloPtr = structure.constructor;
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 128 });
       } else {
@@ -2135,36 +2776,49 @@ describe('Structure: pointer', function() {
     })
     it('should yield underlying pointer object', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
       const { constructor: Int32 } = intStructure;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Int32Ptr = structure.constructor;
       expect(Int32Ptr.child).to.equal(Int32);
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
@@ -2173,35 +2827,49 @@ describe('Structure: pointer', function() {
     })
     it('should detect property of pointer object', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const structure = env.beginStructure({
+      const Int32 = intStructure.constructor;
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Int32Ptr = structure.constructor;
       expect(Int32Ptr.child).to.equal(Int32);
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
@@ -2216,35 +2884,49 @@ describe('Structure: pointer', function() {
           return new ArrayBuffer(len);
         };
       }
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitOffset: 0,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitOffset: 0,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const structure = env.beginStructure({
+      const Int32 = intStructure.constructor;
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Int32Ptr = structure.constructor;
       const pointer = new Int32Ptr(new Int32(4));
       setUsize.call(pointer[MEMORY], 0, usize(0x1000), true);
       pointer[UPDATE]();
@@ -2253,35 +2935,49 @@ describe('Structure: pointer', function() {
     })
     it('should write address of pointer into memory', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitOffset: 0,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitOffset: 0,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const structure = env.beginStructure({
+      const Int32 = intStructure.constructor;
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Int32Ptr = structure.constructor;
       const pointer = new Int32Ptr(new Int32(4));
       pointer[ADDRESS] = usize(0x1000);
       expect(getUsize.call(pointer[MEMORY], 0, true)).to.equal(usize(0x1000));
@@ -2295,47 +2991,65 @@ describe('Structure: pointer', function() {
           return new ArrayBuffer(len);
         };
       }
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]i32',
         byteSize: 4,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Int32SlicePtr } = structure;
       const ta = new Int32Array([ 1, 2, 3, 4 ]);
@@ -2348,48 +3062,66 @@ describe('Structure: pointer', function() {
     })
     it('should write address and length of slice pointer into memory', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitOffset: 0,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitOffset: 0,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]i32',
         byteSize: 4,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: 16,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Int32SlicePtr } = structure;
       const ta = new Int32Array([ 1, 2, 3, 4 ]);
@@ -2401,60 +3133,79 @@ describe('Structure: pointer', function() {
     })
     it('should get address and length of slice pointer with sentinel from memory', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         flags: SliceFlag.HasSentinel,
         name: '[_:0]Int32',
         byteSize: 4,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Int,
-        flags: MemberFlag.IsRequired | MemberFlag.IsSentinel,
-        bitOffset: 0,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachTemplate(sliceStructure, {
-        [MEMORY]: new DataView(new ArrayBuffer(4)),
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              type: MemberType.Int,
+              flags: MemberFlag.IsRequired | MemberFlag.IsSentinel,
+              bitOffset: 0,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+          template: {
+            [MEMORY]: new DataView(new ArrayBuffer(4)),
+          },
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple,
         name: '[*:0]Int32',
         byteSize: addressByteSize,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const Int32SlicePtr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Int32SlicePtr = structure.constructor;
       const ta = new Int32Array([ 1, 2, 3, 4, 0 ]);
       const pointer = new Int32SlicePtr(ta);
       pointer[ADDRESS] = usize(0x1000);
@@ -2483,64 +3234,89 @@ describe('Structure: pointer', function() {
     })
     it('should update target of zig-memory pointer on dereferencing', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]i32',
         byteSize: 4,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const ptrStructure = env.beginStructure({
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize * 2,
-        bitOffset: 0,
-        byteSize: addressByteSize * 2,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize * 2,
+              bitOffset: 0,
+              byteSize: addressByteSize * 2,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        name: 'ptr',
-        bitSize: addressSize * 2,
-        bitOffset: 0,
-        byteSize: addressByteSize * 2,
-        slot: 0,
-        structure: ptrStructure,
-      });
-      const Struct = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              name: 'ptr',
+              bitSize: addressSize * 2,
+              bitOffset: 0,
+              byteSize: addressByteSize * 2,
+              slot: 0,
+              structure: ptrStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Struct = structure.constructor;
       const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
       const bufferMap = new Map();
@@ -2602,58 +3378,77 @@ describe('Structure: pointer', function() {
     })
     it('should allow modification of the length of a slice pointer', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cat',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              name: 'dog',
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[_]Hello',
         byteSize: 8,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: structStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]Hello',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize * 2,
-        bitOffset: 0,
-        byteSize: addressByteSize * 2,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const HelloPtr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize * 2,
+              bitOffset: 0,
+              byteSize: addressByteSize * 2,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const HelloPtr = structure.constructor;
       const pointer = new HelloPtr([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
       const slice1 = pointer['*'];
       expect(slice1.length).to.equal(3);
@@ -2676,58 +3471,78 @@ describe('Structure: pointer', function() {
     })
     it('should allow modification of the length of a multi pointer', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cat',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              name: 'dog',
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[_]Hello',
         byteSize: 8,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: structStructure,
-      });
-      const HelloSlice = env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const structure = env.beginStructure({
+      const HelloSlice = sliceStructure.constructor;
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple,
         name: '[*]Hello',
         byteSize: addressByteSize,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const HelloPtr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const HelloPtr = structure.constructor;
       const buffer = new ArrayBuffer(8 * 5);
       const dv1 = new DataView(buffer);
       for (let i = 1, j = 0; i <= 5; i++, j += 8) {
@@ -2762,57 +3577,76 @@ describe('Structure: pointer', function() {
     })
     it('should allow modification of the length of a multi pointer in Zig memory', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cat',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              name: 'dog',
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]Hello',
         byteSize: 8,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: structStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple,
         name: '[*]Hello',
         byteSize: addressByteSize,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const HelloPtr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const HelloPtr = structure.constructor;
       const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
       const allocator = {
@@ -2847,63 +3681,90 @@ describe('Structure: pointer', function() {
     })
     it('should allow anyopaque pointer to point at anything', function() {
       const env = new Env();
-      const byteStructure = env.beginStructure({
+      const byteStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 1,
-      });
-      env.attachMember(byteStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: {},
-      });
-      const U8 = env.defineStructure(byteStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(byteStructure);
+      const U8 = byteStructure.constructor;
       env.finishStructure(byteStructure);
-      const ptrStructure = env.beginStructure({
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: byteStructure,
-      });
-      const PtrU8 = env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: byteStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const sliceStructure = env.beginStructure({
+      const PtrU8 = ptrStructure.constructor;
+      const sliceStructure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsOpaque,
         byteSize: 1,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: byteStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: byteStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const HelloPtr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const HelloPtr = structure.constructor;
       const pointer = new HelloPtr(undefined);
       expect(() => pointer.$ = new DataView(new ArrayBuffer(8))).to.not.throw();
       expect(() => pointer.$ = new ArrayBuffer(8)).to.not.throw();
@@ -2913,113 +3774,160 @@ describe('Structure: pointer', function() {
     })
     it('should allow C pointer to point at a single object', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const Int32 = intStructure.constructor;
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]i32',
         byteSize: 4,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const cpStructure = env.beginStructure({
+      const cpStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]i32',
         byteSize: addressByteSize,
-      });
-      env.attachMember(cpStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const Int32CPtr = env.defineStructure(cpStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(cpStructure);
       env.finishStructure(cpStructure);
+      const Int32CPtr = cpStructure.constructor;
       const int32 = new Int32(1234);
       const intCPointer = new Int32CPtr(int32);
       expect(intCPointer['*'][0]).to.equal(1234);
     })
     it('should allow C pointer to be initialized with a single pointer', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const spStructure = env.beginStructure({
+      const Int32 = intStructure.constructor;
+      const spStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
-      });
-      env.attachMember(spStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(spStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(spStructure);
       env.finishStructure(spStructure);
-      const sliceStructure = env.beginStructure({
+      const Int32Ptr = spStructure.constructor;
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_c]i32',
         byteSize: 4,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const cpStructure = env.beginStructure({
+      const cpStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]i32',
         byteSize: addressByteSize,
-      });
-      env.attachMember(cpStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const Int32CPtr = env.defineStructure(cpStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(cpStructure);
       env.finishStructure(cpStructure);
+      const Int32CPtr = cpStructure.constructor;
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
       const intCPointer = new Int32CPtr(intPointer);
@@ -3027,116 +3935,154 @@ describe('Structure: pointer', function() {
     })
     it('should allow C pointer to be initialized with an object', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cat',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              name: 'dog',
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[_]Hello',
         byteSize: 8,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: structStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]Hello',
         byteSize: addressByteSize,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const HelloPtr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const HelloPtr = structure.constructor;
       const pointer = new HelloPtr({ cat: 123, dog: 456 });
       expect(pointer[0].cat).to.equal(123);
       expect(pointer[0].dog).to.equal(456);
     })
     it('should allow C pointer to be initialized with an object containg a special prop', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 8,
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'cat',
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        type: MemberType.Uint,
-        name: 'dog',
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              name: 'cat',
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              type: MemberType.Uint,
+              name: 'dog',
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]Hello',
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         byteSize: 8,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: structStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]Hello',
         byteSize: addressByteSize,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const HelloPtr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const HelloPtr = structure.constructor;
       const dv = new DataView(new ArrayBuffer(8));
       dv.setUint32(0, 123, true);
       dv.setUint32(4, 456, true);
@@ -3146,64 +4092,91 @@ describe('Structure: pointer', function() {
     })
     it('should allow C pointer to be cast from a single pointer', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const spStructure = env.beginStructure({
+      const Int32 = intStructure.constructor;
+      const spStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
-      });
-      env.attachMember(spStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(spStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(spStructure);
       env.finishStructure(spStructure);
-      const sliceStructure = env.beginStructure({
+      const Int32Ptr = spStructure.constructor;
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]i32',
         byteSize: 4,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const cpStructure = env.beginStructure({
+      const cpStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]i32',
         byteSize: addressByteSize,
-      });
-      env.attachMember(cpStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const Int32CPtr = env.defineStructure(cpStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(cpStructure);
       env.finishStructure(cpStructure);
+      const Int32CPtr = cpStructure.constructor;
       const int32 = new Int32(1234);
       const intPointer = new Int32Ptr(int32);
       const intCPointer = Int32CPtr(intPointer);
@@ -3212,65 +4185,91 @@ describe('Structure: pointer', function() {
     })
     it('should allow C pointer to be initialized with a slice pointer', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]i32',
         byteSize: 4,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const spStructure = env.beginStructure({
+      const spStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(spStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const Int32SPtr = env.defineStructure(spStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(spStructure);
       env.finishStructure(spStructure);
-      const cpStructure = env.beginStructure({
+      const Int32SPtr = spStructure.constructor;
+      const cpStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]i32',
         byteSize: addressByteSize,
-      });
-      env.attachMember(cpStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const Int32CPtr = env.defineStructure(cpStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(cpStructure);
       env.finishStructure(cpStructure);
+      const Int32CPtr = cpStructure.constructor;
       const intSPointer = new Int32SPtr([ 1, 2, 3, 4 ]);
       const intCPointer = new Int32CPtr(intSPointer);
       expect(intCPointer['*']).to.equal(intSPointer['*']);
@@ -3280,65 +4279,91 @@ describe('Structure: pointer', function() {
     })
     it('should allow C pointer to be cast from with a slice pointer', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]i32',
         byteSize: 4,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const spStructure = env.beginStructure({
+      const spStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: 16,
-      });
-      env.attachMember(spStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const Int32SPtr = env.defineStructure(spStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(spStructure);
       env.finishStructure(spStructure);
-      const cpStructure = env.beginStructure({
+      const Int32SPtr = spStructure.constructor;
+      const cpStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]i32',
         byteSize: addressByteSize,
-      });
-      env.attachMember(cpStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const Int32CPtr = env.defineStructure(cpStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(cpStructure);
       env.finishStructure(cpStructure);
+      const Int32CPtr = cpStructure.constructor;
       const intSPointer = new Int32SPtr([ 1, 2, 3, 4 ]);
       const intCPointer = Int32CPtr(intSPointer);
       expect(intCPointer['*']).to.equal(intSPointer['*']);
@@ -3348,65 +4373,91 @@ describe('Structure: pointer', function() {
     })
     it('should allow C pointer to accept an array', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]i32',
         byteSize: 4,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const spStructure = env.beginStructure({
+      const spStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(spStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const Int32SPtr = env.defineStructure(spStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(spStructure);
       env.finishStructure(spStructure);
-      const cpStructure = env.beginStructure({
+      const Int32SPtr = spStructure.constructor;
+      const cpStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]i32',
         byteSize: addressByteSize,
-      });
-      env.attachMember(cpStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const Int32CPtr = env.defineStructure(cpStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(cpStructure);
       env.finishStructure(cpStructure);
+      const Int32CPtr = cpStructure.constructor;
       const intSPointer = new Int32SPtr([ 1, 2, 3, 4 ]);
       const intCPointer = Int32CPtr(intSPointer);
       expect(intCPointer['*']).to.equal(intSPointer['*']);
@@ -3416,49 +4467,68 @@ describe('Structure: pointer', function() {
     })
     it('should allow C pointer to be set to null', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]i32',
         byteSize: 4,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const cpStructure = env.beginStructure({
+      const cpStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]i32',
         byteSize: addressByteSize,
-      });
-      env.attachMember(cpStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const Int32CPtr = env.defineStructure(cpStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(cpStructure);
       env.finishStructure(cpStructure);
+      const Int32CPtr = cpStructure.constructor;
       const intCPointer = new Int32CPtr(null);
       expect(intCPointer['*']).to.be.null;
       expect(intCPointer.length).to.equal(0);
@@ -3467,89 +4537,120 @@ describe('Structure: pointer', function() {
     })
     it('should allow pointer with no sentinel to be initialized with a pointer that uses one', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]i32',
         byteSize: 4,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const sliceStructureWS = env.beginStructure({
+      const sliceStructureWS = {
         type: StructureType.Slice,
         name: '[_:0]i32',
         byteSize: 4,
-      });
-      env.attachMember(sliceStructureWS, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(sliceStructureWS, {
-        type: MemberType.Int,
-        bitOffset: 0,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const template = {
-        [MEMORY]: new DataView(new ArrayBuffer(4)),
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              type: MemberType.Int,
+              bitOffset: 0,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+          template: {
+           [MEMORY]: new DataView(new ArrayBuffer(4)),
+          },
+        },
+        static: {},
       };
-      env.attachTemplate(sliceStructureWS, template);
-      env.defineStructure(sliceStructureWS);
+      env.beginStructure(sliceStructureWS);
       env.finishStructure(sliceStructureWS);
-      const spStructure = env.beginStructure({
+      const spStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(spStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const Int32SPtr = env.defineStructure(spStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(spStructure);
       env.finishStructure(spStructure);
-      const muStructure = env.beginStructure({
+      const Int32SPtr = spStructure.constructor;
+      const muStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple,
         name: '[*:0]i32',
         byteSize: addressByteSize,
-      });
-      env.attachMember(muStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructureWS,
-      });
-      const Int32MPtr = env.defineStructure(muStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructureWS,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(muStructure);
       env.finishStructure(muStructure);
+      const Int32MPtr = muStructure.constructor;
       const intMPointer = new Int32MPtr([ 1, 2, 3, 4 ]);
       const intSPointer = new Int32SPtr(intMPointer);
       expect(intSPointer.length).to.equal(4);
@@ -3557,51 +4658,72 @@ describe('Structure: pointer', function() {
     })
     it('should immediately update a pointer in Zig memory', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const ptrStructure = env.beginStructure({
+      const Int32 = intStructure.constructor;
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const structure = env.beginStructure({
+      const Int32Ptr = ptrStructure.constructor;
+      const structure = {
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        byteSize: addressByteSize
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        name: 'ptr',
-        bitSize: addressSize,
-        bitOffset: 0,
         byteSize: addressByteSize,
-        slot: 0,
-        structure: ptrStructure,
-      });
-      const Struct = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              name: 'ptr',
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: ptrStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Struct = structure.constructor;
       const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
       const allocator = {
@@ -3638,65 +4760,90 @@ describe('Structure: pointer', function() {
     })
     it('should immediately update a slice pointer in Zig memory', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]i32',
         byteSize: 4,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const spStructure = env.beginStructure({
+      const spStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(spStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize * 2,
-        bitOffset: 0,
-        byteSize: addressByteSize * 2,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const Int32SPtr = env.defineStructure(spStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize * 2,
+              bitOffset: 0,
+              byteSize: addressByteSize * 2,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(spStructure);
       env.finishStructure(spStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        byteSize: addressByteSize * 2
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        name: 'ptr',
-        bitSize: addressSize * 2,
-        bitOffset: 0,
         byteSize: addressByteSize * 2,
-        slot: 0,
-        structure: spStructure,
-      });
-      const Struct = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              name: 'ptr',
+              bitSize: addressSize * 2,
+              bitOffset: 0,
+              byteSize: addressByteSize * 2,
+              slot: 0,
+              structure: spStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Struct = structure.constructor;
       const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
       const allocator = {
@@ -3737,65 +4884,90 @@ describe('Structure: pointer', function() {
     })
     it('should immediately update a C pointer in Zig memory', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]i32',
         byteSize: 4,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const cpStructure = env.beginStructure({
+      const cpStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsMultiple | PointerFlag.IsNullable,
         name: '[*c]i32',
         byteSize: addressByteSize,
-      });
-      env.attachMember(cpStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      const Int32CPtr = env.defineStructure(cpStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(cpStructure);
       env.finishStructure(cpStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Struct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-        byteSize: addressByteSize * 2
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        name: 'ptr',
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: cpStructure,
-      });
-      const Struct = env.defineStructure(structure);
+        byteSize: addressByteSize * 2,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              name: 'ptr',
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: cpStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Struct = structure.constructor;
       const viewMap = new Map(), addressMap = new Map();
       let nextAddress = usize(0x1000);
       const allocator = {
@@ -3832,35 +5004,49 @@ describe('Structure: pointer', function() {
     })
     it('should throw when given a previously freed object', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const structure = env.beginStructure({
+      const Int32 = intStructure.constructor;
+      const structure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      const Int32Ptr = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Int32Ptr = structure.constructor;
       const dv = new DataView(new ArrayBuffer(4));
       dv[ZIG] = { address: usize(-1), len: 4 };
       const int32 = Int32(dv);
@@ -3870,35 +5056,49 @@ describe('Structure: pointer', function() {
   })
   it('should should when visitor specified is unrecognized or invalid', function() {
     const env = new Env();
-    const intStructure = env.beginStructure({
+    const intStructure = {
       type: StructureType.Primitive,
       flags: StructureFlag.HasValue,
       byteSize: 4,
-    });
-    env.attachMember(intStructure, {
-      type: MemberType.Uint,
-      bitSize: 32,
-      bitOffset: 0,
-      byteSize: 4,
-      structure: intStructure,
-    });
-    const Int32 = env.defineStructure(intStructure);
+      signature: 0n,
+      instance: {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
+            structure: intStructure,
+          },
+        ],
+      },
+      static: {},
+    };
+    env.beginStructure(intStructure);
     env.finishStructure(intStructure);
-    const structure = env.beginStructure({
+    const Int32 = intStructure.constructor;
+    const structure = {
       type: StructureType.Pointer,
       flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
       byteSize: 8,
-    });
-    env.attachMember(structure, {
-      type: MemberType.Object,
-      bitSize: 64,
-      bitOffset: 0,
-      byteSize: 8,
-      slot: 0,
-      structure: intStructure,
-    });
-    const Int32Ptr = env.defineStructure(structure);
+      signature: 0n,
+      instance: {
+        members: [
+          {
+            type: MemberType.Object,
+            bitSize: 64,
+            bitOffset: 0,
+            byteSize: 8,
+            slot: 0,
+            structure: intStructure,
+          },
+        ],
+      },
+      static: {},
+    };
+    env.beginStructure(structure);
     env.finishStructure(structure);
+    const Int32Ptr = structure.constructor;
     expect(Int32Ptr.child).to.equal(Int32);
     const int32 = new Int32(1234);
     const intPointer = new Int32Ptr(int32);

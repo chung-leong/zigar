@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import {
-    ArgStructFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructurePurpose,
-    StructureType, VisitorFlag
+  ArgStructFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructurePurpose,
+  StructureType, VisitorFlag
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { ArgumentCountMismatch, UndefinedArgument } from '../../src/errors.js';
@@ -18,8 +18,12 @@ describe('Structure: arg-struct', function() {
       const structure = {
         type: StructureType.ArgStruct,
         byteSize: 8,
-        instance: {},
-        static: { members: [] },
+        signature: 0n,
+        instance: {
+          members: [
+          ],
+        },
+        static: {},
       };
       structure.instance.members = [
         {
@@ -48,8 +52,12 @@ describe('Structure: arg-struct', function() {
       const structure = {
         type: StructureType.ArgStruct,
         byteSize: 8,
-        instance: {},
-        static: { members: [] },
+        signature: 0n,
+        instance: {
+          members: [
+          ],
+        },
+        static: {},
       };
       structure.instance.members = [
         {
@@ -81,52 +89,65 @@ describe('Structure: arg-struct', function() {
   describe('defineStructure', function() {
     it('should define an argument struct', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
         length: 2,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '0',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '1',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 64,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const ArgStruct = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '0',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '1',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 64,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const ArgStruct = structure.constructor;
       expect(ArgStruct).to.be.a('function');
       const object = new ArgStruct([ 123, 456 ]);
       object.retval = 777;
@@ -136,137 +157,176 @@ describe('Structure: arg-struct', function() {
     })
     it('should define an argument struct that contains a struct', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const childStructure = env.beginStructure({
+      const childStructure = {
         type: StructureType.Struct,
         byteSize: 4 * 2,
-      });
-      env.attachMember(childStructure, {
-        name: 'dog',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(childStructure, {
-        name: 'cat',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(childStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'dog',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: 'cat',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(childStructure);
       env.finishStructure(childStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         byteSize: childStructure.byteSize + 4 + 4,
         length: 2,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '0',
-        type: MemberType.Object,
-        bitSize: childStructure.byteSize * 8,
-        bitOffset: 32,
-        byteSize: childStructure.byteSize,
-        slot: 0,
-        structure: childStructure,
-      });
-      env.attachMember(structure, {
-        name: '1',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32 + childStructure.byteSize * 8,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const ArgStruct = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '0',
+              type: MemberType.Object,
+              bitSize: childStructure.byteSize * 8,
+              bitOffset: 32,
+              byteSize: childStructure.byteSize,
+              slot: 0,
+              structure: childStructure,
+            },
+            {
+              name: '1',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 32 + childStructure.byteSize * 8,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const ArgStruct = structure.constructor;
       const object = new ArgStruct([ { dog: 1234, cat: 4567 }, 789 ]);
       object[0].valueOf();
       expect(object[0].valueOf()).to.eql({ dog: 1234, cat: 4567 });
     })
     it('should define an argument struct with pointer as return value', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      })
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure)
       env.finishStructure(intStructure);
-      const ptrStructure = env.beginStructure({
+      const Int32 = intStructure.constructor;
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 8,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         byteSize: ptrStructure.byteSize * 2,
         length: 1,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Object,
-        bitSize: ptrStructure.byteSize * 8,
-        bitOffset: 0,
-        byteSize: ptrStructure.byteSize,
-        slot: 0,
-        structure: ptrStructure,
-      });
-      env.attachMember(structure, {
-        name: '0',
-        type: MemberType.Object,
-        bitSize: ptrStructure.byteSize * 8,
-        bitOffset: ptrStructure.byteSize * 8,
-        byteSize: ptrStructure.byteSize,
-        slot: 1,
-        structure: ptrStructure,
-      });
-      const ArgStruct = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Object,
+              bitSize: ptrStructure.byteSize * 8,
+              bitOffset: 0,
+              byteSize: ptrStructure.byteSize,
+              slot: 0,
+              structure: ptrStructure,
+            },
+            {
+              name: '0',
+              type: MemberType.Object,
+              bitSize: ptrStructure.byteSize * 8,
+              bitOffset: ptrStructure.byteSize * 8,
+              byteSize: ptrStructure.byteSize,
+              slot: 1,
+              structure: ptrStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const ArgStruct = structure.constructor;
       const int = new Int32(1234);
       const object = new ArgStruct([ int ]);
       const pointers = [], mutabilities = [];
@@ -282,49 +342,62 @@ describe('Structure: arg-struct', function() {
     })
     it('should throw when initialized with the wrong number of arguments', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      })
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure)
       env.finishStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
         length: 2,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '0',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '1',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 64,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const ArgStruct = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '0',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '1',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 64,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      const ArgStruct = structure.constructor;
+      env.beginStructure(structure);
       env.finishStructure(structure);
       expect(() => new ArgStruct([ 123 ])).to.throw(ArgumentCountMismatch);
       expect(() => new ArgStruct([ 123, 456, 789 ])).to.throw(ArgumentCountMismatch);
@@ -332,311 +405,407 @@ describe('Structure: arg-struct', function() {
     })
     it('should throw when initialized with undefined arguments', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      })
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure)
       env.finishStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
         length: 2,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '0',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '1',
-        type: MemberType.Void,
-        bitSize: 0,
-        bitOffset: 64,
-        byteSize: 0,
-        structure: {},
-      });
-      const ArgStruct = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '0',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '1',
+              type: MemberType.Void,
+              bitSize: 0,
+              bitOffset: 64,
+              byteSize: 0,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const ArgStruct = structure.constructor;
       expect(() => new ArgStruct([ undefined, undefined ])).to.throw(UndefinedArgument);
       expect(() => new ArgStruct([ 123, undefined ])).to.not.throw();
     })
     it('should throw with argument name in error message when an invalid argument is encountered', function() {
       const env = new Env();
       env.runtimeSafety = true;
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      })
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure)
       env.finishStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
         length: 2,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '0',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '1',
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 64,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const ArgStruct = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '0',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '1',
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 64,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const ArgStruct = structure.constructor;
       expect(() => new ArgStruct([ 123, -456 ])).to.throw(TypeError)
         .with.property('message').that.contains('args[1]');
     })
     it('should define an argument struct for async call', function() {
       const env = new Env();
-      const voidStructure = env.beginStructure({
+      const voidStructure = {
         type: StructureType.Primitive,
         name: 'void',
         byteSize: 0,
         flags: StructureFlag.HasValue,
-      });
-      env.attachMember(voidStructure, {
-        type: MemberType.Void,
-        bitSize: 0,
-        bitOffset: 0,
-        byteSize: 0,
-        structure: voidStructure,
-      });
-      env.defineStructure(voidStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Void,
+              bitSize: 0,
+              bitOffset: 0,
+              byteSize: 0,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(voidStructure);
       env.finishStructure(voidStructure);
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const resolveArgStructure = env.beginStructure({
+      const resolveArgStructure = {
         type: StructureType.ArgStruct,
         byteSize: 4,
         length: 1,
-      });
-      env.attachMember(resolveArgStructure, {
-        name: 'retval',
-        type: MemberType.Void,
-        bitSize: 0,
-        bitOffset: 0,
-        byteSize: 0,
-        structure: voidStructure,
-      });
-      env.attachMember(resolveArgStructure, {
-        name: '0',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(resolveArgStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Void,
+              bitSize: 0,
+              bitOffset: 0,
+              byteSize: 0,
+              structure: voidStructure,
+            },
+            {
+              name: '0',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(resolveArgStructure);
       env.finishStructure(resolveArgStructure);
-      const resolveStructure = env.beginStructure({
+      const resolveStructure = {
         type: StructureType.Function,
         byteSize: 0,
-      });
-      env.attachMember(resolveStructure, {
-        type: MemberType.Object,
-        structure: resolveArgStructure,
-      });
-      const thunk = { [MEMORY]: zig(0x1004) };
-      env.attachTemplate(resolveStructure, thunk, false);
-      const jsThunkController = { [MEMORY]: zig(0x2004) };
-      env.attachTemplate(resolveStructure, jsThunkController, true);
-      env.defineStructure(resolveStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              structure: resolveArgStructure,
+            },
+          ],
+          template: { 
+            [MEMORY]: zig(0x1004), 
+          },
+        },
+      };
+      env.beginStructure(resolveStructure);
+      resolveStructure.static = {
+        template: { 
+          [MEMORY]: zig(0x2004),
+        },
+      };
       env.finishStructure(resolveStructure);
-      const resolvePtrStructure = env.beginStructure({
+      const resolvePtrStructure = {
         type: StructureType.Pointer,
         byteSize: addressByteSize,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | PointerFlag.IsSingle | PointerFlag.IsConst,
-      });
-      env.attachMember(resolvePtrStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        structure: resolveStructure,
-        slot: 0,
-      });
-      env.defineStructure(resolvePtrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: resolveStructure,
+              slot: 0,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(resolvePtrStructure);
       env.finishStructure(resolvePtrStructure);
-      const byteStructure = env.beginStructure({
+      const byteStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 1,
-      });
-      env.attachMember(byteStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: {},
-      });
-      env.defineStructure(byteStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(byteStructure);
       env.finishStructure(byteStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsOpaque,
         byteSize: 1,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: byteStructure,
-      });
-      env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: byteStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const ptrStructure = env.beginStructure({
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: sliceStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: sliceStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const optionalPtrStructure = env.beginStructure({
+      const optionalPtrStructure = {
         type: StructureType.Optional,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         byteSize: addressByteSize,
-      });
-      env.attachMember(optionalPtrStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: ptrStructure,
-      });
-      env.attachMember(optionalPtrStructure, {
-        type: MemberType.Bool,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        structure: {},
-      });
-      env.defineStructure(optionalPtrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: ptrStructure,
+            },
+            {
+              type: MemberType.Bool,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(optionalPtrStructure);
       env.finishStructure(optionalPtrStructure);
-      const promiseStructure = env.beginStructure({
+      const promiseStructure = {
         type: StructureType.Struct,
         purpose: StructurePurpose.Promise,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject,
         name: 'Promise',
         byteSize: addressByteSize * 2,
-      });
-      env.attachMember(promiseStructure, {
-        name: 'ptr',
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        structure: optionalPtrStructure,
-        slot: 0,
-      });
-      env.attachMember(promiseStructure, {
-        name: 'callback',
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: addressSize,
-        byteSize: addressByteSize,
-        structure: resolvePtrStructure,
-        slot: 1,
-      });
-      env.defineStructure(promiseStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'ptr',
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              structure: optionalPtrStructure,
+              slot: 0,
+            },
+            {
+              name: 'callback',
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: addressSize,
+              byteSize: addressByteSize,
+              structure: resolvePtrStructure,
+              slot: 1,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(promiseStructure);
       env.finishStructure(promiseStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasSlot | StructureFlag.HasObject | ArgStructFlag.HasOptions | ArgStructFlag.IsAsync,
         byteSize: (addressByteSize * 2) + 4,
         length: 1,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Void,
-        bitSize: 0,
-        bitOffset: 0,
-        byteSize: 0,
-        structure: voidStructure,
-      });
-      env.attachMember(structure, {
-        name: '0',
-        type: MemberType.Object,
-        bitSize: addressSize * 2,
-        bitOffset: 0,
-        byteSize: addressByteSize * 2,
-        structure: promiseStructure,
-        slot: 0,
-      });
-      env.attachMember(structure, {
-        name: '1',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: addressSize * 2,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const ArgStruct = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Void,
+              bitSize: 0,
+              bitOffset: 0,
+              byteSize: 0,
+              structure: voidStructure,
+            },
+            {
+              name: '0',
+              type: MemberType.Object,
+              bitSize: addressSize * 2,
+              bitOffset: 0,
+              byteSize: addressByteSize * 2,
+              structure: promiseStructure,
+              slot: 0,
+            },
+            {
+              name: '1',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: addressSize * 2,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const ArgStruct = structure.constructor;
       expect(ArgStruct).to.be.a('function');
       env.createJsThunk = function(controllerAddress, fnId) {
         return usize(0xf000);

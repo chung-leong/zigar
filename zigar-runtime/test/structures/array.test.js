@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { ArrayFlag, MemberFlag, MemberType, PointerFlag, StructureFlag, StructureType, VisitorFlag } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ENTRIES, FINALIZE, INITIALIZE, MEMORY, SLOTS, VISIT } from '../../src/symbols.js';
+import { ENTRIES, FINALIZE, INITIALIZE, MEMORY, VISIT } from '../../src/symbols.js';
 import { encodeBase64 } from '../../src/utils.js';
 
 const Env = defineEnvironment();
@@ -13,17 +13,18 @@ describe('Structure: array', function() {
       const structure = {
         type: StructureType.Array,
         byteSize: 8,
-        instance: {},
-        static: { members: [] },
-      };
-      structure.instance.members = [
-        {
-          type: MemberType.Int,
-          bitSize: 32,
-          byteSize: 4,
-          structure: {},
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
         },
-      ];
+        static: {},
+      };
       const env = new Env();
       const descriptors = {};
       const constructor = env.defineArray(structure, descriptors);
@@ -33,17 +34,18 @@ describe('Structure: array', function() {
       const structure = {
         type: StructureType.Array,
         byteSize: 8,
-        instance: {},
-        static: { members: [] },
-      };
-      structure.instance.members = [
-        {
-          type: MemberType.Int,
-          bitSize: 32,
-          byteSize: 4,
-          structure: {},
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
         },
-      ];
+        static: {},
+      };
       const env = new Env();
       const descriptors = {};
       env.defineArray(structure, descriptors);
@@ -62,22 +64,18 @@ describe('Structure: array', function() {
         type: StructureType.Array,
         name: 'Array',
         byteSize: 2,
-        instance: {},
-        static: {
-          members: [],
-          template: {
-            [SLOTS]: {},
-          }
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+              structure,
+            },
+          ],
         },
+        static: {},
       };
-      structure.instance.members = [
-        {
-          type: MemberType.Uint,
-          bitSize: 16,
-          byteSize: 2,
-          structure,
-        },
-      ];
       const env = new Env();
       const descriptors = {};
       env.finalizeArray(structure, descriptors);
@@ -87,33 +85,47 @@ describe('Structure: array', function() {
   describe('defineStructure', function() {
     it('should define structure for holding an int array', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Uint32 = env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const Uint32 = intStructure.constructor;
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsTypedArray,
         length: 8,
         byteSize: 4 * 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       expect(Array).to.be.a('function');
       expect(Array.child).to.equal(Uint32);
       const object = new Array(new Uint32Array(8));
@@ -127,32 +139,45 @@ describe('Structure: array', function() {
     })
     it('should cast the same buffer to the same object', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 8,
         byteSize: 4 * 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const buffer = new ArrayBuffer(4 * 8);
       const object1 = Array(buffer);
       const object2 = Array(buffer);
@@ -160,32 +185,45 @@ describe('Structure: array', function() {
     })
     it('should allow array access using bracket operator', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 8,
         byteSize: 4 * 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const object = new Array(new Uint32Array(8));
       object[0] = 321;
       expect(object[0]).to.equal(321);
@@ -209,64 +247,90 @@ describe('Structure: array', function() {
     })
     it('should return available keys', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 8,
         byteSize: 4 * 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: { constructor: function() {}, typedArray: Uint32Array }
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: { constructor: function() {}, typedArray: Uint32Array }
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const object = new Array(new Uint32Array(8));
       expect(Object.getOwnPropertyNames(object)).to.eql([ '0', '1', '2', '3', '4', '5', '6', '7', 'length' ]);
       expect(Object.keys(object)).to.eql([ '0', '1', '2', '3', '4', '5', '6', '7' ]);
     })
     it('should have getter and setter that are bound to the object', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 8,
         byteSize: 4 * 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: { constructor: function() {}, typedArray: Uint32Array }
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: { constructor: function() {}, typedArray: Uint32Array }
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const object = new Array(new Uint32Array(8));
       const { get, set, length } = object;
       for (let i = 0; i < length; i++) {
@@ -278,32 +342,45 @@ describe('Structure: array', function() {
     })
     it('should define array that is iterable', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 8,
         byteSize: 4 * 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const dv = new DataView(new ArrayBuffer(4 * 8));
       dv.setUint32(0, 1234, true);
       dv.setUint32(16, 4567, true);
@@ -316,32 +393,45 @@ describe('Structure: array', function() {
     })
     it('should permit retrieval of indices during iteration', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 8,
         byteSize: 4 * 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const dv = new DataView(new ArrayBuffer(4 * 8));
       dv.setUint32(0, 1234, true);
       dv.setUint32(16, 4567, true);
@@ -357,62 +447,88 @@ describe('Structure: array', function() {
     })
     it('should throw when no initializer is provided', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 8,
         byteSize: 4 * 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       expect(() => new Array).to.throw(TypeError);
     })
     it('should accept an array as initializer', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 8,
         byteSize: 4 * 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const object = new Array([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
       for (let i = 0; i < 8; i++) {
         expect(object.get(i)).to.equal(i + 1);
@@ -420,64 +536,90 @@ describe('Structure: array', function() {
     })
     it('should accept an object of the same type as initializer', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 8,
         byteSize: 4 * 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const object = new Array([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
       const object2 = new Array(object);
       expect([ ...object2 ]).to.eql([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
     })
     it('should accept an array of bigints as initializer', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 4,
         byteSize: 8 * 4,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 64,
-        byteSize: 8,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 64,
+              byteSize: 8,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const object = new Array([ 100n, 200n, 300n, 400n ]);
       for (let i = 0; i < 4; i++) {
         expect(object.get(i)).to.equal(BigInt(i + 1) * 100n);
@@ -485,33 +627,46 @@ describe('Structure: array', function() {
     })
     it('should accept string as initializer for [#]u8', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         length: 11,
         byteSize: 11,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const str = 'Hello world';
       const array = new Array(str);
       expect(array).to.have.lengthOf(str.length);
@@ -521,33 +676,46 @@ describe('Structure: array', function() {
     })
     it('should accept string as initializer for [#]u16', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         length: 11,
         byteSize: 22,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        byteSize: 2,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const str = 'Hello world';
       const array = new Array(str);
       expect(array).to.have.lengthOf(str.length);
@@ -557,35 +725,48 @@ describe('Structure: array', function() {
     })
     it('should allow reinitialization of [#]u16 using a string', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         name: 'u16',
         byteSize: 2,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        byteSize: 2,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const str = 'Hello world';
       const array = new Array(str);
       const str2 = 'World war z';
@@ -596,35 +777,48 @@ describe('Structure: array', function() {
     })
     it('should allow assignment of string to [#]u16', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         name: 'u16',
         byteSize: 2,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        byteSize: 2,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const array = new Array(undefined);
       const str = 'Hello world';
       array.string = str;
@@ -634,133 +828,185 @@ describe('Structure: array', function() {
     })
     it('should throw when the string is too short', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         name: 'u16',
         byteSize: 2,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        byteSize: 2,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const array = new Array(undefined);
       const str = 'Hello';
       expect(() => array.string = str).to.throw(TypeError);
     })
     it('should throw when given an object with unrecognized properties', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         name: 'u16',
         byteSize: 2,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        byteSize: 2,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       expect(() => new Array({ dogmeat: 5 })).to.throw();
     })
     it('should throw when given something unacceptable', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         name: 'u16',
         byteSize: 2,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        byteSize: 2,
-        structure: intStructure
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+              structure: intStructure
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       expect(() => new Array(() => {})).to.throw();
     })
     it('should accept base64 data as initializer', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         length: 11,
         byteSize: 11,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const str = 'Hello world';
       const base64 = encodeBase64(Buffer.from(str));
       const array = new Array({ base64 });
@@ -771,33 +1017,46 @@ describe('Structure: array', function() {
     })
     it('should allow assignment of base64 data', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         length: 11,
         byteSize: 11,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const array = new Array('Hello world');
       const str = 'World war z';
       array.base64 = encodeBase64(Buffer.from(str));
@@ -807,33 +1066,46 @@ describe('Structure: array', function() {
     })
     it('should accept typed array as initializer', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsTypedArray,
         length: 8,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const array = new Array({ typedArray });
       expect(array).to.have.lengthOf(typedArray.length);
@@ -846,33 +1118,46 @@ describe('Structure: array', function() {
 
     it('should allow assignment of typed array', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsTypedArray,
         length: 8,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const array = new Array(new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]));
       const typedArray = new Uint8Array([ 0, 10, 20, 30, 40, 50, 60, 70 ]);
       array.typedArray = typedArray;
@@ -882,65 +1167,91 @@ describe('Structure: array', function() {
     })
     it('should throw when given typed array of a different type', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsTypedArray,
         length: 8,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const array = new Array(new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]));
       const typedArray = new Int16Array([ 0, 10, 20, 30, 40, 50, 60, 70 ]);
       expect(() => array.typedArray = typedArray).to.throw(TypeError);
     })
     it('should accept data view as initializer', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 8,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const dataView = new DataView(typedArray.buffer);
       const array = new Array({ dataView });
@@ -953,32 +1264,45 @@ describe('Structure: array', function() {
     })
     it('should allow assignment of data view', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 8,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const array = new Array(undefined);
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       array.dataView = new DataView(typedArray.buffer);
@@ -990,32 +1314,45 @@ describe('Structure: array', function() {
     })
     it('should accept typed array of a different type as initializer', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 8,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const typedArray = new Float32Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const array = new Array(typedArray);
       expect(array).to.have.lengthOf(typedArray.length);
@@ -1025,32 +1362,45 @@ describe('Structure: array', function() {
     })
     it('should accept a generator as initializer', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 8,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Array = structure.constructor;
       const f = function*() {
         let i = 0;
         while (i < 8) {
@@ -1066,134 +1416,185 @@ describe('Structure: array', function() {
     })
     it('should throw when initializer is of the wrong length', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 8,
         byteSize: 4 * 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Hello = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Hello = structure.constructor;
       expect(() => new Hello([ 1, 2, 3, 4, 5, 6, 7, 8, 9 ])).to.throw();
     })
     it('should throw when given an object of the incorrect type', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 8,
         byteSize: 4 * 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       expect(() => new Hello({})).to.throw();
     })
     it('should correctly initialize an array of struct pointers', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 4 * 2,
-      });
-      env.attachMember(structStructure, {
-        name: 'dog',
-        type: MemberType.Int,
-        flags: MemberFlag.IsRequired,
-        byteSize: 4,
-        bitOffset: 0,
-        bitSize: 32,
-        structure: intStructure,
-      });
-      env.attachMember(structStructure, {
-        name: 'cat',
-        type: MemberType.Int,
-        flags: MemberFlag.IsRequired,
-        byteSize: 4,
-        bitOffset: 32,
-        bitSize: 32,
-        structure: intStructure,
-      });
-      const Hello = env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'dog',
+              type: MemberType.Int,
+              flags: MemberFlag.IsRequired,
+              byteSize: 4,
+              bitOffset: 0,
+              bitSize: 32,
+              structure: intStructure,
+            },
+            {
+              name: 'cat',
+              type: MemberType.Int,
+              flags: MemberFlag.IsRequired,
+              byteSize: 4,
+              bitOffset: 32,
+              bitSize: 32,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const ptrStructure = env.beginStructure({
+      const Hello = structStructure.constructor;
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        flags: MemberFlag.IsRequired,
-        byteSize: 8,
-        bitOffset: 0,
-        bitSize: 64,
-        slot: 0,
-        structure: structStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              flags: MemberFlag.IsRequired,
+              byteSize: 8,
+              bitOffset: 0,
+              bitSize: 64,
+              slot: 0,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasPointer,
         name: '[4]*Hello',
         length: 4,
         byteSize: 8 * 4,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: ptrStructure,
-      });
-      const HelloPtrArray = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: ptrStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const HelloPtrArray = structure.constructor;
       const object = new HelloPtrArray([
         new Hello({ dog: 1, cat: 2 }),
         new Hello({ dog: 3, cat: 4 }),
@@ -1205,58 +1606,77 @@ describe('Structure: array', function() {
     })
     it('should correctly cast a data view with byteOffset', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: 4 * 2,
-      });
-      env.attachMember(structStructure, {
-        name: 'dog',
-        type: MemberType.Int,
-        flags: MemberFlag.IsRequired,
-        byteSize: 4,
-        bitOffset: 0,
-        bitSize: 32,
-        structure: intStructure,
-      });
-      env.attachMember(structStructure, {
-        name: 'cat',
-        type: MemberType.Int,
-        flags: MemberFlag.IsRequired,
-        byteSize: 4,
-        bitOffset: 32,
-        bitSize: 32,
-        structure: intStructure,
-      });
-      env.defineStructure(structStructure)
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'dog',
+              type: MemberType.Int,
+              flags: MemberFlag.IsRequired,
+              byteSize: 4,
+              bitOffset: 0,
+              bitSize: 32,
+              structure: intStructure,
+            },
+            {
+              name: 'cat',
+              type: MemberType.Int,
+              flags: MemberFlag.IsRequired,
+              byteSize: 4,
+              bitOffset: 32,
+              bitSize: 32,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[4]Hello',
         length: 4,
         byteSize: 8 * 4,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: structStructure,
-      });
-      const HelloArray = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const HelloArray = structure.constructor;
       const buffer = new ArrayBuffer(64);
       const dv = new DataView(buffer, 32, 32);
       dv.setInt32(0, 1234, true);
@@ -1266,34 +1686,47 @@ describe('Structure: array', function() {
     })
     it('should allow reinitialization through the dollar property', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         name: 'u64',
         byteSize: 8,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         name: '[4]u64',
         length: 4,
         byteSize: 8 * 4,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 64,
-        byteSize: 8,
-        structure: intStructure
-      });
-      const Hello = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 64,
+              byteSize: 8,
+              structure: intStructure
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Hello = structure.constructor;
       const object = new Hello([ 100n, 200n, 300n, 400n ]);
       for (let i = 0; i < 4; i++) {
         expect(object.get(i)).to.equal(BigInt(i + 1) * 100n);
@@ -1305,49 +1738,68 @@ describe('Structure: array', function() {
     })
     it('should permit visitation of invalid pointers', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure)
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure)
-      const ptrStructure = env.beginStructure({
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[4]*i32',
         length: 4,
         byteSize: 8 * 4,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: ptrStructure,
-      });
-      const Int32PtrArray = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: ptrStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Int32PtrArray = structure.constructor;
       const dv = new DataView(new ArrayBuffer(structure.byteSize));
       const array = Int32PtrArray(dv);
       const pointers = [], errors = [];
@@ -1373,48 +1825,67 @@ describe('Structure: array', function() {
     })
     it('should correctly copy array holding pointers', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure)
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure)
-      const ptrStructure = env.beginStructure({
+      const Int32 = intStructure.constructor
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         length: 4,
         byteSize: 8 * 4,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: ptrStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: ptrStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Int32PtrArray } = structure;
       const array1 = new Int32PtrArray([ new Int32(1234), new Int32(4567), new Int32(7890), new Int32(12345) ]);
@@ -1426,49 +1897,68 @@ describe('Structure: array', function() {
     })
     it('should correctly copy array holding pointers', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure)
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure)
-      const ptrStructure = env.beginStructure({
+      const Int32 = intStructure.constructor
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: intStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '[4]*i32',
         length: 4,
         byteSize: 8 * 4,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: ptrStructure,
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: ptrStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Int32PtrArray } = structure;
       const array1 = new Int32PtrArray([ new Int32(1234), new Int32(4567), new Int32(7890), new Int32(12345) ]);
@@ -1480,79 +1970,112 @@ describe('Structure: array', function() {
     })
     it('should allow casting to array from a slice with same element type', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         name: 'i64',
         byteSize: 8,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        structure: intStructure,
-      });
-      const Int64 = env.defineStructure(intStructure)
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure)
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: 'Int64Slice',
         byteSize: 8,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Int,
-        bitSize: 64,
-        byteSize: 8,
-        structure: intStructure,
-      });
-      const Int64Slice = env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 64,
+              byteSize: 8,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
+      const Int64Slice = sliceStructure.constructor;
       env.finishStructure(sliceStructure);
-      const arrayStructure = env.beginStructure({
+      const arrayStructure = {
         type: StructureType.Array,
         name: 'Int64Array',
         length: 4,
         byteSize: 8 * 4,
-      });
-      env.attachMember(arrayStructure, {
-        type: MemberType.Int,
-        bitSize: 64,
-        byteSize: 8,
-        structure: intStructure,
-      });
-      const Int64Array = env.defineStructure(arrayStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 64,
+              byteSize: 8,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(arrayStructure);
       env.finishStructure(arrayStructure);
+      const Int64Array = arrayStructure.constructor;
       const slice = new Int64Slice([ 100n, 200n, 300n, 400n ]);
       const array = Int64Array(slice);
       expect(slice[MEMORY]).to.equal(array[MEMORY]);
     })
     it('should allow the assignment of setter and getter as well as other properties', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure)
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure)
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 8,
         byteSize: 4 * 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Hello = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Hello = structure.constructor;
       const object = new Hello([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
       let called;
       object.get = () => { called = 'get' };
@@ -1568,32 +2091,45 @@ describe('Structure: array', function() {
     })
     it('should allow the deletion of setter and getter as well as other properties', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure)
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure)
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         length: 8,
         byteSize: 4 * 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Hello = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Hello = structure.constructor;
       const object = new Hello([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
       delete object.get;
       expect(object.get).to.be.undefined;

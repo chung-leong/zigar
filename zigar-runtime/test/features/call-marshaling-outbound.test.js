@@ -1,15 +1,15 @@
 import { expect, use } from 'chai';
 import ChaiAsPromised from 'chai-as-promised';
 import {
-  ErrorSetFlag,
-  MemberType, PointerFlag, SliceFlag,
-  StructureFlag, StructurePurpose, StructureType
+    ErrorSetFlag,
+    MemberType, PointerFlag, SliceFlag,
+    StructureFlag, StructurePurpose, StructureType
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { Exit } from '../../src/errors.js';
 import '../../src/mixins.js';
 import {
-  ALIGN, ATTRIBUTES, COPY, FINALIZE, MEMORY, PROMISE, RETURN, SETTERS, SLOTS, VISIT, ZIG,
+    ALIGN, ATTRIBUTES, COPY, FINALIZE, MEMORY, PROMISE, RETURN, SETTERS, SLOTS, VISIT, ZIG,
 } from '../../src/symbols.js';
 import { defineProperties, defineProperty, usize } from '../../src/utils.js';
 import { addressByteSize, addressSize } from '../test-utils.js';
@@ -1143,7 +1143,7 @@ describe('Feature: call-marshaling-outbound', function() {
         static: {},
       };
       env.beginStructure(anyErrorStructure);
-      env.defineStructure(anyErrorStructure);
+      anyErrorStructure.constructor;
       const retvalStructure = {
         type: StructureType.ErrorUnion,
         byteSize: addressByteSize + 2,
@@ -1171,7 +1171,7 @@ describe('Feature: call-marshaling-outbound', function() {
         static: {},
       }
       env.beginStructure(retvalStructure);
-      env.defineStructure(retvalStructure);
+      retvalStructure.constructor;
       const u8Structure = {
         type: StructureType.Primitive,
         byteSize: 1,
@@ -1499,7 +1499,7 @@ describe('Feature: call-marshaling-outbound', function() {
         static: {},
       };
       env.beginStructure(retvalStructure);
-      env.defineStructure(retvalStructure);
+      retvalStructure.constructor;
       const u8Structure = {
         type: StructureType.Primitive,
         byteSize: 1,

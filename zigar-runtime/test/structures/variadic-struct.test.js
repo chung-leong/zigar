@@ -13,28 +13,30 @@ describe('Structure: variadic-struct', function() {
       const structure = {
         type: StructureType.VariadicStruct,
         byteSize: 8,
-        instance: {},
-        static: { members: [] },
         length: 1,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: "retval",
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              name: "0",
+              type: MemberType.Bool,
+              bitSize: 1,
+              bitOffset: 32,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
       };
-      structure.instance.members = [
-        {
-          name: "retval",
-          type: MemberType.Int,
-          bitSize: 32,
-          bitOffset: 0,
-          byteSize: 4,
-          structure: {},
-        },
-        {
-          name: "0",
-          type: MemberType.Bool,
-          bitSize: 1,
-          bitOffset: 32,
-          byteSize: 1,
-          structure: {},
-        },
-      ];
       const env = new Env();
       const descriptors = {};
       const constructor = env.defineVariadicStruct(structure, descriptors);
@@ -44,28 +46,30 @@ describe('Structure: variadic-struct', function() {
       const structure = {
         type: StructureType.VariadicStruct,
         byteSize: 8,
-        instance: {},
-        static: { members: [] },
         length: 1,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: "retval",
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+            {
+              name: "0",
+              type: MemberType.Bool,
+              bitSize: 1,
+              bitOffset: 32,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
       };
-      structure.instance.members = [
-        {
-          name: "retval",
-          type: MemberType.Int,
-          bitSize: 32,
-          bitOffset: 0,
-          byteSize: 4,
-          structure: {},
-        },
-        {
-          name: "0",
-          type: MemberType.Bool,
-          bitSize: 1,
-          bitOffset: 32,
-          byteSize: 1,
-          structure: {},
-        },
-      ];
       const env = new Env();
       const descriptors = {};
       env.defineVariadicStruct(structure, descriptors);
@@ -79,86 +83,114 @@ describe('Structure: variadic-struct', function() {
     it('should define an variadic argument struct', function() {
       const env = new Env();
       env.runtimeSafety = true;
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
         align: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const Int32 = env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const floatStructure = env.beginStructure({
+      const Int32 = intStructure.constructor;
+      const floatStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         name: 'f64',
         byteSize: 8,
         align: 8,
-      });
-      env.attachMember(floatStructure, {
-        type: MemberType.Float,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        structure: floatStructure,
-      });
-      const Float64 = env.defineStructure(floatStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Float,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: floatStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(floatStructure);
       env.finishStructure(floatStructure);
-      const structStructure = env.beginStructure({
+      const Float64 = floatStructure.constructor;
+      const structStructure = {
         type: StructureType.Struct,
         flags: StructFlag.IsExtern,
         name: 'Struct',
         byteSize: 8,
         align: 8,
-      });
-      env.attachMember(structStructure, {
-        name: 'number',
-        type: MemberType.Float,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        structure: floatStructure,
-      });
-      const Struct = env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'number',
+              type: MemberType.Float,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: floatStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const structure = env.beginStructure({
+      const Struct = structStructure.constructor;
+      const structure = {
         type: StructureType.VariadicStruct,
         byteSize: 4 * 3,
         align: 4,
         length: 2,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '0',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '1',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 64,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const VariadicStruct = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '0',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '1',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 64,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const VariadicStruct = structure.constructor;
       expect(VariadicStruct).to.be.a('function');
       const args1 = new VariadicStruct([ 123, 456 ], 'hello', 0);
       args1.retval = 777;
@@ -180,72 +212,91 @@ describe('Structure: variadic-struct', function() {
     })
     it('should define an variadic argument struct containing a pointer argument', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
         align: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const ptrStructure = env.beginStructure({
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 4,
         align: 4,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.VariadicStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         byteSize: 4 + 4 + 4,
         align: 4,
         length: 2,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-        slot: 0,
-      });
-      env.attachMember(structure, {
-        name: '0',
-        type: MemberType.Object,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: ptrStructure,
-        slot: 1,
-      });
-      env.attachMember(structure, {
-        name: '1',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 64,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const VariadicStruct = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+              slot: 0,
+            },
+            {
+              name: '0',
+              type: MemberType.Object,
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: ptrStructure,
+              slot: 1,
+            },
+            {
+              name: '1',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 64,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const VariadicStruct = structure.constructor;
       expect(VariadicStruct).to.be.a('function');
       const args1 = new VariadicStruct([ 88, -123 ], 'hello', 0);
       expect(args1[MEMORY].byteLength).to.equal(12);
@@ -262,72 +313,91 @@ describe('Structure: variadic-struct', function() {
     })
     it('should define an variadic argument struct containing a pointer argument and pointer retval', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
         align: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const ptrStructure = env.beginStructure({
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*i32',
         byteSize: 4,
         align: 4,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.VariadicStruct,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         byteSize: 4 + 4 + 4,
         align: 4,
         length: 2,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Object,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: ptrStructure,
-        slot: 0,
-      });
-      env.attachMember(structure, {
-        name: '0',
-        type: MemberType.Object,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: ptrStructure,
-        slot: 1,
-      });
-      env.attachMember(structure, {
-        name: '1',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 64,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const VariadicStruct = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Object,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: ptrStructure,
+              slot: 0,
+            },
+            {
+              name: '0',
+              type: MemberType.Object,
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: ptrStructure,
+              slot: 1,
+            },
+            {
+              name: '1',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 64,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const VariadicStruct = structure.constructor;
       expect(VariadicStruct).to.be.a('function');
       const args1 = new VariadicStruct([ 88, -123 ], 'hello', 0);
       expect(args1[MEMORY].byteLength).to.equal(12);
@@ -346,86 +416,111 @@ describe('Structure: variadic-struct', function() {
   it('should set retval when RETURN is called', function() {
     const env = new Env();
     env.runtimeSafety = true;
-    const intStructure = env.beginStructure({
+    const intStructure = {
       type: StructureType.Primitive,
       flags: StructureFlag.HasValue,
       byteSize: 4,
       align: 4,
-    });
-    env.attachMember(intStructure, {
-      type: MemberType.Int,
-      bitSize: 32,
-      bitOffset: 0,
-      byteSize: 4,
-      structure: intStructure,
-    });
-    const Int32 = env.defineStructure(intStructure);
+      signature: 0n,
+      instance: {
+        members: [
+          {
+            type: MemberType.Int,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
+            structure: {},
+          },
+        ],
+      },
+      static: {},
+    };
+    env.beginStructure(intStructure);
     env.finishStructure(intStructure);
-    const floatStructure = env.beginStructure({
+    const floatStructure = {
       type: StructureType.Primitive,
       flags: StructureFlag.HasValue,
       name: 'f64',
       byteSize: 8,
       align: 8,
-    });
-    env.attachMember(floatStructure, {
-      type: MemberType.Float,
-      bitSize: 64,
-      bitOffset: 0,
-      byteSize: 8,
-      structure: floatStructure,
-    });
-    const Float64 = env.defineStructure(floatStructure);
+      signature: 0n,
+      instance: {
+        members: [
+          {
+            type: MemberType.Float,
+            bitSize: 64,
+            bitOffset: 0,
+            byteSize: 8,
+            structure: {},
+          },
+        ],
+      },
+      static: {},
+    };
+    env.beginStructure(floatStructure);
     env.finishStructure(floatStructure);
-    const structStructure = env.beginStructure({
+    const structStructure = {
       type: StructureType.Struct,
       flags: StructFlag.IsExtern,
       name: 'Struct',
       byteSize: 8,
       align: 8,
-    });
-    env.attachMember(structStructure, {
-      name: 'number',
-      type: MemberType.Float,
-      bitSize: 64,
-      bitOffset: 0,
-      byteSize: 8,
-      structure: floatStructure,
-    });
-    const Struct = env.defineStructure(structStructure);
+      signature: 0n,
+      instance: {
+        members: [
+          {
+            name: 'number',
+            type: MemberType.Float,
+            bitSize: 64,
+            bitOffset: 0,
+            byteSize: 8,
+            structure: floatStructure,
+          },
+        ],
+      },
+      static: {},
+    };
+    env.beginStructure(structStructure);
     env.finishStructure(structStructure);
-    const structure = env.beginStructure({
+    const structure = {
       type: StructureType.VariadicStruct,
       byteSize: 4 * 3,
       align: 4,
       length: 2,
-    });
-    env.attachMember(structure, {
-      name: 'retval',
-      type: MemberType.Int,
-      bitSize: 32,
-      bitOffset: 0,
-      byteSize: 4,
-      structure: intStructure,
-    });
-    env.attachMember(structure, {
-      name: '0',
-      type: MemberType.Int,
-      bitSize: 32,
-      bitOffset: 32,
-      byteSize: 4,
-      structure: intStructure,
-    });
-    env.attachMember(structure, {
-      name: '1',
-      type: MemberType.Int,
-      bitSize: 32,
-      bitOffset: 64,
-      byteSize: 4,
-      structure: intStructure,
-    });
-    const VariadicStruct = env.defineStructure(structure);
+      signature: 0n,
+      instance: {
+        members: [
+          {
+            name: 'retval',
+            type: MemberType.Int,
+            bitSize: 32,
+            bitOffset: 0,
+            byteSize: 4,
+            structure: intStructure,
+          },
+          {
+            name: '0',
+            type: MemberType.Int,
+            bitSize: 32,
+            bitOffset: 32,
+            byteSize: 4,
+            structure: intStructure,
+          },
+          {
+            name: '1',
+            type: MemberType.Int,
+            bitSize: 32,
+            bitOffset: 64,
+            byteSize: 4,
+            structure: intStructure,
+          },
+        ],
+      },
+      static: {},
+    };
+    env.beginStructure(structure);
     env.finishStructure(structure);
+    const VariadicStruct = structure.constructor;
     expect(VariadicStruct).to.be.a('function');
     const args1 = new VariadicStruct([ 123, 456 ], 'hello', 0);
     args1[RETURN](777);

@@ -11,32 +11,45 @@ describe('Member: dataView', function() {
   describe('defineDataView', function() {
     it('should return descriptor for dataView prop', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u8',
         length: 11,
         byteSize: 11,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure
-      });
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       const dataView = env.defineDataView(structure);
       expect(dataView.get).to.be.a('function');
       expect(dataView.set).to.be.a('function');
@@ -45,67 +58,94 @@ describe('Member: dataView', function() {
   describe('defineStructure', function() {
     it('should attach dataView prop to structure', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u8',
         length: 11,
         byteSize: 11,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finalizeStructure(structure);
+      const Array = structure.constructor;
       const array = new Array([ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 ]);
       expect(array.dataView.byteLength).to.equal(11);
     })
     it('should throw when dataView prop is given incorrect data', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
+      intStructure.constructor;
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u8',
         length: 11,
         byteSize: 11,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finalizeStructure(structure);
+      const Array = structure.constructor;
       const array = new Array([ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 ]);
       expect(() => array.dataView = new DataView(new ArrayBuffer(0))).to.throw(TypeError);
       expect(() => array.dataView = new ArrayBuffer(0)).to.throw(TypeError);
@@ -113,34 +153,48 @@ describe('Member: dataView', function() {
     if (process.env.TARGET === 'node') {
       it('should synchronize with external memory when fallback is used', function() {
         const env = new Env();
-        const intStructure = env.beginStructure({
+        const intStructure = {
           type: StructureType.Primitive,
-            byteSize: 1,
-        });
-        env.attachMember(intStructure, {
-          type: MemberType.Uint,
-          bitSize: 8,
-          bitOffset: 0,
           byteSize: 1,
-          structure: intStructure,
-        });
-        env.defineStructure(intStructure);
+          signature: 0n,
+          instance: {
+            members: [
+              {
+                type: MemberType.Uint,
+                bitSize: 8,
+                bitOffset: 0,
+                byteSize: 1,
+                structure: intStructure,
+              },
+            ],
+          },
+          static: {},
+        };
+        env.beginStructure(intStructure);
+        intStructure.constructor;
         env.finalizeStructure(intStructure);
-        const structure = env.beginStructure({
+        const structure = {
           type: StructureType.Array,
           flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
           name: '[11]u8',
           length: 11,
           byteSize: 11,
-        });
-        env.attachMember(structure, {
-          type: MemberType.Uint,
-          bitSize: 8,
-          byteSize: 1,
-          structure: intStructure
-        });
-        const Array = env.defineStructure(structure);
+          signature: 0n,
+          instance: {
+            members: [
+              {
+                type: MemberType.Uint,
+                bitSize: 8,
+                byteSize: 1,
+                structure: intStructure
+              },
+            ],
+          },
+          static: {},
+        };
+        env.beginStructure(structure);
         env.finalizeStructure(structure);
+        const Array = structure.constructor;
         const buffer = new ArrayBuffer(11);
         const dv = env.obtainView(buffer, 0, 11);
         const array = Array(dv);

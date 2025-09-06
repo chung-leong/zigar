@@ -1,12 +1,12 @@
 import { expect } from 'chai';
 import 'mocha-skip-if';
 import {
-    ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, StructureFlag,
-    StructureType,
+  ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, StructureFlag,
+  StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ENVIRONMENT, MEMORY, SENTINEL, SLOTS, VISIT, ZIG } from '../../src/symbols.js';
+import { MEMORY, SENTINEL, SLOTS, ZIG } from '../../src/symbols.js';
 import { usize } from '../../src/utils.js';
 import { addressByteSize, addressSize } from '../test-utils.js';
 
@@ -65,113 +65,24 @@ describe('Feature: structure-acquisition', function() {
       expect(() => env.writeSlot(target, 1, object)).to.not.throw();
     })
   })
-  describe('createTemplate', function() {
-    it('should return a template object', function() {
-      const env = new Env();
-      const dv = new DataView(new ArrayBuffer(8));
-      const templ = env.createTemplate(dv);
-      expect(templ[MEMORY]).to.equal(dv);
-      expect(templ[SLOTS]).to.be.an('object');
-    })
-  })
   describe('beginStructure', function() {
-    it('should return a structure object', function() {
+    it('should define the shape of a structure', function() {
       const env = new Env();
-      const s = env.beginStructure({
+      const s = {
         type: StructureType.Struct,
         name: 'Hello',
         length: 1,
         byteSize: 16,
         align: 3,
-        isConst: false,
-      });
-      expect(s.type).to.equal(StructureType.Struct);
-      expect(s.name).to.equal('Hello');
-      expect(s.byteSize).to.equal(16);
-    })
-  })
-  describe('attachMember', function() {
-    it('should add instance member', function() {
-      const env = new Env();
-      const s = env.beginStructure({
-        type: StructureType.Struct,
-        name: 'Hello',
-        length: 1,
-        byteSize: 16,
-        align: 3,
-        isConst: false,
-      });
-      env.attachMember(s, {
-        type: MemberType.Int,
-        name: 'number',
-        bitSize: 32,
-        byteSize: 4,
-        bitOffset: 0,
-      }, false);
-      expect(s.instance.members[0]).to.eql({
-        type: MemberType.Int,
-        name: 'number',
-        bitSize: 32,
-        byteSize: 4,
-        bitOffset: 0,
-      });
-    })
-    it('should add static member', function() {
-      const env = new Env();
-      const s = env.beginStructure({
-        type: StructureType.Struct,
-        name: 'Hello',
-        length: 1,
-        byteSize: 16,
-        align: 3,
-        isConst: false,
-      });
-      env.attachMember(s, {
-        type: MemberType.Int,
-        name: 'number',
-        bitSize: 32,
-        byteSize: 4,
-        bitOffset: 0,
-      }, true);
-      expect(s.static.members[0]).to.eql({
-        type: MemberType.Int,
-        name: 'number',
-        bitSize: 32,
-        byteSize: 4,
-        bitOffset: 0,
-      });
-    })
-  })
-  describe('attachTemplate', function() {
-    it('should attach instance template', function() {
-      const env = new Env();
-      const dv = new DataView(new ArrayBuffer(8));
-      const templ = env.createTemplate(dv);
-      const s = env.beginStructure({
-        type: StructureType.Struct,
-        name: 'Hello',
-        length: 1,
-        byteSize: 16,
-        align: 3,
-        isConst: false,
-      });
-      env.attachTemplate(s, templ, false);
-      expect(s.instance.template).to.equal(templ);
-    })
-    it('should attach instance template', function() {
-      const env = new Env();
-      const dv = new DataView(new ArrayBuffer(8));
-      const templ = env.createTemplate(dv);
-      const s = env.beginStructure({
-        type: StructureType.Struct,
-        name: 'Hello',
-        length: 1,
-        byteSize: 16,
-        align: 3,
-        isConst: false,
-      });
-      env.attachTemplate(s, templ, true);
-      expect(s.static.template).to.equal(templ);
+        signature: 0n,
+        instance: {
+          members: [],
+        },
+        static: {},
+      };
+      env.beginStructure(s);
+      const Struct = s.constructor;
+      expect(Struct).to.be.a('function');
     })
   })
   describe('finishStructure', function() {
@@ -185,70 +96,6 @@ describe('Feature: structure-acquisition', function() {
       };
       env.finishStructure(s);
       expect(env.structures[0]).to.equal(s);
-    })
-  })
-  describe('captureView', function() {
-    it('should allocate new buffer and copy data using moveExternBytes', function() {
-      const env = new Env();
-      env.getBufferAddress = () => 0x10000;
-      env.moveExternBytes = (dv, address, to) => {
-        dv.setInt32(0, address, true);
-        dv.setInt32(4, dv.byteLength, true);
-      };
-      const dv = env.captureView(1234, 32, true);
-      expect(dv).to.be.instanceOf(DataView);
-      expect(dv.getInt32(0, true)).to.equal(1234);
-      expect(dv.getInt32(4, true)).to.equal(32);
-    })
-    it('should get view of memory using obtainZigView', function() {
-      const env = new Env();
-      env.getBufferAddress = () => 0x10000;
-      env.obtainZigView = (address, len) => {
-        const dv = new DataView(new ArrayBuffer(len));
-        dv[ZIG] = { address, len };
-        return dv;
-      };
-      if (process.env.TARGET === 'wasm') {
-        const dv = env.captureView(1234, 32, false);
-        expect(dv).to.be.instanceOf(DataView);
-        expect(dv[ZIG]).to.eql({ address: 1234, len: 32, handle: 1234 });
-      } else {
-        const dv = env.captureView(1234n, 32, false, 0x8888n);
-        expect(dv).to.be.instanceOf(DataView);
-        expect(dv[ZIG]).to.eql({ address: 1234n, len: 32, handle: 0x8888n });
-      }
-    })
-  })
-  describe('castView', function() {
-    it('should call constructor without the use of the new operator', function() {
-      const env = new Env();
-      env.getBufferAddress = () => 0x10000;
-      env.moveExternBytes = (dv, address, to) => {};
-      let recv, arg;
-      const structure = {
-        constructor: function(dv) {
-          recv = this;
-          arg = dv;
-          return {};
-        }
-      };
-      const object = env.castView(1234, 0, true, structure);
-      expect(recv).to.equal(ENVIRONMENT);
-    })
-    it('should try to create targets of pointers', function() {
-      const env = new Env();
-      env.getBufferAddress = () => 0x10000;
-      env.moveExternBytes = (dv, address, to) => {};
-      let visitor;
-      const structure = {
-        constructor: function(dv) {
-          return {
-            [VISIT]: function(f) { visitor = f },
-          };
-        },
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
-      };
-      const object = env.castView(1234, 8, true, structure);
     })
   })
   describe('acquireStructures', function() {
@@ -280,50 +127,68 @@ describe('Feature: structure-acquisition', function() {
         return ModuleAttribute.LittleEndian;
       };
       env.invokeThunk = function(...args) {};
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const ptrStructure = env.beginStructure({
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: intStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         byteSize: addressByteSize,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
-      });
-      env.attachMember(structStructure, {
-        name: 'ptr',
-        type: MemberType.Object,
-        bitSize: addressSize,
-        bitOffset: 0,
-        byteSize: addressByteSize,
-        slot: 0,
-        structure: ptrStructure,
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'ptr',
+              type: MemberType.Object,
+              bitSize: addressSize,
+              bitOffset: 0,
+              byteSize: addressByteSize,
+              slot: 0,
+              structure: ptrStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
       const dv = new DataView(new ArrayBuffer(addressByteSize));
       if (addressSize === 32) {
@@ -543,64 +408,83 @@ describe('Feature: structure-acquisition', function() {
     })
     it('should return true when there ar exported functions', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const argStructure = env.beginStructure({
+      const argStructure = {
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
         length: 2,
-      });
-      env.attachMember(argStructure, {
-        name: 'retval',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(argStructure, {
-        name: '0',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(argStructure, {
-        name: '1',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 64,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const ArgStruct = env.defineStructure(argStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '0',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '1',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 64,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(argStructure);
       env.finishStructure(argStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Function,
         name: 'fn(i32, i32) i32',
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        structure: argStructure,
-      });
-      const thunk = { [MEMORY]: zig(0x1004) };
-      env.attachTemplate(structure, thunk, false);
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              structure: argStructure,
+            },
+          ],
+          template: {
+            [MEMORY]: zig(0x1004),
+          },
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       expect(env.hasMethods()).to.be.true;
     })

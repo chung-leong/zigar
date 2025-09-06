@@ -9,32 +9,46 @@ describe('Member: string', function() {
   describe('defineString', function() {
     it('should return descriptor for string prop', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
+      intStructure.constructor;
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u8',
         length: 11,
         byteSize: 11,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure
-      });
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       const string = env.defineString(structure);
       expect(string.get).to.be.a('function');
       expect(string.set).to.be.a('function');
@@ -43,34 +57,47 @@ describe('Member: string', function() {
   describe('defineStructure', function() {
     it('should attach string prop to structures', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u8',
         length: 11,
         byteSize: 11,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finalizeStructure(structure);
+      const Array = structure.constructor;
       const array = new Array([ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 ]);
       for (let i = 0, c = 'A'.charCodeAt(0); i < 11; i++, c++) {
         array[i] = c;
@@ -81,34 +108,48 @@ describe('Member: string', function() {
     })
     it('should throw when string prop is given incorrect data', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
+      intStructure.constructor;
       env.finalizeStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Array,
         flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u8',
         length: 11,
         byteSize: 11,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: intStructure
-      });
-      const Array = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: intStructure
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finalizeStructure(structure);
+      const Array = structure.constructor;
       const array = new Array([ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 ]);
       expect(() => array.string = '').to.throw(TypeError);
       expect(() => array.string = 123).to.throw(TypeError);

@@ -13,18 +13,20 @@ describe('Structure: primitive', function() {
       const structure = {
         type: StructureType.Primitive,
         byteSize: 8,
-        instance: {},
-        static: { members: [] },
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: {},
+            }
+          ],
+        },
+        static: {},
       };
-      structure.instance.members = [
-        {
-          type: MemberType.Int,
-          bitSize: 64,
-          bitOffset: 0,
-          byteSize: 8,
-          structure: {},
-        }
-      ];
       const env = new Env();
       const descriptors = {};
       const constructor = env.definePrimitive(structure, descriptors);
@@ -34,18 +36,20 @@ describe('Structure: primitive', function() {
       const structure = {
         type: StructureType.Primitive,
         byteSize: 8,
-        instance: {},
-        static: { members: [] },
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: {},
+            }
+          ],
+        },
+        static: {},
       };
-      structure.instance.members = [
-        {
-          type: MemberType.Int,
-          bitSize: 64,
-          bitOffset: 0,
-          byteSize: 8,
-          structure: {},
-        }
-      ];
       const env = new Env();
       const descriptors = {};
       env.definePrimitive(structure, descriptors);
@@ -60,18 +64,20 @@ describe('Structure: primitive', function() {
       const structure = {
         type: StructureType.Primitive,
         byteSize: 8,
-        instance: {},
-        static: { members: [] },
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: {},
+            }
+          ],
+        },
+        static: {},
       };
-      structure.instance.members = [
-        {
-          type: MemberType.Int,
-          bitSize: 64,
-          bitOffset: 0,
-          byteSize: 8,
-          structure: {},
-        }
-      ];
       const env = new Env();
       const descriptors = {};
       env.finalizePrimitive(structure, descriptors);
@@ -82,18 +88,20 @@ describe('Structure: primitive', function() {
       const structure = {
         type: StructureType.Primitive,
         byteSize: 8,
-        instance: {},
-        static: { members: [] },
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Float,
+              bitSize: 16,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: {},
+            }
+          ],
+        },
+        static: {},
       };
-      structure.instance.members = [
-        {
-          type: MemberType.Float,
-          bitSize: 16,
-          bitOffset: 0,
-          byteSize: 8,
-          structure: {},
-        }
-      ];
       const env = new Env();
       const descriptors = {};
       env.finalizePrimitive(structure, descriptors);
@@ -105,19 +113,25 @@ describe('Structure: primitive', function() {
   describe('defineStructure', function() {
     it('should define a structure for holding a type', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Primitive,
         byteSize: 0,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Type,
-        bitSize: 0,
-        bitOffset: 0,
-        byteSize: 0,
-        slot: 0,
-        structure: {},
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Type,
+              bitSize: 0,
+              bitOffset: 0,
+              byteSize: 0,
+              slot: 0,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Hello } = structure;
       expect(Hello).to.be.a('function');
@@ -128,18 +142,24 @@ describe('Structure: primitive', function() {
     })
     it('should cast the same buffer to the same object', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Primitive,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        structure: {},
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const buffer = new ArrayBuffer(8);
@@ -149,36 +169,48 @@ describe('Structure: primitive', function() {
     })
     it('should throw when no initializer is provided', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Primitive,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        structure: {},
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Hello } = structure;
       expect(() => new Hello).to.throw(TypeError);
     })
     it('should initialize a structure with a structure of the same type', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Primitive,
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Int,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        structure: {},
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const object = new Hello(12345n);
@@ -188,19 +220,25 @@ describe('Structure: primitive', function() {
     })
     it('should have special properties', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Primitive,
         name: 'i64',
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Int,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        structure: {},
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const object = new Hello(12345n);
@@ -209,19 +247,25 @@ describe('Structure: primitive', function() {
     })
     it('should accept base64 data as initializer', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Primitive,
         name: 'i64',
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Int,
-        bitOffset: 0,
-        bitSize: 64,
-        byteSize: 8,
-        structure: {},
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitOffset: 0,
+              bitSize: 64,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: I64 } = structure;
       const str = '\u0001\u0000\u0000\u0000\u0000\u0000\u0000\u0000';
@@ -231,19 +275,25 @@ describe('Structure: primitive', function() {
     })
     it('should allow assignment of base64 data', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Primitive,
         name: 'i64',
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Int,
-        bitOffset: 0,
-        bitSize: 64,
-        byteSize: 8,
-        structure: {},
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitOffset: 0,
+              bitSize: 64,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: I64 } = structure;
       const str = '\u0001\u0000\u0000\u0000\u0000\u0000\u0000\u0000';
@@ -253,19 +303,25 @@ describe('Structure: primitive', function() {
     })
     it('should not have typedArray prop when it is a 128-bit integer', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Primitive,
         name: 'i128',
         byteSize: 16,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Int,
-        bitSize: 128,
-        bitOffset: 0,
-        byteSize: 16,
-        structure: {},
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 128,
+              bitOffset: 0,
+              byteSize: 16,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: Hello } = structure;
       const object = new Hello(12345n);
@@ -274,19 +330,25 @@ describe('Structure: primitive', function() {
     })
     it('should allow casting of typed array into primitive', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Primitive,
         name: 'i64',
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Int,
-        bitOffset: 0,
-        bitSize: 64,
-        byteSize: 8,
-        structure: {},
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitOffset: 0,
+              bitSize: 64,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: I64 } = structure;
       const typedArray = new BigInt64Array([ 1234n ]);
@@ -297,38 +359,50 @@ describe('Structure: primitive', function() {
     })
     it('should throw when given an object with unrecognized properties', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Primitive,
         name: 'i64',
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Int,
-        bitOffset: 0,
-        bitSize: 64,
-        byteSize: 8,
-        structure: {},
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitOffset: 0,
+              bitSize: 64,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: I64 } = structure;
       expect(() => new I64({ dogmeat: 5 })).to.throw(TypeError);
     })
     it('should throw when given an empty object', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Primitive,
         name: 'i64',
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Int,
-        bitOffset: 0,
-        bitSize: 64,
-        byteSize: 8,
-        structure: {},
-      });
-      env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitOffset: 0,
+              bitSize: 64,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
       const { constructor: I64 } = structure;
       expect(() => new I64({})).to.throw(TypeError);

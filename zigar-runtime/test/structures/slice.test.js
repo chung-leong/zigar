@@ -1,10 +1,10 @@
 import { expect } from 'chai';
 import {
-    MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType,
+  MemberFlag, MemberType, PointerFlag, SliceFlag, StructureFlag, StructureType,
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ENTRIES, FINALIZE, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
+import { ENTRIES, FINALIZE, INITIALIZE, MEMORY } from '../../src/symbols.js';
 import { encodeBase64, usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
@@ -16,17 +16,19 @@ describe('Structure: slice', function() {
         type: StructureType.Slice,
         name: '[_]i32',
         byteSize: 4,
-        instance: {},
-        static: { members: [] },
-      };
-      structure.instance.members = [
-        {
-          type: MemberType.Int,
-          bitSize: 32,
-          byteSize: 4,
-          structure: {},
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
         },
-      ];
+        static: {},
+      };
       const env = new Env();
       const descriptors = {};
       const constructor = env.defineSlice(structure, descriptors);
@@ -37,17 +39,19 @@ describe('Structure: slice', function() {
         type: StructureType.Slice,
         name: '[4]i32',
         byteSize: 8,
-        instance: {},
-        static: { members: [] },
-      };
-      structure.instance.members = [
-        {
-          type: MemberType.Int,
-          bitSize: 32,
-          byteSize: 4,
-          structure: {},
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
         },
-      ];
+        static: {},
+      };
       const env = new Env();
       const descriptors = {};
       env.defineSlice(structure, descriptors);
@@ -66,22 +70,19 @@ describe('Structure: slice', function() {
         type: StructureType.Slice,
         name: 'Slice',
         byteSize: 2,
-        instance: {},
-        static: {
-          members: [],
-          template: {
-            [SLOTS]: {},
-          }
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+              structure,
+            },
+          ],
         },
+        static: {},
       };
-      structure.instance.members = [
-        {
-          type: MemberType.Uint,
-          bitSize: 16,
-          byteSize: 2,
-          structure,
-        },
-      ];
       const env = new Env();
       const descriptors = {};
       env.finalizeSlice(structure, descriptors);
@@ -91,20 +92,27 @@ describe('Structure: slice', function() {
   describe('defineStructure', function() {
     it('should define structure for holding an int slice', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const constructor = function() {};
+      const structure = {
         type: StructureType.Slice,
         name: 'Slice',
         byteSize: 4,
-      });
-      const constructor = function() {};
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: { constructor, typedArray: Uint32Array }
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: { constructor, typedArray: Uint32Array }
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       expect(Slice).to.be.a('function');
       expect(Slice.child).to.equal(constructor);
       const object = Slice(new ArrayBuffer(32));
@@ -132,20 +140,27 @@ describe('Structure: slice', function() {
     })
     it('should cast the same buffer to the same object', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const constructor = function() {};
+      const structure = {
         type: StructureType.Slice,
         name: 'Slice',
         byteSize: 4,
-      });
-      const constructor = function() {};
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: { constructor, typedArray: Uint32Array }
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: { constructor, typedArray: Uint32Array }
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const buffer = new ArrayBuffer(4 * 20);
       const object1 = Slice(buffer);
       const object2 = Slice(buffer);
@@ -153,57 +168,78 @@ describe('Structure: slice', function() {
     })
     it('should throw when no initializer is provided', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const constructor = function() {};
+      const structure = {
         type: StructureType.Slice,
         name: 'Slice',
         byteSize: 4,
-      });
-      const constructor = function() {};
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: { constructor, typedArray: Uint32Array }
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: { constructor, typedArray: Uint32Array }
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       expect(() => new Slice).to.throw(TypeError);
     })
     it('should throw when the slice length is changed', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const constructor = function() {};
+      const structure = {
         type: StructureType.Slice,
         name: 'Slice',
         byteSize: 4,
-      });
-      const constructor = function() {};
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: { constructor, typedArray: Uint32Array }
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: { constructor, typedArray: Uint32Array }
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const object = Slice(new ArrayBuffer(32));
       expect(() => object.length = 0).to.throw(TypeError);
     })
     it('should define slice that is iterable', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const constructor = function() {};
+      const structure = {
         type: StructureType.Slice,
         name: 'Slice',
         byteSize: 4,
-      });
-      const constructor = function() {};
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: { constructor, typedArray: Uint32Array }
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: { constructor, typedArray: Uint32Array }
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const object = Slice(new ArrayBuffer(32));
       object.set(1, 321);
       const list = [];
@@ -214,20 +250,27 @@ describe('Structure: slice', function() {
     })
     it('should permit retrieval of indices during iteration', function() {
       const env = new Env();
-      const structure = env.beginStructure({
+      const constructor = function() {};
+      const structure = {
         type: StructureType.Slice,
         name: 'Slice',
         byteSize: 4,
-      });
-      const constructor = function() {};
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: { constructor, typedArray: Uint32Array }
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: { constructor, typedArray: Uint32Array }
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const object = Slice(new ArrayBuffer(32));
       object.set(1, 321);
       const indexList = [];
@@ -241,33 +284,46 @@ describe('Structure: slice', function() {
     })
     it('should have string property when slice contains Uint8', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: 'Slice',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const dv = new DataView(new ArrayBuffer(4));
       dv.setUint8(0, 'A'.charCodeAt(0));
       dv.setUint8(1, 'B'.charCodeAt(0));
@@ -279,34 +335,47 @@ describe('Structure: slice', function() {
     })
     it('should have string property when slice contains Uint16', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         name: 'u16',
         byteSize: 2,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: 'Slice',
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        byteSize: 2,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const dv = new DataView(new ArrayBuffer(8));
       dv.setUint16(0, 'A'.charCodeAt(0), true);
       dv.setUint16(2, 'B'.charCodeAt(0), true);
@@ -318,32 +387,45 @@ describe('Structure: slice', function() {
     })
     it('should accept array as initializer', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         name: '[_]u32',
         byteSize: 4,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const object = new Slice([ 1, 2, 3, 4, 5, 6, 7, 8 ]);
       expect(object.length).to.equal(8);
       for (let i = 0; i < 8; i++) {
@@ -352,96 +434,135 @@ describe('Structure: slice', function() {
     })
     it('should accept number as initializer', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         name: '[_]u32',
         byteSize: 4,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const object = new Slice(8);
       expect(object.length).to.equal(8);
     })
     it('should throw when given an invalid number', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         name: '[_]u32',
         byteSize: 4,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        byteSize: 4,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              byteSize: 4,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       expect(() => new Slice(-123)).to.throw();
       expect(() => new Slice(NaN)).to.throw();
       expect(() => new Slice(Infinity)).to.throw();
     })
     it('should accept string as initializer for []u8', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const str = 'Slice world';
       const slice = new Slice(str);
       expect(slice).to.have.lengthOf(str.length);
@@ -451,34 +572,47 @@ describe('Structure: slice', function() {
     })
     it('should accept string as initializer for []u16', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         name: 'u16',
         byteSize: 2,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u16',
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        byteSize: 2,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const str = 'Slice world';
       const slice = new Slice(str);
       expect(slice).to.have.lengthOf(str.length);
@@ -488,34 +622,47 @@ describe('Structure: slice', function() {
     })
     it('should allow reinitialization of []u16 using a string', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         name: 'u16',
         byteSize: 2,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u16',
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        byteSize: 2,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const str = 'Slice world';
       const slice = new Slice(str);
       const str2 = 'World war z';
@@ -526,34 +673,47 @@ describe('Structure: slice', function() {
     })
     it('should throw when reinitialization leads to a different length', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         name: 'u16',
         byteSize: 2,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u16',
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        byteSize: 2,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const str = 'Slice world';
       const slice = new Slice(str);
       const slice2 = new Slice(str + '!');
@@ -571,33 +731,46 @@ describe('Structure: slice', function() {
           return new ArrayBuffer(len);
         };
       }
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const str = 'Slice world';
       const slice = new Slice(str, { zig: true });
       expect(slice).to.have.lengthOf(str.length);
@@ -607,34 +780,47 @@ describe('Structure: slice', function() {
     })
     it('should allow assignment of string to []u16', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         name: 'u16',
         byteSize: 2,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u16',
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        byteSize: 2,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const slice = new Slice(11);
       const str = 'Slice world';
       slice.string = str;
@@ -644,128 +830,180 @@ describe('Structure: slice', function() {
     })
     it('should throw when the string is too short', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         name: 'u16',
         byteSize: 2,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u16',
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        byteSize: 2,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const slice = new Slice(11);
       const str = 'Slice';
       expect(() => slice.string = str).to.throw(TypeError);
     })
     it('should throw when given an object with unrecognized properties', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         name: 'u16',
         byteSize: 2,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         name: '[_]u16',
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        byteSize: 2,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       expect(() => new Slice({ dogmeat: 5 })).to.throw();
     })
     it('should throw when given something unacceptable', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         name: 'u16',
         byteSize: 2,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         name: '[_]u16',
         byteSize: 2,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        byteSize: 2,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              byteSize: 2,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       expect(() => new Slice(() => {})).to.throw();
     })
     it('should accept base64 data as initializer', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const str = 'Slice world';
       const base64 = encodeBase64(Buffer.from(str));
       const slice = new Slice({ base64 });
@@ -776,33 +1014,46 @@ describe('Structure: slice', function() {
     })
     it('should allow assignment of base64 data', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const slice = new Slice('Slice world');
       const str = 'World war z';
       slice.base64 = encodeBase64(Buffer.from(str));
@@ -812,33 +1063,46 @@ describe('Structure: slice', function() {
     })
     it('should accept typed array as initializer', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const slice = new Slice({ typedArray });
       expect(slice).to.have.lengthOf(typedArray.length);
@@ -850,33 +1114,46 @@ describe('Structure: slice', function() {
     })
     it('should allow assignment of typed array', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const slice = new Slice(new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]));
       const typedArray = new Uint8Array([ 0, 10, 20, 30, 40, 50, 60, 70 ]);
       slice.typedArray = typedArray;
@@ -886,65 +1163,91 @@ describe('Structure: slice', function() {
     })
     it('should throw when given typed array of a different type', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const slice = new Slice(new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]));
       const typedArray = new Int16Array([ 0, 10, 20, 30, 40, 50, 60, 70 ]);
       expect(() => slice.typedArray = typedArray).to.throw(TypeError);
     })
     it('should accept data view as initializer', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const dataView = new DataView(typedArray.buffer);
       const slice = new Slice({ dataView });
@@ -957,32 +1260,45 @@ describe('Structure: slice', function() {
     })
     it('should allow assignment of data view', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const slice = new Slice(8);
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       slice.dataView = new DataView(typedArray.buffer);
@@ -994,32 +1310,45 @@ describe('Structure: slice', function() {
     })
     it('should accept typed array of a different type as initializer', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const typedArray = new Float32Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const slice = new Slice(typedArray);
       expect(slice).to.have.lengthOf(typedArray.length);
@@ -1029,32 +1358,45 @@ describe('Structure: slice', function() {
     })
     it('should accept a generator as initializer', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const f = function*() {
         let i = 0;
         while (i < 8) {
@@ -1070,32 +1412,45 @@ describe('Structure: slice', function() {
     })
     it('should accept a generator that provide a length as first item', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       // incorrect length would lead to too small a buffer
       const f1 = function*() {
         yield { length: 4 };
@@ -1120,58 +1475,77 @@ describe('Structure: slice', function() {
     })
     it('should correctly initialize a slice of structs', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         name: 'Slice',
         byteSize: 4 * 2,
-      });
-      env.attachMember(structStructure, {
-        name: 'dog',
-        type: MemberType.Int,
-        flags: MemberFlag.IsRequired,
-        byteSize: 4,
-        bitOffset: 0,
-        bitSize: 32,
-        structure: intStructure,
-      });
-      env.attachMember(structStructure, {
-        name: 'cat',
-        type: MemberType.Int,
-        flags: MemberFlag.IsRequired,
-        byteSize: 4,
-        bitOffset: 32,
-        bitSize: 32,
-        structure: intStructure,
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'dog',
+              type: MemberType.Int,
+              flags: MemberFlag.IsRequired,
+              byteSize: 4,
+              bitOffset: 0,
+              bitSize: 32,
+              structure: intStructure,
+            },
+            {
+              name: 'cat',
+              type: MemberType.Int,
+              flags: MemberFlag.IsRequired,
+              byteSize: 4,
+              bitOffset: 32,
+              bitSize: 32,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Slice',
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: structStructure,
-      });
-      const SliceSlice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const SliceSlice = structure.constructor;
       const object = new SliceSlice([
         { dog: 1, cat: 2 },
         { dog: 3, cat: 4 },
@@ -1187,67 +1561,86 @@ describe('Structure: slice', function() {
     })
     it('should not set default values of structs when initialized with an element count', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Slice',
         byteSize: 4 * 2,
-      });
-      env.attachMember(structStructure, {
-        name: 'dog',
-        type: MemberType.Int,
-        flags: 0,
-        byteSize: 4,
-        bitOffset: 0,
-        bitSize: 32,
-        structure: intStructure,
-      });
-      env.attachMember(structStructure, {
-        name: 'cat',
-        type: MemberType.Int,
-        flags: 0,
-        byteSize: 4,
-        bitOffset: 32,
-        bitSize: 32,
-        structure: intStructure,
-      });
-      env.attachTemplate(structStructure, {
-        [MEMORY]: (() => {
-          const dv = new DataView(new ArrayBuffer(4 * 2));
-          dv.setUint32(0, 1234, true);
-          dv.setUint32(4, 4567, true);
-          return dv;
-        })(),
-      });
-      const Slice = env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'dog',
+              type: MemberType.Int,
+              flags: 0,
+              byteSize: 4,
+              bitOffset: 0,
+              bitSize: 32,
+              structure: intStructure,
+            },
+            {
+              name: 'cat',
+              type: MemberType.Int,
+              flags: 0,
+              byteSize: 4,
+              bitOffset: 32,
+              bitSize: 32,
+              structure: intStructure,
+            },
+          ],
+          template: {
+            [MEMORY]: (() => {
+              const dv = new DataView(new ArrayBuffer(4 * 2));
+              dv.setUint32(0, 1234, true);
+              dv.setUint32(4, 4567, true);
+              return dv;
+            })(),
+          },
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Slice',
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: structStructure,
-      });
-      const SliceSlice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const SliceSlice = structure.constructor;
       const object = new SliceSlice(4);
       for (let i = 0; i < 4; i++) {
         expect(object[i].valueOf()).to.eql({ dog: 0, cat: 0 });
@@ -1257,32 +1650,45 @@ describe('Structure: slice', function() {
     })
     it('should allow reinitialization through the dollar property', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         name: 'Slice',
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 64,
-        byteSize: 8,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 64,
+              byteSize: 8,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const object = new Slice([ 100n, 200n, 300n, 400n ]);
       expect(object.length).to.equal(4);
       for (let i = 0; i < 4; i++) {
@@ -1296,32 +1702,45 @@ describe('Structure: slice', function() {
     })
     it('should allow casting from a typed array', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const typedArray = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const slice = Slice(typedArray);
       slice[0] = 123;
@@ -1329,32 +1748,45 @@ describe('Structure: slice', function() {
     })
     it('should allow casting from a Uint8ClampedArray', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         name: '[_]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const typedArray = new Uint8ClampedArray([ 0, 1, 2, 3, 4, 5, 6, 7 ]);
       const slice = Slice(typedArray);
       slice[0] = 123;
@@ -1362,213 +1794,298 @@ describe('Structure: slice', function() {
     })
     it('should allow casting from an array with same element type', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         name: 'u64',
         byteSize: 8,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]u64',
         byteSize: 8,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 64,
-        byteSize: 8,
-        structure: uintStructure
-      });
-      const U64Slice = env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 64,
+              byteSize: 8,
+              structure: uintStructure
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const arrayStructure = env.beginStructure({
+      const U64Slice = sliceStructure.constructor;
+      const arrayStructure = {
         type: StructureType.Array,
         name: '[4]u64',
         length: 4,
         byteSize: 8 * 4,
-      });
-      env.attachMember(arrayStructure, {
-        type: MemberType.Uint,
-        bitSize: 64,
-        byteSize: 8,
-        structure: uintStructure
-      });
-      const U64Array = env.defineStructure(arrayStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 64,
+              byteSize: 8,
+              structure: uintStructure
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(arrayStructure);
       env.finishStructure(arrayStructure);
+      const U64Array = arrayStructure.constructor;
       const array = new U64Array([ 100n, 200n, 300n, 400n ]);
       const slice = U64Slice(array);
       expect(slice[MEMORY]).to.equal(array[MEMORY]);
     })
     it('should allow casting from an vector with same element type', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         name: 'u64',
         byteSize: 8,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]u64',
         byteSize: 8,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Uint,
-        bitSize: 64,
-        byteSize: 8,
-        structure: uintStructure,
-      });
-      const Slice = env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 64,
+              byteSize: 8,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const vectorStructure = env.beginStructure({
+      const Slice = sliceStructure.constructor;
+      const vectorStructure = {
         type: StructureType.Vector,
         name: '@Vector(4, u64)',
         length: 4,
         byteSize: 8 * 4,
-      });
-      env.attachMember(vectorStructure, {
-        type: MemberType.Uint,
-        bitSize: 64,
-        byteSize: 8,
-        structure: uintStructure,
-      });
-      const Vector = env.defineStructure(vectorStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 64,
+              byteSize: 8,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(vectorStructure);
       env.finishStructure(vectorStructure);
+      const Vector = vectorStructure.constructor;
       const vector = new Vector([ 100n, 200n, 300n, 400n ]);
       const slice = Slice(vector);
       expect(slice[MEMORY]).to.equal(vector[MEMORY]);
     })
     it('should not allow casting from an array with different element type', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         name: 'i64',
         byteSize: 8,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         name: 'u64',
         byteSize: 8,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const sliceStructure = env.beginStructure({
+      const sliceStructure = {
         type: StructureType.Slice,
         name: '[_]i64',
         byteSize: 8,
-      });
-      env.attachMember(sliceStructure, {
-        type: MemberType.Int,
-        bitSize: 64,
-        byteSize: 8,
-        structure: intStructure,
-      });
-      const I64Slice = env.defineStructure(sliceStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 64,
+              byteSize: 8,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(sliceStructure);
       env.finishStructure(sliceStructure);
-      const arrayStructure = env.beginStructure({
+      const I64Slice = sliceStructure.constructor;
+      const arrayStructure = {
         type: StructureType.Array,
         name: '[4]u64',
         length: 4,
         byteSize: 8 * 4,
-      });
-      env.attachMember(arrayStructure, {
-        type: MemberType.Uint,
-        bitSize: 64,
-        byteSize: 8,
-        structure: uintStructure,
-      });
-      const U64Array = env.defineStructure(arrayStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 64,
+              byteSize: 8,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(arrayStructure);
       env.finishStructure(arrayStructure);
+      const U64Array = arrayStructure.constructor;
       const array = new U64Array([ 100n, 200n, 300n, 400n ]);
       expect(() => I64Slice(array)).to.throw(TypeError)
         .with.property('message').that.contains(`that can accommodate items 8 bytes in length`);
     })
     it('should throw when initializer has the wrong size', function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finalizeStructure(intStructure);
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         name: 'Slice',
         byteSize: 4 * 2,
-      });
-      env.attachMember(structStructure, {
-        name: 'dog',
-        type: MemberType.Int,
-        flags: MemberFlag.IsRequired,
-        byteSize: 4,
-        bitOffset: 0,
-        bitSize: 32,
-        structure: intStructure,
-      });
-      env.attachMember(structStructure, {
-        name: 'cat',
-        type: MemberType.Int,
-        flags: MemberFlag.IsRequired,
-        byteSize: 4,
-        bitOffset: 32,
-        bitSize: 32,
-        structure: intStructure,
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'dog',
+              type: MemberType.Int,
+              flags: MemberFlag.IsRequired,
+              byteSize: 4,
+              bitOffset: 0,
+              bitSize: 32,
+              structure: intStructure,
+            },
+            {
+              name: 'cat',
+              type: MemberType.Int,
+              flags: MemberFlag.IsRequired,
+              byteSize: 4,
+              bitOffset: 32,
+              bitSize: 32,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Slice',
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: structStructure,
-      });
-      const SliceSlice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const SliceSlice = structure.constructor;
       const object = new SliceSlice([
         { dog: 1, cat: 2 },
         { dog: 3, cat: 4 },
@@ -1585,92 +2102,125 @@ describe('Structure: slice', function() {
     })
     it('should throw when initializer is of an invalid type', function() {
       const env = new Env();
-      const structStructure = env.beginStructure({
+      const structStructure = {
         type: StructureType.Struct,
         name: 'Slice',
         byteSize: 4 * 2,
-      });
-      env.attachMember(structStructure, {
-        name: 'dog',
-        type: MemberType.Int,
-        flags: MemberFlag.IsRequired,
-        byteSize: 4,
-        bitOffset: 0,
-        bitSize: 32,
-        structure: {},
-      });
-      env.attachMember(structStructure, {
-        name: 'cat',
-        type: MemberType.Int,
-        flags: MemberFlag.IsRequired,
-        byteSize: 4,
-        bitOffset: 32,
-        bitSize: 32,
-        structure: {},
-      });
-      env.defineStructure(structStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'dog',
+              type: MemberType.Int,
+              flags: MemberFlag.IsRequired,
+              byteSize: 4,
+              bitOffset: 0,
+              bitSize: 32,
+              structure: {},
+            },
+            {
+              name: 'cat',
+              type: MemberType.Int,
+              flags: MemberFlag.IsRequired,
+              byteSize: 4,
+              bitOffset: 32,
+              bitSize: 32,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         name: 'Slice',
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: structStructure,
-      });
-      const SliceSlice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: structStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const SliceSlice = structure.constructor;
       expect(() => new SliceSlice({})).to.throw(TypeError);
     })
     it('should correctly copy a slice holding pointers', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         byteSize: 4,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: {},
-      });
-      const Int32 = env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finishStructure(uintStructure);
-      const ptrStructure = env.beginStructure({
+      const Int32 = uintStructure.constructor;
+      const ptrStructure = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]i32',
         byteSize: 8,
-      });
-      env.attachMember(ptrStructure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: uintStructure,
-      });
-      env.defineStructure(ptrStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              bitOffset: 0,
+              byteSize: 8,
+              slot: 0,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(ptrStructure);
       env.finishStructure(ptrStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[_]i32',
         byteSize: 8,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Object,
-        bitSize: 64,
-        byteSize: 8,
-        structure: ptrStructure,
-      });
-      const Int32PtrSlice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              bitSize: 64,
+              byteSize: 8,
+              structure: ptrStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Int32PtrSlice = structure.constructor;
       const slice1 = new Int32PtrSlice([ new Int32(1234), new Int32(4567), new Int32(7890) ]);
       const slice2 = new Int32PtrSlice(slice1);
       expect(slice1[0]['*']).to.equal(1234);
@@ -1680,44 +2230,57 @@ describe('Structure: slice', function() {
     })
     it('should return string without sentinel value', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        flags: MemberFlag.IsSentinel | MemberFlag.IsRequired,
-        bitOffset: 0,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.attachTemplate(structure, {
-        [MEMORY]: new DataView(new ArrayBuffer(1)),
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+            {
+              type: MemberType.Uint,
+              flags: MemberFlag.IsSentinel | MemberFlag.IsRequired,
+              bitOffset: 0,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+          template: {
+            [MEMORY]: new DataView(new ArrayBuffer(1)),
+          },
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const array = [ ...'Slice\0' ].map(c => c.charCodeAt(0));
       const slice = new Slice(array);
       expect(slice).to.have.lengthOf(6);
@@ -1726,132 +2289,171 @@ describe('Structure: slice', function() {
     })
     it('should automatically insert sentinel character', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        flags: MemberFlag.IsSentinel | MemberFlag.IsRequired,
-        bitOffset: 0,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.attachTemplate(structure, {
-        [MEMORY]: new DataView(new ArrayBuffer(1)),
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+            {
+              type: MemberType.Uint,
+              flags: MemberFlag.IsSentinel | MemberFlag.IsRequired,
+              bitOffset: 0,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+          template: {
+            [MEMORY]: new DataView(new ArrayBuffer(1)),
+          },
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const slice = new Slice('Slice');
       expect(slice).to.have.lengthOf(6);
       expect(slice[5]).to.equal(0);
     })
     it('should not add unnecessary sentinel character', function() {
       const env = new Env();
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        flags: MemberFlag.IsSentinel | MemberFlag.IsRequired,
-        bitOffset: 0,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.attachTemplate(structure, {
-        [MEMORY]: new DataView(new ArrayBuffer(1)),
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+            {
+              type: MemberType.Uint,
+              flags: MemberFlag.IsSentinel | MemberFlag.IsRequired,
+              bitOffset: 0,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+          template: {
+            [MEMORY]: new DataView(new ArrayBuffer(1)),
+          },
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const slice = new Slice('Slice\0');
       expect(slice).to.have.lengthOf(6);
     })
     it('should should throw when sentinel appears too early', function() {
       const env = new Env();
       env.runtimeSafety = true;
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        flags: MemberFlag.IsSentinel | MemberFlag.IsRequired,
-        bitOffset: 0,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.attachTemplate(structure, {
-        [MEMORY]: new DataView(new ArrayBuffer(1)),
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+            {
+              type: MemberType.Uint,
+              flags: MemberFlag.IsSentinel | MemberFlag.IsRequired,
+              bitOffset: 0,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+          template: {
+            [MEMORY]: new DataView(new ArrayBuffer(1)),
+          },
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const array = [ ...'H\0llo\0' ].map(c => c.charCodeAt(0));
       expect(() => new Slice(array)).to.throw(TypeError);
       expect(() => new Slice('H\0llo\0')).to.throw(TypeError);
@@ -1862,44 +2464,57 @@ describe('Structure: slice', function() {
     it('should should throw when sentinel is missing', function() {
       const env = new Env();
       env.runtimeSafety = true;
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        flags: MemberFlag.IsSentinel | MemberFlag.IsRequired,
-        bitOffset: 0,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.attachTemplate(structure, {
-        [MEMORY]: new DataView(new ArrayBuffer(1)),
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+            {
+              type: MemberType.Uint,
+              flags: MemberFlag.IsSentinel | MemberFlag.IsRequired,
+              bitOffset: 0,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+          template: {
+            [MEMORY]: new DataView(new ArrayBuffer(1)),
+          },
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const array = [ ...'Slice' ].map(c => c.charCodeAt(0));
       expect(() => new Slice(array)).to.throw(TypeError);
       expect(() => new Slice({ typedArray: new Uint8Array(array) })).to.throw(TypeError);
@@ -1911,45 +2526,58 @@ describe('Structure: slice', function() {
     it('should should throw when sentinel is missing even if runtimeSafety is false', function() {
       const env = new Env();
       env.runtimeSafety = false;
-      const uintStructure = env.beginStructure({
+      const uintStructure = {
         type: StructureType.Primitive,
         byteSize: 1,
-      });
-      env.attachMember(uintStructure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        bitOffset: 0,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.defineStructure(uintStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              bitOffset: 0,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(uintStructure);
       env.finalizeStructure(uintStructure);
       env.runtimeSafety = false;
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.Slice,
         flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.attachMember(structure, {
-        type: MemberType.Uint,
-        flags: MemberFlag.IsSentinel | MemberFlag.IsRequired,
-        bitOffset: 0,
-        bitSize: 8,
-        byteSize: 1,
-        structure: uintStructure,
-      });
-      env.attachTemplate(structure, {
-        [MEMORY]: new DataView(new ArrayBuffer(1)),
-      });
-      const Slice = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+            {
+              type: MemberType.Uint,
+              flags: MemberFlag.IsSentinel | MemberFlag.IsRequired,
+              bitOffset: 0,
+              bitSize: 8,
+              byteSize: 1,
+              structure: uintStructure,
+            },
+          ],
+          template: {
+            [MEMORY]: new DataView(new ArrayBuffer(1)),
+          },
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const Slice = structure.constructor;
       const array = [ ...'Slice' ].map(c => c.charCodeAt(0));
       expect(() => new Slice(array)).to.throw(TypeError);
       expect(() => new Slice({ typedArray: new Uint8Array(array) })).to.throw(TypeError);
@@ -1961,31 +2589,44 @@ describe('Structure: slice', function() {
     if (process.env.TARGET === 'node') {
       it('should allow casting from a buffer', function() {
         const env = new Env();
-        const uintStructure = env.beginStructure({
+        const uintStructure = {
           type: StructureType.Primitive,
-            byteSize: 4,
-        });
-        env.attachMember(uintStructure, {
-          type: MemberType.Uint,
-          bitSize: 32,
-          bitOffset: 0,
           byteSize: 4,
-          structure: uintStructure,
-        });
-        env.defineStructure(uintStructure);
+          signature: 0n,
+          instance: {
+            members: [
+              {
+                type: MemberType.Uint,
+                bitSize: 32,
+                bitOffset: 0,
+                byteSize: 4,
+                structure: uintStructure,
+              },
+            ],
+          },
+          static: {},
+        };
+        env.beginStructure(uintStructure);
         env.finalizeStructure(uintStructure);
-        const structure = env.beginStructure({
+        const structure = {
           type: StructureType.Slice,
           name: '[_]u32',
           byteSize: 4,
-        });
-        env.attachMember(structure, {
-          type: MemberType.Uint,
-          bitSize: 32,
-          byteSize: 4,
-          structure: uintStructure,
-        });
-        const Slice = env.defineStructure(structure);
+          signature: 0n,
+          instance: {
+            members: [
+              {
+                type: MemberType.Uint,
+                bitSize: 32,
+                byteSize: 4,
+                structure: uintStructure,
+              },
+            ],
+          },
+          static: {},
+        };
+        env.beginStructure(structure);
+        const Slice = structure.constructor;
         env.finishStructure(structure);
         const buffer = new Buffer(16);
         const slice = Slice(buffer);
