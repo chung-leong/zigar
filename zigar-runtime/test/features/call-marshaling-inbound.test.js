@@ -2156,111 +2156,141 @@ describe('Feature: call-marshaling-inbound', function() {
     })
     it('should return failure code when error is not in error set', async function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         name: 'Int32',
         byteSize: 4,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const errorStructure = env.beginStructure({
+      const errorStructure = {
         type: StructureType.ErrorSet,
         name: 'MyError',
         byteSize: 2,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Uint,
+              bitSize: 16,
+              bitOffset: 0,
+              byteSize: 2,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      }
+      env.beginStructure(errorStructure);
+      const MyError = errorStructure.constructor;
+      Object.assign(errorStructure.static, {
+        members: [
+          {
+            name: 'UnableToRetrieveMemoryLocation',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 0,
+            structure: errorStructure,
+          },
+          {
+            name: 'UnableToCreateObject',
+            type: MemberType.Object,
+            flags: MemberFlag.IsReadOnly,
+            slot: 1,
+            structure: errorStructure,
+          },
+        ],
+        template: {
+          [SLOTS]: {
+            0: MyError.call(ENVIRONMENT, errorData(5)),
+            1: MyError.call(ENVIRONMENT, errorData(8)),
+          }
+        },
       });
-      env.attachMember(errorStructure, {
-        type: MemberType.Uint,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: errorStructure,
-      });
-      const MyError = env.defineStructure(errorStructure);
-      env.attachMember(errorStructure, {
-        name: 'UnableToRetrieveMemoryLocation',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 0,
-        structure: errorStructure,
-      }, true);
-      env.attachMember(errorStructure, {
-        name: 'UnableToCreateObject',
-        type: MemberType.Object,
-        flags: MemberFlag.IsReadOnly,
-        slot: 1,
-        structure: errorStructure,
-      }, true);
-      env.attachTemplate(errorStructure, {
-        [SLOTS]: {
-          0: MyError.call(ENVIRONMENT, errorData(5)),
-          1: MyError.call(ENVIRONMENT, errorData(8)),
-        }
-      }, true);
       env.finishStructure(errorStructure);
-      const unionStructure = env.beginStructure({
+      const unionStructure = {
         type: StructureType.ErrorUnion,
         flags: StructureFlag.HasValue,
         name: 'ErrorUnion',
         byteSize: 6,
-      });
-      env.attachMember(unionStructure, {
-        type: MemberType.Int,
-        bitOffset: 0,
-        bitSize: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(unionStructure, {
-        type: MemberType.Uint,
-        flags: MemberFlag.IsSelector,
-        bitOffset: 32,
-        bitSize: 16,
-        byteSize: 2,
-        structure: errorStructure,
-      });
-      env.defineStructure(unionStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitOffset: 0,
+              bitSize: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              type: MemberType.Uint,
+              flags: MemberFlag.IsSelector,
+              bitOffset: 32,
+              bitSize: 16,
+              byteSize: 2,
+              structure: errorStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(unionStructure);
       env.finishStructure(unionStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ArgStruct,
         flags: StructureFlag.HasObject | StructureFlag.HasSlot | ArgStructFlag.IsThrowing,
         byteSize: 6 + 4 * 2,
         length: 2,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Object,
-        bitSize: 48,
-        bitOffset: 0,
-        byteSize: 6,
-        slot: 0,
-        structure: unionStructure,
-      });
-      env.attachMember(structure, {
-        name: '0',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 48,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '1',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 80,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const ArgStruct = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Object,
+              bitSize: 48,
+              bitOffset: 0,
+              byteSize: 6,
+              slot: 0,
+              structure: unionStructure,
+            },
+            {
+              name: '0',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 48,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '1',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 80,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const ArgStruct = structure.constructor;
       const fn = (arg1, arg2) => {
         throw new Error('Boo!');
       };
@@ -2289,52 +2319,65 @@ describe('Feature: call-marshaling-inbound', function() {
     })
     it('should return code indicating deadlock when waiting is not possible', async function() {
       const env = new Env();
-      const intStructure = env.beginStructure({
+      const intStructure = {
         type: StructureType.Primitive,
         name: 'Int32',
         byteSize: 4,
         flags: StructureFlag.HasValue,
-      });
-      env.attachMember(intStructure, {
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.defineStructure(intStructure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const structure = env.beginStructure({
+      const structure = {
         type: StructureType.ArgStruct,
         byteSize: 4 * 3,
         length: 2,
-      });
-      env.attachMember(structure, {
-        name: 'retval',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 0,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '0',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 32,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      env.attachMember(structure, {
-        name: '1',
-        type: MemberType.Int,
-        bitSize: 32,
-        bitOffset: 64,
-        byteSize: 4,
-        structure: intStructure,
-      });
-      const ArgStruct = env.defineStructure(structure);
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '0',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '1',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 64,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(structure);
       env.finishStructure(structure);
+      const ArgStruct = structure.constructor;
       const fn = async (arg1, arg2) => {
         await delay(50);
         return arg1 + arg2;

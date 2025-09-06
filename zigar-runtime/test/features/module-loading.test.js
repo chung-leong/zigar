@@ -109,58 +109,6 @@ describe('Feature: module-loading', function() {
     })
   })
   if (process.env.TARGET === 'wasm') {
-    describe('initialize', function() {
-      skip.if(process.version <= 'v18').
-      it('should accept a WASI object', async function() {
-        const env = new Env();
-        const url = new URL('./wasm-samples/read-file.wasm', import.meta.url);
-        const buffer = await readFile(fileURLToPath(url));
-        env.loadModule(buffer, {
-          memoryInitial: 257,
-          memoryMax: undefined,
-          tableInitial: 320,
-          multithreaded: false,
-        });
-        const { WASI } = await import('wasi');
-        const wasi = new WASI({
-          version: 'preview1',
-          args: [],
-          env: {},
-          preopens: {
-            '/local': fileURLToPath(new URL('.', import.meta.url)),
-          },
-        });
-        await env.initialize(wasi);
-      })
-      skip.if(process.version <= 'v18').
-      it('should throw when WASM source has already been obtained', async function() {
-        const env = new Env();
-        const url = new URL('./wasm-samples/read-file.wasm', import.meta.url);
-        const buffer = await readFile(fileURLToPath(url));
-        await env.instantiateWebAssembly(buffer, {
-          memoryInitial: 257,
-          memoryMax: undefined,
-          tableInitial: 320,
-          multithreaded: false,
-        });
-        const { WASI } = await import('wasi');
-        const wasi = new WASI({
-          version: 'preview1',
-          args: [],
-          env: {},
-          preopens: {
-            '/local': fileURLToPath(new URL('.', import.meta.url)),
-          },
-        });
-        let error;
-        try {
-          await env.init(wasi);
-        } catch (err) {
-          error = err;
-        }
-        expect(error).to.be.an('error');
-      })
-    })
     describe('displayPanic', function() {
       it('should output panic message to console', async function() {
         const env = new Env();
@@ -317,8 +265,8 @@ describe('Feature: module-loading', function() {
       it('should export functions of the class needed by Zig code', function() {
         const env = new Env();
         const exports = env.exportFunctions();
-        expect(exports._captureString).to.be.a('function');
-        expect(exports._beginStructure).to.be.a('function');
+        expect(exports._createBool).to.be.a('function');
+        expect(exports._createObject).to.be.a('function');
       })
     })
     describe('importFunctions', function() {

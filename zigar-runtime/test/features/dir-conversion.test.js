@@ -13,11 +13,16 @@ describe('Feature: dir-conversion', function() {
       ]);
       const dir = env.convertDirectory(map);
       const list = [];
-      for (const entry of dir.readdir()) {
+      let entry;
+      while (entry = dir.readdir()) {
         list.push(entry);
       }
-      expect(list).to.have.lengthOf(1);
-      expect(list[0]).to.eql({ name: 'hello.txt', type: 'file' });
+      expect(list).to.have.lengthOf(3);
+      expect(list).to.eql([ 
+        { name: '.', type: 'directory' }, 
+        { name: '..', type: 'directory' },
+        { name: 'hello.txt', type: 'file' },
+      ]);
       let called = false;
       dir.onClose = () => called = true;
       map.close();
@@ -26,24 +31,28 @@ describe('Feature: dir-conversion', function() {
     it('should return same object if it has a readdir method', function() {
       const env = new Env();
       const object = {
-        *readdir() {
-          for (let i = 0; i < 5; i++) {
-            yield { name: `file${i}.txt`, type: 'file' };
+        pos: 0,
+
+        readdir() {
+          const index = this.pos++;
+          if (index < 5) {
+            return { name: `file${index}.txt`, type: 'file' };
           }
         },
       };
       const dir = env.convertDirectory(object);
       const list = [];
-      for (const entry of dir.readdir()) {
+      let entry;
+      while (entry = dir.readdir()) {
         list.push(entry);
       }
       expect(list).to.have.lengthOf(5);
       expect(list[0]).to.eql({ name: 'file0.txt', type: 'file' });
     })
-    it('should throw error when conversion is not possible', function() {
+    it('should return undefined when conversion is not possible', function() {
       const env = new Env();
-      expect(() => env.convertDirectory(1234)).to.throw(TypeError)
-        .with.property('message').that.contains('map or object');
+      const dir = env.convertDirectory(1234);
+      expect(dir).to.be.undefined;
     })
   })
 })
