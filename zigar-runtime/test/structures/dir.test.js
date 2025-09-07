@@ -27,5 +27,9 @@ describe('Feature: dir', function() {
       const dir = env.createDirectory(object);
       expect(dir).to.equal(object);
     })
+    it('should throw error when argument cannot be converted', async function() {
+      const env = new Env();
+      expect(() => env.createDirectory(1234)).to.throw(Error);
+    })
   })
 })

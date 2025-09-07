@@ -33,10 +33,12 @@ export default mixin({
       }
     }
     let fd = this.createStreamHandle(file, rights);
+    /* c8 ignore start */
     if (process.env.TARGET === 'node' && process.platform === 'win32') {
       // handle is pointer
       fd = this.obtainZigView(usize(fd << 1), 0);
     }
+    /* c8 ignore end */
     return { handle: fd };
   },
 });
