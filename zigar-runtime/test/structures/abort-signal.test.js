@@ -190,7 +190,7 @@ describe('Feature: abort-signal', function() {
               bitSize: 32,
               bitOffset: 0,
               byteSize: 4,
-              structure: intStructure,
+              structure: {},
             },
           ],
         },

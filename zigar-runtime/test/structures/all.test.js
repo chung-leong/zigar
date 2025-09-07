@@ -206,7 +206,7 @@ describe('Structure: all', function() {
               bitSize: 64,
               bitOffset: 0,
               byteSize: 8,
-              structure,
+              structure: {},
             }
           ],
         },

@@ -887,8 +887,6 @@ describe('Feature: pointer-synchronization', function() {
         static: {},
       };
       env.beginStructure(ptrStructure);
-      env.attachMember(ptrStructure, );
-      ptrStructure.constructor;
       env.finishStructure(ptrStructure);
       const structure = {
         type: StructureType.ArgStruct,

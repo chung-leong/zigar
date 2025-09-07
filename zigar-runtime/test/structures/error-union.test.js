@@ -81,19 +81,19 @@ describe('Structure: error-union', function() {
         type: StructureType.ErrorSet,
         name: 'MyError',
         byteSize: 2,
-        signature: 0n,
-        instance: {
-          members: [
-            {
-              type: MemberType.Uint,
-              bitSize: 16,
-              bitOffset: 0,
-              byteSize: 2,
-              structure: errorStructure,
-            },
-          ],
-        },
+        signature: 0n,      
       };
+      errorStructure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure: errorStructure,
+          },
+        ],
+      },
       env.beginStructure(errorStructure);
       const MyError = errorStructure.constructor;
       errorStructure.static = {
@@ -247,18 +247,18 @@ describe('Structure: error-union', function() {
         name: 'anyerror',
         byteSize: 2,
         signature: 0n,
-        instance: {
-          members: [
-            {
-              type: MemberType.Uint,
-              bitSize: 16,
-              bitOffset: 0,
-              byteSize: 2,
-              structure: anyErrorStructure,
-            },
-          ],
-        },
         static: {},
+      };
+      anyErrorStructure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure: anyErrorStructure,
+          },
+        ],
       };
       env.beginStructure(anyErrorStructure);
       env.finishStructure(anyErrorStructure);

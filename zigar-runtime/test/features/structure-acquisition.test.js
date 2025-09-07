@@ -185,19 +185,23 @@ describe('Feature: structure-acquisition', function() {
               structure: ptrStructure,
             },
           ],
+          template: {
+            [MEMORY]: (() => {
+              const dv = new DataView(new ArrayBuffer(addressByteSize));
+              if (addressSize === 32) {
+                dv.setUint32(0, 0x1000, true);
+              } else {
+                dv.setBigUint64(0, 0x1000n, true);
+              }
+              return dv;
+            })(),
+            [SLOTS]: {},
+          }
         },
         static: {},
       };
       env.beginStructure(structStructure);
       env.finishStructure(structStructure);
-      const dv = new DataView(new ArrayBuffer(addressByteSize));
-      if (addressSize === 32) {
-        dv.setUint32(0, 0x1000, true);
-      } else {
-        dv.setBigUint64(0, 0x1000n, true);
-      }
-      const templ = { [MEMORY]: dv, [SLOTS]: {} };
-      env.attachTemplate(structStructure, templ, false);
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
       } else {
@@ -421,7 +425,7 @@ describe('Feature: structure-acquisition', function() {
               bitSize: 32,
               bitOffset: 0,
               byteSize: 4,
-              structure: intStructure,
+              structure: {},
             },
           ],
         },
