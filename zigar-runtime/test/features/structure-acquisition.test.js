@@ -13,56 +13,52 @@ import { addressByteSize, addressSize } from '../test-utils.js';
 const Env = defineEnvironment();
 
 describe('Feature: structure-acquisition', function() {
-  describe('readSlot', function() {
+  describe('getSlotValue', function() {
     it('should read from global slots where target is null', function() {
       const env = new Env();
       const object = {}
       env.slots[1] = object;
-      const result1 = env.readSlot(null, 1);
-      const result2 = env.readSlot(null, 2);
+      const result1 = env.getSlotValue(null, 1);
+      const result2 = env.getSlotValue(null, 2);
       expect(result1).to.equal(object);
       expect(result2).to.be.undefined;
     })
-    it('should read from slots of target object', function() {
+    it('should read from target object', function() {
       const env = new Env();
       const object = {}
       const target = {
-        [SLOTS]: {
-          1: object,
-        }
+        1: object,
       };
-      const result1 = env.readSlot(target, 1);
-      const result2 = env.readSlot(target, 2);
+      const result1 = env.getSlotValue(target, 1);
+      const result2 = env.getSlotValue(target, 2);
       expect(result1).to.equal(object);
       expect(result2).to.be.undefined;
     })
     it('should not throw where object does not have slots', function() {
       const env = new Env();
       const target = {};
-      expect(() => env.readSlot(target, 1)).to.not.throw();
+      expect(() => env.getSlotValue(target, 1)).to.not.throw();
     })
   });
-  describe('writeSlot', function() {
+  describe('setSlotValue', function() {
     it('should write into global slots where target is null', function() {
       const env = new Env();
       const object = {}
-      env.writeSlot(null, 1, object);
+      env.setSlotValue(null, 1, object);
       expect(env.slots[1]).to.equal(object);
     })
-    it('should read from slots of target object', function() {
+    it('should write to slot of target object', function() {
       const env = new Env();
       const object = {}
-      const target = {
-        [SLOTS]: {}
-      };
-      env.writeSlot(target, 1, object);
-      expect(target[SLOTS][1]).to.equal(object);
+      const target = {};
+      env.setSlotValue(target, 1, object);
+      expect(target[1]).to.equal(object);
     })
     it('should not throw where object does not have slots', function() {
       const env = new Env();
       const object = {}
       const target = {};
-      expect(() => env.writeSlot(target, 1, object)).to.not.throw();
+      expect(() => env.setSlotValue(target, 1, object)).to.not.throw();
     })
   })
   describe('beginStructure', function() {
@@ -210,6 +206,7 @@ describe('Feature: structure-acquisition', function() {
         };
       }
       env.acquireStructures({});
+      const templ = structStructure.instance.template;
       expect(templ[SLOTS][0]).to.not.be.undefined;
       expect(templ[SLOTS][0]['*']).to.equal(0);
     })
@@ -1106,70 +1103,6 @@ describe('Feature: structure-acquisition', function() {
       expect(name).to.equal('fn ()');
     })
   })
-  if (process.env.TARGET === 'wasm') {
-    describe('beginDefinition', function() {
-      it('should return an empty object', function() {
-        const env = new Env();
-        const def1 = env.beginDefinition();
-        expect(def1).to.be.an('object');
-        const { _beginDefinition } = env.exportFunctions();
-        const def2 = env.fromWebAssembly('v', _beginDefinition());
-        expect(def2).to.be.an('object');
-      })
-    })
-    describe('insertProperty', function() {
-      it('should insert value into object', function() {
-        const env = new Env();
-        const def1 = env.beginDefinition();
-        env.insertProperty(def1, 'hello', 1234);
-        expect(def1).to.have.property('hello', 1234);
-        const {
-          _beginDefinition,
-          _insertBoolean,
-          _insertString,
-          _insertObject,
-        } = env.exportFunctions();
-        const object = {};
-        const defIndex = _beginDefinition();
-        _insertBoolean(defIndex, env.toWebAssembly('s', 'boolean'), 1);
-        _insertString(defIndex, env.toWebAssembly('s', 'string'), env.toWebAssembly('s', 'holy cow'));
-        _insertObject(defIndex, env.toWebAssembly('s', 'object'), env.toWebAssembly('v', object));
-        const def2 = env.fromWebAssembly('v', defIndex);
-        expect(def2).to.have.property('boolean', true);
-        expect(def2).to.have.property('string', 'holy cow');
-        expect(def2).to.have.property('object', object);
-      })
-    })
-    describe('insertInteger', function() {
-      it('should convert negative value for unsigned integers', function() {
-        const env = new Env();
-        const def = env.beginDefinition();
-        env.insertInteger(def, 'hello', -2, true);
-        expect(def).to.have.property('hello', 0xffff_fffe);
-      })
-    })
-    describe('insertBigInteger', function() {
-      it('should convert negative value for unsigned integers', function() {
-        const env = new Env();
-        const def = env.beginDefinition();
-        env.insertBigInteger(def, 'hello', -2n, true);
-        expect(def).to.have.property('hello', 0xffff_ffff_ffff_fffen);
-      })
-    })
-    describe('captureString', function() {
-      it('should return string located at address', function() {
-        const env = new Env();
-        const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-        const text = 'Hello';
-        const src = new DataView(memory.buffer, 128, 16);
-        for (let i = 0; i < text.length; i++) {
-          src.setUint8(i, text.charCodeAt(i));
-        }
-        const string = env.captureString(128, 5);
-        expect(string).to.equal('Hello');
-      })
-    })
-  }
 })
 
 function zig(address, len = 0) {

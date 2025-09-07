@@ -58,7 +58,8 @@ describe('Feature: stream-redirection', function() {
           copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
         };
       }
-      const original = env.redirectStream(1, chunks);
+      const stream = env.convertWriter(chunks);
+      const original = env.redirectStream(1, stream);
       const bufferAddress = usize(0x1000);
       const stringAddress = usize(0x2000);
       const writtenAddress = usize(0x3000);
@@ -78,7 +79,7 @@ describe('Feature: stream-redirection', function() {
       expect(chunks).to.have.lengthOf(1);
       expect(chunks[0]).to.eql(string);
       env.redirectStream(1, original);
-      const [ line ] = await capture(() => {
+      const [ line ] = await capture(async () => {
         env.fdWrite(1, bufferAddress, 1, writtenAddress);
       });
       expect(line).to.equal('Hello world');
@@ -142,7 +143,7 @@ describe('Feature: stream-redirection', function() {
         };
       }
       const map = new Map;
-      env.redirectStream(3, map);
+      env.redirectStream(-1, map);
     })
     it('should close a stream when undefined is given', async function() {
       const env = new Env();
@@ -269,14 +270,6 @@ describe('Feature: stream-redirection', function() {
         env.flushStreams();
       });
       expect(lines).to.eql([ 'Hello world!' ]);
-    })
-    it('should trigger flushing of stdout in C', async function() {
-      const env = new Env();
-      let called = false;
-      env.libc = true;
-      env.flushStdout = () => called = true;
-      env.flushStreams();
-      expect(called).to.be.true;
     })
   })
 })

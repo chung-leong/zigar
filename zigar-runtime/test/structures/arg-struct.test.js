@@ -396,9 +396,9 @@ describe('Structure: arg-struct', function() {
         },
         static: {},
       };
-      const ArgStruct = structure.constructor;
       env.beginStructure(structure);
       env.finishStructure(structure);
+      const ArgStruct = structure.constructor;
       expect(() => new ArgStruct([ 123 ])).to.throw(ArgumentCountMismatch);
       expect(() => new ArgStruct([ 123, 456, 789 ])).to.throw(ArgumentCountMismatch);
       expect(() => new ArgStruct([ 123, 456 ])).to.not.throw();
@@ -813,7 +813,6 @@ describe('Structure: arg-struct', function() {
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
       }
-      new ArgStruct([ 123 ]);
       expect(() => new ArgStruct([ 123 ])).to.not.throw();
       expect(() => new ArgStruct([ 123, {} ])).to.not.throw();
       expect(() => new ArgStruct([ 123, { callback: () => {} } ])).to.not.throw();

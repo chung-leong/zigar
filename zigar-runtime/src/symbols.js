@@ -48,6 +48,7 @@ export const GENERATOR = symbol('generator');
 export const ALLOCATOR = symbol('allocator');
 export const FALLBACK = symbol('fallback');
 export const SIGNATURE = symbol('signature');
+export const CONTROLLER = symbol('controller');
 export const STRING_RETVAL = symbol('string retval');
 
 export const UPDATE = symbol('update');

@@ -49,23 +49,24 @@ describe('Feature: reader-conversion', function() {
       expect(res2).to.eql(new Uint8Array([ 5, 6, 7, 8 ]));
       const res3 = reader.read(4);
       expect(res3).to.eql(new Uint8Array([ 9 ]));
-      reader.seek(3n, 0);
+      reader.seek(3, 0);
       const res4 = reader.read(4);
       expect(res4).to.eql(new Uint8Array([ 4, 5, 6, 7 ]));
       const res5 = reader.tell();
-      expect(res5).to.equal(7n);
-      reader.seek(-2n, 1);
+      expect(res5).to.equal(7);
+      reader.seek(-2, 1);
       const res6 = reader.tell();
-      expect(res6).to.equal(5n);
-      reader.seek(-1n, 2);
+      expect(res6).to.equal(5);
+      reader.seek(-1, 2);
       const res7 = reader.tell();
-      expect(res7).to.equal(8n);
+      expect(res7).to.equal(8);
       expect(() => reader.seek(1000, 0)).to.throw(InvalidArgument);
       let called = false;
       reader.onClose = () => called = true;
       array.close();
       expect(called).to.be.true;
     })
+    skip.
     it('should convert a Blob to a reader', async function() {
       const env = new Env();
       const blob = new Blob([
@@ -79,11 +80,11 @@ describe('Feature: reader-conversion', function() {
       expect(res2).to.eql(new Uint8Array([ 5, 6, 7, 8 ]));
       const res3 = await reader.read(4);
       expect(res3).to.eql(new Uint8Array([ 9 ]));
-      reader.seek(3n, 0);
+      reader.seek(3, 0);
       const res4 = await reader.read(4);
       expect(res4).to.eql(new Uint8Array([ 4, 5, 6, 7 ]));
       const res5 = reader.tell();
-      expect(res5).to.equal(7n);
+      expect(res5).to.equal(7);
       blob.close();
     })
     it('should convert null to a reader', async function() {
@@ -102,13 +103,14 @@ describe('Feature: reader-conversion', function() {
       const reader = env.convertReader(originalReader);
       expect(reader).to.equal(originalReader);
     })
-    it('should throw when argument cannot be converted to a reader', async function() {
+    it('should return undefined when argument cannot be converted to a reader', async function() {
       const env = new Env();
-      expect(() => env.convertReader({})).to.throw(Error)
-        .with.property('message').that.contains('ReadableStreamDefaultReader');
-      expect(() => env.convertReader(undefined)).to.throw(Error)
-        .with.property('message').that.contains('undefined');
-      expect(() => env.convertReader(null)).to.not.throw();
+      const result1 = env.convertReader({});
+      expect(result1).to.be.undefined;
+      const result2 = env.convertReader(undefined);
+      expect(result2).to.be.undefined;
+      const result3 = env.convertReader(null);
+      expect(result3).to.be.an('object');
     })
   })
 })

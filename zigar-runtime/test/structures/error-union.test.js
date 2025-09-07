@@ -767,7 +767,7 @@ describe('Structure: error-union', function() {
       };
       env.beginStructure(errorStructure);
       const MyError = errorStructure.constructor;
-      Object.static = {
+      errorStructure.static = {
         members: [
           {
             name: 'UnableToRetrieveMemoryLocation',

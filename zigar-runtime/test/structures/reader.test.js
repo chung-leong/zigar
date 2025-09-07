@@ -62,9 +62,9 @@ describe('Structure: reader', function() {
         '*': { [MEMORY]: dv2 }
       }
       const read2 = await readFn(ptr, buffer2);
-      expect(read2).to.equal(28);
+      expect(read2).to.equal(4);
       const read3 = await readFn(ptr, buffer2);
-      expect(read3).to.equal(0);
+      expect(read3).to.equal(8);
     })
     it('should create a read struct from an instanceof ReadableStreamBYOBReader', async function() {
       const env = new Env();

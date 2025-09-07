@@ -12,7 +12,6 @@ describe('Structure: error-set', function() {
       const structure = {
         type: StructureType.ErrorSet,
         byteSize: 2,
-        instance: {},
         static: {
           members: [],
           template: {
@@ -20,15 +19,17 @@ describe('Structure: error-set', function() {
           }
         },
       };
-      structure.instance.members = [
-        {
-          type: MemberType.Uint,
-          bitSize: 16,
-          bitOffset: 0,
-          byteSize: 1,
-          structure,
-        },
-      ];
+      structure.instance = {
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 1,
+            structure,
+          },
+        ],
+      };
       const env = new Env();
       const descriptors = {};
       const constructor = env.defineErrorSet(structure, descriptors);
@@ -38,7 +39,6 @@ describe('Structure: error-set', function() {
       const structure = {
         type: StructureType.ErrorSet,
         byteSize: 2,
-        instance: {},
         static: {
           members: [],
           template: {
@@ -46,15 +46,17 @@ describe('Structure: error-set', function() {
           }
         },
       };
-      structure.instance.members = [
-        {
-          type: MemberType.Uint,
-          bitSize: 16,
-          bitOffset: 0,
-          byteSize: 2,
-          structure,
-        },
-      ];
+      structure.instance = { 
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure,
+          },
+        ],
+      };
       const env = new Env();
       const descriptors = {};
       env.defineErrorSet(structure, descriptors);
@@ -69,7 +71,6 @@ describe('Structure: error-set', function() {
         type: StructureType.ErrorSet,
         name: 'ErrorSet',
         byteSize: 2,
-        instance: {},
         static: {
           members: [],
           template: {
@@ -77,15 +78,17 @@ describe('Structure: error-set', function() {
           }
         },
       };
-      structure.instance.members = [
-        {
-          type: MemberType.Uint,
-          bitSize: 16,
-          bitOffset: 0,
-          byteSize: 2,
-          structure,
-        },
-      ];
+      structure.instance = { 
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure,
+          },
+        ],
+      };
       const env = new Env();
       const descriptors = {};
       env.finalizeErrorSet(structure, descriptors);
@@ -96,52 +99,55 @@ describe('Structure: error-set', function() {
         type: StructureType.ErrorSet,
         name: 'ErrorSet',
         byteSize: 2,
-        instance: {},
-        static: {},
       };
-      structure.instance.members = [
-        {
-          type: MemberType.Uint,
-          bitSize: 16,
-          bitOffset: 0,
-          byteSize: 2,
-          structure,
-        },
-      ];
-      structure.static.members = [
-        {
-          name: 'dog_ate_homework',
-          type: MemberType.Object,
-          flags: MemberFlag.IsPartOfSet,
-          slot: 0,
-          structure,
-        },
-        {
-          name: 'cat_fell_in_love',
-          type: MemberType.Object,
-          flags: MemberFlag.IsPartOfSet,
-          slot: 1,
-          structure,
-        },
-      ];
+      structure.instance = { 
+        members: [
+          {
+            type: MemberType.Uint,
+            bitSize: 16,
+            bitOffset: 0,
+            byteSize: 2,
+            structure,
+          },
+        ],
+      }
       const Item = function(number) {
         this[MEMORY] = new DataView(new ArrayBuffer(2));
         this[MEMORY].setInt16(0, number, true);
       };
       const dog = new Item(77);
       const cat = new Item(88);
-      structure.static.template = {
-        [SLOTS]: {
-          0: dog,
-          1: cat
+      structure.static = { 
+        members: [
+          {
+            name: 'dog_ate_homework',
+            type: MemberType.Object,
+            flags: MemberFlag.IsPartOfSet,
+            slot: 0,
+            structure,
+          },
+          {
+            name: 'cat_fell_in_love',
+            type: MemberType.Object,
+            flags: MemberFlag.IsPartOfSet,
+            slot: 1,
+            structure,
+          },
+        ],
+        template: {
+          [SLOTS]: {
+            0: dog,
+            1: cat
+          },
         },
       };
       const env = new Env();
       const descriptors = {};
-      structure.constructor;
-      env.finalizeErrorSet(structure, descriptors);
-      expect(descriptors.dog_ate_homework?.value).to.be.an('error');
-      expect(descriptors.cat_fell_in_love?.value).to.be.an('error');
+      env.defineErrorSet(structure, descriptors);
+      const staticDescriptors = {};
+      env.finalizeErrorSet(structure, staticDescriptors);
+      expect(staticDescriptors.dog_ate_homework?.value).to.be.an('error');
+      expect(staticDescriptors.cat_fell_in_love?.value).to.be.an('error');
     })
   })
   describe('defineStructure', function() {
@@ -270,6 +276,7 @@ describe('Structure: error-set', function() {
         flags: ErrorSetFlag.IsGlobal,
         byteSize: 2,
         signature: 0n,
+        static: {},
       };
       structure.instance = {
         members: [
@@ -414,7 +421,10 @@ describe('Structure: error-set', function() {
             structure,
           },
         ],
-      }
+      };
+      structure.static = {
+        members: [],
+      };
       env.beginStructure(structure);
       const AnyError = structure.constructor;
       env.finishStructure(structure);
@@ -696,7 +706,7 @@ describe('Structure: error-set', function() {
             structure,
           },
         ],
-        instance: {
+        template: {
           [SLOTS]: {
             0: ErrorSet.call(ENVIRONMENT, errorData(5)),
             1: ErrorSet.call(ENVIRONMENT, errorData(8)),
@@ -998,7 +1008,7 @@ describe('Structure: error-set', function() {
             structure,
           },
         ],
-        instance: {
+        template: {
           [SLOTS]: {
             0: ErrorSet.call(ENVIRONMENT, errorData(5)),
             1: ErrorSet.call(ENVIRONMENT, errorData(8)),

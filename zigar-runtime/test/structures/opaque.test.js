@@ -104,6 +104,7 @@ describe('Structure: opaque', function () {
         static: {},
       };
       env.beginStructure(structure);
+      env.finishStructure(structure);
       const Hello = structure.constructor;
       const ptrStructure = {
         type: StructureType.Pointer,
@@ -209,6 +210,7 @@ describe('Structure: opaque', function () {
             })(),
           },
         },
+        static: {},
       };
       env.beginStructure(fnStructure);
       const Next = fnStructure.constructor;

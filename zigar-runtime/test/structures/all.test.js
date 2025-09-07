@@ -29,6 +29,7 @@ describe('Structure: all', function() {
         },
         static: {},
       };
+      env.beginStructure(structure);
       const Hello = structure.constructor;
       expect(Hello).to.be.a('function');
       const dv = new DataView(new ArrayBuffer(8));
@@ -242,7 +243,7 @@ describe('Structure: all', function() {
       };
       env.beginStructure(intStructure);
       env.finishStructure(intStructure);
-      const Int32 = intStructure;
+      const Int32 = intStructure.constructor;
       const structure = {
         type: StructureType.Struct,
         name: 'Hello',
@@ -352,6 +353,7 @@ describe('Structure: all', function() {
       };
       env.beginStructure(intStructure);
       env.finishStructure(intStructure);
+      const Int32 = intStructure.constructor;
       const structure = {
         type: StructureType.Enum,
         flags: StructureFlag.HasValue,
@@ -483,6 +485,7 @@ describe('Structure: all', function() {
       };
       env.beginStructure(argStruct);
       env.finishStructure(argStruct);
+      const ArgStruct = argStruct.constructor;
       const fnStructure = {
         type: StructureType.Function,
         byteSize: 0,
@@ -498,9 +501,9 @@ describe('Structure: all', function() {
             [MEMORY]: zig(0x1234),
           },
         },
+        static: {},
       };
       env.beginStructure(fnStructure);
-      env.attachTemplate(fnStructure, thunk, false);
       env.finalizeStructure(fnStructure);
       const Fn = fnStructure.constructor;
       const fn = Fn.call(ENVIRONMENT, zig(0x4567));
@@ -703,9 +706,9 @@ describe('Structure: all', function() {
             [MEMORY]: zig(0x4567),
           },
         },
+        static: {},
       };
       env.beginStructure(setterStructure);
-      env.attachTemplate(setterStructure, setterThunk, false);
       env.finishStructure(setterStructure);
       const Setter = setterStructure.constructor;
       structure.static = {
@@ -733,6 +736,7 @@ describe('Structure: all', function() {
         },
       };
       env.finishStructure(structure);
+      const Hello = structure.constructor;
       const object = new Hello({ dog: 1, cat: 2 });
       let apple = 123;
       const thunkAddresses = [];

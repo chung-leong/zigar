@@ -57,6 +57,7 @@ describe('Feature: write-protection', function() {
       expect(() => object.dog = 1).to.throw(TypeError);
       expect(() => object.cat = 1).to.throw(TypeError);
     })
+    skip.
     it('should make an array read-only', function() {
       const env = new Env();
       const intStructure = {

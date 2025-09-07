@@ -73,6 +73,12 @@ describe('Structure: enum', function() {
           },
         ],
       };
+      structure.static = {
+        members: [],
+        template: {
+          [SLOTS]: {},
+        },
+      };
       const env = new Env();
       const descriptors = {};
       env.finalizeEnum(structure, descriptors);
@@ -835,6 +841,7 @@ describe('Structure: enum', function() {
       };
       env.beginStructure(structure);
       structure.static = {
+        members: [],
         template: {
           [SLOTS]: {},
         },
@@ -863,6 +870,7 @@ describe('Structure: enum', function() {
       };
       env.beginStructure(structure);
       structure.static = {
+        members: [],
         template: {
           [SLOTS]: {},
         },

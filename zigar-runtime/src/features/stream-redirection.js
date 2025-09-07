@@ -3,9 +3,6 @@ import { mixin } from '../environment.js';
 import { InvalidFileDescriptor, InvalidStream, Unsupported } from '../errors.js';
 import { decodeText } from '../utils.js';
 
-const stdinRights = PosixDescriptorRight.fd_read;
-const stdoutRights = PosixDescriptorRight.fd_write;
-
 const defaultDirRights =  PosixDescriptorRight.fd_seek
                         | PosixDescriptorRight.fd_fdstat_set_flags
                         | PosixDescriptorRight.fd_tell
@@ -105,16 +102,14 @@ export default mixin({
     const fd = (num === -1) ? PosixDescriptor.root : num;
     const previous = map.get(fd);
     if (arg !== undefined) {
-      let stream, rights;
-      if (num === 0) {
+      let stream, rights = this.getDefaultRights('file');
+      if (num === PosixDescriptor.stdin) {
         stream = this.convertReader(arg);
-        rights = [ stdinRights, 0 ];
-      } else if (num === 1 || num === 2) {
+      } else if (num === PosixDescriptor.stdout || num === PosixDescriptor.stderr) {
         stream = this.convertWriter(arg);
-        rights = [ stdoutRights, 0 ];
-      } else if (num === -1) {
+      } else if (num === PosixDescriptor.root) {
         stream = this.convertDirectory(arg);
-        rights = [ rootRights, rootRightsInheriting ];
+        rights = this.getDefaultRights('dir');
       } else {
         throw new Error(`Expecting 0, 1, 2, or -1, received ${fd}`);
       }
@@ -125,7 +120,7 @@ export default mixin({
     } else {
       map.delete(fd);
     }
-    return previous;
+    return previous?.[0];
   },
   createLogWriter(source) {
     const env = this;

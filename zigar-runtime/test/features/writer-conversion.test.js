@@ -57,13 +57,14 @@ describe('Feature: writer-conversion', function() {
       const writer = env.convertWriter(originalWriter);
       expect(writer).to.equal(originalWriter);
     })
-    it('should throw when argument cannot be converted to a writer', async function() {
+    it('should return undefined when argument cannot be converted to a writer', async function() {
       const env = new Env();
-      expect(() => env.convertWriter({})).to.throw(Error)
-        .with.property('message').that.contains('WritableStreamDefaultWriter');
-      expect(() => env.convertWriter(undefined)).to.throw(Error)
-        .with.property('message').that.contains('undefined');
-      expect(() => env.convertWriter(null)).to.not.throw();
+      const result1 = env.convertWriter({});
+      expect(result1).to.undefined;
+      const result2 = env.convertWriter(undefined);
+      expect(result2).to.undefined;
+      const result3 = env.convertWriter(null);
+      expect(result3).to.an('object');
     })
   })
 })

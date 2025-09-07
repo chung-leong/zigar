@@ -130,7 +130,7 @@ describe('Structure: pointer', function() {
               bitOffset: 0,
               byteSize: 8,
               slot: 0,
-              structure: {},
+              structure: intStructure,
             },
           ],
         },
@@ -233,7 +233,7 @@ describe('Structure: pointer', function() {
               bitOffset: 0,
               byteSize: 8,
               slot: 0,
-              structure: {},
+              structure: intStructure,
             },
           ],
         },
@@ -414,7 +414,7 @@ describe('Structure: pointer', function() {
     it('should accept a target from a different module', function() {
       const envA = new Env();
       const envB = new Env();
-      const intStructureA = envA.beginStructure({
+      const intStructureA = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         signature: 0xaaaan,
@@ -432,8 +432,8 @@ describe('Structure: pointer', function() {
           ],
         },
         static: {},
-      });
-      const intStructureB = envB.beginStructure({
+      };
+      const intStructureB = {
         type: StructureType.Primitive,
         flags: StructureFlag.HasValue,
         signature: 0xaaaan,
@@ -451,12 +451,14 @@ describe('Structure: pointer', function() {
           ],
         },
         static: {},
-      });
-      const Int32A = envA.defineStructure(intStructureA);
-      const Int32B = envB.defineStructure(intStructureB);
+      };
+      envA.beginStructure(intStructureA);
       envA.finishStructure(intStructureA);
+      envB.beginStructure(intStructureB);
       envB.finishStructure(intStructureB);
-      const structureA = envA.beginStructure({
+      const Int32A = intStructureA.constructor;
+      const Int32B = intStructureB.constructor;
+      const structureA = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
@@ -474,8 +476,8 @@ describe('Structure: pointer', function() {
           ],
         },
         static: {},
-      });
-      const structureB = envB.beginStructure({
+      };
+      const structureB = {
         type: StructureType.Pointer,
         flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
@@ -493,11 +495,13 @@ describe('Structure: pointer', function() {
           ],
         },
         static: {},
-      });
-      const Int32PtrA = envA.defineStructure(structureA);
-      const Int32PtrB = envB.defineStructure(structureB);
+      };
+      envA.beginStructure(structureA);
       envA.finishStructure(structureA);
+      envB.beginStructure(structureB);
       envB.finishStructure(structureB);
+      const Int32PtrA = structureA.constructor;
+      const Int32PtrB = structureB.constructor;
       const int32A = new Int32A(123);
       const int32B = new Int32B(456);
       const int32PtrA = new Int32PtrA(int32A);

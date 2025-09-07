@@ -216,6 +216,7 @@ describe('Structure: function', function() {
           [MEMORY]: zig(0x8888),
         },
       };
+      env.finishStructure(structure);
       const constructor = structure.constructor;
       expect(constructor).to.be.a('function');
       let constructorAddr, fnIds = [];
@@ -338,7 +339,6 @@ describe('Structure: function', function() {
           [MEMORY]: zig(0x8888),
         },
       };
-      env.attachTemplate(structure, jsThunkConstructor, true);
       const Fn = structure.constructor;
       env.finishStructure(structure);
       expect(() => new Fn()).to.throw(TypeError);

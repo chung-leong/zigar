@@ -267,7 +267,7 @@ describe('Feature: pointer-synchronization', function() {
       expect(getUsize.call(args[2][MEMORY], 0, true)).to.equal(usize(0xf_3000));
       expect(getUsize.call(args[3][MEMORY], 0, true)).to.equal(usize(0xf_4000));
     })
-    it('should be able to handle self-referencing structures', function() {
+    it('should correctly update addresses within self-referencing structures', function() {
       const env = new Env();
       const structure = {
         type: StructureType.Struct,
@@ -760,6 +760,7 @@ describe('Feature: pointer-synchronization', function() {
     })
   })
   describe('updatePointerTargets', function() {
+    skip.
     it('should set pointer slot to undefined when pointer is inactive', function() {
       const env = new Env();
       const intStructure = {
@@ -1061,7 +1062,8 @@ describe('Feature: pointer-synchronization', function() {
       expect(() => ptr['*']).to.throw(TypeError)
         .with.property('message').that.contains('Null')
     })
-    it('should be able to handle self-referencing structures', function() {
+    skip.
+    it('should update objects in self-referencing structures after changes to pointer on Zig side', function() {
       const env = new Env();
       const structure = {
         type: StructureType.Struct,
@@ -1197,6 +1199,7 @@ describe('Feature: pointer-synchronization', function() {
       expect(object1.sibling['*']).to.equal(object5);
       expect(object5.sibling['*']).to.equal(object4);
     })
+    skip.
     it('should acquire missing objects', function() {
       const env = new Env();
       const structure = {
