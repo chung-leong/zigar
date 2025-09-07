@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { usize } from '../../src/utils.js';
@@ -52,7 +53,7 @@ describe('Syscalls: stream-location', function() {
       }
       const dirMap = new Map();
       const dir = env.convertDirectory(dirMap);
-      env.streamMap.set(4, [ dir, 0, 0 ]);
+      const dirFd = env.createStreamHandle(dir, env.getDefaultRights('dir'));
       const path = './hello/../world.txt';
       const pathAddress = usize(0x1000);
       const encoder = new TextEncoder();
@@ -60,11 +61,71 @@ describe('Syscalls: stream-location', function() {
       const pathLen = pathSrc.length;
       const pathArray = env.obtainZigArray(pathAddress, pathLen);
       for (let i = 0; i < pathLen; i++) pathArray[i] = pathSrc[i];
-      const result = env.obtainStreamLocation(4, pathAddress, pathLen);
+      const result = env.obtainStreamLocation(dirFd, pathAddress, pathLen);
       expect(result).to.eql({
         parent: dirMap, 
         path: 'world.txt', 
       });
+    })
+    it('should resolve . to directory itself', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = function(address, len) {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      const dirMap = new Map();
+      const dir = env.convertDirectory(dirMap);
+      const dirFd = env.createStreamHandle(dir, env.getDefaultRights('dir'));
+      const path = '.';
+      const pathAddress = usize(0x1000);
+      const encoder = new TextEncoder();
+      const pathSrc = encoder.encode(path);
+      const pathLen = pathSrc.length;
+      const pathArray = env.obtainZigArray(pathAddress, pathLen);
+      for (let i = 0; i < pathLen; i++) pathArray[i] = pathSrc[i];
+      const result = env.obtainStreamLocation(dirFd, pathAddress, pathLen);
+      expect(result).to.eql({
+        parent: dirMap, 
+        path: '', 
+      });
+    })
+    it('should throw when path is ..', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = function(address, len) {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+      }
+      const dirMap = new Map();
+      const dir = env.convertDirectory(dirMap);
+      const dirFd = env.createStreamHandle(dir, env.getDefaultRights('dir'));
+      const path = '..';
+      const pathAddress = usize(0x1000);
+      const encoder = new TextEncoder();
+      const pathSrc = encoder.encode(path);
+      const pathLen = pathSrc.length;
+      const pathArray = env.obtainZigArray(pathAddress, pathLen);
+      for (let i = 0; i < pathLen; i++) pathArray[i] = pathSrc[i];
+      expect(() => {
+        env.obtainStreamLocation(dirFd, pathAddress, pathLen);
+      }).to.throw(Error).with.property('code').that.equal(PosixError.ENOENT);
     })
     it('should remove trailing slash', async function() {
       const env = new Env();

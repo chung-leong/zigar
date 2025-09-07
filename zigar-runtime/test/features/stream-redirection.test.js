@@ -189,6 +189,10 @@ describe('Feature: stream-redirection', function() {
       const env = new Env();
       expect(() => env.redirectStream(4, null)).to.throw();
     })
+    it('should throw when argument cannot be converted to a stream', async function() {
+      const env = new Env();
+      expect(() => env.redirectStream(1, 'dingo')).to.throw();
+    })
   })
   describe('createStreamHandle', function() {
     it('should create a handle from a reader', async function() {

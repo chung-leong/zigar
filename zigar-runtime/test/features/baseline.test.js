@@ -345,6 +345,29 @@ describe('Feature: baseline', function() {
       env.fdWrite(1, iovsAddress, 1, writtenAddress);
       expect(event).to.eql({ source: 'stdout', message: 'Hello world' });
     })
+    if (process.env.TARGET === 'wasm') {
+      it('should throw when wasi event is set after module has compiled', function() {
+        const env = new Env();
+        env.table = {};
+        expect(() => env.addListener('wasi', () => {})).to.throw();       
+      })
+    } else if (process.env.TARGET === 'node') {
+      it('should call set redirection mask for certain event', function() {
+        const env = new Env();
+        const mask = {};
+        env.setRedirectionMask = (name, on) => {
+          mask[name] = on;
+        };
+        env.addListener('open', () => {});
+        expect(mask.open).to.be.true;
+        env.addListener('unlink', () => {});
+        expect(mask.unlink).to.be.true;
+        env.addListener('syscall', () => {});
+        expect(mask.syscall).to.be.true;
+        env.addListener('open', null);
+        expect(mask.open).to.be.false;
+      })
+    }
   })
   describe('triggerEvent', function() {
     it('should call listener', function() {

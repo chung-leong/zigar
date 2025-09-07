@@ -440,6 +440,14 @@ export class InvalidFileDescriptor extends Error {
   }
 }
 
+export class InvalidPath extends Error {
+  code = PosixError.ENOENT;
+
+  constructor(path) {
+    super(`Invalid relative path '${path}'`);
+  }
+}
+
 export class MissingStreamMethod extends Error {
   code = PosixError.EBADF;
 
