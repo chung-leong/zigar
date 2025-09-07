@@ -1390,7 +1390,6 @@ describe('Structure: union', function() {
         expect(flags & VisitorFlag.IsInactive).to.equal(VisitorFlag.IsInactive);
       })
     })
-    skip.
     it('should release pointer when a different property is activated externally', function() {
       const env = new Env();
       const intStructure = {

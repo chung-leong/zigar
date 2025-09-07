@@ -26,7 +26,6 @@ if (process.env.TARGET === 'wasm') {
       })
     })
     describe('allocateJsThunk', function() {
-      skip.
       it('should allocate a JavaScript thunk', async function() {
         const wasmPath = absolute('./wasm-samples/fn-pointer.wasm');
         const binary = await readFile(wasmPath);
@@ -53,7 +52,6 @@ if (process.env.TARGET === 'wasm') {
       })
     })
     describe('freeJsThunk', function() {
-      skip.
       it('should free a JavaScript thunk', async function() {
         const wasmPath = absolute('./wasm-samples/fn-pointer.wasm');
         const binary = await readFile(wasmPath);

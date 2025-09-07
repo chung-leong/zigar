@@ -172,7 +172,6 @@ export class BlobReader extends AsyncReader {
   async fetch() {
     const chunk = await this.pread(size8k, this.pos);
     const { length } = chunk;
-    this.pos += length;
     return { done: !length, value: (length) ? chunk : null };
   }
 
@@ -181,6 +180,12 @@ export class BlobReader extends AsyncReader {
     const response = new Response(slice);
     const buffer = await response.arrayBuffer();
     return new Uint8Array(buffer);
+  }
+  
+  async read(len) {
+    const chunk = await super.read(len);
+    this.pos += chunk.length;
+    return chunk;
   }
 
   tell() {

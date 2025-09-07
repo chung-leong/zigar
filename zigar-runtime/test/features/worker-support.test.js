@@ -9,7 +9,6 @@ const Env = defineEnvironment();
 if (process.env.TARGET === 'wasm') {
   describe('Feature: worker-support', function() {
     describe('spawnThread', function() {
-      skip.
       it('should spawn a thread', async function() {
         const env = new Env();
         const url = new URL('./wasm-samples/thread.wasm', import.meta.url);

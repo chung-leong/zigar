@@ -329,7 +329,7 @@ export default mixin({
     } = structure;
     const { structure: targetStructure } = member;
     const { type: targetType, constructor: Target } = targetStructure;
-    staticDescriptors.child = (Target) ? defineValue(Target) : {
+    staticDescriptors.child = (Target !== Object) ? defineValue(Target) : {
       // deal with self-referencing pointer
       get() { return targetStructure.constructor }
     };

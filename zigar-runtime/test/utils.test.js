@@ -1,12 +1,14 @@
 import { expect } from 'chai';
 
-import { MemberType } from '../src/constants.js';
+import { MemberType, PosixDescriptor, PosixDescriptorFlag } from '../src/constants.js';
 import { LENGTH, MEMORY, PROXY } from '../src/symbols.js';
 import {
   adjustAddress,
   alignForward,
   always,
   decodeBase64,
+  decodeEnum,
+  decodeFlags,
   decodeText,
   defineProperties,
   empty,
@@ -17,13 +19,16 @@ import {
   getPrimitiveName,
   getProxy,
   getSelf,
+  hasMethod,
   isInvalidAddress,
   isMisaligned,
+  isPromise,
   never,
   ObjectCache,
+  safeInt,
   toString,
   transformIterable,
-  usize,
+  usize
 } from '../src/utils.js';
 
 describe('Utility functions', function() {
@@ -67,6 +72,15 @@ describe('Utility functions', function() {
       }
       const result = decodeText([ ta1 ], 'utf-16');
       expect(result).to.equal(text.repeat(1));
+    })
+    it('should convert an array that is a view of a SharedArrayBuffer', function() {
+      const buffer = new SharedArrayBuffer(16);
+      const array = new Uint8Array(buffer);
+      for (let i = 0; i < array.length; i++) {
+        array[i] = 'a'.charCodeAt(0);
+      }
+      const result = decodeText(array, 'utf-8');
+      expect(result).to.equal('a'.repeat(16));
     })
   })
   describe('encodeText', function() {
@@ -361,5 +375,54 @@ describe('Utility functions', function() {
       })
     }
   })
-
+  describe('safeInt', function() {
+    it('should convert a big int to a number', function() {
+      const result = safeInt(123n);
+      expect(result).to.equal(123);
+    })
+    it('should throw when the number is too large', function() {
+      const num = BigInt(Number.MAX_SAFE_INTEGER) + 1n;
+      expect(() => safeInt(num)).to.throw(RangeError);
+    })
+    it('should throw when the number is too small', function() {
+      const num = BigInt(Number.MIN_SAFE_INTEGER) - 1n;
+      expect(() => safeInt(num)).to.throw(RangeError);
+    })
+  })
+  describe('decodeEnum', function() {
+    it ('should find name of enum value', function() {
+      const name1 = decodeEnum(PosixDescriptor.stderr, PosixDescriptor);
+      expect(name1).to.equal('stderr');
+      const name2 = decodeEnum(123, PosixDescriptor);
+      expect(name2).to.be.undefined;
+    })
+  })
+  describe('decodeFlags', function() {
+    it('should populate an object with names of set bit flags', function() {
+      const flags1 = decodeFlags(PosixDescriptorFlag.append | PosixDescriptorFlag.nonblock, PosixDescriptorFlag);
+      expect(flags1).to.eql({ append: true, nonblock: true });
+      const flags2 = decodeFlags(0, PosixDescriptorFlag);
+      expect(flags2).to.eql({});
+    })
+  })
+  describe('isPromise', function() {
+    it('should correctly detect whether something is a promise', function() {
+      const result1 = isPromise(Promise.resolve(true));
+      expect(result1).to.be.true;
+      const result2 = isPromise({ then() {} });
+      expect(result2).to.be.true;
+      const result3 = isPromise(true);
+      expect(result3).to.be.false;
+    })
+  })
+  describe('hasMethod', function() {
+    it('should check for presence of object method', function() {
+      const result1 = hasMethod({ hello() {} }, 'hello');
+      expect(result1).to.be.true;
+      const result2 = hasMethod({ hello() {} }, 'then');
+      expect(result2).to.be.false;
+      const result3 = hasMethod({ hello: 123 }, 'hello');
+      expect(result3).to.be.false;
+    })
+  })
 })

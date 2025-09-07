@@ -317,7 +317,7 @@ export class InvalidStream extends TypeError {
       types.push('WritableStreamDefaultWriter', 'array', 'null');
     }
     if (rights & PosixDescriptorRight.fd_readdir) {
-      types.push('map');
+      types.push('Map');
     }
     const list = types.join(', ');
     super(`Expected ${list}, or an object with the appropriate stream interface, received ${arg}`);

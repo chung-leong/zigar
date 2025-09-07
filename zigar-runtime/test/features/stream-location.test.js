@@ -7,7 +7,6 @@ const Env = defineEnvironment();
 
 describe('Syscalls: stream-location', function() {
   describe('obtainStreamLocation', function() {
-    skip.
     it('should resolve relative to root', async function() {
       const env = new Env();
       if (process.env.TARGET === 'wasm') {
@@ -23,7 +22,7 @@ describe('Syscalls: stream-location', function() {
           return buffer;
         };
       }
-      const path = 'hello/world.txt';
+      const path = '/hello/world.txt';
       const pathAddress = usize(0x1000);
       const encoder = new TextEncoder();
       const pathSrc = encoder.encode(path);

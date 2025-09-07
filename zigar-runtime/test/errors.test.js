@@ -3,7 +3,7 @@ import ChaiAsPromised from 'chai-as-promised';
 
 use(ChaiAsPromised);
 
-import { MemberType, PointerFlag, PosixError, StructureFlag, StructureType } from '../src/constants.js';
+import { MemberType, PointerFlag, PosixDescriptorRight, PosixError, StructureFlag, StructureType } from '../src/constants.js';
 import {
   AccessingOpaque,
   AlignmentConflict,
@@ -25,9 +25,11 @@ import {
   InvalidFileDescriptor,
   InvalidInitializer,
   InvalidPointerTarget,
+  InvalidStream,
   InvalidType,
   InvalidVariadicArgument,
   MisplacedSentinel,
+  MissingEventListener,
   MissingInitializers,
   MissingSentinel,
   MissingUnionInitializer,
@@ -58,7 +60,7 @@ import {
   getDescription,
   replaceRangeError
 } from '../src/errors.js';
-import { captureError } from './test-utils.js';
+import { capture, captureError } from './test-utils.js';
 
 describe('Error functions', function() {
   describe('MustBeOverridden', function() {
@@ -182,6 +184,14 @@ describe('Error functions', function() {
       };
       const err = new NotInErrorSet(structure);
       expect(err.message).to.contain('Hello');
+    })
+  })
+  describe('InvalidStream', function() {
+    it('should have expected message', function() {
+      const err1 = new InvalidStream(PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write, '123');
+      expect(err1.message).to.contain('ReadableStreamDefaultReader').and.to.contain('WritableStreamDefaultWriter');
+      const err2 = new InvalidStream(PosixDescriptorRight.fd_readdir, '123');
+      expect(err2.message).to.contain('Map');
     })
   })
   describe('InvalidType', function() {
@@ -384,6 +394,16 @@ describe('Error functions', function() {
       };
       const err = new InvalidInitializer(structure, 'object', 16);
       expect(err.message).to.contain('Hello');
+    })
+  })
+  describe('MissingEventListener', function() {
+    it('should have expected message and code', async function() {
+      const [ message ] = await capture(() => {
+        const err = new MissingEventListener('open', PosixError.EBADF);
+        console.log(err.message);
+        expect(err.message).to.contain('open');
+        expect(err.code).to.equal(PosixError.EBADF);
+      });
     })
   })
   describe('MissingInitializers', function() {

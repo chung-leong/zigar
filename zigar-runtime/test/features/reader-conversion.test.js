@@ -66,7 +66,6 @@ describe('Feature: reader-conversion', function() {
       array.close();
       expect(called).to.be.true;
     })
-    skip.
     it('should convert a Blob to a reader', async function() {
       const env = new Env();
       const blob = new Blob([

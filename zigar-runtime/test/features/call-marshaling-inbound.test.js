@@ -177,7 +177,7 @@ describe('Feature: call-marshaling-inbound', function() {
               bitOffset: 0,
               byteSize: addressByteSize,
               slot: 0,
-              structure: {},
+              structure: intStructure,
             },
           ],
         },

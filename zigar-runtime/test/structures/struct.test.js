@@ -1422,7 +1422,6 @@ describe('Structure: struct', function() {
       const object = new Hello({});
       expect(object.valueOf()).to.eql([]);
     })
-    skip.
     it('should define a struct that contains pointers', function() {
       const env = new Env();
       const intStructure = {
