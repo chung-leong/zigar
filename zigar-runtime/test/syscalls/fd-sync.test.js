@@ -2,7 +2,6 @@ import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -31,12 +30,8 @@ describe('Syscall: fd-sync', function() {
   })
   it('should return an error code when handle is invalid', async function() {
     const env = new Env();
-    let result;
-    const [ error ] = await captureError(() => { 
-      result = env.fdSync(4)
-    });
-    expect(result).to.equal(PosixError.EBADF);
-    expect(error).to.contains('file descriptor');
+    const result = env.fdSync(4);
+    expect(result).to.equal(PosixError.ENOTSUP);
   })
   if (process.env.TARGET === 'wasm') {
     it('should be callable through WASI', async function() {

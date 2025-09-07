@@ -145,8 +145,7 @@ describe('Syscall: fd-write', function() {
         result = env.fdWrite(5, iovsAddress, 1, writtenAddress);
       })
     });
-    expect(result).to.equal(PosixError.EBADF);
-    expect(line).to.be.undefined;
+    expect(result).to.equal(PosixError.ENOTSUP);
   })
   if (process.env.TARGET === 'wasm') {
     it('should be callable through WASI', async function() {

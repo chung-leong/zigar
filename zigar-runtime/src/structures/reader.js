@@ -1,5 +1,6 @@
+import { PosixDescriptorRight } from '../constants.js';
 import { mixin } from '../environment.js';
-import { checkInefficientAccess } from '../errors.js';
+import { checkInefficientAccess, InvalidStream } from '../errors.js';
 import { MEMORY } from '../symbols.js';
 import { isPromise, usize } from '../utils.js';
 
@@ -20,6 +21,9 @@ export default mixin({
       if('context' in arg && 'readFn' in arg) return arg;
     }
     const reader = this.convertReader(arg);
+    if (!reader) {
+        throw new InvalidStream(PosixDescriptorRight.fd_read, arg);
+    }
     // create a handle referencing the reader 
     const readerId = this.nextReaderId++;
     const context = this.obtainZigView(readerId, 0, false);

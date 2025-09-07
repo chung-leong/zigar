@@ -1,15 +1,15 @@
 import { expect, use } from 'chai';
 import ChaiAsPromised from 'chai-as-promised';
 import {
-    ErrorSetFlag,
-    MemberType, PointerFlag, SliceFlag,
-    StructureFlag, StructurePurpose, StructureType
+  ErrorSetFlag,
+  MemberType, PointerFlag, SliceFlag,
+  StructureFlag, StructurePurpose, StructureType
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { Exit } from '../../src/errors.js';
 import '../../src/mixins.js';
 import {
-    ALIGN, ATTRIBUTES, COPY, FINALIZE, MEMORY, PROMISE, RETURN, SETTERS, SLOTS, VISIT, ZIG,
+  ALIGN, ATTRIBUTES, COPY, FINALIZE, MEMORY, PROMISE, RETURN, SETTERS, SLOTS, VISIT, ZIG,
 } from '../../src/symbols.js';
 import { defineProperties, defineProperty, usize } from '../../src/utils.js';
 import { addressByteSize, addressSize } from '../test-utils.js';
@@ -1755,6 +1755,9 @@ describe('Feature: call-marshaling-outbound', function() {
     })
     it('should convert web stream writer to File struct', function() {
       const env = new Env();
+      if (process.env.TARGET === 'node') {
+        env.setSyscallTrap = () => {};
+      }
       const usizeStructure = {
         type: StructureType.Primitive,
         byteSize: addressByteSize,
@@ -1835,6 +1838,9 @@ describe('Feature: call-marshaling-outbound', function() {
     })
     it('should convert Map to Dir struct', function() {
       const env = new Env();
+      if (process.env.TARGET === 'node') {
+        env.setSyscallTrap = () => {};
+      }
       const usizeStructure = {
         type: StructureType.Primitive,
         byteSize: addressByteSize,

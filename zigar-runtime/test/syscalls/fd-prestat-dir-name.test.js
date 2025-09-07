@@ -10,7 +10,7 @@ describe('Syscall: fd-prestat-dir-name', function() {
     it('should no error when retrieving the name', function() {
       const env = new Env();
       const f = env.getWASIHandler('fd_prestat_dir_name');
-      expect(f()).to.equal(PosixError.NONE);
+      expect(f(3)).to.equal(PosixError.NONE);
     })
   }  
 })

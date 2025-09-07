@@ -31,6 +31,8 @@ describe('Syscall: fd-filestat-get', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
     }   
     const array = new Uint8Array(32);
     env.addListener('open', () => {
@@ -86,6 +88,8 @@ describe('Syscall: fd-filestat-get', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
     }   
     env.addListener('open', () => {
       return new Uint8Array(32);
@@ -129,6 +133,8 @@ describe('Syscall: fd-filestat-get', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
     }   
     env.addListener('open', () => {
       return new Uint8Array(32);
@@ -140,7 +146,7 @@ describe('Syscall: fd-filestat-get', function() {
     const pathAddress = usize(0x1000);
     const pathLen = path.length;
     const fdAddress = usize(0x2000);
-    env.moveExternBytes(path, pathAddress);
+    env.moveExternBytes(path, pathAddress, true);
     const result1 = env.pathOpen(3, 0, pathAddress, pathLen, 0, 2n, 0n, 0, fdAddress);
     expect(result1).to.equal(0);
     const fdDV = env.obtainZigView(fdAddress, 4);

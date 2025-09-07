@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { PosixError } from '../../src/constants.js';
+import { PosixDescriptorRight, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { usize } from '../../src/utils.js';
@@ -30,6 +30,7 @@ describe('Syscall: fd-lock-set', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
     }
     const file = {
       setlock(lock) {
@@ -42,10 +43,10 @@ describe('Syscall: fd-lock-set', function() {
     const le = env.littleEndian;
     dv.setBigUint64(8, 1000n, le);
     dv.setBigUint64(16, 2048n, le);
-    const fd = env.createStreamHandle(file);
+    const fd = env.createStreamHandle(file, [ PosixDescriptorRight.fd_read, 0 ]);
     const result = env.fdLockSet(fd, flockAddress, false);
     expect(result).to.equal(0);
-    expect(file.lock).to.eql({ type: 0, whence: 0, start: 1000n, len: 2048n, pid: 0 });
+    expect(file.lock).to.eql({ type: 0, whence: 0, start: 1000, len: 2048, pid: 0 });
   })
   it('should return EAGAIN on lock conflict', async function() {
     const env = new Env();
@@ -70,6 +71,7 @@ describe('Syscall: fd-lock-set', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
     }
     const file = {
       setlock(lock) {
@@ -86,7 +88,7 @@ describe('Syscall: fd-lock-set', function() {
     const le = env.littleEndian;
     dv.setBigUint64(8, 1000n, le);
     dv.setBigUint64(16, 2048n, le);
-    const fd = env.createStreamHandle(file);
+    const fd = env.createStreamHandle(file, [ PosixDescriptorRight.fd_read, 0 ]);
     env.fdLockSet(fd, flockAddress, false);
     const result = env.fdLockSet(fd, flockAddress, false);
     expect(result).to.equal(PosixError.EAGAIN);

@@ -172,7 +172,8 @@ export class BlobReader extends AsyncReader {
   async fetch() {
     const chunk = await this.pread(size8k, this.pos);
     const { length } = chunk;
-    return { done: !!length, value: (length) ? chunk : null };
+    this.pos += length;
+    return { done: !length, value: (length) ? chunk : null };
   }
 
   async pread(len, offset) {

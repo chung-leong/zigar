@@ -3,6 +3,9 @@ import { mixin } from '../environment.js';
 import { InvalidFileDescriptor, InvalidStream, Unsupported } from '../errors.js';
 import { decodeText } from '../utils.js';
 
+const stdinRights = [ PosixDescriptorRight.fd_read, 0 ];
+const stdoutRights = [ PosixDescriptorRight.fd_write, 0 ];
+
 const defaultDirRights =  PosixDescriptorRight.fd_seek
                         | PosixDescriptorRight.fd_fdstat_set_flags
                         | PosixDescriptorRight.fd_tell
@@ -55,8 +58,8 @@ export default mixin({
     };
     this.streamMap = new Map([ 
       [ PosixDescriptor.root, [ root, this.getDefaultRights('dir'), 0 ] ], 
-      [ PosixDescriptor.stdout, [ this.createLogWriter('stdout'), this.getDefaultRights('file'), 0 ] ], 
-      [ PosixDescriptor.stderr, [ this.createLogWriter('stderr'), this.getDefaultRights('file'), 0 ] ], 
+      [ PosixDescriptor.stdout, [ this.createLogWriter('stdout'), stdoutRights, 0 ] ], 
+      [ PosixDescriptor.stderr, [ this.createLogWriter('stderr'), stdoutRights, 0 ] ], 
     ]);
     this.flushRequestMap = new Map();
     this.nextStreamHandle = PosixDescriptor.min;
@@ -102,11 +105,13 @@ export default mixin({
     const fd = (num === -1) ? PosixDescriptor.root : num;
     const previous = map.get(fd);
     if (arg !== undefined) {
-      let stream, rights = this.getDefaultRights('file');
+      let stream, rights;
       if (num === PosixDescriptor.stdin) {
         stream = this.convertReader(arg);
+        rights = stdinRights;
       } else if (num === PosixDescriptor.stdout || num === PosixDescriptor.stderr) {
         stream = this.convertWriter(arg);
+        rights = stdoutRights;
       } else if (num === PosixDescriptor.root) {
         stream = this.convertDirectory(arg);
         rights = this.getDefaultRights('dir');

@@ -31,8 +31,9 @@ describe('Syscall: path-remove-directory', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setRedirectionMask = () => {};
     }   
-    env.addListener('rmdir', () => undefined);
+    env.addListener('rmdir', () => 'hello');
     const path = new TextEncoder().encode('/world');
     const pathAddress = usize(0x1000);
     const pathLen = path.length;

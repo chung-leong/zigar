@@ -47,7 +47,7 @@ describe('Syscall: fd-pread', function() {
     set.call(iovsDV, usizeByteSize * 2, stringAddress, le);
     set.call(iovsDV, usizeByteSize * 3, stringLen, le);
     env.moveExternBytes(iovsDV, iovsAddress, true);
-    const result = env.fdPread(0, iovsAddress, 2, usize(3), readAddress)
+    const result = env.fdPread(0, iovsAddress, 2, 3n, readAddress)
     expect(result).to.equal(PosixError.NONE);
     const readDV = env.obtainZigView(readAddress, 4);
     const read = readDV.getUint32(0, le);

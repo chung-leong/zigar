@@ -11,6 +11,9 @@ describe('Feature: stream-redirection', function() {
   describe('destroyStreamHandle', function() {
     it('should remove a stream handle', async function() {
       const env = new Env();
+      if (process.env.TARGET === 'node') {
+        env.setSyscallTrap = () => {};
+      }
       const stream = {
         read() {},
       };
@@ -20,6 +23,9 @@ describe('Feature: stream-redirection', function() {
     })
     it('should invoke destroy method', async function() {
       const env = new Env();
+      if (process.env.TARGET === 'node') {
+        env.setSyscallTrap = () => {};
+      }
       let called = false;
       const stream = {
         read() {},
@@ -187,6 +193,9 @@ describe('Feature: stream-redirection', function() {
   describe('createStreamHandle', function() {
     it('should create a handle from a reader', async function() {
       const env = new Env();
+      if (process.env.TARGET === 'node') {
+        env.setSyscallTrap = () => {};
+      }
       const stream = new ReadableStream({
         async pull(controller) {
           controller.close();
@@ -194,28 +203,54 @@ describe('Feature: stream-redirection', function() {
       });
       const reader = stream.getReader();
       const file = env.convertReader(reader);
-      const handle = env.createStreamHandle(file, PosixDescriptorRight.fd_read);
+      const handle = env.createStreamHandle(file, [ PosixDescriptorRight.fd_read, 0 ]);
       expect(handle).to.be.a('number');
       env.destroyStreamHandle(handle);
     })
     it('should create a handle from a writer', async function() {
       const env = new Env();
+      if (process.env.TARGET === 'node') {
+        env.setSyscallTrap = () => {};
+      }
       const stream = new WritableStream({
         async write() {}
       });
       const writer = stream.getWriter();
       const file = env.convertWriter(writer);
-      const handle = env.createStreamHandle(file, PosixDescriptorRight.fd_write);
+      const handle = env.createStreamHandle(file, [ PosixDescriptorRight.fd_write, 0 ]);
       expect(handle).to.be.a('number');
       env.destroyStreamHandle(handle);
     })
     it('should create a handle from null', async function() {
       const env = new Env();
+      if (process.env.TARGET === 'node') {
+        env.setSyscallTrap = () => {};
+      }
       const file = env.convertWriter(null);
-      const handle = env.createStreamHandle(file, PosixDescriptorRight.fd_read);
+      const handle = env.createStreamHandle(file, [ PosixDescriptorRight.fd_read, 0 ]);
       expect(handle).to.be.a('number');
       env.destroyStreamHandle(handle);
     })
+    if (process.env.TARGET === 'node') {
+      it('should activate syscall trap', async function() {
+        const env = new Env();
+        let syscallTrap;
+        env.setSyscallTrap = (on) => {
+          syscallTrap = on;
+        };
+        const stream = new ReadableStream({
+          async pull(controller) {
+            controller.close();
+          }
+        });
+        const reader = stream.getReader();
+        const file = env.convertReader(reader);
+        const handle = env.createStreamHandle(file, [ PosixDescriptorRight.fd_read, 0 ]);
+        expect(syscallTrap).to.be.true;
+        env.destroyStreamHandle(handle);
+        expect(syscallTrap).to.be.false;
+      })
+    }
   })
   describe('destroyStreamHandle', function() {
     

@@ -29,6 +29,8 @@ describe('Syscall: fd-close', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
     }   
     env.addListener('open', (evt) => {
       return new Uint8Array(32);

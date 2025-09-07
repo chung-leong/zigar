@@ -31,6 +31,7 @@ describe('Syscall: path-create-directory', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setRedirectionMask = () => {};
     }   
     let event;
     env.addListener('mkdir', (evt) => {
@@ -74,6 +75,7 @@ describe('Syscall: path-create-directory', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setRedirectionMask = () => {};
     }   
     env.addListener('mkdir', () => false);
     const path = new TextEncoder().encode('/world');
@@ -106,8 +108,9 @@ describe('Syscall: path-create-directory', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setRedirectionMask = () => {};
     }   
-    env.addListener('mkdir', () => undefined);
+    env.addListener('mkdir', () => 'hello');
     const path = new TextEncoder().encode('/world');
     const pathAddress = usize(0x1000);
     const pathLen = path.length;

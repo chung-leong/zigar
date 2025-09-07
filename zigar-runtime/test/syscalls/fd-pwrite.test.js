@@ -30,6 +30,7 @@ describe('Syscall: fd-pwrite', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
     }
     const iovsAddress = usize(0x1000);
     const stringAddress = usize(0x2000);
@@ -48,7 +49,7 @@ describe('Syscall: fd-pwrite', function() {
     let result;
     const array = new Uint8Array(64);
     const writer = env.convertWriter(array);
-    const fd = env.createStreamHandle(writer, PosixDescriptorRight.fd_write);
+    const fd = env.createStreamHandle(writer, [ PosixDescriptorRight.fd_write, 0 ]);
     result = env.fdPwrite(fd, iovsAddress, 2, usize(4), writtenAddress);
     expect(result).to.equal(PosixError.NONE);
     const writtenDV = env.obtainZigView(writtenAddress, 4);
@@ -80,7 +81,7 @@ describe('Syscall: fd-pwrite', function() {
       const f = env.getWASIHandler('fd_pwrite');
       const array = new Uint8Array(64);
       const writer = env.convertWriter(array);
-      const fd = env.createStreamHandle(writer, PosixDescriptorRight.fd_write);
+      const fd = env.createStreamHandle(writer, [ PosixDescriptorRight.fd_write, 0 ]);
       result = f(fd, iovsAddress, 2, usize(4), writtenAddress);
       const writtenDV = env.obtainZigView(writtenAddress, 4);
       const written = writtenDV.getUint32(0, le);
@@ -115,10 +116,11 @@ describe('Syscall: fd-pwrite', function() {
           const copy = this.getCopyFunction(len);
           copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
         };
+        env.setSyscallTrap = () => {};
       }
       const array = new Uint8Array(64);
       const writer = env.convertWriter(array);
-      const fd = env.createStreamHandle(writer, PosixDescriptorRight.fd_write);
+      const fd = env.createStreamHandle(writer, [ PosixDescriptorRight.fd_write, 0 ]);
       const address = usize(0x1000);
       const writtenAddress = usize(0x3000);
       const string = new TextEncoder().encode('Hello world\n');

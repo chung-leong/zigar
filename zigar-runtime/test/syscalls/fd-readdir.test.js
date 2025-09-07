@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { PosixDescriptor, PosixError } from '../../src/constants.js';
+import { PosixDescriptor, PosixDescriptorRight, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { usize } from '../../src/utils.js';
@@ -41,7 +41,7 @@ describe('Syscall: fd-readdir', function() {
       [ 'hello-world.txt', {} ],
     ]);
     const dir = env.convertDirectory(map);
-    const fd = env.createStreamHandle(dir);
+    const fd = env.createStreamHandle(dir, [ PosixDescriptorRight.fd_readdir, 0 ]);
     const bufAddress = usize(0x1000);
     const bufLen = 24 + 1 + 24 + 2 + 16;
     const usedAddress = usize(0x2000);
@@ -149,7 +149,7 @@ describe('Syscall: fd-readdir', function() {
       [ 'hello-world.txt', { type: 'fil' } ],
     ]);
     const dir = env.convertDirectory(map);
-    const fd = env.createStreamHandle(dir);
+    const fd = env.createStreamHandle(dir, [ PosixDescriptorRight.fd_readdir, 0 ]);
     const bufAddress = usize(0x1000);
     const bufLen = 24 + 1 + 24 + 2 + 16;
     const usedAddress = usize(0x2000);
@@ -192,7 +192,7 @@ describe('Syscall: fd-readdir', function() {
         [ 'hello-world.txt', {} ],
       ]);
       const dir = env.convertDirectory(map);
-      const fd = env.createStreamHandle(dir);
+      const fd = env.createStreamHandle(dir, [ PosixDescriptorRight.fd_readdir, 0 ]);
       const bufAddress = 0x1000;
       const bufLen = 24 + 1 + 24 + 2 + 16;
       const usedAddress = 0x2000;

@@ -30,6 +30,8 @@ describe('Syscall: path-filestat-set-times', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
     }   
     let event;
     env.addListener('set_times', (evt) => {
@@ -75,6 +77,8 @@ describe('Syscall: path-filestat-set-times', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
     }   
     let event;
     env.addListener('set_times', (evt) => {

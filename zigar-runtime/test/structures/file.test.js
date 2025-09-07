@@ -11,6 +11,9 @@ describe('Structure: file', function() {
   describe('createFile', function() {
     it('should create a file struct from an instanceof ReadableStreamDefaultReader', async function() {
       const env = new Env();
+      if (process.env.TARGET === 'node') {
+        env.setSyscallTrap = () => {};
+      }
       let count = 0;
       const stream = new ReadableStream({
         async pull(controller) {
@@ -27,6 +30,9 @@ describe('Structure: file', function() {
     })
     it('should create a file struct from a Blob', async function() {
       const env = new Env();
+      if (process.env.TARGET === 'node') {
+        env.setSyscallTrap = () => {};
+      }
       const blob = new Blob([
         new Uint8Array([ 0, 1, 2, 3 ]),
         new Uint8Array([ 4, 5, 6, 7, 8 ]),
@@ -37,6 +43,9 @@ describe('Structure: file', function() {
     })
     it('should create a file struct from an array', async function() {
       const env = new Env();
+      if (process.env.TARGET === 'node') {
+        env.setSyscallTrap = () => {};
+      }
       const array = [];
       const file = env.createFile(array);
       expect(file.handle).to.be.a('number');
@@ -44,6 +53,9 @@ describe('Structure: file', function() {
     })
     it('should return the same object if it has a handle property', async function() {
       const env = new Env();
+      if (process.env.TARGET === 'node') {
+        env.setSyscallTrap = () => {};
+      }
       const object = { handle: 1234 };
       const file = env.createFile(object);
       expect(file).to.equal(object);

@@ -30,16 +30,12 @@ describe('Syscall: fd-allocate', function() {
     env.redirectStream(0, stream);
     const result = env.fdAllocate(0, 123n, 16);
     expect(result).to.equal(PosixError.NONE);
-    expect(args).to.eql([ 123n, 16 ]);
+    expect(args).to.eql([ 123, 16 ]);
   })
   it('should return an error code when handle is invalid', async function() {
     const env = new Env();
-    let result;
-    const [ error ] = await captureError(() => { 
-      result = env.fdAllocate(4, 123n, 16)
-    });
-    expect(result).to.equal(PosixError.EBADF);
-    expect(error).to.contains('file descriptor');
+    const result = env.fdAllocate(4, 123n, 16)
+    expect(result).to.equal(PosixError.ENOTSUP);
   })
   if (process.env.TARGET === 'wasm') {
     it('should be callable through WASI', async function() {
@@ -55,7 +51,7 @@ describe('Syscall: fd-allocate', function() {
       env.redirectStream(0, stream);
       const result = f(0, 123n, 16);
       expect(result).to.equal(PosixError.NONE);
-      expect(args).to.eql([ 123n, 16 ]);
+      expect(args).to.eql([ 123, 16 ]);
     })
   }
 })

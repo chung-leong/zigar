@@ -42,6 +42,8 @@ describe('Syscall: path-open', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
     }   
     let event;
     env.addListener('open', (evt) => {
@@ -88,6 +90,8 @@ describe('Syscall: path-open', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
     }   
     let event;
     env.addListener('open', (evt) => {
@@ -134,6 +138,7 @@ describe('Syscall: path-open', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setRedirectionMask = () => {};
     }   
     env.addListener('open', (evt) => false);
     const path = new TextEncoder().encode('/hello.txt');

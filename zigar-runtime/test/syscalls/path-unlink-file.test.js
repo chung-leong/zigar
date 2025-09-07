@@ -31,6 +31,7 @@ describe('Syscall: path-unlink-file', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setRedirectionMask = () => {};
     }
     let event;
     env.addListener('unlink', (evt) => {
@@ -54,7 +55,6 @@ describe('Syscall: path-unlink-file', function() {
   it('should display error when listener does not return a boolean', async function() {
     const env = new Env();
     env.memory = new WebAssembly.Memory({ initial: 1 });
-    env.addListener('unlink', () => undefined);
     if (process.env.TARGET === 'wasm') {
       env.memory = new WebAssembly.Memory({ initial: 1 });
     } else {
@@ -76,7 +76,9 @@ describe('Syscall: path-unlink-file', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setRedirectionMask = () => {};
     }
+    env.addListener('unlink', () => 'hello');
     const path = new TextEncoder().encode('/hello.txt');
     const pathAddress = usize(0x1000);
     const pathLen = path.length;

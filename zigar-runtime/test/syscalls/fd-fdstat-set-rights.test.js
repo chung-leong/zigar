@@ -31,11 +31,12 @@ describe('Syscall: fd-fdstat-set-rights', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
     }
     const array = new Uint8Array(256);
     const reader = env.convertReader(array);
-    const fd = env.createStreamHandle(reader, PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write);
-    const result1 = env.fdFdstatSetRights(fd, PosixDescriptorRight.fd_read);
+    const fd = env.createStreamHandle(reader, [ PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write, 0 ]);
+    const result1 = env.fdFdstatSetRights(fd, [ PosixDescriptorRight.fd_read, 0 ]);
     expect(result1).to.equal(PosixError.NONE);
     const iovsAddress = usize(0x1000);
     const bufAddress = usize(0x2000);
@@ -75,13 +76,14 @@ describe('Syscall: fd-fdstat-set-rights', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
     }
     const array = new Uint8Array(256);
     const reader = env.convertReader(array);
-    const fd = env.createStreamHandle(reader, PosixDescriptorRight.fd_read);
+    const fd = env.createStreamHandle(reader, [ PosixDescriptorRight.fd_read, 0 ]);
     let result;
     const [ error ] = await captureError(() => {
-      result = env.fdFdstatSetRights(fd, PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write);
+      result = env.fdFdstatSetRights(fd, PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write, 0);
     });
     expect(result).to.equal(PosixError.EBADF);
   })
@@ -108,11 +110,12 @@ describe('Syscall: fd-fdstat-set-rights', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
     }
     const reader = {
       read() {}
     };
-    const fd = env.createStreamHandle(reader, PosixDescriptorRight.fd_read);
+    const fd = env.createStreamHandle(reader, [ PosixDescriptorRight.fd_read, 0 ]);
     let result;
     const [ error ] = await captureError(() => {
       result = env.fdFdstatSetRights(fd, PosixDescriptorRight.fd_write);

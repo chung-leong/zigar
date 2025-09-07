@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { PosixError } from '../../src/constants.js';
+import { PosixDescriptorRight, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { usize } from '../../src/utils.js';
@@ -30,6 +30,7 @@ describe('Syscall: fd-lock-get', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
     }
     const file1 = {
       getlock(lock) {}
@@ -39,14 +40,14 @@ describe('Syscall: fd-lock-get', function() {
     const le = env.littleEndian;
     dv.setBigUint64(8, 1000n, le);
     dv.setBigUint64(16, 2048n, le);
-    const fd1 = env.createStreamHandle(file1);
+    const fd1 = env.createStreamHandle(file1, [ PosixDescriptorRight.fd_read, 0 ]);
     const result1 = env.fdLockGet(fd1, flockAddress, false);
     expect(result1).to.equal(0);
     const type = dv.getUint16(0, le);
     expect(type).to.equal(2);   // unlock
     const file2 = {};
     dv.setUint16(0, 0, le);
-    const fd2 = env.createStreamHandle(file1);
+    const fd2 = env.createStreamHandle(file1, [ PosixDescriptorRight.fd_read, 0 ]);
     const result2 = env.fdLockGet(fd1, flockAddress, false);
     expect(result2).to.equal(0);
   })
@@ -73,6 +74,7 @@ describe('Syscall: fd-lock-get', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
     }
     const file1 = {
       getlock(lock) {
@@ -90,7 +92,7 @@ describe('Syscall: fd-lock-get', function() {
     const le = env.littleEndian;
     dv.setBigUint64(8, 1000n, le);
     dv.setBigUint64(16, 2048n, le);
-    const fd1 = env.createStreamHandle(file1);
+    const fd1 = env.createStreamHandle(file1, [ PosixDescriptorRight.fd_read, 0 ]);
     const result1 = env.fdLockGet(fd1, flockAddress, false);
     expect(result1).to.equal(PosixError.NONE);
     const lock1 = {
@@ -106,7 +108,7 @@ describe('Syscall: fd-lock-get', function() {
         return {};
       }
     };
-    const fd2 = env.createStreamHandle(file2);
+    const fd2 = env.createStreamHandle(file2, [ PosixDescriptorRight.fd_read, 0 ]);
     const result2 = env.fdLockGet(fd2, flockAddress, false);
     expect(result2).to.equal(PosixError.NONE);
     const lock2 = {

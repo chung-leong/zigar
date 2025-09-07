@@ -31,12 +31,13 @@ describe('Syscall: fd-fdstat-set-flags', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
     }
     const blob = new Blob([ 
       new Uint8Array([ 0, 1, 2, 3, 4, 6, 7, 8 ])
     ]);
     const reader = env.convertReader(blob);
-    const fd = env.createStreamHandle(reader, PosixDescriptorRight.fd_read);
+    const fd = env.createStreamHandle(reader, [ PosixDescriptorRight.fd_read, 0 ]);
     const result1 = env.fdFdstatSetFlags(fd, PosixDescriptorFlag.nonblock);
     expect(result1).to.equal(0);
     const iovsAddress = usize(0x1000);
@@ -82,11 +83,12 @@ describe('Syscall: fd-fdstat-set-flags', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
     }
     const reader = {
       read() {}
     };
-    const fd = env.createStreamHandle(reader, PosixDescriptorRight.fd_read);
+    const fd = env.createStreamHandle(reader, [ PosixDescriptorRight.fd_read, 0 ]);
     let result;
     const [ error ] = await captureError(() => {
       result = env.fdFdstatSetFlags(fd, PosixDescriptorFlag.nonblock);

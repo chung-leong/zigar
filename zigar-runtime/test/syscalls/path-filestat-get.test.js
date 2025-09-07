@@ -32,6 +32,7 @@ describe('Syscall: path-filestat-get', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setRedirectionMask = () => {};
     }   
     env.addListener('stat', (evt) => {
       event = evt;
@@ -74,6 +75,7 @@ describe('Syscall: path-filestat-get', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setRedirectionMask = () => {};
     }   
     env.addListener('stat', (evt) => false);
     const path = new TextEncoder().encode('/hello.txt');
@@ -108,8 +110,9 @@ describe('Syscall: path-filestat-get', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setRedirectionMask = () => {};
     }   
-    env.addListener('stat', (evt) => undefined);
+    env.addListener('stat', (evt) => 'hello');
     const path = new TextEncoder().encode('/hello.txt');
     const pathAddress = usize(0x1000);
     const pathLen = path.length;

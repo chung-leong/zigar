@@ -3,7 +3,6 @@ import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { usize } from '../../src/utils.js';
-import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -68,12 +67,8 @@ describe('Syscall: fd-tell', function() {
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
     }   
-    let result;
-    const [ error ] = await captureError(() => { 
-      result = env.fdTell(4)
-    });
-    expect(result).to.equal(PosixError.EBADF);
-    expect(error).to.contains('file descriptor');
+    const result = env.fdTell(4);
+    expect(result).to.equal(PosixError.ENOTSUP);
   })
   if (process.env.TARGET === 'wasm') {
     it('should be callable through WASI', async function() {

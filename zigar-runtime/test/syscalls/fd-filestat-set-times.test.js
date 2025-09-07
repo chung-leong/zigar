@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { PosixError } from '../../src/constants.js';
+import { PosixDescriptorRight, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { usize } from '../../src/utils.js';
@@ -30,6 +30,8 @@ describe('Syscall: fd-filestat-set-times', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
     }   
     const array = new Uint8Array(32);
     env.addListener('open', () => {
@@ -83,6 +85,8 @@ describe('Syscall: fd-filestat-set-times', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
     }   
     let event;
     env.addListener('set_times', (evt) => {
@@ -92,7 +96,7 @@ describe('Syscall: fd-filestat-set-times', function() {
     });
     const array = new Uint8Array(32);
     const file = env.convertReader(array);
-    const fd = env.createStreamHandle(file);
+    const fd = env.createStreamHandle(file, [ PosixDescriptorRight.fd_filestat_set_times, 0 ]);
     const result = env.fdFilestatSetTimes(fd, 123n, 456n, 1 << 0 | 1 << 2);
     expect(result).to.equal(PosixError.NONE);
     expect(event).to.eql({

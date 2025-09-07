@@ -32,9 +32,8 @@ describe('Syscall: fd-fdstat-get', function() {
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
     }   
-    const f = env.getWASIHandler('fd_fdstat_get');
     const bufAddress = usize(0x1000);
-    const result = f(1, bufAddress);
+    const result = env.fdFdstatGet(1, bufAddress);
     expect(result).to.equal(0);
     const dv = new DataView(env.memory.buffer);
     const rights = Number(dv.getBigUint64(bufAddress + 8, env.littleEndian));
@@ -63,6 +62,8 @@ describe('Syscall: fd-fdstat-get', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
     }   
     env.addListener('open', () => {
       return new Uint8Array(32);
@@ -74,14 +75,12 @@ describe('Syscall: fd-fdstat-get', function() {
     const fdAddress = usize(0x2000);
     const pathArray = env.obtainZigArray(pathAddress, pathLen);
     for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
-    const open = env.getWASIHandler('path_open');
-    const result1 = open(PosixDescriptor.root, 0, pathAddress, pathLen, 0, BigInt(PosixDescriptorRight.fd_read), 0n, 0, fdAddress);
+    const result1 = env.pathOpen(PosixDescriptor.root, 0, pathAddress, pathLen, 0, BigInt(PosixDescriptorRight.fd_read), 0n, 0, fdAddress);
     expect(result1).to.equal(0);
     const dv = new DataView(env.memory.buffer);
     const fd = dv.getUint32(fdAddress, env.littleEndian);
     const bufAddress = 0x3000;
-    const f = env.getWASIHandler('fd_fdstat_get');
-    const result2 = f(fd, bufAddress);
+    const result2 = env.fdFdstatGet(fd, bufAddress);
     expect(result2).to.equal(0);
     const rights = Number(dv.getBigUint64(bufAddress + 8, env.littleEndian));
     expect(rights & PosixDescriptorRight.fd_read).to.not.equal(0);
@@ -109,6 +108,8 @@ describe('Syscall: fd-fdstat-get', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
     }   
     env.addListener('open', () => {
       return new Map();
@@ -120,14 +121,12 @@ describe('Syscall: fd-fdstat-get', function() {
     const fdAddress = usize(0x2000);
     const pathArray = env.obtainZigArray(pathAddress, pathLen);
     for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
-    const open = env.getWASIHandler('path_open');
-    const result1 = open(PosixDescriptor.root, 0, pathAddress, pathLen, 0, BigInt(PosixDescriptorRight.fd_readdir), 0n, 0, fdAddress);
+    const result1 = env.pathOpen(PosixDescriptor.root, 0, pathAddress, pathLen, 0, BigInt(PosixDescriptorRight.fd_readdir), 0n, 0, fdAddress);
     expect(result1).to.equal(0);
     const dv = new DataView(env.memory.buffer);
     const fd = dv.getUint32(fdAddress, env.littleEndian);
     const bufAddress = usize(0x3000);
-    const f = env.getWASIHandler('fd_fdstat_get');
-    const result2 = f(fd, bufAddress);
+    const result2 = env.fdFdstatGet(fd, bufAddress);
     expect(result2).to.equal(0);
     const rights = Number(dv.getBigUint64(bufAddress + 8, env.littleEndian));
     expect(rights & PosixDescriptorRight.fd_readdir).to.not.equal(0);
@@ -155,6 +154,8 @@ describe('Syscall: fd-fdstat-get', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
     }   
     env.addListener('open', () => {
       return {
@@ -169,14 +170,12 @@ describe('Syscall: fd-fdstat-get', function() {
     const fdAddress = usize(0x2000);
     const pathArray = env.obtainZigArray(pathAddress, pathLen);
     for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
-    const open = env.getWASIHandler('path_open');
-    const result1 = open(PosixDescriptor.root, 0, pathAddress, pathLen, 0, BigInt(PosixDescriptorRight.fd_readdir), 0n, 0, fdAddress);
+    const result1 = env.pathOpen(PosixDescriptor.root, 0, pathAddress, pathLen, 0, BigInt(PosixDescriptorRight.fd_readdir), 0n, 0, fdAddress);
     expect(result1).to.equal(0);
     const dv = new DataView(env.memory.buffer);
     const fd = dv.getUint32(fdAddress, env.littleEndian);
     const bufAddress = usize(0x3000);
-    const f = env.getWASIHandler('fd_fdstat_get');
-    const result2 = f(fd, bufAddress);
+    const result2 = env.fdFdstatGet(fd, bufAddress);
     expect(result2).to.equal(0);
     const rights = Number(dv.getBigUint64(bufAddress + 8, env.littleEndian));
     expect(rights & PosixDescriptorRight.fd_readdir).to.not.equal(0);
@@ -204,6 +203,8 @@ describe('Syscall: fd-fdstat-get', function() {
         const copy = this.getCopyFunction(len);
         copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
     }   
     env.addListener('open', () => {
       return {
@@ -218,16 +219,14 @@ describe('Syscall: fd-fdstat-get', function() {
     const fdAddress = usize(0x2000);
     const pathArray = env.obtainZigArray(pathAddress, pathLen);
     for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
-    const open = env.getWASIHandler('path_open');
-    const result1 = open(PosixDescriptor.root, 0, pathAddress, pathLen, 0, BigInt(PosixDescriptorRight.fd_readdir), 0n, 0, fdAddress);
+    const result1 = env.pathOpen(PosixDescriptor.root, 0, pathAddress, pathLen, 0, BigInt(PosixDescriptorRight.fd_readdir), 0n, 0, fdAddress);
     expect(result1).to.equal(0);
     const dv = new DataView(env.memory.buffer);
     const fd = dv.getUint32(fdAddress, env.littleEndian);
     const bufAddress = usize(0x3000);
-    const f = env.getWASIHandler('fd_fdstat_get');
     let result2;
     const [ error ] = await captureError(() => {
-      result2 = f(fd, bufAddress);
+      result2 = env.fdFdstatGet(fd, bufAddress);
     })
     expect(result2).to.equal(PosixError.EINVAL);
     expect(error).to.contain('dir');

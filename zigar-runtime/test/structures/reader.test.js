@@ -126,7 +126,7 @@ describe('Structure: reader', function() {
       const read2 = await readFn(ptr, buffer2);
       expect(read2).to.equal(40);
     })
-    it('should create a read struct from a Blob', async function() {
+    it('should create a reader struct from a Blob', async function() {
       const env = new Env();
       const blob = new Blob([
         new Uint8Array([ 0, 1, 2, 3 ]),

@@ -1,5 +1,6 @@
+import { PosixDescriptorRight } from '../constants.js';
 import { mixin } from '../environment.js';
-import { checkInefficientAccess } from '../errors.js';
+import { checkInefficientAccess, InvalidStream } from '../errors.js';
 import { MEMORY } from '../symbols.js';
 import { isPromise, usize } from '../utils.js';
 
@@ -20,6 +21,9 @@ export default mixin({
       if('context' in arg && 'writeFn' in arg) return arg;
     }
     const writer = this.convertWriter(arg);
+    if (!writer) {
+      throw new InvalidStream(PosixDescriptorRight.fd_write, arg);
+    }
     // create a handle referencing the writer 
     const writerId = this.nextWriterContextId++;
     const context = this.obtainZigView(writerId, 0, false);

@@ -9,6 +9,9 @@ describe('Feature: dir', function() {
   describe('createDirectory', function() {
     it('should create a dir struct from a Map', async function() {
       const env = new Env();
+      if (process.env.TARGET === 'node') {
+        env.setSyscallTrap = () => {};
+      }
       const map = new Map([
         [ 'hello.txt', { type: 'file' } ],
       ]);
@@ -17,6 +20,9 @@ describe('Feature: dir', function() {
     })
     it('should return the same object if it has a fd property', async function() {
       const env = new Env();
+      if (process.env.TARGET === 'node') {
+        env.setSyscallTrap = () => {};
+      }
       const object = { fd: 1234 };
       const dir = env.createDirectory(object);
       expect(dir).to.equal(object);
