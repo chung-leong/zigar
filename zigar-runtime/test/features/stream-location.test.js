@@ -50,6 +50,8 @@ describe('Syscalls: stream-location', function() {
           }
           return buffer;
         };
+        env.setSyscallTrap = () => {};
+        env.setRedirectionMask = () => {};
       }
       const dirMap = new Map();
       const dir = env.convertDirectory(dirMap);
@@ -81,6 +83,8 @@ describe('Syscalls: stream-location', function() {
           }
           return buffer;
         };
+        env.setSyscallTrap = () => {};
+        env.setRedirectionMask = () => {};
       }
       const dirMap = new Map();
       const dir = env.convertDirectory(dirMap);
@@ -112,6 +116,8 @@ describe('Syscalls: stream-location', function() {
           }
           return buffer;
         };
+        env.setSyscallTrap = () => {};
+        env.setRedirectionMask = () => {};
       }
       const dirMap = new Map();
       const dir = env.convertDirectory(dirMap);
@@ -141,6 +147,8 @@ describe('Syscalls: stream-location', function() {
           }
           return buffer;
         };
+        env.setSyscallTrap = () => {};
+        env.setRedirectionMask = () => {};
       }
       const dirMap = new Map();
       const dir = env.convertDirectory(dirMap);

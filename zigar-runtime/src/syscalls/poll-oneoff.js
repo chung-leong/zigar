@@ -53,8 +53,8 @@ export default mixin({
               onError(err);
             }
           } break;
-          default: 
-            throw new InvalidArgument()
+          default:
+            throw new InvalidArgument();
         }
         if (promise) {
           promises.push(promise);
