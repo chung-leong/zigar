@@ -213,6 +213,7 @@ const PosixDescriptorFlag = {
   sync: 1 << 4,
 };
 const PosixDescriptor = {
+  stdin: 0,
   stdout: 1,
   stderr: 2,
   root: -1,
@@ -272,6 +273,7 @@ const PROMISE = symbol('promise');
 const GENERATOR = symbol('generator');
 const ALLOCATOR = symbol('allocator');
 const SIGNATURE = symbol('signature');
+const CONTROLLER = symbol('controller');
 const STRING_RETVAL = symbol('string retval');
 
 const UPDATE = symbol('update');
@@ -2923,12 +2925,12 @@ class AlignmentConflict extends TypeError {
   }
 }
 
-let TypeMismatch$1 = class TypeMismatch extends TypeError {
+class TypeMismatch extends TypeError {
   constructor(expected, arg) {
     const received = getDescription(arg);
     super(`Expected ${addArticle(expected)}, received ${received}`);
   }
-};
+}
 
 class InvalidStream extends TypeError {
   constructor(rights, arg) {
@@ -2940,7 +2942,7 @@ class InvalidStream extends TypeError {
       types.push('WritableStreamDefaultWriter', 'array', 'null');
     }
     if (rights & PosixDescriptorRight.fd_readdir) {
-      types.push('map');
+      types.push('Map');
     }
     const list = types.join(', ');
     super(`Expected ${list}, or an object with the appropriate stream interface, received ${arg}`);
@@ -3060,6 +3062,14 @@ class InvalidFileDescriptor extends Error {
 
   constructor() {
     super(`Invalid file descriptor`);
+  }
+}
+
+class InvalidPath extends Error {
+  code = PosixError.ENOENT;
+
+  constructor(path) {
+    super(`Invalid relative path '${path}'`);
   }
 }
 
@@ -3229,7 +3239,7 @@ function checkStreamMethod(stream, name) {
 function expectBoolean(result, errorCode) {
   if (result === true) return PosixError.NONE; 
   if (result === false) return errorCode;
-  throw new TypeMismatch$1('boolean', result);
+  throw new TypeMismatch('boolean', result);
 }
 
 function isErrorJSON(arg) {
@@ -3294,7 +3304,7 @@ var allocatorMethods = mixin({
         const { dv, align } = getMemory(arg);
         const zig = dv?.[ZIG];
         if (!zig) {
-          throw new TypeMismatch$1('object containing allocated Zig memory', arg);
+          throw new TypeMismatch('object containing allocated Zig memory', arg);
         }
         const { address } = zig;
         if (address === usizeInvalid) {
@@ -3313,7 +3323,7 @@ var allocatorMethods = mixin({
       value(arg) {
         const { dv: src, align, constructor } = getMemory(arg);
         if (!src) {
-          throw new TypeMismatch$1('string, DataView, typed array, or Zig object', arg);
+          throw new TypeMismatch('string, DataView, typed array, or Zig object', arg);
         }
         const dest = this.alloc(src.byteLength, align);
         copy(dest, src);
@@ -3376,16 +3386,10 @@ var baseline = mixin({
       alignOf: (T) => check(T?.[ALIGN]),
       typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
       on: (name, cb) => this.addListener(name, cb),
+      wasi: (object) => this.setCustomWASI(object) ,
     };
   },
   addListener(name, cb) {
-    {
-      if (name === 'wasi') {
-        if (this.table) {
-          throw new Error(`WASI event handler cannot be set after compilation has begun. Disable topLevelAwait and await __zigar.init().`);
-        }
-      }
-    }
     this.listenerMap.set(name, cb);
   },
   hasListener(name) {
@@ -4155,7 +4159,7 @@ class BlobReader extends AsyncReader {
   async fetch() {
     const chunk = await this.pread(size8k, this.pos);
     const { length } = chunk;
-    return { done: !!length, value: (done) ? chunk : null };
+    return { done: !length, value: (length) ? chunk : null };
   }
 
   async pread(len, offset) {
@@ -4163,6 +4167,12 @@ class BlobReader extends AsyncReader {
     const response = new Response(slice);
     const buffer = await response.arrayBuffer();
     return new Uint8Array(buffer);
+  }
+  
+  async read(len) {
+    const chunk = await super.read(len);
+    this.pos += chunk.length;
+    return chunk;
   }
 
   tell() {
@@ -4324,13 +4334,13 @@ class MapDirectory {
 }
 
 function reposition(whence, offset, current, size) {
-  let pos = -1n;
+  let pos = -1;
   switch (whence) {
     case 0: pos = offset; break;
     case 1: pos = current + offset; break;
     case 2: pos = size + offset; break;
   }
-  if (!(pos >= 0n && pos <= size)) throw new InvalidArgument();
+  if (!(pos >= 0 && pos <= size)) throw new InvalidArgument();
   return pos;
 }
 
@@ -4644,6 +4654,7 @@ var moduleLoading = mixin({
       this.valueIndices = new Map();
       this.options = null;
       this.executable = null;
+      this.instance = null;
       this.memory = null;
       this.table = null;
       this.initialTableLength = 0;
@@ -4778,30 +4789,59 @@ var moduleLoading = mixin({
           // a small delay to allow for setting of event handler
           await new Promise(r => setTimeout(r, 0));
         }
-        this.customWASI = await this.triggerEvent('wasi', {});
-        const instance = await this.instantiateWebAssembly(source, options);
-        const { exports } = instance;
-        this.importFunctions(exports);
-        if (this.customWASI) {
-          // use a proxy to attach the memory object to the list of exports
-          const exportsPlusMemory = { ...exports, memory: this.memory };
-          const instanceProxy = new Proxy(instance, {
-            get(inst, name) {
-              return (name === 'exports') ? exportsPlusMemory : inst[name];
-            }
-          });
-          this.customWASI.initialize?.(instanceProxy);
-        }
+        const instance = this.instance = await this.instantiateWebAssembly(source, options);
+        this.importFunctions(instance.exports);
+        this.initializeCustomWASI();
         this.initialize();
       })();
     },
     getWASIHandler(name) {
-      return this.getBuiltinHandler?.(name)
-          ?? this.customWASI?.wasiImport?.[name]
-          ?? (() => {
-            console.error(`Not implemented: ${name}`);
+      const nameCamelized = name.replace(/_./g, m => m.charAt(1).toUpperCase());
+      const handler = this[nameCamelized].bind(this);
+      const eventName = this[nameCamelized + 'Event'];
+      return (...args) => {
+        const result = handler?.(...args) ?? PosixError.ENOTSUP;
+        const onResult = (result) => {
+          if (result === PosixError.ENOTSUP || result === PosixError.ENOTCAPABLE) {
+            // the handler has is either missing or has declined to deal with it, 
+            // try with the method from the programmer supplied WASI interface
+            if (result === PosixError.ENOTSUP) {
+              const custom = this.customWASI?.wasiImport?.[name];
+              if (custom) {
+                return custom(...args);
+              }
+            }
+            // if we can't fallback onto a custom handler, explain the failure
+            if (eventName) {
+              console.error(`WASI method '${name}' requires the handling of the '${eventName}' event`);
+            } else if (!handler) {
+              console.error(`No support: ${name}`);
+            }
             return PosixError.ENOTSUP;
-          });
+          }
+          return result;
+        };
+        return isPromise(result) ? result.then(onResult) : onResult(result);
+      };
+    },
+    setCustomWASI(wasi) {
+      this.customWASI = wasi;
+      if (this.instance) {
+        this.initializeCustomWASI();
+      }
+    },
+    initializeCustomWASI() {
+      const wasi = this.customWASI;
+      if (wasi) {
+        // use a proxy to attach the memory object to the list of exports
+        const exportsPlusMemory = { ...this.instance.exports, memory: this.memory };
+        const instanceProxy = new Proxy(this.instance, {
+          get(inst, name) {
+            return (name === 'exports') ? exportsPlusMemory : inst[name];
+          }
+        });
+        wasi.initialize?.(instanceProxy);
+      }
     },
     displayPanic(address, len) {
       const array = new Uint8Array(this.memory.buffer, address, len);
@@ -4951,7 +4991,7 @@ var pointerSynchronization = mixin({
           if (currentTarget && !currentTarget[MEMORY][ZIG]) {
             currentTarget[VISIT]?.(callback, targetFlags);
           }
-        }
+        }        
         if (newTarget !== currentTarget) {
           // acquire targets of pointers in new target if it;s in JS memory
           if (newTarget && !newTarget[MEMORY][ZIG]) {
@@ -5071,9 +5111,6 @@ var streamLocation = mixin({
   obtainStreamLocation(dirFd, pathAddress, pathLen) {
     const pathArray = this.obtainZigArray(pathAddress, pathLen);
     let path = decodeText(pathArray).trim();
-    if (path === '.') {
-      return this.getStreamLocation(dirFd);
-    }
     if (path.endsWith('/')) {
       path = path.slice(0, -1);
     }
@@ -5081,7 +5118,11 @@ var streamLocation = mixin({
     const list = [];
     for (const part of parts) {
       if (part === '..') {
-        list.pop();
+        if (list.length > 0) {
+          list.pop();
+        } else {
+          throw new InvalidPath(path);
+        }
       } else if (part !== '.' && part != '') {
         list.push(part);
       }
@@ -5096,18 +5137,18 @@ var streamLocation = mixin({
   getStreamLocation(fd) {
     return this.streamLocationMap.get(fd);
   },
-  setStreamLocation(fd, path) {
+  setStreamLocation(fd, loc) {
     const m = this.streamLocationMap;
-    if (path) {
-      m.set(fd, path);
+    if (loc) {
+      m.set(fd, loc);
     } else {
       m.delete(fd);
     }
   },
 });
 
-const stdinRights = PosixDescriptorRight.fd_read;
-const stdoutRights = PosixDescriptorRight.fd_write;
+const stdinRights = [ PosixDescriptorRight.fd_read, 0 ];
+const stdoutRights = [ PosixDescriptorRight.fd_write, 0 ];
 
 const defaultDirRights =  PosixDescriptorRight.fd_seek
                         | PosixDescriptorRight.fd_fdstat_set_flags
@@ -5161,8 +5202,8 @@ var streamRedirection = mixin({
     };
     this.streamMap = new Map([ 
       [ PosixDescriptor.root, [ root, this.getDefaultRights('dir'), 0 ] ], 
-      [ PosixDescriptor.stdout, [ this.createLogWriter('stdout'), this.getDefaultRights('file'), 0 ] ], 
-      [ PosixDescriptor.stderr, [ this.createLogWriter('stderr'), this.getDefaultRights('file'), 0 ] ], 
+      [ PosixDescriptor.stdout, [ this.createLogWriter('stdout'), stdoutRights, 0 ] ], 
+      [ PosixDescriptor.stderr, [ this.createLogWriter('stderr'), stdoutRights, 0 ] ], 
     ]);
     this.flushRequestMap = new Map();
     this.nextStreamHandle = PosixDescriptor.min;
@@ -5199,15 +5240,15 @@ var streamRedirection = mixin({
     const previous = map.get(fd);
     if (arg !== undefined) {
       let stream, rights;
-      if (num === 0) {
+      if (num === PosixDescriptor.stdin) {
         stream = this.convertReader(arg);
-        rights = [ stdinRights, 0 ];
-      } else if (num === 1 || num === 2) {
+        rights = stdinRights;
+      } else if (num === PosixDescriptor.stdout || num === PosixDescriptor.stderr) {
         stream = this.convertWriter(arg);
-        rights = [ stdoutRights, 0 ];
-      } else if (num === -1) {
+        rights = stdoutRights;
+      } else if (num === PosixDescriptor.root) {
         stream = this.convertDirectory(arg);
-        rights = [ rootRights, rootRightsInheriting ];
+        rights = this.getDefaultRights('dir');
       } else {
         throw new Error(`Expecting 0, 1, 2, or -1, received ${fd}`);
       }
@@ -5218,7 +5259,7 @@ var streamRedirection = mixin({
     } else {
       map.delete(fd);
     }
-    return previous;
+    return previous?.[0];
   },
   createLogWriter(source) {
     const env = this;
@@ -5593,7 +5634,7 @@ var generator = mixin({
     const { constructor, instance: { members } } = structure;
     if (func) {
       if (typeof(func) !== 'function') {
-        throw new TypeMismatch$1('function', func);
+        throw new TypeMismatch('function', func);
       }
     } else {
       const generator = args[GENERATOR] = new AsyncGenerator();
@@ -5773,7 +5814,7 @@ var promise = mixin({
     const { constructor } = structure;
     if (func) {
       if (typeof(func) !== 'function') {
-        throw new TypeMismatch$1('function', func);
+        throw new TypeMismatch('function', func);
       }
     } else {
       args[PROMISE] = new Promise((resolve, reject) => {
@@ -5852,6 +5893,9 @@ var reader = mixin({
       if('context' in arg && 'readFn' in arg) return arg;
     }
     const reader = this.convertReader(arg);
+    if (!reader) {
+        throw new InvalidStream(PosixDescriptorRight.fd_read, arg);
+    }
     // create a handle referencing the reader 
     const readerId = this.nextReaderId++;
     const context = this.obtainZigView(readerId, 0, false);
@@ -5918,6 +5962,9 @@ var writer = mixin({
       if('context' in arg && 'writeFn' in arg) return arg;
     }
     const writer = this.convertWriter(arg);
+    if (!writer) {
+      throw new InvalidStream(PosixDescriptorRight.fd_write, arg);
+    }
     // create a handle referencing the writer 
     const writerId = this.nextWriterContextId++;
     const context = this.obtainZigView(writerId, 0, false);
@@ -6005,7 +6052,8 @@ var environSizesGet = mixin({
   environSizesGet(environCountAddress, environBufSizeAddress) {
     const result = this.triggerEvent('env') ?? {};
     if (typeof(result) !== 'object') {
-      throw new TypeMismatch('object', result);
+      console.error(new TypeMismatch('object', result).message);
+      return PosixError.EFAULT;
     }
     const env = this.envVariables = [];
     for (const [ name, value ] of Object.entries(result)) {
@@ -6084,7 +6132,7 @@ var fdFdstatGet = mixin({
           throw new InvalidEnumValue(PosixFileType, stream.type);
         }
       } else {
-        if (rights & (PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write)) {
+        if (rights[0] & (PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write)) {
           type = PosixFileType.file;
         } else {
           type = PosixFileType.directory;
@@ -6108,10 +6156,10 @@ var fdFdstatSetFlags = mixin({
       const entry = this.getStream(fd);
       const [ stream, rights, flags ] = entry;
       if (newFlags & PosixDescriptorFlag.nonblock) {
-        if (rights & PosixDescriptorRight.fd_read) {
+        if (rights[0] & PosixDescriptorRight.fd_read) {
           checkStreamMethod(stream, 'readnb');
         }
-        if (rights & PosixDescriptorRight.fd_write) {
+        if (rights[0] & PosixDescriptorRight.fd_write) {
           checkStreamMethod(stream, 'writenb');
         }
       }
@@ -6149,7 +6197,7 @@ var copyStat = mixin({
       return PosixError.ENOENT;
     }
     if (typeof(stat) !== 'object' || !stat) {
-      throw new TypeMismatch$1('object or false', stat);
+      throw new TypeMismatch('object or false', stat);
     }
     const { ino = 1, type = 'unknown', size = 0, atime = 0, mtime = 0, ctime = 0 } = stat;
     const typeNum = getEnumNumber(type, PosixFileType);
@@ -6193,6 +6241,7 @@ var fdFilestatGet = mixin({
 });
 
 var fdFileStatSetTimes = mixin({
+  fdFilestatSetTimesEvent: 'set_times',
   fdFilestatSetTimes(fd, atime, mtime, tFlags, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const [ stream ] = this.getStream(fd);
@@ -6224,11 +6273,14 @@ var fdPread = mixin({
       }
       return reader.pread(total, safeInt(offset));
     }, (chunk) => {
-      let { byteOffset: pos, buffer } = chunk;
+      let { byteOffset: pos, byteLength: remaining, buffer } = chunk;
       for (const { ptr, len } of ops) {
-        const part = new DataView(buffer, pos, len);
-        this.moveExternBytes(part, ptr, true);
-        pos += len;
+        if (remaining > 0) {
+          const part = new DataView(buffer, pos, Math.min(remaining, len));
+          this.moveExternBytes(part, ptr, true);
+          pos += len;
+          remaining -= len;
+        }
       }
       this.copyUint32(readAddress, chunk.length);
     });
@@ -6237,7 +6289,7 @@ var fdPread = mixin({
 
 var fdPrestatDirName = mixin({
   fdPrestatDirName(fd, pathAddress, pathLen) {
-    if (!this.customPreopened) {
+    if (!this.customWASI?.wasiImport?.fd_prestat_get) {
       if (fd === 3) {
         return 0;
       } else {
@@ -6251,7 +6303,7 @@ var fdPrestatDirName = mixin({
 
 var fdPrestatGet = mixin({
   fdPrestatGet(fd, bufAddress) {
-    if (!this.customPreopened) {
+    if (!this.customWASI?.wasiImport?.fd_prestat_get) {
       if (fd === 3) {
         // descriptor 3 is the root directory, I think
         this.streamMap.set(fd, this.streamMap.get(PosixDescriptor.root));
@@ -6447,6 +6499,7 @@ var fdWrite = mixin({
 });
 
 var pathCreateDirectory = mixin({
+  pathCreateDirectoryEvent: 'mkdir',
   pathCreateDirectory(dirFd, pathAddress, pathLen, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
@@ -6464,6 +6517,7 @@ var pathCreateDirectory = mixin({
 });
 
 var pathFilestatGet = mixin({
+  pathFilestatGetEvent: 'stat/open',
   pathFilestatGet(dirFd, lFlags, pathAddress, pathLen, bufAddress, canWait) {
     let infer = false;
     return catchPosixError(canWait, PosixError.ENOENT, () => {
@@ -6497,6 +6551,7 @@ var pathFilestatGet = mixin({
 });
 
 var pathFilestatSetTimes = mixin({
+  pathFilestatSetTimesEvent: 'set_times',
   pathFilestatSetTimes(dirFd, lFlags, pathAddress, pathLen, atime, mtime, tFlags, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
@@ -6514,6 +6569,7 @@ const Right = {
 };
 
 var pathOpen = mixin({
+  pathOpenEvent: 'open',
   pathOpen(dirFd, lFlags, pathAddress, pathLen, oFlags, rightsBase, rightsInheriting, fdFlags, fdAddress, canWait) {
     const fdRights = [ Number(rightsBase), Number(rightsInheriting) ];
     if (!(fdRights[0] & PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write | PosixDescriptorRight.fd_readdir)) {
@@ -6547,6 +6603,7 @@ var pathOpen = mixin({
 });
 
 var pathRemoveDirectory = mixin({
+  pathRemoveDirectory: 'rmdir',
   pathRemoveDirectory(dirFd, pathAddress, pathLen, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
@@ -6556,6 +6613,7 @@ var pathRemoveDirectory = mixin({
 });
 
 var pathUnlinkFile = mixin({
+  pathUnlinkFileEvent: 'unlink',
   pathUnlinkFile(dirFd, pathAddress, pathLen, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
@@ -6683,41 +6741,6 @@ var randomGet = mixin({
     this.moveExternBytes(dv, bufAddress, true);
     return 0;
   }
-}) ;
-
-var wasiSupport = mixin({
-  getBuiltinHandler(name) {
-    const nameCamelized = name.replace(/_./g, m => m.charAt(1).toUpperCase());
-    const handler = this[nameCamelized];
-    if (handler) {
-      const custom = this.customWASI?.wasiImport?.[name];
-      if (custom && name === 'fd_prestat_get') {
-        this.customPreopened = true;
-      }
-      return (...args) => {
-        const result = handler.call(this, ...args);
-        const onResult = (result) => {
-          if (result === PosixError.ENOTSUP && custom) {
-            // the handler has declined to deal with it, use the method from the custom WASI interface
-            return custom(...args);
-          } else if (result === PosixError.ENOTSUP || result === PosixError.ENOTCAPABLE) {
-            // if we can't fallback onto a custom handler, explain the failure
-            const evtName = this.lastEvent;
-            if (evtName) {
-              if (this.hasListener(evtName)) {
-                console.error(`WASI method '${name}' failed because the handler for '${evtName}' declined to handle the event`);
-              } else {
-                console.error(`WASI method '${name}' requires the handling of the '${evtName}' event`);
-              }
-            }
-            return PosixError.ENOTSUP;
-          }
-          return result;
-        };
-        return isPromise(result) ? result.then(onResult) : onResult(result);
-      };
-    }
-  },
 }) ;
 
 var workerSupport = mixin({
@@ -7019,7 +7042,6 @@ var structureAcquisition = mixin({
       }
       if (this.ioRedirection) {
         for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
-          this.use(wasiSupport);
           switch (name) {
             case 'environ_get': this.use(environGet); break;
             case 'environ_sizes_get': this.use(environSizesGet); break;
@@ -7824,7 +7846,7 @@ var base64 = mixin({
       },
       set(str, allocator) {
         if (typeof(str) !== 'string') {
-          throw new TypeMismatch$1('string', str);
+          throw new TypeMismatch('string', str);
         }
         const dv = decodeBase64(str);
         thisEnv.assignView(this, dv, structure, false, allocator);
@@ -7850,7 +7872,7 @@ var clampedArray = mixin({
       },
       set(ta, allocator) {
         if (ta?.[Symbol.toStringTag] !== ClampedArray.name) {
-          throw new TypeMismatch$1(ClampedArray.name, ta);
+          throw new TypeMismatch(ClampedArray.name, ta);
         }
         const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
         thisEnv.assignView(this, dv, structure, true, allocator);
@@ -7872,7 +7894,7 @@ var dataView = mixin({
       },
       set(dv, allocator) {
         if (dv?.[Symbol.toStringTag] !== 'DataView') {
-          throw new TypeMismatch$1('DataView', dv);
+          throw new TypeMismatch('DataView', dv);
         }
         thisEnv.assignView(this, dv, structure, true, allocator);
       },
@@ -8102,7 +8124,7 @@ var string = mixin({
       },
       set(str, allocator) {
         if (typeof(str) !== 'string') {
-          throw new TypeMismatch$1('string', str);
+          throw new TypeMismatch('string', str);
         }
         const sentinelValue = this.constructor[SENTINEL]?.value;
         if (sentinelValue !== undefined && str.charCodeAt(str.length - 1) !== sentinelValue) {
@@ -8229,7 +8251,7 @@ var typedArray = mixin({
       },
       set(ta, allocator) {
         if (ta?.[Symbol.toStringTag] !== TypedArray.name) {
-          throw new TypeMismatch$1(TypedArray.name, ta);
+          throw new TypeMismatch(TypedArray.name, ta);
         }
         const dv = new DataView(ta.buffer, ta.byteOffset, ta.byteLength);
         thisEnv.assignView(this, dv, structure, true, allocator);
@@ -9235,7 +9257,6 @@ var _function = mixin({
   defineFunction(structure, descriptors) {
     const {
       instance: { members: [ member ], template: thunk },
-      static: { template: jsThunkController },
     } = structure;
     const cache = new ObjectCache();
     const { structure: { constructor: ArgStruct } } = member;
@@ -9249,13 +9270,13 @@ var _function = mixin({
           throw new NoInitializer(structure);
         }
         if (typeof(arg) !== 'function') {
-          throw new TypeMismatch$1('function', arg);
+          throw new TypeMismatch('function', arg);
         }
-        if (ArgStruct[TYPE] === StructureType.VariadicStruct || !jsThunkController) {
+        if (ArgStruct[TYPE] === StructureType.VariadicStruct || !constructor[CONTROLLER]) {
           throw new Unsupported();
         }
         // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
-        dv = thisEnv.getFunctionThunk(arg, jsThunkController);
+        dv = thisEnv.getFunctionThunk(arg, constructor[CONTROLLER]);
       } else {
         if (this !== ENVIRONMENT) {
           // casting from buffer to function is allowed only if request comes from the runtime
@@ -9288,6 +9309,10 @@ var _function = mixin({
     return constructor;
   },
   finalizeFunction(structure, staticDescriptors, descriptors) {
+    const {
+      static: { template },
+    } = structure;
+    staticDescriptors[CONTROLLER] = defineValue(template);
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
   },
@@ -9689,7 +9714,7 @@ var pointer = mixin({
     } = structure;
     const { structure: targetStructure } = member;
     const { type: targetType, constructor: Target } = targetStructure;
-    staticDescriptors.child = (Target) ? defineValue(Target) : {
+    staticDescriptors.child = (Target !== Object) ? defineValue(Target) : {
       // deal with self-referencing pointer
       get() { return targetStructure.constructor }
     };
@@ -10761,7 +10786,6 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureStructureAcquisition: structureAcquisition,
   FeatureThunkAllocation: thunkAllocation,
   FeatureViewManagement: viewManagement,
-  FeatureWasiSupport: wasiSupport,
   FeatureWorkerSupport: workerSupport,
   FeatureWriteProtection: writeProtection,
   FeatureWriterConversion: writerConversion,

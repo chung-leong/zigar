@@ -3,6 +3,7 @@ import { mixin } from '../environment.js';
 import { catchPosixError, expectBoolean } from '../errors.js';
 
 export default mixin({
+  pathUnlinkFileEvent: 'unlink',
   pathUnlinkFile(dirFd, pathAddress, pathLen, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);

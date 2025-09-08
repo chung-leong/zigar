@@ -23,16 +23,10 @@ var baseline = mixin({
       alignOf: (T) => check(T?.[ALIGN]),
       typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
       on: (name, cb) => this.addListener(name, cb),
+      wasi: (object) => this.setCustomWASI(object) ,
     };
   },
   addListener(name, cb) {
-    {
-      if (name === 'wasi') {
-        if (this.table) {
-          throw new Error(`WASI event handler cannot be set after compilation has begun. Disable topLevelAwait and await __zigar.init().`);
-        }
-      }
-    }
     this.listenerMap.set(name, cb);
   },
   hasListener(name) {

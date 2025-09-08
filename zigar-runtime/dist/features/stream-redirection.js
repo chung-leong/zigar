@@ -3,8 +3,8 @@ import { mixin } from '../environment.js';
 import { InvalidStream, Unsupported, InvalidFileDescriptor } from '../errors.js';
 import { decodeText } from '../utils.js';
 
-const stdinRights = PosixDescriptorRight.fd_read;
-const stdoutRights = PosixDescriptorRight.fd_write;
+const stdinRights = [ PosixDescriptorRight.fd_read, 0 ];
+const stdoutRights = [ PosixDescriptorRight.fd_write, 0 ];
 
 const defaultDirRights =  PosixDescriptorRight.fd_seek
                         | PosixDescriptorRight.fd_fdstat_set_flags
@@ -58,8 +58,8 @@ var streamRedirection = mixin({
     };
     this.streamMap = new Map([ 
       [ PosixDescriptor.root, [ root, this.getDefaultRights('dir'), 0 ] ], 
-      [ PosixDescriptor.stdout, [ this.createLogWriter('stdout'), this.getDefaultRights('file'), 0 ] ], 
-      [ PosixDescriptor.stderr, [ this.createLogWriter('stderr'), this.getDefaultRights('file'), 0 ] ], 
+      [ PosixDescriptor.stdout, [ this.createLogWriter('stdout'), stdoutRights, 0 ] ], 
+      [ PosixDescriptor.stderr, [ this.createLogWriter('stderr'), stdoutRights, 0 ] ], 
     ]);
     this.flushRequestMap = new Map();
     this.nextStreamHandle = PosixDescriptor.min;
@@ -96,15 +96,15 @@ var streamRedirection = mixin({
     const previous = map.get(fd);
     if (arg !== undefined) {
       let stream, rights;
-      if (num === 0) {
+      if (num === PosixDescriptor.stdin) {
         stream = this.convertReader(arg);
-        rights = [ stdinRights, 0 ];
-      } else if (num === 1 || num === 2) {
+        rights = stdinRights;
+      } else if (num === PosixDescriptor.stdout || num === PosixDescriptor.stderr) {
         stream = this.convertWriter(arg);
-        rights = [ stdoutRights, 0 ];
-      } else if (num === -1) {
+        rights = stdoutRights;
+      } else if (num === PosixDescriptor.root) {
         stream = this.convertDirectory(arg);
-        rights = [ rootRights, rootRightsInheriting ];
+        rights = this.getDefaultRights('dir');
       } else {
         throw new Error(`Expecting 0, 1, 2, or -1, received ${fd}`);
       }
@@ -115,7 +115,7 @@ var streamRedirection = mixin({
     } else {
       map.delete(fd);
     }
-    return previous;
+    return previous?.[0];
   },
   createLogWriter(source) {
     const env = this;

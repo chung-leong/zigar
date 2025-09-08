@@ -1,6 +1,6 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
-import { decodeText, empty, defineProperty, defineValue } from '../utils.js';
+import { decodeText, isPromise, empty, defineProperty, defineValue } from '../utils.js';
 
 var moduleLoading = mixin({
   init() {
@@ -12,6 +12,7 @@ var moduleLoading = mixin({
       this.valueIndices = new Map();
       this.options = null;
       this.executable = null;
+      this.instance = null;
       this.memory = null;
       this.table = null;
       this.initialTableLength = 0;
@@ -146,30 +147,59 @@ var moduleLoading = mixin({
           // a small delay to allow for setting of event handler
           await new Promise(r => setTimeout(r, 0));
         }
-        this.customWASI = await this.triggerEvent('wasi', {});
-        const instance = await this.instantiateWebAssembly(source, options);
-        const { exports } = instance;
-        this.importFunctions(exports);
-        if (this.customWASI) {
-          // use a proxy to attach the memory object to the list of exports
-          const exportsPlusMemory = { ...exports, memory: this.memory };
-          const instanceProxy = new Proxy(instance, {
-            get(inst, name) {
-              return (name === 'exports') ? exportsPlusMemory : inst[name];
-            }
-          });
-          this.customWASI.initialize?.(instanceProxy);
-        }
+        const instance = this.instance = await this.instantiateWebAssembly(source, options);
+        this.importFunctions(instance.exports);
+        this.initializeCustomWASI();
         this.initialize();
       })();
     },
     getWASIHandler(name) {
-      return this.getBuiltinHandler?.(name)
-          ?? this.customWASI?.wasiImport?.[name]
-          ?? (() => {
-            console.error(`Not implemented: ${name}`);
+      const nameCamelized = name.replace(/_./g, m => m.charAt(1).toUpperCase());
+      const handler = this[nameCamelized].bind(this);
+      const eventName = this[nameCamelized + 'Event'];
+      return (...args) => {
+        const result = handler?.(...args) ?? PosixError.ENOTSUP;
+        const onResult = (result) => {
+          if (result === PosixError.ENOTSUP || result === PosixError.ENOTCAPABLE) {
+            // the handler has is either missing or has declined to deal with it, 
+            // try with the method from the programmer supplied WASI interface
+            if (result === PosixError.ENOTSUP) {
+              const custom = this.customWASI?.wasiImport?.[name];
+              if (custom) {
+                return custom(...args);
+              }
+            }
+            // if we can't fallback onto a custom handler, explain the failure
+            if (eventName) {
+              console.error(`WASI method '${name}' requires the handling of the '${eventName}' event`);
+            } else if (!handler) {
+              console.error(`No support: ${name}`);
+            }
             return PosixError.ENOTSUP;
-          });
+          }
+          return result;
+        };
+        return isPromise(result) ? result.then(onResult) : onResult(result);
+      };
+    },
+    setCustomWASI(wasi) {
+      this.customWASI = wasi;
+      if (this.instance) {
+        this.initializeCustomWASI();
+      }
+    },
+    initializeCustomWASI() {
+      const wasi = this.customWASI;
+      if (wasi) {
+        // use a proxy to attach the memory object to the list of exports
+        const exportsPlusMemory = { ...this.instance.exports, memory: this.memory };
+        const instanceProxy = new Proxy(this.instance, {
+          get(inst, name) {
+            return (name === 'exports') ? exportsPlusMemory : inst[name];
+          }
+        });
+        wasi.initialize?.(instanceProxy);
+      }
     },
     displayPanic(address, len) {
       const array = new Uint8Array(this.memory.buffer, address, len);

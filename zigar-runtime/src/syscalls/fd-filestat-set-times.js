@@ -4,6 +4,7 @@ import { catchPosixError, expectBoolean } from '../errors.js';
 import { extractTimes } from '../utils.js';
 
 export default mixin({
+  fdFilestatSetTimesEvent: 'set_times',
   fdFilestatSetTimes(fd, atime, mtime, tFlags, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const [ stream ] = this.getStream(fd);

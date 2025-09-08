@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 
 export default (process.env.TARGET === 'wasm') ? mixin({
   fdPrestatDirName(fd, pathAddress, pathLen) {
-    if (!this.customPreopened) {
+    if (!this.customWASI?.wasiImport?.fd_prestat_get) {
       if (fd === 3) {
         return 0;
       } else {

@@ -14,7 +14,7 @@ var fdFdstatGet = mixin({
           throw new InvalidEnumValue(PosixFileType, stream.type);
         }
       } else {
-        if (rights & (PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write)) {
+        if (rights[0] & (PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write)) {
           type = PosixFileType.file;
         } else {
           type = PosixFileType.directory;

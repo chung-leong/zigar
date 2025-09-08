@@ -5,6 +5,7 @@ import { decodeFlags } from '../utils.js';
 import './copy-stat.js';
 
 var pathFilestatGet = mixin({
+  pathFilestatGetEvent: 'stat/open',
   pathFilestatGet(dirFd, lFlags, pathAddress, pathLen, bufAddress, canWait) {
     let infer = false;
     return catchPosixError(canWait, PosixError.ENOENT, () => {

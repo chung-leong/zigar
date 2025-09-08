@@ -11,6 +11,7 @@ const Right = {
 };
 
 var pathOpen = mixin({
+  pathOpenEvent: 'open',
   pathOpen(dirFd, lFlags, pathAddress, pathLen, oFlags, rightsBase, rightsInheriting, fdFlags, fdAddress, canWait) {
     const fdRights = [ Number(rightsBase), Number(rightsInheriting) ];
     if (!(fdRights[0] & PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write | PosixDescriptorRight.fd_readdir)) {

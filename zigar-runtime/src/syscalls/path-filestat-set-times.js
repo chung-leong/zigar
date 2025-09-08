@@ -4,6 +4,7 @@ import { catchPosixError, expectBoolean } from '../errors.js';
 import { decodeFlags, extractTimes } from '../utils.js';
 
 export default mixin({
+  pathFilestatSetTimesEvent: 'set_times',
   pathFilestatSetTimes(dirFd, lFlags, pathAddress, pathLen, atime, mtime, tFlags, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);

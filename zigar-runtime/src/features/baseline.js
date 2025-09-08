@@ -23,18 +23,13 @@ export default mixin({
       alignOf: (T) => check(T?.[ALIGN]),
       typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
       on: (name, cb) => this.addListener(name, cb),
+      wasi: (process.env.TARGET === 'wasm') ? (object) => this.setCustomWASI(object) : undefined,
     };
   },
   addListener(name, cb) {
     if (process.env.TARGET === 'node') {
       if ([ 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink', 'syscall' ].includes(name)) {
         this.setRedirectionMask(name, !!cb);
-      }
-    } else if (process.env.TARGET === 'wasm') {
-      if (name === 'wasi') {
-        if (this.table) {
-          throw new Error(`WASI event handler cannot be set after compilation has begun. Disable topLevelAwait and await __zigar.init().`);
-        }
       }
     }
     this.listenerMap.set(name, cb);

@@ -172,7 +172,7 @@ class BlobReader extends AsyncReader {
   async fetch() {
     const chunk = await this.pread(size8k, this.pos);
     const { length } = chunk;
-    return { done: !!length, value: (done) ? chunk : null };
+    return { done: !length, value: (length) ? chunk : null };
   }
 
   async pread(len, offset) {
@@ -180,6 +180,12 @@ class BlobReader extends AsyncReader {
     const response = new Response(slice);
     const buffer = await response.arrayBuffer();
     return new Uint8Array(buffer);
+  }
+  
+  async read(len) {
+    const chunk = await super.read(len);
+    this.pos += chunk.length;
+    return chunk;
   }
 
   tell() {
@@ -341,13 +347,13 @@ class MapDirectory {
 }
 
 function reposition(whence, offset, current, size) {
-  let pos = -1n;
+  let pos = -1;
   switch (whence) {
     case 0: pos = offset; break;
     case 1: pos = current + offset; break;
     case 2: pos = size + offset; break;
   }
-  if (!(pos >= 0n && pos <= size)) throw new InvalidArgument();
+  if (!(pos >= 0 && pos <= size)) throw new InvalidArgument();
   return pos;
 }
 

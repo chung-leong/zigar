@@ -33,7 +33,6 @@ export { default as FeatureStreamRedirection } from './features/stream-redirecti
 export { default as FeatureStructureAcquisition } from './features/structure-acquisition.js';
 export { default as FeatureThunkAllocation } from './features/thunk-allocation.js';
 export { default as FeatureViewManagement } from './features/view-management.js';
-export { default as FeatureWasiSupport } from './features/wasi-support.js';
 export { default as FeatureWorkerSupport } from './features/worker-support.js';
 export { default as FeatureWriteProtection } from './features/write-protection.js';
 export { default as FeatureWriterConversion } from './features/writer-conversion.js';

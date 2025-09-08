@@ -60,7 +60,6 @@ import dataCopying from './data-copying.js';
 import objectLinkage from './object-linkage.js';
 import streamLocation from './stream-location.js';
 import streamRedirection from './stream-redirection.js';
-import wasiSupport from './wasi-support.js';
 import workerSupport from './worker-support.js';
 
 export default mixin({
@@ -236,7 +235,6 @@ export default mixin({
       }
       if (this.ioRedirection) {
         for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
-          this.use(wasiSupport);
           switch (name) {
             case 'environ_get': this.use(environGet); break;
             case 'environ_sizes_get': this.use(environSizesGet); break;

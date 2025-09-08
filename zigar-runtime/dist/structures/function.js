@@ -1,14 +1,13 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NoInitializer, TypeMismatch, Unsupported, NoCastingToFunction } from '../errors.js';
-import { TYPE, ENVIRONMENT, MEMORY } from '../symbols.js';
-import { ObjectCache, defineValue, getSelf, defineProperties } from '../utils.js';
+import { CONTROLLER, TYPE, ENVIRONMENT, MEMORY } from '../symbols.js';
+import { defineValue, ObjectCache, getSelf, defineProperties } from '../utils.js';
 
 var _function = mixin({
   defineFunction(structure, descriptors) {
     const {
       instance: { members: [ member ], template: thunk },
-      static: { template: jsThunkController },
     } = structure;
     const cache = new ObjectCache();
     const { structure: { constructor: ArgStruct } } = member;
@@ -24,11 +23,11 @@ var _function = mixin({
         if (typeof(arg) !== 'function') {
           throw new TypeMismatch('function', arg);
         }
-        if (ArgStruct[TYPE] === StructureType.VariadicStruct || !jsThunkController) {
+        if (ArgStruct[TYPE] === StructureType.VariadicStruct || !constructor[CONTROLLER]) {
           throw new Unsupported();
         }
         // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
-        dv = thisEnv.getFunctionThunk(arg, jsThunkController);
+        dv = thisEnv.getFunctionThunk(arg, constructor[CONTROLLER]);
       } else {
         if (this !== ENVIRONMENT) {
           // casting from buffer to function is allowed only if request comes from the runtime
@@ -61,6 +60,10 @@ var _function = mixin({
     return constructor;
   },
   finalizeFunction(structure, staticDescriptors, descriptors) {
+    const {
+      static: { template },
+    } = structure;
+    staticDescriptors[CONTROLLER] = defineValue(template);
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
   },

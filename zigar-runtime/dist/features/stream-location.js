@@ -1,5 +1,6 @@
 import { PosixDescriptor } from '../constants.js';
 import { mixin } from '../environment.js';
+import { InvalidPath } from '../errors.js';
 import { decodeText } from '../utils.js';
 
 var streamLocation = mixin({
@@ -9,9 +10,6 @@ var streamLocation = mixin({
   obtainStreamLocation(dirFd, pathAddress, pathLen) {
     const pathArray = this.obtainZigArray(pathAddress, pathLen);
     let path = decodeText(pathArray).trim();
-    if (path === '.') {
-      return this.getStreamLocation(dirFd);
-    }
     if (path.endsWith('/')) {
       path = path.slice(0, -1);
     }
@@ -19,7 +17,11 @@ var streamLocation = mixin({
     const list = [];
     for (const part of parts) {
       if (part === '..') {
-        list.pop();
+        if (list.length > 0) {
+          list.pop();
+        } else {
+          throw new InvalidPath(path);
+        }
       } else if (part !== '.' && part != '') {
         list.push(part);
       }
@@ -34,10 +36,10 @@ var streamLocation = mixin({
   getStreamLocation(fd) {
     return this.streamLocationMap.get(fd);
   },
-  setStreamLocation(fd, path) {
+  setStreamLocation(fd, loc) {
     const m = this.streamLocationMap;
-    if (path) {
-      m.set(fd, path);
+    if (loc) {
+      m.set(fd, loc);
     } else {
       m.delete(fd);
     }

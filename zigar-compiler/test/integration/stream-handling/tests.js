@@ -133,21 +133,18 @@ export function addTests(importModule, options) {
     })
     it('should fallback to the system when open handler returns undefined', async function() {
       this.timeout(0);
-      const { __zigar, hash } = await importTest('open-and-read-from-file-system', { topLevelAwait: false });
+      const { __zigar, hash } = await importTest('open-and-read-from-file-system');
       if (target === 'wasm32') {
-        __zigar.on('wasi', async () => {
-          const { WASI } = await import('wasi');
-          return new WASI({
-            version: 'preview1',
-            args: [],
-            env: {},
-            preopens: {
-              '/': '/',
-            },
-          });
-        });
+        const { WASI } = await import('wasi');
+        __zigar.wasi(new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/': '/',
+          },
+        }));
       }
-      await __zigar.init();
       const correct = (platform() === 'win32') 
       ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
       : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';

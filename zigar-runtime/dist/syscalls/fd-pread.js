@@ -23,11 +23,14 @@ var fdPread = mixin({
       }
       return reader.pread(total, safeInt(offset));
     }, (chunk) => {
-      let { byteOffset: pos, buffer } = chunk;
+      let { byteOffset: pos, byteLength: remaining, buffer } = chunk;
       for (const { ptr, len } of ops) {
-        const part = new DataView(buffer, pos, len);
-        this.moveExternBytes(part, ptr, true);
-        pos += len;
+        if (remaining > 0) {
+          const part = new DataView(buffer, pos, Math.min(remaining, len));
+          this.moveExternBytes(part, ptr, true);
+          pos += len;
+          remaining -= len;
+        }
       }
       this.copyUint32(readAddress, chunk.length);
     });

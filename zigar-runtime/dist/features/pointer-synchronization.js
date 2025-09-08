@@ -84,7 +84,7 @@ var pointerSynchronization = mixin({
           if (currentTarget && !currentTarget[MEMORY][ZIG]) {
             currentTarget[VISIT]?.(callback, targetFlags);
           }
-        }
+        }        
         if (newTarget !== currentTarget) {
           // acquire targets of pointers in new target if it;s in JS memory
           if (newTarget && !newTarget[MEMORY][ZIG]) {

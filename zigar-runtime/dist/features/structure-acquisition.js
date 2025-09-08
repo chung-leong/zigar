@@ -55,7 +55,6 @@ import './data-copying.js';
 import './object-linkage.js';
 import './stream-location.js';
 import './stream-redirection.js';
-import './wasi-support.js';
 import './worker-support.js';
 
 var structureAcquisition = mixin({

@@ -4,7 +4,7 @@ import { createView } from '../utils.js';
 
 var fdPrestatGet = mixin({
   fdPrestatGet(fd, bufAddress) {
-    if (!this.customPreopened) {
+    if (!this.customWASI?.wasiImport?.fd_prestat_get) {
       if (fd === 3) {
         // descriptor 3 is the root directory, I think
         this.streamMap.set(fd, this.streamMap.get(PosixDescriptor.root));

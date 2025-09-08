@@ -10,10 +10,10 @@ var fdFdstatSetFlags = mixin({
       const entry = this.getStream(fd);
       const [ stream, rights, flags ] = entry;
       if (newFlags & PosixDescriptorFlag.nonblock) {
-        if (rights & PosixDescriptorRight.fd_read) {
+        if (rights[0] & PosixDescriptorRight.fd_read) {
           checkStreamMethod(stream, 'readnb');
         }
-        if (rights & PosixDescriptorRight.fd_write) {
+        if (rights[0] & PosixDescriptorRight.fd_write) {
           checkStreamMethod(stream, 'writenb');
         }
       }
