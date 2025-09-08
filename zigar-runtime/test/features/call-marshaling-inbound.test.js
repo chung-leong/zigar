@@ -200,7 +200,7 @@ describe('Feature: call-marshaling-inbound', function() {
               bitOffset: 0,
               byteSize: ptrStructure.byteSize,
               slot: 0,
-              structure: {},
+              structure: ptrStructure,
             },
             {
               name: '0',

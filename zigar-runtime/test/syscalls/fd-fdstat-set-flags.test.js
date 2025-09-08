@@ -60,7 +60,7 @@ describe('Syscall: fd-fdstat-set-flags', function() {
       expect(buf.getUint8(i)).to.equal(i);
     }
   })
-  it('should fail when stream does not support no-blocking operation', async function() {
+  it('should fail when stream does not support no-blocking read operation', async function() {
     const env = new Env();
     if (process.env.TARGET === 'wasm') {
       env.memory = new WebAssembly.Memory({ initial: 1 });
@@ -89,6 +89,41 @@ describe('Syscall: fd-fdstat-set-flags', function() {
       read() {}
     };
     const fd = env.createStreamHandle(reader, [ PosixDescriptorRight.fd_read, 0 ]);
+    let result;
+    const [ error ] = await captureError(() => {
+      result = env.fdFdstatSetFlags(fd, PosixDescriptorFlag.nonblock);
+    });
+    expect(result).to.equal(PosixError.EBADF);
+  })
+  it('should fail when stream does not support no-blocking write operation', async function() {
+    const env = new Env();
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        const len = jsDV.byteLength;
+        const zigDV = this.obtainZigView(address, len);
+        if (!(jsDV instanceof DataView)) {
+          jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+        }
+        const copy = this.getCopyFunction(len);
+        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+      };
+      env.setSyscallTrap = () => {};
+    }
+    const reader = {
+      write() {}
+    };
+    const fd = env.createStreamHandle(reader, [ PosixDescriptorRight.fd_write, 0 ]);
     let result;
     const [ error ] = await captureError(() => {
       result = env.fdFdstatSetFlags(fd, PosixDescriptorFlag.nonblock);

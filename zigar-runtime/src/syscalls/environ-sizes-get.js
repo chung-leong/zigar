@@ -1,4 +1,6 @@
+import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
+import { TypeMismatch } from '../errors.js';
 import { encodeText } from '../utils.js';
 import './copy-int.js';
 
@@ -6,7 +8,8 @@ export default mixin({
   environSizesGet(environCountAddress, environBufSizeAddress) {
     const result = this.triggerEvent('env') ?? {};
     if (typeof(result) !== 'object') {
-      throw new TypeMismatch('object', result);
+      console.error(new TypeMismatch('object', result).message);
+      return PosixError.EFAULT;
     }
     const env = this.envVariables = [];
     for (const [ name, value ] of Object.entries(result)) {

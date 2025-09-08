@@ -51,6 +51,43 @@ describe('Syscall: fd-lock-get', function() {
     const result2 = env.fdLockGet(fd1, flockAddress, false);
     expect(result2).to.equal(0);
   })
+  it('should pretend file is not lock when locking is not supported', async function() {
+    const env = new Env();
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        const len = jsDV.byteLength;
+        const zigDV = this.obtainZigView(address, len);
+        if (!(jsDV instanceof DataView)) {
+          jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+        }
+        const copy = this.getCopyFunction(len);
+        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+      };
+      env.setSyscallTrap = () => {};
+    }
+    const file1 = {};
+    const flockAddress = usize(0x1000);
+    const dv = env.obtainZigView(flockAddress, 24, false);
+    const le = env.littleEndian;
+    dv.setBigUint64(8, 1000n, le);
+    dv.setBigUint64(16, 2048n, le);
+    const fd1 = env.createStreamHandle(file1, [ PosixDescriptorRight.fd_read, 0 ]);
+    const result = env.fdLockGet(fd1, flockAddress, false);
+    expect(result).to.equal(0);
+    const type = dv.getUint16(0, le);
+    expect(type).to.equal(2);   // unlock
+  })
   it('should copy info about existing lock into memory location', async function() {
     const env = new Env();
     if (process.env.TARGET === 'wasm') {

@@ -45,6 +45,39 @@ describe('Syscall: path-remove-directory', function() {
     expect(result).to.equal(PosixError.ENOENT);
     expect(error).to.contain('boolean');
   })
+  it('should return ENOTSUP when listener returns undefined', async function() {
+    const env = new Env();
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function(address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        const len = jsDV.byteLength;
+        const zigDV = this.obtainZigView(address, len);
+        if (!(jsDV instanceof DataView)) {
+          jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+        }
+        const copy = this.getCopyFunction(len);
+        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+      };
+      env.setRedirectionMask = () => {};
+    }   
+    env.addListener('rmdir', () => undefined);
+    const path = new TextEncoder().encode('/world');
+    const pathAddress = usize(0x1000);
+    const pathLen = path.length;
+    env.moveExternBytes(path, pathAddress, pathLen);
+    const result = env.pathRemoveDirectory(PosixDescriptor.root, pathAddress, pathLen);
+    expect(result).to.equal(PosixError.ENOTSUP);
+  })
   if (process.env.TARGET === 'wasm') {
     it('should be callable through WASI', async function() {
       const env = new Env();
