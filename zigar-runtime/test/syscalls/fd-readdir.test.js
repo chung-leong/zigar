@@ -118,7 +118,7 @@ describe('Syscall: fd-readdir', function() {
     const len = direntDV.getUint32(16, le);
     expect(used).to.equal(50);
     expect(len).to.equal(1);
-    })
+  })
   it('should return EINVAL when entry type is incorrect', async function() {
     const env = new Env();
     if (process.env.TARGET === 'wasm') {
@@ -226,6 +226,52 @@ describe('Syscall: fd-readdir', function() {
             break;
         }
       }
+    })
+  }
+  if (process.env.TARGET === 'node') {
+    it('should seek back to previous position when an entry too large to fit buffer', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = function(address, len) {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+        env.moveExternBytes = function(jsDV, address, to) {
+          const len = jsDV.byteLength;
+          const zigDV = this.obtainZigView(address, len);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const copy = this.getCopyFunction(len);
+          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        };
+        env.setSyscallTrap = function() {};
+      }   
+      const map = new Map([
+        [ 'very very very long file name.txt', {} ],
+        [ 'hello-world.txt', {} ],
+      ]);
+      const dir = env.convertDirectory(map);
+      let position;
+      dir.seek = function(pos) {
+        position = pos;
+      };
+      const fd = env.createStreamHandle(dir, [ PosixDescriptorRight.fd_readdir, 0 ]);
+      const bufAddress = usize(0x1000);
+      const bufLen = 24 + 2 + 24 + 2 + 24 + 16;
+      const usedAddress = usize(0x2000);
+      const le = env.littleEndian;
+      let cookie = 0n;
+      const result = env.fdReaddir(fd, bufAddress, bufLen, cookie, usedAddress);
+      expect(result).to.equal(0);
+      expect(position).to.equal(2);
     })
   }
 })

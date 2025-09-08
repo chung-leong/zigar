@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { PosixError } from '../../src/constants.js';
+import { PosixDescriptorFlag, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { usize, usizeByteSize } from '../../src/utils.js';
@@ -140,12 +140,108 @@ describe('Syscall: fd-write', function() {
     set.call(iovsDV, usizeByteSize * 0, stringAddress, le);
     set.call(iovsDV, usizeByteSize * 1, stringLen, le);
     let result;
+        result = env.fdWrite(5, iovsAddress, 1, writtenAddress);
     const [ line ] = await capture(async () => {
       const [ error ] = await captureError(async () => {
-        result = env.fdWrite(5, iovsAddress, 1, writtenAddress);
       })
     });
     expect(result).to.equal(PosixError.ENOTSUP);
+  })
+  it('should write to an array', async function() {
+    const env = new Env();
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function (address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        const len = jsDV.byteLength;
+        const zigDV = this.obtainZigView(address, len);
+        if (!(jsDV instanceof DataView)) {
+          jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+        }
+        const copy = this.getCopyFunction(len);
+        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+      };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
+    }
+    const array = [];
+    const writer = env.convertWriter(array);
+    const fd = env.createStreamHandle(writer, env.getDefaultRights('file'), 0);
+    const iovsAddress = usize(0x1000);
+    const stringAddress = usize(0x2000);
+    const writtenAddress = usize(0x3000);
+    const text = 'ABCDEFG\n'
+    const string = new TextEncoder().encode(text);
+    env.moveExternBytes(string, stringAddress, true);
+    const iovsDV = env.obtainZigView(iovsAddress, usizeByteSize * 4, false);
+    const stringLen = usize(string.length);
+    const set = (usizeByteSize === 8) ? iovsDV.setBigUint64 : iovsDV.setUint32;
+    const le = env.littleEndian;
+    set.call(iovsDV, usizeByteSize * 0, stringAddress, le);
+    set.call(iovsDV, usizeByteSize * 1, stringLen, le);
+    set.call(iovsDV, usizeByteSize * 2, stringAddress, le);
+    set.call(iovsDV, usizeByteSize * 3, stringLen, le);
+    const result = env.fdWrite(fd, iovsAddress, 2, writtenAddress);
+    expect(result).to.equal(PosixError.NONE);
+    expect(array[0]).to.be.an('Uint8Array');
+    expect(array[0]).to.have.lengthOf(text.length * 2);
+  })
+  it('should write to an array in non-blocking mode', async function() {
+    const env = new Env();
+    if (process.env.TARGET === 'wasm') {
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+    } else {
+      const map = new Map();
+      env.obtainExternBuffer = function (address, len) {
+        let buffer = map.get(address);
+        if (!buffer) {
+          buffer = new ArrayBuffer(len);
+          map.set(address, buffer);
+        }
+        return buffer;
+      };
+      env.moveExternBytes = function(jsDV, address, to) {
+        const len = jsDV.byteLength;
+        const zigDV = this.obtainZigView(address, len);
+        if (!(jsDV instanceof DataView)) {
+          jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+        }
+        const copy = this.getCopyFunction(len);
+        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+      };
+      env.setSyscallTrap = () => {};
+      env.setRedirectionMask = () => {};
+    }
+    const array = [];
+    const writer = env.convertWriter(array);
+    const fd = env.createStreamHandle(writer, env.getDefaultRights('file'), PosixDescriptorFlag.nonblock);
+    const iovsAddress = usize(0x1000);
+    const stringAddress = usize(0x2000);
+    const writtenAddress = usize(0x3000);
+    const text = 'ABCDEFG\n'
+    const string = new TextEncoder().encode(text);
+    env.moveExternBytes(string, stringAddress, true);
+    const iovsDV = env.obtainZigView(iovsAddress, usizeByteSize * 4, false);
+    const stringLen = usize(string.length);
+    const set = (usizeByteSize === 8) ? iovsDV.setBigUint64 : iovsDV.setUint32;
+    const le = env.littleEndian;
+    set.call(iovsDV, usizeByteSize * 0, stringAddress, le);
+    set.call(iovsDV, usizeByteSize * 1, stringLen, le);
+    set.call(iovsDV, usizeByteSize * 2, stringAddress, le);
+    set.call(iovsDV, usizeByteSize * 3, stringLen, le);
+    const result = env.fdWrite(fd, iovsAddress, 2, writtenAddress);
+    expect(result).to.equal(PosixError.NONE);
+    expect(array[0]).to.be.an('Uint8Array');
+    expect(array[0]).to.have.lengthOf(text.length * 2);
   })
   if (process.env.TARGET === 'wasm') {
     it('should be callable through WASI', async function() {
@@ -287,6 +383,84 @@ describe('Syscall: fd-write', function() {
         await delay(300);
       });
       expect(lines).to.eql([ 'Hi!', 'Hello world!' ]);
+    })
+    it('should write to an array using a different function', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = function (address, len) {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+        env.moveExternBytes = function(jsDV, address, to) {
+          const len = jsDV.byteLength;
+          const zigDV = this.obtainZigView(address, len);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const copy = this.getCopyFunction(len);
+          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        };
+        env.setSyscallTrap = () => {};
+        env.setRedirectionMask = () => {};
+      }
+      const array = [];
+      const writer = env.convertWriter(array);
+      const fd = env.createStreamHandle(writer, env.getDefaultRights('file'), 0);
+      const address = usize(0x1000);
+      const writtenAddress = usize(0x3000);
+      const text = 'ABCDEFG\n'
+      const string = new TextEncoder().encode(text);
+      env.moveExternBytes(string, address, true);
+      const result = env.fdWrite1(fd, address, string.length, writtenAddress);
+      expect(result).to.equal(PosixError.NONE);
+      expect(array[0]).to.be.an('Uint8Array');
+      expect(array[0]).to.have.lengthOf(text.length);
+    })
+    it('should write to an array using a different function in non-blocking mode', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = function (address, len) {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+        env.moveExternBytes = function(jsDV, address, to) {
+          const len = jsDV.byteLength;
+          const zigDV = this.obtainZigView(address, len);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const copy = this.getCopyFunction(len);
+          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        };
+        env.setSyscallTrap = () => {};
+        env.setRedirectionMask = () => {};
+      }
+      const array = [];
+      const writer = env.convertWriter(array);
+      const fd = env.createStreamHandle(writer, env.getDefaultRights('file'), PosixDescriptorFlag.nonblock);
+      const address = usize(0x1000);
+      const writtenAddress = usize(0x3000);
+      const text = 'ABCDEFG\n'
+      const string = new TextEncoder().encode(text);
+      env.moveExternBytes(string, address, true);
+      const result = env.fdWrite1(fd, address, string.length, writtenAddress);
+      expect(result).to.equal(PosixError.NONE);
+      expect(array[0]).to.be.an('Uint8Array');
+      expect(array[0]).to.have.lengthOf(text.length);
     })
   }
 })

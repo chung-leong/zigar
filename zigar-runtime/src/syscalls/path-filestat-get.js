@@ -29,7 +29,7 @@ export default mixin({
       if (infer) {
         const stream = this.convertReader(result) ?? this.convertWriter(result) ?? this.convertDirectory(result);
         if (!stream) {
-          throw new InvalidStream(PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write | PosixDescriptorRight.fd_readdir, arg);
+          throw new InvalidStream(PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write | PosixDescriptorRight.fd_readdir, result);
         }
         result = this.inferStat(stream);
       }

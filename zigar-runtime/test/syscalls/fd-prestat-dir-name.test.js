@@ -12,6 +12,11 @@ describe('Syscall: fd-prestat-dir-name', function() {
       const result = env.fdPrestatDirName(3);
       expect(result).to.equal(PosixError.NONE);
     })
+    it('should return EBADF when descriptor is not 3', function() {
+      const env = new Env();
+      const result = env.fdPrestatDirName(4);
+      expect(result).to.equal(PosixError.EBADF);
+    })
     it('should fallback to custom WASI', function() {
       const env = new Env();
       env.customWASI = {

@@ -16,7 +16,7 @@ export default mixin({
         // we don't get a cookie on the Node side
         return dir.tell();
       } else {
-        return dir.seek(cookie);
+        return dir.seek(Number(cookie));
       }
     }, (pos) => catchPosixError(canWait, PosixError.EBADF, () => {      
       cookie = pos;
@@ -38,7 +38,7 @@ export default mixin({
         if (remaining < 24 + nameArray.length) {
           if (process.env.TARGET === 'node') {
             // restore the position now, since we won't see it again
-            dir.seek(cookie);
+            dir.seek(Number(cookie));
           }
           break;
         }

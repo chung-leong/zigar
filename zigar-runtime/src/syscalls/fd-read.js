@@ -10,7 +10,7 @@ export default mixin({
     const iovsSize = usizeByteSize * 2;
     const ops = [];
     let total = 0;
-    return catchPosixError(canWait, PosixError.EIO, () => {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
       const[ reader, rights, flags ] = this.getStream(fd);
       checkAccessRight(rights, PosixDescriptorRight.fd_read);
       const iovs = createView(iovsSize * iovsCount);
@@ -44,7 +44,7 @@ export default mixin({
     },
 
     fdRead1(fd, address, len, readAddress, canWait) {
-      return catchPosixError(canWait, PosixError.EIO, () => {
+      return catchPosixError(canWait, PosixError.EBADF, () => {
         const [ reader, rights, flags ] = this.getStream(fd);
         checkAccessRight(rights, PosixDescriptorRight.fd_read);
         const method = (flags & PosixDescriptorFlag.nonblock) ? reader.readnb : reader.read;
