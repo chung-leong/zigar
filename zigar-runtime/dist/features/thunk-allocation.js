@@ -8,6 +8,9 @@ var thunkAllocation = mixin({
       freeJsThunk: { argType: 'ii', returnType: 'i' },
       findJsThunk: { argType: 'ii', returnType: 'i' },
     },
+    imports: {
+      identifyJsThunk: { argType: 'ii', returnType: 'i' },
+    },
     init() {
       this.thunkSources = [];
       this.thunkMap = new Map();
@@ -41,11 +44,12 @@ var thunkAllocation = mixin({
         element: 'anyfunc',
       });
       const { exports } = new w.Instance(this.executable, imports);
-      const { createJsThunk, destroyJsThunk } = exports;
+      const { createJsThunk, destroyJsThunk, identifyJsThunk } = exports;
       const source = {
         thunkCount: 0,
         createJsThunk,
         destroyJsThunk,
+        identifyJsThunk,
         table,
       };
       this.thunkSources.unshift(source);

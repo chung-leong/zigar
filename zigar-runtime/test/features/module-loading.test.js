@@ -2,11 +2,12 @@ import { expect } from 'chai';
 import { readFile } from 'fs/promises';
 import 'mocha-skip-if';
 import { fileURLToPath } from 'url';
+import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { ALIGN, COPY, MEMORY, RESTORE, SIZE, ZIG } from '../../src/symbols.js';
 import { defineProperties, usize } from '../../src/utils.js';
-import { captureError } from '../test-utils.js';
+import { captureError, delay } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
@@ -343,6 +344,169 @@ describe('Feature: module-loading', function() {
         expect(env.runThunk).to.be.a('function');
       })
     })
+    describe('getWASIHandler', function() {
+      it('should return a handler that return a promise when an event listener returns a promise', async function() {
+        const env = new Env();
+        if (process.env.TARGET === 'wasm') {
+          env.memory = new WebAssembly.Memory({ initial: 1 });
+        } else {
+          const map = new Map();
+          env.obtainExternBuffer = function (address, len) {
+            let buffer = map.get(address);
+            if (!buffer) {
+              buffer = new ArrayBuffer(len);
+              map.set(address, buffer);
+            }
+            return buffer;
+          };
+          env.moveExternBytes = function(jsDV, address, to) {
+            const len = jsDV.byteLength;
+            const zigDV = this.obtainZigView(address, len);
+            if (!(jsDV instanceof DataView)) {
+              jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+            }
+            const copy = this.getCopyFunction(len);
+            copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+          };
+        }
+        const pathAddress = usize(0x1000);
+        const pathArray = new TextEncoder().encode('/hello.txt');
+        env.moveExternBytes(pathArray, pathAddress, true);
+        const f = env.getWASIHandler('path_unlink_file');
+        env.addListener('unlink', async () => false);
+        const result = f(3, pathAddress, pathArray.length, 0x1000);
+        expect(result).to.be.a('promise');
+      })
+      it('should return a handler that display error message when fallback is unavailable', async function() {
+        const env = new Env();
+        if (process.env.TARGET === 'wasm') {
+          env.memory = new WebAssembly.Memory({ initial: 1 });
+        } else {
+          const map = new Map();
+          env.obtainExternBuffer = function (address, len) {
+            let buffer = map.get(address);
+            if (!buffer) {
+              buffer = new ArrayBuffer(len);
+              map.set(address, buffer);
+            }
+            return buffer;
+          };
+          env.moveExternBytes = function(jsDV, address, to) {
+            const len = jsDV.byteLength;
+            const zigDV = this.obtainZigView(address, len);
+            if (!(jsDV instanceof DataView)) {
+              jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+            }
+            const copy = this.getCopyFunction(len);
+            copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+          };
+        }
+        const pathAddress = usize(0x1000);
+        const pathArray = new TextEncoder().encode('/hello.txt');
+        env.moveExternBytes(pathArray, pathAddress, true);
+        const f = env.getWASIHandler('path_unlink_file');
+        let result;
+        const [ error ] = await captureError(() => {
+          result = f(3, pathAddress, pathArray.length);
+        });
+        expect(result).to.equal(PosixError.ENOTSUP);
+        expect(error).to.contain('unlink');
+      })
+      it('should return a handler that display error message when there is no implementation', async function() {
+        const env = new Env();
+        if (process.env.TARGET === 'wasm') {
+          env.memory = new WebAssembly.Memory({ initial: 1 });
+        } else {
+          const map = new Map();
+          env.obtainExternBuffer = function (address, len) {
+            let buffer = map.get(address);
+            if (!buffer) {
+              buffer = new ArrayBuffer(len);
+              map.set(address, buffer);
+            }
+            return buffer;
+          };
+          env.moveExternBytes = function(jsDV, address, to) {
+            const len = jsDV.byteLength;
+            const zigDV = this.obtainZigView(address, len);
+            if (!(jsDV instanceof DataView)) {
+              jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+            }
+            const copy = this.getCopyFunction(len);
+            copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+          };
+        }
+        const f = env.getWASIHandler('tip_cow');
+        let result;
+        const [ error ] = await captureError(() => {
+          result = f();
+        });
+        expect(result).to.equal(PosixError.ENOTSUP);
+        expect(error).to.contain('tip_cow');
+      })
+    })
+    describe('setCustomWASI', function() {
+      it('should set custom WASI handlers', function() {
+        const env = new Env();
+        const wasi = {
+          wasiImport: {
+            path_unlink_file() {}
+          }
+        };
+        env.setCustomWASI(wasi);
+      })
+      it('should invoke initializeCustomWASI when instance has already been created', function() {
+        const env = new Env();
+        const wasi = {
+          wasiImport: {
+            path_unlink_file() {}
+          }
+        };
+        let called = false;
+        env.initializeCustomWASI = () => called = true;
+        env.instance = {};
+        env.setCustomWASI(wasi);
+        expect(called).to.be.true;
+      })
+    })
+    describe('initializeCustomWASI', function() {
+      it('should call initialize method', function() {
+        const env = new Env();
+        let initializeArgs, unlinkArgs;
+        const wasi = {
+          wasiImport: {
+            path_unlink_file(...args) {
+              unlinkArgs = args;
+              return PosixError.ENOENT;
+            }
+          },
+          initialize(...args) {
+            initializeArgs = args;
+          },
+        };
+        env.setCustomWASI(wasi);
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+        env.instance = {
+          instanceData: {},
+        };
+        env.initializeCustomWASI();
+        expect(initializeArgs[0].instanceData).to.equal(env.instance.instanceData);
+        expect(initializeArgs[0].exports.memory).to.equal(env.memory);
+        let handlerCalled = false;
+        env.addListener('unlink', () => {
+          handlerCalled = true;
+          return undefined
+        });
+        const f = env.getWASIHandler('path_unlink_file');
+        const pathAddress = 0x1000;
+        const pathArray = new TextEncoder().encode('/hello.txt');
+        env.moveExternBytes(pathArray, pathAddress, true);
+        const result = f(3, pathAddress, pathArray.length);
+        expect(result).to.equal(PosixError.ENOENT);
+        expect(handlerCalled).to.be.true;
+        expect(unlinkArgs).to.eql([ 3, 4096, 10 ]);
+      })
+    })
   } else if (process.env.TARGET === 'node') {
     describe('exportFunctions', function() {
       it('should export functions of the class needed by Zig code', function() {
@@ -377,6 +541,32 @@ describe('Feature: module-loading', function() {
         env.importFunctions(exports);
         expect(env.runThunk).to.be.a('function');
         expect(env.runVariadicThunk).to.be.a('function');
+      })
+    })
+    describe('addPromiseHandling', function() {
+      it('should create a function that unlocks a futex on promise fulfillment', async function() {
+        const env = new Env();
+        let handlerArgs;
+        const handler = (a, b, c, futexAddress) => {
+          if (a > 0 && futexAddress) {
+            handlerArgs = [ a, b, c ];
+            return Promise.resolve(PosixError.EEXIST);
+          } else {
+            return PosixError.EAGAIN;
+          }
+        };
+        const f = env.addPromiseHandling(handler);
+        let finalizeArgs;
+        env.finalizeAsyncCall = (...args) => finalizeArgs = args;
+        const result1 = f.call(env, 1, 2, 3, 0x1000n);
+        expect(result1).to.not.be.a('promise');
+        await delay(10);
+        expect(finalizeArgs).to.eql([ 0x1000n, PosixError.EEXIST ]);
+        const result2 = f.call(env, 0, 0, 0, 0x1000n);
+        expect(result2).to.not.be.a('promise');
+        expect(finalizeArgs).to.eql([ 0x1000n, PosixError.EAGAIN ]);
+        const result3 = f.call(env, 0, 0, 0);
+        expect(result3).to.equal(PosixError.EAGAIN);
       })
     })
   }

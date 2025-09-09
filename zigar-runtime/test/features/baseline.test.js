@@ -393,7 +393,7 @@ describe('Feature: baseline', function() {
       object.abandon();
       expect(env.abandoned).to.be.true;
     })
-    it('should allow redirection of console output', async function() {
+    it('should allow redirection of log messages', async function() {
       const env = new Env();
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
@@ -437,6 +437,51 @@ describe('Feature: baseline', function() {
       object.on('log', (evt) => event = evt);
       env.fdWrite(1, iovsAddress, 1, writtenAddress);
       expect(event).to.eql({ source: 'stdout', message: 'Hello world' });
+    })
+    it('should allow redirection of stdout', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = function (address, len) {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+        env.moveExternBytes = function(jsDV, address, to) {
+          const len = jsDV.byteLength;
+          const zigDV = this.obtainZigView(address, len);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const copy = this.getCopyFunction(len);
+          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        };
+      }
+      const iovsAddress = usize(0x1000);
+      const stringAddress = usize(0x2000);
+      const writtenAddress = usize(0x3000);
+      const text = 'Hello world\n';
+      const string = new TextEncoder().encode(text);
+      const stringDV = env.obtainZigView(stringAddress, string.length)
+      for (let i = 0; i < string.length; i++) {
+        stringDV.setUint8(i, string[i]);
+      }
+      const iovsDV = env.obtainZigView(iovsAddress, usizeByteSize * 4, false);
+      const stringLen = usize(string.length);
+      const set = (usizeByteSize === 8) ? iovsDV.setBigUint64 : iovsDV.setUint32;
+      const le = env.littleEndian;
+      set.call(iovsDV, usizeByteSize * 0, stringAddress, le);
+      set.call(iovsDV, usizeByteSize * 1, stringLen, le);
+      const object = env.getSpecialExports();
+      const array = [];
+      object.redirect(1, array);
+      env.fdWrite(1, iovsAddress, 1, writtenAddress);
+      expect(array).to.have.lengthOf(1);
     })
     it('should provide functions for obtaining type info', async function() {
       const env = new Env();
@@ -498,6 +543,17 @@ describe('Feature: baseline', function() {
     })
     if (process.env.TARGET === 'wasm') {
       it('should allow redirection of console output', async function() {
+      })
+      it('should allow installation of custom WASI handlers', async function() {
+        const env = new Env();
+        const wasi = {
+          wasiImport: {
+            path_unlink_file() {}
+          }
+        };
+        const object = env.getSpecialExports();
+        object.wasi(wasi);
+        expect(env.customWASI).to.equal(wasi);
       })
     }
   })

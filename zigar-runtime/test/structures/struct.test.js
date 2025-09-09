@@ -1504,7 +1504,7 @@ describe('Structure: struct', function() {
                 dv.setBigUint64(8, 0x3000n, true);
               }
               return dv;
-            }), 
+            })(), 
             [SLOTS]: {},
           }
         },

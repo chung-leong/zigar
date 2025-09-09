@@ -55,7 +55,7 @@ describe('Syscall: fd-fdstat-set-flags', function() {
     await delay(10);
     const result3 = await env.fdRead(fd, iovsAddress, 1, readAddress, true);
     expect(result3).to.equal(PosixError.NONE);
-    const buf = env.obtainZigView(bufAddress, bufLen, false);
+    const buf = env.obtainZigView(bufAddress, Number(bufLen), false);
     for (let i = 0; i < 4; i++) {
       expect(buf.getUint8(i)).to.equal(i);
     }

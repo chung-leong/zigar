@@ -143,10 +143,6 @@ var moduleLoading = mixin({
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
-        if (options.delay) {
-          // a small delay to allow for setting of event handler
-          await new Promise(r => setTimeout(r, 0));
-        }
         const instance = this.instance = await this.instantiateWebAssembly(source, options);
         this.importFunctions(instance.exports);
         this.initializeCustomWASI();
@@ -155,7 +151,7 @@ var moduleLoading = mixin({
     },
     getWASIHandler(name) {
       const nameCamelized = name.replace(/_./g, m => m.charAt(1).toUpperCase());
-      const handler = this[nameCamelized].bind(this);
+      const handler = this[nameCamelized]?.bind?.(this);
       const eventName = this[nameCamelized + 'Event'];
       return (...args) => {
         const result = handler?.(...args) ?? PosixError.ENOTSUP;

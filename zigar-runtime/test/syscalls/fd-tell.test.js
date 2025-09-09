@@ -35,9 +35,9 @@ describe('Syscall: fd-tell', function() {
     }   
     const posAddress = usize(0x1000);
     env.redirectStream(0, array);
-    env.fdSeek(0, 1n, 1, posAddress)
-    env.fdSeek(0, 1n, 1, posAddress)
-    const result = env.fdTell(0);
+    env.fdSeek(0, 1, 1, posAddress);
+    env.fdSeek(0, 1, 1, posAddress);
+    const result = env.fdTell(0, posAddress);
     expect(result).to.equal(PosixError.NONE);
     const posDV = env.obtainZigView(posAddress, 8);
     const pos = posDV.getBigUint64(0, env.littleEndian);
