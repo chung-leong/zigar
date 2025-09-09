@@ -449,7 +449,7 @@ export class InvalidPath extends Error {
 }
 
 export class MissingStreamMethod extends Error {
-  code = PosixError.EBADF;
+  code = PosixError.EPERM;
 
   constructor(name) {
     super(`Missing stream method '${name}'`);

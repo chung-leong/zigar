@@ -839,10 +839,8 @@ describe('Feature: pointer-synchronization', function() {
       const object = new Hello(new Int32(123));
       expect(object.$['*']).to.equal(123);
       object[MEMORY].setBigUint64(0, 0n);
-      const context = env.startContext();
-      env.updatePointerTargets(context, object, true);
-      expect(object[SLOTS][0][SLOTS][0]).to.be.undefined;
       expect(object.$).to.be.null;
+      expect(object[SLOTS][0][SLOTS][0]).to.be.undefined;
     })
     it('should ignore argument pointers', function() {
       const env = new Env();

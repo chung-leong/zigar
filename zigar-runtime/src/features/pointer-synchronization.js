@@ -93,7 +93,7 @@ export default mixin({
         }
       }
     }
-    const flags = ((inbound) ? VisitorFlag.IgnoreRetval : 0) | VisitorFlag.IgnoreInactive;
+    const flags = (inbound) ? VisitorFlag.IgnoreRetval : 0;
     object[VISIT](callback, flags);
   },
   findTargetClusters(potentialClusters) {

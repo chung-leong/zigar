@@ -93,7 +93,7 @@ describe('Syscall: fd-fdstat-set-flags', function() {
     const [ error ] = await captureError(() => {
       result = env.fdFdstatSetFlags(fd, PosixDescriptorFlag.nonblock);
     });
-    expect(result).to.equal(PosixError.EBADF);
+    expect(result).to.equal(PosixError.EPERM);
   })
   it('should fail when stream does not support no-blocking write operation', async function() {
     const env = new Env();
@@ -128,6 +128,6 @@ describe('Syscall: fd-fdstat-set-flags', function() {
     const [ error ] = await captureError(() => {
       result = env.fdFdstatSetFlags(fd, PosixDescriptorFlag.nonblock);
     });
-    expect(result).to.equal(PosixError.EBADF);
+    expect(result).to.equal(PosixError.EPERM);
   })
 })

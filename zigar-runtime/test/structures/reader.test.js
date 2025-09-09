@@ -71,8 +71,8 @@ describe('Structure: reader', function() {
       let count = 0;
       const stream = new ReadableStream({
         async pull(controller) {
+          const { byobRequest } = controller;
           if (count++ < 4) {
-            const { byobRequest } = controller;
             const { view } = byobRequest;
             for (let i = 0; i < view.length; i++) {
               view[i] = 123;
@@ -80,6 +80,7 @@ describe('Structure: reader', function() {
             byobRequest.respond(view.length);
           } else {
             controller.close();
+            byobRequest.respond(0);
           }
         },
         type: 'bytes',
