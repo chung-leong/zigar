@@ -6,13 +6,83 @@ import {
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { MEMORY, SENTINEL, SLOTS, ZIG } from '../../src/symbols.js';
+import { ENVIRONMENT, MEMORY, SENTINEL, SLOTS, ZIG } from '../../src/symbols.js';
 import { usize } from '../../src/utils.js';
 import { addressByteSize, addressSize } from '../test-utils.js';
 
 const Env = defineEnvironment();
 
 describe('Feature: structure-acquisition', function() {
+  describe('createView', function() {
+    it('should allocate new buffer and copy data using moveExternBytes', function() {
+      const env = new Env();
+      env.getBufferAddress = () => 0x10000;
+      env.moveExternBytes = (dv, address, to) => {
+        dv.setInt32(0, address, true);
+        dv.setInt32(4, dv.byteLength, true);
+      };
+      const dv = env.createView(1234, 32, true);
+      expect(dv).to.be.instanceOf(DataView);
+      expect(dv.getInt32(0, true)).to.equal(1234);
+      expect(dv.getInt32(4, true)).to.equal(32);
+    })
+    it('should get view of memory using obtainZigView', function() {
+      const env = new Env();
+      env.getBufferAddress = () => 0x10000;
+      env.obtainZigView = (address, len) => {
+        const dv = new DataView(new ArrayBuffer(len));
+        dv[ZIG] = { address, len };
+        return dv;
+      };
+      if (process.env.TARGET === 'wasm') {
+        const dv = env.createView(1234, 32, false);
+        expect(dv).to.be.instanceOf(DataView);
+        expect(dv[ZIG]).to.eql({ address: 1234, len: 32, handle: 1234 });
+      } else {
+        const dv = env.createView(1234n, 32, false, 0x8888n);
+        expect(dv).to.be.instanceOf(DataView);
+        expect(dv[ZIG]).to.eql({ address: 1234n, len: 32, handle: 0x8888n });
+      }
+    })
+  })
+  describe('createInstance', function() {
+    it('should call constructor without the use of the new operator', function() {
+      const env = new Env();
+      env.getBufferAddress = () => 0x10000;
+      env.moveExternBytes = (dv, address, to) => {};
+      let recv, arg;
+      const constructor = function(dv) {
+        recv = this;
+        arg = dv;
+        const object = Object.create(constructor.prototype);
+        object[SLOTS] = {};
+        return object;
+      }
+      const structure = { constructor };
+      const dv = env.createView(usize(1234), 16, true);
+      const object = env.createInstance(structure, dv, {});
+      expect(recv).to.equal(ENVIRONMENT);
+      expect(object).to.instanceOf(constructor);
+    })
+  })
+  describe('createTemplate', function() {
+    it('should should create a template', function() {
+      const env = new Env();
+      const dv = new DataView(new ArrayBuffer(16));
+      const slots = { 1: null };
+      const template = env.createTemplate(dv, slots);
+      expect(template[MEMORY]).to.equal(dv);
+      expect(template[SLOTS]).to.equal(slots);
+    })
+  })
+  describe('appendList', function() {
+    it('should add an element to a list', function() {
+      const env = new Env();
+      const list = [];
+      env.appendList(list, 123);
+      expect(list).to.eql([ 123 ]);
+    })
+  })
   describe('getSlotValue', function() {
     it('should read from global slots where target is null', function() {
       const env = new Env();
@@ -39,7 +109,7 @@ describe('Feature: structure-acquisition', function() {
       const target = {};
       expect(() => env.getSlotValue(target, 1)).to.not.throw();
     })
-  });
+  })
   describe('setSlotValue', function() {
     it('should write into global slots where target is null', function() {
       const env = new Env();
@@ -194,9 +264,31 @@ describe('Feature: structure-acquisition', function() {
             [SLOTS]: {},
           }
         },
-        static: {},
       };
       env.beginStructure(structStructure);
+      const Struct = structStructure.constructor;
+      const structDV = new DataView(new ArrayBuffer(addressByteSize));
+      if (addressSize === 32) {
+        structDV.setUint32(0, 0x3000, true);
+      } else {
+        structDV.setBigUint64(0, 0x3000n, true);
+      }
+      const struct = Struct.call(ENVIRONMENT, structDV);
+      structStructure.static = {
+        members: [
+          {
+            name: 'self',
+            type: MemberType.Object,
+            slot: 0,
+            structure: ptrStructure,
+          }
+        ],
+        template: {
+          [SLOTS]: {
+            0: struct,
+          },
+        }
+      };
       env.finishStructure(structStructure);
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });

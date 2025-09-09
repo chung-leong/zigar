@@ -154,6 +154,7 @@ export default mixin({
           if (decl?.[VISIT]) {
             this.updatePointerTargets(null, decl);
           }
+          /* c8 ignore next */
         } catch {}
       }
       // update default values held in template
