@@ -1,0 +1,9 @@
+.{
+    .name = .custom,
+    .version = "0.11.1",
+    .paths = .{
+        "custom.zig",
+        "build.zig",
+    },
+    .fingerprint = 0xf584169b8ed919d5,
+}
