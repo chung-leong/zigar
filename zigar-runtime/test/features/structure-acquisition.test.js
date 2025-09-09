@@ -111,7 +111,7 @@ describe('Feature: structure-acquisition', function() {
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
       }
-      env.acquireStructures({ omitFunctions: true, omitVariables: true });
+      env.acquireStructures();
       expect(thunkAddress).to.equal(usize(0x1234));
     })
     it('should acquire default pointers', function() {
@@ -205,7 +205,7 @@ describe('Feature: structure-acquisition', function() {
           return new ArrayBuffer(len);
         };
       }
-      env.acquireStructures({});
+      env.acquireStructures();
       const templ = structStructure.instance.template;
       expect(templ[SLOTS][0]).to.not.be.undefined;
       expect(templ[SLOTS][0]['*']).to.equal(0);

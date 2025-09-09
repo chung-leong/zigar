@@ -10,7 +10,7 @@ var fdRead = mixin({
     const iovsSize = usizeByteSize * 2;
     const ops = [];
     let total = 0;
-    return catchPosixError(canWait, PosixError.EIO, () => {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
       const[ reader, rights, flags ] = this.getStream(fd);
       checkAccessRight(rights, PosixDescriptorRight.fd_read);
       const iovs = createView(iovsSize * iovsCount);

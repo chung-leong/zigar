@@ -13,7 +13,7 @@ var fdReaddir = mixin({
     return catchPosixError(canWait, PosixError.EBADF, () => {
       [ dir ] = this.getStream(fd);
       {
-        return dir.seek(cookie);
+        return dir.seek(Number(cookie));
       }
     }, (pos) => catchPosixError(canWait, PosixError.EBADF, () => {      
       cookie = pos;

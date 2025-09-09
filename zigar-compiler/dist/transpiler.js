@@ -151,6 +151,7 @@ const PosixError = {
   EIO: 29,
   ENOENT: 44,
   ENOTSUP: 58,
+  EPERM: 63,
   ESPIPE: 70,
   ENOTCAPABLE: 76,
 };
@@ -3074,7 +3075,7 @@ class InvalidPath extends Error {
 }
 
 class MissingStreamMethod extends Error {
-  code = PosixError.EBADF;
+  code = PosixError.EPERM;
 
   constructor(name) {
     super(`Missing stream method '${name}'`);
@@ -4015,24 +4016,14 @@ class AsyncReader {
     if (!(chunk instanceof Uint8Array)) {
       if (chunk instanceof ArrayBuffer) {
         chunk = new Uint8Array(chunk);
-      } else if (value.buffer instanceof ArrayBuffer) {
+      } else if (chunk.buffer instanceof ArrayBuffer) {
         chunk = new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
       } else {
-        return 0;
+        chunk = encodeText(chunk + '');
       }
     }
-    let len = chunk.length;
-    if (!this.bytes) {
-      this.bytes = chunk;
-    } else {
-      const remaining = this.bytes.length;
-      len += remaining;
-      const array = new Uint8Array(len);
-      array.set(this.bytes);
-      array.set(chunk, remaining);
-      this.bytes = array;
-    }
-    return len;
+    this.bytes = chunk;
+    return chunk.length;
   }
 
   shift(len) {
@@ -4142,6 +4133,10 @@ class WebStreamWriter extends AsyncWriter {
     if (!this.done) {
       this.writer.close();
     }
+  }
+
+  valueOf() {
+    return this.writer;
   }
 }
 
@@ -4262,6 +4257,10 @@ class ArrayWriter {
   poll() {
     return size16meg;
   }
+
+  valueOf() {
+    return this.array;
+  }
 }
 
 class NullStream {
@@ -4280,12 +4279,16 @@ class NullStream {
   poll(tag) {
     return (tag === PosixPollEventType.FD_READ) ? 0 : size16meg;
   }
+
+  valueOf() {
+    return null;
+  }
 }
 
 class MapDirectory {
   onClose = null;
   keys = null;
-  cookie = 0n;
+  cookie = 0;
 
   constructor(map) {
     this.map = map;
@@ -4294,7 +4297,7 @@ class MapDirectory {
   }
 
   readdir() {
-    const offset = Number(this.cookie);
+    const offset = this.cookie;
     let dent;
     switch (offset) {
       case 0:
@@ -4322,10 +4325,6 @@ class MapDirectory {
 
   tell() {
     return this.cookie;
-  }
-
-  poll() {
-    return this.size - Number(this.cookie);
   }
 
   valueOf() {
@@ -5000,7 +4999,7 @@ var pointerSynchronization = mixin({
         }
       }
     };
-    const flags = ((inbound) ? VisitorFlag.IgnoreRetval : 0) | VisitorFlag.IgnoreInactive;
+    const flags = (inbound) ? VisitorFlag.IgnoreRetval : 0;
     object[VISIT](callback, flags);
   },
   findTargetClusters(potentialClusters) {
@@ -5211,10 +5210,8 @@ var streamRedirection = mixin({
   getStream(fd) {
     const entry = this.streamMap.get(fd);
     if (!entry) {
-      {
-        if (2 < fd && fd < PosixDescriptor.min) {
-          throw new Unsupported();
-        }
+      if (2 < fd && fd < PosixDescriptor.min) {
+        throw new Unsupported();
       }
       throw new InvalidFileDescriptor();
     }
@@ -6177,15 +6174,6 @@ var fdFdstatSetRights = mixin({
         // rights can only be removed, not added
         throw new InvalidFileDescriptor();
       }
-      if (rights & PosixDescriptorRight.fd_write) {
-        checkStreamMethod(stream, 'write');
-      }
-      if (rights & PosixDescriptorRight.fd_read) {
-        checkStreamMethod(stream, 'read');
-      }
-      if (rights & PosixDescriptorRight.fd_readdir) {
-        checkStreamMethod(stream, 'readdir');
-      }
       entry[1] = rights;
     });    
   },
@@ -6357,7 +6345,7 @@ var fdRead = mixin({
     const iovsSize = usizeByteSize * 2;
     const ops = [];
     let total = 0;
-    return catchPosixError(canWait, PosixError.EIO, () => {
+    return catchPosixError(canWait, PosixError.EBADF, () => {
       const[ reader, rights, flags ] = this.getStream(fd);
       checkAccessRight(rights, PosixDescriptorRight.fd_read);
       const iovs = createView(iovsSize * iovsCount);
@@ -6395,7 +6383,7 @@ var fdReaddir = mixin({
     return catchPosixError(canWait, PosixError.EBADF, () => {
       [ dir ] = this.getStream(fd);
       if ("wasm" === 'node') ; else {
-        return dir.seek(cookie);
+        return dir.seek(Number(cookie));
       }
     }, (pos) => catchPosixError(canWait, PosixError.EBADF, () => {      
       cookie = pos;
@@ -6472,7 +6460,7 @@ var fdWrite = mixin({
     const le = this.littleEndian;
     const iovsSize = usizeByteSize * 2;
     let total = 0;
-    return catchPosixError(canWait, PosixError.EIO, () => {        
+    return catchPosixError(canWait, PosixError.EBADF, () => {
       const[ writer, rights, flags ] = this.getStream(fd);
       checkAccessRight(rights, PosixDescriptorRight.fd_write);
       const iovs = createView(iovsSize * iovsCount);
@@ -6541,7 +6529,7 @@ var pathFilestatGet = mixin({
       if (infer) {
         const stream = this.convertReader(result) ?? this.convertWriter(result) ?? this.convertDirectory(result);
         if (!stream) {
-          throw new InvalidStream(PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write | PosixDescriptorRight.fd_readdir, arg);
+          throw new InvalidStream(PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write | PosixDescriptorRight.fd_readdir, result);
         }
         result = this.inferStat(stream);
       }
@@ -6572,7 +6560,7 @@ var pathOpen = mixin({
   pathOpenEvent: 'open',
   pathOpen(dirFd, lFlags, pathAddress, pathLen, oFlags, rightsBase, rightsInheriting, fdFlags, fdAddress, canWait) {
     const fdRights = [ Number(rightsBase), Number(rightsInheriting) ];
-    if (!(fdRights[0] & PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write | PosixDescriptorRight.fd_readdir)) {
+    if (!(fdRights[0] & (PosixDescriptorRight.fd_read | PosixDescriptorRight.fd_write | PosixDescriptorRight.fd_readdir))) {
       fdRights[0] |= PosixDescriptorRight.fd_read;
     }
     let loc;
@@ -6671,8 +6659,8 @@ var pollOneoff = mixin({
               onError(err);
             }
           } break;
-          default: 
-            throw new InvalidArgument()
+          default:
+            throw new InvalidArgument();
         }
         if (promise) {
           promises.push(promise);

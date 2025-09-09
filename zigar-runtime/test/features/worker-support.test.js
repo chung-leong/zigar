@@ -19,7 +19,7 @@ if (process.env.TARGET === 'wasm') {
           tableInitial: 17,
           multithreaded: true,
         });
-        env.acquireStructures({});
+        env.acquireStructures();
         const { spawn } = env.useStructures();
         const [ line ] = await capture(async () => {
           const result = spawn();

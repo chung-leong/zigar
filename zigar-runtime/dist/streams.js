@@ -1,6 +1,6 @@
 import { PosixPollEventType } from './constants.js';
 import { WouldBlock, InvalidArgument } from './errors.js';
-import { empty } from './utils.js';
+import { encodeText, empty } from './utils.js';
 
 class AsyncReader {
   bytes = null;
@@ -28,24 +28,14 @@ class AsyncReader {
     if (!(chunk instanceof Uint8Array)) {
       if (chunk instanceof ArrayBuffer) {
         chunk = new Uint8Array(chunk);
-      } else if (value.buffer instanceof ArrayBuffer) {
+      } else if (chunk.buffer instanceof ArrayBuffer) {
         chunk = new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
       } else {
-        return 0;
+        chunk = encodeText(chunk + '');
       }
     }
-    let len = chunk.length;
-    if (!this.bytes) {
-      this.bytes = chunk;
-    } else {
-      const remaining = this.bytes.length;
-      len += remaining;
-      const array = new Uint8Array(len);
-      array.set(this.bytes);
-      array.set(chunk, remaining);
-      this.bytes = array;
-    }
-    return len;
+    this.bytes = chunk;
+    return chunk.length;
   }
 
   shift(len) {
@@ -155,6 +145,10 @@ class WebStreamWriter extends AsyncWriter {
     if (!this.done) {
       this.writer.close();
     }
+  }
+
+  valueOf() {
+    return this.writer;
   }
 }
 
@@ -275,6 +269,10 @@ class ArrayWriter {
   poll() {
     return size16meg;
   }
+
+  valueOf() {
+    return this.array;
+  }
 }
 
 class NullStream {
@@ -293,12 +291,16 @@ class NullStream {
   poll(tag) {
     return (tag === PosixPollEventType.FD_READ) ? 0 : size16meg;
   }
+
+  valueOf() {
+    return null;
+  }
 }
 
 class MapDirectory {
   onClose = null;
   keys = null;
-  cookie = 0n;
+  cookie = 0;
 
   constructor(map) {
     this.map = map;
@@ -307,7 +309,7 @@ class MapDirectory {
   }
 
   readdir() {
-    const offset = Number(this.cookie);
+    const offset = this.cookie;
     let dent;
     switch (offset) {
       case 0:
@@ -335,10 +337,6 @@ class MapDirectory {
 
   tell() {
     return this.cookie;
-  }
-
-  poll() {
-    return this.size - Number(this.cookie);
   }
 
   valueOf() {

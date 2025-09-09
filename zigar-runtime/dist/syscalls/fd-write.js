@@ -9,7 +9,7 @@ var fdWrite = mixin({
     const le = this.littleEndian;
     const iovsSize = usizeByteSize * 2;
     let total = 0;
-    return catchPosixError(canWait, PosixError.EIO, () => {        
+    return catchPosixError(canWait, PosixError.EBADF, () => {
       const[ writer, rights, flags ] = this.getStream(fd);
       checkAccessRight(rights, PosixDescriptorRight.fd_write);
       const iovs = createView(iovsSize * iovsCount);

@@ -35,7 +35,7 @@ if (process.env.TARGET === 'wasm') {
           tableInitial: 100,
           multithreaded: false,
         });
-        env.acquireStructures({});
+        env.acquireStructures();
         const { Fn } = env.useStructures();
         let thunkControllerAddress;
         let fnId;
@@ -61,7 +61,7 @@ if (process.env.TARGET === 'wasm') {
           tableInitial: 100,
           multithreaded: false,
         });
-        env.acquireStructures({});
+        env.acquireStructures();
         const { Fn } = env.useStructures();
         let thunkControllerAddress;
         let fnId;
