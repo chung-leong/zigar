@@ -79,6 +79,35 @@ if (process.env.TARGET === 'wasm') {
         expect(freedFnId2).to.equal(fnId + 1);
       })
     })
+    describe('findJsThunk', function() {
+      it('should find the id of a thunk by address', async function() {
+        const wasmPath = absolute('./wasm-samples/fn-pointer.wasm');
+        const binary = await readFile(wasmPath);
+        const env = new Env();
+        await env.loadModule(binary, {
+          memoryInitial: 1024,
+          tableInitial: 100,
+          multithreaded: false,
+        });
+        env.acquireStructures();
+        const { Fn } = env.useStructures();
+        let thunkControllerAddress;
+        let fnId;
+        env.import
+        env.createJsThunk = function(address, id) {
+          thunkControllerAddress = address;
+          fnId = id;
+          return usize(100);
+        };
+        new Fn(() => {});
+        const thunkAddress1 = env.allocateJsThunk(thunkControllerAddress, fnId);
+        const thunkAddress2 = env.allocateJsThunk(thunkControllerAddress, fnId + 1);
+        const foundFnId1 = env.findJsThunk(thunkControllerAddress, thunkAddress1);
+        const foundFnId2 = env.findJsThunk(thunkControllerAddress, thunkAddress2);
+        expect(foundFnId1).to.equal(fnId);
+        expect(foundFnId2).to.equal(fnId + 1);
+      })
+    })
   })
 }
 

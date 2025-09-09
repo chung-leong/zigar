@@ -249,6 +249,7 @@ export default mixin({
     },
     importFunctions(exports) {
       for (const [ name ] of Object.entries(this.imports)) {
+        console.log({ name });
         const fn = exports[name];
         if (fn) {
           defineProperty(this, name, defineValue(fn));

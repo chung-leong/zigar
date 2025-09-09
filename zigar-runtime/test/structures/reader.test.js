@@ -222,6 +222,46 @@ describe('Structure: reader', function() {
       const read3 = readFn(ptr, buffer2);
       expect(read3).to.equal(0);
     })
+    it('should return 0 when stream is closed prematurely in JavaScript', async function() {
+      const env = new Env();
+      const array = new Uint8Array([ 0, 1, 2, 3, 4, 5, 6, 7, 8 ]);
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = function(address, len) {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+        env.moveExternBytes = function(jsDV, address, to) {
+          const len = jsDV.byteLength;
+          const zigDV = this.obtainZigView(address, len);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          const copy = this.getCopyFunction(len);
+          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        };
+      }
+      const { context, readFn } = env.createReader(array);
+      const ptr = {
+        '*': { [MEMORY]: context }
+      };
+      const bufferAddress1 = usize(0x1000);
+      const dv = env.obtainZigView(bufferAddress1, 4);
+      const buffer = {
+        '*': { [MEMORY]: dv }
+      }
+      const read1 = readFn(ptr, buffer);
+      expect(read1).to.equal(4);
+      array.close();
+      const read2 = readFn(ptr, buffer);
+      expect(read2).to.equal(0);
+    })
     it('should rethrow the error when the stream throws one', async function() {
       const env = new Env();
       const stream = new ReadableStream({
