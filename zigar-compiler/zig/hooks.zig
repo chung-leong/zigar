@@ -1959,7 +1959,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         fn setThreadContext(ptr: ?*anyopaque) callconv(.c) ?*anyopaque {
             const info: *ThreadInfo = @ptrCast(@alignCast(ptr.?));
-            const proc: *const fn (?*anyopaque) callconv(.c) ?*anyopaque = @ptrCast(info.proc);
+            const proc: *const fn (?*anyopaque) callconv(.c) ?*anyopaque = @ptrCast(@alignCast(info.proc));
             const arg = info.arg;
             const instance = info.instance;
             c_allocator.destroy(info);
@@ -4100,9 +4100,12 @@ pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
             if (!std.meta.eql(handle_cc, Sub.calling_convention)) {
                 @compileError("Handler with wrong calling convention: " ++ handler_name);
             }
+            if (Sub.Original == *const anyopaque) {
+                @compileLog(name);
+            }
             table[index] = .{ name, .{
                 .handler = &@field(Sub, handler_name),
-                .original = &@field(Sub.Original, decl.name),
+                .original = @ptrCast(&@field(Sub.Original, decl.name)),
             } };
             index += 1;
         }
