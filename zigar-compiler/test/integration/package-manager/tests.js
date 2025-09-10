@@ -5,13 +5,13 @@ import { fileURLToPath } from 'url';
 import { capture } from '../test-utils.js';
 
 export function addTests(importModule, options) {
-  const { target, compilerVersion } = options;
+  const { target } = options;
   const importTest = async (name, options) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url, options);
   };
   describe('Package manager', function() {
-    skip.if(target === 'wasm32').or(compilerVersion < '0.14.0').
+    skip.if(target === 'wasm32').
     it('should link in ziglua', async function() {
       this.timeout(0);
       const { run } = await importTest('use-ziglua/ziglua');
@@ -46,6 +46,11 @@ export function addTests(importModule, options) {
       expect(lines).to.have.lengthOf(4);
       expect(lines[0]).to.contain('Handel');
       expect(lines[3]).to.contain('Mozart');
+    })
+    it('should link in ffmpeg', async function() {
+      this.timeout(0);
+      const { run } = await importTest('use-ffmpeg/ffmpeg');
+      run();
     })
     it('should correctly link in local package', async function() {
       this.timeout(0);
