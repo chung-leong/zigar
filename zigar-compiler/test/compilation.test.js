@@ -268,6 +268,15 @@ describe('Compilation', function() {
       const { size } = await stat(outputPath);
       expect(size).to.be.at.least(1000);
     })
+    it('should ignore empty build file', async function() {
+      this.timeout(0);
+      const srcPath = absolute('./zig-samples/empty/test.zig');
+      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch() };
+      const modPath = getModuleCachePath(srcPath, options);
+      const { outputPath } = await compile(srcPath, modPath, options);
+      const { size } = await stat(outputPath);
+      expect(size).to.be.at.least(1000);
+    })
     it('should throw when code cannot be compiled', async function() {
       this.timeout(0);
       const srcPath = absolute('./zig-samples/basic/invalid-syntax.zig');
