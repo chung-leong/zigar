@@ -26,8 +26,10 @@ export default mixin({
         if (ArgStruct[TYPE] === StructureType.VariadicStruct || !constructor[CONTROLLER]) {
           throw new Unsupported();
         }
-        // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
-        dv = thisEnv.getFunctionThunk(arg, constructor[CONTROLLER]);
+        if (process.env.TARGET !== 'wasm' || thisEnv.instance) {
+          // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
+          dv = thisEnv.getFunctionThunk(arg, constructor[CONTROLLER]);
+        }
       } else {
         if (this !== ENVIRONMENT) {
           // casting from buffer to function is allowed only if request comes from the runtime
@@ -50,8 +52,13 @@ export default mixin({
       });
       // make self an instance of this function type
       Object.setPrototypeOf(self, constructor.prototype);
-      self[MEMORY] = dv;
-      cache.save(dv, self);
+      if (process.env.TARGET !== 'wasm' || dv) {
+        self[MEMORY] = dv;
+        cache.save(dv, self);
+      } else {
+        thisEnv.deferredThunks ??= [];
+        thisEnv.deferredThunks.push({ target: self, fn: arg, cache });
+      }
       return self;
     };
     // make function type a superclass of Function
@@ -67,4 +74,17 @@ export default mixin({
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
   },
+  ...(process.env.TARGET === 'wasm' ? {
+    createDeferredThunks() {
+      const list = this.deferredThunks;
+      if (list) {
+        for (const { target, fn, cache } of list) {
+          const { constructor } = target;
+          const dv = this.getFunctionThunk(fn, constructor[CONTROLLER]);
+          target[MEMORY] = dv;
+          cache.save(dv, target);
+        }
+      }
+    },
+  } : undefined),
 });

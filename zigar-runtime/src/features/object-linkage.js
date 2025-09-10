@@ -51,6 +51,8 @@ export default mixin({
       // update pointer targets
       object[VISIT]?.(function() { this[UPDATE]() }, VisitorFlag.IgnoreInactive);
     }
+    // create thunks of function objects that were created prior to compilation
+    this.createDeferredThunks?.();
   },
   ...(process.env.TARGET === 'wasm' ? {
     imports: {

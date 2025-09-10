@@ -1,7 +1,7 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NoInitializer, TypeMismatch, Unsupported, NoCastingToFunction } from '../errors.js';
-import { CONTROLLER, TYPE, ENVIRONMENT, MEMORY } from '../symbols.js';
+import { CONTROLLER, MEMORY, TYPE, ENVIRONMENT } from '../symbols.js';
 import { defineValue, ObjectCache, getSelf, defineProperties } from '../utils.js';
 
 var _function = mixin({
@@ -26,8 +26,10 @@ var _function = mixin({
         if (ArgStruct[TYPE] === StructureType.VariadicStruct || !constructor[CONTROLLER]) {
           throw new Unsupported();
         }
-        // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
-        dv = thisEnv.getFunctionThunk(arg, constructor[CONTROLLER]);
+        if (thisEnv.instance) {
+          // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
+          dv = thisEnv.getFunctionThunk(arg, constructor[CONTROLLER]);
+        }
       } else {
         if (this !== ENVIRONMENT) {
           // casting from buffer to function is allowed only if request comes from the runtime
@@ -50,8 +52,13 @@ var _function = mixin({
       });
       // make self an instance of this function type
       Object.setPrototypeOf(self, constructor.prototype);
-      self[MEMORY] = dv;
-      cache.save(dv, self);
+      if (dv) {
+        self[MEMORY] = dv;
+        cache.save(dv, self);
+      } else {
+        thisEnv.deferredThunks ??= [];
+        thisEnv.deferredThunks.push({ target: self, fn: arg, cache });
+      }
       return self;
     };
     // make function type a superclass of Function
@@ -67,6 +74,19 @@ var _function = mixin({
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
   },
+  ...({
+    createDeferredThunks() {
+      const list = this.deferredThunks;
+      if (list) {
+        for (const { target, fn, cache } of list) {
+          const { constructor } = target;
+          const dv = this.getFunctionThunk(fn, constructor[CONTROLLER]);
+          target[MEMORY] = dv;
+          cache.save(dv, target);
+        }
+      }
+    },
+  } ),
 });
 
 export { _function as default };
