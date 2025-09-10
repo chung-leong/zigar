@@ -9,8 +9,8 @@ export function addTests(importModule, options) {
       return importModule(url);
   };
   describe('Pointer', function() {
+    this.timeout(0);
     it('should import pointer as static variables', async function() {
-      this.timeout(0);
       const {
         default: module,
         int32_slice,
@@ -101,7 +101,6 @@ export function addTests(importModule, options) {
       expect(pointerAfterRestore).to.equal(pointerBefore);
     })
     it('should print pointer arguments', async function() {
-      this.timeout(0);
       const { print } = await importTest('as-function-parameters');
       const lines = await capture(() => {
         print('hello');
@@ -110,13 +109,11 @@ export function addTests(importModule, options) {
       expect(lines).to.eql([ 'hello', 'world' ]);
     })
     it('should return pointer', async function() {
-      this.timeout(0);
       const { getBytes, getText } = await importTest('as-return-value');
       expect(getBytes().string).to.equal('World');
       expect(getText()).to.equal('Hello');
     })
     it('should handle pointer in array', async function() {
-      this.timeout(0);
       const { default: module, print } = await importTest('array-of');
       expect(module.array.length).to.equal(4);
       expect(module.array[0].string).to.equal('dog');
@@ -130,7 +127,6 @@ export function addTests(importModule, options) {
       expect(after).to.equal('{ { 100, 111, 103 }, { 99, 97, 116 }, { 98, 101, 97, 114 }, { 99, 111, 119 } }');
     })
     it('should handle pointer in struct', async function() {
-      this.timeout(0);
       const { default: module, StructA, struct_b, StructC, print } = await importTest('in-struct');
       expect(module.struct_a.text1.string).to.equal('dog');
       expect(module.struct_a.text2.string).to.equal('cat');
@@ -146,11 +142,9 @@ export function addTests(importModule, options) {
       expect(StructC.valueOf()).to.eql({ text1: 'apple', text2: 'orange' });
     })
     it('should not compile code with pointer in packed struct', async function() {
-      this.timeout(0);
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })
     it('should handle pointer as comptime field', async function() {
-      this.timeout(0);
       const { default: module, StructA, print } = await importTest('as-comptime-field');
       expect(module.struct_a.text.string).to.equal('Hello');
       const b = new StructA({ number: 500 });
@@ -160,7 +154,6 @@ export function addTests(importModule, options) {
       expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .text = { 72, 101, 108, 108, 111 } }');
     })
     it('should handle pointer in bare union', async function() {
-      this.timeout(0);
       const { default: module, UnionA } = await importTest('in-bare-union');
       expect(() => module.union_a.text.string).to.throw(TypeError)
         .with.property('message').that.contains('untagged union');
@@ -176,7 +169,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should handle pointer in tagged union', async function() {
-      this.timeout(0);
       const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
       expect(module.union_a.text.string).to.equal('Hello');
       expect(TagType(module.union_a)).to.equal(TagType.text);
@@ -192,7 +184,6 @@ export function addTests(importModule, options) {
       expect(module.union_a.text).to.be.null;
     })
     it('should handle pointer in optional', async function() {
-      this.timeout(0);
       const { default: module, print } = await importTest('in-optional');
       expect(module.optional).to.equal('Hello');
       const [ before ] = await capture(() => print());
@@ -207,7 +198,6 @@ export function addTests(importModule, options) {
       expect(after2).to.equal('{ 87, 111, 114, 108, 100 }');
     })
     it('should handle pointer in error union', async function() {
-      this.timeout(0);
       const { default: module, Error, print } = await importTest('in-error-union');
       expect(module.error_union.string).to.equal('Hello');
       const [ before ] = await capture(() => print());
@@ -222,7 +212,6 @@ export function addTests(importModule, options) {
       expect(after2).to.equal('{ 87, 111, 114, 108, 100 }');
     })
     it('should handle pointer in vector', async function() {
-      this.timeout(0);
       const { default: module, vector_const, change } = await importTest('vector-of');
       expect(vector_const.valueOf()).to.eql([ 1, 1, 1, 1 ]);
       expect(module.vector.valueOf()).to.eql([ 1, 1, 1, 1 ]);

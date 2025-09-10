@@ -13,22 +13,19 @@ import {
 } from '../dist/index.cjs';
 
 describe('Addon functionalities', function() {
+  this.timeout(0);
   describe('Addon compilation', function() {
     const addonDir = fileURLToPath(new URL('./addon-results', import.meta.url));
     it('should build addon for Windows', async function() {
-      this.timeout(0);
       await buildAddon(addonDir, { platform: 'win32', arch: 'x64' });
     })
     it('should build addon for MacOS', async function() {
-      this.timeout(0);
       await buildAddon(addonDir, { platform: 'darwin', arch: 'arm64' });
     })
     it('should build addon for MacOS-x64', async function() {
-      this.timeout(0);
       await buildAddon(addonDir, { platform: 'darwin', arch: 'x64' });
     })
     it('should build addon for Linux', async function() {
-      this.timeout(0);
       let onStartCalled = false, onEndCalled = false;
       const onStart = () => onStartCalled = true;
       const onEnd = () => onEndCalled = true;
@@ -37,11 +34,9 @@ describe('Addon functionalities', function() {
       expect(onEndCalled).to.equal(true);
     })
     it('should build addon for Linux-musl', async function() {
-      this.timeout(0);
       await buildAddon(addonDir, { platform: 'linux-musl', arch: 'x64' });
     })
     it('should try to compile for unknown architecture', async function() {
-      this.timeout(0);
       try {
         const result = await buildAddon(addonDir, { platform: 'xxx', arch: 'xxx' });
         expect.fail('Error expected');
@@ -49,13 +44,11 @@ describe('Addon functionalities', function() {
       }
     })
     it('should ignore missing compiler when library file is present', async function() {
-      this.timeout(0);
       await buildAddon(addonDir, { platform: 'linux', arch: 'x64' });
       const { changed } = await buildAddon(addonDir, { platform: 'linux', arch: 'x64', zigPath: 'zigo' });
       expect(changed).to.be.false;
     })
     it('should throw when both compiler and library file are missing', async function() {
-      this.timeout(0);
       let failed = false;
       try {
         await buildAddon(addonDir, { platform: 'linux', arch: 'riscv64', zigPath: 'zigo' });
@@ -84,13 +77,11 @@ describe('Addon functionalities', function() {
     };
     describe('importModule', function() {
       it('should load module', function() {
-        this.timeout(0);
         const path = getModulePath('integers');
         const module = importModule(path, { recompile: true });
         expect(module.int32).to.equal(1234);
       })
       it('should throw when module is missing', function() {
-        this.timeout(0);
         const path = getModulePath('missing');
         let error;
         try {

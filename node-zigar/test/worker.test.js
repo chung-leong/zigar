@@ -2,8 +2,8 @@ import { expect } from 'chai';
 import { Worker } from 'worker_threads';
 
 describe('CommonJS worker', function() {
+  this.timeout(0);
   it('should load compile Zig file and Node-API addon ', async function() {
-    this.timeout(0);
     const url = new URL('./zig-samples/simple.zig?quiet=1', import.meta.url).href;
     const worker = startWorker(url);
     await new Promise((resolve, reject) => {
@@ -15,7 +15,6 @@ describe('CommonJS worker', function() {
     expect(result).to.have.property('modulePath');
   })
   it('should allow synchronous await', function() {
-    this.timeout(0);
     const url = new URL('./zig-samples/simple.zig?quiet=1', import.meta.url).href;
     const worker = startWorker(url);
     const result = awaitWorker(worker);

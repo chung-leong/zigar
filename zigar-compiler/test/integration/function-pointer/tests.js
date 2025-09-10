@@ -11,8 +11,8 @@ export function addTests(importModule, options) {
       return importModule(url, options);
   };
   describe('Function pointer', function() {
+    this.timeout(0);
     it('should correctly pass floating point arguments', async function() {
-      this.timeout(0);
       const { call } = await importTest('floating-point-arguments');
       const f = (a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12) => {
         return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12;
@@ -21,7 +21,6 @@ export function addTests(importModule, options) {
       expect(result.toFixed(1)).to.equal(`${0.1 + 0.2 + 0.3 + 0.4 + 0.5 + 0.6 + 0.7 + 0.8 + 0.9 + 1.0 + 1.1 + 1.2}`);
     })
     it('should correctly pass struct arguments', async function() {
-      this.timeout(0);
       const { call } = await importTest('struct-arguments');
       let object;
       const f = (b) => {
@@ -33,7 +32,6 @@ export function addTests(importModule, options) {
       expect(result.valueOf()).to.eql({ number1: 123, number2: 456 });
     })
     it('should correctly pass array arguments', async function() {
-      this.timeout(0);
       const { call } = await importTest('array-arguments');
       let array1, array2;
       const f = (a, b) => {
@@ -45,7 +43,6 @@ export function addTests(importModule, options) {
       expect(array2).to.eql([ 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2 ]);
     })
     it('should correctly pass slice arguments', async function() {
-      this.timeout(0);
       const { call } = await importTest('slice-arguments');
       let array;
       const f = (a) => {
@@ -55,7 +52,6 @@ export function addTests(importModule, options) {
       expect(array).to.eql([ 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2 ]);
     })
     it('should correctly pass string arguments', async function() {
-      this.timeout(0);
       const { call } = await importTest('string-arguments');
       let string;
       const f = (s) => {
@@ -65,7 +61,6 @@ export function addTests(importModule, options) {
       expect(string).to.equal('Hello world');
     })
     it('should correctly pass allocator as argument and return a new slice', async function() {
-      this.timeout(0);
       const { printString, printArray } = await importTest('returning-slice');
       const f1 = ({ allocator }) => {
         return allocator.dupe('Hello world!');
@@ -83,7 +78,6 @@ export function addTests(importModule, options) {
       expect(line2).to.equal('{ 1e0, 2e0, 3e0, 4e0 }');
     })
     it('should correctly pass abort signal as argument', async function() {
-      this.timeout(0);
       const { call } = await importTest('abort-signal', { multithreaded: true });
       let aborted = false;
       const f = ({ signal }) => signal.addEventListener('abort', () => aborted = true);
@@ -92,7 +86,6 @@ export function addTests(importModule, options) {
       expect(aborted).to.be.true;
     })
     it('should correctly pass promise as argument', async function() {
-      this.timeout(0);
       const { call, JSError } = await importTest('promise');
       const f1 = ({ callback }) => callback(55);
       const [ line1 ] = await capture(() => call(f1));
@@ -127,7 +120,6 @@ export function addTests(importModule, options) {
       expect(line7).to.equal('number = 1234, error = Unexpected');
     })
     it('should correctly pass allocator and promise as arguments', async function() {
-      this.timeout(0);
       const { call } = await importTest('promise-with-allocator');
       const f1 = async () => 'Hello world';
       const [ line1 ] = await capture(() => call(f1));
@@ -140,7 +132,6 @@ export function addTests(importModule, options) {
       expect(line3).to.equal('value = Hello world');
     })
     it('should correctly pass generator as argument', async function() {
-      this.timeout(0);
       const { call, JSError } = await importTest('generator');
       const f1 = async function*() {
         for (let i = 0; i < 5; i++) yield i;
@@ -194,7 +185,6 @@ export function addTests(importModule, options) {
       ]);
     })
     it('should correctly pass allocator and generator as arguments', async function() {
-      this.timeout(0);
       const { call } = await importTest('generator-with-allocator');
       const f1 = async function*() {
         const avengers = [
@@ -226,11 +216,9 @@ export function addTests(importModule, options) {
         'error = Unexpected'
       ]);
     })
-
     skip.if(platform() === 'win32' && arch() === 'x64').
     or(platform() === 'linux' && arch() === 'aarch64').
     it('should throw when JavaScript is used as target of pointer to variadic function', async function() {
-      this.timeout(0);
       const { call, printI32 } = await importTest('variadic-function');
       const lines = await capture(() => call(printI32));
       expect(lines).to.eql([ '123', '456', '789' ]);

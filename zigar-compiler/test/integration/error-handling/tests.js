@@ -10,8 +10,8 @@ export function addTests(importModule, options) {
     return importModule(url);
   };
   describe('Error handling', function() {
+    this.timeout(0);
     it('should attach error stack to error object', async function () {
-      this.timeout(0);
       const { throwError } = await importTest('throw-error');
       try {
         throwError();
@@ -25,7 +25,6 @@ export function addTests(importModule, options) {
     });
     skip.entirely.if(target === 'wasm32').or(optimize !== 'Debug').
     it('should print stack trace', async function() {
-      this.timeout(0);      
       const { fail } = await importTest('stack-trace');
       const lines = await capture(() => fail());
       const text = lines.join('\n');
@@ -36,7 +35,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.unless(target === 'wasm32').and(runtimeSafety).
     it('should produce an error return trace', async function() {
-      this.timeout(0);
       const { fail } = await importTest('wasm-error-trace');
       const [ line ] = await captureError(() => {
         if (runtimeSafety) {

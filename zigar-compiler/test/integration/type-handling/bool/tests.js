@@ -9,8 +9,8 @@ export function addTests(importModule, options) {
       return importModule(url);
   };
   describe('Bool', function() {
+    this.timeout(0);
     it('should import bool as static variables', async function() {
-      this.timeout(0);
       const { default: module, bool3, bool4, print } = await importTest('as-static-variables');
       expect(module.bool1).to.be.true;
       expect(module.bool2).to.be.false;
@@ -27,7 +27,6 @@ export function addTests(importModule, options) {
       expect(JSON.stringify(module.bool1)).to.equal('false');
     })
     it('should print bool arguments', async function() {
-      this.timeout(0);
       const { default: module, print } = await importTest('as-function-parameters');
       const lines = await capture(() => {
         print(true);
@@ -36,13 +35,11 @@ export function addTests(importModule, options) {
       expect(lines).to.eql([ 'yes', 'no' ]);
     })
     it('should return bool', async function() {
-      this.timeout(0);
       const { default: module } = await importTest('as-return-value');
       expect(module.getTrue()).to.equal(true);
       expect(module.getFalse()).to.equal(false);
     })
     it('should handle bool in array', async function() {
-      this.timeout(0);
       const { default: module, array_const, print } = await importTest('array-of');
       expect(module.array.length).to.equal(4);
       expect([ ...module.array ]).to.eql([ true, false, false, true ]);
@@ -59,7 +56,6 @@ export function addTests(importModule, options) {
       expect(() => module.array = [ false, false, false ]).to.throw();
     })
     it('should handle bool in struct', async function() {
-      this.timeout(0);
       const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ state1: false, state2: true });
       const b = new StructA({});
@@ -71,7 +67,6 @@ export function addTests(importModule, options) {
       expect(after).to.equal('in-struct.StructA{ .state1 = true, .state2 = false }');
     })
     it('should handle bool in packed struct', async function() {
-      this.timeout(0);
       const { default: module, StructA, print } = await importTest('in-packed-struct');
       expect(module.struct_a.valueOf()).to.eql({ state1: false, state2: true, number: 200, state3: true });
       const b = new StructA({});
@@ -83,7 +78,6 @@ export function addTests(importModule, options) {
       expect(after).to.equal('in-packed-struct.StructA{ .state1 = true, .state2 = false, .number = 100, .state3 = false }');
     })
     it('should handle bool as comptime field', async function() {
-      this.timeout(0);
       const { default: module, StructA, print } = await importTest('as-comptime-field');
       expect(module.struct_a.state).to.equal(false);
       const b = new StructA({ number: 500 });
@@ -92,7 +86,6 @@ export function addTests(importModule, options) {
       expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .state = false }');
     })
     it('should handle bool in bare union', async function() {
-      this.timeout(0);
       const { default: module, UnionA } = await importTest('in-bare-union');
       expect(module.union_a.state).to.be.true;
       if (runtimeSafety) {
@@ -113,7 +106,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should handle bool in tagged union', async function() {
-      this.timeout(0);
       const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
       expect(module.union_a.state).to.be.true;
       expect(TagType(module.union_a)).to.equal(TagType.state);
@@ -129,7 +121,6 @@ export function addTests(importModule, options) {
       expect(module.union_a.state).to.be.null;
     })
     it('should handle bool in optional', async function() {
-      this.timeout(0);
       const { default: module, print } = await importTest('in-optional');
       expect(module.optional).to.be.true;
       const [ before ] = await capture(() => print());
@@ -142,7 +133,6 @@ export function addTests(importModule, options) {
       expect(module.optional).to.be.false;
     })
     it('should handle bool in error union', async function() {
-      this.timeout(0);
       const { default: module, Error, print } = await importTest('in-error-union');
       expect(module.error_union).to.be.true;
       const [ before ] = await capture(() => print());
@@ -155,7 +145,6 @@ export function addTests(importModule, options) {
       expect(module.error_union).to.be.false;
     })
     it('should handle bool in vector', async function() {
-      this.timeout(0);
       const { default: module, vector_const, print } = await importTest('vector-of');
       expect(module.vector.length).to.equal(4);
       expect([ ...module.vector ]).to.eql([ true, false, false, true ]);

@@ -13,8 +13,8 @@ export function addTests(importModule, options) {
       return importModule(url, options);
   };
   describe('Thread handling', function() {
+    this.timeout(0);
     it('should spawn threads and invoke callback', async function() {
-      this.timeout(0);
       const {
         spawn,
         startup,
@@ -42,7 +42,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should create thread pool and invoke callback', async function() {
-      this.timeout(0);
       const {
         startup,
         spawn,
@@ -63,7 +62,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should create thread that resolves a promise', async function() {
-      this.timeout(0);
       const {
         startup,
         spawn,
@@ -92,7 +90,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should receive string from promise', async function() {
-      this.timeout(0);
       const {
         startup,
         spawn,
@@ -109,7 +106,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should receive string from generator', async function() {
-      this.timeout(0);
       const {
         startup,
         spawn,
@@ -130,7 +126,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should receive string from allocating generator', async function() {
-      this.timeout(0);
       const {
         startup,
         spawn,
@@ -150,7 +145,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should create thread or immediately provide a value', async function() {
-      this.timeout(0);
       const {
         startup,
         spawn,
@@ -173,7 +167,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should reject a promise synchronously', async function() {
-      this.timeout(0);
       const {
         spawn,
       } = await importTest('create-thread-promise-failure', { multithreaded: true });
@@ -181,7 +174,6 @@ export function addTests(importModule, options) {
       await expect(promise).to.eventually.be.rejectedWith(Error).with.property('message', 'Thread creation failure');
     })
     it('should create thread that accepts an abort signal', async function() {
-      this.timeout(0);
       const {
         startup,
         spawn,
@@ -214,7 +206,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should create thread that accepts an abort signal that works atomically', async function() {
-      this.timeout(0);
       const {
         startup,
         spawn,
@@ -247,7 +238,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should create thread that allocate memory', async function() {
-      this.timeout(0);
       const {
         startup,
         spawn,
@@ -262,7 +252,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should create thread pool for function returning promise', async function() {
-      this.timeout(0);
       const {
         startup,
         spawn,
@@ -277,7 +266,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should call functions through work queue', async function() {
-      this.timeout(0);
       const {
         startup,
         shutdown,
@@ -298,7 +286,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should not compile when a function accepts an AbortSignal without Promise', async function() {
-      this.timeout(0);
       const promise = importTest('abort-signal-without-promise');
       expect(promise).to.be.eventually.be.rejectedWith(Error)
         .with.property('message').that.contains('AbortSignal');

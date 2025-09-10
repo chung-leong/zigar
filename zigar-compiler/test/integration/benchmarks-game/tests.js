@@ -26,8 +26,8 @@ export function addTests(importModule, options) {
     }
   };
   describe('Zig Benchmarks Game', function() {
+    this.timeout(0);
     it('should produce the right results for the binary-trees example', async function() {
-      this.timeout(0);
       const { binaryTree } = await importTest('binary-trees');
       const n = 12;
       const lines = await capture(() => binaryTree(n));
@@ -38,7 +38,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should produce the right results for the fannkuch-redux example', async function() {
-      this.timeout(0);
       const { Pfannkuchen } = await importTest('fannkuch-redux');
       const n = 10;
       const result = Pfannkuchen(n);
@@ -46,7 +45,6 @@ export function addTests(importModule, options) {
       expect(result.max_flips_count).equal(38);
     })
     it('should produce the right results for the fasta example', async function() {
-      this.timeout(0);
       const { fasta } = await importTest('fasta');
       const n = 250000;
       const lines = await capture(() => fasta(n));
@@ -57,7 +55,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should produce the right results for the k-nucleotide example', async function() {
-      this.timeout(0);
       const { kNucleotide } = await importTest('k-nucleotide');
       const n = 250000;
       const lines = await loadData(`fasta-${n}`, 'utf-8');
@@ -72,7 +69,6 @@ export function addTests(importModule, options) {
       expect(outputLines).to.eql(refLines);
     })
     it('should produce the right results for the mandelbrot example', async function() {
-      this.timeout(0);
       const { mandelbrot } = await importTest('mandelbrot');
       const n = 2000;
       const lines = await capture(() => mandelbrot(n));
@@ -83,7 +79,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should produce the right results for the nbody example', async function() {
-      this.timeout(0);
       const {
         Planets, solar_mass, year, advance, energy, offset_momentum
       } = await importTest('nbody');
@@ -150,7 +145,6 @@ export function addTests(importModule, options) {
       expect(result2.toFixed(9)).to.equal('-0.169078071');
     })
     it('should produce the right results for the reverse-complement example', async function() {
-      this.timeout(0);
       const { reverseComplement } = await importTest('reverse-complement');
       const n = 250000;
       // reverseComplement() modifies the data it's given so we need to use buffers here
@@ -168,7 +162,6 @@ export function addTests(importModule, options) {
       expect(different).to.be.false;
     })
     it('should produce the right results for the spectral-norm example', async function() {
-      this.timeout(0);
       const { spectralNorm } = await importTest('spectral-norm');
       const n = 1500;
       const result = spectralNorm(n);

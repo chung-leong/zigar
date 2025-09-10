@@ -12,25 +12,22 @@ export function addTests(importModule, options) {
       return importModule(url);
   };
   describe('Void', function() {
+    this.timeout(0);
     it('should handle void as static variables', async function() {
-      this.timeout(0);
       const { default: module } = await importTest('as-static-variables');
       expect(module.empty).to.be.undefined;
       expect(JSON.stringify(module.empty)).to.equal(undefined);
     })
     it('should print void arguments', async function() {
-      this.timeout(0);
       const { print } = await importTest('as-function-parameters');
       const lines = await capture(() => print(undefined));
       expect(lines).to.eql([ 'void' ]);
     })
     it('should return void', async function() {
-      this.timeout(0);
       const { getVoid } = await importTest('as-return-value');
       expect(getVoid()).to.equal(undefined);
     })
     it('should handle void in array', async function() {
-      this.timeout(0);
       const { array, print } = await importTest('array-of');
       expect(array.length).to.equal(4);
       expect([ ...array ]).to.eql([ undefined, undefined, undefined, undefined ]);
@@ -38,7 +35,6 @@ export function addTests(importModule, options) {
       expect(line).to.equal('{ void, void, void, void }');
     })
     it('should handle void in struct', async function() {
-      this.timeout(0);
       const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ empty1: undefined, empty2: undefined });
       const b = new StructA({});
@@ -50,7 +46,6 @@ export function addTests(importModule, options) {
       expect(after).to.equal('in-struct.StructA{ .empty1 = void, .empty2 = void }');
     })
     it('should handle void in packed struct', async function() {
-      this.timeout(0);
       const { default: module, StructA, print } = await importTest('in-packed-struct');
       expect(module.struct_a.valueOf()).to.eql({ empty1: undefined, empty2: undefined, number: 200, empty3: undefined });
       const b = new StructA({});
@@ -62,7 +57,6 @@ export function addTests(importModule, options) {
       expect(after).to.equal('in-packed-struct.StructA{ .empty1 = void, .empty2 = void, .number = 100, .empty3 = void }');
     })
     it('should handle void as comptime field', async function() {
-      this.timeout(0);
       const { default: module, StructA, print } = await importTest('as-comptime-field');
       expect(module.struct_a.empty).to.be.undefined;
       const b = new StructA({ number: 500 });
@@ -71,7 +65,6 @@ export function addTests(importModule, options) {
       expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .empty = void }');
     })
     it('should handle void in bare union', async function() {
-      this.timeout(0);
       const { default: module, UnionA } = await importTest('in-bare-union');
       expect(module.union_a.empty).to.be.undefined;
       if (runtimeSafety) {
@@ -92,7 +85,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should handle void in tagged union', async function() {
-      this.timeout(0);
       const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
       expect(module.union_a.empty).to.be.undefined;
       expect(TagType(module.union_a)).to.equal(TagType.empty);
@@ -108,7 +100,6 @@ export function addTests(importModule, options) {
       expect(module.union_a.empty).to.be.null;
     })
     it('should handle void in optional', async function() {
-      this.timeout(0);
       const { default: module, print } = await importTest('in-optional');
       expect(module.optional).to.be.undefined;
       const [ before ] = await capture(() => print());
@@ -121,7 +112,6 @@ export function addTests(importModule, options) {
       expect(module.optional).to.be.undefined;
     })
     it('should handle void in error union', async function() {
-      this.timeout(0);
       const { default: module, Error, print } = await importTest('in-error-union');
       expect(module.error_union).to.be.undefined;
       const [ before ] = await capture(() => print());
@@ -134,7 +124,6 @@ export function addTests(importModule, options) {
       expect(module.error_union).to.be.undefined;
     })
     it('should not compile code containing void vector', async function() {
-      this.timeout(0);
       await expect(importTest('vector-of')).to.eventually.be.rejected;
     })
   })

@@ -17,6 +17,7 @@ import {
 const littleEndian = true;
 
 describe('WASM decoding', function() {
+  this.timeout(0);
   describe('parseBinary', function() {
     it('should parse WASM files', async function() {
       const wasmFiles = [
@@ -46,7 +47,6 @@ describe('WASM decoding', function() {
   })
   describe('repackBinary', function() {
     it('should recreate WASM binary', async function() {
-      this.timeout(0);
       const wasmFiles = [
         'fail',
         'global',
@@ -67,7 +67,6 @@ describe('WASM decoding', function() {
       }
     })
     it('should recreate WASM files from WABT test suite', async function() {
-      this.timeout(0);
       const dir = absolute(`./wasm-samples/wabt-test-suite`);
       const names = await readdir(dir);
       const wasmFiles = names.filter(n => /\.wasm$/.test(n)).map(n => `${dir}/${n}`);
@@ -122,7 +121,6 @@ describe('WASM decoding', function() {
       }
     })
     it('should handle more complicated file', async function() {
-      this.timeout(0);
       const path = absolute(`./wasm-samples/ziglyph.wasm`);
       const content = await readFile(path);
       const binary = new DataView(content.buffer);
@@ -142,7 +140,6 @@ describe('WASM decoding', function() {
       }
     })
     it('should repack code from WABT test suite', async function() {
-      this.timeout(0);
       const dir = absolute(`./wasm-samples/wabt-test-suite`);
       const names = await readdir(dir);
       const wasmFiles = names.filter(n => /\.wasm$/.test(n)).map(n => `${dir}/${n}`);

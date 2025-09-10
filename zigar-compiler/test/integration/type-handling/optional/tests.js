@@ -9,8 +9,8 @@ export function addTests(importModule, options) {
       return importModule(url);
   };
   describe('Optional', function() {
+    this.timeout(0);
     it('should import optional as static variables', async function() {
-      this.timeout(0);
       const { default: module, f64_empty, f64_value, print } = await importTest('as-static-variables');
       expect(module.i32_empty).to.be.null;
       expect(module.i32_value).to.be.equal(1234);
@@ -34,7 +34,6 @@ export function addTests(importModule, options) {
       expect(JSON.stringify(module.bool_value)).to.equal('true');
     })
     it('should print optional arguments', async function() {
-      this.timeout(0);
       const { print } = await importTest('as-function-parameters');
       const lines = await capture(() => {
         print(221);
@@ -46,13 +45,11 @@ export function addTests(importModule, options) {
       ]);
     })
     it('should return optional', async function() {
-      this.timeout(0);
       const { default: module } = await importTest('as-return-value');
       expect(module.getSomething()).to.equal(1234);
       expect(module.getNothing()).to.be.null;
     })
     it('should handle optional in array', async function() {
-      this.timeout(0);
       const { default: module, print } = await importTest('array-of');
       expect([ ...module.array ]).to.eql([ 1, 2, null, 4 ]);
       const [ before ] = await capture(() => print());
@@ -63,7 +60,6 @@ export function addTests(importModule, options) {
       expect(after).to.equal('{ 1, null, 3, 4 }');
     })
     it('should handle optional in struct', async function() {
-      this.timeout(0);
       const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ number1: null, number2: -444n });
       const b = new StructA({});
@@ -75,11 +71,9 @@ export function addTests(importModule, options) {
       expect(after).to.equal('in-struct.StructA{ .number1 = 123, .number2 = null }');
     })
     it('should handle optional in packed struct', async function() {
-      this.timeout(0);
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })
     it('should handle optional as comptime field', async function() {
-      this.timeout(0);
       const { default: module, StructA, print } = await importTest('as-comptime-field');
       expect(module.struct_a.number1).to.equal(5000);
       expect(module.struct_a.number2).to.equal(null);
@@ -90,7 +84,6 @@ export function addTests(importModule, options) {
       expect(line).to.equal('as-comptime-field.StructA{ .state = true, .number1 = 5000, .number2 = null }');
     })
     it('should handle optional in bare union', async function() {
-      this.timeout(0);
       const { default: module, UnionA } = await importTest('in-bare-union');
       expect(module.union_a.number).to.equal(1234);
       if (runtimeSafety) {
@@ -111,7 +104,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should handle optional in tagged union', async function() {
-      this.timeout(0);
       const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
       expect(module.union_a.number).to.equal(3456);
       expect(TagType(module.union_a)).to.equal(TagType.number);
@@ -128,7 +120,6 @@ export function addTests(importModule, options) {
       expect(module.union_a.number).to.be.null;
     })
     it('should handle optional in optional', async function() {
-      this.timeout(0);
       const { default: module, print } = await importTest('in-optional');
       expect(module.optional).to.equal(3000);
       const [ before ] = await capture(() => print());
@@ -141,7 +132,6 @@ export function addTests(importModule, options) {
       expect(module.optional).to.equal(-4000);
     })
     it('should handle optional in error union', async function() {
-      this.timeout(0);
       const { default: module, Error, print } = await importTest('in-error-union');
       expect(module.error_union).to.equal(3000);
       const [ before ] = await capture(() => print());
@@ -154,7 +144,6 @@ export function addTests(importModule, options) {
       expect(module.error_union).to.be.null;
     })
     it('should handle optional in vector', async function() {
-      this.timeout(0);
       await expect(importTest('vector-of')).to.eventually.be.rejected;
     })
   })

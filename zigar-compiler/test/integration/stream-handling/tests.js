@@ -18,8 +18,8 @@ export function addTests(importModule, options) {
       return importModule(url, options);
   };
   describe('Stream handling', function() {
+    this.timeout(0);
     it('should read from reader', async function() {
-      this.timeout(0);
       const {
         startup,
         shutdown,
@@ -48,7 +48,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should read from reader in main thread', async function() {
-      this.timeout(0);
       const { hash } = await importTest('read-from-reader-in-main-thread');
       const correct = (platform() === 'win32') 
       ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
@@ -59,7 +58,6 @@ export function addTests(importModule, options) {
       expect(digest.string).to.equal(correct);
     })
     it('should read from file', async function() {
-      this.timeout(0);
       const {
         startup,
         shutdown,
@@ -90,7 +88,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should read from file in main thread', async function() {
-      this.timeout(0);
       const { hash } = await importTest('read-from-file-in-main-thread');
       const correct = (platform() === 'win32') 
       ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
@@ -101,7 +98,6 @@ export function addTests(importModule, options) {
       expect(digest.string).to.equal(correct);
     })
     it('should open and read from file in main thread', async function() {
-      this.timeout(0);
       const { __zigar, hash } = await importTest('open-and-read-from-file-in-main-thread');
       const correct = (platform() === 'win32') 
       ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
@@ -132,7 +128,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should fallback to the system when open handler returns undefined', async function() {
-      this.timeout(0);
       const { __zigar, hash } = await importTest('open-and-read-from-file-system');
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
@@ -159,7 +154,6 @@ export function addTests(importModule, options) {
       expect(event).to.be.an('object');
     })
     it('should not attempt io redirection when feature is disabled', async function() {
-      this.timeout(0);
       const { __zigar, check } = await importTest('open-and-close-file', { useRedirection: false, topLevelAwait: false });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
@@ -185,7 +179,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target !== 'linux').
     it('should open file through direct syscall', async function() {
-      this.timeout(0);
       const { __zigar, check } = await importTest('open-file-through-direct-syscall');
       const content = new Uint8Array(16);
       let event;
@@ -203,7 +196,6 @@ export function addTests(importModule, options) {
       });
     })
     it('should open and read from file using posix functions', async function() {
-      this.timeout(0);
       const { __zigar, hash } = await importTest('open-and-read-file-with-posix-functions', { useLibc: true });
       const correct = (platform() === 'win32') 
       ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
@@ -225,7 +217,6 @@ export function addTests(importModule, options) {
       });
     })
     it('should open and read from file using libc functions', async function() {
-      this.timeout(0);
       const { __zigar, hash } = await importTest('open-and-read-file-with-libc-functions', { useLibc: true });
       const correct = (platform() === 'win32') 
       ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
@@ -247,7 +238,6 @@ export function addTests(importModule, options) {
       });
     })
     it('should open a file and seek to a particular position', async function() {
-      this.timeout(0);
       const { read } = await importTest('seek-file');
       const path = absolute('./data/test.txt');
       const content = await readFile(path);
@@ -256,7 +246,6 @@ export function addTests(importModule, options) {
       expect(chunk.string).to.equal('ur fathers broug');
     })
     it('should open a file and seek to a particular position in thread', async function() {
-      this.timeout(0);
       const { startup, shutdown, read } = await importTest('seek-file-in-thread', { multithreaded: true });
       startup(1);
       try {
@@ -270,7 +259,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should open a file and seek to a particular position using posix function', async function() {
-      this.timeout(0);
       const { __zigar, read } = await importTest('seek-file-with-posix-functions', { useLibc: true });
       const path = absolute('./data/test.txt');
       const content = await readFile(path);
@@ -280,7 +268,6 @@ export function addTests(importModule, options) {
       expect(chunk.string).to.equal('ur fathers broug');
     })
     it('should open a file and seek to a particular position using libc function', async function() {
-      this.timeout(0);
       const { __zigar, read } = await importTest('seek-file-with-libc-functions', { useLibc: true });
       const path = absolute('./data/test.txt');
       const content = await readFile(path);
@@ -291,7 +278,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.unless(target === 'win32').
     it('should open a file and seek to a particular position using win32 function', async function() {
-      this.timeout(0);
       const { read } = await importTest('seek-file-with-win32-function');
       const path = absolute('./data/test.txt');
       const content = await readFile(path);
@@ -300,7 +286,6 @@ export function addTests(importModule, options) {
       expect(chunk.string).to.equal('ur fathers broug');
     })
     it('should obtain the expected position after a seek operation using posix function', async function() {
-      this.timeout(0);
       const { __zigar, seek } = await importTest('return-file-position-with-posix-functions', { useLibc: true });
       const content = new TextEncoder().encode('Hello world!');
       __zigar.on('open', () => content);
@@ -308,7 +293,6 @@ export function addTests(importModule, options) {
       expect(pos).to.equal(content.length - 2);
     })
     it('should obtain the expected position after a seek operation using libc function', async function() {
-      this.timeout(0);
       const { __zigar, seek } = await importTest('return-file-position-with-libc-functions', { useLibc: true });
       const content = new TextEncoder().encode('Hello world!');
       __zigar.on('open', () => content);
@@ -316,7 +300,6 @@ export function addTests(importModule, options) {
       expect(pos).to.equal(content.length - 2);
     })
     it('should save and restore file position using using libc functions', async function() {
-      this.timeout(0);
       const { __zigar, printTwice } = await importTest('save-and-restore-file-position-with-libc-functions', { useLibc: true });
       const path = absolute('./data/test.txt');
       const content = await readFile(path);
@@ -328,7 +311,6 @@ export function addTests(importModule, options) {
       ]);
     })
     it('should write to writer', async function() {
-      this.timeout(0);
       const {
         startup,
         shutdown,
@@ -357,7 +339,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should write to writer in main thread', async function() {
-      this.timeout(0);
       const { save } = await importTest('write-to-writer-in-main-thread');
       const chunks = [];
       const len = save('This is a test', chunks);
@@ -368,7 +349,6 @@ export function addTests(importModule, options) {
       expect(string).to.equal('This is a test');
     })
     it('should write to file', async function() {
-      this.timeout(0);
       const {
         startup,
         shutdown,
@@ -397,7 +377,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should write to file in main thread', async function() {
-      this.timeout(0);
       const { save } = await importTest('write-to-file-in-main-thread');
       const chunks = [];
       const len =  save('This is a test', chunks);
@@ -408,7 +387,6 @@ export function addTests(importModule, options) {
       expect(string).to.equal('This is a test');
     })
     it('should open and write to file in main thread', async function() {
-      this.timeout(0);
       const { __zigar, save } = await importTest('open-and-write-to-file-in-main-thread');
       const chunks = [];
       let event;
@@ -439,7 +417,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should open and write to file using posix functions', async function() {
-      this.timeout(0);
       const { __zigar, save } = await importTest('open-and-write-to-file-with-posix-functions', { useLibc: true });
       const chunks = [];
       let event;
@@ -461,7 +438,6 @@ export function addTests(importModule, options) {
       });
     })
     it('should open and write to file using libc functions', async function() {
-      this.timeout(0);
       const { __zigar, save } = await importTest('open-and-write-to-file-with-libc-functions', { useLibc: true });
       const chunks = [];
       let event;
@@ -484,7 +460,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.unless(target === 'win32').
     it('should open and write to file using win32 functions', async function() {
-      this.timeout(0);
       const { __zigar, save } = await importTest('open-and-write-to-file-with-win32-functions');
       const chunks = [];
       let event;
@@ -506,7 +481,6 @@ export function addTests(importModule, options) {
       });
     })
     it('should obtain error code using libc function', async function() {
-      this.timeout(0);
       const { __zigar, triggerError } = await importTest('return-last-error-with-libc-function', { useLibc: true });
       __zigar.on('open', () => {
         return {
@@ -527,7 +501,6 @@ export function addTests(importModule, options) {
       expect(error).to.contain('Invalid argument');
     })
     it('should detect end of file using libc function', async function() {
-      this.timeout(0);
       const { __zigar, detectEOF } = await importTest('detect-end-of-file-with-libc-function', { useLibc: true });
       __zigar.on('open', () => {
         return new Uint8Array(256);
@@ -536,7 +509,6 @@ export function addTests(importModule, options) {
       expect(result).to.be.true;
     })
     it('should rewind file using libc function', async function() {
-      this.timeout(0);
       const { __zigar, getStartingPos } = await importTest('rewind-file-with-libc-function', { useLibc: true });
       __zigar.on('open', () => {
         return new Uint8Array(256);
@@ -545,7 +517,6 @@ export function addTests(importModule, options) {
       expect(result).to.equal(0);
     })
     it('should check file access using posix function', async function() {
-      this.timeout(0);
       const { __zigar, check } = await importTest('check-access-with-posix-function', { useLibc: true });
       let event;
       __zigar.on('open', (evt) => {
@@ -594,7 +565,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target == 'win32').
     it('should check access of file in directory using posix function', async function() {
-      this.timeout(0);
       const { __zigar, check } = await importTest('check-access-at-dir-with-posix-function', { useLibc: true });
       const uint8Array = new Uint8Array(256);
       const array = [];
@@ -623,7 +593,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target === 'win32').
     it('should open file in directory using posix function', async function() {
-      this.timeout(0);
       const { __zigar, write } = await importTest('open-file-at-dir-with-posix-function', { useLibc: true });
       const array = [];
       const map = new Map([
@@ -650,7 +619,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target === 'win32').
     it('should retrieve stat of file in directory using posix function', async function() {
-      this.timeout(0);
       const { __zigar, stat } = await importTest('stat-file-at-dir-with-posix-function', { useLibc: true });
       const typeArray = new Uint8Array(256);
       const map = new Map([
@@ -688,7 +656,6 @@ export function addTests(importModule, options) {
       });
     })
     it('should decompress xz file', async function() {
-      this.timeout(0);
       const {
         startup,
         shutdown,
@@ -720,7 +687,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should get stats of an Uint8Array passed as a file', async function() {
-      this.timeout(0);
       const { __zigar, print } = await importTest('stat-opened-file');
       const array = new Uint8Array(17);
       const lines1 = await capture(() => print(array));
@@ -753,7 +719,6 @@ export function addTests(importModule, options) {
       })
     })
     it('should get stats of an opened file using posix function', async function() {
-      this.timeout(0);
       const { __zigar, print } = await importTest('stat-opened-file-with-posix-function', { useLibc: true });
       const array = new Uint8Array(17);
       __zigar.on('open', () => {
@@ -801,7 +766,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should get stats of file referenced by path using posix function', async function() {
-      this.timeout(0);
       const { __zigar, print, printLink } = await importTest('stat-file-by-path-with-posix-function', { useLibc: true });
       const path = '/hello.txt';
       let event;
@@ -871,7 +835,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.unless(target === 'win32').
     it('should get size of an opened file using win32 function', async function() {
-      this.timeout(0);
       const { get, getEx } = await importTest('get-size-with-win32-function');
       const array = new Uint8Array(17);
       expect(get(array)).to.equal(17n);
@@ -879,7 +842,6 @@ export function addTests(importModule, options) {
     });
     skip.entirely.unless(target === 'win32').
     it('should get stats of an opened file using win32 function', async function() {
-      this.timeout(0);
       const { __zigar, print } = await importTest('get-info-with-win32-function');
       const array = new Uint8Array(17);
       const lines1 = await capture(() => print(array));
@@ -913,7 +875,6 @@ export function addTests(importModule, options) {
     });
     skip.entirely.if(target === 'win32').or.if(target === 'wasm32').
     it('should set access and last modified time of an opened file using posix function', async function() {
-      this.timeout(0);
       const { __zigar, setTimes } = await importTest('set-times-of-opened-file-with-posix-function', { useLibc: true });
       const array = new Uint8Array(17);
       __zigar.on('open', () => {
@@ -940,7 +901,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.unless(target === 'win32').
     it('should set access and last modified time of an opened file using futime', async function() {
-      this.timeout(0);
       const { __zigar, setTimes } = await importTest('set-times-of-opened-file-with-futime');
       const array = new Uint8Array(17);
       __zigar.on('open', () => {
@@ -967,7 +927,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target === 'win32').
     it('should set access and last modified time of an opened file using posix function with ns precision', async function() {
-      this.timeout(0);
       const { __zigar, setTimes } = await importTest('set-ns-times-of-opened-file-with-posix-function', { useLibc: true });
       const array = new Uint8Array(17);
       __zigar.on('open', () => {
@@ -994,7 +953,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target === 'win32').
     it('should set access and last modified time of a file by using posix function', async function() {
-      this.timeout(0);
       const { __zigar, setTimes, setLinkTimes } = await importTest('set-times-of-file-by-path-with-posix-function', { useLibc: true });
       let event;
       __zigar.on('set_times', (evt) => {
@@ -1028,7 +986,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should set access and last modified time of a file by using utime', async function() {
-      this.timeout(0);
       const { __zigar, setTimes } = await importTest('set-times-of-file-by-path-with-utime', { useLibc: true });
       let event;
       __zigar.on('set_times', (evt) => {
@@ -1050,7 +1007,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target === 'win32').
     it('should set access and last modified time of a file in directory using posix function', async function() {
-      this.timeout(0);
       const { __zigar, setTimes } = await importTest('set-times-of-file-at-dir-with-posix-function', { useLibc: true });
       let event;
       const map = new Map();
@@ -1075,7 +1031,6 @@ export function addTests(importModule, options) {
         .with.property('message', 'Unable to set times');
     })
     it('should get directory entries', async function() {
-      this.timeout(0);
       const { print } = await importTest('read-directory');
       const map1 = new Map([
         [ 'hello.txt', { type: 'file' } ],
@@ -1095,7 +1050,6 @@ export function addTests(importModule, options) {
       expect(lines2).to.have.lengthOf(100);
     })
     it('should get directory entries in thread', async function() {
-      this.timeout(0);
       const { startup, shutdown, print } = await importTest('read-directory-in-thread', { multithreaded: true });
       startup(1);
       try {
@@ -1121,7 +1075,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target === 'win32').
     it('should perform sync operation using posix function', async function() {
-      this.timeout(0);
       const { __zigar, save } = await importTest('perform-sync-with-posix-function', { useLibc: true });
       const chunks = [];
       __zigar.on('open', (evt) => {
@@ -1147,7 +1100,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.unless(target === 'linux').or(target === 'wasm32').
     it('should perform datasync operation using posix function', async function() {
-      this.timeout(0);
       const { __zigar, save } = await importTest('perform-datasync-with-posix-function', { useLibc: true });
       const chunks = [];
       __zigar.on('open', (evt) => {
@@ -1173,7 +1125,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.unless(target === 'linux').or(target === 'wasm32').
     it('should perform advise operation using posix function', async function() {
-      this.timeout(0);
       const { __zigar, save } = await importTest('perform-advise-with-posix-function', { useLibc: true });
       const chunks = [];
       __zigar.on('open', (evt) => {
@@ -1201,7 +1152,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.unless(target === 'linux').or(target === 'wasm32').
     it('should perform allocate operation using posix function', async function() {
-      this.timeout(0);
       const { __zigar, save } = await importTest('perform-allocate-with-posix-function', { useLibc: true });
       const chunks = [];
       __zigar.on('open', (evt) => {
@@ -1229,7 +1179,6 @@ export function addTests(importModule, options) {
       expect(args).to.eql([ 0, 1000 ]);
     })
     it('should open file in directory', async function() {
-      this.timeout(0);
       const { __zigar, print } = await importTest('open-file-at-dir');
       __zigar.on('open', (evt) => {
         const { parent, path } = evt;
@@ -1250,7 +1199,6 @@ export function addTests(importModule, options) {
       ])
     })
     it('should retrieve names of files in directory', async function() {
-      this.timeout(0);
       const { print } = await importTest('scan-directory');
       const map = new Map([
         [ 'hello.txt', { type: 'file', content: 'Hello world' } ],
@@ -1265,7 +1213,6 @@ export function addTests(importModule, options) {
       ]);
     })
     it('should retrieve names of files in directory using posix functions', async function() {
-      this.timeout(0);
       const { __zigar, print } = await importTest('scan-directory-with-posix-functions', { useLibc: true });
       const map = new Map([
         [ 'hello.txt', { type: 'file', content: 'Hello world' } ],
@@ -1317,7 +1264,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should create a directory using posix function', async function() {
-      this.timeout(0);
       const { __zigar, create } = await importTest('create-directory-with-posix-function', { useLibc: true });
       let event;
       __zigar.on('mkdir', (evt) => {
@@ -1328,7 +1274,6 @@ export function addTests(importModule, options) {
       expect(event).to.eql({ parent: null, path: 'hello/world' });
     })
     it('should remove a directory using posix function', async function() {
-      this.timeout(0);
       const { __zigar, remove } = await importTest('remove-directory-with-posix-function', { useLibc: true });
       let event;
       __zigar.on('rmdir', (evt) => {
@@ -1339,7 +1284,6 @@ export function addTests(importModule, options) {
       expect(event).to.eql({ parent: null, path: 'hello/world' });
     })
     it('should remove a file using posix function', async function() {
-      this.timeout(0);
       const { __zigar, remove } = await importTest('remove-file-with-posix-function', { useLibc: true });
       let event;
       __zigar.on('unlink', (evt) => {
@@ -1351,7 +1295,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target == 'win32').
     it('should open and read from file using pread', async function() {
-      this.timeout(0);
       const { __zigar, readAt } = await importTest('open-and-read-file-with-pread', { useLibc: true });
       const path = absolute('./data/test.txt');
       const content = await readFile(path);
@@ -1363,7 +1306,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target == 'win32').
     it('should open and read from file using preadv', async function() {
-      this.timeout(0);
       const { __zigar, readAt } = await importTest('open-and-read-file-with-preadv', { useLibc: true });
       const path = absolute('./data/test.txt');
       const content = await readFile(path);
@@ -1383,7 +1325,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target == 'win32').
     it('should open and read from file using readv', async function() {
-      this.timeout(0);
       const { __zigar, read } = await importTest('open-and-read-file-with-readv', { useLibc: true });
       const path = absolute('./data/test.txt');
       const content = await readFile(path);
@@ -1403,7 +1344,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target == 'win32').
     it('should open and write into file using pwrite', async function() {
-      this.timeout(0);
       const { __zigar, writeAt } = await importTest('open-and-write-file-with-pwrite', { useLibc: true });
       const array = new Uint8Array(256);
       __zigar.on('open', (evt) => {
@@ -1417,7 +1357,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target == 'win32').
     it('should open and write into file using pwritev', async function() {
-      this.timeout(0);
       const { __zigar, writeAt } = await importTest('open-and-write-file-with-pwritev', { useLibc: true });
       const array = new Uint8Array(256);
       __zigar.on('open', (evt) => {
@@ -1431,7 +1370,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target == 'win32').
     it('should open and write into file using writev', async function() {
-      this.timeout(0);
       const { __zigar, write } = await importTest('open-and-write-file-with-writev', { useLibc: true });
       const array = [];
       __zigar.on('open', (evt) => {
@@ -1445,7 +1383,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target == 'win32').or.if(target === 'wasm32').
     it('should set lock on file using fcntl', async function() {
-      this.timeout(0);
       const { lock } = await importTest('set-lock-with-fcntl', { useLibc: true });
       const file1 = {
         read() {},
@@ -1468,7 +1405,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target === 'win32').or.if(target === 'wasm32').
     it('should set lock on file', async function() {
-      this.timeout(0);
       const { lock, unlock } = await importTest('set-lock-on-file', { useLibc: true });
       const file = {
         read() {},
@@ -1498,7 +1434,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target === 'win32').or.if(target === 'wasm32').
     it('should get lock on file using fcntl', async function() {
-      this.timeout(0);
       const { check } = await importTest('get-lock-with-fcntl', { useLibc: true });
       const file1 = {
         read() {},
@@ -1520,7 +1455,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target === 'win32').or.if(target === 'wasm32').
     it('should set lock on file using posix function', async function() {
-      this.timeout(0);
       const { lock, unlock } = await importTest('set-lock-with-posix-function', { useLibc: true });
       const file = {
         read() {},
@@ -1550,7 +1484,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target === 'win32').or.if(target === 'wasm32').
     it('should set lock on file inside thread', async function() {
-      this.timeout(0);
       const { spawn, startup, shutdown } = await importTest('set-lock-on-file-in-thread', { multithreaded: true, useLibc: true });
       const file = {
         chunks: [],
@@ -1582,7 +1515,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target === 'win32').
     it('should set no-blocking flag of descriptor using fcntl', async function() {
-      this.timeout(0);
       const { print, startup, shutdown } = await importTest('set-non-blocking-flag-with-fcntl', { multithreaded: true, useLibc: true });
       const path = absolute('./data/macbeth.txt');
       const content = await readFile(path);
@@ -1610,7 +1542,6 @@ export function addTests(importModule, options) {
       reader.close();
     })
     it('should read lines from file using fgets', async function() {
-      this.timeout(0);
       const { print, startup, shutdown } = await importTest('read-line-from-file-with-fgets', { multithreaded: true, useLibc: true });
       const path = absolute('./data/macbeth.txt');
       const content = await readFile(path);
@@ -1638,7 +1569,6 @@ export function addTests(importModule, options) {
       reader.close();
     })
     it('should read lines from stdin using fgets', async function() {
-      this.timeout(0);
       const { __zigar, print, startup, shutdown } = await importTest('read-line-from-stdin-with-fgets', { multithreaded: true, useLibc: true });
       const path = absolute('./data/macbeth.txt');
       const content = await readFile(path);
@@ -1668,7 +1598,6 @@ export function addTests(importModule, options) {
     })
     it('should scan variables from a file using fscanf', async function() {
       // C is needed for this test since varargs handling in Zig is still dodgy
-      this.timeout(0);
       const { scan } = await importTest('c/scan-file-with-fscanf', { useLibc: true });
       const input = [
         '1 2 3 hello',
@@ -1685,7 +1614,6 @@ export function addTests(importModule, options) {
     })
     it('should scan variables from a stdin using scanf', async function() {
       // ditto
-      this.timeout(0);
       const { __zigar, scan } = await importTest('c/scan-stdin-with-scanf', { useLibc: true });
       const input = [
         '1 2 3 hello',
@@ -1703,7 +1631,6 @@ export function addTests(importModule, options) {
     })
     it('should scan variables from a web stream using scanf', async function() {
       // ditto
-      this.timeout(0);
       const { __zigar, startup, shutdown, scan } = await importTest('c/scan-web-stream-with-scanf', { multithreaded: true, useLibc: true });
       const input = [
         '1 2 3 hello',
@@ -1739,7 +1666,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should get characters from a file using fgetc', async function() {
-      this.timeout(0);
       const { print } = await importTest('read-file-content-with-fgetc', { useLibc: true });
       const path = absolute('./data/macbeth.txt');
       const content = await readFile(path);
@@ -1748,7 +1674,6 @@ export function addTests(importModule, options) {
       expect(line).to.be.a('string');
     })
     it('should get characters from stdin using getchar', async function() {
-      this.timeout(0);
       const { __zigar, print } = await importTest('read-stdin-with-getchar', { useLibc: true });
       const path = absolute('./data/macbeth.txt');
       const content = await readFile(path);
@@ -1758,7 +1683,6 @@ export function addTests(importModule, options) {
       expect(line).to.be.a('string');
     })
     it('should push character into stdin using ungetc', async function() {
-      this.timeout(0);
       const { __zigar, push, get } = await importTest('push-character-into-stdin-with-ungetc', { useLibc: true });
       const content = new Uint8Array([ 1, 2, 3, 4 ]);
       __zigar.redirect(0, content);
@@ -1777,7 +1701,6 @@ export function addTests(importModule, options) {
       expect(result5).to.equal(2);
     })
     it('should flush open file using fflush', async function() {
-      this.timeout(0);
       const { __zigar, open, close, write, writeFlush, writeFlushAll } = await importTest('flush-buffer-with-fflush', { useLibc: true });
       const array = [];
       __zigar.on('open', (evt) => array);
@@ -1796,7 +1719,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.unless(target === 'win32').
     it('should delete file using win32 function', async function() {
-      this.timeout(0);
       const { __zigar, remove, removeW } = await importTest('delete-file-with-win32-function');
       let event;
       __zigar.on('unlink', (evt) => {
@@ -1815,7 +1737,6 @@ export function addTests(importModule, options) {
       });
     })
     it('should delete file in directory', async function() {
-      this.timeout(0);
       const { __zigar, remove } = await importTest('delete-file-at-dir');
       let event;
       __zigar.on('unlink', (evt) => {
@@ -1839,7 +1760,6 @@ export function addTests(importModule, options) {
     });
     skip.entirely.unless(target === 'win32').
     it('should remove directory using win32 function', async function() {
-      this.timeout(0);
       const { __zigar, remove, removeW } = await importTest('remove-directory-with-win32-function');
       let event;
       __zigar.on('rmdir', (evt) => {
@@ -1858,7 +1778,6 @@ export function addTests(importModule, options) {
       });
     })
     it('should remove directory in directory', async function() {
-      this.timeout(0);
       const { __zigar, remove } = await importTest('remove-directory-at-dir');
       let event;
       __zigar.on('rmdir', (evt) => {
@@ -1882,7 +1801,6 @@ export function addTests(importModule, options) {
     });
     skip.entirely.unless(target === 'win32').
     it('should make directory using win32 function', async function() {
-      this.timeout(0);
       const { __zigar, mkdir, mkdirW } = await importTest('make-directory-with-win32-function');
       let event;
       __zigar.on('mkdir', (evt) => {
@@ -1901,7 +1819,6 @@ export function addTests(importModule, options) {
       });
     })
     it('should make directory in directory', async function() {
-      this.timeout(0);
       const { __zigar, add } = await importTest('make-directory-at-dir');
       let event;
       __zigar.on('mkdir', (evt) => {
@@ -1925,7 +1842,6 @@ export function addTests(importModule, options) {
     });
     skip.entirely.if(target === 'win32').
     it('should read files using poll function', async function() {
-      this.timeout(0);
       const { __zigar, startup, shutdown, readBoth } = await importTest('open-and-read-files-using-poll', { multithreaded: true, useLibc: true });
       __zigar.on('open', ({ path }) => {
         const m = /file(\d)$/.exec(path);
@@ -1971,7 +1887,6 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target === 'wasm32').
     it('should redirect io from dynamically linked library', async function() {
-      this.timeout(0);
       const { __zigar, use } = await importTest('redirect-shared-lib');
       let ext;
       switch (target) {

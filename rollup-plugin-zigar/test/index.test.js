@@ -10,25 +10,22 @@ import { createServer } from 'vite';
 import Zigar from '../dist/index.js';
 
 describe('Loader', function() {
+  this.timeout(0);
   describe('Options', function() {
     const path = absolute('../../zigar-compiler/test/zig-samples/basic/console.zig');
     it('should generate code with embedded WASM by default', async function() {
-      this.timeout(0);
       const code = await transpile(path, { embedWASM: true });
       expect(code).to.contain('atob');
     })
     it('should generate code that uses fetch when embedWASM is false', async function() {
-      this.timeout(0);
       const code = await transpile(path, { embedWASM: false, nodeCompat: false });
       expect(code).to.contain('fetch');
     })
     it('should generate code that uses readFile when embedWASM is false and nodeCompat is true', async function() {
-      this.timeout(0);
       const code = await transpile(path, { embedWASM: false, nodeCompat: true });
       expect(code).to.contain('readFile');
     })
     it('should fail when useReadFile is specified', async function() {
-      this.timeout(0);
       let error;
       try {
         await transpile(path, { embedWASM: false, useReadFile: true });
@@ -38,7 +35,6 @@ describe('Loader', function() {
       expect(error).to.be.an('Error');
     })
     it('should default to ReleaseSmall where NODE_ENV is production', async function() {
-      this.timeout(0);
       const code1 = await transpile(path, { embedWASM: true });
       process.env.NODE_ENV = 'production';
       try {
@@ -67,7 +63,6 @@ describe('Loader', function() {
       expect(error).to.be.an('error').with.property('message').that.contains('ReleaseFast');
     })
     it('should serve transcoded files through Vite', async function() {
-      this.timeout(0);
       const host = 'localhost';
       const port = 10001;
       const server = await createServer({

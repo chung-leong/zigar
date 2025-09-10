@@ -12,8 +12,8 @@ export function addTests(importModule, options) {
       return importModule(url);
   };
   describe('Error set', function() {
+    this.timeout(0);
     it('should handle error set as static variables', async function() {
-      this.timeout(0);
       const {
         default: module,
         NormalError,
@@ -40,7 +40,6 @@ export function addTests(importModule, options) {
       expect(JSON.stringify(module.error_var)).to.equal('{"error":"Out of memory"}');
     })
     it('should print error arguments', async function() {
-      this.timeout(0);
       const { StrangeError, print, printAny } = await importTest('as-function-parameters');
       const lines = await capture(() => {
         print(StrangeError.SystemIsOnFire);
@@ -49,13 +48,11 @@ export function addTests(importModule, options) {
       expect(lines).to.eql([ 'error.SystemIsOnFire', 'error.NoMoreBeer' ]);
     })
     it('should return error', async function() {
-      this.timeout(0);
       const { getError, getAnyError, StrangeError } = await importTest('as-return-value');
       expect(getError()).to.equal(StrangeError.NoMoreBeer);
       expect(getAnyError()).to.equal(StrangeError.AlienInvasion);
     })
     it('should handle error in array', async function() {
-      this.timeout(0);
       const { default: module, StrangeError, print } = await importTest('array-of');
       expect(module.array.length).to.equal(4);
       expect(module.array[0]).to.equal(StrangeError.SystemIsOnFire);
@@ -69,7 +66,6 @@ export function addTests(importModule, options) {
       expect(after).to.equal('{ error.SystemIsOnFire, error.DogAteAllMemory, error.NoMoreBeer, error.CondomBrokeYouPregnant }');
     })
     it('should handle error in struct', async function() {
-      this.timeout(0);
       const { default: module, StrangeError, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.err1).to.equal(StrangeError.AlienInvasion);
       expect(module.struct_a.err2).to.equal(StrangeError.SystemIsOnFire);
@@ -83,11 +79,9 @@ export function addTests(importModule, options) {
       expect(after).to.equal('in-struct.StructA{ .err1 = error.SystemIsOnFire, .err2 = error.DogAteAllMemory }');
     })
     it('should not compile code with error in packed struct', async function() {
-      this.timeout(0);
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })
     it('should handle error as comptime field', async function() {
-      this.timeout(0);
       const { default: module, StrangeError, StructA, print } = await importTest('as-comptime-field');
       expect(module.struct_a.err).to.equal(StrangeError.SystemIsOnFire);
       const b = new StructA({ number: 500 });
@@ -96,7 +90,6 @@ export function addTests(importModule, options) {
       expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .err = error.SystemIsOnFire }');
     })
     it('should handle error in bare union', async function() {
-      this.timeout(0);
       const { default: module, StrangeError, UnionA } = await importTest('in-bare-union');
       expect(module.union_a.err).to.equal(StrangeError.AlienInvasion);
       if (runtimeSafety) {
@@ -117,7 +110,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should handle error in tagged union', async function() {
-      this.timeout(0);
       const { default: module, TagType, StrangeError, UnionA } = await importTest('in-tagged-union');
       expect(module.union_a.err).to.equal(StrangeError.DogAteAllMemory);
       expect(TagType(module.union_a)).to.equal(TagType.err);
@@ -133,7 +125,6 @@ export function addTests(importModule, options) {
       expect(module.union_a.err).to.be.null;
     })
     it('should handle error in optional', async function() {
-      this.timeout(0);
       const { default: module, StrangeError, print } = await importTest('in-optional');
       module.optional;
       // expect(module.optional).to.equal(StrangeError.SystemIsOnFire);
@@ -149,11 +140,9 @@ export function addTests(importModule, options) {
       expect(after2).to.equal('error.NoMoreBeer');
     })
     it('should not compile code containing error in error union', async function() {
-      this.timeout(0);
       await expect(importTest('in-error-union')).to.eventually.be.rejected;
     })
     it('should not compile code containing error vector', async function() {
-      this.timeout(0);
       await expect(importTest('vector-of')).to.eventually.be.rejected;
     })
   })

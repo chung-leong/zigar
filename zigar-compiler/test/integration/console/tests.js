@@ -9,20 +9,18 @@ export function addTests(importModule, options) {
       return importModule(url, options);
   };
   describe('Console', function() {
+    this.timeout(0);
     it('should output to development console', async function() {
-      this.timeout(0);
       const { hello } = await importTest('print-with-newline');
       const lines = await capture(() => hello());
       expect(lines).to.eql([ 'Hello world!' ]);
     })
     it('should flush console after function exits', async function() {
-      this.timeout(0);
       const { print } = await importTest('print-no-newline');
       const lines = await capture(() => print())
       expect(lines[0]).to.equal('Hello world');
     })
     it('should capture output from C code', async function() {
-      this.timeout(0);
       const {
         __zigar,
         test_printf,

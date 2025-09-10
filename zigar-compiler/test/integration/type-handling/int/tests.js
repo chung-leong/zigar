@@ -9,8 +9,8 @@ export function addTests(importModule, options) {
     return importModule(url);
   };
   describe('Int', function() {
+    this.timeout(0);
     it('should import int as static variables', async function() {
-      this.timeout(0);
       const { default: module, int4, int8, int16, print } = await importTest('as-static-variables');
       expect(module.private).to.be.undefined;
       expect(module.int4).to.equal(7);
@@ -38,7 +38,6 @@ export function addTests(importModule, options) {
       expect(JSON.stringify(module.uint16)).to.equal('123');
     })
     it('should print int arguments', async function() {
-      this.timeout(0);
       const { print1, print2 } = await importTest('as-function-parameters');
       const lines = await capture(() => {
         print1(221, -1234);
@@ -51,7 +50,6 @@ export function addTests(importModule, options) {
       expect(() => print1(221, undefined)).to.throw();
     })
     it('should return int', async function() {
-      this.timeout(0);
       const { default: module } = await importTest('as-return-value');
       expect(module.getInt8()).to.equal(127);
       expect(module.getUint8()).to.equal(0);
@@ -69,7 +67,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should handle int in array', async function() {
-      this.timeout(0);
       const { default: module, print1, print2, print3 } = await importTest('array-of');
       expect([ ...module.array1 ]).to.eql([ 1, 2, 3, 4 ]);
       expect([ ...module.array2 ]).to.eql([ 1, 2, 3, 4 ]);
@@ -91,7 +88,6 @@ export function addTests(importModule, options) {
       expect(after3).to.equal('{ 3, 3, 3, 3 }');
     })
     it('should handle int in struct', async function() {
-      this.timeout(0);
       const { default: module, StructA, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ number1: -5, number2: -444n });
       const b = new StructA({});
@@ -103,7 +99,6 @@ export function addTests(importModule, options) {
       expect(after).to.equal('in-struct.StructA{ .number1 = 123, .number2 = 456 }');
     })
     it('should handle int in packed struct', async function() {
-      this.timeout(0);
       const { default: module, StructA, print } = await importTest('in-packed-struct');
       expect(module.struct_a.valueOf()).to.eql({ number1: 15, number2: 777n, state: true, number3: -420 });
       const b = new StructA({});
@@ -115,7 +110,6 @@ export function addTests(importModule, options) {
       expect(after).to.equal('in-packed-struct.StructA{ .number1 = 100, .number2 = 200, .state = false, .number3 = 300 }');
     })
     it('should handle int as comptime field', async function() {
-      this.timeout(0);
       const { default: module, StructA, print } = await importTest('as-comptime-field');
       expect(module.struct_a.number).to.equal(5000);
       const b = new StructA({ state: true });
@@ -124,7 +118,6 @@ export function addTests(importModule, options) {
       expect(line).to.equal('as-comptime-field.StructA{ .state = true, .number = 5000 }');
     })
     it('should handle int in bare union', async function() {
-      this.timeout(0);
       const { default: module, UnionA } = await importTest('in-bare-union');
       expect(module.union_a.number).to.equal(1234);
       if (runtimeSafety) {
@@ -145,7 +138,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should handle int in tagged union', async function() {
-      this.timeout(0);
       const { default: module, TagType, UnionA } = await importTest('in-tagged-union');
       expect(module.union_a.number).to.equal(3456);
       expect(TagType(module.union_a)).to.equal(TagType.number);
@@ -161,7 +153,6 @@ export function addTests(importModule, options) {
       expect(module.union_a.number).to.be.null;
     })
     it('should handle int in optional', async function() {
-      this.timeout(0);
       const { default: module, print } = await importTest('in-optional');
       expect(module.optional).to.equal(3000);
       const [ before ] = await capture(() => print());
@@ -177,7 +168,6 @@ export function addTests(importModule, options) {
       expect(module.optional).to.equal(-4000);
     })
     it('should handle int in error union', async function() {
-      this.timeout(0);
       const { default: module, Error, print } = await importTest('in-error-union');
       expect(module.error_union).to.equal(3000);
       const [ before ] = await capture(() => print());
@@ -190,7 +180,6 @@ export function addTests(importModule, options) {
       expect(module.error_union).to.equal(-4000);
     })
     it('should handle int in vector', async function() {
-      this.timeout(0);
       const { default: module, print1, print2, print3 } = await importTest('vector-of');
       expect([ ...module.vector1 ]).to.eql([ 1, 2, 3, 4 ]);
       expect([ ...module.vector2 ]).to.eql([ 1, 2, 3, 4 ]);

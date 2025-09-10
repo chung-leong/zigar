@@ -12,8 +12,8 @@ export function addTests(importModule, options) {
       return importModule(url);
   };
   describe('Error union', function() {
+    this.timeout(0);
     it('should import error union as static variables', async function() {
-      this.timeout(0);
       const { default: module } = await importTest('as-static-variables');
       expect(module.Error).to.be.a('function');
       expect(module.positive_outcome).to.equal(123);
@@ -45,7 +45,6 @@ export function addTests(importModule, options) {
       expect(JSON.stringify(module.positive_outcome)).to.equal('456');
     })
     it('should print error union arguments', async function() {
-      this.timeout(0);
       const { print, Error } = await importTest('as-function-parameters');
       const lines = await capture(() => {
         print(221);
@@ -57,13 +56,11 @@ export function addTests(importModule, options) {
       ]);
     })
     it('should return error union', async function() {
-      this.timeout(0);
       const { default: module, Error } = await importTest('as-return-value');
       expect(module.getSomething()).to.equal(1234);
       expect(() => module.getFailure()).to.throw(Error.GoldfishDied);
     })
     it('should handle error union in array', async function() {
-      this.timeout(0);
       const { default: module, Error, print } = await importTest('array-of');
       expect(module.array).to.have.lengthOf(4);
       expect(module.array[0]).to.equal(1);
@@ -79,7 +76,6 @@ export function addTests(importModule, options) {
       expect(after).to.equal('{ 1, error.GoldfishDied, 3, 4 }');
     })
     it('should handle error union in struct', async function() {
-      this.timeout(0);
       const { default: module, Error, StructA, print } = await importTest('in-struct');
       expect(() => module.struct_a.number1).to.throw(Error.GoldfishDied);
       expect(module.struct_a.number2).to.equal(-444n);
@@ -93,11 +89,9 @@ export function addTests(importModule, options) {
       expect(after).to.equal('in-struct.StructA{ .number1 = 123, .number2 = error.NoMoney }');
     })
     it('should not compile code with error union in packed struct', async function() {
-      this.timeout(0);
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
     })
     it('should handle error union as comptime field', async function() {
-      this.timeout(0);
       const { default: module, Error, StructA, print } = await importTest('as-comptime-field');
       expect(module.struct_a.number1).to.equal(5000);
       expect(() => module.struct_a.number2).to.throw(Error.GoldfishDied);
@@ -108,7 +102,6 @@ export function addTests(importModule, options) {
       expect(line).to.equal('as-comptime-field.StructA{ .state = true, .number1 = 5000, .number2 = error.GoldfishDied }');
     })
     it('should handle error union in bare union', async function() {
-      this.timeout(0);
       const { default: module, Error, UnionA } = await importTest('in-bare-union');
       expect(module.union_a.number).to.equal(3456);
       if (runtimeSafety) {
@@ -129,7 +122,6 @@ export function addTests(importModule, options) {
       }
     })
     it('should handle error union in tagged union', async function() {
-      this.timeout(0);
       const { default: module, TagType, Error, UnionA } = await importTest('in-tagged-union');
       expect(module.union_a.number).to.equal(3456);
       expect(TagType(module.union_a)).to.equal(TagType.number);
@@ -145,7 +137,6 @@ export function addTests(importModule, options) {
       expect(module.union_a.number).to.be.null;
     })
     it('should handle error union in optional', async function() {
-      this.timeout(0);
       const { default: module, Error, print } = await importTest('in-optional');
       expect(module.optional).to.equal(3000);
       const [ before ] = await capture(() => print());
@@ -160,7 +151,6 @@ export function addTests(importModule, options) {
       expect(after2).to.equal('error.GoldfishDied');
     })
     it('should handle error union in error union', async function() {
-      this.timeout(0);
       const { default: module, Error, FileError, print } = await importTest('in-error-union');
       expect(module.error_union).to.equal(3000);
       const [ before ] = await capture(() => print());
@@ -174,7 +164,6 @@ export function addTests(importModule, options) {
       expect(after2).to.equal('error.Corrupted');
     })
     it('should handle error union in vector', async function() {
-      this.timeout(0);
       await expect(importTest('vector-of')).to.eventually.be.rejected;
     })
   })

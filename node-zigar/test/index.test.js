@@ -10,6 +10,7 @@ process.env.BITS = [ 'arm', 'mips', 'mipsel', 'ppc', 'x86', ].includes(arch()) ?
 process.env.TARGET = 'node';
 
 describe('Loader', function() {
+  this.timeout(0);
   describe('resolve', function() {
     it('should call nextResolver', async function() {
       let called = false;
@@ -24,7 +25,6 @@ describe('Loader', function() {
   })
   describe('load', function() {
     it('should load Zig file', async function() {
-      this.timeout(0);
       const { href: url } = new URL('./zig-samples/simple.zig', import.meta.url);
       const { source, format, shortCircuit } = await load(url, {}, () => {});
       expect(format).to.equal('module');
@@ -35,7 +35,6 @@ describe('Loader', function() {
       expect(m[1]).to.contain('add');
     })
     it('should load Zig file with no functions', async function() {
-      this.timeout(0);
       const { href: url } = new URL('./zig-samples/struct.zig', import.meta.url);
       const { source } = await load(url, {}, () => {});
       expect(source).to.not.contain('const source = ');
@@ -51,13 +50,11 @@ describe('Loader', function() {
       expect(called).to.be.true;
     })
     it('should use query variables', async function() {
-      this.timeout(0);
       const { href: url } = new URL('./zig-samples/simple.zig?optimize=ReleaseSafe', import.meta.url);
       const { source } = await load(url, {}, () => {});
       expect(source).to.contain('runtimeSafety: true');
     })
     it('should use config file', async function() {
-      this.timeout(0);
       const { href: url } = new URL('./zig-samples/lib/simple.zigar', import.meta.url);
       const { source } = await load(url, {}, () => {});
       expect(source).to.contain('runtimeSafety: false');
@@ -65,7 +62,6 @@ describe('Loader', function() {
   })
   describe('import', function() {
     it('should load Zigar module', async function() {
-      this.timeout(0);
       const module = await import('./zig-samples/lib/integers.zigar');
       expect(module.int16).to.equal(-44);
     })
