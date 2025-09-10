@@ -1374,16 +1374,21 @@ async function compile(srcPath, modPath, options) {
     srcPath = join(srcPath, '?');
   }
   const config = createConfig(srcPath, modPath, options);
-  const { moduleDir, outputPath } = config;
+  const { moduleDir, outputPath, ignoreBuildFile } = config;
   let changed = false;
   let sourcePaths = [];
   if (srcPath) {
-    try {
-      // add custom build file if one is found
-      const path = moduleDir + 'build.zig';
-      await stat(path);
-      config.buildFilePath = path;
-    } catch (err) {
+    if (!ignoreBuildFile) {
+      try {
+        // add custom build file if one is found
+        const path = moduleDir + 'build.zig';
+        const code = await readFile(path, 'utf-8');
+        const remaining = code.replace(/\/\/.*/g, '').trim();
+        if (remaining) {
+          config.buildFilePath = path;
+        }
+      } catch (err) {
+      }
     }
     try {
       // add path to build.extra.zig if it exists
@@ -1563,6 +1568,7 @@ function createConfig(srcPath, modPath, options = {}) {
     evalBranchQuota = 2000000,
     omitFunctions = false,
     omitVariables = false,
+    ignoreBuildFile = false,
   } = options;
   const src = parse(srcPath ?? '');
   const mod = parse(modPath ?? '');
@@ -1656,6 +1662,7 @@ function createConfig(srcPath, modPath, options = {}) {
     evalBranchQuota,
     omitFunctions,
     omitVariables,
+    ignoreBuildFile,
     extraFilePath: undefined,
   };
 }
@@ -1831,6 +1838,10 @@ const optionsForCompile = {
   targets: {
     type: 'object',
     title: 'List of cross-compilation targets',
+  },
+  ignoreBuildFile: {
+    type: 'boolean',
+    title: 'Ignore build.zig present alongside source files',
   },
 };
 
@@ -4784,10 +4795,6 @@ var moduleLoading = mixin({
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
-        if (options.delay) {
-          // a small delay to allow for setting of event handler
-          await new Promise(r => setTimeout(r, 0));
-        }
         const instance = this.instance = await this.instantiateWebAssembly(source, options);
         this.importFunctions(instance.exports);
         this.initializeCustomWASI();
@@ -4796,7 +4803,7 @@ var moduleLoading = mixin({
     },
     getWASIHandler(name) {
       const nameCamelized = name.replace(/_./g, m => m.charAt(1).toUpperCase());
-      const handler = this[nameCamelized].bind(this);
+      const handler = this[nameCamelized]?.bind?.(this);
       const eventName = this[nameCamelized + 'Event'];
       return (...args) => {
         const result = handler?.(...args) ?? PosixError.ENOTSUP;
@@ -4901,6 +4908,8 @@ var objectLinkage = mixin({
       // update pointer targets
       object[VISIT]?.(function() { this[UPDATE](); }, VisitorFlag.IgnoreInactive);
     }
+    // create thunks of function objects that were created prior to compilation
+    this.createDeferredThunks?.();
   },
   ...({
     imports: {
@@ -5331,6 +5340,9 @@ var thunkAllocation = mixin({
       freeJsThunk: { argType: 'ii', returnType: 'i' },
       findJsThunk: { argType: 'ii', returnType: 'i' },
     },
+    imports: {
+      identifyJsThunk: { argType: 'ii', returnType: 'i' },
+    },
     init() {
       this.thunkSources = [];
       this.thunkMap = new Map();
@@ -5364,11 +5376,12 @@ var thunkAllocation = mixin({
         element: 'anyfunc',
       });
       const { exports } = new w.Instance(this.executable, imports);
-      const { createJsThunk, destroyJsThunk } = exports;
+      const { createJsThunk, destroyJsThunk, identifyJsThunk } = exports;
       const source = {
         thunkCount: 0,
         createJsThunk,
         destroyJsThunk,
+        identifyJsThunk,
         table,
       };
       this.thunkSources.unshift(source);
@@ -9263,8 +9276,10 @@ var _function = mixin({
         if (ArgStruct[TYPE] === StructureType.VariadicStruct || !constructor[CONTROLLER]) {
           throw new Unsupported();
         }
-        // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
-        dv = thisEnv.getFunctionThunk(arg, constructor[CONTROLLER]);
+        if (thisEnv.instance) {
+          // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
+          dv = thisEnv.getFunctionThunk(arg, constructor[CONTROLLER]);
+        }
       } else {
         if (this !== ENVIRONMENT) {
           // casting from buffer to function is allowed only if request comes from the runtime
@@ -9287,8 +9302,13 @@ var _function = mixin({
       });
       // make self an instance of this function type
       Object.setPrototypeOf(self, constructor.prototype);
-      self[MEMORY] = dv;
-      cache.save(dv, self);
+      if (dv) {
+        self[MEMORY] = dv;
+        cache.save(dv, self);
+      } else {
+        thisEnv.deferredThunks ??= [];
+        thisEnv.deferredThunks.push({ target: self, fn: arg, cache });
+      }
       return self;
     };
     // make function type a superclass of Function
@@ -9304,6 +9324,19 @@ var _function = mixin({
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
   },
+  ...({
+    createDeferredThunks() {
+      const list = this.deferredThunks;
+      if (list) {
+        for (const { target, fn, cache } of list) {
+          const { constructor } = target;
+          const dv = this.getFunctionThunk(fn, constructor[CONTROLLER]);
+          target[MEMORY] = dv;
+          cache.save(dv, target);
+        }
+      }
+    },
+  } ),
 });
 
 var opaque = mixin({

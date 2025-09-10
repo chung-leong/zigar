@@ -1971,6 +1971,7 @@ export function addTests(importModule, options) {
         await shutdown();
       }
     })
+    skip.entirely.if(target === 'wasm32').
     it('should redirect io from dynamically linked library', async function() {
       this.timeout(0);
       const { __zigar, use } = await importTest('redirect-shared-lib');

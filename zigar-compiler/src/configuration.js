@@ -80,6 +80,10 @@ export const optionsForCompile = {
     type: 'object',
     title: 'List of cross-compilation targets',
   },
+  ignoreBuildFile: {
+    type: 'boolean',
+    title: 'Ignore build.zig present alongside source files',
+  },
 };
 
 export const optionsForTranspile = {

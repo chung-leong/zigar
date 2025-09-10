@@ -796,16 +796,21 @@ async function compile(srcPath, modPath, options) {
     srcPath = join(srcPath, '?');
   }
   const config = createConfig(srcPath, modPath, options);
-  const { moduleDir, outputPath } = config;
+  const { moduleDir, outputPath, ignoreBuildFile } = config;
   let changed = false;
   let sourcePaths = [];
   if (srcPath) {
-    try {
-      // add custom build file if one is found
-      const path = moduleDir + 'build.zig';
-      await stat(path);
-      config.buildFilePath = path;
-    } catch (err) {
+    if (!ignoreBuildFile) {
+      try {
+        // add custom build file if one is found
+        const path = moduleDir + 'build.zig';
+        const code = await readFile(path, 'utf-8');
+        const remaining = code.replace(/\/\/.*/g, '').trim();
+        if (remaining) {
+          config.buildFilePath = path;
+        }
+      } catch (err) {
+      }
     }
     try {
       // add path to build.extra.zig if it exists
@@ -986,6 +991,7 @@ function createConfig(srcPath, modPath, options = {}) {
     evalBranchQuota = 2000000,
     omitFunctions = false,
     omitVariables = false,
+    ignoreBuildFile = false,
   } = options;
   const src = parse(srcPath ?? '');
   const mod = parse(modPath ?? '');
@@ -1079,6 +1085,7 @@ function createConfig(srcPath, modPath, options = {}) {
     evalBranchQuota,
     omitFunctions,
     omitVariables,
+    ignoreBuildFile,
     extraFilePath: undefined,
   };
 }
@@ -1255,6 +1262,10 @@ const optionsForCompile = {
   targets: {
     type: 'object',
     title: 'List of cross-compilation targets',
+  },
+  ignoreBuildFile: {
+    type: 'boolean',
+    title: 'Ignore build.zig present alongside source files',
   },
 };
 
