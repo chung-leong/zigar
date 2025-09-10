@@ -162,17 +162,15 @@ export function addTests(importModule, options) {
       this.timeout(0);
       const { __zigar, check } = await importTest('open-and-close-file', { useRedirection: false, topLevelAwait: false });
       if (target === 'wasm32') {
-        __zigar.on('wasi', async () => {
-          const { WASI } = await import('wasi');
-          return new WASI({
-            version: 'preview1',
-            args: [],
-            env: {},
-            preopens: {
-              '/': '/',
-            },
-          });
-        });
+        const { WASI } = await import('wasi');
+        __zigar.wasi(new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/': '/',
+          },
+        }));
       }
       await __zigar.init();
       const path = absolute('./data/test.txt');
