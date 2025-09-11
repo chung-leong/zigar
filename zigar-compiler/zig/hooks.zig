@@ -1728,7 +1728,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.futime(fd, tb);
         }
 
-        pub fn futime64(fd: c_int, tb: *const utimbuf64) callconv(.c) c_int {
+        pub fn futime64(fd: c_int, tb: *const utimbuf) callconv(.c) c_int {
             const ts: [2]std.c.timespec = .{
                 .{ .sec = tb.actime, .nsec = 0 },
                 .{ .sec = tb.modtime, .nsec = 0 },
@@ -1857,7 +1857,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.utime(path, tb);
         }
 
-        pub fn utime64(path: [*:0]const u8, tb: *const utimbuf64) callconv(.c) c_int {
+        pub fn utime64(path: [*:0]const u8, tb: *const utimbuf) callconv(.c) c_int {
             const ts: [2]std.c.timespec = .{
                 .{ .sec = tb.actime, .nsec = 0 },
                 .{ .sec = tb.modtime, .nsec = 0 },
@@ -1870,11 +1870,6 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         }
 
         const utimbuf = extern struct {
-            actime: c_long,
-            modtime: c_long,
-        };
-
-        const utimbuf64 = extern struct {
             actime: c_longlong,
             modtime: c_longlong,
         };
