@@ -3,7 +3,7 @@ import chaiAsPromised from 'chai-as-promised';
 import { execSync } from 'child_process';
 import { open, readFile } from 'fs/promises';
 import 'mocha-skip-if';
-import { platform } from 'os';
+import { arch, platform } from 'os';
 import { fileURLToPath } from 'url';
 import { InvalidArgument } from '../../../../zigar-runtime/src/errors.js';
 import { capture, captureError, delay } from '../test-utils.js';
@@ -1894,10 +1894,35 @@ export function addTests(importModule, options) {
         case 'darwin': ext = 'dynlib'; break;
         default: ext = 'so'; break;
       }
+      const cpuArchs = {
+        arm: 'arm',
+        arm64: 'aarch64',
+        ia32: 'x86',
+        loong64: 'loong64',
+        mips: 'mips',
+        mipsel: 'mipsel',
+        ppc: 'powerpc',
+        ppc64: 'powerpc64le',
+        s390: undefined,
+        riscv64: 'riscv64',
+        s390x: 's390x',
+        x64: 'x86_64',
+      };
+      const osTags = {
+        aix: 'aix',
+        darwin: 'macos',
+        freebsd: 'freebsd',
+        linux: 'linux-gnu',
+        openbsd: 'openbsd',
+        sunos: 'solaris',
+        win32: 'windows',
+      };
+      const cpuArch = cpuArchs[arch()];
+      const osTag = osTags[platform()];
       __zigar.on('syscall', true);
       const libPath = absolute(`./data/print.${ext}`);
       const zigPath = absolute(`./redirect-shared-lib-target.zig`);
-      execSync(`zig build-lib "${zigPath}" -dynamic -femit-bin="${libPath}"`);
+      execSync(`zig build-lib "${zigPath}" -target ${cpuArch}-${osTag} -dynamic -femit-bin="${libPath}"`);
       const [ line ] = await capture(() => use(libPath));
       expect(line).to.equal('Hello world');
     })
