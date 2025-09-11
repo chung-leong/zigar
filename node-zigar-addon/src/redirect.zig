@@ -317,8 +317,7 @@ pub fn Controller(comptime Host: type) type {
                     var handle: windows_h.HMODULE = undefined;
                     if (windows_h.GetModuleHandleExA(windows_h.GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, @ptrCast(ptr), &handle) == 0)
                         return error.UnableToGetLibraryInfo;
-
-                    break :get .{ .{ .inner = .{ .dll = handle } }, "" }; // path isn't needed on Windows
+                    break :get .{ .{ .inner = .{ .dll = @ptrCast(handle) } }, "" }; // path isn't needed on Windows
                 },
                 else => unreachable,
             };

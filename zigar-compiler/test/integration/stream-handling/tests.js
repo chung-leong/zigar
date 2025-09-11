@@ -1890,9 +1890,9 @@ export function addTests(importModule, options) {
       const { __zigar, use } = await importTest('redirect-shared-lib');
       let ext;
       switch (target) {
-        case 'win32': ext = 'dll';
-        case 'darwin': ext = 'dynlib';
-        default: ext = 'so';
+        case 'win32': ext = 'dll'; break;
+        case 'darwin': ext = 'dynlib'; break;
+        default: ext = 'so'; break;
       }
       __zigar.on('syscall', true);
       const libPath = absolute(`./data/print.${ext}`);
