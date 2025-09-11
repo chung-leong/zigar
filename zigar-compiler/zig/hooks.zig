@@ -2186,6 +2186,13 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             return Original.clearerr(s);
         }
 
+        pub fn getc() callconv(.c) c_int {
+            const stdin = getStdProxy(0);
+            var buf: [1]u8 = undefined;
+            if (read(stdin, &buf, 1) != 1) return -1;
+            return buf[0];
+        }
+
         pub fn getchar() callconv(.c) c_int {
             const stdin = getStdProxy(0);
             var buf: [1]u8 = undefined;
@@ -2693,6 +2700,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
         const Self = @This();
         pub const Original = struct {
             pub var clearerr: *const @TypeOf(Self.clearerr) = undefined;
+            pub var getc: *const @TypeOf(Self.getc) = undefined;
             pub var getchar: *const @TypeOf(Self.getchar) = undefined;
             pub var fclose: *const @TypeOf(Self.fclose) = undefined;
             pub var fdopen: *const @TypeOf(Self.fdopen) = undefined;

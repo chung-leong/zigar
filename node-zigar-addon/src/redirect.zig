@@ -2,6 +2,8 @@ const std = @import("std");
 const c_allocator = std.heap.c_allocator;
 const builtin = @import("builtin");
 
+const syscall = @import("./syscall.zig");
+
 const os = switch (builtin.target.os.tag) {
     .linux => .linux,
     .driverkit, .ios, .macos, .tvos, .visionos, .watchos => .darwin,
@@ -543,7 +545,6 @@ pub fn Controller(comptime Host: type) type {
 
         fn handleSigsysSignal(_: i32, info: *const std.c.siginfo_t, ucontext: ?*anyopaque) callconv(.c) void {
             if (os != .linux) @compileError("Unsupported");
-            const syscall = @import("./syscall.zig");
             if (@TypeOf(syscall.table) == void) return;
             @setEvalBranchQuota(100000);
             Host.trapping_syscalls = false;
@@ -563,21 +564,18 @@ pub fn Controller(comptime Host: type) type {
                             var result: RvT = undefined;
                             inline for (&handler_args, 0..) |*ptr, arg_index| {
                                 const ArgT = @TypeOf(ptr.*);
-                                ptr.* = if (arg_index == handler_args.len - 1) &result else cast: {
-                                    const arg: usize = args[arg_index];
-                                    switch (@typeInfo(ArgT)) {
-                                        .pointer => break :cast @ptrFromInt(arg),
-                                        .int => |int| {
-                                            const arg_trunc: @Type(.{
-                                                .int = .{
-                                                    .bits = int.bits,
-                                                    .signedness = .unsigned,
-                                                },
-                                            }) = @truncate(arg);
-                                            break :cast @bitCast(arg_trunc);
-                                        },
-                                        else => @compileError("Unrecognized type"),
-                                    }
+                                ptr.* = if (arg_index == handler_args.len - 1) &result else switch (@typeInfo(ArgT)) {
+                                    .pointer => @ptrFromInt(args[arg_index]),
+                                    .int => |int| cast: {
+                                        const arg_trunc: @Type(.{
+                                            .int = .{
+                                                .bits = int.bits,
+                                                .signedness = .unsigned,
+                                            },
+                                        }) = @truncate(args[arg_index]);
+                                        break :cast @bitCast(arg_trunc);
+                                    },
+                                    else => @compileError("Unrecognized type"),
                                 };
                             }
                             if (@call(.auto, handler, handler_args)) {
