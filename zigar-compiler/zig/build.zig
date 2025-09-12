@@ -12,7 +12,6 @@ pub fn build(b: *std.Build) !void {
     const host_type = if (cfg.is_wasm) "wasm" else "napi";
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const build_args = .{ .target = target, .optimize = optimize };
     const lib = b.addSharedLibrary(.{
         .name = cfg.module_name,
         .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "stub-" ++ host_type ++ ".zig" },
@@ -25,7 +24,11 @@ pub fn build(b: *std.Build) !void {
     });
     const zigar_imports: []const Import = &.{.{ .name = "zigar", .module = zigar }};
     const extra_imports: []const Import = switch (@hasDecl(extra, "getImports")) {
-        true => @call(.always_inline, extra.getImports, .{ b, build_args }),
+        true => @call(.always_inline, extra.getImports, .{ b, .{
+            .library = lib,
+            .target = target,
+            .optimize = optimize,
+        } }),
         false => &.{},
     };
     const imports = try std.mem.concat(b.allocator, Import, &.{ zigar_imports, extra_imports });
@@ -36,7 +39,12 @@ pub fn build(b: *std.Build) !void {
     mod.addIncludePath(.{ .cwd_relative = cfg.module_dir });
     lib.root_module.addImport("module", mod);
     const extra_c_files: []const []const u8 = switch (@hasDecl(extra, "getCSourceFiles")) {
-        true => @call(.always_inline, extra.getCSourceFiles, .{ b, build_args }),
+        true => @call(.always_inline, extra.getCSourceFiles, .{ b, .{
+            .library = lib,
+            .module = mod,
+            .target = target,
+            .optimize = optimize,
+        } }),
         false => &.{},
     };
     for (extra_c_files) |file| {

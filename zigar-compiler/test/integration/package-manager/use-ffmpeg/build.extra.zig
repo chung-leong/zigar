@@ -6,6 +6,6 @@ pub fn getImports(b: *std.Build, args: anytype) []const std.Build.Module.Import 
         .optimize = args.optimize,
     });
     const ffmpeg = libffmpeg.artifact("ffmpeg");
-    args.lib.linkLibrary(ffmpeg);
+    args.library.linkLibrary(ffmpeg);
     return &.{};
 }
