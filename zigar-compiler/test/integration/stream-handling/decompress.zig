@@ -18,13 +18,7 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
     work_queue.deinitAsync(promise);
 }
 
-pub fn decompress(
-    reader: std.io.AnyReader,
-    writer: std.io.AnyWriter,
-    promise: zigar.function.PromiseOf(ns.decompress),
-) !void {
-    try work_queue.push(ns.decompress, .{ reader, writer }, promise);
-}
+pub const decompress = work_queue.promisify(ns.decompress);
 
 const ns = struct {
     pub fn decompress(reader: std.io.AnyReader, writer: std.io.AnyWriter) !void {

@@ -18,15 +18,7 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
     work_queue.deinitAsync(promise);
 }
 
-pub fn read(
-    allocator: std.mem.Allocator,
-    file: std.fs.File,
-    offset: usize,
-    len: usize,
-    promise: zigar.function.PromiseOf(ns.read),
-) !void {
-    try work_queue.push(ns.read, .{ allocator, file, offset, len }, promise);
-}
+pub const read = work_queue.promisify(ns.read);
 
 const ns = struct {
     pub fn read(allocator: std.mem.Allocator, file: std.fs.File, offset: usize, len: usize) ![]u8 {

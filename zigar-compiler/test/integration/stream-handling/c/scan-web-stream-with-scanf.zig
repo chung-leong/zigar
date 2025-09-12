@@ -18,9 +18,7 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
     work_queue.deinitAsync(promise);
 }
 
-pub fn scan(promise: zigar.function.PromiseOf(ns.scan)) !void {
-    try work_queue.push(ns.scan, .{}, promise);
-}
+pub const scan = work_queue.promisify(ns.scan);
 
 const ns = struct {
     extern fn scan_stdin_with_scanf_once() void;

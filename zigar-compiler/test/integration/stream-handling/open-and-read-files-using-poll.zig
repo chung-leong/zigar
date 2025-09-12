@@ -18,9 +18,7 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
     work_queue.deinitAsync(promise);
 }
 
-pub fn readBoth(path1: [*:0]const u8, path2: [*:0]const u8, promise: zigar.function.PromiseOf(ns.readBoth)) !void {
-    try work_queue.push(ns.readBoth, .{ path1, path2 }, promise);
-}
+pub const readBoth = work_queue.promisify(ns.readBoth);
 
 const ns = struct {
     pub fn readBoth(path1: [*:0]const u8, path2: [*:0]const u8) !void {

@@ -18,12 +18,7 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
     work_queue.deinitAsync(promise);
 }
 
-pub fn print(
-    dir: std.fs.Dir,
-    promise: zigar.function.PromiseOf(ns.print),
-) !void {
-    try work_queue.push(ns.print, .{dir}, promise);
-}
+pub const print = work_queue.promisify(ns.print);
 
 const ns = struct {
     pub fn print(dir: std.fs.Dir) !void {

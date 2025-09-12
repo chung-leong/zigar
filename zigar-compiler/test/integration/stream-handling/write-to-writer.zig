@@ -18,13 +18,7 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
     work_queue.deinitAsync(promise);
 }
 
-pub fn save(
-    data: []const u8,
-    writer: std.io.AnyWriter,
-    promise: zigar.function.PromiseOf(ns.save),
-) !void {
-    try work_queue.push(ns.save, .{ data, writer }, promise);
-}
+pub const save = work_queue.promisify(ns.save);
 
 const ns = struct {
     pub fn save(data: []const u8, writer: std.io.AnyWriter) !usize {

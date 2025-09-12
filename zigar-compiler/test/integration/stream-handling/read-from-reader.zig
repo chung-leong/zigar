@@ -18,12 +18,7 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
     work_queue.deinitAsync(promise);
 }
 
-pub fn hash(
-    reader: std.io.AnyReader,
-    promise: zigar.function.PromiseOf(ns.hash),
-) !void {
-    try work_queue.push(ns.hash, .{reader}, promise);
-}
+pub const hash = work_queue.promisify(ns.hash);
 
 const ns = struct {
     pub fn hash(reader: std.io.AnyReader) ![std.crypto.hash.Sha1.digest_length * 2]u8 {

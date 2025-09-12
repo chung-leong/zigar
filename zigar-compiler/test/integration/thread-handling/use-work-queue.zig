@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const zigar = @import("zigar");
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -17,24 +18,9 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
     work_queue.deinitAsync(promise);
 }
 
-pub fn returnString(
-    allocator: std.mem.Allocator,
-    promise: zigar.function.PromiseOf(ns.returnString),
-) !void {
-    try work_queue.push(ns.returnString, .{allocator}, promise);
-}
-
-pub fn returnInt(
-    promise: zigar.function.PromiseOf(ns.returnInt),
-) !void {
-    try work_queue.push(ns.returnInt, .{}, promise);
-}
-
-pub fn returnPoint(
-    promise: zigar.function.PromiseOf(ns.returnPoint),
-) !void {
-    try work_queue.push(ns.returnPoint, .{}, promise);
-}
+pub const returnString = work_queue.promisify(ns.returnString);
+pub const returnInt = work_queue.promisify(ns.returnInt);
+pub const returnPoint = work_queue.promisify(ns.returnPoint);
 
 const ns = struct {
     pub fn returnString(allocator: std.mem.Allocator) ![]const u8 {
