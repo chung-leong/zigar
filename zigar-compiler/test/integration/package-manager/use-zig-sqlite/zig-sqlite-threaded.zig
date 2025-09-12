@@ -27,17 +27,9 @@ pub const Album = struct {
     Artist: []const u8,
 };
 
-pub fn open(promise: zigar.function.PromiseOf(ns.open)) !void {
-    try work_queue.push(ns.open, .{}, promise);
-}
-
-pub fn close(promise: zigar.function.PromiseOf(ns.close)) !void {
-    try work_queue.push(ns.close, .{}, promise);
-}
-
-pub fn search(allocator: std.mem.Allocator, keyword: []const u8, promise: zigar.function.PromiseOf(ns.search)) !void {
-    try work_queue.push(ns.search, .{ allocator, keyword }, promise);
-}
+pub const open = work_queue.promisify(ns.open);
+pub const close = work_queue.promisify(ns.close);
+pub const search = work_queue.promisify(ns.search);
 
 const ns = struct {
     pub fn open() !void {

@@ -5,6 +5,8 @@ const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 const builtin = @import("builtin");
 
+const fn_transform = @import("./fn-transform.zig");
+
 pub const AnyValue = *opaque {};
 
 pub fn IntFor(comptime n: comptime_int) type {
@@ -1994,6 +1996,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             false => struct {},
             true => std.meta.ArgsTuple(@TypeOf(ns.onThreadEnd)),
         };
+        pub const Error = std.mem.Allocator.Error || error{Unexpected};
         pub const Options = init: {
             const fields = std.meta.fields(struct {
                 allocator: std.mem.Allocator,
@@ -2092,7 +2095,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             self.queue.stop();
         }
 
-        pub fn push(self: *@This(), comptime func: anytype, args: ArgsOf(func), dest: ?PromiseOrGenerator(func)) !void {
+        pub fn push(self: *@This(), comptime func: anytype, args: ArgsOf(func), dest: ?PromiseOrGenerator(func)) Error!void {
             switch (self.status) {
                 .initialized => {},
                 else => return error.Unexpected,
@@ -2113,6 +2116,71 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                 else => return,
             }
             while (self.queue.pull() != null) {}
+        }
+
+        pub fn asyncify(comptime self: *@This(), comptime func: anytype) Asyncified(@TypeOf(func)) {
+            const FT = @TypeOf(func);
+            const Args = std.meta.ArgsTuple(FT);
+            const AFT = Asyncified(FT);
+            const AsyncArgs = std.meta.ArgsTuple(AFT);
+            const async_fn_info = @typeInfo(AFT).@"fn";
+            const AsyncRT = async_fn_info.return_type.?;
+            const cc = async_fn_info.calling_convention;
+            const async_ns = struct {
+                fn push(async_args: AsyncArgs) AsyncRT {
+                    var args: Args = undefined;
+                    inline for (&args, 0..) |*ptr, i| ptr.* = async_args[i];
+                    const p_or_g = async_args[async_args.len - 1];
+                    return self.push(func, args, p_or_g);
+                }
+            };
+            return fn_transform.spreadArgs(async_ns.push, cc);
+        }
+
+        pub fn promisify(comptime self: *@This(), comptime func: anytype) Asyncified(@TypeOf(func)) {
+            const PorG = PromiseOrGenerator(@TypeOf(func));
+            if (PorG.internal_type == .generator) {
+                @compileError("Generator function encountered");
+            }
+            return self.asyncify(func);
+        }
+
+        pub fn Asyncified(comptime FT: type) type {
+            const PorG = PromiseOrGenerator(FT);
+            const fn_info = @typeInfo(FT).@"fn";
+            const org_params = fn_info.params;
+            var params: [org_params.len + 1]std.builtin.Type.Fn.Param = undefined;
+            inline for (org_params, 0..) |org_param, i| params[i] = org_param;
+            params[params.len - 1] = .{
+                .is_generic = false,
+                .is_noalias = false,
+                .type = PorG,
+            };
+            return @Type(.{
+                .@"fn" = .{
+                    .calling_convention = fn_info.calling_convention,
+                    .is_generic = false,
+                    .is_var_args = false,
+                    .params = &params,
+                    .return_type = Error!void,
+                },
+            });
+        }
+
+        test "Asyncified" {
+            const FT1 = Asyncified(fn () void);
+            try expectEqual(fn (Promise(void)) Error!void, FT1);
+            const FT2 = Asyncified(fn (i32, *anyopaque) error{CheeseMelted}!i64);
+            try expectEqual(fn (i32, *anyopaque, Promise(error{CheeseMelted}!i64)) Error!void, FT2);
+            const Iterator = struct {
+                ptr: *anyopaque,
+
+                pub fn next(_: *@This()) error{CowboyHatesCows}!?i32 {
+                    return 0;
+                }
+            };
+            const FT3 = Asyncified(fn () Iterator);
+            try expectEqual(fn (Generator(error{CowboyHatesCows}!?i32, false)) Error!void, FT3);
         }
 
         const Status = enum {
@@ -2262,7 +2330,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
     };
 }
 
-test "WorkQueue" {
+test "WorkQueue.push()" {
     const test_ns = struct {
         var total: i32 = 0;
 
@@ -2284,11 +2352,70 @@ test "WorkQueue" {
     try queue.push(test_ns.hello, .{456}, null);
     try queue.push(test_ns.world, .{}, null);
     std.time.sleep(1e+8);
-    try expect(test_ns.total == 123 + 456);
+    try expectEqual(123 + 456, test_ns.total);
     var futex: std.atomic.Value(u32) = .init(0);
     queue.deinitAsync(.init(&futex, test_ns.shutdown));
     // wait for thread shutdown
     std.Thread.Futex.wait(&futex, 0);
+}
+
+test "WorkQueue.promisify()" {
+    const test_ns1 = struct {
+        var total: i32 = 0;
+
+        pub fn hello(num: i32) i32 {
+            total += num;
+            return num;
+        }
+
+        pub fn world() error{Doh}!bool {
+            return error.Doh;
+        }
+    };
+    const test_ns2 = struct {
+        var hello_result: ?i32 = null;
+        var world_result: ?bool = null;
+
+        fn hello_callback(_: ?*anyopaque, result: i32) void {
+            hello_result = result;
+        }
+
+        fn world_callback(_: ?*anyopaque, result: error{Doh}!bool) void {
+            world_result = result catch false;
+        }
+
+        fn init(allocator: std.mem.Allocator) !void {
+            try queue.init(.{ .allocator = allocator, .n_jobs = 1 });
+        }
+
+        fn deinit() void {
+            var futex: std.atomic.Value(u32) = .init(0);
+            queue.deinitAsync(.init(&futex, shutdown));
+            // wait for thread shutdown
+            std.Thread.Futex.wait(&futex, 0);
+        }
+
+        fn shutdown(futex: *std.atomic.Value(u32), _: void) void {
+            futex.store(1, .monotonic);
+            std.Thread.Futex.wake(futex, 1);
+        }
+
+        var queue: WorkQueue(test_ns1, struct {}) = .{};
+
+        pub const hello = queue.promisify(test_ns1.hello);
+        pub const world = queue.promisify(test_ns1.world);
+    };
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    try test_ns2.init(gpa.allocator());
+    const promise1: PromiseOf(test_ns1.hello) = .init(null, test_ns2.hello_callback);
+    try test_ns2.hello(1234, promise1);
+    const promise2: PromiseOf(test_ns1.world) = .init(null, test_ns2.world_callback);
+    try test_ns2.world(promise2);
+    std.time.sleep(1e+8);
+    try expectEqual(1234, test_ns1.total);
+    try expectEqual(1234, test_ns2.hello_result);
+    try expectEqual(false, test_ns2.world_result);
+    test_ns2.deinit();
 }
 
 fn isValidCallback(comptime FT: type, comptime AT: type, comptime RT: type) bool {
