@@ -473,6 +473,9 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     };
                     result.* = if ((mode & implied_mode) == mode) 0 else intFromError(.ACCES);
                     return true;
+                } else if (err != .OPNOTSUPP or isPrivateDescriptor(dirfd)) {
+                    result.* = intFromError(err);
+                    return true;
                 }
             }
             return false;

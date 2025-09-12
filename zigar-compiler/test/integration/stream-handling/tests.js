@@ -644,6 +644,29 @@ export function addTests(importModule, options) {
       expect(check(map, 'subdirectory', { execute: true })).to.be.true;
     })
     skip.entirely.if(target === 'win32').
+    it('should check access of file in directory in file system using posix function', async function() {
+      const { __zigar, check } = await importTest('check-access-at-dir-in-file-system-with-posix-function', { useLibc: true });
+      const path = absolute(`./data/statat_test`);
+      await mkdir(path, { recursive: true });
+      await writeFile(`${path}/file.txt`, 'Hello world');
+      try {
+        let event;
+        __zigar.on('open', (evt) => {
+          event = evt;
+          return undefined;
+        });
+        __zigar.on('stat', (evt) => {
+          event = evt;
+          return undefined;
+        });
+        expect(check(path, 'file.txt', { read: true })).to.be.true;
+      } finally {
+        try {
+          await rmdir(path, { recursive: true });
+        } catch {}
+      }
+    })
+    skip.entirely.if(target === 'win32').
     it('should open file in directory using posix function', async function() {
       const { __zigar, write } = await importTest('open-file-at-dir-with-posix-function', { useLibc: true });
       const array = [];
@@ -743,7 +766,7 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target === 'win32').
     it('should retrieve stat of file in directory in file system using posix function', async function() {
-      const { __zigar, stat } = await importTest('stat-file-at-dir-in-file-system-with-posix-function', { useLibc: true, useRedirection: true });
+      const { __zigar, stat } = await importTest('stat-file-at-dir-in-file-system-with-posix-function', { useLibc: true });
       const path = absolute(`./data/statat_test`);
       await mkdir(path, { recursive: true });
       await writeFile(`${path}/file.txt`, 'Hello world');
@@ -873,6 +896,30 @@ export function addTests(importModule, options) {
           'mtime = 123,1',
           'atime = 1,0',
         ]);
+      }
+    })
+    it('should get stats of an opened file in the file system using posix function', async function() {
+      const { __zigar, print } = await importTest('stat-opened-file-in-file-system-with-posix-function', { useLibc: true });
+      const path = absolute('./data/fstat_test.txt');
+      await writeFile(path, 'Hello world');
+      try {
+        let event;
+        __zigar.on('open', (evt) => {
+          event = evt;
+          return undefined;
+        });
+        const [ line ] = await capture(() => print(path));
+        expect(line).to.equal('size = 11');
+        expect(event).to.eql({
+          parent: null,
+          path: path.slice(1),
+          rights: { read: true, readdir: true },
+          flags: { symlinkFollow: true }
+        });
+      } finally {
+        try {
+          await unlink(path);
+        } catch {}
       }
     })
     it('should get stats of file referenced by path using posix function', async function() {
@@ -2050,6 +2097,27 @@ export function addTests(importModule, options) {
           parent: null,
           path: path.slice(1), 
         });
+      } finally {
+        try {
+          await rmdir(path, { recursive: true, maxRetries: 10 });
+        } catch {}
+      }
+    })
+    skip.entirely.if(target === 'win32').
+    it('should create directory in another directory in file system using posix function', async function() {
+      const { __zigar, makeDirectory } = await importTest('create-directory-at-dir-in-file-system-with-posix-function', { useLibc: true });
+      const path = absolute(`./data/mkdirat_test`);
+      await mkdir(path, { recursive: true });
+      try {
+        let event;
+        __zigar.on('mkdir', (evt) => {
+          event = evt;
+          return undefined;
+        });
+        makeDirectory(path, 'hello');
+        const info = await stat(`${path}/hello`);
+        expect(info.isDirectory()).to.be.true;
+        expect(event).to.be.undefined;
       } finally {
         try {
           await rmdir(path, { recursive: true, maxRetries: 10 });
