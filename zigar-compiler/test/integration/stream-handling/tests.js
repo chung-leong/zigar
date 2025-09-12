@@ -1,7 +1,7 @@
 import { expect, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import { execSync } from 'child_process';
-import { mkdir, open, readFile, rmdir } from 'fs/promises';
+import { mkdir, open, readFile, rmdir, stat, unlink, writeFile } from 'fs/promises';
 import 'mocha-skip-if';
 import { arch, platform } from 'os';
 import { fileURLToPath } from 'url';
@@ -2016,6 +2016,81 @@ export function addTests(importModule, options) {
       } finally {
         try {
           await rmdir(path, { recursive: true, maxRetries: 10 });
+        } catch {}
+      }
+    })
+    skip.entirely.if(target === 'win32').
+    it('should set mtime and atime of file using posix function', async function() {
+      const { __zigar, setTimes } = await importTest('set-times-of-file-in-file-system-with-posix-function', { useLibc: true });
+      const path = absolute(`./data/settimes_test.txt`);
+      await writeFile(path, 'Hello world');
+      try {
+        let event;
+        __zigar.on('set_times', (evt) => {
+          event = evt;
+          return undefined;
+        });
+        setTimes(path, 3, 1234);
+        expect(event).to.eql({
+          parent: null,
+          path: path.slice(1),
+          times: { atime: 3000001234n, mtime: 3000001234n },
+          flags: { symlinkFollow: true }
+        });
+        const info = await stat(path);
+        expect(info.atimeMs).to.equal(3000.001234);
+        expect(info.mtimeMs).to.equal(3000.001234);
+      } finally {
+        try {
+          await unlink(path);
+        } catch {}
+      }
+    })
+    it('should scan directory in file system file using posix function', async function() {
+      const { __zigar, print } = await importTest('scan-directory-in-file-system-with-posix-functions', { useLibc: true, useRedirection: true });
+      const path = absolute(`./data/readdir_test`);
+      await mkdir(path, { recursive: true });
+      await writeFile(`${path}/file1.txt`, 'Hello world');
+      await writeFile(`${path}/file2.txt`, 'Rats live on no evil start');
+      try {
+        const events = [];
+        __zigar.on('open', (evt) => {
+          events.push(evt);
+          return undefined;
+        });
+        __zigar.on('stat', (evt) => {
+          events.push(evt);
+          return undefined;
+        })
+        const lines = await capture(() => print(path));
+        expect(lines).to.contain('. (4096 bytes)');
+        expect(lines).to.contain('.. (4096 bytes)');
+        expect(lines).to.contain('file1.txt (11 bytes)');
+        expect(lines).to.contain('file2.txt (26 bytes)');
+        const event1 = {
+          parent: null,
+          path: `${path}/file1.txt`.slice(1),
+          flags: { symlinkFollow: true }
+        }
+        const found1 = events.find((evt) => evt.path === event1.path);
+        expect(found1).to.eql(event1);
+        const event2 = {
+          parent: null,
+          path: `${path}/file2.txt`.slice(1),
+          flags: { symlinkFollow: true }
+        }
+        const found2 = events.find((evt) => evt.path === event2.path);
+        expect(found2).to.eql(event2);
+        const event3 = {
+          parent: null,
+          path: path.slice(1),
+          flags: { symlinkFollow: true }
+        }
+        const found3 = events.find((evt) => evt.path === event3.path && !evt.rights);
+        expect(found3).to.eql(event3);
+      } finally {
+        try {
+          await rmdir(path, { recursive: true });
         } catch {}
       }
     })

@@ -62,8 +62,8 @@ pub const Syscall = extern struct {
         },
         futimes: extern struct {
             fd: i32,
-            atime: u64,
-            mtime: u64,
+            atime: i64,
+            mtime: i64,
             time_flags: std.os.wasi.fstflags_t = .{ .ATIM = true, .MTIM = true },
         },
         getdents: extern struct {
@@ -173,8 +173,8 @@ pub const Syscall = extern struct {
             path: [*:0]const u8,
             lookup_flags: std.os.wasi.lookupflags_t,
             time_flags: std.os.wasi.fstflags_t = .{ .ATIM = true, .MTIM = true },
-            atime: u64,
-            mtime: u64,
+            atime: i64,
+            mtime: i64,
         },
         write: extern struct {
             fd: i32,
@@ -710,8 +710,10 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 } };
                 const err = Host.redirectSyscall(&call);
                 if (err == .SUCCESS) copyStat(buf, &call.u.stat.stat);
-                result.* = intFromError(err);
-                return true;
+                if (err != .OPNOTSUPP or isPrivateDescriptor(dirfd)) {
+                    result.* = intFromError(err);
+                    return true;
+                }
             }
             return false;
         }
@@ -1404,8 +1406,8 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return times;
         }
 
-        fn getNanoseconds(ts: std.c.timespec) u64 {
-            return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
+        fn getNanoseconds(ts: std.c.timespec) i64 {
+            return ts.sec * 1_000_000_000 + ts.nsec;
         }
 
         fn convertLookupFlags(flags: c_int) std.os.wasi.lookupflags_t {

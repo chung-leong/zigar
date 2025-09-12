@@ -62,8 +62,8 @@ pub const Syscall = extern struct {
         },
         futimes: extern struct {
             fd: i32,
-            atime: u64,
-            mtime: u64,
+            atime: i64,
+            mtime: i64,
             time_flags: std.os.wasi.fstflags_t = .{ .ATIM = true, .MTIM = true },
         },
         getdents: extern struct {
@@ -173,8 +173,8 @@ pub const Syscall = extern struct {
             path: [*:0]const u8,
             lookup_flags: std.os.wasi.lookupflags_t,
             time_flags: std.os.wasi.fstflags_t = .{ .ATIM = true, .MTIM = true },
-            atime: u64,
-            mtime: u64,
+            atime: i64,
+            mtime: i64,
         },
         write: extern struct {
             fd: i32,
@@ -1404,8 +1404,8 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return times;
         }
 
-        fn getNanoseconds(ts: std.c.timespec) u64 {
-            return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
+        fn getNanoseconds(ts: std.c.timespec) i64 {
+            return ts.sec * 1_000_000_000 + ts.nsec;
         }
 
         fn convertLookupFlags(flags: c_int) std.os.wasi.lookupflags_t {
@@ -1728,7 +1728,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.futime(fd, tb);
         }
 
-        pub fn futime64(fd: c_int, tb: *const utimbuf64) callconv(.c) c_int {
+        pub fn futime64(fd: c_int, tb: *const utimbuf) callconv(.c) c_int {
             const ts: [2]std.c.timespec = .{
                 .{ .sec = tb.actime, .nsec = 0 },
                 .{ .sec = tb.modtime, .nsec = 0 },
@@ -1857,7 +1857,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.utime(path, tb);
         }
 
-        pub fn utime64(path: [*:0]const u8, tb: *const utimbuf64) callconv(.c) c_int {
+        pub fn utime64(path: [*:0]const u8, tb: *const utimbuf) callconv(.c) c_int {
             const ts: [2]std.c.timespec = .{
                 .{ .sec = tb.actime, .nsec = 0 },
                 .{ .sec = tb.modtime, .nsec = 0 },
@@ -1870,11 +1870,6 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         }
 
         const utimbuf = extern struct {
-            actime: c_long,
-            modtime: c_long,
-        };
-
-        const utimbuf64 = extern struct {
             actime: c_longlong,
             modtime: c_longlong,
         };
@@ -2184,6 +2179,13 @@ pub fn LibcSubstitute(comptime redirector: type) type {
                 return;
             }
             return Original.clearerr(s);
+        }
+
+        pub fn getc() callconv(.c) c_int {
+            const stdin = getStdProxy(0);
+            var buf: [1]u8 = undefined;
+            if (read(stdin, &buf, 1) != 1) return -1;
+            return buf[0];
         }
 
         pub fn getchar() callconv(.c) c_int {
@@ -2693,6 +2695,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
         const Self = @This();
         pub const Original = struct {
             pub var clearerr: *const @TypeOf(Self.clearerr) = undefined;
+            pub var getc: *const @TypeOf(Self.getc) = undefined;
             pub var getchar: *const @TypeOf(Self.getchar) = undefined;
             pub var fclose: *const @TypeOf(Self.fclose) = undefined;
             pub var fdopen: *const @TypeOf(Self.fdopen) = undefined;

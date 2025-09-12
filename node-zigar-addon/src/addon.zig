@@ -1082,8 +1082,8 @@ const ModuleHost = struct {
         if (@hasField(@TypeOf(args.*), "fd")) {
             return try self.callPosixFunction(self.js.fd_filestat_set_times, &.{
                 try env.createInt32(args.fd),
-                try env.createBigintUint64(args.atime),
-                try env.createBigintUint64(args.mtime),
+                try env.createBigintInt64(args.atime),
+                try env.createBigintInt64(args.mtime),
                 try env.createUint32(@as(u16, @bitCast(args.time_flags))),
                 futex,
             });
@@ -1094,8 +1094,8 @@ const ModuleHost = struct {
                 try env.createUint32(@as(u32, @bitCast(args.lookup_flags))),
                 try env.createUsize(@intFromPtr(args.path)),
                 try env.createUint32(path_len),
-                try env.createBigintUint64(args.atime),
-                try env.createBigintUint64(args.mtime),
+                try env.createBigintInt64(args.atime),
+                try env.createBigintInt64(args.mtime),
                 try env.createUint32(@as(u16, @bitCast(args.time_flags))),
                 futex,
             });
