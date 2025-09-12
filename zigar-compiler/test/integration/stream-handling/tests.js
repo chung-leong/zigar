@@ -1,7 +1,7 @@
 import { expect, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import { execSync } from 'child_process';
-import { open, readFile } from 'fs/promises';
+import { mkdir, open, readFile, rmdir } from 'fs/promises';
 import 'mocha-skip-if';
 import { arch, platform } from 'os';
 import { fileURLToPath } from 'url';
@@ -129,6 +129,58 @@ export function addTests(importModule, options) {
     })
     it('should fallback to the system when open handler returns undefined', async function() {
       const { __zigar, hash } = await importTest('open-and-read-from-file-system');
+      if (target === 'wasm32') {
+        const { WASI } = await import('wasi');
+        __zigar.wasi(new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/': '/',
+          },
+        }));
+      }
+      const correct = (platform() === 'win32') 
+      ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
+      : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+      const path = absolute('./data/test.txt');
+      let event;
+      __zigar.on('open', (evt) => {
+        event = evt;
+        return undefined;
+      });
+      const digest = hash(path);
+      expect(digest.string).to.equal(correct);
+      expect(event).to.be.an('object');
+    })
+    it('should open file thru file system using posix function', async function() {
+      const { __zigar, hash } = await importTest('open-and-read-from-file-system-with-posix-function');
+      if (target === 'wasm32') {
+        const { WASI } = await import('wasi');
+        __zigar.wasi(new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/': '/',
+          },
+        }));
+      }
+      const correct = (platform() === 'win32') 
+      ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
+      : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+      const path = absolute('./data/test.txt');
+      let event;
+      __zigar.on('open', (evt) => {
+        event = evt;
+        return undefined;
+      });
+      const digest = hash(path);
+      expect(digest.string).to.equal(correct);
+      expect(event).to.be.an('object');
+    })
+    it('should open file thru file system using libc function', async function() {
+      const { __zigar, hash } = await importTest('open-and-read-from-file-system-with-libc-function');
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
         __zigar.wasi(new WASI({
@@ -1925,6 +1977,47 @@ export function addTests(importModule, options) {
       execSync(`zig build-lib "${zigPath}" -target ${cpuArch}-${osTag} -dynamic -femit-bin="${libPath}"`);
       const [ line ] = await capture(() => use(libPath));
       expect(line).to.equal('Hello world');
+    })
+    it('should create directory in file system using posix function', async function() {
+      const { __zigar, makeDirectory } = await importTest('create-directory-in-file-system-with-posix-function', { useLibc: true });
+      const path = absolute(`./data/mkdir_test`);
+      try {
+        let event;
+        __zigar.on('mkdir', (evt) => {
+          event = evt;
+          return undefined;
+        });
+        makeDirectory(path);
+        expect(event).to.eql({
+          parent: null,
+          path: path.slice(1), 
+        });
+      } finally {
+        try {
+          await rmdir(path, { recursive: true, maxRetries: 10 });
+        } catch {}
+      }
+    })
+    it('should remove directory in file system using posix function', async function() {
+      const { __zigar, removeDirectory } = await importTest('remove-directory-in-file-system-with-posix-function', { useLibc: true });
+      const path = absolute(`./data/rmdir_test`);
+      await mkdir(path, { recursive: true });
+      try {
+        let event;
+        __zigar.on('rmdir', (evt) => {
+          event = evt;
+          return undefined;
+        });
+        removeDirectory(path);
+        expect(event).to.eql({
+          parent: null,
+          path: path.slice(1), 
+        });
+      } finally {
+        try {
+          await rmdir(path, { recursive: true, maxRetries: 10 });
+        } catch {}
+      }
     })
   })
 }
