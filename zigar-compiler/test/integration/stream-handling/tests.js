@@ -670,6 +670,40 @@ export function addTests(importModule, options) {
       });
     })
     skip.entirely.if(target === 'win32').
+    it('should open file in directory in file system using posix function', async function() {
+      const { __zigar, write } = await importTest('open-file-at-dir-in-file-system-with-posix-function', { useLibc: true });
+      const path = absolute(`./data/openat_test`);
+      await mkdir(path, { recursive: true });
+      try {
+        let event;
+        __zigar.on('open', (evt) => {
+          event = evt;
+          return undefined;
+        });
+        const text = 'Hello world!!!';
+        const len = write(path, 'writable.txt', text);
+        expect(len).to.equal(text.length);
+        const content = await readFile(`${path}/writable.txt`, 'utf8');
+        expect(content).to.equal(text);
+        expect(event).to.eql({
+          parent: null,
+          path: path.slice(1),
+          rights: {
+            read: true,
+            readdir: true,
+          },
+          flags: {
+            directory: true,
+            symlinkFollow: true,
+          },
+        });
+      } finally {
+        try {
+          await rmdir(path, { recursive: true });
+        } catch {}
+      }
+    })
+    skip.entirely.if(target === 'win32').
     it('should retrieve stat of file in directory using posix function', async function() {
       const { __zigar, stat } = await importTest('stat-file-at-dir-with-posix-function', { useLibc: true });
       const typeArray = new Uint8Array(256);
@@ -706,6 +740,30 @@ export function addTests(importModule, options) {
         path: 'readable.txt',
         flags: { symlinkFollow: true }
       });
+    })
+    skip.entirely.if(target === 'win32').
+    it('should retrieve stat of file in directory in file system using posix function', async function() {
+      const { __zigar, stat } = await importTest('stat-file-at-dir-in-file-system-with-posix-function', { useLibc: true, useRedirection: true });
+      const path = absolute(`./data/statat_test`);
+      await mkdir(path, { recursive: true });
+      await writeFile(`${path}/file.txt`, 'Hello world');
+      try {
+        let event;
+        __zigar.on('open', (evt) => {
+          event = evt;
+          return undefined;
+        });
+        __zigar.on('stat', (evt) => {
+          event = evt;
+          return undefined;
+        });
+        const [ line ] = await capture(() => stat(path, 'file.txt'));
+        expect(line).to.eql('size = 11');
+      } finally {
+        try {
+          await rmdir(path, { recursive: true });
+        } catch {}
+      }
     })
     it('should decompress xz file', async function() {
       const {
@@ -2019,6 +2077,27 @@ export function addTests(importModule, options) {
         } catch {}
       }
     })
+    it('should remove file in file system using posix function', async function() {
+      const { __zigar, removeFile } = await importTest('remove-file-in-file-system-with-posix-function', { useLibc: true });
+      const path = absolute(`./data/unlink_test.txt`);
+      await writeFile(path, 'Hello world');
+      try {
+        let event;
+        __zigar.on('unlink', (evt) => {
+          event = evt;
+          return undefined;
+        });
+        removeFile(path);
+        expect(event).to.eql({
+          parent: null,
+          path: path.slice(1), 
+        });
+      } finally {
+        try {
+          await unlink(path);
+        } catch {}
+      }
+    })
     skip.entirely.if(target === 'win32').
     it('should set mtime and atime of file using posix function', async function() {
       const { __zigar, setTimes } = await importTest('set-times-of-file-in-file-system-with-posix-function', { useLibc: true });
@@ -2047,7 +2126,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should scan directory in file system file using posix function', async function() {
-      const { __zigar, print } = await importTest('scan-directory-in-file-system-with-posix-functions', { useLibc: true, useRedirection: true });
+      const { __zigar, print } = await importTest('scan-directory-in-file-system-with-posix-functions', { useLibc: true });
       const path = absolute(`./data/readdir_test`);
       await mkdir(path, { recursive: true });
       await writeFile(`${path}/file1.txt`, 'Hello world');

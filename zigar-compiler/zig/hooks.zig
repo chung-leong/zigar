@@ -1653,12 +1653,12 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.__fxstat64(ver, fd, buf);
         }
 
-        pub fn __fxstatat(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *Stat) callconv(.c) c_int {
+        pub fn __fxstatat(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *Stat, flags: c_int) callconv(.c) c_int {
             var result: c_int = undefined;
-            if (redirector.newfstatat(dirfd, path, buf, AT.SYMLINK_FOLLOW, &result)) {
+            if (redirector.newfstatat(dirfd, path, buf, flags, &result)) {
                 return saveError(result);
             }
-            return Original.__fxstatat(ver, dirfd, path, buf);
+            return Original.__fxstatat(ver, dirfd, path, buf, flags);
         }
 
         pub fn __fxstatat64(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *Stat) callconv(.c) c_int {
