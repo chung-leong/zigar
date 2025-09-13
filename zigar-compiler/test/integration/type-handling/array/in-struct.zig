@@ -27,9 +27,13 @@ pub fn print() void {
 }
 
 pub const @"meta(zigar)" = struct {
-    pub fn isFieldString(comptime CT: type, comptime field_name: []const u8) bool {
-        if (CT == StructB and std.mem.eql(u8, field_name, "foo")) return true;
-        if (CT == StructC and std.mem.eql(u8, field_name, "foo")) return true;
+    pub fn isDeclString(comptime T: type, comptime decl: std.meta.DeclEnum(T)) bool {
+        if (T == StructC and decl == .foo) return true;
+        return false;
+    }
+
+    pub fn isFieldString(comptime T: type, comptime field: std.meta.FieldEnum(T)) bool {
+        if (T == StructB and field == .foo) return true;
         return false;
     }
 };

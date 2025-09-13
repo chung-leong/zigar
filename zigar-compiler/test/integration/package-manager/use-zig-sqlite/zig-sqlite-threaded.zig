@@ -60,7 +60,7 @@ const ns = struct {
 };
 
 pub const @"meta(zigar)" = struct {
-    pub fn isFieldString(comptime _: type, comptime _: []const u8) bool {
+    pub fn isFieldString(comptime T: type, comptime _: std.meta.FieldEnum(T)) bool {
         return true;
     }
 };

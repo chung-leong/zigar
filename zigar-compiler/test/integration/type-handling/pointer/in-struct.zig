@@ -26,7 +26,7 @@ pub fn print() void {
 }
 
 pub const @"meta(zigar)" = struct {
-    pub fn isFieldString(comptime T: type, comptime _: []const u8) bool {
+    pub fn isFieldString(comptime T: type, _: std.meta.DeclEnum(T)) bool {
         return switch (T) {
             StructB, StructC => true,
             else => false,

@@ -10,7 +10,7 @@ pub fn print() void {
 const Self = @This();
 
 pub const @"meta(zigar)" = struct {
-    pub fn isFieldString(comptime T: type, comptime name: []const u8) bool {
-        return T == Self and std.mem.eql(u8, name, "optional");
+    pub fn isDeclString(comptime T: type, field: std.meta.DeclEnum(T)) bool {
+        return T == Self and field == .optional;
     }
 };

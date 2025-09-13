@@ -16,8 +16,8 @@ pub var string: [5]u8 = .{ 'H', 'e', 'l', 'l', 'o' };
 
 const ns = @This();
 pub const @"meta(zigar)" = struct {
-    pub fn isFieldString(comptime CT: type, comptime field_name: []const u8) bool {
-        _ = field_name;
-        return CT == ns;
+    pub fn isDeclString(comptime T: type, comptime decl: std.meta.DeclEnum(T)) bool {
+        _ = decl;
+        return T == ns;
     }
 };

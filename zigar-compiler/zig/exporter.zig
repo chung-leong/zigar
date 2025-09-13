@@ -524,15 +524,18 @@ fn Factory(comptime host: type, comptime module: type) type {
         }
 
         fn addStructMembers(self: @This(), list: Value, comptime td: TypeData) !void {
+            const FieldEnum = std.meta.FieldEnum(td.type);
             inline for (std.meta.fields(td.type), 0..) |field, index| {
                 const field_td = tdb.get(field.type);
+                const field_enum = comptime std.meta.stringToEnum(FieldEnum, field.name).?;
                 // comptime fields are not actually stored in the struct
                 // fields of comptime types in comptime structs are handled in the same manner
                 const is_actual = comptime !field.is_comptime and !field_td.isComptimeOnly();
+                // check meta function to see if field should be handled in a special manner
                 const can_be_string = canBeString(field.type);
-                const is_string = can_be_string and meta.call("isFieldString", .{ td.type, field.name });
+                const is_string = can_be_string and meta.call("isFieldString", .{ td.type, field_enum });
                 const can_be_plain = !is_string and canBePlain(field.type);
-                const is_plain = can_be_plain and meta.call("isFieldPlain", .{ td.type, field.name });
+                const is_plain = can_be_plain and meta.call("isFieldPlain", .{ td.type, field_enum });
                 const supported = comptime field_td.isSupported();
                 try appendList(list, .{
                     .name = field.name,
@@ -564,12 +567,14 @@ fn Factory(comptime host: type, comptime module: type) type {
         }
 
         fn addUnionMembers(self: @This(), list: Value, comptime td: TypeData) !void {
+            const FieldEnum = std.meta.FieldEnum(td.type);
             inline for (std.meta.fields(td.type), 0..) |field, index| {
                 const field_td = tdb.get(field.type);
+                const field_enum = comptime std.meta.stringToEnum(FieldEnum, field.name).?;
                 const can_be_string = canBeString(field.type);
-                const is_string = can_be_string and meta.call("isFieldString", .{ td.type, field.name });
+                const is_string = can_be_string and meta.call("isFieldString", .{ td.type, field_enum });
                 const can_be_plain = !is_string and canBePlain(field.type);
-                const is_plain = can_be_plain and meta.call("isFieldPlain", .{ td.type, field.name });
+                const is_plain = can_be_plain and meta.call("isFieldPlain", .{ td.type, field_enum });
                 const supported = comptime field_td.isSupported();
                 try appendList(list, .{
                     .name = field.name,
@@ -725,8 +730,10 @@ fn Factory(comptime host: type, comptime module: type) type {
             const list = try createList(.{});
             switch (@typeInfo(td.type)) {
                 .@"struct", .@"union", .@"enum", .@"opaque" => if (comptime !td.isArguments()) {
+                    const DeclEnum = std.meta.DeclEnum(td.type);
                     inline for (comptime std.meta.declarations(td.type), 0..) |decl, index| {
                         if (comptime std.mem.startsWith(u8, decl.name, "meta(")) continue;
+                        const decl_enum = comptime std.meta.stringToEnum(DeclEnum, decl.name).?;
                         const decl_ptr = &@field(td.type, decl.name);
                         const decl_ptr_td = tdb.get(@TypeOf(decl_ptr));
                         if (comptime decl_ptr_td.isSupported()) {
@@ -755,9 +762,9 @@ fn Factory(comptime host: type, comptime module: type) type {
                                         },
                                         else => {
                                             const can_be_string = canBeString(DT);
-                                            const is_string = can_be_string and meta.call("isFieldString", .{ td.type, decl.name });
+                                            const is_string = can_be_string and meta.call("isDeclString", .{ td.type, decl_enum });
                                             const can_be_plain = !is_string and canBePlain(DT);
-                                            const is_plain = can_be_plain and meta.call("isFieldPlain", .{ td.type, decl.name });
+                                            const is_plain = can_be_plain and meta.call("isDeclPlain", .{ td.type, decl_enum });
                                             break :check .{ is_string, is_plain };
                                         },
                                     }

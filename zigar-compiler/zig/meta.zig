@@ -1,3 +1,5 @@
+const std = @import("std");
+
 const module = @import("module");
 
 pub fn call(comptime name: []const u8, comptime args: anytype) bool {
@@ -19,15 +21,23 @@ pub fn call(comptime name: []const u8, comptime args: anytype) bool {
 }
 
 const default = struct {
-    fn isFieldString(comptime CT: type, comptime field_name: []const u8) bool {
-        _ = CT;
-        _ = field_name;
+    fn isDeclString(comptime T: type, comptime decl: std.meta.DeclEnum(T)) bool {
+        _ = decl;
         return false;
     }
 
-    fn isFieldPlain(comptime CT: type, comptime field_name: []const u8) bool {
-        _ = CT;
-        _ = field_name;
+    fn isDeclPlain(comptime T: type, comptime decl: std.meta.DeclEnum(T)) bool {
+        _ = decl;
+        return false;
+    }
+
+    fn isFieldString(comptime T: type, comptime field: std.meta.FieldEnum(T)) bool {
+        _ = field;
+        return false;
+    }
+
+    fn isFieldPlain(comptime T: type, comptime field: std.meta.FieldEnum(T)) bool {
+        _ = field;
         return false;
     }
 
@@ -41,14 +51,14 @@ const default = struct {
         return false;
     }
 
-    fn isArgumentString(comptime FT: type, comptime arg_index: usize) bool {
-        _ = FT;
+    fn isArgumentString(comptime T: type, comptime arg_index: usize) bool {
+        _ = T;
         _ = arg_index;
         return false;
     }
 
-    fn isArgumentPlain(comptime FT: type, comptime arg_index: usize) bool {
-        _ = FT;
+    fn isArgumentPlain(comptime T: type, comptime arg_index: usize) bool {
+        _ = T;
         _ = arg_index;
         return false;
     }
