@@ -1,6 +1,10 @@
 ## 0.14.2
 
 * Implemented virtual file system
+* Overhauled metadata system
+* Added way to specific field/return value as plain JavaScript object
+* Added way to add imports and C source files without overriding default build file
+* Added asyncify/promisify function to WorkQueue
 * Added support for packed union
 * Added option to set optimization of NAPI addon
 * Changed how custom WASI interface is specified
