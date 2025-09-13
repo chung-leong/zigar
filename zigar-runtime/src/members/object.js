@@ -9,6 +9,8 @@ export default mixin({
     return bindSlot(member.slot, {
       get: (member.flags & MemberFlag.IsString)
         ? getString
+        : (member.flags & MemberFlag.IsPlain)
+        ? getPlain
         : (member.structure.flags & StructureFlag.HasValue) ? getValue : getObject,
       set: (member.flags & MemberFlag.IsReadOnly) ? throwReadOnly : setValue,
     });
@@ -17,6 +19,11 @@ export default mixin({
 
 function getValue(slot) {
   return getObject.call(this, slot).$;
+}
+
+function getPlain(slot) {
+  const retval = getObject.call(this, slot).$;
+  return (retval) ? retval.valueOf() : retval;
 }
 
 function getObject(slot) {

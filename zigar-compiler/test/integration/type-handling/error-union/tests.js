@@ -43,6 +43,8 @@ export function addTests(importModule, options) {
       expect(module.void_error).to.be.undefined;
       expect(() => JSON.stringify(module.negative_outcome)).to.throw();
       expect(JSON.stringify(module.positive_outcome)).to.equal('456');
+      expect(() => module.struct_error).to.throw();
+      expect(module.struct_value).to.eql({ integer: 1234, boolean: true, decimal: 3.5 });
     })
     it('should print error union arguments', async function() {
       const { print, Error } = await importTest('as-function-parameters');

@@ -751,24 +751,10 @@ fn Factory(comptime host: type, comptime module: type) type {
                             if (should_export) {
                                 checkStaticMember(DT);
                                 const decl_td = tdb.get(DT);
-                                const is_string, const is_plain = check: {
-                                    switch (@typeInfo(DT)) {
-                                        .@"fn" => |f| {
-                                            const can_be_string = canReturnString(f);
-                                            const is_string = can_be_string and meta.call("isRetvalString", .{decl_value});
-                                            const can_be_plain = !is_string and canReturnPlain(f);
-                                            const is_plain = can_be_plain and meta.call("isRetvalPlain", .{decl_value});
-                                            break :check .{ is_string, is_plain };
-                                        },
-                                        else => {
-                                            const can_be_string = canBeString(DT);
-                                            const is_string = can_be_string and meta.call("isDeclString", .{ td.type, decl_enum });
-                                            const can_be_plain = !is_string and canBePlain(DT);
-                                            const is_plain = can_be_plain and meta.call("isDeclPlain", .{ td.type, decl_enum });
-                                            break :check .{ is_string, is_plain };
-                                        },
-                                    }
-                                };
+                                const can_be_string = canBeString(DT);
+                                const is_string = can_be_string and meta.call("isDeclString", .{ td.type, decl_enum });
+                                const can_be_plain = !is_string and canBePlain(DT);
+                                const is_plain = can_be_plain and meta.call("isDeclPlain", .{ td.type, decl_enum });
                                 try appendList(list, .{
                                     .name = decl.name,
                                     .type = MemberType.object,
@@ -1491,24 +1477,17 @@ fn canBeString(comptime T: type) bool {
         .array => |pt| pt.child == u8 or pt.child == u16,
         .optional => |op| canBeString(op.child),
         .error_union => |eu| canBeString(eu.payload),
-        else => false,
-    };
-}
-
-fn canReturnString(comptime f: std.builtin.Type.Fn) bool {
-    if (f.return_type) |RT| {
-        if (canBeString(RT)) return true;
-    }
-    inline for (f.params) |param| {
-        if (param.type) |PT| {
-            if (comptime types.getInternalType(PT)) |internal_type| {
-                if (internal_type == .promise and internal_type == .generator) {
-                    if (canBeString(PT.payload)) return true;
+        .@"fn" => |f| inline for (f.params) |param| {
+            if (param.type) |PT| {
+                if (comptime types.getInternalType(PT)) |internal_type| {
+                    if (internal_type == .promise or internal_type == .generator) {
+                        if (canBeString(PT.payload)) break true;
+                    }
                 }
             }
-        }
-    }
-    return false;
+        } else if (f.return_type) |RT| canBeString(RT) else false,
+        else => false,
+    };
 }
 
 fn canBePlain(comptime T: type) bool {
@@ -1521,22 +1500,15 @@ fn canBePlain(comptime T: type) bool {
         .@"struct", .@"union", .array, .vector, .@"enum" => true,
         .optional => |op| canBePlain(op.child),
         .error_union => |eu| canBePlain(eu.payload),
-        else => false,
-    };
-}
-
-fn canReturnPlain(comptime f: std.builtin.Type.Fn) bool {
-    if (f.return_type) |RT| {
-        if (canBePlain(RT)) return true;
-    }
-    inline for (f.params) |param| {
-        if (param.type) |PT| {
-            if (comptime types.getInternalType(PT)) |internal_type| {
-                if (internal_type == .promise and internal_type == .generator) {
-                    if (canBePlain(PT.payload)) return true;
+        .@"fn" => |f| inline for (f.params) |param| {
+            if (param.type) |PT| {
+                if (comptime types.getInternalType(PT)) |internal_type| {
+                    if (internal_type == .promise or internal_type == .generator) {
+                        if (canBePlain(PT.payload)) break true;
+                    }
                 }
             }
-        }
-    }
-    return false;
+        } else if (f.return_type) |RT| canBePlain(RT) else false,
+        else => false,
+    };
 }

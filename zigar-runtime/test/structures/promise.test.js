@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { FINALIZE, MEMORY, PROMISE, RETURN, STRING_RETVAL, ZIG } from '../../src/symbols.js';
+import { FINALIZE, MEMORY, PROMISE, RETURN, TRANSFORM, ZIG } from '../../src/symbols.js';
 import { usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
@@ -32,7 +32,7 @@ describe('Structure: promise', function() {
       const { ptr, callback } = env.createPromise(structure, args, undefined);
       expect(args[PROMISE]).to.be.a('promise');
       args[FINALIZE] = () => {};
-      args[STRING_RETVAL] = true;
+      args[TRANSFORM] = (retval) => retval.string;
       callback(ptr, { string: 'Hello' });
       const result = await args[PROMISE];
       expect(result).to.equal('Hello');

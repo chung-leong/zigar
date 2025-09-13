@@ -14,10 +14,27 @@ pub fn print() void {
 
 pub var string: [5]u8 = .{ 'H', 'e', 'l', 'l', 'o' };
 
+pub var plain_array: [5]u8 = .{ 'H', 'e', 'l', 'l', 'o' };
+
+pub var complex_array: [3]struct {
+    int: i32,
+    float: f64,
+} = .{
+    .{ .int = 1234, .float = 3.125 },
+    .{ .int = 333, .float = 0.1 },
+    .{ .int = 10000, .float = 123.456 },
+};
+
 const ns = @This();
 pub const @"meta(zigar)" = struct {
     pub fn isDeclString(comptime T: type, comptime decl: std.meta.DeclEnum(T)) bool {
-        _ = decl;
-        return T == ns;
+        return T == ns and decl == .string;
+    }
+
+    pub fn isDeclPlain(comptime T: type, comptime decl: std.meta.DeclEnum(T)) bool {
+        return T == ns and switch (decl) {
+            .plain_array, .complex_array => true,
+            else => false,
+        };
     }
 };

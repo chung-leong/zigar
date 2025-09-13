@@ -2,8 +2,8 @@ import { MemberType, StructurePurpose, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustArgumentError, Exit, UndefinedArgument, ZigError } from '../errors.js';
 import {
-  ALLOCATOR, ATTRIBUTES, COPY, FINALIZE, GENERATOR, MEMORY, PROMISE, RETURN, SETTERS,
-  STRING_RETVAL, VISIT
+  ALLOCATOR, ATTRIBUTES, COPY, FINALIZE, GENERATOR, MEMORY, PROMISE, RETURN, SETTERS, TRANSFORM,
+  VISIT,
 } from '../symbols.js';
 
 export default mixin({
@@ -154,6 +154,7 @@ export default mixin({
         argStruct[COPY]?.(this.findShadowView(argStruct[MEMORY]));
       }
     }
+    const transform = fn[TRANSFORM];
     if (isAsync) {
       let retval = null;
       // if a function has returned a value or failed synchronmously, the promise is resolved immediately
@@ -165,13 +166,15 @@ export default mixin({
         }
       }
       if (retval != null) {
-        if (fn[STRING_RETVAL] && retval) {
-          retval = retval.string;
+        if (transform) {
+          retval = transform(retval);
         }
         argStruct[RETURN](retval);
-      } else if (fn[STRING_RETVAL]) {
-        // so the promise or generator knows that a string is wanted 
-        argStruct[STRING_RETVAL] = true;
+      } else {
+        if (transform) {
+          // so the promise or generator can perform the transform 
+          argStruct[TRANSFORM] = transform;
+        }
       }
       // this would be undefined if a callback function is used instead
       return argStruct[PROMISE] ?? argStruct[GENERATOR];
@@ -179,7 +182,7 @@ export default mixin({
       finalize();
       try {
         const { retval } = argStruct;
-        return (fn[STRING_RETVAL] && retval) ? retval.string : retval;
+        return (transform) ? transform(retval) : retval;
       } catch (err) {
         throw new ZigError(err, 1);
       }

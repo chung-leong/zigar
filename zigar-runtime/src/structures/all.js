@@ -3,8 +3,8 @@ import { mixin } from '../environment.js';
 import { MissingInitializers, NoInitializer, NoProperty } from '../errors.js';
 import {
   ALIGN, CACHE, CAST, CONST_TARGET, COPY, ENTRIES, ENVIRONMENT, FINALIZE, FLAGS, INITIALIZE, KEYS,
-  MEMORY, PROPS, RESTORE, RESTRICT, SETTERS, SHAPE, SIGNATURE, SIZE, SLOTS, STRING_RETVAL, TYPE,
-  TYPED_ARRAY, UPDATE
+  MEMORY, PROPS, RESTORE, RESTRICT, SETTERS, SHAPE, SIGNATURE, SIZE, SLOTS, TRANSFORM, TYPE,
+  TYPED_ARRAY, UPDATE,
 } from '../symbols.js';
 import { defineProperties, defineProperty, defineValue, ObjectCache } from '../utils.js';
 
@@ -89,7 +89,9 @@ export default mixin({
         if (member.structure.type === StructureType.Function) {
           let fn = template[SLOTS][slot];
           if (flags & MemberFlag.IsString) {
-            fn[STRING_RETVAL] = true;
+            fn[TRANSFORM] = (retval) => retval.string;
+          } else if (flags & MemberFlag.IsPlain) {
+            fn[TRANSFORM] = (retval) => retval.valueOf();
           }
           staticDescriptors[name] = defineValue(fn);
           // provide a name if one isn't assigned yet

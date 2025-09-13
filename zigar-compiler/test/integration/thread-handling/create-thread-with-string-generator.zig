@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const zigar = @import("zigar");
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -28,8 +29,12 @@ pub fn shutdown() void {
     zigar.thread.end();
 }
 
+const module = @This();
 pub const @"meta(zigar)" = struct {
-    pub fn isRetvalString(comptime func: anytype) bool {
-        return func == spawn;
+    pub fn isDeclString(comptime T: type, comptime decl: std.meta.DeclEnum(T)) bool {
+        return switch (T) {
+            module => decl == .spawn,
+            else => false,
+        };
     }
 };

@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { FINALIZE, GENERATOR, MEMORY, RESET, RETURN, STRING_RETVAL, THROWING, YIELD } from '../../src/symbols.js';
+import { FINALIZE, GENERATOR, MEMORY, RESET, RETURN, THROWING, TRANSFORM, YIELD } from '../../src/symbols.js';
 import { captureError, delay } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -40,7 +40,7 @@ describe('Structure: generator', function() {
       }      
       const { ptr, callback } = env.createGenerator(structure, args, undefined);
       args[FINALIZE] = () => {};
-      args[STRING_RETVAL] = true;
+      args[TRANSFORM] = (retval) => retval.string;
       setTimeout(() => callback(ptr, { string: 'Hello' }), 10);
       setTimeout(() => callback(ptr, { string: 'world' }), 20);
       setTimeout(() => callback({ '*': { [MEMORY]: ptr } }, null), 30);

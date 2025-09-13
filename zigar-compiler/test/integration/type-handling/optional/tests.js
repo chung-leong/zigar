@@ -32,6 +32,8 @@ export function addTests(importModule, options) {
       expect(() => module.f64_empty = 3.14).to.throw();
       expect(JSON.stringify(module.bool_empty)).to.equal('null');
       expect(JSON.stringify(module.bool_value)).to.equal('true');
+      expect(module.struct_empty).to.be.null;
+      expect(module.struct_value).to.eql({ integer: 1234, boolean: true, decimal: 3.5 });
     })
     it('should print optional arguments', async function() {
       const { print } = await importTest('as-function-parameters');

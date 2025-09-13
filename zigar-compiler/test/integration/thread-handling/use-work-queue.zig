@@ -39,8 +39,19 @@ const ns = struct {
     }
 };
 
+const module = @This();
 pub const @"meta(zigar)" = struct {
-    pub fn isRetvalString(comptime func: anytype) bool {
-        return @TypeOf(func) == @TypeOf(returnString) and func == returnString;
+    pub fn isDeclString(comptime T: type, comptime decl: std.meta.DeclEnum(T)) bool {
+        return switch (T) {
+            module => decl == .returnString,
+            else => false,
+        };
+    }
+
+    pub fn isDeclPlain(comptime T: type, comptime decl: std.meta.DeclEnum(T)) bool {
+        return switch (T) {
+            module => decl == .returnPoint,
+            else => false,
+        };
     }
 };

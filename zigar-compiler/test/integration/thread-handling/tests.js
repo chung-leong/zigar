@@ -280,7 +280,7 @@ export function addTests(importModule, options) {
         const int = await returnInt();
         expect(int).to.equal(1234);
         const point = await returnPoint();
-        expect(point.valueOf()).to.eql({ x: 0.1234, y: 0.4567 });
+        expect(point).to.eql({ x: 0.1234, y: 0.4567 });
       } finally {
         await shutdown();
       }

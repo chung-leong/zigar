@@ -1,3 +1,5 @@
+const std = @import("std");
+
 pub fn getBytes() []const u8 {
     return "World";
 }
@@ -7,7 +9,7 @@ pub fn getText() []const u8 {
 }
 
 pub const @"meta(zigar)" = struct {
-    pub fn isRetvalString(comptime func: anytype) bool {
-        return @TypeOf(func) == @TypeOf(getText) and func == getText;
+    pub fn isDeclString(comptime T: type, comptime decl: std.meta.DeclEnum(T)) bool {
+        return decl == .getText;
     }
 };

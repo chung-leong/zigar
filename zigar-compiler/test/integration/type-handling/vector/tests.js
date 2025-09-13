@@ -14,7 +14,7 @@ export function addTests(importModule, options) {
   describe('Vector', function() {
     this.timeout(0);
     it('should handle vector as static variables', async function() {
-      const { default: module } = await importTest('as-static-variables');
+      const { default: module, v3 } = await importTest('as-static-variables');
       expect([ ...module.v1 ]).to.eql([ 1, 2, 3, 4 ]);
       module.v2 = [ 4, 5, 6 ];
       expect([ ...module.v2 ]).to.eql([ 4, 5, 6 ]);
@@ -22,6 +22,7 @@ export function addTests(importModule, options) {
       expect(lines).to.eql([ '{ 4, 5, 6 }' ]);
       expect(module.v1.valueOf()).to.eql([ 1, 2, 3, 4 ]);
       expect(JSON.stringify(module.v1)).to.equal('[1,2,3,4]');
+      expect(v3).to.eql([ 1, 2, 3, 4 ]);
     })
     it('should print vector arguments', async function() {
       const { print } = await importTest('as-function-parameters');

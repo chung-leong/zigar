@@ -48,6 +48,12 @@ export function addTests(importModule, options) {
       const [ afterTA ] = await capture(() => print());
       expect(afterTA).to.equal('{ 1, 2, 3, 4 }');
       expect(module.string).to.equal('Hello');
+      expect(module.plain_array).to.eql([ 72, 101, 108, 108, 111 ]);
+      expect(module.complex_array).to.eql([
+        { int: 1234, float: 3.125 },
+        { int: 333, float: 0.1 },
+        { int: 10000, float: 123.456 },
+      ]);
     })
     it('should print array arguments', async function() {
       const { print } = await importTest('as-function-parameters');
@@ -96,6 +102,8 @@ export function addTests(importModule, options) {
       expect(module.struct_b.bar.string).to.equal('Hello');
       expect(StructC.foo).to.equal('Hello');
       expect(StructC.bar.string).to.equal('Hello');
+      expect(module.plain_struct_b).to.eql({ foo: 'Hello', bar: [ 72, 101, 108, 108, 111 ] });
+      expect(module.plain_struct_a).to.eql({ array1: [ 10, 20, 30, 40 ], array2: [ 11, 21, 31, 41 ] });
     })
     it('should should not compile code with array in packed struct', async function() {
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;

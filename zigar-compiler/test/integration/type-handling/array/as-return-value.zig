@@ -1,3 +1,5 @@
+const std = @import("std");
+
 pub fn getArray() [4]i32 {
     return .{ 1, 2, 3, 4 };
 }
@@ -7,7 +9,7 @@ pub fn getString() [5]u8 {
 }
 
 pub const @"meta(zigar)" = struct {
-    pub fn isRetvalString(comptime _: anytype) bool {
+    pub fn isDeclString(comptime T: type, comptime _: std.meta.DeclEnum(T)) bool {
         return true;
     }
 };

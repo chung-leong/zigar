@@ -473,6 +473,9 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     };
                     result.* = if ((mode & implied_mode) == mode) 0 else intFromError(.ACCES);
                     return true;
+                } else if (err != .OPNOTSUPP or isPrivateDescriptor(dirfd)) {
+                    result.* = intFromError(err);
+                    return true;
                 }
             }
             return false;
@@ -710,8 +713,10 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 } };
                 const err = Host.redirectSyscall(&call);
                 if (err == .SUCCESS) copyStat(buf, &call.u.stat.stat);
-                result.* = intFromError(err);
-                return true;
+                if (err != .OPNOTSUPP or isPrivateDescriptor(dirfd)) {
+                    result.* = intFromError(err);
+                    return true;
+                }
             }
             return false;
         }
@@ -1651,12 +1656,12 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.__fxstat64(ver, fd, buf);
         }
 
-        pub fn __fxstatat(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *Stat) callconv(.c) c_int {
+        pub fn __fxstatat(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *Stat, flags: c_int) callconv(.c) c_int {
             var result: c_int = undefined;
-            if (redirector.newfstatat(dirfd, path, buf, AT.SYMLINK_FOLLOW, &result)) {
+            if (redirector.newfstatat(dirfd, path, buf, flags, &result)) {
                 return saveError(result);
             }
-            return Original.__fxstatat(ver, dirfd, path, buf);
+            return Original.__fxstatat(ver, dirfd, path, buf, flags);
         }
 
         pub fn __fxstatat64(ver: c_int, dirfd: c_int, path: [*:0]const u8, buf: *Stat) callconv(.c) c_int {

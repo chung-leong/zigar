@@ -49,7 +49,6 @@ export const ALLOCATOR = symbol('allocator');
 export const FALLBACK = symbol('fallback');
 export const SIGNATURE = symbol('signature');
 export const CONTROLLER = symbol('controller');
-export const STRING_RETVAL = symbol('string retval');
 
 export const UPDATE = symbol('update');
 export const RESTORE = symbol('restore');
@@ -64,3 +63,4 @@ export const FINALIZE = symbol('finalize');
 export const CAST = symbol('cast');
 export const RETURN = symbol('return');
 export const YIELD = symbol('yield');
+export const TRANSFORM = symbol('transform');
