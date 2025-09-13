@@ -11,3 +11,13 @@ pub const float64_array4x4: [4][4]f64 = .{
 pub fn print() void {
     std.debug.print("{d}", .{int32_array4});
 }
+
+pub var string: [5]u8 = .{ 'H', 'e', 'l', 'l', 'o' };
+
+const ns = @This();
+pub const @"meta(zigar)" = struct {
+    pub fn isFieldString(comptime CT: type, comptime field_name: []const u8) bool {
+        _ = field_name;
+        return CT == ns;
+    }
+};

@@ -19,12 +19,7 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
     work_queue.deinitAsync(promise);
 }
 
-pub fn hash(
-    file: std.fs.File,
-    promise: zigar.function.PromiseOf(ns.hash),
-) !void {
-    try work_queue.push(ns.hash, .{file}, promise);
-}
+pub const hash = work_queue.promisify(ns.hash);
 
 const ns = struct {
     pub fn hash(file: std.fs.File) ![std.crypto.hash.Sha1.digest_length * 2]u8 {

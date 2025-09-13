@@ -117,6 +117,7 @@ export const MemberFlag = {
   IsSentinel:       0x0020,
   IsBackingInt:     0x0040,
   IsString:         0x0080,
+  IsPlain:          0x0100,
 };
 
 export const ModuleAttribute = {

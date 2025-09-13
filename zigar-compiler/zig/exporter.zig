@@ -499,13 +499,20 @@ fn Factory(comptime host: type, comptime module: type) type {
             const FT = td.parent_type.?;
             inline for (std.meta.fields(td.type), 0..) |field, index| {
                 const field_td = tdb.get(field.type);
-                const is_string = comptime canBeString(field.type) and meta.call("isArgumentString", .{ FT, index });
+                // check if FT is used as a function pointer
+                const PT = *const FT;
+                const as_ptr = comptime tdb.has(PT) and tdb.get(PT).isInUse() and !td.isVariadic();
+                const can_be_string = as_ptr and canBeString(field.type);
+                const is_string = can_be_string and meta.call("isArgumentString", .{ FT, index });
+                const can_be_plain = as_ptr and !is_string and canBePlain(field.type);
+                const is_plain = can_be_plain and meta.call("isArgumentPlain", .{ FT, index });
                 try appendList(list, .{
                     .name = field.name,
                     .type = getMemberType(field_td, field.is_comptime),
                     .flags = MemberFlags{
                         .is_required = true,
                         .is_string = is_string,
+                        .is_plain = is_plain,
                     },
                     .bitOffset = @bitOffsetOf(td.type, field.name),
                     .bitSize = field_td.getBitSize(),
@@ -522,7 +529,10 @@ fn Factory(comptime host: type, comptime module: type) type {
                 // comptime fields are not actually stored in the struct
                 // fields of comptime types in comptime structs are handled in the same manner
                 const is_actual = comptime !field.is_comptime and !field_td.isComptimeOnly();
-                const is_string = comptime canBeString(field.type) and meta.call("isFieldString", .{ td.type, field.name });
+                const can_be_string = canBeString(field.type);
+                const is_string = can_be_string and meta.call("isFieldString", .{ td.type, field.name });
+                const can_be_plain = !is_string and canBePlain(field.type);
+                const is_plain = can_be_plain and meta.call("isFieldPlain", .{ td.type, field.name });
                 const supported = comptime field_td.isSupported();
                 try appendList(list, .{
                     .name = field.name,
@@ -531,6 +541,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .is_read_only = !is_actual,
                         .is_required = is_actual and field.default_value_ptr == null,
                         .is_string = is_string,
+                        .is_plain = is_plain,
                     },
                     .bitOffset = if (is_actual) @bitOffsetOf(td.type, field.name) else null,
                     .bitSize = if (is_actual) field_td.getBitSize() else null,
@@ -555,7 +566,10 @@ fn Factory(comptime host: type, comptime module: type) type {
         fn addUnionMembers(self: @This(), list: Value, comptime td: TypeData) !void {
             inline for (std.meta.fields(td.type), 0..) |field, index| {
                 const field_td = tdb.get(field.type);
-                const is_string = comptime canBeString(field.type) and meta.call("isFieldString", .{ td.type, field.name });
+                const can_be_string = canBeString(field.type);
+                const is_string = can_be_string and meta.call("isFieldString", .{ td.type, field.name });
+                const can_be_plain = !is_string and canBePlain(field.type);
+                const is_plain = can_be_plain and meta.call("isFieldPlain", .{ td.type, field.name });
                 const supported = comptime field_td.isSupported();
                 try appendList(list, .{
                     .name = field.name,
@@ -563,6 +577,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .flags = MemberFlags{
                         .is_read_only = field_td.isComptimeOnly(),
                         .is_string = is_string,
+                        .is_plain = is_plain,
                     },
                     .bitOffset = td.getContentBitOffset(),
                     .bitSize = field_td.getBitSize(),
@@ -729,16 +744,32 @@ fn Factory(comptime host: type, comptime module: type) type {
                             if (should_export) {
                                 checkStaticMember(DT);
                                 const decl_td = tdb.get(DT);
+                                const is_string, const is_plain = check: {
+                                    switch (@typeInfo(DT)) {
+                                        .@"fn" => |f| {
+                                            const can_be_string = canReturnString(f);
+                                            const is_string = can_be_string and meta.call("isRetvalString", .{decl_value});
+                                            const can_be_plain = !is_string and canReturnPlain(f);
+                                            const is_plain = can_be_plain and meta.call("isRetvalPlain", .{decl_value});
+                                            break :check .{ is_string, is_plain };
+                                        },
+                                        else => {
+                                            const can_be_string = canBeString(DT);
+                                            const is_string = can_be_string and meta.call("isFieldString", .{ td.type, decl.name });
+                                            const can_be_plain = !is_string and canBePlain(DT);
+                                            const is_plain = can_be_plain and meta.call("isFieldPlain", .{ td.type, decl.name });
+                                            break :check .{ is_string, is_plain };
+                                        },
+                                    }
+                                };
                                 try appendList(list, .{
                                     .name = decl.name,
                                     .type = MemberType.object,
                                     .flags = MemberFlags{
                                         .is_read_only = decl_ptr_td.isConst(),
                                         .is_method = decl_td.isMethodOf(td.type),
-                                        .is_string = switch (@typeInfo(DT)) {
-                                            .@"fn" => |f| comptime canReturnString(f) and meta.call("isRetvalString", .{decl_value}),
-                                            else => comptime canBeString(DT) and meta.call("isFieldString", .{ td.type, decl.name }),
-                                        },
+                                        .is_string = is_string,
+                                        .is_plain = is_plain,
                                     },
                                     .slot = index,
                                     .structure = try self.getStructure(DT),
@@ -1439,12 +1470,18 @@ const MemberFlags = packed struct(u32) {
     is_backing_int: bool = false,
     is_string: bool = false,
 
-    _: u24 = 0,
+    is_plain: bool = false,
+    _: u23 = 0,
 };
 
 fn canBeString(comptime T: type) bool {
     return switch (@typeInfo(T)) {
-        inline .pointer, .array => |pt| pt.child == u8 or pt.child == u16,
+        .pointer => |pt| switch (pt.size) {
+            .one => canBeString(pt.child),
+            .many, .c => if (pt.sentinel_ptr != null) pt.child == u8 or pt.child == u16 else false,
+            .slice => pt.child == u8 or pt.child == u16,
+        },
+        .array => |pt| pt.child == u8 or pt.child == u16,
         .optional => |op| canBeString(op.child),
         .error_union => |eu| canBeString(eu.payload),
         else => false,
@@ -1457,12 +1494,39 @@ fn canReturnString(comptime f: std.builtin.Type.Fn) bool {
     }
     inline for (f.params) |param| {
         if (param.type) |PT| {
-            if (types.getInternalType(PT)) |internal_type| {
-                switch (internal_type) {
-                    .promise, .generator => {
-                        if (canBeString(PT.payload)) return true;
-                    },
-                    else => {},
+            if (comptime types.getInternalType(PT)) |internal_type| {
+                if (internal_type == .promise and internal_type == .generator) {
+                    if (canBeString(PT.payload)) return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+fn canBePlain(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .pointer => |pt| switch (pt.size) {
+            .one, .c => canBePlain(pt.child),
+            .slice => true,
+            else => false,
+        },
+        .@"struct", .@"union", .array, .vector, .@"enum" => true,
+        .optional => |op| canBePlain(op.child),
+        .error_union => |eu| canBePlain(eu.payload),
+        else => false,
+    };
+}
+
+fn canReturnPlain(comptime f: std.builtin.Type.Fn) bool {
+    if (f.return_type) |RT| {
+        if (canBePlain(RT)) return true;
+    }
+    inline for (f.params) |param| {
+        if (param.type) |PT| {
+            if (comptime types.getInternalType(PT)) |internal_type| {
+                if (internal_type == .promise and internal_type == .generator) {
+                    if (canBePlain(PT.payload)) return true;
                 }
             }
         }

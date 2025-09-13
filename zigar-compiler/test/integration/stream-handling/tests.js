@@ -2168,7 +2168,7 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target === 'win32').
     it('should set mtime and atime of file using posix function', async function() {
-      const { __zigar, setTimes } = await importTest('set-times-of-file-in-file-system-with-posix-function', { useLibc: true });
+      const { __zigar, setTimes } = await importTest('set-times-of-file-in-file-system-with-posix-functions', { useLibc: true });
       const path = absolute(`./data/settimes_test.txt`);
       await writeFile(path, 'Hello world');
       try {

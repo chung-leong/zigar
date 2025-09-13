@@ -47,6 +47,7 @@ export function addTests(importModule, options) {
       module.int32_array4.typedArray = new Int32Array([ 1, 2, 3, 4 ]);
       const [ afterTA ] = await capture(() => print());
       expect(afterTA).to.equal('{ 1, 2, 3, 4 }');
+      expect(module.string).to.equal('Hello');
     })
     it('should print array arguments', async function() {
       const { print } = await importTest('as-function-parameters');

@@ -25,12 +25,29 @@ const default = struct {
         return false;
     }
 
+    fn isFieldPlain(comptime CT: type, comptime field_name: []const u8) bool {
+        _ = CT;
+        _ = field_name;
+        return false;
+    }
+
     fn isRetvalString(comptime func: anytype) bool {
         _ = func;
         return false;
     }
 
+    fn isRetvalPlain(comptime func: anytype) bool {
+        _ = func;
+        return false;
+    }
+
     fn isArgumentString(comptime FT: type, comptime arg_index: usize) bool {
+        _ = FT;
+        _ = arg_index;
+        return false;
+    }
+
+    fn isArgumentPlain(comptime FT: type, comptime arg_index: usize) bool {
         _ = FT;
         _ = arg_index;
         return false;
