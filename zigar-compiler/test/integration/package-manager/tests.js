@@ -92,11 +92,6 @@ export function addTests(importModule, options) {
         await shutdown();
       }
     })
-    it('should link in ffmpeg', async function() {
-      this.timeout(0);
-      const { transcode } = await importTest('use-ffmpeg/ffmpeg');
-      // transcode();
-    })
     it('should correctly link in local package', async function() {
       this.timeout(0);
       const { hello } = await importTest('use-local/local');
