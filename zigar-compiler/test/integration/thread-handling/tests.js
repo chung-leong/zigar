@@ -105,7 +105,23 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
-    it('should receive string from generator', async function() {
+    it('should receive plain object from promise', async function() {
+      const {
+        startup,
+        spawn,
+        shutdown,
+      } = await importTest('create-thread-with-plain-object-promise', { multithreaded: true });
+      startup();
+      try {
+        const promise = spawn();
+        expect(promise).to.be.a('promise');
+        const result = await promise;
+        expect(result).to.eql({ x: 123n, y: 456n });
+      } finally {
+        shutdown();
+      }
+    })
+    it('should receive strings from generator', async function() {
       const {
         startup,
         spawn,
@@ -125,7 +141,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
-    it('should receive string from allocating generator', async function() {
+    it('should receive strings from allocating generator', async function() {
       const {
         startup,
         spawn,
@@ -140,6 +156,32 @@ export function addTests(importModule, options) {
           expect(s).to.equal('Hello world');
         }
         expect(list).to.have.lengthOf(5);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should receive plain objects from generator', async function() {
+      const {
+        startup,
+        spawn,
+        shutdown,
+      } = await importTest('create-thread-with-plain-object-generator', { multithreaded: true });
+      startup();
+      try {
+        const generator = spawn();
+        expect(generator[Symbol.asyncIterator]).to.be.a('function');
+        const list = [];
+        for await (const s of generator) {
+          list.push(s);
+        }
+        expect(list).to.have.lengthOf(5);
+        expect(list).to.eql([
+          { x: 0n, y: 0n },
+          { x: 10n, y: 100n },
+          { x: 20n, y: 200n },
+          { x: 30n, y: 300n },
+          { x: 40n, y: 400n }
+        ]);
       } finally {
         shutdown();
       }
