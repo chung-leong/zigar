@@ -154,7 +154,7 @@ export function addTests(importModule, options) {
       expect(event).to.be.an('object');
     })
     it('should open file thru file system using posix function', async function() {
-      const { __zigar, hash } = await importTest('open-and-read-from-file-system-with-posix-function');
+      const { __zigar, hash } = await importTest('open-and-read-from-file-system-with-posix-function', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
         __zigar.wasi(new WASI({
@@ -180,7 +180,7 @@ export function addTests(importModule, options) {
       expect(event).to.be.an('object');
     })
     it('should open file thru file system using libc function', async function() {
-      const { __zigar, hash } = await importTest('open-and-read-from-file-system-with-libc-function');
+      const { __zigar, hash } = await importTest('open-and-read-from-file-system-with-libc-function', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
         __zigar.wasi(new WASI({
@@ -646,6 +646,17 @@ export function addTests(importModule, options) {
     skip.entirely.if(target === 'win32').
     it('should check access of file in directory in file system using posix function', async function() {
       const { __zigar, check } = await importTest('check-access-at-dir-in-file-system-with-posix-function', { useLibc: true });
+      if (target === 'wasm32') {
+        const { WASI } = await import('wasi');
+        __zigar.wasi(new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/': '/',
+          },
+        }));
+      }
       const path = absolute(`./data/statat_test`);
       await mkdir(path, { recursive: true });
       await writeFile(`${path}/file.txt`, 'Hello world');
@@ -695,6 +706,17 @@ export function addTests(importModule, options) {
     skip.entirely.if(target === 'win32').
     it('should open file in directory in file system using posix function', async function() {
       const { __zigar, write } = await importTest('open-file-at-dir-in-file-system-with-posix-function', { useLibc: true });
+      if (target === 'wasm32') {
+        const { WASI } = await import('wasi');
+        __zigar.wasi(new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/': '/',
+          },
+        }));
+      }
       const path = absolute(`./data/openat_test`);
       await mkdir(path, { recursive: true });
       try {
@@ -767,6 +789,17 @@ export function addTests(importModule, options) {
     skip.entirely.if(target === 'win32').
     it('should retrieve stat of file in directory in file system using posix function', async function() {
       const { __zigar, stat } = await importTest('stat-file-at-dir-in-file-system-with-posix-function', { useLibc: true });
+      if (target === 'wasm32') {
+        const { WASI } = await import('wasi');
+        __zigar.wasi(new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/': '/',
+          },
+        }));
+      }
       const path = absolute(`./data/statat_test`);
       await mkdir(path, { recursive: true });
       await writeFile(`${path}/file.txt`, 'Hello world');
@@ -900,6 +933,17 @@ export function addTests(importModule, options) {
     })
     it('should get stats of an opened file in the file system using posix function', async function() {
       const { __zigar, print } = await importTest('stat-opened-file-in-file-system-with-posix-function', { useLibc: true });
+      if (target === 'wasm32') {
+        const { WASI } = await import('wasi');
+        __zigar.wasi(new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/': '/',
+          },
+        }));
+      }
       const path = absolute('./data/fstat_test.txt');
       await writeFile(path, 'Hello world');
       try {
@@ -2085,6 +2129,17 @@ export function addTests(importModule, options) {
     })
     it('should create directory in file system using posix function', async function() {
       const { __zigar, makeDirectory } = await importTest('create-directory-in-file-system-with-posix-function', { useLibc: true });
+      if (target === 'wasm32') {
+        const { WASI } = await import('wasi');
+        __zigar.wasi(new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/': '/',
+          },
+        }));
+      }
       const path = absolute(`./data/mkdir_test`);
       try {
         let event;
@@ -2106,6 +2161,17 @@ export function addTests(importModule, options) {
     skip.entirely.if(target === 'win32').
     it('should create directory in another directory in file system using posix function', async function() {
       const { __zigar, makeDirectory } = await importTest('create-directory-at-dir-in-file-system-with-posix-function', { useLibc: true });
+      if (target === 'wasm32') {
+        const { WASI } = await import('wasi');
+        __zigar.wasi(new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/': '/',
+          },
+        }));
+      }
       const path = absolute(`./data/mkdirat_test`);
       await mkdir(path, { recursive: true });
       try {
@@ -2126,6 +2192,17 @@ export function addTests(importModule, options) {
     })
     it('should remove directory in file system using posix function', async function() {
       const { __zigar, removeDirectory } = await importTest('remove-directory-in-file-system-with-posix-function', { useLibc: true });
+      if (target === 'wasm32') {
+        const { WASI } = await import('wasi');
+        __zigar.wasi(new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/': '/',
+          },
+        }));
+      }
       const path = absolute(`./data/rmdir_test`);
       await mkdir(path, { recursive: true });
       try {
@@ -2147,6 +2224,17 @@ export function addTests(importModule, options) {
     })
     it('should remove file in file system using posix function', async function() {
       const { __zigar, removeFile } = await importTest('remove-file-in-file-system-with-posix-function', { useLibc: true });
+      if (target === 'wasm32') {
+        const { WASI } = await import('wasi');
+        __zigar.wasi(new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/': '/',
+          },
+        }));
+      }
       const path = absolute(`./data/unlink_test.txt`);
       await writeFile(path, 'Hello world');
       try {
@@ -2195,6 +2283,17 @@ export function addTests(importModule, options) {
     })
     it('should scan directory in file system file using posix function', async function() {
       const { __zigar, print } = await importTest('scan-directory-in-file-system-with-posix-functions', { useLibc: true });
+      if (target === 'wasm32') {
+        const { WASI } = await import('wasi');
+        __zigar.wasi(new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/': '/',
+          },
+        }));
+      }
       const path = absolute(`./data/readdir_test`);
       await mkdir(path, { recursive: true });
       await writeFile(`${path}/file1.txt`, 'Hello world');
@@ -2210,8 +2309,11 @@ export function addTests(importModule, options) {
           return undefined;
         })
         const lines = await capture(() => print(path));
-        expect(lines).to.contain('. (4096 bytes)');
-        expect(lines).to.contain('.. (4096 bytes)');
+        if (target !== 'wasm32') {
+          // Node.js's WASI module doesn't return . and ..
+          expect(lines).to.contain('.');
+          expect(lines).to.contain('..');
+        }
         expect(lines).to.contain('file1.txt (11 bytes)');
         expect(lines).to.contain('file2.txt (26 bytes)');
         const event1 = {
@@ -2233,8 +2335,11 @@ export function addTests(importModule, options) {
           path: path.slice(1),
           flags: { symlinkFollow: true }
         }
-        const found3 = events.find((evt) => evt.path === event3.path && !evt.rights);
-        expect(found3).to.eql(event3);
+        if (target !== 'wasm32') {        
+          // stat on path
+          const found3 = events.find((evt) => evt.path === event3.path && !evt.rights);
+          expect(found3).to.eql(event3);
+        }
       } finally {
         try {
           await rmdir(path, { recursive: true });

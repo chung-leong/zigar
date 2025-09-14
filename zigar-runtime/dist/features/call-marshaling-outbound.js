@@ -1,7 +1,7 @@
 import { StructureType, StructurePurpose, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ZigError, UndefinedArgument, adjustArgumentError, Exit } from '../errors.js';
-import { ATTRIBUTES, MEMORY, FINALIZE, COPY, STRING_RETVAL, RETURN, PROMISE, GENERATOR, SETTERS, VISIT, ALLOCATOR } from '../symbols.js';
+import { ATTRIBUTES, MEMORY, FINALIZE, COPY, TRANSFORM, RETURN, PROMISE, GENERATOR, SETTERS, VISIT, ALLOCATOR } from '../symbols.js';
 
 var callMarshalingOutbound = mixin({
   createOutboundCaller(thunk, ArgStruct) {
@@ -139,6 +139,7 @@ var callMarshalingOutbound = mixin({
         argStruct[COPY]?.(this.findShadowView(argStruct[MEMORY]));
       }
     }
+    const transform = fn[TRANSFORM];
     if (isAsync) {
       let retval = null;
       // if a function has returned a value or failed synchronmously, the promise is resolved immediately
@@ -150,13 +151,15 @@ var callMarshalingOutbound = mixin({
         }
       }
       if (retval != null) {
-        if (fn[STRING_RETVAL] && retval) {
-          retval = retval.string;
+        if (transform) {
+          retval = transform(retval);
         }
         argStruct[RETURN](retval);
-      } else if (fn[STRING_RETVAL]) {
-        // so the promise or generator knows that a string is wanted 
-        argStruct[STRING_RETVAL] = true;
+      } else {
+        if (transform) {
+          // so the promise or generator can perform the transform 
+          argStruct[TRANSFORM] = transform;
+        }
       }
       // this would be undefined if a callback function is used instead
       return argStruct[PROMISE] ?? argStruct[GENERATOR];
@@ -164,7 +167,7 @@ var callMarshalingOutbound = mixin({
       finalize();
       try {
         const { retval } = argStruct;
-        return (fn[STRING_RETVAL] && retval) ? retval.string : retval;
+        return (transform) ? transform(retval) : retval;
       } catch (err) {
         throw new ZigError(err, 1);
       }

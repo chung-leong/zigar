@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { RETURN, PROMISE, MEMORY, ZIG, STRING_RETVAL, FINALIZE } from '../symbols.js';
+import { RETURN, PROMISE, MEMORY, ZIG, TRANSFORM, FINALIZE } from '../symbols.js';
 import { usize } from '../utils.js';
 
 var promise = mixin({
@@ -27,8 +27,11 @@ var promise = mixin({
           if (result instanceof Error) {
             reject(result);
           } else {
-            if (args[STRING_RETVAL] && result) {
-              result = result.string;
+            if (result) {
+              const f = args[TRANSFORM];
+              if (f) {
+                result = f(result);
+              }
             }
             resolve(result);
           }        };

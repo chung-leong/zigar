@@ -26,9 +26,13 @@ pub fn print(path: [*:0]const u8) !void {
             name,
         });
         defer allocator.free(child_path);
-        var info: c.struct_stat = undefined;
-        const result = c.stat(child_path.ptr, &info);
-        if (result < 0) return error.UnableToStatFile;
-        std.debug.print("{s} ({d} bytes)\n", .{ name, info.st_size });
+        if (entry.d_type == c.DT_DIR) {
+            std.debug.print("{s}\n", .{name});
+        } else {
+            var info: c.struct_stat = undefined;
+            const result = c.stat(child_path.ptr, &info);
+            if (result < 0) return error.UnableToStatFile;
+            std.debug.print("{s} ({d} bytes)\n", .{ name, info.st_size });
+        }
     }
 }

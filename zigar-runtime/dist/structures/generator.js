@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { YIELD, THROWING, GENERATOR, MEMORY, STRING_RETVAL, RESET, FINALIZE, RETURN } from '../symbols.js';
+import { YIELD, THROWING, GENERATOR, MEMORY, TRANSFORM, RESET, FINALIZE, RETURN } from '../symbols.js';
 import { usize } from '../utils.js';
 
 var generator = mixin({
@@ -35,8 +35,11 @@ var generator = mixin({
         if (instance) {
           const { func, args } = instance;
           const isError = result instanceof Error;
-          if (!isError && args[STRING_RETVAL] && result) {
-            result = result.string;
+          if (!isError && result) {
+            const f = args[TRANSFORM];
+            if (f) {
+              result = f(result);
+            }
           }
           const retval = await ((func.length === 2)
           ? func(isError ? result : null, isError ? null : result)

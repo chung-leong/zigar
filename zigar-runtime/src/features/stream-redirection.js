@@ -65,6 +65,9 @@ export default mixin({
     this.nextStreamHandle = PosixDescriptor.min;
   },
   getStream(fd) {
+    if (process.env.TARGET === 'wasm') {
+      if (fd === 3) fd = PosixDescriptor.root;
+    }
     const entry = this.streamMap.get(fd);
     if (!entry) {
       if (2 < fd && fd < PosixDescriptor.min) {
@@ -98,19 +101,18 @@ export default mixin({
       }
     }
   },
-  redirectStream(num, arg) {
+  redirectStream(fd, arg) {
     const map = this.streamMap;
-    const fd = (num === -1) ? PosixDescriptor.root : num;
     const previous = map.get(fd);
     if (arg !== undefined) {
       let stream, rights;
-      if (num === PosixDescriptor.stdin) {
+      if (fd === PosixDescriptor.stdin) {
         stream = this.convertReader(arg);
         rights = stdinRights;
-      } else if (num === PosixDescriptor.stdout || num === PosixDescriptor.stderr) {
+      } else if (fd === PosixDescriptor.stdout || fd === PosixDescriptor.stderr) {
         stream = this.convertWriter(arg);
         rights = stdoutRights;
-      } else if (num === PosixDescriptor.root) {
+      } else if (fd === PosixDescriptor.root) {
         stream = this.convertDirectory(arg);
         rights = this.getDefaultRights('dir');
       } else {

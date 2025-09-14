@@ -1,7 +1,7 @@
 import { StructureType, MemberType, MemberFlag, structureNames, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NoProperty, MissingInitializers, NoInitializer } from '../errors.js';
-import { KEYS, SETTERS, MEMORY, COPY, SLOTS, CACHE, RESTORE, PROPS, ENTRIES, TYPED_ARRAY, FLAGS, TYPE, SIZE, ALIGN, ENVIRONMENT, SIGNATURE, STRING_RETVAL, SHAPE, INITIALIZE, CAST, RESTRICT, FINALIZE, UPDATE, CONST_TARGET } from '../symbols.js';
+import { KEYS, SETTERS, MEMORY, COPY, SLOTS, CACHE, RESTORE, PROPS, ENTRIES, TYPED_ARRAY, FLAGS, TYPE, SIZE, ALIGN, ENVIRONMENT, SIGNATURE, TRANSFORM, SHAPE, INITIALIZE, CAST, RESTRICT, FINALIZE, UPDATE, CONST_TARGET } from '../symbols.js';
 import { ObjectCache, defineProperty, defineValue, defineProperties } from '../utils.js';
 
 var all = mixin({
@@ -78,7 +78,9 @@ var all = mixin({
         if (member.structure.type === StructureType.Function) {
           let fn = template[SLOTS][slot];
           if (flags & MemberFlag.IsString) {
-            fn[STRING_RETVAL] = true;
+            fn[TRANSFORM] = (retval) => retval.string;
+          } else if (flags & MemberFlag.IsPlain) {
+            fn[TRANSFORM] = (retval) => retval.valueOf();
           }
           staticDescriptors[name] = defineValue(fn);
           // provide a name if one isn't assigned yet
