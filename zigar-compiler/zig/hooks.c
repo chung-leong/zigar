@@ -241,7 +241,7 @@ bool load_orig_func(void** orig_ptr, void *other_fn, const char* name) {
 
 // set vfprintf_orig when vfprintf itself isn't begin hooked
 bool load_vfprintf(void) {
-#ifdef __LINUX__
+#ifdef __linux__
     return load_orig_func(&vfprintf_orig, memset, "vfprintf");
 #else
     return load_orig_func(&vfprintf_orig, vsnprintf, "vfprintf");
@@ -250,7 +250,7 @@ bool load_vfprintf(void) {
 
 // set vfscanf_orig when vfscanf itself isn't begin hooked
 bool load_vfscanf(void) {
-#ifdef __LINUX__
+#ifdef __linux__
     return load_orig_func(&vfscanf_orig, memset, "vfscanf");
 #else 
     return load_orig_func(&vfscanf_orig, vsscanf, "vfscanf");
