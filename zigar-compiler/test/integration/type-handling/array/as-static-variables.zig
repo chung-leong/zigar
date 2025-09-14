@@ -25,6 +25,13 @@ pub var complex_array: [3]struct {
     .{ .int = 10000, .float = 123.456 },
 };
 
+pub var typed_array: [4][4]f64 = .{
+    .{ 1.1, 1.2, 1.3, 1.4 },
+    .{ 2.1, 2.2, 2.3, 2.4 },
+    .{ 3.1, 3.2, 3.3, 3.4 },
+    .{ 4.1, 4.2, 4.3, 4.4 },
+};
+
 const ns = @This();
 pub const @"meta(zigar)" = struct {
     pub fn isDeclString(comptime T: type, comptime decl: std.meta.DeclEnum(T)) bool {
@@ -34,6 +41,13 @@ pub const @"meta(zigar)" = struct {
     pub fn isDeclPlain(comptime T: type, comptime decl: std.meta.DeclEnum(T)) bool {
         return T == ns and switch (decl) {
             .plain_array, .complex_array => true,
+            else => false,
+        };
+    }
+
+    pub fn isDeclTypedArray(comptime T: type, comptime decl: std.meta.DeclEnum(T)) bool {
+        return T == ns and switch (decl) {
+            .typed_array => true,
             else => false,
         };
     }

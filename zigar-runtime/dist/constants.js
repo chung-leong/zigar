@@ -118,6 +118,7 @@ const MemberFlag = {
   IsBackingInt:     0x0040,
   IsString:         0x0080,
   IsPlain:          0x0100,
+  IsTypedArray:     0x0200,
 };
 
 const ModuleAttribute = {

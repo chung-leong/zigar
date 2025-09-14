@@ -31,12 +31,22 @@ const default = struct {
         return false;
     }
 
+    pub fn isDeclTypedArray(comptime T: type, comptime decl: std.meta.DeclEnum(T)) bool {
+        _ = decl;
+        return false;
+    }
+
     pub fn isFieldString(comptime T: type, comptime field: std.meta.FieldEnum(T)) bool {
         _ = field;
         return false;
     }
 
     pub fn isFieldPlain(comptime T: type, comptime field: std.meta.FieldEnum(T)) bool {
+        _ = field;
+        return false;
+    }
+
+    pub fn isFieldTypedArray(comptime T: type, comptime field: std.meta.FieldEnum(T)) bool {
         _ = field;
         return false;
     }
@@ -48,6 +58,12 @@ const default = struct {
     }
 
     pub fn isArgumentPlain(comptime T: type, comptime arg_index: usize) bool {
+        _ = T;
+        _ = arg_index;
+        return false;
+    }
+
+    pub fn isArgumentTypedArray(comptime T: type, comptime arg_index: usize) bool {
         _ = T;
         _ = arg_index;
         return false;

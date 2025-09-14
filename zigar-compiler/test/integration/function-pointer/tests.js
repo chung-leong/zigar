@@ -224,5 +224,24 @@ export function addTests(importModule, options) {
       expect(lines).to.eql([ '123', '456', '789' ]);
       expect(() => call(() => {})).to.throw();
     })
+    it('should receive transformed arguments through callback', async function() {
+      const { setCallback, triggerCallback } = await importTest('receive-transformed');
+      let received;
+      setCallback((...args) => {
+        received = args;
+        return 123;
+      });
+      const result = triggerCallback();
+      expect(result).to.equal(123);
+      expect(received).to.be.an('array');
+      expect(received[0]).to.equal('Hello world');
+      expect(received[1]).to.eql([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ]);
+      expect(received[2]).to.eql(new Uint8Array([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ]));
+      expect(received[3]).to.eql({
+        string: 'Hello world',
+        plain: [ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ],
+        typed_array: new Uint8Array([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ]),
+      })
+    })
   })
 }

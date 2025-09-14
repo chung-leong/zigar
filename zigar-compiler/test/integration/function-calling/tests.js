@@ -874,5 +874,21 @@ export function addTests(importModule, options) {
       const result3 = await reduceColorDepthOfRgba8888ToArgb1555(copiedBytesArray, 128);
       expect(result3).to.equal(1234);
     })
+    it('should apply transform to return values', async function() {
+      const { returnString, returnPlain, returnTypedArray, returnStruct } = await importTest('return-transformed');
+      const result1 = returnString();
+      expect(result1).to.equal('Hello world');
+      const result2 = returnPlain();
+      expect(result2).to.eql([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ]);
+      const result3 = returnTypedArray();
+      expect(result3).to.be.an('Uint8Array');
+      expect(result3).to.eql(new Uint8Array([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ]));
+      const result4 = returnStruct();
+      expect(result4).to.eql({
+        string: 'Hello world',
+        plain: [ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ],
+        typed_array: new Uint8Array([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ]),
+      });
+    })
   })
 }

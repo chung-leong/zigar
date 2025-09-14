@@ -54,6 +54,7 @@ export function addTests(importModule, options) {
         { int: 333, float: 0.1 },
         { int: 10000, float: 123.456 },
       ]);
+      expect(module.typed_array).to.be.a('Float64Array');
     })
     it('should print array arguments', async function() {
       const { print } = await importTest('as-function-parameters');
