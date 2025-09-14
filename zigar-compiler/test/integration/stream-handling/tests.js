@@ -2257,6 +2257,17 @@ export function addTests(importModule, options) {
     skip.entirely.if(target === 'win32').
     it('should set mtime and atime of file using posix function', async function() {
       const { __zigar, setTimes } = await importTest('set-times-of-file-in-file-system-with-posix-functions', { useLibc: true });
+      if (target === 'wasm32') {
+        const { WASI } = await import('wasi');
+        __zigar.wasi(new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/': '/',
+          },
+        }));
+      }
       const path = absolute(`./data/settimes_test.txt`);
       await writeFile(path, 'Hello world');
       try {
@@ -2273,8 +2284,14 @@ export function addTests(importModule, options) {
           flags: { symlinkFollow: true }
         });
         const info = await stat(path);
-        expect(info.atimeMs).to.equal(3000.001234);
-        expect(info.mtimeMs).to.equal(3000.001234);
+        if (target === 'wasm32') {
+          // Node.js's WASI module does not provide nanosecond resolution
+          expect(info.atimeMs).to.equal(3000);
+          expect(info.mtimeMs).to.equal(3000);
+        } else {
+          expect(info.atimeMs).to.equal(3000.001234);
+          expect(info.mtimeMs).to.equal(3000.001234);
+        }
       } finally {
         try {
           await unlink(path);
