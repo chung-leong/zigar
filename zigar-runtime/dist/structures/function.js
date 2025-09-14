@@ -2,14 +2,13 @@ import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NoInitializer, TypeMismatch, Unsupported, NoCastingToFunction } from '../errors.js';
 import { CONTROLLER, MEMORY, TYPE, ENVIRONMENT } from '../symbols.js';
-import { defineValue, ObjectCache, getSelf, defineProperties } from '../utils.js';
+import { defineValue, getSelf, defineProperties } from '../utils.js';
 
 var _function = mixin({
   defineFunction(structure, descriptors) {
     const {
       instance: { members: [ member ], template: thunk },
     } = structure;
-    const cache = new ObjectCache();
     const { structure: { constructor: ArgStruct } } = member;
     const thisEnv = this;
     const constructor = function(arg) {
@@ -38,10 +37,6 @@ var _function = mixin({
         // casting a memory pointing to Zig binary
         dv = arg;
       }
-      let existing;
-      if (existing = cache.find(dv)) {
-        return existing;
-      }
       const argCount = ArgStruct.prototype.length;
       const self = (creating)
       ? thisEnv.createInboundCaller(arg, ArgStruct)
@@ -54,10 +49,9 @@ var _function = mixin({
       Object.setPrototypeOf(self, constructor.prototype);
       if (dv) {
         self[MEMORY] = dv;
-        cache.save(dv, self);
       } else {
         thisEnv.deferredThunks ??= [];
-        thisEnv.deferredThunks.push({ target: self, fn: arg, cache });
+        thisEnv.deferredThunks.push({ target: self, fn: arg });
       }
       return self;
     };
@@ -78,11 +72,10 @@ var _function = mixin({
     createDeferredThunks() {
       const list = this.deferredThunks;
       if (list) {
-        for (const { target, fn, cache } of list) {
+        for (const { target, fn } of list) {
           const { constructor } = target;
           const dv = this.getFunctionThunk(fn, constructor[CONTROLLER]);
           target[MEMORY] = dv;
-          cache.save(dv, target);
         }
       }
     },

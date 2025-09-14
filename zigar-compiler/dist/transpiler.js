@@ -119,6 +119,8 @@ const MemberFlag = {
   IsMethod:         0x0010,
   IsBackingInt:     0x0040,
   IsString:         0x0080,
+  IsPlain:          0x0100,
+  IsTypedArray:     0x0200,
 };
 
 const ModuleAttribute = {
@@ -275,7 +277,6 @@ const GENERATOR = symbol('generator');
 const ALLOCATOR = symbol('allocator');
 const SIGNATURE = symbol('signature');
 const CONTROLLER = symbol('controller');
-const STRING_RETVAL = symbol('string retval');
 
 const UPDATE = symbol('update');
 const RESTORE = symbol('restore');
@@ -290,6 +291,7 @@ const FINALIZE = symbol('finalize');
 const CAST = symbol('cast');
 const RETURN = symbol('return');
 const YIELD = symbol('yield');
+const TRANSFORM = symbol('transform');
 
 function defineProperty(object, name, descriptor) {
   if (descriptor) {
@@ -3817,6 +3819,7 @@ var callMarshalingOutbound = mixin({
         argStruct[COPY]?.(this.findShadowView(argStruct[MEMORY]));
       }
     }
+    const transform = fn[TRANSFORM];
     if (isAsync) {
       let retval = null;
       // if a function has returned a value or failed synchronmously, the promise is resolved immediately
@@ -3828,13 +3831,15 @@ var callMarshalingOutbound = mixin({
         }
       }
       if (retval != null) {
-        if (fn[STRING_RETVAL] && retval) {
-          retval = retval.string;
+        if (transform) {
+          retval = transform(retval);
         }
         argStruct[RETURN](retval);
-      } else if (fn[STRING_RETVAL]) {
-        // so the promise or generator knows that a string is wanted 
-        argStruct[STRING_RETVAL] = true;
+      } else {
+        if (transform) {
+          // so the promise or generator can perform the transform 
+          argStruct[TRANSFORM] = transform;
+        }
       }
       // this would be undefined if a callback function is used instead
       return argStruct[PROMISE] ?? argStruct[GENERATOR];
@@ -3842,7 +3847,7 @@ var callMarshalingOutbound = mixin({
       finalize();
       try {
         const { retval } = argStruct;
-        return (fn[STRING_RETVAL] && retval) ? retval.string : retval;
+        return (transform) ? transform(retval) : retval;
       } catch (err) {
         throw new ZigError(err, 1);
       }
@@ -5217,6 +5222,9 @@ var streamRedirection = mixin({
     this.nextStreamHandle = PosixDescriptor.min;
   },
   getStream(fd) {
+    {
+      if (fd === 3) fd = PosixDescriptor.root;
+    }
     const entry = this.streamMap.get(fd);
     if (!entry) {
       if (2 < fd && fd < PosixDescriptor.min) {
@@ -5240,19 +5248,18 @@ var streamRedirection = mixin({
       this.streamMap.delete(fd);
     }
   },
-  redirectStream(num, arg) {
+  redirectStream(fd, arg) {
     const map = this.streamMap;
-    const fd = (num === -1) ? PosixDescriptor.root : num;
     const previous = map.get(fd);
     if (arg !== undefined) {
       let stream, rights;
-      if (num === PosixDescriptor.stdin) {
+      if (fd === PosixDescriptor.stdin) {
         stream = this.convertReader(arg);
         rights = stdinRights;
-      } else if (num === PosixDescriptor.stdout || num === PosixDescriptor.stderr) {
+      } else if (fd === PosixDescriptor.stdout || fd === PosixDescriptor.stderr) {
         stream = this.convertWriter(arg);
         rights = stdoutRights;
-      } else if (num === PosixDescriptor.root) {
+      } else if (fd === PosixDescriptor.root) {
         stream = this.convertDirectory(arg);
         rights = this.getDefaultRights('dir');
       } else {
@@ -5666,8 +5673,11 @@ var generator = mixin({
         if (instance) {
           const { func, args } = instance;
           const isError = result instanceof Error;
-          if (!isError && args[STRING_RETVAL] && result) {
-            result = result.string;
+          if (!isError && result) {
+            const f = args[TRANSFORM];
+            if (f) {
+              result = f(result);
+            }
           }
           const retval = await ((func.length === 2)
           ? func(isError ? result : null, isError ? null : result)
@@ -5837,8 +5847,11 @@ var promise = mixin({
           if (result instanceof Error) {
             reject(result);
           } else {
-            if (args[STRING_RETVAL] && result) {
-              result = result.string;
+            if (result) {
+              const f = args[TRANSFORM];
+              if (f) {
+                result = f(result);
+              }
             }
             resolve(result);
           }        };
@@ -7946,12 +7959,24 @@ var _null = mixin({
 
 var object = mixin({
   defineMemberObject(member) {
-    return bindSlot(member.slot, {
-      get: (member.flags & MemberFlag.IsString)
-        ? getString
-        : (member.structure.flags & StructureFlag.HasValue) ? getValue : getObject,
-      set: (member.flags & MemberFlag.IsReadOnly) ? throwReadOnly : setValue,
-    });
+    let get, set;
+    if (member.flags & MemberFlag.IsString) {
+      get = getString;
+    } else if (member.flags & MemberFlag.IsTypedArray) {
+      get = getTypedArray;
+    } else if (member.flags & MemberFlag.IsPlain) {
+      get = getPlain;
+    } else if (member.structure.flags & StructureFlag.HasValue) {
+      get = getValue;
+    } else {
+      get = getObject;
+    }
+    if (member.flags & MemberFlag.IsReadOnly) {
+      set = throwReadOnly;
+    } else {
+      set = setValue;
+    }
+    return bindSlot(member.slot, { get, set });
   }
 });
 
@@ -7959,13 +7984,20 @@ function getValue(slot) {
   return getObject.call(this, slot).$;
 }
 
-function getObject(slot) {
-  return this[SLOTS][slot] ?? this[VIVIFICATE](slot);
+function getString(slot) {
+  return getValue.call(this, slot)?.string ?? null;
 }
 
-function getString(slot) {
-  const retval = getObject.call(this, slot).$;
-  return (retval) ? retval.string : retval;
+function getTypedArray(slot) {
+  return getValue.call(this, slot)?.typedArray ?? null;
+}
+
+function getPlain(slot) {
+  return getValue.call(this, slot)?.valueOf?.() ?? null;
+}
+
+function getObject(slot) {
+  return this[SLOTS][slot] ?? this[VIVIFICATE](slot);
 }
 
 function setValue(slot, value, allocator) {
@@ -8391,7 +8423,11 @@ var all$1 = mixin({
         if (member.structure.type === StructureType.Function) {
           let fn = template[SLOTS][slot];
           if (flags & MemberFlag.IsString) {
-            fn[STRING_RETVAL] = true;
+            fn[TRANSFORM] = (retval) => retval.string;
+          } else if (flags & MemberFlag.IsTypedArray) {
+            fn[TRANSFORM] = (retval) => retval.typedArray;
+          } else if (flags & MemberFlag.IsPlain) {
+            fn[TRANSFORM] = (retval) => retval.valueOf();
           }
           staticDescriptors[name] = defineValue(fn);
           // provide a name if one isn't assigned yet
@@ -9259,7 +9295,6 @@ var _function = mixin({
     const {
       instance: { members: [ member ], template: thunk },
     } = structure;
-    const cache = new ObjectCache();
     const { structure: { constructor: ArgStruct } } = member;
     const thisEnv = this;
     const constructor = function(arg) {
@@ -9288,10 +9323,6 @@ var _function = mixin({
         // casting a memory pointing to Zig binary
         dv = arg;
       }
-      let existing;
-      if (existing = cache.find(dv)) {
-        return existing;
-      }
       const argCount = ArgStruct.prototype.length;
       const self = (creating)
       ? thisEnv.createInboundCaller(arg, ArgStruct)
@@ -9304,10 +9335,9 @@ var _function = mixin({
       Object.setPrototypeOf(self, constructor.prototype);
       if (dv) {
         self[MEMORY] = dv;
-        cache.save(dv, self);
       } else {
         thisEnv.deferredThunks ??= [];
-        thisEnv.deferredThunks.push({ target: self, fn: arg, cache });
+        thisEnv.deferredThunks.push({ target: self, fn: arg });
       }
       return self;
     };
@@ -9328,11 +9358,10 @@ var _function = mixin({
     createDeferredThunks() {
       const list = this.deferredThunks;
       if (list) {
-        for (const { target, fn, cache } of list) {
+        for (const { target, fn } of list) {
           const { constructor } = target;
           const dv = this.getFunctionThunk(fn, constructor[CONTROLLER]);
           target[MEMORY] = dv;
-          cache.save(dv, target);
         }
       }
     },

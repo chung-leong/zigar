@@ -2,14 +2,13 @@ import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NoCastingToFunction, NoInitializer, TypeMismatch, Unsupported } from '../errors.js';
 import { CONTROLLER, ENVIRONMENT, MEMORY, TYPE } from '../symbols.js';
-import { defineProperties, defineValue, getSelf, ObjectCache } from '../utils.js';
+import { defineProperties, defineValue, getSelf } from '../utils.js';
 
 export default mixin({
   defineFunction(structure, descriptors) {
     const {
       instance: { members: [ member ], template: thunk },
     } = structure;
-    const cache = new ObjectCache();
     const { structure: { constructor: ArgStruct } } = member;
     const thisEnv = this;
     const constructor = function(arg) {
@@ -38,10 +37,6 @@ export default mixin({
         // casting a memory pointing to Zig binary
         dv = arg;
       }
-      let existing;
-      if (existing = cache.find(dv)) {
-        return existing;
-      }
       const argCount = ArgStruct.prototype.length;
       const self = (creating)
       ? thisEnv.createInboundCaller(arg, ArgStruct)
@@ -54,10 +49,9 @@ export default mixin({
       Object.setPrototypeOf(self, constructor.prototype);
       if (process.env.TARGET !== 'wasm' || dv) {
         self[MEMORY] = dv;
-        cache.save(dv, self);
       } else {
         thisEnv.deferredThunks ??= [];
-        thisEnv.deferredThunks.push({ target: self, fn: arg, cache });
+        thisEnv.deferredThunks.push({ target: self, fn: arg });
       }
       return self;
     };
@@ -78,11 +72,10 @@ export default mixin({
     createDeferredThunks() {
       const list = this.deferredThunks;
       if (list) {
-        for (const { target, fn, cache } of list) {
+        for (const { target, fn } of list) {
           const { constructor } = target;
           const dv = this.getFunctionThunk(fn, constructor[CONTROLLER]);
           target[MEMORY] = dv;
-          cache.save(dv, target);
         }
       }
     },
