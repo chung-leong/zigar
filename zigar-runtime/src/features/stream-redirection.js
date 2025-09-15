@@ -93,7 +93,7 @@ export default mixin({
     this.streamMap.set(fd, [ stream, rights, flags ]);
     stream.onClose = () => this.destroyStreamHandle(fd);
     if (process.env.TARGET === 'node') {
-      if (this.streamMap.size === 4) {
+      if (process.platform === 'linux' && this.streamMap.size === 4) {
         this.setSyscallTrap(true);
       }
     }
@@ -106,7 +106,7 @@ export default mixin({
       stream?.destroy?.();
       this.streamMap.delete(fd);
       if (process.env.TARGET === 'node') {
-        if (this.streamMap.size === 3) {
+        if (process.platform === 'linux' && this.streamMap.size === 3) {
           this.setSyscallTrap(false);
         }
       }

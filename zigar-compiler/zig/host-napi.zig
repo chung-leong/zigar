@@ -274,7 +274,7 @@ fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
     };
     var name_s = name[0..std.mem.len(name)];
     if (os == .darwin) {
-        if (std.mem.indexOf(u8, name_s, "$INODE64")) |suffic_index| {
+        if (std.mem.indexOf(u8, name_s, "$")) |suffic_index| {
             name_s.len = suffic_index;
         }
     }
