@@ -480,6 +480,14 @@ export class WouldBlock extends Error {
   }
 }
 
+export class TooManyFiles extends Error {
+  code = PosixError.EMFILE;
+
+  constructor() {
+    super(`Too many open files`);
+  }
+}
+
 export class Deadlock extends Error {
   code = PosixError.EDEADLK;
 

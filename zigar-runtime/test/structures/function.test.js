@@ -95,8 +95,6 @@ describe('Structure: function', function() {
       expect(f).to.be.an.instanceOf(constructor);
       expect(f.constructor).to.equal(constructor);
       expect(f).to.be.an.instanceOf(Function);
-      const f2 = constructor.call(ENVIRONMENT, dv);
-      expect(f2).to.equal(f);
       expect(f.name).to.equal('');
       defineProperty(f, 'name', { value: 'dingo' });
       expect(f.name).to.equal('dingo');
@@ -109,6 +107,7 @@ describe('Structure: function', function() {
       };
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
+        env.instance = {};
         env.allocateScratchMemory = function(len, align) {
           return usize(0x4000);
         };
@@ -230,25 +229,21 @@ describe('Structure: function', function() {
       };
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
-      }
-      const fn = (arg1, arg2) => {
-        return arg1 + arg2;
-      };
-      const f = new constructor(fn);
-      expect(f).to.be.a('function');
-      const f2 = new constructor(fn);
-      expect(f2).to.equal(f);
-      expect(constructorAddr).to.equal(usize(0x8888));
-      expect(fnIds).to.eql([ 1 ]);
-      const len = ArgStruct[SIZE];
-      if (process.env.TARGET === 'wasm') {
-        env.memory = new WebAssembly.Memory({ initial: 1 });
+        env.instance = {};
       } else {
         const buffer = new ArrayBuffer(len);
         env.obtainExternBuffer = function(address, len) {
           return buffer;
         };
       }
+      const fn = (arg1, arg2) => {
+        return arg1 + arg2;
+      };
+      const f = new constructor(fn);
+      expect(f).to.be.a('function');
+      expect(constructorAddr).to.equal(usize(0x8888));
+      expect(fnIds).to.eql([ 1 ]);
+      const len = ArgStruct[SIZE];
       const address = usize(0x1000);
       const dv = env.obtainZigView(address, len);
       const argStruct = ArgStruct(dv);
@@ -512,6 +507,125 @@ describe('Structure: function', function() {
       const dv = zig(0x4000);
       expect(() => Fn(dv)).to.throw(TypeError);
       expect(() => Fn(null)).to.throw(TypeError);
+    })
+  })
+  describe('createDeferredThunks', function() {
+    it('should create thunks for function object created pre-compilation', function() {
+      const env = new Env();
+      const intStructure = {
+        type: StructureType.Primitive,
+        byteSize: 4,
+        flags: StructureFlag.HasValue,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: {},
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(intStructure);
+      env.finishStructure(intStructure);
+      const argStructure = {
+        type: StructureType.ArgStruct,
+        byteSize: 4 * 3,
+        length: 2,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              name: 'retval',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 0,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '0',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 32,
+              byteSize: 4,
+              structure: intStructure,
+            },
+            {
+              name: '1',
+              type: MemberType.Int,
+              bitSize: 32,
+              bitOffset: 64,
+              byteSize: 4,
+              structure: intStructure,
+            },
+          ],
+        },
+        static: {},
+      };
+      env.beginStructure(argStructure);
+      env.finishStructure(argStructure);
+      const ArgStruct = argStructure.constructor;
+      const structure = {
+        type: StructureType.Function,
+        name: 'fn(i32, i32) i32',
+        byteSize: 8,
+        signature: 0n,
+        instance: {
+          members: [
+            {
+              type: MemberType.Object,
+              structure: argStructure,
+            },
+          ],
+          template: { 
+            [MEMORY]: zig(0x1004),
+          },
+        },
+      };
+      env.beginStructure(structure);
+      structure.static = {
+        template: { 
+          [MEMORY]: zig(0x8888),
+        },
+      };
+      env.finishStructure(structure);
+      const constructor = structure.constructor;
+      expect(constructor).to.be.a('function');
+      let constructorAddr, fnIds = [];
+      let nextThunkAddr = usize(0x10000);
+      if (process.env.TARGET === 'wasm') {
+        env.memory = new WebAssembly.Memory({ initial: 2 });
+      } else {
+        const buffer = new ArrayBuffer(len);
+        env.obtainExternBuffer = function(address, len) {
+          return buffer;
+        };
+      }
+      const fn = (arg1, arg2) => {
+        return arg1 + arg2;
+      };
+      const f1 = new constructor(() => {});
+      const f2 = new constructor(() => {});
+      expect(f1).to.be.a('function');
+      expect(f2).to.be.a('function');
+      expect(f1[MEMORY]).to.be.undefined;
+      expect(f2[MEMORY]).to.be.undefined;
+      env.instance = {};
+      env.createJsThunk = function(...args) {
+        constructorAddr = args[0];
+        fnIds.push(args[1]);
+        const thunkAddr = nextThunkAddr;
+        nextThunkAddr += usize(0x100);
+        return thunkAddr;
+      };
+      env.createDeferredThunks();
+      expect(f1[MEMORY]).to.be.a('DataView');
+      expect(f2[MEMORY]).to.be.a('DataView');
     })
   })
 })

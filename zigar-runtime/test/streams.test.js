@@ -28,6 +28,23 @@ describe('Streams', function() {
       stream.onClose = () => closed = true;
       reader.close();
       expect(closed).to.be.true;
+      expect(reader.close).to.be.undefined;
+    })
+    it('should invoke all close functions when the same reader is used for multiple streams', function() {
+      const rs = new ReadableStream({
+        async pull(controller) {
+          controller.close();
+        },
+      });
+      const reader = rs.getReader();
+      const stream1 = new WebStreamReader(reader);
+      const stream2 = new WebStreamReader(reader);
+      let closed1 = false, closed2 = false;
+      stream1.onClose = () => closed1 = true;
+      stream2.onClose = () => closed2 = true;
+      reader.close();
+      expect(closed1).to.be.true;
+      expect(closed2).to.be.true;
     })
     describe('read', function() {      
       it('should read bytes from the next avialable chunk', async function() {

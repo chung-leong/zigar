@@ -1,6 +1,7 @@
 import { expect } from 'chai';
-import { PosixDescriptorRight, PosixError } from '../../src/constants.js';
+import { PosixDescriptor, PosixDescriptorRight, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
+import { InvalidFileDescriptor, TooManyFiles, Unsupported } from '../../src/errors.js';
 import '../../src/mixins.js';
 import { usize, usizeByteSize } from '../../src/utils.js';
 import { capture, captureError, delay } from '../test-utils.js';
@@ -8,6 +9,28 @@ import { capture, captureError, delay } from '../test-utils.js';
 const Env = defineEnvironment();
 
 describe('Feature: stream-redirection', function() {
+  describe('getStream', function() {
+    it('should retrieve a stream', function() {
+      const env = new Env();
+      const stdout = env.getStream(1);
+      expect(stdout).to.be.an('array');
+    })
+    it('should throw an InvalidFileDescriptor error when no stream is found', function() {
+      const env = new Env();
+      expect(() => env.getStream(PosixDescriptor.min + 5)).to.throw(InvalidFileDescriptor);
+    })
+    it('should throw an Unsupported error when descriptor is outside the range of private descriptors', function() {
+      const env = new Env();
+      expect(() => env.getStream(10)).to.throw(Unsupported);
+    })
+    if (process.env.TARGET === 'wasm') {
+      it('should return the root stream when the descriptor is 3', function() {
+        const env = new Env();
+        const root = env.getStream(3);
+        expect(root).to.be.an('array');
+      })
+    }
+  })
   describe('destroyStreamHandle', function() {
     it('should remove a stream handle', async function() {
       const env = new Env();
@@ -234,6 +257,43 @@ describe('Feature: stream-redirection', function() {
       const handle = env.createStreamHandle(file, [ PosixDescriptorRight.fd_read, 0 ]);
       expect(handle).to.be.a('number');
       env.destroyStreamHandle(handle);
+    })
+    it('should throw when there are too many files', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'node') {
+        env.setSyscallTrap = () => {};
+      }
+      const { max } = PosixDescriptor;
+      PosixDescriptor.max = PosixDescriptor.min + 100;
+      try {
+        const file = env.convertWriter(null);
+        expect(() => {
+          while (true) {
+            env.createStreamHandle(file, [ PosixDescriptorRight.fd_read, 0 ]);
+          }
+        }).to.throw(TooManyFiles);        
+      } finally {
+        PosixDescriptor.max = max;
+      }
+    })
+    it('should reuse file descriptors once the full range is used', async function() {
+      const env = new Env();
+      if (process.env.TARGET === 'node') {
+        env.setSyscallTrap = () => {};
+      }
+      const { max } = PosixDescriptor;
+      PosixDescriptor.max = PosixDescriptor.min + 100;
+      try {
+        const file = env.convertWriter(null);
+        expect(() => {
+          for (let count = 0; count < 200; count++) {
+            const fd = env.createStreamHandle(file, [ PosixDescriptorRight.fd_read, 0 ]);
+            env.destroyStreamHandle(fd);
+          }
+        }).to.not.throw();
+      } finally {
+        PosixDescriptor.max = max;
+      }
     })
     if (process.env.TARGET === 'node') {
       it('should activate syscall trap', async function() {

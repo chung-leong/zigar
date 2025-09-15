@@ -90,6 +90,62 @@ describe('Member: object', function() {
       returnNull = true;
       expect(get.call(object)).to.equal(null);
     })
+    it('should return descriptor for plain JavaScript object', function() {
+      const env = new Env();
+      const member = {
+        type: MemberType.Object,
+        flags: MemberFlag.IsPlain,
+        slot: 1,
+        structure: {
+          type: StructureType.Array,
+        },
+      };
+      const { get, set } = env.defineMemberObject(member);
+      let returnNull = false;
+      const array = defineProperties({}, {
+        $: {
+          get() {
+            return (returnNull) ? null : { valueOf() { return { text: 'Hello' } } };
+          },
+        }
+      });
+      const object = {
+        [SLOTS]: {
+          1: array,
+        }
+      };
+      expect(get.call(object)).to.eql({ text: 'Hello' });
+      returnNull = true;
+      expect(get.call(object)).to.equal(null);
+    })
+    it('should return descriptor for TypedArray', function() {
+      const env = new Env();
+      const member = {
+        type: MemberType.Object,
+        flags: MemberFlag.IsTypedArray,
+        slot: 1,
+        structure: {
+          type: StructureType.Array,
+        },
+      };
+      const { get, set } = env.defineMemberObject(member);
+      let returnNull = false;
+      const array = defineProperties({}, {
+        $: {
+          get() {
+            return (returnNull) ? null : { typedArray: new Uint8Array([ 1, 2, 3 ]) };
+          },
+        }
+      });
+      const object = {
+        [SLOTS]: {
+          1: array,
+        }
+      };
+      expect(get.call(object)).to.eql(new Uint8Array([ 1, 2, 3 ]));
+      returnNull = true;
+      expect(get.call(object)).to.equal(null);
+    })
     it('should be invokable through defineMember', function() {
       const env = new Env();
       const member = {

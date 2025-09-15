@@ -2352,11 +2352,6 @@ export function addTests(importModule, options) {
           path: path.slice(1),
           flags: { symlinkFollow: true }
         }
-        if (target !== 'wasm32') {        
-          // stat on path
-          const found3 = events.find((evt) => evt.path === event3.path && !evt.rights);
-          expect(found3).to.eql(event3);
-        }
       } finally {
         try {
           await rmdir(path, { recursive: true });

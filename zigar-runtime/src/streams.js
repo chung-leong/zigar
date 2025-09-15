@@ -1,6 +1,6 @@
 import { PosixPollEventType } from './constants.js';
 import { InvalidArgument, WouldBlock } from './errors.js';
-import { empty, encodeText } from './utils.js';
+import { defineProperty, empty, encodeText } from './utils.js';
 
 export class AsyncReader {
   bytes = null;
@@ -71,7 +71,7 @@ export class WebStreamReader extends AsyncReader {
   constructor(reader) {
     super();
     this.reader = reader;
-    reader.close = () => this.onClose?.();
+    attachClose(reader, this);
   }
 
   async fetch() {
@@ -160,7 +160,7 @@ export class BlobReader extends AsyncReader {
     super();
     this.blob = blob;
     this.size = blob.size;
-    blob.close = () => this.onClose?.();
+    attachClose(blob, this);
   }
 
   async fetch() {
@@ -204,7 +204,7 @@ export class Uint8ArrayReadWriter {
   constructor(array) {
     this.array = array;
     this.size = array.length;    
-    array.close = () => this.onClose?.();
+    attachClose(array, this);
   }
 
   readnb(len) {
@@ -255,7 +255,7 @@ export class ArrayWriter {
   constructor(array) {
     this.array = array;
     this.closeCB = null;
-    array.close = () => this.onClose?.();
+    attachClose(array, this);
   }
 
   writenb(bytes) {
@@ -305,7 +305,7 @@ export class MapDirectory {
   constructor(map) {
     this.map = map;
     this.size = map.size;
-    map.close = () => this.onClose?.();
+    attachClose(map, this);
   }
 
   readdir() {
@@ -353,6 +353,17 @@ function reposition(whence, offset, current, size) {
   }
   if (!(pos >= 0 && pos <= size)) throw new InvalidArgument();
   return pos;
+}
+
+function attachClose(target, stream) {
+  const previous = target.close;
+  defineProperty(target, 'close', { 
+    value: () => {
+      previous?.();
+      stream.onClose?.();
+      delete target.close;
+    }
+  });
 }
 
 const size8k = 8192;

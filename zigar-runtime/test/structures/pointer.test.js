@@ -621,6 +621,7 @@ describe('Structure: pointer', function() {
       };
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
+        env.instance = {};
       }
       expect(FnPtr.child).to.equal(Fn);
       let argsReceived;

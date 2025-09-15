@@ -812,6 +812,7 @@ describe('Structure: arg-struct', function() {
       };
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
+        env.instance = {};
       }
       expect(() => new ArgStruct([ 123 ])).to.not.throw();
       expect(() => new ArgStruct([ 123, {} ])).to.not.throw();
