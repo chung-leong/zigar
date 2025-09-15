@@ -21,7 +21,8 @@
   "files": [
     "dist/*",
     "zig/*.zig",
-    "zig/*/*.zig"
+    "zig/*/*.zig",
+    "*.patch"
   ],
   "repository": {
     "type": "git",

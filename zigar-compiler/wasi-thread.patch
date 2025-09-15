@@ -1,0 +1,200 @@
+diff -ruN ./std-unpatched/heap/WasmAllocator.zig ./std/heap/WasmAllocator.zig
+--- ./std-unpatched/heap/WasmAllocator.zig	2025-05-23 06:31:41.000000000 +0200
++++ ./std/heap/WasmAllocator.zig	2025-09-15 21:57:14.425214241 +0200
+@@ -10,9 +10,6 @@
+     if (!builtin.target.cpu.arch.isWasm()) {
+         @compileError("only available for wasm32 arch");
+     }
+-    if (!builtin.single_threaded) {
+-        @compileError("TODO implement support for multi-threaded wasm");
+-    }
+ }
+ 
+ pub const vtable: Allocator.VTable = .{
+@@ -44,10 +41,19 @@
+ var frees: [size_class_count]usize = @splat(0);
+ /// For each big size class, points to the freed pointer.
+ var big_frees: [big_size_class_count]usize = @splat(0);
++var mutex: switch (builtin.single_threaded) {
++    false => std.Thread.Mutex,
++    true => struct {
++        inline fn lock(_: *@This()) void {}
++        inline fn unlock(_: *@This()) void {}
++    },
++} = .{};
+ 
+ fn alloc(ctx: *anyopaque, len: usize, alignment: mem.Alignment, return_address: usize) ?[*]u8 {
+     _ = ctx;
+     _ = return_address;
++    mutex.lock();
++    defer mutex.unlock();
+     // Make room for the freelist next pointer.
+     const actual_len = @max(len +| @sizeOf(usize), alignment.toByteUnits());
+     const slot_size = math.ceilPowerOfTwo(usize, actual_len) catch return null;
+@@ -90,6 +96,8 @@
+ ) bool {
+     _ = ctx;
+     _ = return_address;
++    mutex.lock();
++    defer mutex.unlock();
+     // We don't want to move anything from one size class to another, but we
+     // can recover bytes in between powers of two.
+     const buf_align = alignment.toByteUnits();
+diff -ruN ./std-unpatched/std.zig ./std/std.zig
+--- ./std-unpatched/std.zig	2025-05-23 06:31:41.000000000 +0200
++++ ./std/std.zig	2025-09-15 21:58:50.244676094 +0200
+@@ -106,6 +106,8 @@
+ 
+     /// Function used to implement `std.fs.cwd` for WASI.
+     wasiCwd: fn () os.wasi.fd_t = fs.defaultWasiCwd,
++    /// Availability of synchronous wait in the main thread
++    wasi_main_thread_wait: bool = false,
+ 
+     /// The current log level.
+     log_level: log.Level = log.default_level,
+diff -ruN ./std-unpatched/Thread/Mutex.zig ./std/Thread/Mutex.zig
+--- ./std-unpatched/Thread/Mutex.zig	2025-05-23 06:31:41.000000000 +0200
++++ ./std/Thread/Mutex.zig	2025-09-15 21:58:23.315443273 +0200
+@@ -51,6 +51,8 @@
+     WindowsImpl
+ else if (builtin.os.tag.isDarwin())
+     DarwinImpl
++else if (builtin.os.tag == .wasi)
++    WasiImpl
+ else
+     FutexImpl;
+ 
+@@ -208,6 +210,77 @@
+     }
+ };
+ 
++const WasiImpl = struct {
++    status: std.atomic.Value(u32) = .{ .raw = free },
++    wait_count: std.atomic.Value(u32) = .{ .raw = 0 },
++
++    const free: u32 = 0; // no one owns the lock
++    const owned: u32 = 1; // a worker thread has the lock
++    const seized: u32 = 2; // the main thread either has the lock already or is about to get it
++    const forfeited: u32 = 3; // the main thread has received the lock from the previous owner
++
++    pub fn lock(self: *@This()) void {
++        if (inMainThread()) {
++            // announce that the lock will be taken by the main thread
++            switch (self.status.swap(seized, .acquire)) {
++                // seizing a free lock
++                free => {},
++                // keep spinning until the current owner surrenders it
++                owned => while (self.status.load(.monotonic) != forfeited) {},
++                else => unreachable,
++            }
++        } else {
++            while (true) {
++                // try to get the lock
++                if (self.status.cmpxchgWeak(free, owned, .acquire, .monotonic)) |status| {
++                    // pause the worker when the lock is not free
++                    if (status != free) {
++                        _ = self.wait_count.fetchAdd(1, .monotonic);
++                        Thread.Futex.wait(&self.status, status);
++                        _ = self.wait_count.fetchSub(1, .monotonic);
++                    }
++                } else break;
++            }
++        }
++    }
++
++    pub fn unlock(self: *@This()) void {
++        if (inMainThread()) {
++            // just release the lock
++            self.status.store(free, .release);
++        } else {
++            // release the lock if the worker thread still owns it
++            if (self.status.cmpxchgStrong(owned, free, .release, .monotonic)) |status| {
++                switch (status) {
++                    seized => {
++                        // let the spinning main thread take the lock
++                        self.status.store(forfeited, .release);
++                        return;
++                    },
++                    else => unreachable,
++                }
++            }
++        }
++        if (self.wait_count.load(.monotonic) > 0) {
++            // awaken a waiting worker thread
++            Thread.Futex.wake(&self.status, 1);
++        }
++    }
++
++    pub fn tryLock(self: *@This()) bool {
++        const new_status: u32 = if (inMainThread()) seized else owned;
++        return self.status.cmpxchgStrong(free, new_status, .acquire, .monotonic) == null;
++    }
++
++    fn inMainThread() bool {
++        const root = @import("root");
++        if (@hasDecl(root, "std_options") and root.std_options.wasi_main_thread_wait) {
++            return false;
++        }
++        return Thread.getCurrentId() == 0;
++    }
++};
++
+ test "smoke test" {
+     var mutex = Mutex{};
+ 
+diff -ruN ./std-unpatched/Thread.zig ./std/Thread.zig
+--- ./std-unpatched/Thread.zig	2025-05-23 06:31:41.000000000 +0200
++++ ./std/Thread.zig	2025-09-15 22:00:06.480869901 +0200
+@@ -1022,14 +1022,33 @@
+ 
+     comptime {
+         if (!builtin.single_threaded) {
+-            @export(&wasi_thread_start, .{ .name = "wasi_thread_start" });
++            switch (builtin.mode) {
++                .Debug => {
++                    @export(&wasi_thread_start_debug, .{ .name = "wasi_thread_start" });
++                    @export(&wasi_thread_start, .{ .name = "wasi_thread_start_cont", .visibility = .hidden });
++                },
++                else => @export(&wasi_thread_start, .{ .name = "wasi_thread_start" }),
++            }
+         }
+     }
+ 
++    /// Set the stack pointer then call wasi_thread_start
++    fn wasi_thread_start_debug(_: i32, arg: *Instance) callconv(.naked) void {
++        __set_stack_pointer(arg.thread.memory.ptr + arg.stack_offset);
++        asm volatile (
++            \\ local.get 0
++            \\ local.get 1
++            \\ call wasi_thread_start_cont
++            \\ return
++        );
++    }
++
+     /// Called by the host environment after thread creation.
+     fn wasi_thread_start(tid: i32, arg: *Instance) callconv(.c) void {
+         comptime assert(!builtin.single_threaded);
+-        __set_stack_pointer(arg.thread.memory.ptr + arg.stack_offset);
++        if (builtin.mode != .Debug) {
++            __set_stack_pointer(arg.thread.memory.ptr + arg.stack_offset);
++        }
+         __wasm_init_tls(arg.thread.memory.ptr + arg.tls_offset);
+         @atomicStore(u32, &WasiThreadImpl.tls_thread_id, @intCast(tid), .seq_cst);
+ 
+@@ -1059,12 +1078,10 @@
+             },
+             .completed => unreachable,
+             .detached => {
+-                // restore the original stack pointer so we can free the memory
+-                // without having to worry about freeing the stack
+-                __set_stack_pointer(arg.original_stack_pointer);
+-                // Ensure a copy so we don't free the allocator reference itself
+-                var allocator = arg.thread.allocator;
+-                allocator.free(arg.thread.memory);
++                // use free in the vtable so the stack doesn't get set to undefined when optimize = Debug
++                const free = arg.thread.allocator.vtable.free;
++                const ptr = arg.thread.allocator.ptr;
++                free(ptr, arg.thread.memory, std.mem.Alignment.@"1", 0);
+             },
+         }
+     }
