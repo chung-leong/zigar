@@ -12,19 +12,27 @@ async function copyBuildFile() {
   await copyFile(srcPath, dstPath);
 }
 
-async function patchStandardLibrary() {
+async function copyBuildExtraFile() {
   const modPath = findZigarCompiler();
-  const patchPath = join(modPath, 'wasi-thread.patch');
-  const zigPath = findZigCompiler();
-  const stdPath = join(zigPath, 'lib/std');  
-  const dryRunCmd = `patch -d "${stdPath}" -t -p0 -N --dry-run < "${patchPath}"`;
+  const srcPath = join(modPath, 'zig/build.extra.zig');
+  const dstPath = join(process.cwd(), 'build.extra.zig');
+  await copyFile(srcPath, dstPath);
+}
+
+async function patchStandardLibrary() {
   try {
+    const modPath = findZigarCompiler();
+    const patchPath = join(modPath, 'wasi-thread.patch');
+    const zigPath = resolve(findExecutable('zig'), '..');
+    const stdPath = join(zigPath, 'lib/std');
+    const patchExePath = findExecutable('patch');
+    const dryRunCmd = `"${patchExePath}" -d "${stdPath}" -t -p0 -N --dry-run < "${patchPath}"`;
     const dryRunResult = execSync(dryRunCmd).toString();
-    const patchCmd = `patch -d "${stdPath}" -t -p0 < "${patchPath}"`;
+    const patchCmd = `"${patchExePath}" -d ${JSON.stringify(stdPath)} -t -p0 < ${JSON.stringify(patchPath)}`;
     const result = execSync(patchCmd).toString();
     console.log(result);
   } catch (err) {
-    const dryRunError = err.stdout.toString();
+    const dryRunError = err.stdout?.toString?.() ?? err.message;
     throw new Error(`Operation failed:\n\n${dryRunError}`);
   }
 }
@@ -35,16 +43,16 @@ function findZigarCompiler() {
   return resolve(jsPath, '../..');
 }
 
-function findZigCompiler() {
-  let binPath;
-  if (process.platform === 'win32') {
-    const result = execSync(`where zig`).toString();
-    binPath = result;
-  } else {
-    const result = execSync(`whereis zig`).toString();
-    binPath = result.replace(/^\w+:\s*/, '');
+function findExecutable(cmd) {
+  try {
+    if (process.platform === 'win32') {
+      return execSync(`where ${cmd}`).toString().trim();
+    } else {
+      return execSync(`whereis ${cmd}`).toString().replace(/^\w+:\s*/, '').trim();
+    }
+  } catch {
+    throw new Error(`Executable not found: ${cmd}`);
   }
-  return resolve(binPath, '..');
 }
 
 function printHelp() {
@@ -54,6 +62,7 @@ function printHelp() {
     'Commands:',
     '',
     '  custom        Create a copy of Zigar\'s build.zig in the current folder',
+    '  extra         Create a barebone build.extra.zig in the current folder',
     '  patch         Patch Zig\'s standard library to enable thread support',
     '  help          Show this message',
     '',
@@ -68,6 +77,9 @@ try {
   switch (cmd) {
     case 'custom':
       await copyBuildFile();
+      break;
+    case 'extra':
+      await copyBuildExtraFile();
       break;
     case 'patch':
       await patchStandardLibrary();
