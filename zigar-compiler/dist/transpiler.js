@@ -151,6 +151,7 @@ const PosixError = {
   EFAULT: 21,
   EINVAL: 28,
   EIO: 29,
+  EMFILE: 34,
   ENOENT: 44,
   ENOTSUP: 58,
   EPERM: 63,
@@ -221,7 +222,9 @@ const PosixDescriptor = {
   stderr: 2,
   root: -1,
 
-  min: 0x000f_ffff};
+  min: 0x00f0_0000,
+  max: 0x00ff_ffff, 
+};
 const PosixPollEventType = {
   CLOCK: 0,
   FD_READ: 1,
@@ -3111,6 +3114,14 @@ class WouldBlock extends Error {
   }
 }
 
+class TooManyFiles extends Error {
+  code = PosixError.EMFILE;
+
+  constructor() {
+    super(`Too many open files`);
+  }
+}
+
 class Deadlock extends Error {
   code = PosixError.EDEADLK;
 
@@ -4075,7 +4086,7 @@ class WebStreamReader extends AsyncReader {
   constructor(reader) {
     super();
     this.reader = reader;
-    reader.close = () => this.onClose?.();
+    attachClose(reader, this);
   }
 
   async fetch() {
@@ -4164,7 +4175,7 @@ class BlobReader extends AsyncReader {
     super();
     this.blob = blob;
     this.size = blob.size;
-    blob.close = () => this.onClose?.();
+    attachClose(blob, this);
   }
 
   async fetch() {
@@ -4208,7 +4219,7 @@ class Uint8ArrayReadWriter {
   constructor(array) {
     this.array = array;
     this.size = array.length;    
-    array.close = () => this.onClose?.();
+    attachClose(array, this);
   }
 
   readnb(len) {
@@ -4259,7 +4270,7 @@ class ArrayWriter {
   constructor(array) {
     this.array = array;
     this.closeCB = null;
-    array.close = () => this.onClose?.();
+    attachClose(array, this);
   }
 
   writenb(bytes) {
@@ -4309,7 +4320,7 @@ class MapDirectory {
   constructor(map) {
     this.map = map;
     this.size = map.size;
-    map.close = () => this.onClose?.();
+    attachClose(map, this);
   }
 
   readdir() {
@@ -4357,6 +4368,17 @@ function reposition(whence, offset, current, size) {
   }
   if (!(pos >= 0 && pos <= size)) throw new InvalidArgument();
   return pos;
+}
+
+function attachClose(target, stream) {
+  const previous = target.close;
+  defineProperty(target, 'close', { 
+    value: () => {
+      previous?.();
+      stream.onClose?.();
+      delete target.close;
+    }
+  });
 }
 
 const size8k = 8192;
@@ -5233,9 +5255,20 @@ var streamRedirection = mixin({
       throw new InvalidFileDescriptor();
     }
     return entry;
-  },
+  },  
   createStreamHandle(stream, rights, flags = 0) {
-    const fd = this.nextStreamHandle++;
+    let fd = this.nextStreamHandle++;
+    if (fd > PosixDescriptor.max) {
+      // look for free slot
+      fd = PosixDescriptor.min;
+      while (this.streamMap.get(fd)) {      
+        fd++;
+        if (fd > PosixDescriptor.max) {
+          throw new TooManyFiles();
+        }
+      }
+      this.nextStreamHandle = fd + 1;
+    }
     this.streamMap.set(fd, [ stream, rights, flags ]);
     stream.onClose = () => this.destroyStreamHandle(fd);
     return fd;

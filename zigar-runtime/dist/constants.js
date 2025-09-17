@@ -149,6 +149,7 @@ const PosixError = {
   EFAULT: 21,
   EINVAL: 28,
   EIO: 29,
+  EMFILE: 34,
   ENOENT: 44,
   ENOTSUP: 58,
   EPERM: 63,
@@ -224,8 +225,8 @@ const PosixDescriptor = {
   stderr: 2,
   root: -1,
 
-  min: 0x000f_ffff,
-  max: 0x07ff_ffff, 
+  min: 0x00f0_0000,
+  max: 0x00ff_ffff, 
 };
 const PosixPollEventType = {
   CLOCK: 0,

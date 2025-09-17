@@ -23,10 +23,7 @@ pub fn build(b: *std.Build) !void {
         else => {},
     }
     lib.linkLibC();
-    const wf = switch (@hasDecl(std.Build, "addUpdateSourceFiles")) {
-        true => b.addUpdateSourceFiles(),
-        false => b.addWriteFiles(),
-    };
+    const wf = b.addUpdateSourceFiles();
     wf.addCopyFileToSource(lib.getEmittedBin(), output_path);
     wf.step.dependOn(&lib.step);
     b.getInstallStep().dependOn(&wf.step);
