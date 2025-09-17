@@ -1,5 +1,7 @@
 import 'mocha-skip-if';
 import { arch, endianness, platform } from 'os';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { addTests } from '../../zigar-compiler/test/integration/index.js';
 
 for (const optimize of [ 'Debug', 'ReleaseSmall', 'ReleaseSafe', 'ReleaseFast' ]) {
@@ -30,9 +32,15 @@ async function importModule(path, options) {
               + `omit-functions=${omitFunctions ? 1 : 0}&`
               + `omit-variables=${omitVariables ? 1 : 0}&`
               + `use-redirection=${useRedirection ? 1 : 0}&`;
-  // TODO: query variables actually get discarded currently
-  // should write the settings into a config file instead 
-  // (and delete it afterward)
+  const path = fileURLToPath(url);
+  const configPath = join(dirname(path), 'bun-zigar.toml');
+  global.__test_options = {
+    optimize,
+    multithreaded,
+    omitFunctions,
+    omitVariables,
+    useRedirection,
+  };
   currentModule = await import(path + '?' + query);
   return currentModule;
 }

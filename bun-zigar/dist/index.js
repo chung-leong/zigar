@@ -36,6 +36,10 @@ await plugin({
         const cfgModule = await import(configPath);
         Object.assign(options, processConfig(cfgModule.default, configPath, availableOptions));
       }
+      if (global.__test_options) {
+        Object.assign(options, global.__test_options);
+        delete global.__test_options;
+      }
       const ext = extname(path);
       const useCode = ext === '.zig';
       const srcPath = (useCode) ? path : findSourceFile(path, options);
