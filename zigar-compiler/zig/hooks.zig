@@ -1752,7 +1752,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             if (redirector.open(path, flags_int, 0, &result)) {
                 if (result > 0) {
                     if (c_allocator.create(RedirectedDir)) |dir| {
-                        dir.* = .{ .fd = @intCast(result) };
+                        dir.* = .{ .fd = result };
                         return @ptrCast(dir);
                     } else |_| {}
                 }
@@ -2778,44 +2778,37 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
         pub const lseeki64 = posix.lseek64;
 
         pub fn _findclose(handle: isize) callconv(.c) c_int {
-            const dir: *std.c.DIR = @ptrFromInt(@as(usize, @bitCast(handle)));
-            if (RedirectedDir.cast(dir)) |_| {
-                posix.closedir(dir);
+            const d: *std.c.DIR = @ptrFromInt(@as(usize, @bitCast(handle)));
+            if (RedirectedDir.cast(d)) |dir| {
+                _ = posix.close(dir.fd);
+                c_allocator.destroy(dir);
                 return 0;
             }
             return Original._findclose(handle);
         }
 
         pub fn _findfirst32(filespec: [*:0]const u8, info: *FindData32) callconv(.c) isize {
-            if (redirector.Host.isRedirecting(.open)) {
-                if (getPath(filespec) catch return -1) |path| {
-                    defer c_allocator.free(path);
-                    const dir = posix.opendir(path) orelse return -1;
-                    const handle: isize = @bitCast(@intFromPtr(dir));
-                    if (_findnext32(handle, info) == 0) {
-                        return @bitCast(handle);
-                    } else {
-                        posix.closedir(dir);
-                        return -1;
-                    }
+            const handle = opendir(filespec);
+            if (handle < 0) return -1;
+            if (handle > 0) {
+                if (_findnext32(handle, info) != 0) {
+                    _ = _findclose(handle);
+                    return -1;
                 }
+                return handle;
             }
             return Original._findfirst32(filespec, info);
         }
 
         pub fn _findfirst64(filespec: [*:0]const u8, info: *FindData64) callconv(.c) isize {
-            if (redirector.Host.isRedirecting(.open)) {
-                if (getPath(filespec) catch return -1) |path| {
-                    defer c_allocator.free(path);
-                    const dir = posix.opendir(path) orelse return -1;
-                    const handle: isize = @bitCast(@intFromPtr(dir));
-                    if (_findnext64(handle, info) == 0) {
-                        return @bitCast(handle);
-                    } else {
-                        posix.closedir(dir);
-                        return -1;
-                    }
+            const handle = opendir(filespec);
+            if (handle < 0) return -1;
+            if (handle > 0) {
+                if (_findnext64(handle, info) != 0) {
+                    _ = _findclose(handle);
+                    return -1;
                 }
+                return handle;
             }
             return Original._findfirst64(filespec, info);
         }
@@ -2860,6 +2853,27 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
                 return try c_allocator.dupeZ(u8, filespec[0 .. len - 2]);
             }
             return null;
+        }
+
+        fn opendir(filespec: [*:0]const u8) isize {
+            if (redirector.Host.isRedirecting(.open)) {
+                if (getPath(filespec) catch return -1) |path| {
+                    defer c_allocator.free(path);
+                    const flags: O = .{ .DIRECTORY = true };
+                    const flags_int: @typeInfo(O).@"struct".backing_integer.? = @bitCast(flags);
+                    var result: c_int = undefined;
+                    if (redirector.open(path, flags_int, 0, &result)) {
+                        if (result > 0) {
+                            if (c_allocator.create(RedirectedDir)) |dir| {
+                                dir.* = .{ .fd = result };
+                                return @bitCast(@intFromPtr(dir));
+                            } else |_| {}
+                        }
+                        return -1;
+                    }
+                }
+            }
+            return 0;
         }
 
         fn readdirT(comptime T: type, dir: *std.c.DIR, info: *T) c_int {

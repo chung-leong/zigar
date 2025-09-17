@@ -166,9 +166,7 @@ export function addTests(importModule, options) {
           },
         }));
       }
-      const correct = (platform() === 'win32') 
-      ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
-      : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+      const correct = 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
       const path = absolute('./data/test.txt');
       let event;
       __zigar.on('open', (evt) => {
@@ -192,9 +190,7 @@ export function addTests(importModule, options) {
           },
         }));
       }
-      const correct = (platform() === 'win32') 
-      ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
-      : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+      const correct = 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
       const path = absolute('./data/test.txt');
       let event;
       __zigar.on('open', (evt) => {
@@ -944,7 +940,10 @@ export function addTests(importModule, options) {
           },
         }));
       }
-      const path = absolute('./data/fstat_test.txt');
+      let path = absolute(`./data/fstat_test`);
+      if (target === 'win32') {
+        path = path.slice(2).replace(/\\/g, '/');
+      }
       await writeFile(path, 'Hello world');
       try {
         let event;
@@ -2140,7 +2139,10 @@ export function addTests(importModule, options) {
           },
         }));
       }
-      const path = absolute(`./data/mkdir_test`);
+      let path = absolute(`./data/mkdir_test`);
+      if (target === 'win32') {
+        path = path.slice(2).replace(/\\/g, '/');
+      }
       try {
         let event;
         __zigar.on('mkdir', (evt) => {
@@ -2203,7 +2205,10 @@ export function addTests(importModule, options) {
           },
         }));
       }
-      const path = absolute(`./data/rmdir_test`);
+      let path = absolute(`./data/rmdir_test`);
+      if (target === 'win32') {
+        path = path.slice(2).replace(/\\/g, '/');
+      }
       await mkdir(path, { recursive: true });
       try {
         let event;
@@ -2235,7 +2240,10 @@ export function addTests(importModule, options) {
           },
         }));
       }
-      const path = absolute(`./data/unlink_test.txt`);
+      let path = absolute(`./data/unlink_test.txt`);
+      if (target === 'win32') {
+        path = path.slice(2).replace(/\\/g, '/');
+      }
       await writeFile(path, 'Hello world');
       try {
         let event;
@@ -2299,7 +2307,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should scan directory in file system file using posix function', async function() {
-      const { __zigar, print } = await importTest('scan-directory-in-file-system-with-posix-functions', { useLibc: true });
+      const { __zigar, print } = await importTest('scan-directory-in-file-system-with-posix-functions', { useLibc: true, useRedirection: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
         __zigar.wasi(new WASI({
@@ -2311,7 +2319,10 @@ export function addTests(importModule, options) {
           },
         }));
       }
-      const path = absolute(`./data/readdir_test`);
+      let path = absolute(`./data/readdir_test`);
+      if (target === 'win32') {
+        path = path.slice(2).replace(/\\/g, '/');
+      }
       await mkdir(path, { recursive: true });
       await writeFile(`${path}/file1.txt`, 'Hello world');
       await writeFile(`${path}/file2.txt`, 'Rats live on no evil start');
