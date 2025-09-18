@@ -26,9 +26,9 @@ async function patchStandardLibrary() {
     const zigPath = resolve(findExecutable('zig'), '..');
     const stdPath = join(zigPath, 'lib/std');
     const patchExePath = findExecutable('patch');
-    const dryRunCmd = `"${patchExePath}" -d "${stdPath}" -t -p0 -N --dry-run < "${patchPath}"`;
+    const dryRunCmd = `patch -d "${stdPath}" -t -p0 -N --dry-run < "${patchPath}"`;
     const dryRunResult = execSync(dryRunCmd).toString();
-    const patchCmd = `"${patchExePath}" -d ${JSON.stringify(stdPath)} -t -p0 < ${JSON.stringify(patchPath)}`;
+    const patchCmd = `patch -d ${JSON.stringify(stdPath)} -t -p0 < ${JSON.stringify(patchPath)}`;
     const result = execSync(patchCmd).toString();
     console.log(result);
   } catch (err) {
@@ -38,21 +38,23 @@ async function patchStandardLibrary() {
 }
 
 function findZigarCompiler() {
-  const require = createRequire(import.meta.url);
   const jsPath = require.resolve('zigar-compiler');
   return resolve(jsPath, '../..');
 }
 
 function findExecutable(cmd) {
+  let path;
   try {
     if (process.platform === 'win32') {
-      return execSync(`where ${cmd}`).toString().trim();
+      path = execSync(`where ${cmd}`).toString().trim();
     } else {
-      return execSync(`whereis ${cmd}`).toString().replace(/^\w+:\s*/, '').trim();
+      [ path ] = execSync(`whereis ${cmd}`).toString().replace(/^\w+:\s*/, '').trim().split(/\s+/);
     }
-  } catch {
+  } catch {}
+  if (!path) {
     throw new Error(`Executable not found: ${cmd}`);
   }
+  return path;
 }
 
 function printHelp() {

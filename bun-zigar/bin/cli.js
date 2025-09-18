@@ -197,11 +197,23 @@ async function addPreload() {
 }
 
 async function copyBuildFile() {
-  const require = createRequire(import.meta.url);
-  const modPath = require.resolve('zigar-compiler');
-  const srcPath = resolve(modPath, '../../zig/build.zig');
+  const modPath = findZigarCompiler();
+  const srcPath = join(modPath, 'zig/build.zig');
   const dstPath = join(process.cwd(), 'build.zig');
   await copyFile(srcPath, dstPath);
+}
+
+async function copyBuildExtraFile() {
+  const modPath = findZigarCompiler();
+  const srcPath = join(modPath, 'zig/build.extra.zig');
+  const dstPath = join(process.cwd(), 'build.extra.zig');
+  await copyFile(srcPath, dstPath);
+}
+
+function findZigarCompiler() {
+  const require = createRequire(import.meta.url);
+  const jsPath = require.resolve('zigar-compiler');
+  return resolve(jsPath, '../..');
 }
 
 function printHelp() {
@@ -213,6 +225,7 @@ function printHelp() {
     '  init          Create basic config file',
     '  build         Build library files for Zig modules and Bun.js addon',
     '  custom        Create a copy of Zigar\'s build.zig in the current folder',
+    '  extra         Create a barebone build.extra.zig in the current folder',
     '  preload       Add bun-zigar as preloaded module to bunfig.toml',
     '',
     '  help          Show this message',
@@ -234,7 +247,10 @@ try {
       break;
     case 'custom':
       await copyBuildFile();
-      break;  
+      break;
+    case 'extra':
+      await copyBuildExtraFile();
+      break;
     case 'preload':
       await addPreload();
       break;
