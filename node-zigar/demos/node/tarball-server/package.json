@@ -12,9 +12,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "fastify": "^5.3.3"
+    "fastify": "^5.6.0"
   },
   "devDependencies": {
-    "node-zigar": "^0.14.1"
+    "node-zigar": "^0.14.2-alpha.1"
   }
 }

@@ -16,10 +16,11 @@ const { createEnvironment } = require(resolve(__dirname, "../lib/node-zigar-addo
 const s = {
   constructor: null,
   type: 0,
+  purpose: 0,
   flags: 0,
   signature: undefined,
   name: undefined,
-  byteSize: 0,
+  byteSize: undefined,
   align: 0,
   instance: {
     members: [],
@@ -41,7 +42,8 @@ const m = {
 const s0 = {}, s1 = {}, s2 = {}, s3 = {}, s4 = {}, s5 = {}, s6 = {}, s7 = {}, s8 = {}, s9 = {};
 const s10 = {}, s11 = {}, s12 = {}, s13 = {}, s14 = {}, s15 = {}, s16 = {}, s17 = {}, s18 = {}, s19 = {};
 const s20 = {}, s21 = {}, s22 = {}, s23 = {}, s24 = {}, s25 = {}, s26 = {}, s27 = {}, s28 = {}, s29 = {};
-const s30 = {}, s31 = {}, s32 = {}, s33 = {}, s34 = {}, s35 = {}, s36 = {}, s37 = {};
+const s30 = {}, s31 = {}, s32 = {}, s33 = {}, s34 = {}, s35 = {}, s36 = {}, s37 = {}, s38 = {}, s39 = {};
+const s40 = {}, s41 = {}, s42 = {};
 
 // declare objects
 const o0 = {}, o1 = {}, o2 = {}, o3 = {}, o4 = {}, o5 = {}, o6 = {}, o7 = {}, o8 = {}, o9 = {};
@@ -50,56 +52,39 @@ const o20 = {}, o21 = {}, o22 = {}, o23 = {}, o24 = {}, o25 = {}, o26 = {}, o27 
 const o30 = {}, o31 = {}, o32 = {}, o33 = {}, o34 = {}, o35 = {}, o36 = {}, o37 = {}, o38 = {}, o39 = {};
 const o40 = {}, o41 = {}, o42 = {}, o43 = {}, o44 = {}, o45 = {}, o46 = {}, o47 = {}, o48 = {}, o49 = {};
 const o50 = {}, o51 = {}, o52 = {}, o53 = {}, o54 = {}, o55 = {}, o56 = {}, o57 = {}, o58 = {}, o59 = {};
-const o60 = {};
+const o60 = {}, o61 = {}, o62 = {}, o63 = {}, o64 = {}, o65 = {}, o66 = {}, o67 = {}, o68 = {}, o69 = {};
+const o70 = {}, o71 = {}, o72 = {}, o73 = {};
 
 // define byte arrays
 const U = i => new Uint8Array(i);
-const a0 = U([ 1, 0 ]);
-const a1 = U([ 2, 0 ]);
-const a2 = U([ 3, 0 ]);
-const a3 = U([ 4, 0 ]);
-const a4 = U([ 5, 0 ]);
-const a5 = U([ 6, 0 ]);
-const a6 = U([ 7, 0 ]);
-const a7 = U([ 8, 0 ]);
-const a8 = U([ 9, 0 ]);
-const a9 = U([ 10, 0 ]);
-const a10 = U([ 11, 0 ]);
-const a11 = U([ 12, 0 ]);
-const a12 = U([ 13, 0 ]);
-const a13 = U([ 14, 0 ]);
-const a14 = U([ 15, 0 ]);
-const a15 = U([ 16, 0 ]);
-const a16 = U([ 17, 0 ]);
-const a17 = U([ 18, 0 ]);
-const a18 = U([ 19, 0 ]);
-const a19 = U([ 20, 0 ]);
-const a20 = U([ 21, 0 ]);
-const a21 = U([ 22, 0 ]);
-const a22 = U([ 23, 0 ]);
-const a23 = U([ 24, 0 ]);
-const a24 = U([ 25, 0 ]);
-const a25 = U([ 40, 0 ]);
-const a26 = U([ 48, 0 ]);
-const a27 = U([ 49, 0 ]);
-const a28 = U([ 50, 0 ]);
-const a29 = U([ 51, 0 ]);
-const a30 = U([ 52, 0 ]);
-const a31 = U(0);
-const a32 = U(16);
-const a33 = U(a0);
-const a34 = U(a26);
-const a35 = U(16);
-const a36 = U(16);
+const a0 = U([ 10, 0 ]);
+const a1 = U([ 11, 0 ]);
+const a2 = U([ 14, 0 ]);
+const a3 = U([ 15, 0 ]);
+const a4 = U([ 16, 0 ]);
+const a5 = U([ 17, 0 ]);
+const a6 = U([ 18, 0 ]);
+const a7 = U([ 19, 0 ]);
+const a8 = U(0);
+const a9 = U([ 0, 1 ]);
+const a10 = U(3);
+const a11 = U([ 1 ]);
+const a12 = U(16);
+const a13 = U(a0);
+const a14 = U(a1);
+const a15 = U(3);
+const a16 = U(1);
+const a17 = U(16);
+const a18 = U([ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 ]);
+const a19 = U(32);
+const a20 = U(1);
+const a21 = U(16);
 
 // fill in object properties
 const $ = Object.assign;
 $(o0, {
   slots: {
-    0: o1, 1: o2, 2: o3, 3: o4, 4: o5, 5: o6, 6: o7, 7: o8, 8: o9, 9: o10,
-    10: o11, 11: o12, 12: o13, 13: o14, 14: o15, 15: o16, 16: o17, 17: o18, 18: o19, 19: o20,
-    20: o21, 21: o22, 22: o23, 23: o24, 24: o25, 25: o26, 26: o27, 27: o28, 28: o29, 29: o30,
-    30: o31,
+    0: o1, 1: o2, 2: o3, 3: o4, 4: o5, 5: o6, 6: o7, 7: o8,
   },
 });
 $(o1, {
@@ -142,267 +127,266 @@ $(o8, {
   memory: { array: a7 },
   const: true,
 });
-$(o9, {
-  structure: s1,
+$(o9, {});
+$(o10, {
+  memory: { array: a8 },
+  handle: 178424,
+});
+$(o11, {});
+$(o12, {
+  memory: { array: a9 },
+});
+$(o13, {});
+$(o14, {
+  slots: {
+    0: o15, 1: o17, 2: o18,
+  },
+});
+$(o15, {
+  structure: s7,
   memory: { array: a8 },
   const: true,
+  slots: {
+    0: o16,
+  },
 });
-$(o10, {
-  structure: s1,
-  memory: { array: a9 },
-  const: true,
+$(o16, {
+  structure: s6,
 });
-$(o11, {
-  structure: s1,
+$(o17, {
+  structure: s10,
   memory: { array: a10 },
   const: true,
 });
-$(o12, {
-  structure: s1,
+$(o18, {
+  structure: s8,
   memory: { array: a11 },
   const: true,
 });
-$(o13, {
-  structure: s1,
-  memory: { array: a12 },
-  const: true,
+$(o19, {});
+$(o20, {});
+$(o21, {});
+$(o22, {
+  memory: { array: a8 },
+  handle: 223937,
 });
-$(o14, {
-  structure: s1,
+$(o23, {
+  memory: { array: a8 },
+  handle: 228768,
+});
+$(o24, {});
+$(o25, {
+  memory: { array: a12 },
+  handle: 222011,
+  slots: {
+    0: o26, 1: o28,
+  },
+});
+$(o26, {
+  structure: s13,
+  memory: { array: a12, offset: 0, length: 8 },
+  slots: {
+    0: o27,
+  },
+});
+$(o27, {
+  structure: s12,
+  memory: { array: a12, offset: 0, length: 8 },
+});
+$(o28, {
+  structure: s16,
+  memory: { array: a12, offset: 8, length: 8 },
+  slots: {
+    0: o29,
+  },
+});
+$(o29, {
+  structure: s15,
+  memory: { array: a8 },
+});
+$(o30, {});
+$(o31, {
+  memory: { array: a8 },
+  handle: 179060,
+});
+$(o32, {
+  slots: {
+    0: o33, 1: o34,
+  },
+});
+$(o33, {
+  structure: s20,
   memory: { array: a13 },
   const: true,
 });
-$(o15, {
-  structure: s1,
+$(o34, {
+  structure: s20,
   memory: { array: a14 },
   const: true,
 });
-$(o16, {
-  structure: s1,
-  memory: { array: a15 },
-  const: true,
-});
-$(o17, {
-  structure: s1,
-  memory: { array: a16 },
-  const: true,
-});
-$(o18, {
-  structure: s1,
-  memory: { array: a17 },
-  const: true,
-});
-$(o19, {
-  structure: s1,
-  memory: { array: a18 },
-  const: true,
-});
-$(o20, {
-  structure: s1,
-  memory: { array: a19 },
-  const: true,
-});
-$(o21, {
-  structure: s1,
-  memory: { array: a20 },
-  const: true,
-});
-$(o22, {
-  structure: s1,
-  memory: { array: a21 },
-  const: true,
-});
-$(o23, {
-  structure: s1,
-  memory: { array: a22 },
-  const: true,
-});
-$(o24, {
-  structure: s1,
-  memory: { array: a23 },
-  const: true,
-});
-$(o25, {
-  structure: s1,
-  memory: { array: a24 },
-  const: true,
-});
-$(o26, {
-  structure: s1,
-  memory: { array: a25 },
-  const: true,
-});
-$(o27, {
-  structure: s1,
-  memory: { array: a26 },
-  const: true,
-});
-$(o28, {
-  structure: s1,
-  memory: { array: a27 },
-  const: true,
-});
-$(o29, {
-  structure: s1,
-  memory: { array: a28 },
-  const: true,
-});
-$(o30, {
-  structure: s1,
-  memory: { array: a29 },
-  const: true,
-});
-$(o31, {
-  structure: s1,
-  memory: { array: a30 },
-  const: true,
-});
-$(o32, {
-  memory: { array: a31 },
-  handle: 135190,
-});
-$(o33, {
-  memory: { array: a31 },
-  handle: 149365,
-});
-$(o34, {
-  memory: { array: a31 },
-  handle: 152057,
-});
-$(o35, {
-  memory: { array: a32 },
-  handle: 148028,
-  slots: {
-    0: o36, 1: o38,
-  },
-});
+$(o35, {});
 $(o36, {
-  structure: s9,
-  memory: { array: a32, offset: 0, length: 8 },
   slots: {
-    0: o37,
+    0: o37, 1: o38, 2: o39,
   },
 });
 $(o37, {
-  structure: s8,
-  memory: { array: a32, offset: 0, length: 8 },
+  structure: s7,
+  memory: { array: a8 },
+  const: true,
+  slots: {
+    0: o16,
+  },
 });
 $(o38, {
-  structure: s12,
-  memory: { array: a32, offset: 8, length: 8 },
-  slots: {
-    0: o39,
-  },
+  structure: s10,
+  memory: { array: a15 },
+  const: true,
 });
 $(o39, {
-  structure: s11,
-  memory: { array: a31 },
-});
-$(o40, {
-  memory: { array: a31 },
-  handle: 135551,
-});
-$(o41, {
-  slots: {
-    0: o42, 1: o43,
-  },
-});
-$(o42, {
-  structure: s16,
-  memory: { array: a33 },
+  structure: s8,
+  memory: { array: a16 },
   const: true,
+});
+$(o40, {});
+$(o41, {});
+$(o42, {
+  memory: { array: a8 },
+  handle: 228781,
 });
 $(o43, {
-  structure: s16,
-  memory: { array: a34 },
-  const: true,
+  memory: { array: a8 },
+  handle: 230285,
 });
-$(o44, {
-  memory: { array: a31 },
-  handle: 152070,
-});
+$(o44, {});
 $(o45, {
-  memory: { array: a31 },
-  handle: 153574,
+  memory: { array: a17 },
+  handle: 222011,
+  slots: {
+    0: o46, 1: o48,
+  },
 });
 $(o46, {
-  memory: { array: a35 },
-  handle: 148028,
+  structure: s22,
+  memory: { array: a12, offset: 0, length: 8 },
   slots: {
-    0: o47, 1: o49,
+    0: o47,
   },
 });
 $(o47, {
-  structure: s18,
-  memory: { array: a32, offset: 0, length: 8 },
-  slots: {
-    0: o48,
-  },
+  structure: s11,
+  memory: { array: a8 },
 });
 $(o48, {
-  structure: s7,
-  memory: { array: a31 },
+  structure: s29,
+  memory: { array: a12, offset: 8, length: 8 },
+  slots: {
+    0: o49,
+  },
 });
 $(o49, {
-  structure: s25,
-  memory: { array: a32, offset: 8, length: 8 },
-  slots: {
-    0: o50,
-  },
+  structure: s28,
+  memory: { array: a8 },
 });
 $(o50, {
-  structure: s24,
-  memory: { array: a31 },
+  memory: { array: a18 },
+  handle: 233851,
+  slots: {
+    0: o51,
+  },
 });
 $(o51, {
-  memory: { array: a31 },
-  handle: 153587,
+  structure: s26,
+  memory: { array: a18, offset: 0, length: 16 },
+  slots: {
+    0: o52,
+  },
 });
 $(o52, {
-  memory: { array: a31 },
-  handle: 155091,
+  structure: s25,
+  memory: { array: a8 },
 });
-$(o53, {
-  memory: { array: a36 },
-  handle: 148028,
-  slots: {
-    0: o36, 1: o54,
-  },
-});
-$(o54, {
-  structure: s33,
-  memory: { array: a32, offset: 8, length: 8 },
-  slots: {
-    0: o55,
-  },
-});
+$(o53, {});
+$(o54, {});
 $(o55, {
-  structure: s32,
-  memory: { array: a31 },
+  slots: {
+    0: o56, 1: o58, 2: o59,
+  },
 });
 $(o56, {
-  memory: { array: a31 },
-  handle: 136214,
-});
-$(o57, {
+  structure: s7,
+  memory: { array: a8 },
+  const: true,
   slots: {
-    0: o58, 1: o59, 2: o60,
+    0: o57,
   },
 });
+$(o57, {
+  structure: s26,
+});
 $(o58, {
-  structure: s5,
-  memory: { array: a31 },
-  handle: 126041,
+  structure: s32,
+  memory: { array: a19 },
+  handle: 222856,
 });
 $(o59, {
-  structure: s15,
-  memory: { array: a31 },
-  handle: 126085,
+  structure: s8,
+  memory: { array: a20 },
+  const: true,
 });
-$(o60, {
-  structure: s36,
-  memory: { array: a31 },
-  handle: 126184,
+$(o60, {});
+$(o61, {});
+$(o62, {
+  memory: { array: a8 },
+  handle: 230935,
+});
+$(o63, {
+  memory: { array: a8 },
+  handle: 232439,
+});
+$(o64, {});
+$(o65, {
+  memory: { array: a21 },
+  handle: 222011,
+  slots: {
+    0: o26, 1: o66,
+  },
+});
+$(o66, {
+  structure: s38,
+  memory: { array: a12, offset: 8, length: 8 },
+  slots: {
+    0: o67,
+  },
+});
+$(o67, {
+  structure: s37,
+  memory: { array: a8 },
+});
+$(o68, {});
+$(o69, {
+  memory: { array: a8 },
+  handle: 200947,
+});
+$(o70, {
+  slots: {
+    0: o71, 1: o72, 2: o73,
+  },
+});
+$(o71, {
+  structure: s5,
+  memory: { array: a8 },
+  handle: 169364,
+});
+$(o72, {
+  structure: s19,
+  memory: { array: a8 },
+  handle: 169377,
+});
+$(o73, {
+  structure: s41,
+  memory: { array: a8 },
+  handle: 169390,
 });
 
 // fill in structure properties
@@ -410,26 +394,29 @@ $(s0, {
   ...s,
   flags: 1,
   signature: 0xa310b7d01f11b8can,
-  name: "void",
+  byteSize: 0,
   align: 1,
   instance: {
     members: [
       {
         ...m,
         bitSize: 0,
-        bitOffset: 0,
         byteSize: 0,
+        bitOffset: 0,
         structure: s0,
       },
     ],
   },
+  static: {
+    members: [],
+  },
+  name: "void",
 });
 $(s1, {
   ...s,
   type: 5,
   flags: 1,
-  signature: 0x5062e16b4c329430n,
-  name: "ES0",
+  signature: 0x5c49cd7eda493ef6n,
   byteSize: 2,
   align: 2,
   instance: {
@@ -438,8 +425,8 @@ $(s1, {
         ...m,
         type: 3,
         bitSize: 16,
-        bitOffset: 0,
         byteSize: 2,
+        bitOffset: 0,
         structure: s1,
       },
     ],
@@ -448,270 +435,86 @@ $(s1, {
     members: [
       {
         ...m,
+        name: "Unexpected",
         type: 5,
         flags: 4,
         slot: 0,
-        name: "OutOfMemory",
         structure: s1,
       },
       {
         ...m,
+        name: "OutOfMemory",
         type: 5,
         flags: 4,
         slot: 1,
-        name: "Unknown",
         structure: s1,
       },
       {
         ...m,
+        name: "AlreadyInitialized",
         type: 5,
         flags: 4,
         slot: 2,
-        name: "UnableToAllocateMemory",
         structure: s1,
       },
       {
         ...m,
+        name: "Deinitializing",
         type: 5,
         flags: 4,
         slot: 3,
-        name: "UnableToFreeMemory",
         structure: s1,
       },
       {
         ...m,
+        name: "UnableToUseThread",
         type: 5,
         flags: 4,
         slot: 4,
-        name: "UnableToRetrieveMemoryLocation",
         structure: s1,
       },
       {
         ...m,
+        name: "ThreadQuotaExceeded",
         type: 5,
         flags: 4,
         slot: 5,
-        name: "UnableToCreateDataView",
         structure: s1,
       },
       {
         ...m,
+        name: "SystemResources",
         type: 5,
         flags: 4,
         slot: 6,
-        name: "UnableToCreateObject",
         structure: s1,
       },
       {
         ...m,
+        name: "LockedMemoryLimitExceeded",
         type: 5,
         flags: 4,
         slot: 7,
-        name: "UnableToObtainSlot",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 8,
-        name: "UnableToRetrieveObject",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 9,
-        name: "UnableToInsertObject",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 10,
-        name: "UnableToStartStructureDefinition",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 11,
-        name: "UnableToAddStructureMember",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 12,
-        name: "UnableToAddStaticMember",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 13,
-        name: "UnableToAddMethod",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 14,
-        name: "UnableToCreateStructureTemplate",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 15,
-        name: "UnableToCreateString",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 16,
-        name: "UnableToAddStructureTemplate",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 17,
-        name: "UnableToDefineStructure",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 18,
-        name: "UnableToWriteToConsole",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 19,
-        name: "UnableToCreateFunction",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 20,
-        name: "UnableToUseThread",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 21,
-        name: "NotInMainThread",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 22,
-        name: "MainThreadNotFound",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 23,
-        name: "MultithreadingNotEnabled",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 24,
-        name: "TooManyArguments",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 25,
-        name: "SystemResources",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 26,
-        name: "Unexpected",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 27,
-        name: "AlreadyInitialized",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 28,
-        name: "Deinitializing",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 29,
-        name: "ThreadQuotaExceeded",
-        structure: s1,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 30,
-        name: "LockedMemoryLimitExceeded",
         structure: s1,
       },
     ],
     template: o0
   },
+  name: "ES0",
 });
 $(s2, {
   ...s,
   type: 4,
   flags: 1,
-  signature: 0x486b0cb193cc99edn,
-  name: "ES0!void",
+  signature: 0x4d22a6cc8c076c22n,
   byteSize: 2,
   align: 2,
   instance: {
     members: [
       {
         ...m,
-        bitSize: 0,
         bitOffset: 16,
+        bitSize: 0,
         byteSize: 0,
         slot: 0,
         structure: s0,
@@ -720,19 +523,22 @@ $(s2, {
         ...m,
         type: 3,
         flags: 8,
-        bitSize: 16,
         bitOffset: 0,
+        bitSize: 16,
         byteSize: 2,
         structure: s1,
       },
     ],
   },
+  static: {
+    members: [],
+  },
+  name: "ES0!void",
 });
 $(s3, {
   ...s,
   flags: 17,
   signature: 0xad790f74c7d61933n,
-  name: "usize",
   byteSize: 8,
   align: 8,
   instance: {
@@ -741,19 +547,22 @@ $(s3, {
         ...m,
         type: 3,
         bitSize: 64,
-        bitOffset: 0,
         byteSize: 8,
+        bitOffset: 0,
         structure: s3,
       },
     ],
   },
+  static: {
+    members: [],
+  },
+  name: "usize",
 });
 $(s4, {
   ...s,
   type: 12,
   flags: 42,
-  signature: 0xdc467b8577879c03n,
-  name: "Arg(fn (usize) ES0!void)",
+  signature: 0x8e91d7462f89ba65n,
   length: 1,
   byteSize: 16,
   align: 8,
@@ -761,35 +570,40 @@ $(s4, {
     members: [
       {
         ...m,
+        name: "retval",
         type: 5,
         flags: 1,
-        bitSize: 16,
         bitOffset: 64,
+        bitSize: 16,
         byteSize: 2,
         slot: 0,
-        name: "retval",
         structure: s2,
       },
       {
         ...m,
+        name: "0",
         type: 3,
         flags: 1,
-        bitSize: 64,
         bitOffset: 0,
+        bitSize: 64,
         byteSize: 8,
         slot: 1,
-        name: "0",
         structure: s3,
       },
     ],
+    template: o9
   },
+  static: {
+    members: [],
+  },
+  name: "Arg(fn (usize) ES0!void)",
 });
 $(s5, {
   ...s,
   type: 14,
-  signature: 0xe4855c7a3f89eb94n,
-  name: "fn (usize) ES0!void",
+  signature: 0x5ecba166d36aefeen,
   length: 1,
+  byteSize: 0,
   instance: {
     members: [
       {
@@ -800,14 +614,17 @@ $(s5, {
         structure: s4,
       },
     ],
-    template: o32
+    template: o10
   },
+  static: {
+    members: [],
+  },
+  name: "fn (usize) ES0!void",
 });
 $(s6, {
   ...s,
   flags: 1,
   signature: 0x370ee22b85937307n,
-  name: "u8",
   byteSize: 1,
   align: 1,
   instance: {
@@ -816,21 +633,142 @@ $(s6, {
         ...m,
         type: 3,
         bitSize: 8,
-        bitOffset: 0,
         byteSize: 1,
+        bitOffset: 0,
         structure: s6,
       },
     ],
   },
+  static: {
+    members: [],
+  },
+  name: "u8",
 });
 $(s7, {
+  ...s,
+  flags: 9,
+  signature: 0x406b8a99e2cc9d59n,
+  byteSize: 0,
+  align: 1,
+  instance: {
+    members: [
+      {
+        ...m,
+        type: 6,
+        bitSize: 0,
+        byteSize: 0,
+        bitOffset: 0,
+        slot: 0,
+        structure: s7,
+      },
+    ],
+    template: o11
+  },
+  static: {
+    members: [],
+  },
+  name: "type",
+});
+$(s8, {
+  ...s,
+  flags: 1,
+  signature: 0x6eddab4b13ff06c5n,
+  byteSize: 1,
+  align: 1,
+  instance: {
+    members: [
+      {
+        ...m,
+        type: 1,
+        bitSize: 1,
+        byteSize: 1,
+        bitOffset: 0,
+        structure: s8,
+      },
+    ],
+  },
+  static: {
+    members: [],
+  },
+  name: "bool",
+});
+$(s9, {
+  ...s,
+  type: 2,
+  signature: 0x4485a9035cc2b0d7n,
+  byteSize: 2,
+  align: 1,
+  instance: {
+    members: [
+      {
+        ...m,
+        name: "value",
+        type: 3,
+        flags: 1,
+        bitOffset: 0,
+        bitSize: 8,
+        byteSize: 1,
+        slot: 0,
+        structure: s6,
+      },
+      {
+        ...m,
+        name: "is_required",
+        type: 1,
+        bitOffset: 8,
+        bitSize: 1,
+        byteSize: 1,
+        slot: 1,
+        structure: s8,
+      },
+    ],
+    template: o12
+  },
+  static: {
+    members: [],
+  },
+  name: "S0",
+});
+$(s10, {
+  ...s,
+  type: 7,
+  flags: 27,
+  signature: 0x6cc1b27fb3d21636n,
+  byteSize: 3,
+  align: 1,
+  instance: {
+    members: [
+      {
+        ...m,
+        type: 5,
+        bitSize: 16,
+        byteSize: 2,
+        bitOffset: 0,
+        slot: 0,
+        structure: s9,
+      },
+      {
+        ...m,
+        type: 3,
+        flags: 8,
+        bitOffset: 16,
+        bitSize: 8,
+        byteSize: 1,
+        structure: s6,
+      },
+    ],
+    template: o13
+  },
+  static: {
+    members: [],
+  },
+  name: "?S0",
+});
+$(s11, {
   ...s,
   type: 9,
   flags: 480,
   signature: 0x9b3f78f92307ba61n,
-  name: "anyopaque",
-  byteSize: undefined,
-  align: 65535,
   instance: {
     members: [
       {
@@ -842,133 +780,17 @@ $(s7, {
       },
     ],
   },
-});
-$(s8, {
-  ...s,
-  type: 8,
-  flags: 332,
-  signature: 0x4057fadddf1d8877n,
-  name: "*opaque",
-  byteSize: 8,
-  align: 8,
-  instance: {
-    members: [
-      {
-        ...m,
-        type: 5,
-        bitSize: 64,
-        byteSize: 8,
-        slot: 0,
-        structure: s7,
-      },
-    ],
-  },
-});
-$(s9, {
-  ...s,
-  type: 7,
-  flags: 15,
-  signature: 0xfd89f2070573d249n,
-  name: "?*opaque",
-  byteSize: 8,
-  align: 8,
-  instance: {
-    members: [
-      {
-        ...m,
-        type: 5,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 0,
-        structure: s8,
-      },
-      {
-        ...m,
-        type: 3,
-        flags: 8,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        structure: s3,
-      },
-    ],
-  },
-});
-$(s10, {
-  ...s,
-  type: 12,
-  flags: 14,
-  signature: 0xa4f4ca33336a9dbcn,
-  name: "Arg(fn (?*opaque, void) void)",
-  length: 2,
-  byteSize: 8,
-  align: 8,
-  instance: {
-    members: [
-      {
-        ...m,
-        flags: 1,
-        bitSize: 0,
-        bitOffset: 64,
-        byteSize: 0,
-        slot: 0,
-        name: "retval",
-        structure: s0,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 1,
-        bitSize: 64,
-        bitOffset: 0,
-        byteSize: 8,
-        slot: 1,
-        name: "0",
-        structure: s9,
-      },
-      {
-        ...m,
-        flags: 1,
-        bitSize: 0,
-        bitOffset: 64,
-        byteSize: 0,
-        slot: 2,
-        name: "1",
-        structure: s0,
-      },
-    ],
-  },
-});
-$(s11, {
-  ...s,
-  type: 14,
-  signature: 0xab938596c6214c24n,
-  name: "fn (?*opaque, void) void",
-  length: 2,
-  instance: {
-    members: [
-      {
-        ...m,
-        type: 5,
-        bitSize: 64,
-        byteSize: 8,
-        structure: s10,
-      },
-    ],
-    template: o33
-  },
   static: {
     members: [],
-    template: o34
+    template: o14
   },
+  name: "anyopaque",
 });
 $(s12, {
   ...s,
   type: 8,
-  flags: 204,
-  signature: 0x3383733aa3b32c56n,
-  name: "*const fn (?*opaque, void) void",
+  flags: 332,
+  signature: 0x4057fadddf1d8877n,
   byteSize: 8,
   align: 8,
   instance: {
@@ -982,15 +804,19 @@ $(s12, {
         structure: s11,
       },
     ],
+    template: o19
   },
+  static: {
+    members: [],
+  },
+  name: "*opaque",
 });
 $(s13, {
   ...s,
-  type: 2,
-  flags: 526,
-  signature: 0x0d15352f0eaaaee2n,
-  name: "Promise",
-  byteSize: 16,
+  type: 7,
+  flags: 15,
+  signature: 0xfd89f2070573d249n,
+  byteSize: 8,
   align: 8,
   instance: {
     members: [
@@ -998,159 +824,106 @@ $(s13, {
         ...m,
         type: 5,
         bitSize: 64,
+        byteSize: 8,
         bitOffset: 0,
-        byteSize: 8,
         slot: 0,
-        name: "ptr",
-        structure: s9,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 1,
-        bitSize: 64,
-        bitOffset: 64,
-        byteSize: 8,
-        slot: 1,
-        name: "callback",
         structure: s12,
-      },
-    ],
-    template: o35
-  },
-});
-$(s14, {
-  ...s,
-  type: 12,
-  flags: 94,
-  signature: 0x4df95d08659081dcn,
-  name: "Arg(fn (Promise) void)",
-  length: 0,
-  byteSize: 16,
-  align: 8,
-  instance: {
-    members: [
-      {
-        ...m,
-        flags: 1,
-        bitSize: 0,
-        bitOffset: 128,
-        byteSize: 0,
-        slot: 0,
-        name: "retval",
-        structure: s0,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 1,
-        bitSize: 128,
-        bitOffset: 0,
-        byteSize: 16,
-        slot: 1,
-        name: "0",
-        structure: s13,
-      },
-    ],
-  },
-});
-$(s15, {
-  ...s,
-  type: 14,
-  signature: 0xc449c79e7d730846n,
-  name: "fn (Promise) void",
-  length: 0,
-  instance: {
-    members: [
-      {
-        ...m,
-        type: 5,
-        bitSize: 128,
-        byteSize: 16,
-        structure: s14,
-      },
-    ],
-    template: o40
-  },
-});
-$(s16, {
-  ...s,
-  type: 5,
-  flags: 1,
-  signature: 0x2adad32524badd97n,
-  name: "ES1",
-  byteSize: 2,
-  align: 2,
-  instance: {
-    members: [
-      {
-        ...m,
-        type: 3,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: s16,
-      },
-    ],
-  },
-  static: {
-    members: [
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 0,
-        name: "OutOfMemory",
-        structure: s16,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 4,
-        slot: 1,
-        name: "Unexpected",
-        structure: s16,
-      },
-    ],
-    template: o41
-  },
-});
-$(s17, {
-  ...s,
-  type: 4,
-  flags: 1,
-  signature: 0x6eca2207e5ac3565n,
-  name: "ES1!void",
-  byteSize: 2,
-  align: 2,
-  instance: {
-    members: [
-      {
-        ...m,
-        bitSize: 0,
-        bitOffset: 16,
-        byteSize: 0,
-        slot: 0,
-        structure: s0,
       },
       {
         ...m,
         type: 3,
         flags: 8,
-        bitSize: 16,
         bitOffset: 0,
-        byteSize: 2,
-        structure: s16,
+        bitSize: 64,
+        byteSize: 8,
+        structure: s3,
       },
     ],
+    template: o20
   },
+  static: {
+    members: [],
+  },
+  name: "?*opaque",
 });
-$(s18, {
+$(s14, {
+  ...s,
+  type: 12,
+  flags: 14,
+  signature: 0xa4f4ca33336a9dbcn,
+  length: 2,
+  byteSize: 8,
+  align: 8,
+  instance: {
+    members: [
+      {
+        ...m,
+        name: "retval",
+        flags: 1,
+        bitOffset: 64,
+        bitSize: 0,
+        byteSize: 0,
+        slot: 0,
+        structure: s0,
+      },
+      {
+        ...m,
+        name: "0",
+        type: 5,
+        flags: 1,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 1,
+        structure: s13,
+      },
+      {
+        ...m,
+        name: "1",
+        flags: 1,
+        bitOffset: 64,
+        bitSize: 0,
+        byteSize: 0,
+        slot: 2,
+        structure: s0,
+      },
+    ],
+    template: o21
+  },
+  static: {
+    members: [],
+  },
+  name: "Arg(fn (?*opaque, void) void)",
+});
+$(s15, {
+  ...s,
+  type: 14,
+  signature: 0xab938596c6214c24n,
+  length: 2,
+  byteSize: 0,
+  instance: {
+    members: [
+      {
+        ...m,
+        type: 5,
+        bitSize: 64,
+        byteSize: 8,
+        structure: s14,
+      },
+    ],
+    template: o22
+  },
+  static: {
+    members: [],
+    template: o23
+  },
+  name: "fn (?*opaque, void) void",
+});
+$(s16, {
   ...s,
   type: 8,
-  flags: 460,
-  signature: 0x98abf42c3c09f315n,
-  name: "*const opaque",
+  flags: 204,
+  signature: 0x3383733aa3b32c56n,
   byteSize: 8,
   align: 8,
   instance: {
@@ -1161,17 +934,122 @@ $(s18, {
         bitSize: 64,
         byteSize: 8,
         slot: 0,
-        structure: s7,
+        structure: s15,
       },
     ],
+    template: o24
   },
+  static: {
+    members: [],
+  },
+  name: "*const fn (?*opaque, void) void",
+});
+$(s17, {
+  ...s,
+  type: 2,
+  purpose: 1,
+  flags: 14,
+  signature: 0x0d15352f0eaaaee2n,
+  byteSize: 16,
+  align: 8,
+  instance: {
+    members: [
+      {
+        ...m,
+        name: "ptr",
+        type: 5,
+        bitOffset: 0,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: s13,
+      },
+      {
+        ...m,
+        name: "callback",
+        type: 5,
+        flags: 1,
+        bitOffset: 64,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 1,
+        structure: s16,
+      },
+    ],
+    template: o25
+  },
+  static: {
+    members: [],
+  },
+  name: "S1",
+});
+$(s18, {
+  ...s,
+  type: 12,
+  flags: 94,
+  signature: 0x4df95d08659081dcn,
+  length: 0,
+  byteSize: 16,
+  align: 8,
+  instance: {
+    members: [
+      {
+        ...m,
+        name: "retval",
+        flags: 1,
+        bitOffset: 128,
+        bitSize: 0,
+        byteSize: 0,
+        slot: 0,
+        structure: s0,
+      },
+      {
+        ...m,
+        name: "0",
+        type: 5,
+        flags: 1,
+        bitOffset: 0,
+        bitSize: 128,
+        byteSize: 16,
+        slot: 1,
+        structure: s17,
+      },
+    ],
+    template: o30
+  },
+  static: {
+    members: [],
+  },
+  name: "Arg(fn (S1) void)",
 });
 $(s19, {
   ...s,
+  type: 14,
+  signature: 0xc449c79e7d730846n,
+  length: 0,
+  byteSize: 0,
+  instance: {
+    members: [
+      {
+        ...m,
+        type: 5,
+        bitSize: 128,
+        byteSize: 16,
+        structure: s18,
+      },
+    ],
+    template: o31
+  },
+  static: {
+    members: [],
+  },
+  name: "fn (S1) void",
+});
+$(s20, {
+  ...s,
   type: 5,
-  flags: 17,
-  signature: 0xd44c72e3a91d7a13n,
-  name: "anyerror",
+  flags: 1,
+  signature: 0xc3ba8da026469b22n,
   byteSize: 2,
   align: 2,
   instance: {
@@ -1180,19 +1058,122 @@ $(s19, {
         ...m,
         type: 3,
         bitSize: 16,
-        bitOffset: 0,
         byteSize: 2,
-        structure: s19,
+        bitOffset: 0,
+        structure: s20,
       },
     ],
   },
+  static: {
+    members: [
+      {
+        ...m,
+        name: "Unexpected",
+        type: 5,
+        flags: 4,
+        slot: 0,
+        structure: s20,
+      },
+      {
+        ...m,
+        name: "OutOfMemory",
+        type: 5,
+        flags: 4,
+        slot: 1,
+        structure: s20,
+      },
+    ],
+    template: o32
+  },
+  name: "ES1",
 });
-$(s20, {
+$(s21, {
+  ...s,
+  type: 4,
+  flags: 1,
+  signature: 0xa65ab153c9e26fc7n,
+  byteSize: 2,
+  align: 2,
+  instance: {
+    members: [
+      {
+        ...m,
+        bitOffset: 16,
+        bitSize: 0,
+        byteSize: 0,
+        slot: 0,
+        structure: s0,
+      },
+      {
+        ...m,
+        type: 3,
+        flags: 8,
+        bitOffset: 0,
+        bitSize: 16,
+        byteSize: 2,
+        structure: s20,
+      },
+    ],
+  },
+  static: {
+    members: [],
+  },
+  name: "ES1!void",
+});
+$(s22, {
+  ...s,
+  type: 8,
+  flags: 460,
+  signature: 0x98abf42c3c09f315n,
+  byteSize: 8,
+  align: 8,
+  instance: {
+    members: [
+      {
+        ...m,
+        type: 5,
+        bitSize: 64,
+        byteSize: 8,
+        slot: 0,
+        structure: s11,
+      },
+    ],
+    template: o35
+  },
+  static: {
+    members: [],
+  },
+  name: "*const opaque",
+});
+$(s23, {
+  ...s,
+  name: "anyerror",
+  type: 5,
+  flags: 17,
+  signature: 0xd44c72e3a91d7a13n,
+  byteSize: 2,
+  align: 2,
+  instance: {
+    members: [
+      {
+        ...m,
+        type: 3,
+        bitSize: 16,
+        byteSize: 2,
+        bitOffset: 0,
+        structure: s23,
+      },
+    ],
+  },
+  static: {
+    members: [],
+  },
+});
+$(s24, {
   ...s,
   type: 4,
   flags: 1,
   signature: 0xde5ac594824a5e52n,
-  name: "anyerror!usize",
   byteSize: 16,
   align: 8,
   instance: {
@@ -1200,8 +1181,8 @@ $(s20, {
       {
         ...m,
         type: 3,
-        bitSize: 64,
         bitOffset: 0,
+        bitSize: 64,
         byteSize: 8,
         slot: 0,
         structure: s3,
@@ -1210,20 +1191,23 @@ $(s20, {
         ...m,
         type: 3,
         flags: 8,
-        bitSize: 16,
         bitOffset: 64,
+        bitSize: 16,
         byteSize: 2,
-        structure: s19,
+        structure: s23,
       },
     ],
   },
+  static: {
+    members: [],
+  },
+  name: "anyerror!usize",
 });
-$(s21, {
+$(s25, {
   ...s,
   type: 9,
   flags: 224,
   signature: 0x9b3f78f92307ba61n,
-  name: "[_]u8",
   byteSize: 1,
   align: 1,
   instance: {
@@ -1237,13 +1221,17 @@ $(s21, {
       },
     ],
   },
+  static: {
+    members: [],
+    template: o36
+  },
+  name: "[_]u8",
 });
-$(s22, {
+$(s26, {
   ...s,
   type: 8,
   flags: 188,
   signature: 0x7e2f0adf211d515en,
-  name: "[]const u8",
   byteSize: 16,
   align: 8,
   instance: {
@@ -1254,17 +1242,21 @@ $(s22, {
         bitSize: 128,
         byteSize: 16,
         slot: 0,
-        structure: s21,
+        structure: s25,
       },
     ],
+    template: o40
   },
+  static: {
+    members: [],
+  },
+  name: "[]const u8",
 });
-$(s23, {
+$(s27, {
   ...s,
   type: 12,
   flags: 46,
   signature: 0x1d25e6978b851ae8n,
-  name: "Arg(fn (*const opaque, []const u8) anyerror!usize)",
   length: 2,
   byteSize: 40,
   align: 8,
@@ -1272,46 +1264,51 @@ $(s23, {
     members: [
       {
         ...m,
+        name: "retval",
         type: 5,
         flags: 1,
-        bitSize: 128,
         bitOffset: 0,
+        bitSize: 128,
         byteSize: 16,
         slot: 0,
-        name: "retval",
-        structure: s20,
+        structure: s24,
       },
       {
         ...m,
+        name: "0",
         type: 5,
         flags: 1,
-        bitSize: 64,
         bitOffset: 128,
+        bitSize: 64,
         byteSize: 8,
         slot: 1,
-        name: "0",
-        structure: s18,
+        structure: s22,
       },
       {
         ...m,
+        name: "1",
         type: 5,
         flags: 1,
-        bitSize: 128,
         bitOffset: 192,
+        bitSize: 128,
         byteSize: 16,
         slot: 2,
-        name: "1",
-        structure: s22,
+        structure: s26,
       },
     ],
+    template: o41
   },
+  static: {
+    members: [],
+  },
+  name: "Arg(fn (*const opaque, []const u8) anyerror!usize)",
 });
-$(s24, {
+$(s28, {
   ...s,
   type: 14,
   signature: 0x1d9c964af8eccc95n,
-  name: "fn (*const opaque, []const u8) anyerror!usize",
   length: 2,
+  byteSize: 0,
   instance: {
     members: [
       {
@@ -1319,22 +1316,22 @@ $(s24, {
         type: 5,
         bitSize: 320,
         byteSize: 40,
-        structure: s23,
+        structure: s27,
       },
     ],
-    template: o44
+    template: o42
   },
   static: {
     members: [],
-    template: o45
+    template: o43
   },
+  name: "fn (*const opaque, []const u8) anyerror!usize",
 });
-$(s25, {
+$(s29, {
   ...s,
   type: 8,
   flags: 204,
   signature: 0x0a0057cd103bd73en,
-  name: "*const fn (*const opaque, []const u8) anyerror!usize",
   byteSize: 8,
   align: 8,
   instance: {
@@ -1345,53 +1342,134 @@ $(s25, {
         bitSize: 64,
         byteSize: 8,
         slot: 0,
-        structure: s24,
+        structure: s28,
       },
     ],
+    template: o44
   },
+  static: {
+    members: [],
+  },
+  name: "*const fn (*const opaque, []const u8) anyerror!usize",
 });
-$(s26, {
+$(s30, {
   ...s,
-  type: 2,
-  flags: 16398,
-  signature: 0x4837e98da467efb2n,
   name: "Writer",
+  type: 2,
+  purpose: 7,
+  flags: 14,
+  signature: 0x4837e98da467efb2n,
   byteSize: 16,
   align: 8,
   instance: {
     members: [
       {
         ...m,
+        name: "context",
         type: 5,
         flags: 1,
-        bitSize: 64,
         bitOffset: 0,
+        bitSize: 64,
         byteSize: 8,
         slot: 0,
-        name: "context",
-        structure: s18,
+        structure: s22,
       },
       {
         ...m,
+        name: "writeFn",
         type: 5,
         flags: 1,
-        bitSize: 64,
         bitOffset: 64,
+        bitSize: 64,
         byteSize: 8,
         slot: 1,
-        name: "writeFn",
-        structure: s25,
+        structure: s29,
       },
     ],
-    template: o46
+    template: o45
+  },
+  static: {
+    members: [],
   },
 });
-$(s27, {
+$(s31, {
+  ...s,
+  type: 2,
+  flags: 14,
+  signature: 0xd2de084ea0e336ban,
+  byteSize: 24,
+  align: 8,
+  instance: {
+    members: [
+      {
+        ...m,
+        name: "value",
+        type: 5,
+        flags: 1,
+        bitOffset: 0,
+        bitSize: 128,
+        byteSize: 16,
+        slot: 0,
+        structure: s26,
+      },
+      {
+        ...m,
+        name: "is_required",
+        type: 1,
+        bitOffset: 128,
+        bitSize: 1,
+        byteSize: 1,
+        slot: 1,
+        structure: s8,
+      },
+    ],
+    template: o50
+  },
+  static: {
+    members: [],
+  },
+  name: "S2",
+});
+$(s32, {
+  ...s,
+  type: 7,
+  flags: 31,
+  signature: 0xfb56cb615b1dc17dn,
+  byteSize: 32,
+  align: 8,
+  instance: {
+    members: [
+      {
+        ...m,
+        type: 5,
+        bitSize: 192,
+        byteSize: 24,
+        bitOffset: 0,
+        slot: 0,
+        structure: s31,
+      },
+      {
+        ...m,
+        type: 3,
+        flags: 8,
+        bitOffset: 192,
+        bitSize: 8,
+        byteSize: 1,
+        structure: s6,
+      },
+    ],
+    template: o53
+  },
+  static: {
+    members: [],
+  },
+  name: "?S2",
+});
+$(s33, {
   ...s,
   type: 9,
   flags: 14,
   signature: 0xc001c2bbe5847336n,
-  name: "[_][]const u8",
   byteSize: 16,
   align: 8,
   instance: {
@@ -1401,17 +1479,22 @@ $(s27, {
         type: 5,
         bitSize: 128,
         byteSize: 16,
-        structure: s22,
+        structure: s26,
       },
     ],
+    template: o54
   },
+  static: {
+    members: [],
+    template: o55
+  },
+  name: "[_][]const u8",
 });
-$(s28, {
+$(s34, {
   ...s,
   type: 8,
   flags: 188,
   signature: 0x5ed240e66e88c600n,
-  name: "[]const []const u8",
   byteSize: 16,
   align: 8,
   instance: {
@@ -1422,46 +1505,29 @@ $(s28, {
         bitSize: 128,
         byteSize: 16,
         slot: 0,
-        structure: s27,
+        structure: s33,
       },
     ],
+    template: o60
   },
-});
-$(s29, {
-  ...s,
-  type: 5,
-  flags: 17,
-  signature: 0x3596180da264e267n,
-  name: "anyerror",
-  byteSize: 2,
-  align: 2,
-  instance: {
-    members: [
-      {
-        ...m,
-        type: 3,
-        bitSize: 16,
-        bitOffset: 0,
-        byteSize: 2,
-        structure: s29,
-      },
-    ],
+  static: {
+    members: [],
   },
+  name: "[]const []const u8",
 });
-$(s30, {
+$(s35, {
   ...s,
   type: 4,
   flags: 1,
   signature: 0x5a95f4d8316dada4n,
-  name: "anyerror!void",
   byteSize: 2,
   align: 2,
   instance: {
     members: [
       {
         ...m,
-        bitSize: 0,
         bitOffset: 16,
+        bitSize: 0,
         byteSize: 0,
         slot: 0,
         structure: s0,
@@ -1470,20 +1536,23 @@ $(s30, {
         ...m,
         type: 3,
         flags: 8,
-        bitSize: 16,
         bitOffset: 0,
+        bitSize: 16,
         byteSize: 2,
-        structure: s29,
+        structure: s23,
       },
     ],
   },
+  static: {
+    members: [],
+  },
+  name: "anyerror!void",
 });
-$(s31, {
+$(s36, {
   ...s,
   type: 12,
   flags: 14,
   signature: 0x29d18d49b97be9cen,
-  name: "Arg(fn (?*opaque, anyerror!void) void)",
   length: 2,
   byteSize: 16,
   align: 8,
@@ -1491,45 +1560,50 @@ $(s31, {
     members: [
       {
         ...m,
+        name: "retval",
         flags: 1,
-        bitSize: 0,
         bitOffset: 80,
+        bitSize: 0,
         byteSize: 0,
         slot: 0,
-        name: "retval",
         structure: s0,
       },
       {
         ...m,
+        name: "0",
         type: 5,
         flags: 1,
-        bitSize: 64,
         bitOffset: 0,
+        bitSize: 64,
         byteSize: 8,
         slot: 1,
-        name: "0",
-        structure: s9,
+        structure: s13,
       },
       {
         ...m,
+        name: "1",
         type: 5,
         flags: 1,
-        bitSize: 16,
         bitOffset: 64,
+        bitSize: 16,
         byteSize: 2,
         slot: 2,
-        name: "1",
-        structure: s30,
+        structure: s35,
       },
     ],
+    template: o61
   },
+  static: {
+    members: [],
+  },
+  name: "Arg(fn (?*opaque, anyerror!void) void)",
 });
-$(s32, {
+$(s37, {
   ...s,
   type: 14,
   signature: 0x268510ca6d00efc3n,
-  name: "fn (?*opaque, anyerror!void) void",
   length: 2,
+  byteSize: 0,
   instance: {
     members: [
       {
@@ -1537,22 +1611,22 @@ $(s32, {
         type: 5,
         bitSize: 128,
         byteSize: 16,
-        structure: s31,
+        structure: s36,
       },
     ],
-    template: o51
+    template: o62
   },
   static: {
     members: [],
-    template: o52
+    template: o63
   },
+  name: "fn (?*opaque, anyerror!void) void",
 });
-$(s33, {
+$(s38, {
   ...s,
   type: 8,
   flags: 204,
   signature: 0x771b102a8d7a0f5dn,
-  name: "*const fn (?*opaque, anyerror!void) void",
   byteSize: 8,
   align: 8,
   instance: {
@@ -1563,52 +1637,60 @@ $(s33, {
         bitSize: 64,
         byteSize: 8,
         slot: 0,
-        structure: s32,
+        structure: s37,
       },
     ],
+    template: o64
   },
+  static: {
+    members: [],
+  },
+  name: "*const fn (?*opaque, anyerror!void) void",
 });
-$(s34, {
+$(s39, {
   ...s,
   type: 2,
-  flags: 526,
+  purpose: 1,
+  flags: 14,
   signature: 0x1dd368925fb30621n,
-  name: "Promise",
   byteSize: 16,
   align: 8,
   instance: {
     members: [
       {
         ...m,
+        name: "ptr",
         type: 5,
-        bitSize: 64,
         bitOffset: 0,
+        bitSize: 64,
         byteSize: 8,
         slot: 0,
-        name: "ptr",
-        structure: s9,
+        structure: s13,
       },
       {
         ...m,
+        name: "callback",
         type: 5,
         flags: 1,
-        bitSize: 64,
         bitOffset: 64,
+        bitSize: 64,
         byteSize: 8,
         slot: 1,
-        name: "callback",
-        structure: s33,
+        structure: s38,
       },
     ],
-    template: o53
+    template: o65
   },
+  static: {
+    members: [],
+  },
+  name: "S3",
 });
-$(s35, {
+$(s40, {
   ...s,
   type: 12,
   flags: 126,
-  signature: 0x09576b689730d5b9n,
-  name: "Arg(fn (Writer, []const u8, []const []const u8, Promise) ES1!void)",
+  signature: 0x077b85be4b50ed1fn,
   length: 3,
   byteSize: 72,
   align: 8,
@@ -1616,68 +1698,73 @@ $(s35, {
     members: [
       {
         ...m,
+        name: "retval",
         type: 5,
         flags: 1,
-        bitSize: 16,
         bitOffset: 512,
+        bitSize: 16,
         byteSize: 2,
         slot: 0,
-        name: "retval",
-        structure: s17,
+        structure: s21,
       },
       {
         ...m,
+        name: "0",
         type: 5,
         flags: 1,
-        bitSize: 128,
         bitOffset: 0,
+        bitSize: 128,
         byteSize: 16,
         slot: 1,
-        name: "0",
+        structure: s30,
+      },
+      {
+        ...m,
+        name: "1",
+        type: 5,
+        flags: 1,
+        bitOffset: 128,
+        bitSize: 128,
+        byteSize: 16,
+        slot: 2,
         structure: s26,
       },
       {
         ...m,
+        name: "2",
         type: 5,
         flags: 1,
-        bitSize: 128,
-        bitOffset: 128,
-        byteSize: 16,
-        slot: 2,
-        name: "1",
-        structure: s22,
-      },
-      {
-        ...m,
-        type: 5,
-        flags: 1,
-        bitSize: 128,
         bitOffset: 256,
+        bitSize: 128,
         byteSize: 16,
         slot: 3,
-        name: "2",
-        structure: s28,
+        structure: s34,
       },
       {
         ...m,
+        name: "3",
         type: 5,
         flags: 1,
-        bitSize: 128,
         bitOffset: 384,
+        bitSize: 128,
         byteSize: 16,
         slot: 4,
-        name: "3",
-        structure: s34,
+        structure: s39,
       },
     ],
+    template: o68
   },
+  static: {
+    members: [],
+  },
+  name: "Arg(fn (Writer, []const u8, []const []const u8, S3) ES1!void)",
 });
-$(s36, {
+$(s41, {
   ...s,
   type: 14,
-  signature: 0x875510d8bd83d1acn,
-  name: "fn (Writer, []const u8, []const []const u8, Promise) ES1!void",
+  signature: 0x378c1371960d9f43n,
   length: 3,
+  byteSize: 0,
   instance: {
     members: [
       {
@@ -1685,56 +1772,65 @@ $(s36, {
         type: 5,
         bitSize: 576,
         byteSize: 72,
-        structure: s35,
+        structure: s40,
       },
     ],
-    template: o56
+    template: o69
   },
+  static: {
+    members: [],
+  },
+  name: "fn (Writer, []const u8, []const []const u8, S3) ES1!void",
 });
-$(s37, {
+$(s42, {
   ...s,
-  type: 2,
-  flags: 4096,
-  signature: 0x239ab4f327f6ac1bn,
   name: "tar",
+  type: 2,
+  flags: 128,
+  signature: 0x239ab4f327f6ac1bn,
+  byteSize: 0,
   align: 1,
+  instance: {
+    members: [],
+  },
   static: {
     members: [
       {
         ...m,
+        name: "startup",
         type: 5,
         flags: 2,
         slot: 0,
-        name: "startup",
         structure: s5,
       },
       {
         ...m,
+        name: "shutdown",
         type: 5,
         flags: 2,
         slot: 1,
-        name: "shutdown",
-        structure: s15,
+        structure: s19,
       },
       {
         ...m,
+        name: "tar",
         type: 5,
         flags: 2,
         slot: 2,
-        name: "tar",
-        structure: s36,
+        structure: s41,
       },
     ],
-    template: o57
+    template: o70
   },
 });
 const structures = [
   s0, s1, s2, s3, s4, s5, s6, s7, s8, s9,
   s10, s11, s12, s13, s14, s15, s16, s17, s18, s19,
   s20, s21, s22, s23, s24, s25, s26, s27, s28, s29,
-  s30, s31, s32, s33, s34, s35, s36, s37,
+  s30, s31, s32, s33, s34, s35, s36, s37, s38, s39,
+  s40, s41, s42,
 ];
-const root = s37;
+const root = s42;
 const settings = {
   runtimeSafety: false,
   littleEndian: true,

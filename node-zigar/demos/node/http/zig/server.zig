@@ -56,10 +56,10 @@ const ServerThread = struct {
 
     pub fn stop(self: *@This()) void {
         if (self.connection) |c| {
-            std.c.shutdown(c.stream.handle, .both) catch {};
+            std.posix.shutdown(c.stream.handle, .both) catch {};
         }
         if (self.server) |s| {
-            std.c.shutdown(s.stream.handle, .both) catch {};
+            std.posix.shutdown(s.stream.handle, .both) catch {};
         }
     }
 

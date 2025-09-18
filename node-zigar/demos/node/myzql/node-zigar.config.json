@@ -6,7 +6,6 @@
     }
   },
   "targets": [
-    { "platform": "linux", "arch": "x64" },
-    { "platform": "linux", "arch": "arm64" }
+    { "platform": "linux", "arch": "x64" }
   ]
 }
