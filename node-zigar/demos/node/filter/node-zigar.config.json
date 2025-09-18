@@ -2,7 +2,8 @@
   "optimize": "ReleaseSmall",
   "modules": {
     "lib/sepia.zigar": {
-      "source": "zig/sepia.zig"
+      "source": "zig/sepia.zig",
+      "loader": "src/sepia.js"
     }
   },
   "targets": [
