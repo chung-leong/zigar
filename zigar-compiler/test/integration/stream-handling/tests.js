@@ -2292,7 +2292,7 @@ export function addTests(importModule, options) {
           flags: { symlinkFollow: true }
         });
         const info = await stat(path);
-        if (target === 'wasm32') {
+        if (target === 'wasm32' || process.versions.bun) {
           // Node.js's WASI module does not provide nanosecond resolution
           expect(info.atimeMs).to.equal(3000);
           expect(info.mtimeMs).to.equal(3000);

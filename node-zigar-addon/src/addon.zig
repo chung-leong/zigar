@@ -29,6 +29,7 @@ const ModuleHost = struct {
     library: ?std.DynLib = null,
     base_address: usize = 0,
     env: Env,
+    is_bun: bool = false,
     js: struct {
         create_view: ?Ref = null,
         create_instance: ?Ref = null,
@@ -124,6 +125,11 @@ const ModuleHost = struct {
         // export functions to it; exported functions will keep self alive until they're all
         // garbage collected
         try self.exportFunctionsToJavaScript(js_env);
+        // check if we're running in Bun.js
+        const global = try env.getGlobal();
+        if (env.getNamedProperty(global, "Bun")) |_| {
+            self.is_bun = true;
+        } else |_| {}
         return js_env;
     }
 
@@ -357,16 +363,23 @@ const ModuleHost = struct {
 
     fn moveExternBytes(self: *@This(), view: Value, address: Value, to: Value) !void {
         const env = self.env;
-        const len, const js_opaque, _, _ = env.getDataviewInfo(view) catch ta: {
+        const js_to_zig = try env.getValueBool(to);
+        if (!js_to_zig and self.is_bun) {
+            // the address of the buffer is not stable initially on Bun.js v1.2.22
+            // we need to touch it once, then get the address
+            if (env.getDataviewInfo(view)) |_| {} else |_| {
+                _ = try env.getTypedarrayInfo(view);
+            }
+        }
+        const len, const js_opaque, _, const offset = env.getDataviewInfo(view) catch ta: {
             _, const len, const ptr, const ab, const offset = try env.getTypedarrayInfo(view);
             break :ta .{ len, ptr, ab, offset };
         };
         if (len > 0) {
             const zig_bytes: [*]u8 = @ptrFromInt(try env.getValueUsize(address));
             const js_bytes: [*]u8 = @ptrCast(js_opaque);
-            const js_to_zig = try env.getValueBool(to);
-            const src = if (js_to_zig) js_bytes else zig_bytes;
-            const dst = if (js_to_zig) zig_bytes else js_bytes;
+            const src = if (js_to_zig) js_bytes[offset..] else zig_bytes;
+            const dst = if (js_to_zig) zig_bytes else js_bytes[offset..];
             @memcpy(dst[0..len], src[0..len]);
         }
     }
