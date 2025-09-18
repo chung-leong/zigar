@@ -642,21 +642,20 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn flock(fd: c_int, op: c_int, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(fd)) {
-                const lock: Flock = .{
-                    .type = switch (op & ~@as(c_int, std.c.LOCK.NB)) {
-                        std.c.LOCK.SH => F.RDLCK,
-                        std.c.LOCK.EX => F.WRLCK,
-                        std.c.LOCK.UN => F.UNLCK,
-                        else => {
-                            result.* = intFromError(std.c.E.INVAL);
-                            return true;
-                        },
+                var lock: Flock = undefined;
+                lock.type = switch (op & ~@as(c_int, std.c.LOCK.NB)) {
+                    std.c.LOCK.SH => F.RDLCK,
+                    std.c.LOCK.EX => F.WRLCK,
+                    std.c.LOCK.UN => F.UNLCK,
+                    else => {
+                        result.* = intFromError(std.c.E.INVAL);
+                        return true;
                     },
-                    .whence = std.c.SEEK.SET,
-                    .start = 0,
-                    .len = 0,
-                    .pid = 0,
                 };
+                lock.whence = std.c.SEEK.SET;
+                lock.start = 0;
+                lock.len = 0;
+                lock.pid = 0;
                 const fcntl_op: c_int = switch (op & std.c.LOCK.NB) {
                     0 => F.SETLKW,
                     else => F.SETLK,
@@ -1752,7 +1751,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             if (redirector.open(path, flags_int, 0, &result)) {
                 if (result > 0) {
                     if (c_allocator.create(RedirectedDir)) |dir| {
-                        dir.* = .{ .fd = @intCast(result) };
+                        dir.* = .{ .fd = result };
                         return @ptrCast(dir);
                     } else |_| {}
                 }
@@ -2257,13 +2256,8 @@ pub fn LibcSubstitute(comptime redirector: type) type {
                     file.errno = posix.getError();
                     return -1;
                 }
-                switch (@typeInfo(stdio_h.fpos_t)) {
-                    .int => pos.* = result,
-                    .@"struct" => if (@hasField(stdio_h.fpos_t, "__pos")) {
-                        @field(pos, "__pos") = result;
-                    },
-                    else => @compileError("Unexpected fpos_t type"),
-                }
+                const offset_ptr: *off64_t = @ptrCast(pos);
+                offset_ptr.* = result;
                 return 0;
             }
             return Original.fgetpos(s, pos);
@@ -2353,13 +2347,9 @@ pub fn LibcSubstitute(comptime redirector: type) type {
         pub fn fsetpos(s: *std.c.FILE, pos: *const stdio_h.fpos_t) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
                 if (flush(file) < 0) return -1;
-                const offset = switch (@typeInfo(stdio_h.fpos_t)) {
-                    .int => pos.*,
-                    .@"struct" => if (@hasField(stdio_h.fpos_t, "__pos"))
-                        @field(pos, "__pos"),
-                    else => @compileError("Unexpected fpos_t type"),
-                };
-                const result = posix.lseek64(file.fd, @intCast(offset), std.c.SEEK.SET);
+                const offset_ptr: *const off64_t = @ptrCast(pos);
+                const offset = offset_ptr.*;
+                const result = posix.lseek64(file.fd, offset, std.c.SEEK.SET);
                 if (result < 0) return saveFileError(file, posix.getError());
                 return 0;
             }
@@ -2778,44 +2768,37 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
         pub const lseeki64 = posix.lseek64;
 
         pub fn _findclose(handle: isize) callconv(.c) c_int {
-            const dir: *std.c.DIR = @ptrFromInt(@as(usize, @bitCast(handle)));
-            if (RedirectedDir.cast(dir)) |_| {
-                posix.closedir(dir);
+            const d: *std.c.DIR = @ptrFromInt(@as(usize, @bitCast(handle)));
+            if (RedirectedDir.cast(d)) |dir| {
+                _ = posix.close(dir.fd);
+                c_allocator.destroy(dir);
                 return 0;
             }
             return Original._findclose(handle);
         }
 
         pub fn _findfirst32(filespec: [*:0]const u8, info: *FindData32) callconv(.c) isize {
-            if (redirector.Host.isRedirecting(.open)) {
-                if (getPath(filespec) catch return -1) |path| {
-                    defer c_allocator.free(path);
-                    const dir = posix.opendir(path) orelse return -1;
-                    const handle: isize = @bitCast(@intFromPtr(dir));
-                    if (_findnext32(handle, info) == 0) {
-                        return @bitCast(handle);
-                    } else {
-                        posix.closedir(dir);
-                        return -1;
-                    }
+            const handle = opendir(filespec);
+            if (handle < 0) return -1;
+            if (handle > 0) {
+                if (_findnext32(handle, info) != 0) {
+                    _ = _findclose(handle);
+                    return -1;
                 }
+                return handle;
             }
             return Original._findfirst32(filespec, info);
         }
 
         pub fn _findfirst64(filespec: [*:0]const u8, info: *FindData64) callconv(.c) isize {
-            if (redirector.Host.isRedirecting(.open)) {
-                if (getPath(filespec) catch return -1) |path| {
-                    defer c_allocator.free(path);
-                    const dir = posix.opendir(path) orelse return -1;
-                    const handle: isize = @bitCast(@intFromPtr(dir));
-                    if (_findnext64(handle, info) == 0) {
-                        return @bitCast(handle);
-                    } else {
-                        posix.closedir(dir);
-                        return -1;
-                    }
+            const handle = opendir(filespec);
+            if (handle < 0) return -1;
+            if (handle > 0) {
+                if (_findnext64(handle, info) != 0) {
+                    _ = _findclose(handle);
+                    return -1;
                 }
+                return handle;
             }
             return Original._findfirst64(filespec, info);
         }
@@ -2860,6 +2843,27 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
                 return try c_allocator.dupeZ(u8, filespec[0 .. len - 2]);
             }
             return null;
+        }
+
+        fn opendir(filespec: [*:0]const u8) isize {
+            if (redirector.Host.isRedirecting(.open)) {
+                if (getPath(filespec) catch return -1) |path| {
+                    defer c_allocator.free(path);
+                    const flags: O = .{ .DIRECTORY = true };
+                    const flags_int: @typeInfo(O).@"struct".backing_integer.? = @bitCast(flags);
+                    var result: c_int = undefined;
+                    if (redirector.open(path, flags_int, 0, &result)) {
+                        if (result > 0) {
+                            if (c_allocator.create(RedirectedDir)) |dir| {
+                                dir.* = .{ .fd = result };
+                                return @bitCast(@intFromPtr(dir));
+                            } else |_| {}
+                        }
+                        return -1;
+                    }
+                }
+            }
+            return 0;
         }
 
         fn readdirT(comptime T: type, dir: *std.c.DIR, info: *T) c_int {

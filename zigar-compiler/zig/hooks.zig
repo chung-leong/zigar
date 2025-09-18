@@ -642,21 +642,20 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub fn flock(fd: c_int, op: c_int, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(fd)) {
-                const lock: Flock = .{
-                    .type = switch (op & ~@as(c_int, std.c.LOCK.NB)) {
-                        std.c.LOCK.SH => F.RDLCK,
-                        std.c.LOCK.EX => F.WRLCK,
-                        std.c.LOCK.UN => F.UNLCK,
-                        else => {
-                            result.* = intFromError(std.c.E.INVAL);
-                            return true;
-                        },
+                var lock: Flock = undefined;
+                lock.type = switch (op & ~@as(c_int, std.c.LOCK.NB)) {
+                    std.c.LOCK.SH => F.RDLCK,
+                    std.c.LOCK.EX => F.WRLCK,
+                    std.c.LOCK.UN => F.UNLCK,
+                    else => {
+                        result.* = intFromError(std.c.E.INVAL);
+                        return true;
                     },
-                    .whence = std.c.SEEK.SET,
-                    .start = 0,
-                    .len = 0,
-                    .pid = 0,
                 };
+                lock.whence = std.c.SEEK.SET;
+                lock.start = 0;
+                lock.len = 0;
+                lock.pid = 0;
                 const fcntl_op: c_int = switch (op & std.c.LOCK.NB) {
                     0 => F.SETLKW,
                     else => F.SETLK,
@@ -2257,13 +2256,8 @@ pub fn LibcSubstitute(comptime redirector: type) type {
                     file.errno = posix.getError();
                     return -1;
                 }
-                switch (@typeInfo(stdio_h.fpos_t)) {
-                    .int => pos.* = result,
-                    .@"struct" => if (@hasField(stdio_h.fpos_t, "__pos")) {
-                        @field(pos, "__pos") = result;
-                    },
-                    else => @compileError("Unexpected fpos_t type"),
-                }
+                const offset_ptr: *off64_t = @ptrCast(pos);
+                offset_ptr.* = result;
                 return 0;
             }
             return Original.fgetpos(s, pos);
@@ -2353,13 +2347,9 @@ pub fn LibcSubstitute(comptime redirector: type) type {
         pub fn fsetpos(s: *std.c.FILE, pos: *const stdio_h.fpos_t) callconv(.c) c_int {
             if (getRedirectedFile(s)) |file| {
                 if (flush(file) < 0) return -1;
-                const offset = switch (@typeInfo(stdio_h.fpos_t)) {
-                    .int => pos.*,
-                    .@"struct" => if (@hasField(stdio_h.fpos_t, "__pos"))
-                        @field(pos, "__pos"),
-                    else => @compileError("Unexpected fpos_t type"),
-                };
-                const result = posix.lseek64(file.fd, @intCast(offset), std.c.SEEK.SET);
+                const offset_ptr: *const off64_t = @ptrCast(pos);
+                const offset = offset_ptr.*;
+                const result = posix.lseek64(file.fd, offset, std.c.SEEK.SET);
                 if (result < 0) return saveFileError(file, posix.getError());
                 return 0;
             }

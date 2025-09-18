@@ -371,15 +371,16 @@ const ModuleHost = struct {
                 _ = try env.getTypedarrayInfo(view);
             }
         }
-        const len, const js_opaque, _, const offset = env.getDataviewInfo(view) catch ta: {
+        // offset is not needed, since it's already applied to the pointer returned
+        const len, const js_opaque, _, _ = env.getDataviewInfo(view) catch ta: {
             _, const len, const ptr, const ab, const offset = try env.getTypedarrayInfo(view);
             break :ta .{ len, ptr, ab, offset };
         };
         if (len > 0) {
             const zig_bytes: [*]u8 = @ptrFromInt(try env.getValueUsize(address));
             const js_bytes: [*]u8 = @ptrCast(js_opaque);
-            const src = if (js_to_zig) js_bytes[offset..] else zig_bytes;
-            const dst = if (js_to_zig) zig_bytes else js_bytes[offset..];
+            const src = if (js_to_zig) js_bytes else zig_bytes;
+            const dst = if (js_to_zig) zig_bytes else js_bytes;
             @memcpy(dst[0..len], src[0..len]);
         }
     }

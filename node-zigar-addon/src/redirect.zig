@@ -24,7 +24,6 @@ const prctl_h = @cImport({
 
 pub fn Controller(comptime Host: type) type {
     const bits = @bitSizeOf(usize);
-    const page_size = std.heap.pageSize();
 
     return struct {
         pub fn installHooks(host: *Host, lib: *std.DynLib, path: []const u8) !void {
@@ -105,7 +104,7 @@ pub fn Controller(comptime Host: type) type {
                 const lib_len = max_vaddr.?;
                 // get the syscall vtable
                 if (host.getSyscallHook("__syscall")) |hook| {
-                    try addSyscallVtable(base_address, lib_len, @ptrCast(hook.handler));
+                    try addSyscallVtable(base_address, lib_len, @ptrCast(@alignCast(hook.handler)));
                 }
             } else if (os == .darwin) {
                 const macho = std.macho;
@@ -328,7 +327,7 @@ pub fn Controller(comptime Host: type) type {
         pub fn uninstallHooks(host: *Host) !void {
             if (os == .linux) {
                 if (host.getSyscallHook("__syscall")) |hook| {
-                    try removeSyscallVtable(@ptrCast(hook.handler));
+                    try removeSyscallVtable(@ptrCast(@alignCast(hook.handler)));
                 }
             }
         }
@@ -607,6 +606,7 @@ pub fn Controller(comptime Host: type) type {
         }
 
         fn getPageSlice(address: usize) []align(std.heap.page_size_min) u8 {
+            const page_size = std.heap.pageSize();
             const page_address = std.mem.alignBackward(usize, address, page_size);
             const page_ptr: [*]align(std.heap.page_size_min) u8 = @ptrFromInt(page_address);
             return page_ptr[0..page_size];
