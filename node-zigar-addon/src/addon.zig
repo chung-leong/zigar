@@ -285,25 +285,28 @@ const ModuleHost = struct {
         self.library = lib;
     }
 
-    pub fn installSyscallTrap(self: *@This()) !void {
-        try redirection_controller.installSyscallTrap(&trapping_syscalls);
-        // add pointer to trapping_syscalls to the list so traps of all threads belonging
-        // to this module can be enable/disable from the main thread
-        self.thread_syscall_trap_mutex.lock();
-        defer self.thread_syscall_trap_mutex.unlock();
-        try self.thread_syscall_trap_switches.append(&trapping_syscalls);
-        if (self.syscall_trap_count > 0) {
-            trapping_syscalls = true;
+    pub fn initializeThread(self: *@This()) !void {
+        in_main_thread = false;
+        if (self.redirecting_io) {
+            try redirection_controller.installSyscallTrap(&trapping_syscalls);
+            self.thread_syscall_trap_mutex.lock();
+            defer self.thread_syscall_trap_mutex.unlock();
+            try self.thread_syscall_trap_switches.append(&trapping_syscalls);
+            if (self.syscall_trap_count > 0) {
+                trapping_syscalls = true;
+            }
         }
     }
 
-    pub fn uninstallSyscallTrap(self: *@This()) !void {
-        self.thread_syscall_trap_mutex.lock();
-        defer self.thread_syscall_trap_mutex.unlock();
-        const index = for (self.thread_syscall_trap_switches.items, 0..) |ptr, i| {
-            if (ptr == &trapping_syscalls) break i;
-        } else return;
-        _ = self.thread_syscall_trap_switches.swapRemove(index);
+    pub fn deinitializeThread(self: *@This()) !void {
+        if (self.redirecting_io) {
+            self.thread_syscall_trap_mutex.lock();
+            defer self.thread_syscall_trap_mutex.unlock();
+            const index = for (self.thread_syscall_trap_switches.items, 0..) |ptr, i| {
+                if (ptr == &trapping_syscalls) break i;
+            } else return;
+            _ = self.thread_syscall_trap_switches.swapRemove(index);
+        }
     }
 
     pub fn getSyscallHook(self: *@This(), name: [*:0]const u8) ?HookEntry {

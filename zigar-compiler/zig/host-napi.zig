@@ -205,14 +205,14 @@ pub fn setHostInstance(ptr: *Module.Host) callconv(.c) E {
 }
 
 pub fn initializeThread(ptr: *anyopaque) !void {
-    _ = setHostInstance(@ptrCast(ptr));
-    if (imports.install_syscall_trap(instance) != .SUCCESS) {
+    instance = @ptrCast(ptr);
+    if (imports.initialize_thread(instance) != .SUCCESS) {
         return error.UnableToInitializeThread;
     }
 }
 
 pub fn deinitializeThread() !void {
-    if (imports.uninstall_syscall_trap(instance) != .SUCCESS) {
+    if (imports.deinitialize_thread(instance) != .SUCCESS) {
         return error.UnableToDeinitializeThread;
     }
 }

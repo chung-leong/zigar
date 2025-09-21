@@ -1963,6 +1963,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             const instance = info.instance;
             c_allocator.destroy(info);
             redirector.Host.initializeThread(instance) catch {};
+            defer redirector.Host.deinitializeThread() catch {};
             return proc(arg);
         }
 
