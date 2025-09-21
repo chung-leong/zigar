@@ -2307,7 +2307,7 @@ export function addTests(importModule, options) {
       }
     })
     it('should scan directory in file system file using posix function', async function() {
-      const { __zigar, print } = await importTest('scan-directory-in-file-system-with-posix-functions', { useLibc: true, useRedirection: true });
+      const { __zigar, print } = await importTest('scan-directory-in-file-system-with-posix-functions', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
         __zigar.wasi(new WASI({
@@ -2369,6 +2369,19 @@ export function addTests(importModule, options) {
         } catch {}
       }
     })
+    it('should throw when attempting to convert to a file when useRedirection is false', async function() {
+      const { call } = await importTest('fail-to-convert-file', { useRedirection: false });
+      const array = new Uint8Array([ 1, 2, 3, 4 ]);
+      expect(() => call(array)).to.throw();
+    })
+    it('should throw when attempting to convert to a dir when useRedirection is false', async function() {
+      const { call } = await importTest('fail-to-convert-dir', { useRedirection: false });
+      const map = new Map([
+        [ 'hello.txt', { type: 'file' } ],
+      ]);
+      expect(() => call(map)).to.throw();
+    })
+
   })
 }
 

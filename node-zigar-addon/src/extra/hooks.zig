@@ -1636,7 +1636,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const unlinkat = makeStdHook("unlinkat");
         pub const utimensat = makeStdHook("utimensat");
         pub const utimes = makeStdHook("utimes");
-        // pub const write = makeStdHook("write");
+        pub const write = makeStdHook("write");
         pub const writev = makeStdHook("writev");
 
         pub fn __fxstat(ver: c_int, fd: c_int, buf: *Stat) callconv(.c) c_int {
@@ -2041,7 +2041,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var utime: *const @TypeOf(Self.utime) = undefined;
             pub var utime64: *const @TypeOf(Self.utime64) = undefined;
             pub var utimes: *const @TypeOf(Self.utimes) = undefined;
-            // pub var write: *const @TypeOf(Self.write) = undefined;
+            pub var write: *const @TypeOf(Self.write) = undefined;
             pub var writev: *const @TypeOf(Self.writev) = undefined;
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
@@ -2538,9 +2538,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
         }
 
         fn writeRaw(file: *RedirectedFile, src: [*]const u8, len: off_t) callconv(.c) off_t {
-            _ = src;
-            _ = len;
-            const result = -1; // posix.write(file.fd, src, len);
+            const result = posix.write(file.fd, src, len);
             if (result < 0) return saveFileError(file, posix.getError());
             return result;
         }

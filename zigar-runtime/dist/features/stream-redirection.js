@@ -1,6 +1,6 @@
 import { PosixDescriptorRight, PosixDescriptor } from '../constants.js';
 import { mixin } from '../environment.js';
-import { InvalidStream, TooManyFiles, Unsupported, InvalidFileDescriptor } from '../errors.js';
+import { InvalidStream, Unsupported, TooManyFiles, InvalidFileDescriptor } from '../errors.js';
 import { decodeText } from '../utils.js';
 
 const stdinRights = [ PosixDescriptorRight.fd_read, 0 ];
@@ -78,6 +78,9 @@ var streamRedirection = mixin({
     return entry;
   },  
   createStreamHandle(stream, rights, flags = 0) {
+    if (!this.ioRedirection) {
+      throw new Unsupported();
+    }
     let fd = this.nextStreamHandle++;
     if (fd > PosixDescriptor.max) {
       // look for free slot

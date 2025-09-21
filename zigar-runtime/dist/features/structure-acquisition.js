@@ -71,6 +71,7 @@ var structureAcquisition = mixin({
     };
     this.littleEndian = true;
     this.runtimeSafety = false;
+    this.ioRedirection = true;
     this.libc = false;
   },
   createView(address, len, copy, handle) {
@@ -168,10 +169,10 @@ var structureAcquisition = mixin({
   },
   exportStructures() {
     this.prepareObjectsForExport();
-    const { structures, runtimeSafety, littleEndian, libc } = this;
+    const { structures, runtimeSafety, littleEndian, ioRedirection, libc } = this;
     return {
       structures,
-      settings: { runtimeSafety, littleEndian, libc },
+      settings: { runtimeSafety, littleEndian, ioRedirection, libc },
     };
   },
   prepareObjectsForExport() {

@@ -78,6 +78,9 @@ export default mixin({
     return entry;
   },  
   createStreamHandle(stream, rights, flags = 0) {
+    if (!this.ioRedirection) {
+      throw new Unsupported();
+    }
     let fd = this.nextStreamHandle++;
     if (fd > PosixDescriptor.max) {
       // look for free slot
