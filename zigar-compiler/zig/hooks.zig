@@ -1769,7 +1769,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         }
 
         pub fn pthread_create(thread: *std.c.pthread_t, attr: ?*const std.c.pthread_attr_t, start_routine: *const fn (?*anyopaque) callconv(.c) ?*anyopaque, arg: ?*anyopaque) callconv(.c) c_int {
-            const instance = redirector.Host.getInstance() catch return @intFromEnum(std.c.E.FAULT);
+            const instance = redirector.Host.getInstance();
             const info = c_allocator.create(ThreadInfo) catch return @intFromEnum(std.c.E.NOMEM);
             info.* = .{
                 .proc = start_routine,
@@ -3876,7 +3876,10 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             const arg = info.arg;
             const instance = info.instance;
             c_allocator.destroy(info);
-            redirector.Host.initializeThread(instance) catch {};
+            redirector.Host.initializeThread(instance) catch {
+                @panic("Unable to initialize thread");
+            };
+            defer redirector.Host.deinitializeThread() catch {};
             return proc(arg);
         }
 

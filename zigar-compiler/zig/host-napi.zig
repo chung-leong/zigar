@@ -37,9 +37,11 @@ var gpa = std.heap.DebugAllocator(.{}).init;
 const allocator = gpa.allocator();
 var imports: Module.Imports = undefined;
 
+threadlocal var instance: *Module.Host = undefined;
+
 pub fn createBool(initializer: bool) !AnyValue {
     var value: AnyValue = undefined;
-    if (imports.create_bool(initializer, &value) != .SUCCESS) {
+    if (imports.create_bool(instance, initializer, &value) != .SUCCESS) {
         return error.UnableToCreateBoolean;
     }
     return value;
@@ -47,7 +49,7 @@ pub fn createBool(initializer: bool) !AnyValue {
 
 pub fn createInteger(initializer: i32, is_unsigned: bool) !AnyValue {
     var value: AnyValue = undefined;
-    if (imports.create_integer(initializer, is_unsigned, &value) != .SUCCESS) {
+    if (imports.create_integer(instance, initializer, is_unsigned, &value) != .SUCCESS) {
         return error.UnableToCreateInteger;
     }
     return value;
@@ -55,7 +57,7 @@ pub fn createInteger(initializer: i32, is_unsigned: bool) !AnyValue {
 
 pub fn createBigInteger(initializer: i64, is_unsigned: bool) !AnyValue {
     var value: AnyValue = undefined;
-    if (imports.create_big_integer(initializer, is_unsigned, &value) != .SUCCESS) {
+    if (imports.create_big_integer(instance, initializer, is_unsigned, &value) != .SUCCESS) {
         return error.UnableToCreateInteger;
     }
     return value;
@@ -63,7 +65,7 @@ pub fn createBigInteger(initializer: i64, is_unsigned: bool) !AnyValue {
 
 pub fn createString(initializer: []const u8) !AnyValue {
     var value: AnyValue = undefined;
-    if (imports.create_string(initializer.ptr, initializer.len, &value) != .SUCCESS) {
+    if (imports.create_string(instance, initializer.ptr, initializer.len, &value) != .SUCCESS) {
         return error.UnableToCreateString;
     }
     return value;
@@ -71,7 +73,7 @@ pub fn createString(initializer: []const u8) !AnyValue {
 
 pub fn createView(bytes: ?[*]const u8, len: usize, copying: bool, export_handle: ?usize) !AnyValue {
     var value: AnyValue = undefined;
-    if (imports.create_view(bytes, len, copying, export_handle orelse 0, &value) != .SUCCESS) {
+    if (imports.create_view(instance, bytes, len, copying, export_handle orelse 0, &value) != .SUCCESS) {
         return error.UnableToCreateDataView;
     }
     return value;
@@ -79,7 +81,7 @@ pub fn createView(bytes: ?[*]const u8, len: usize, copying: bool, export_handle:
 
 pub fn createInstance(structure: AnyValue, dv: AnyValue, slots: ?AnyValue) !AnyValue {
     var value: AnyValue = undefined;
-    if (imports.create_instance(structure, dv, slots, &value) != .SUCCESS) {
+    if (imports.create_instance(instance, structure, dv, slots, &value) != .SUCCESS) {
         return error.UnableToCreateStructureInstance;
     }
     return value;
@@ -87,7 +89,7 @@ pub fn createInstance(structure: AnyValue, dv: AnyValue, slots: ?AnyValue) !AnyV
 
 pub fn createTemplate(dv: ?AnyValue, slots: ?AnyValue) !AnyValue {
     var value: AnyValue = undefined;
-    if (imports.create_template(dv, slots, &value) != .SUCCESS) {
+    if (imports.create_template(instance, dv, slots, &value) != .SUCCESS) {
         return error.UnableToCreateTemplate;
     }
     return value;
@@ -95,7 +97,7 @@ pub fn createTemplate(dv: ?AnyValue, slots: ?AnyValue) !AnyValue {
 
 pub fn createList() !AnyValue {
     var list: AnyValue = undefined;
-    if (imports.create_list(&list) != .SUCCESS) {
+    if (imports.create_list(instance, &list) != .SUCCESS) {
         return error.UnableToCreateList;
     }
     return list;
@@ -103,7 +105,7 @@ pub fn createList() !AnyValue {
 
 pub fn createObject() !AnyValue {
     var object: AnyValue = undefined;
-    if (imports.create_object(&object) != .SUCCESS) {
+    if (imports.create_object(instance, &object) != .SUCCESS) {
         return error.UnableToCreateObject;
     }
     return object;
@@ -111,34 +113,34 @@ pub fn createObject() !AnyValue {
 
 pub fn getProperty(object: AnyValue, key: []const u8) !AnyValue {
     var value: AnyValue = undefined;
-    if (imports.get_property(object, key.ptr, key.len, &value) != .SUCCESS) {
+    if (imports.get_property(instance, object, key.ptr, key.len, &value) != .SUCCESS) {
         return error.UnableToGetProperty;
     }
     return value;
 }
 
 pub fn setProperty(object: AnyValue, key: []const u8, value: AnyValue) !void {
-    if (imports.set_property(object, key.ptr, key.len, value) != .SUCCESS) {
+    if (imports.set_property(instance, object, key.ptr, key.len, value) != .SUCCESS) {
         return error.UnableToSetProperty;
     }
 }
 
 pub fn getSlotValue(object: ?AnyValue, slot: usize) !AnyValue {
     var value: AnyValue = undefined;
-    if (imports.get_slot_value(object, slot, &value) != .SUCCESS) {
+    if (imports.get_slot_value(instance, object, slot, &value) != .SUCCESS) {
         return error.UnableToGetSlotValue;
     }
     return value;
 }
 
 pub fn setSlotValue(object: ?AnyValue, slot: usize, value: AnyValue) !void {
-    if (imports.set_slot_value(object, slot, value) != .SUCCESS) {
+    if (imports.set_slot_value(instance, object, slot, value) != .SUCCESS) {
         return error.UnableToSetSlotValue;
     }
 }
 
 pub fn appendList(list: AnyValue, value: AnyValue) !void {
-    if (imports.append_list(list, value) != .SUCCESS) {
+    if (imports.append_list(instance, list, value) != .SUCCESS) {
         return error.UnableToAppendList;
     }
 }
@@ -153,13 +155,13 @@ pub fn getExportHandle(comptime ptr: anytype) usize {
 }
 
 pub fn beginStructure(structure: AnyValue) !void {
-    if (imports.begin_structure(structure) != .SUCCESS) {
+    if (imports.begin_structure(instance, structure) != .SUCCESS) {
         return error.UnableToDefineStructure;
     }
 }
 
 pub fn finishStructure(structure: AnyValue) !void {
-    if (imports.finish_structure(structure) != .SUCCESS) {
+    if (imports.finish_structure(instance, structure) != .SUCCESS) {
         return error.UnableToDefineStructure;
     }
 }
@@ -170,7 +172,7 @@ pub fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
         .arg_address = @intFromPtr(arg_ptr),
         .arg_size = arg_size,
     };
-    return imports.handle_jscall(&call);
+    return imports.handle_jscall(instance, &call);
 }
 
 pub fn releaseFunction(fn_ptr: anytype) void {
@@ -178,32 +180,40 @@ pub fn releaseFunction(fn_ptr: anytype) void {
     const thunk_address = @intFromPtr(fn_ptr);
     const control = thunk_js.createThunkController(@This(), FT);
     const fn_id = control(.identify, thunk_address) catch return;
-    _ = imports.release_function(fn_id);
+    _ = imports.release_function(instance, fn_id);
 }
 
 pub fn startMultithread() !void {
-    if (imports.enable_multithread() != .SUCCESS) return error.UnableToUseThread;
+    if (imports.enable_multithread(instance) != .SUCCESS) return error.UnableToUseThread;
 }
 
 pub fn stopMultithread() void {
-    _ = imports.disable_multithread();
+    _ = imports.disable_multithread(instance);
 }
 
 pub fn redirectIO(fn_ptr: *const anyopaque) !void {
-    if (imports.redirect_io(fn_ptr) != .SUCCESS) return error.UnableToRedirectIO;
+    if (imports.redirect_syscalls(instance, fn_ptr) != .SUCCESS) return error.UnableToRedirectIO;
 }
 
-pub fn getInstance() !*anyopaque {
-    var ptr: *anyopaque = undefined;
-    if (imports.get_instance(&ptr) != .SUCCESS) {
-        return error.UnableToGetHostInstance;
-    }
-    return ptr;
+pub fn getInstance() *anyopaque {
+    return instance;
+}
+
+pub fn setHostInstance(ptr: *Module.Host) callconv(.c) E {
+    instance = ptr;
+    return E.SUCCESS;
 }
 
 pub fn initializeThread(ptr: *anyopaque) !void {
-    if (imports.initialize_thread(ptr) != .SUCCESS) {
+    _ = setHostInstance(@ptrCast(ptr));
+    if (imports.install_syscall_trap(instance) != .SUCCESS) {
         return error.UnableToInitializeThread;
+    }
+}
+
+pub fn deinitializeThread() !void {
+    if (imports.uninstall_syscall_trap(instance) != .SUCCESS) {
+        return error.UnableToDeinitializeThread;
     }
 }
 
@@ -300,7 +310,7 @@ fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
 
 pub fn redirectSyscall(call: *hooks.Syscall) std.c.E {
     if (!exporter.options.use_redirection) unreachable;
-    const result = imports.handle_syscall(call);
+    const result = imports.handle_syscall(instance, call);
     // translate from WASI enum to the current system's
     return inline for (std.meta.fields(E)) |field| {
         const wasi_enum = @field(E, field.name);
@@ -316,7 +326,7 @@ pub fn redirectSyscall(call: *hooks.Syscall) std.c.E {
 pub fn isRedirecting(comptime literal: @TypeOf(.enum_literal)) bool {
     if (!exporter.options.use_redirection) unreachable;
     var mask: hooks.Mask = undefined;
-    if (imports.get_syscall_mask(&mask) != .SUCCESS) return false;
+    if (imports.get_syscall_mask(instance, &mask) != .SUCCESS) return false;
     const name = @tagName(literal);
     return @field(mask, name);
 }
@@ -342,6 +352,7 @@ pub fn createModule(comptime module_ns: type) Module {
         },
         .imports = &imports,
         .exports = &.{
+            .set_host_instance = setHostInstance,
             .get_export_address = getExportAddress,
             .get_factory_thunk = ns.getFactoryThunk,
             .run_thunk = runThunk,

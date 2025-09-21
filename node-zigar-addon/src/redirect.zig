@@ -445,7 +445,7 @@ pub fn Controller(comptime Host: type) type {
             return null;
         }
 
-        pub fn installSyscallTrap() !void {
+        pub fn installSyscallTrap(ptr: *const bool) !void {
             if (os == .linux) {
                 // enable syscall user dispatch, excluding the memory region where libc sits; the signal
                 // trampoline is also inside this range, allowing us to reenable trapping from within
@@ -456,7 +456,7 @@ pub fn Controller(comptime Host: type) type {
                     prctl_h.PR_SYS_DISPATCH_ON,
                     libc.address,
                     libc.len,
-                    @intFromPtr(&Host.trapping_syscalls),
+                    @intFromPtr(ptr),
                 ) != 0) {
                     return error.SyscallUserDispatchFailure;
                 }

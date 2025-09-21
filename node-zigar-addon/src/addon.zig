@@ -82,12 +82,12 @@ const ModuleHost = struct {
     multithread_count: std.atomic.Value(usize) = .init(0),
     redirection_mask: hooks.Mask = .{},
     syscall_trap_count: usize = 0,
-    syscall_trap_mutex: std.Thread.Mutex = .{},
-    syscall_trap_switches: std.ArrayList(*bool),
+    thread_syscall_trap_mutex: std.Thread.Mutex = undefined,
+    thread_syscall_trap_switches: std.ArrayList(*bool) = undefined,
 
-    pub threadlocal var instance: *@This() = undefined;
-    pub threadlocal var in_main_thread: bool = undefined;
     pub threadlocal var trapping_syscalls: bool = false;
+    threadlocal var main_thread_syscall_trap_count: usize = 0;
+    threadlocal var in_main_thread: bool = undefined;
 
     var module_count: i32 = 0;
     var buffer_count: i32 = 0;
@@ -111,15 +111,21 @@ const ModuleHost = struct {
     }
 
     fn createEnvironment(env: Env) !Value {
+        // this function is only called from a main thread (where the event loop runs)
+        in_main_thread = true;
         // compile embedded JavaScript
         const js_module = try compileJavaScript(env);
         // look for the Environment class
         const create_env = try env.getNamedProperty(js_module, "createEnvironment");
         // create the environment
         const js_env = try env.callFunction(try env.getNull(), create_env, &.{});
-        const self = try createSelf(env);
+        const self = try c_allocator.create(@This());
+        self.* = .{
+            .env = env,
+            .thread_syscall_trap_mutex = .{},
+            .thread_syscall_trap_switches = .init(c_allocator),
+        };
         defer self.release();
-        try self.setThreadContext(true);
         // import functions from the environment
         try self.importFunctionsFromJavaScript(js_env);
         // export functions to it; exported functions will keep self alive until they're all
@@ -164,16 +170,6 @@ const ModuleHost = struct {
         return try env.runScript(js_str);
     }
 
-    fn createSelf(env: Env) !*@This() {
-        const self = try c_allocator.create(@This());
-        self.* = .{
-            .env = env,
-            .syscall_trap_switches = .init(c_allocator),
-        };
-        instance = self;
-        return self;
-    }
-
     fn addRef(self: *@This()) void {
         self.ref_count += 1;
     }
@@ -189,7 +185,6 @@ const ModuleHost = struct {
             }
             if (self.redirecting_io) redirection_controller.uninstallHooks(self) catch {};
             if (self.library) |*lib| lib.close();
-            self.syscall_trap_switches.deinit();
             c_allocator.destroy(self);
             module_count -= 1;
         }
@@ -280,19 +275,35 @@ const ModuleHost = struct {
                 },
             }
         };
+        _ = module.exports.set_host_instance(@ptrCast(self));
         try self.exportFunctionsToModule();
         if (env.getValueBool(redirectingIO) catch true and module.attributes.io_redirection) {
             try redirection_controller.installHooks(self, &lib, path_s);
+            try redirection_controller.installSyscallTrap(&trapping_syscalls);
             self.redirecting_io = true;
         }
         self.library = lib;
     }
 
-    pub fn setThreadContext(self: *@This(), is_main: bool) !void {
-        instance = self;
-        in_main_thread = is_main;
-        try self.addSyscallTrapSwitch();
-        try redirection_controller.installSyscallTrap();
+    pub fn installSyscallTrap(self: *@This()) !void {
+        try redirection_controller.installSyscallTrap(&trapping_syscalls);
+        // add pointer to trapping_syscalls to the list so traps of all threads belonging
+        // to this module can be enable/disable from the main thread
+        self.thread_syscall_trap_mutex.lock();
+        defer self.thread_syscall_trap_mutex.unlock();
+        try self.thread_syscall_trap_switches.append(&trapping_syscalls);
+        if (self.syscall_trap_count > 0) {
+            trapping_syscalls = true;
+        }
+    }
+
+    pub fn uninstallSyscallTrap(self: *@This()) !void {
+        self.thread_syscall_trap_mutex.lock();
+        defer self.thread_syscall_trap_mutex.unlock();
+        const index = for (self.thread_syscall_trap_switches.items, 0..) |ptr, i| {
+            if (ptr == &trapping_syscalls) break i;
+        } else return;
+        _ = self.thread_syscall_trap_switches.swapRemove(index);
     }
 
     pub fn getSyscallHook(self: *@This(), name: [*:0]const u8) ?HookEntry {
@@ -602,29 +613,20 @@ const ModuleHost = struct {
         _ = try env.getValueStringUtf8(event, event_bytes);
         const event_name = event_bytes[0..event_len];
         const set = try env.getValueBool(listening);
-        const count_before = countEventHandlers(self.redirection_mask);
+        const empty_mask = hooks.Mask{};
+        const empty_before = self.redirection_mask == empty_mask;
         return inline for (std.meta.fields(hooks.Mask)) |field| {
             if (std.mem.eql(u8, field.name, event_name)) {
                 @field(self.redirection_mask, field.name) = set;
-                const count_after = countEventHandlers(self.redirection_mask);
-                if (count_before == 0 and count_after != 0) {
+                const empty_after = self.redirection_mask == empty_mask;
+                if (empty_before and !empty_after) {
                     self.enableSyscallTrap();
-                } else if (count_before != 0 and count_after == 0) {
+                } else if (!empty_before and empty_after) {
                     self.disableSyscallTrap();
                 }
                 break;
             }
         } else error.UnknownEventName;
-    }
-
-    fn countEventHandlers(mask: hooks.Mask) usize {
-        var count: usize = 0;
-        inline for (std.meta.fields(hooks.Mask)) |field| {
-            if (@field(mask, field.name)) {
-                count += 1;
-            }
-        }
-        return count;
     }
 
     fn setSyscallTrap(self: *@This(), trapping: Value) !void {
@@ -640,9 +642,14 @@ const ModuleHost = struct {
     fn enableSyscallTrap(self: *@This()) void {
         self.syscall_trap_count += 1;
         if (self.syscall_trap_count == 1) {
-            for (self.syscall_trap_switches.items) |ptr| {
-                ptr.* = true;
-            }
+            // turn on syscall trap in main thread; since the boolean is shared among multiple modules,
+            // we set it only if this module is the first to do so
+            main_thread_syscall_trap_count += 1;
+            if (main_thread_syscall_trap_count == 1) trapping_syscalls = true;
+            // turn on all syscall traps in threads belonging to this module
+            self.thread_syscall_trap_mutex.lock();
+            defer self.thread_syscall_trap_mutex.unlock();
+            for (self.thread_syscall_trap_switches.items) |ptr| ptr.* = true;
         }
     }
 
@@ -650,9 +657,11 @@ const ModuleHost = struct {
         if (self.syscall_trap_count == 0) return;
         self.syscall_trap_count -= 1;
         if (self.syscall_trap_count == 0) {
-            for (self.syscall_trap_switches.items) |ptr| {
-                ptr.* = false;
-            }
+            main_thread_syscall_trap_count -= 1;
+            if (main_thread_syscall_trap_count == 0) trapping_syscalls = false;
+            self.thread_syscall_trap_mutex.lock();
+            defer self.thread_syscall_trap_mutex.unlock();
+            for (self.thread_syscall_trap_switches.items) |ptr| ptr.* = false;
         }
     }
 
@@ -670,13 +679,13 @@ const ModuleHost = struct {
             const extra = if (Payload == void or Payload == E) 0 else 1;
             const NewArgs = comptime define: {
                 const fields = std.meta.fields(Args);
-                var new_fields: [fields.len - 1 + extra]std.builtin.Type.StructField = undefined;
+                var new_fields: [fields.len + extra]std.builtin.Type.StructField = undefined;
                 var new_args_info = @typeInfo(Args);
                 new_args_info.@"struct".fields = &new_fields;
                 for (&new_fields, 0..) |*field_ptr, i| {
                     const Arg = switch (i) {
-                        fields.len - 1 => *Payload,
-                        else => fields[i + 1].type,
+                        0 => *Module.Host,
+                        else => if (extra == 1 and i == new_fields.len - 1) *Payload else fields[i].type,
                     };
                     field_ptr.* = .{
                         .name = std.fmt.comptimePrint("{d}", .{i}),
@@ -691,14 +700,10 @@ const ModuleHost = struct {
             const ns = struct {
                 fn call(new_args: NewArgs) E {
                     var args: Args = undefined;
-                    inline for (&args, 0..) |*arg_ptr, i| {
-                        if (i == 0) {
-                            // use instance of @This() associated with this thread
-                            arg_ptr.* = instance;
-                        } else {
-                            arg_ptr.* = new_args[i - 1];
-                        }
-                    }
+                    inline for (&args, 0..) |*arg_ptr, i| arg_ptr.* = switch (i) {
+                        0 => @ptrCast(@alignCast(new_args[i])),
+                        else => new_args[i],
+                    };
                     const retval = @call(.auto, func, args);
                     if (retval) |payload| {
                         if (Payload == E) return payload;
@@ -709,7 +714,14 @@ const ModuleHost = struct {
                     }
                 }
             };
-            @field(module.imports, field.name) = fn_transform.spreadArgs(ns.call, .c);
+            const transformed_func = fn_transform.spreadArgs(ns.call, .c);
+            const T1 = @TypeOf(transformed_func);
+            const T2 = @typeInfo(@TypeOf(@field(module.imports, field.name))).pointer.child;
+            if (T1 != T2) {
+                @compileLog(extra);
+                @compileError("Function declaration mismatch: " ++ field.name ++ "\n\nExpected: " ++ @typeName(T2) ++ "\n  Actual: " ++ @typeName(T1) ++ "\n");
+            }
+            @field(module.imports, field.name) = transformed_func;
         }
     }
 
@@ -811,10 +823,10 @@ const ModuleHost = struct {
         return try env.getProperty(object, key);
     }
 
-    fn setProperty(self: *@This(), object: Value, key_bytes: [*]const u8, key_len: usize, value: Value) !void {
+    fn setProperty(self: *@This(), object: Value, key_bytes: [*]const u8, key_len: usize, value: ?Value) !void {
         const env = self.env;
         const key = try env.createStringUtf8(key_bytes[0..key_len]);
-        return try env.setProperty(object, key, value);
+        return try env.setProperty(object, key, value orelse try env.getNull());
     }
 
     fn getSlotValue(self: *@This(), object: ?Value, slot: usize) !Value {
@@ -884,7 +896,8 @@ const ModuleHost = struct {
                     try env.createUsize(call.futex_handle),
                 },
             );
-            return std.meta.intToEnum(E, try env.getValueUint32(status)) catch .FAULT;
+            const status_value = try env.getValueUint32(status);
+            return std.meta.intToEnum(E, status_value) catch .FAULT;
         } else {
             const func = self.ts.handle_jscall orelse return error.Disabled;
             var futex: Futex = undefined;
@@ -1267,15 +1280,6 @@ const ModuleHost = struct {
         });
     }
 
-    fn addSyscallTrapSwitch(self: *@This()) !void {
-        self.syscall_trap_mutex.lock();
-        defer self.syscall_trap_mutex.unlock();
-        try self.syscall_trap_switches.append(&trapping_syscalls);
-        if (self.syscall_trap_count > 0) {
-            trapping_syscalls = true;
-        }
-    }
-
     fn getSyscallMask(self: *@This(), ptr: *hooks.Mask) !void {
         var mask = self.redirection_mask;
         // a stat request can be handled by a 'stat' or an 'open' event handler
@@ -1299,7 +1303,7 @@ const ModuleHost = struct {
         }
     }
 
-    fn redirectIo(self: *@This(), ptr: *const anyopaque) !void {
+    fn redirectSyscalls(self: *@This(), ptr: *const anyopaque) !void {
         if (!self.redirecting_io) return error.RedirectionDisabled;
         try redirection_controller.installHooksInLibraryOf(self, ptr);
     }
@@ -1350,15 +1354,6 @@ const ModuleHost = struct {
         }
     }
 
-    fn getInstance(self: *@This(), ptr: **anyopaque) !void {
-        ptr.* = self;
-    }
-
-    fn initializeThread(_: *@This(), ptr: *anyopaque) !void {
-        const self: *@This() = @ptrCast(@alignCast(ptr));
-        try self.setThreadContext(false);
-    }
-
     const threadsafe_callback = struct {
         fn handle_jscall(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
@@ -1404,7 +1399,8 @@ const Futex = struct {
 
     pub fn wait(self: *@This()) E {
         std.Thread.Futex.wait(&self.value, initial_value);
-        return @enumFromInt(self.value.load(.acquire));
+        const final_value = self.value.load(.acquire);
+        return std.meta.intToEnum(E, final_value) catch E.FAULT;
     }
 
     pub fn wake(handle: usize, result: E) !void {

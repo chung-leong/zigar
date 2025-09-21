@@ -1,22 +1,20 @@
 const std = @import("std");
-const log = std.log.scoped(.@"examples/basic");
 
+const zigar = @import("zigar");
 const zzz = @import("zzz");
 const http = zzz.HTTP;
-
 const tardy = zzz.tardy;
-const Tardy = tardy.Tardy(.auto);
 const Runtime = tardy.Runtime;
 const Socket = tardy.Socket;
-
 const Server = http.Server;
 const Router = http.Router;
 const Context = http.Context;
 const Route = http.Route;
 const Respond = http.Respond;
 
-const zigar = @import("zigar");
+const log = std.log.scoped(.@"examples/basic");
 
+const Tardy = tardy.Tardy(.auto);
 pub fn startServer(host: []const u8, port: u16, promise: zigar.function.PromiseOf(main)) !void {
     try zigar.thread.use();
     const thread = try std.Thread.spawn(.{}, main, .{ host, port, promise.any() });
