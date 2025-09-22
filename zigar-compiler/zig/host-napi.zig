@@ -272,10 +272,9 @@ fn destroyJsThunk(
     return .SUCCESS;
 }
 
-const hook_table = hooks.getHookTable(@This());
+const hook_table = hooks.getHookTable(@This(), exporter.options.use_redirection);
 
 fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
-    if (!exporter.options.use_redirection) unreachable;
     const os = switch (builtin.target.os.tag) {
         .linux => .linux,
         .driverkit, .ios, .macos, .tvos, .visionos, .watchos => .darwin,

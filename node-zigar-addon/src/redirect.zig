@@ -24,9 +24,10 @@ const prctl_h = @cImport({
 
 pub fn Controller(comptime Host: type) type {
     const bits = @bitSizeOf(usize);
+    const LibExtent = struct { address: usize = 0, len: usize = 0 };
 
     return struct {
-        pub fn installHooks(host: *Host, lib: *std.DynLib, path: []const u8) !void {
+        pub fn installHooks(host: *Host, lib: *std.DynLib, path: []const u8) !LibExtent {
             var sfb = std.heap.stackFallback(4096, c_allocator);
             const allocator = sfb.get();
             if (os == .linux) {
@@ -101,11 +102,7 @@ pub fn Controller(comptime Host: type) type {
                     const end = segment.p_vaddr + segment.p_memsz;
                     if (max_vaddr == null or end > max_vaddr.?) max_vaddr = end;
                 }
-                const lib_len = max_vaddr.?;
-                // get the syscall vtable
-                if (host.getSyscallHook("__syscall")) |hook| {
-                    try addSyscallVtable(base_address, lib_len, @ptrCast(@alignCast(hook.handler)));
-                }
+                return .{ .address = base_address, .len = max_vaddr.? };
             } else if (os == .darwin) {
                 const macho = std.macho;
                 const MachHeader = if (bits == 64) macho.mach_header_64 else macho.mach_header;
@@ -268,6 +265,7 @@ pub fn Controller(comptime Host: type) type {
                         }
                     }
                 }
+                return .{};
             } else if (os == .windows) {
                 const ThunkData = windows_h.IMAGE_THUNK_DATA;
                 const ImportDescriptor = windows_h.IMAGE_IMPORT_DESCRIPTOR;
@@ -301,10 +299,11 @@ pub fn Controller(comptime Host: type) type {
                         try installHook(hook, address, true);
                     }
                 }
+                return .{};
             }
         }
 
-        pub fn installHooksInLibraryOf(host: *Host, ptr: *const anyopaque) !void {
+        pub fn installHooksInLibraryOf(host: *Host, ptr: *const anyopaque) !LibExtent {
             var lib: std.DynLib, const path: []const u8 = switch (os) {
                 .linux, .darwin => get: {
                     var info: dlfcn_h.Dl_info = undefined;
@@ -321,15 +320,7 @@ pub fn Controller(comptime Host: type) type {
                 else => unreachable,
             };
             defer lib.close();
-            try installHooks(host, &lib, path);
-        }
-
-        pub fn uninstallHooks(host: *Host) !void {
-            if (os == .linux) {
-                if (host.getSyscallHook("__syscall")) |hook| {
-                    try removeSyscallVtable(@ptrCast(@alignCast(hook.handler)));
-                }
-            }
+            return try installHooks(host, &lib, path);
         }
 
         fn installHook(hook: Host.HookEntry, address: usize, read_only: bool) !void {
@@ -360,76 +351,80 @@ pub fn Controller(comptime Host: type) type {
         var syscall_vtables: [*]const HandlerEntry = empty_list;
         var syscall_vtables_mutex: std.Thread.Mutex = .{};
 
-        fn addSyscallVtable(address: usize, len: usize, vtable: *const Host.HandlerVTable) !void {
-            // the list is a many pointer that we can update atomically
-            // in order to expand it we need to determine the new length first
-            syscall_vtables_mutex.lock();
-            defer syscall_vtables_mutex.unlock();
-            const list = syscall_vtables;
-            const old_len = count: {
-                var index: usize = 0;
-                while (true) : (index += 1) {
-                    const entry = list[index];
-                    if (entry.start_address == 0) break;
+        pub fn addSyscallVtable(pos: LibExtent, vtable: *const Host.HandlerVTable) !void {
+            if (os == .linux) {
+                // the list is a many pointer that we can update atomically
+                // in order to expand it we need to determine the new length first
+                syscall_vtables_mutex.lock();
+                defer syscall_vtables_mutex.unlock();
+                const list = syscall_vtables;
+                const old_len = count: {
+                    var index: usize = 0;
+                    while (true) : (index += 1) {
+                        const entry = list[index];
+                        if (entry.start_address == 0) break;
+                    }
+                    break :count index;
+                };
+                const new_len = old_len + 1;
+                const new_list = try c_allocator.alloc(HandlerEntry, new_len + 1);
+                // copy from old list
+                for (0..old_len) |index| {
+                    new_list[index] = list[index];
                 }
-                break :count index;
-            };
-            const new_len = old_len + 1;
-            const new_list = try c_allocator.alloc(HandlerEntry, new_len + 1);
-            // copy from old list
-            for (0..old_len) |index| {
-                new_list[index] = list[index];
+                new_list[old_len] = .{
+                    .start_address = pos.address,
+                    .end_address = pos.address + pos.len,
+                    .vtable = vtable,
+                };
+                // add terminator
+                new_list[new_len] = empty_list[0];
+                // make the switch
+                syscall_vtables = new_list.ptr;
+                // free the old list if necessary
+                if (list != empty_list) c_allocator.free(list[0 .. old_len + 1]);
             }
-            new_list[old_len] = .{
-                .start_address = address,
-                .end_address = address + len,
-                .vtable = vtable,
-            };
-            // add terminator
-            new_list[new_len] = empty_list[0];
-            // make the switch
-            syscall_vtables = new_list.ptr;
-            // free the old list if necessary
-            if (list != empty_list) c_allocator.free(list[0 .. old_len + 1]);
         }
 
-        fn removeSyscallVtable(vtable: *const Host.HandlerVTable) !void {
-            syscall_vtables_mutex.lock();
-            defer syscall_vtables_mutex.unlock();
-            const list = syscall_vtables;
-            const old_len = count: {
-                var index: usize = 0;
-                while (true) : (index += 1) {
-                    const entry = list[index];
-                    if (entry.start_address == 0) break;
-                }
-                break :count index;
-            };
-            const new_len: usize = count: {
-                var len: usize = old_len;
-                var index: usize = 0;
-                while (true) : (index += 1) {
-                    const entry = list[index];
-                    if (entry.vtable == vtable) len -= 1;
-                    if (entry.start_address == 0) break;
-                }
-                break :count len;
-            };
-            if (new_len > 0) {
-                const new_list = try c_allocator.alloc(HandlerEntry, new_len + 1);
-                var remaining: usize = 0;
-                for (list[0..old_len]) |entry| {
-                    if (entry.vtable != vtable) {
-                        new_list[remaining] = entry;
-                        remaining += 1;
+        pub fn removeSyscallVtable(vtable: *const Host.HandlerVTable) !void {
+            if (os == .linux) {
+                syscall_vtables_mutex.lock();
+                defer syscall_vtables_mutex.unlock();
+                const list = syscall_vtables;
+                const old_len = count: {
+                    var index: usize = 0;
+                    while (true) : (index += 1) {
+                        const entry = list[index];
+                        if (entry.start_address == 0) break;
                     }
+                    break :count index;
+                };
+                const new_len: usize = count: {
+                    var len: usize = old_len;
+                    var index: usize = 0;
+                    while (true) : (index += 1) {
+                        const entry = list[index];
+                        if (entry.vtable == vtable) len -= 1;
+                        if (entry.start_address == 0) break;
+                    }
+                    break :count len;
+                };
+                if (new_len > 0) {
+                    const new_list = try c_allocator.alloc(HandlerEntry, new_len + 1);
+                    var remaining: usize = 0;
+                    for (list[0..old_len]) |entry| {
+                        if (entry.vtable != vtable) {
+                            new_list[remaining] = entry;
+                            remaining += 1;
+                        }
+                    }
+                    new_list[new_len] = empty_list[0];
+                    syscall_vtables = new_list.ptr;
+                } else {
+                    syscall_vtables = empty_list;
                 }
-                new_list[new_len] = empty_list[0];
-                syscall_vtables = new_list.ptr;
-            } else {
-                syscall_vtables = empty_list;
+                c_allocator.free(list[0 .. old_len + 1]);
             }
-            c_allocator.free(list[0 .. old_len + 1]);
         }
 
         fn getSyscallVtable(address: usize) ?*const Host.HandlerVTable {
@@ -504,10 +499,9 @@ pub fn Controller(comptime Host: type) type {
             }
         }
 
-        const LibcExtent = struct { address: usize, len: usize };
-        var libc_extent: ?LibcExtent = null;
+        var libc_extent: ?LibExtent = null;
 
-        fn getLibcExtent() !LibcExtent {
+        fn getLibcExtent() !LibExtent {
             if (os != .linux) @compileError("Unsupported");
             return libc_extent orelse {
                 const elf = std.elf;

@@ -24,7 +24,6 @@ const ModuleHost = struct {
     const redirection_controller = redirect.Controller(@This());
 
     ref_count: isize = 1,
-    redirecting_io: bool = false,
     module: ?*Module = null,
     library: ?std.DynLib = null,
     base_address: usize = 0,
@@ -81,6 +80,7 @@ const ModuleHost = struct {
     } = .{},
     multithread_count: std.atomic.Value(usize) = .init(0),
     redirection_mask: hooks.Mask = .{},
+    syscall_trap_installed: bool = false,
     syscall_trap_count: usize = 0,
     thread_syscall_trap_mutex: std.Thread.Mutex = undefined,
     thread_syscall_trap_switches: std.ArrayList(*bool) = undefined,
@@ -183,7 +183,12 @@ const ModuleHost = struct {
                     env.deleteReference(ref) catch {};
                 }
             }
-            if (self.redirecting_io) redirection_controller.uninstallHooks(self) catch {};
+            if (self.syscall_trap_installed) {
+                if (self.getSyscallHook("__syscall")) |hook| {
+                    const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
+                    redirection_controller.removeSyscallVtable(vtable) catch {};
+                }
+            }
             if (self.library) |*lib| lib.close();
             c_allocator.destroy(self);
             module_count -= 1;
@@ -277,17 +282,24 @@ const ModuleHost = struct {
         };
         _ = module.exports.set_host_instance(@ptrCast(self));
         try self.exportFunctionsToModule();
-        if (env.getValueBool(redirectingIO) catch true and module.attributes.io_redirection) {
-            try redirection_controller.installHooks(self, &lib, path_s);
-            try redirection_controller.installSyscallTrap(&trapping_syscalls);
-            self.redirecting_io = true;
+        if (env.getValueBool(redirectingIO) catch true) {
+            const pos = try redirection_controller.installHooks(self, &lib, path_s);
+            if (module.attributes.io_redirection) {
+                if (self.getSyscallHook("__syscall")) |hook| {
+                    const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
+                    try redirection_controller.addSyscallVtable(pos, vtable);
+                    errdefer redirection_controller.removeSyscallVtable(vtable) catch {};
+                    try redirection_controller.installSyscallTrap(&trapping_syscalls);
+                    self.syscall_trap_installed = true;
+                }
+            }
         }
         self.library = lib;
     }
 
     pub fn initializeThread(self: *@This()) !void {
         in_main_thread = false;
-        if (self.redirecting_io) {
+        if (self.syscall_trap_installed) {
             try redirection_controller.installSyscallTrap(&trapping_syscalls);
             self.thread_syscall_trap_mutex.lock();
             defer self.thread_syscall_trap_mutex.unlock();
@@ -299,7 +311,7 @@ const ModuleHost = struct {
     }
 
     pub fn deinitializeThread(self: *@This()) !void {
-        if (self.redirecting_io) {
+        if (self.syscall_trap_installed) {
             self.thread_syscall_trap_mutex.lock();
             defer self.thread_syscall_trap_mutex.unlock();
             const index = for (self.thread_syscall_trap_switches.items, 0..) |ptr, i| {
@@ -1307,8 +1319,14 @@ const ModuleHost = struct {
     }
 
     fn redirectSyscalls(self: *@This(), ptr: *const anyopaque) !void {
-        if (!self.redirecting_io) return error.RedirectionDisabled;
-        try redirection_controller.installHooksInLibraryOf(self, ptr);
+        if (!self.syscall_trap_installed) return error.RedirectionDisabled;
+        const pos = try redirection_controller.installHooksInLibraryOf(self, ptr);
+        if (self.syscall_trap_installed) {
+            if (self.getSyscallHook("__syscall")) |hook| {
+                const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
+                return redirection_controller.addSyscallVtable(pos, vtable);
+            }
+        }
     }
 
     fn enableMultithread(self: *@This()) !void {

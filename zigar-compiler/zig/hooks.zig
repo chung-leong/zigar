@@ -1768,17 +1768,6 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.posix_fallocate(fd, offset, len);
         }
 
-        pub fn pthread_create(thread: *std.c.pthread_t, attr: ?*const std.c.pthread_attr_t, start_routine: *const fn (?*anyopaque) callconv(.c) ?*anyopaque, arg: ?*anyopaque) callconv(.c) c_int {
-            const instance = redirector.Host.getInstance();
-            const info = c_allocator.create(ThreadInfo) catch return @intFromEnum(std.c.E.NOMEM);
-            info.* = .{
-                .proc = start_routine,
-                .arg = arg,
-                .instance = instance,
-            };
-            return Original.pthread_create(thread, attr, &setThreadContext, info);
-        }
-
         pub fn readdir(d: *std.c.DIR) callconv(.c) ?*align(1) const Dirent {
             if (RedirectedDir.cast(d)) |dir| {
                 return readdirT(Dirent, dir);
@@ -1956,17 +1945,6 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             } else @compileError("Unable to get error number pointer");
         }
 
-        fn setThreadContext(ptr: ?*anyopaque) callconv(.c) ?*anyopaque {
-            const info: *ThreadInfo = @ptrCast(@alignCast(ptr.?));
-            const proc: *const fn (?*anyopaque) callconv(.c) ?*anyopaque = @ptrCast(@alignCast(info.proc));
-            const arg = info.arg;
-            const instance = info.instance;
-            c_allocator.destroy(info);
-            redirector.Host.initializeThread(instance) catch {};
-            defer redirector.Host.deinitializeThread() catch {};
-            return proc(arg);
-        }
-
         const errno_h = @cImport({
             @cInclude("errno.h");
         });
@@ -2021,7 +1999,6 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var pread: *const @TypeOf(Self.pread) = undefined;
             pub var pread64: *const @TypeOf(Self.pread64) = undefined;
             pub var preadv: *const @TypeOf(Self.preadv) = undefined;
-            pub var pthread_create: *const @TypeOf(Self.pthread_create) = undefined;
             pub var pwrite: *const @TypeOf(Self.pwrite) = undefined;
             pub var pwritev: *const @TypeOf(Self.pwritev) = undefined;
             pub var pwrite64: *const @TypeOf(Self.pwrite64) = undefined;
@@ -2043,6 +2020,38 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var utimes: *const @TypeOf(Self.utimes) = undefined;
             pub var write: *const @TypeOf(Self.write) = undefined;
             pub var writev: *const @TypeOf(Self.writev) = undefined;
+        };
+        pub const calling_convention = std.builtin.CallingConvention.c;
+    };
+}
+
+pub fn PthreadSubstitute(comptime redirector: type) type {
+    return struct {
+        pub fn pthread_create(thread: *std.c.pthread_t, attr: ?*const std.c.pthread_attr_t, start_routine: *const fn (?*anyopaque) callconv(.c) ?*anyopaque, arg: ?*anyopaque) callconv(.c) c_int {
+            const instance = redirector.Host.getInstance();
+            const info = c_allocator.create(ThreadInfo) catch return @intFromEnum(std.c.E.NOMEM);
+            info.* = .{
+                .proc = start_routine,
+                .arg = arg,
+                .instance = instance,
+            };
+            return Original.pthread_create(thread, attr, &setThreadContext, info);
+        }
+
+        fn setThreadContext(ptr: ?*anyopaque) callconv(.c) ?*anyopaque {
+            const info: *ThreadInfo = @ptrCast(@alignCast(ptr.?));
+            const proc: *const fn (?*anyopaque) callconv(.c) ?*anyopaque = @ptrCast(@alignCast(info.proc));
+            const arg = info.arg;
+            const instance = info.instance;
+            c_allocator.destroy(info);
+            redirector.Host.initializeThread(instance) catch {};
+            defer redirector.Host.deinitializeThread() catch {};
+            return proc(arg);
+        }
+
+        const Self = @This();
+        pub const Original = struct {
+            pub var pthread_create: *const @TypeOf(Self.pthread_create) = undefined;
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
     };
@@ -2764,7 +2773,7 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
     return struct {
         const posix = PosixSubstitute(redirector);
         const libc = LibcSubstitute(redirector);
-        const win32 = Win32SubstituteS(redirector);
+        const win32 = Win32Substitute(redirector);
 
         pub const lseeki64 = posix.lseek64;
 
@@ -2925,7 +2934,7 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
     };
 }
 
-pub fn Win32SubstituteS(comptime redirector: type) type {
+pub fn Win32Substitute(comptime redirector: type) type {
     return struct {
         pub fn CloseHandle(handle: HANDLE) callconv(WINAPI) BOOL {
             if (handle == temporary_handle) return TRUE;
@@ -3016,26 +3025,6 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
                 return CreateFileA(converter.path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
             }
             return Original.CreateFileW(path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
-        }
-
-        pub fn CreateThread(
-            thread_attributes: ?*SECURITY_ATTRIBUTES,
-            stack_size: SIZE_T,
-            start_address: LPTHREAD_START_ROUTINE,
-            parameter: ?LPVOID,
-            creation_flags: DWORD,
-            thread_id: ?*DWORD,
-        ) callconv(WINAPI) ?HANDLE {
-            const instance = redirector.Host.getInstance() catch {
-                _ = saveError(std.c.E.FAULT);
-                return null;
-            };
-            const info = c_allocator.create(ThreadInfo) catch {
-                _ = saveError(std.c.E.NOMEM);
-                return null;
-            };
-            info.* = .{ .proc = start_address, .arg = parameter, .instance = instance };
-            return Original.CreateThread(thread_attributes, stack_size, &setThreadContext, info, creation_flags, thread_id);
         }
 
         pub fn DeleteFileA(path: LPCSTR) callconv(WINAPI) BOOL {
@@ -3871,19 +3860,6 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
             return attributes;
         }
 
-        fn setThreadContext(ptr: LPVOID) callconv(WINAPI) DWORD {
-            const info: *ThreadInfo = @ptrCast(@alignCast(ptr));
-            const proc: *const fn (?LPVOID) callconv(WINAPI) DWORD = @ptrCast(info.proc);
-            const arg = info.arg;
-            const instance = info.instance;
-            c_allocator.destroy(info);
-            redirector.Host.initializeThread(instance) catch {
-                @panic("Unable to initialize thread");
-            };
-            defer redirector.Host.deinitializeThread() catch {};
-            return proc(arg);
-        }
-
         const temporary_handle: HANDLE = @ptrFromInt(0x1fff_ffff);
         const fd_format_string = "\\\\??\\UNC\\@zigar\\fd\\{x}";
         const fd_path_prefix = fd_format_string[0 .. fd_format_string.len - 3];
@@ -3919,7 +3895,6 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         const LPCVOID = std.os.windows.LPCVOID;
         const LPCWSTR = std.os.windows.LPCWSTR;
         const LPOVERLAPPED_COMPLETION_ROUTINE = std.os.windows.LPOVERLAPPED_COMPLETION_ROUTINE;
-        const LPTHREAD_START_ROUTINE = std.os.windows.LPTHREAD_START_ROUTINE;
         const LPVOID = std.os.windows.LPVOID;
         const NTSTATUS = std.os.windows.NTSTATUS;
         const OBJECT_ATTRIBUTES = std.os.windows.OBJECT_ATTRIBUTES;
@@ -3927,7 +3902,6 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
         const OBJECT_INFORMATION_CLASS = std.os.windows.OBJECT_INFORMATION_CLASS;
         const OVERLAPPED = std.os.windows.OVERLAPPED;
         const SECURITY_ATTRIBUTES = std.os.windows.SECURITY_ATTRIBUTES;
-        const SIZE_T = std.os.windows.SIZE_T;
         const ULONG = std.os.windows.ULONG;
         const UNICODE_STRING = std.os.windows.UNICODE_STRING;
         const WCHAR = std.os.windows.WCHAR;
@@ -4023,6 +3997,68 @@ pub fn Win32SubstituteS(comptime redirector: type) type {
     };
 }
 
+pub fn Win32ThreadSubstitute(comptime redirector: type) type {
+    const win32 = Win32Substitute(redirector);
+
+    return struct {
+        pub fn CreateThread(
+            thread_attributes: ?*SECURITY_ATTRIBUTES,
+            stack_size: SIZE_T,
+            start_address: LPTHREAD_START_ROUTINE,
+            parameter: ?LPVOID,
+            creation_flags: DWORD,
+            thread_id: ?*DWORD,
+        ) callconv(WINAPI) ?HANDLE {
+            const instance = redirector.Host.getInstance();
+            const info = c_allocator.create(ThreadInfo) catch {
+                _ = win32.saveError(std.c.E.NOMEM);
+                return null;
+            };
+            info.* = .{ .proc = start_address, .arg = parameter, .instance = instance };
+            return Original.CreateThread(thread_attributes, stack_size, &setThreadContext, info, creation_flags, thread_id);
+        }
+
+        fn setThreadContext(ptr: LPVOID) callconv(WINAPI) DWORD {
+            const info: *ThreadInfo = @ptrCast(@alignCast(ptr));
+            const proc: *const fn (?LPVOID) callconv(WINAPI) DWORD = @ptrCast(info.proc);
+            const arg = info.arg;
+            const instance = info.instance;
+            c_allocator.destroy(info);
+            redirector.Host.initializeThread(instance) catch {
+                @panic("Unable to initialize thread");
+            };
+            defer redirector.Host.deinitializeThread() catch {};
+            return proc(arg);
+        }
+
+        const std_stream = struct {
+            var handles: [3]?HANDLE = .{ null, null, null };
+            fn get(comptime index: usize) HANDLE {
+                const ids = .{ std.os.windows.STD_INPUT_HANDLE, std.os.windows.STD_OUTPUT_HANDLE, std.os.windows.STD_ERROR_HANDLE };
+                return handles[index] orelse find: {
+                    const handle = std.os.windows.GetStdHandle(ids[index]) catch std.os.windows.INVALID_HANDLE_VALUE;
+                    handles[index] = handle;
+                    break :find handle;
+                };
+            }
+        };
+
+        const DWORD = std.os.windows.DWORD;
+        const HANDLE = std.os.windows.HANDLE;
+        const LPTHREAD_START_ROUTINE = std.os.windows.LPTHREAD_START_ROUTINE;
+        const LPVOID = std.os.windows.LPVOID;
+        const SECURITY_ATTRIBUTES = std.os.windows.SECURITY_ATTRIBUTES;
+        const SIZE_T = std.os.windows.SIZE_T;
+        const WINAPI: std.builtin.CallingConvention = if (builtin.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c;
+
+        const Self = @This();
+        pub const Original = struct {
+            pub var CreateThread: *const @TypeOf(Self.CreateThread) = undefined;
+        };
+        pub const calling_convention = WINAPI;
+    };
+}
+
 pub const HandlerVTable = init: {
     const redirector = SyscallRedirector(void);
     const len = count: {
@@ -4070,28 +4106,42 @@ pub fn getHandlerVtable(comptime Host: type) HandlerVTable {
     return vtable;
 }
 
-pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
+pub fn getHookTable(comptime Host: type, comptime redirect_io: bool) std.StaticStringMap(Entry) {
     const redirector = SyscallRedirector(Host);
-    const list = switch (os) {
+    const list = if (redirect_io) switch (os) {
         .linux => .{
             PosixSubstitute(redirector),
+            PthreadSubstitute(redirector),
             LibcSubstitute(redirector),
             LinuxLibcSubstitute(redirector),
         },
         .darwin => .{
             PosixSubstitute(redirector),
+            PthreadSubstitute(redirector),
             LibcSubstitute(redirector),
         },
         .windows => .{
             PosixSubstitute(redirector),
+            PthreadSubstitute(redirector), // in case someone is using pthread-win32
             LibcSubstitute(redirector),
+            Win32ThreadSubstitute(redirector),
             Win32LibcSubsitute(redirector),
-            Win32SubstituteS(redirector),
+            Win32Substitute(redirector),
+        },
+        else => .{},
+    } else switch (os) {
+        .darwin, .linux => .{
+            PthreadSubstitute(redirector),
+        },
+        .windows => .{
+            PthreadSubstitute(redirector),
+            Win32ThreadSubstitute(redirector),
         },
         else => .{},
     };
+    const extra = if (redirect_io and os == .linux) 1 else 0;
     const len = init: {
-        var total: usize = 1;
+        var total: usize = extra;
         inline for (list) |Sub| {
             const decls = std.meta.declarations(Sub.Original);
             total += decls.len;
@@ -4099,12 +4149,14 @@ pub fn getHookTable(comptime Host: type) std.StaticStringMap(Entry) {
         break :init total;
     };
     var table: [len]std.meta.Tuple(&.{ []const u8, Entry }) = undefined;
-    // make vtable available through the hook table
-    table[0] = .{ "__syscall", .{
-        .handler = &getHandlerVtable(Host),
-        .original = undefined,
-    } };
-    var index: usize = 1;
+    if (redirect_io) {
+        // make vtable available through the hook table
+        table[0] = .{ "__syscall", .{
+            .handler = &getHandlerVtable(Host),
+            .original = undefined,
+        } };
+    }
+    var index: usize = extra;
     inline for (list) |Sub| {
         const decls = std.meta.declarations(Sub.Original);
         inline for (decls) |decl| {
