@@ -3,7 +3,7 @@ import { mixin } from '../environment.js';
 import { ALIGN, ENVIRONMENT, MEMORY, SIZE, SLOTS, TYPE } from '../symbols.js';
 
 const events = [ 'log', 'env', 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink', 'syscall' ];
-const firstMasked = 2;
+const firstMasked = 1;
 
 export default mixin({
   init() {
@@ -35,6 +35,7 @@ export default mixin({
       if (!this.ioRedirection) {
         throw new Error(`Redirection disabled`);
       }
+      this.listenerMap.set(name, cb);
       if (process.env.TARGET === 'node') {
         if (index >= firstMasked) {
           this.setRedirectionMask(name, !!cb);
@@ -43,7 +44,6 @@ export default mixin({
     } else {
       throw new Error(`Unknown event: ${name}`);
     }
-    this.listenerMap.set(name, cb);
   },
   hasListener(name) {
     return this.listenerMap.get(name);

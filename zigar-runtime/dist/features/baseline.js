@@ -34,10 +34,10 @@ var baseline = mixin({
       if (!this.ioRedirection) {
         throw new Error(`Redirection disabled`);
       }
+      this.listenerMap.set(name, cb);
     } else {
       throw new Error(`Unknown event: ${name}`);
     }
-    this.listenerMap.set(name, cb);
   },
   hasListener(name) {
     return this.listenerMap.get(name);

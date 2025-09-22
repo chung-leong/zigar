@@ -18,16 +18,24 @@ comptime {
 }
 
 const ModuleHost = struct {
-    pub const HookEntry = hooks.Entry;
+    pub const Deferred = struct {
+        address: usize = 0,
+        read_only: bool = false,
+    };
+    pub const HookEntry = struct {
+        handler: *const anyopaque,
+        original: **const anyopaque,
+        deferred: ?*Deferred = null,
+    };
     pub const Syscall = hooks.Syscall;
     pub const HandlerVTable = hooks.HandlerVTable;
     const redirection_controller = redirect.Controller(@This());
 
+    env: Env,
     ref_count: isize = 1,
     module: ?*Module = null,
     library: ?std.DynLib = null,
     base_address: usize = 0,
-    env: Env,
     is_bun: bool = false,
     js: struct {
         create_view: ?Ref = null,
@@ -41,6 +49,8 @@ const ModuleHost = struct {
         handle_jscall: ?Ref = null,
         release_function: ?Ref = null,
 
+        environ_get: ?Ref = null,
+        environ_sizes_get: ?Ref = null,
         fd_advise: ?Ref = null,
         fd_allocate: ?Ref = null,
         fd_close: ?Ref = null,
@@ -84,6 +94,11 @@ const ModuleHost = struct {
     syscall_trap_count: usize = 0,
     thread_syscall_trap_mutex: std.Thread.Mutex = undefined,
     thread_syscall_trap_switches: std.ArrayList(*bool) = undefined,
+    env_variable_deferred: Deferred = .{},
+    env_variable_list: ?[]?[*:0]const u8 = null,
+    env_variable_bytes: ?[]const u8 = null,
+    env_variable_ptr: *[*:null]?[*:0]const u8 = undefined,
+    env_variable_original: *[*:null]?[*:0]const u8 = undefined,
 
     pub threadlocal var trapping_syscalls: bool = false;
     threadlocal var main_thread_syscall_trap_count: usize = 0;
@@ -184,12 +199,14 @@ const ModuleHost = struct {
                 }
             }
             if (self.syscall_trap_installed) {
-                if (self.getSyscallHook("__syscall")) |hook| {
+                if (self.getSyscallHook("__sc_vtable")) |hook| {
                     const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
                     redirection_controller.removeSyscallVtable(vtable) catch {};
                 }
             }
             if (self.library) |*lib| lib.close();
+            if (self.env_variable_list) |list| c_allocator.free(list);
+            if (self.env_variable_bytes) |bytes| c_allocator.free(bytes);
             c_allocator.destroy(self);
             module_count -= 1;
         }
@@ -285,7 +302,7 @@ const ModuleHost = struct {
         if (env.getValueBool(redirectingIO) catch true) {
             const pos = try redirection_controller.installHooks(self, &lib, path_s);
             if (module.attributes.io_redirection) {
-                if (self.getSyscallHook("__syscall")) |hook| {
+                if (self.getSyscallHook("__sc_vtable")) |hook| {
                     const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
                     try redirection_controller.addSyscallVtable(pos, vtable);
                     errdefer redirection_controller.removeSyscallVtable(vtable) catch {};
@@ -323,9 +340,16 @@ const ModuleHost = struct {
 
     pub fn getSyscallHook(self: *@This(), name: [*:0]const u8) ?HookEntry {
         const module = self.module.?;
-        var hook: HookEntry = undefined;
-        if (module.exports.get_syscall_hook(name, &hook) != .SUCCESS) return null;
-        return hook;
+        var hook: hooks.Entry = undefined;
+        return if (module.exports.get_syscall_hook(name, &hook) == .SUCCESS) .{
+            .handler = hook.handler,
+            .original = hook.original,
+        } else if (std.mem.eql(u8, name[0..std.mem.len(name)], "environ")) .{
+            // get the address to the pointer
+            .handler = undefined,
+            .original = undefined,
+            .deferred = &self.env_variable_deferred,
+        } else null;
     }
 
     fn getModuleAttributes(self: *@This()) !Value {
@@ -628,6 +652,11 @@ const ModuleHost = struct {
         _ = try env.getValueStringUtf8(event, event_bytes);
         const event_name = event_bytes[0..event_len];
         const set = try env.getValueBool(listening);
+        if (std.mem.eql(u8, event_name, "env")) {
+            // retrieve environment variable through WASI functions and insert into module
+            if (set) try self.obtainEnvVariables();
+            return;
+        }
         const empty_mask = hooks.Mask{};
         const empty_before = self.redirection_mask == empty_mask;
         return inline for (std.meta.fields(hooks.Mask)) |field| {
@@ -1295,6 +1324,34 @@ const ModuleHost = struct {
         });
     }
 
+    fn obtainEnvVariables(self: *@This()) !void {
+        const deferred = self.env_variable_deferred;
+        if (deferred.address == 0 or self.env_variable_bytes != null) return;
+        const env = self.env;
+        var count: u32 = undefined;
+        var len: u32 = undefined;
+        if (try self.callPosixFunction(self.js.environ_sizes_get, &.{
+            try env.createUsize(@intFromPtr(&count)),
+            try env.createUsize(@intFromPtr(&len)),
+        }) != .SUCCESS) return error.UnableToGetEnvSize;
+        const list = try c_allocator.alloc(?[*:0]const u8, count + 1);
+        errdefer c_allocator.free(list);
+        const bytes = try c_allocator.alloc(u8, len);
+        errdefer c_allocator.free(bytes);
+        if (try self.callPosixFunction(self.js.environ_get, &.{
+            try env.createUsize(@intFromPtr(list.ptr)),
+            try env.createUsize(@intFromPtr(bytes.ptr)),
+        }) != .SUCCESS) return error.UnableToGetEnv;
+        list[list.len - 1] = null;
+        self.env_variable_ptr = @ptrCast(list.ptr);
+        try redirection_controller.installHook(.{
+            .handler = @ptrCast(&self.env_variable_ptr),
+            .original = @ptrCast(&self.env_variable_original),
+        }, deferred.address, deferred.read_only);
+        self.env_variable_list = list;
+        self.env_variable_bytes = bytes;
+    }
+
     fn getSyscallMask(self: *@This(), ptr: *hooks.Mask) !void {
         var mask = self.redirection_mask;
         // a stat request can be handled by a 'stat' or an 'open' event handler
@@ -1322,7 +1379,7 @@ const ModuleHost = struct {
         if (!self.syscall_trap_installed) return error.RedirectionDisabled;
         const pos = try redirection_controller.installHooksInLibraryOf(self, ptr);
         if (self.syscall_trap_installed) {
-            if (self.getSyscallHook("__syscall")) |hook| {
+            if (self.getSyscallHook("__sc_vtable")) |hook| {
                 const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
                 return redirection_controller.addSyscallVtable(pos, vtable);
             }

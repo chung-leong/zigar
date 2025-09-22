@@ -323,18 +323,25 @@ pub fn Controller(comptime Host: type) type {
             return try installHooks(host, &lib, path);
         }
 
-        fn installHook(hook: Host.HookEntry, address: usize, read_only: bool) !void {
-            const ptr: **const anyopaque = @ptrFromInt(address);
-            if (ptr.* != hook.handler) {
-                hook.original.* = ptr.*;
-                if (read_only) {
-                    const page = getPageSlice(address);
-                    // std.posix.mprotect() does support Windows
-                    try std.posix.mprotect(page, std.c.PROT.READ | std.c.PROT.WRITE);
-                    defer std.posix.mprotect(page, std.c.PROT.READ) catch {};
-                    ptr.* = hook.handler;
-                } else {
-                    ptr.* = hook.handler;
+        pub fn installHook(hook: Host.HookEntry, address: usize, read_only: bool) !void {
+            if (hook.deferred) |deferred_ptr| {
+                deferred_ptr.* = .{
+                    .address = address,
+                    .read_only = read_only,
+                };
+            } else {
+                const ptr: **const anyopaque = @ptrFromInt(address);
+                if (ptr.* != hook.handler) {
+                    hook.original.* = ptr.*;
+                    if (read_only) {
+                        const page = getPageSlice(address);
+                        // std.posix.mprotect() does support Windows
+                        try std.posix.mprotect(page, std.c.PROT.READ | std.c.PROT.WRITE);
+                        defer std.posix.mprotect(page, std.c.PROT.READ) catch {};
+                        ptr.* = hook.handler;
+                    } else {
+                        ptr.* = hook.handler;
+                    }
                 }
             }
         }

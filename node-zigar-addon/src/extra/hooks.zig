@@ -4151,7 +4151,7 @@ pub fn getHookTable(comptime Host: type, comptime redirect_io: bool) std.StaticS
     var table: [len]std.meta.Tuple(&.{ []const u8, Entry }) = undefined;
     if (redirect_io) {
         // make vtable available through the hook table
-        table[0] = .{ "__syscall", .{
+        table[0] = .{ "__sc_vtable", .{
             .handler = &getHandlerVtable(Host),
             .original = undefined,
         } };

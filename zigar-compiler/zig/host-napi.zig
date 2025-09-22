@@ -302,8 +302,6 @@ fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
         return .NOENT;
     };
     dest.* = entry;
-    // std.debug.print("{s}\n", .{name_s});
-    // return .NOENT;
     return .SUCCESS;
 }
 

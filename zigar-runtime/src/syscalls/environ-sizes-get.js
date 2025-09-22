@@ -26,7 +26,7 @@ export default mixin({
   },
   ...(process.env.TARGET === 'node' ? {
     exports: {
-      environSizesGet: { async: true },
+      environSizesGet: {},
     },
     /* c8 ignore next */
   } : undefined),
