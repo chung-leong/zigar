@@ -345,6 +345,16 @@ describe('Feature: baseline', function() {
       env.fdWrite(1, iovsAddress, 1, writtenAddress);
       expect(event).to.eql({ source: 'stdout', message: 'Hello world' });
     })
+    it('should throw when event is unknown', function() {
+      const env = new Env();
+      expect(() => env.addListener('dingo', () => {})).to.throw(Error)
+        .with.property('message').that.contains('dingo');
+    })
+    it('should throw on io event when useRedirection is false', function() {
+      const env = new Env();
+      env.ioRedirection = false;
+      expect(() => env.addListener('open', () => {})).to.throw(Error);
+    })
     if (process.env.TARGET === 'node') {
       it('should call set redirection mask for certain event', function() {
         const env = new Env();

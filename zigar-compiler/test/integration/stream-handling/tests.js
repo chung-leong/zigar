@@ -2381,12 +2381,13 @@ export function addTests(importModule, options) {
       ]);
       expect(() => call(map)).to.throw();
     })
-    it('should handle threads correct when useRedirection is false', async function() {
-      const { call, startup, shutdown } = await importTest('return-from-thread', { multithreaded: true, useRedirection: false });
+    it('should handle threads correctly when useRedirection is false', async function() {
+      const { __zigar, call, startup, shutdown } = await importTest('return-from-thread', { multithreaded: true, useRedirection: false });
       startup();
       try {
         const result = await call(1234);
         expect(result).to.equal(1234);
+        expect(() => __zigar.on('open', () => {})).to.throw();
       } finally {
         await shutdown();
       }

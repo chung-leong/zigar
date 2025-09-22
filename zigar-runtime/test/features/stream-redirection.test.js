@@ -295,6 +295,14 @@ describe('Feature: stream-redirection', function() {
         PosixDescriptor.max = max;
       }
     })
+    it('should throw an error when redirection is disabled', async function() {
+      const env = new Env();
+      env.ioRedirection = false;
+      const file = env.convertWriter(null);
+      expect(() => {
+        env.createStreamHandle(file, [ PosixDescriptorRight.fd_read, 0 ]);
+      }).to.throw();
+    })
     if (process.env.TARGET === 'node') {
       it('should activate syscall trap', async function() {
         const env = new Env();

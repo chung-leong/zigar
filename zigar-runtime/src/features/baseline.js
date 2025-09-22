@@ -2,6 +2,9 @@ import { structureNames } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ALIGN, ENVIRONMENT, MEMORY, SIZE, SLOTS, TYPE } from '../symbols.js';
 
+const events = [ 'log', 'env', 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink', 'syscall' ];
+const firstMasked = 2;
+
 export default mixin({
   init() {
     this.variables = [];
@@ -27,10 +30,18 @@ export default mixin({
     };
   },
   addListener(name, cb) {
-    if (process.env.TARGET === 'node') {
-      if ([ 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink', 'syscall' ].includes(name)) {
-        this.setRedirectionMask(name, !!cb);
+    const index = events.indexOf(name);
+    if (index >= 0) {
+      if (!this.ioRedirection) {
+        throw new Error(`Redirection disabled`);
       }
+      if (process.env.TARGET === 'node') {
+        if (index >= firstMasked) {
+          this.setRedirectionMask(name, !!cb);
+        }
+      }
+    } else {
+      throw new Error(`Unknown event: ${name}`);
     }
     this.listenerMap.set(name, cb);
   },

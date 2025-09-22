@@ -2,6 +2,8 @@ import { structureNames } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MEMORY, SLOTS, TYPE, ALIGN, SIZE, ENVIRONMENT } from '../symbols.js';
 
+const events = [ 'log', 'env', 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink', 'syscall' ];
+
 var baseline = mixin({
   init() {
     this.variables = [];
@@ -27,6 +29,14 @@ var baseline = mixin({
     };
   },
   addListener(name, cb) {
+    const index = events.indexOf(name);
+    if (index >= 0) {
+      if (!this.ioRedirection) {
+        throw new Error(`Redirection disabled`);
+      }
+    } else {
+      throw new Error(`Unknown event: ${name}`);
+    }
     this.listenerMap.set(name, cb);
   },
   hasListener(name) {

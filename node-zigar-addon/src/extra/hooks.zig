@@ -2053,6 +2053,7 @@ pub fn PthreadSubstitute(comptime redirector: type) type {
         pub const Original = struct {
             pub var pthread_create: *const @TypeOf(Self.pthread_create) = undefined;
         };
+        pub const calling_convention = std.builtin.CallingConvention.c;
     };
 }
 
@@ -4136,6 +4137,7 @@ pub fn getHookTable(comptime Host: type, comptime redirect_io: bool) std.StaticS
             PthreadSubstitute(redirector),
             Win32ThreadSubstitute(redirector),
         },
+        else => .{},
     };
     const extra = if (redirect_io and os == .linux) 1 else 0;
     const len = init: {
@@ -4147,7 +4149,7 @@ pub fn getHookTable(comptime Host: type, comptime redirect_io: bool) std.StaticS
         break :init total;
     };
     var table: [len]std.meta.Tuple(&.{ []const u8, Entry }) = undefined;
-    if (extra) {
+    if (redirect_io) {
         // make vtable available through the hook table
         table[0] = .{ "__syscall", .{
             .handler = &getHandlerVtable(Host),
