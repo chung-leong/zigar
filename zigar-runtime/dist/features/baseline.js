@@ -35,6 +35,11 @@ var baseline = mixin({
         throw new Error(`Redirection disabled`);
       }
       this.listenerMap.set(name, cb);
+      {
+        if (this.libc) {
+          this.initializeLibc();
+        }
+      }
     } else {
       throw new Error(`Unknown event: ${name}`);
     }
@@ -119,6 +124,11 @@ var baseline = mixin({
       this.finalizeStructure(structure);
     }
   },
+  ...({
+    imports: {
+      initializeLibc: { argType: 'ii' },
+    },
+  } ),
 });
 
 const structureNamesLC = structureNames.map(name => name.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase());

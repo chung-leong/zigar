@@ -36,7 +36,11 @@ export default mixin({
         throw new Error(`Redirection disabled`);
       }
       this.listenerMap.set(name, cb);
-      if (process.env.TARGET === 'node') {
+      if (process.env.TARGET === 'wasm') {
+        if (this.libc) {
+          this.initializeLibc();
+        }
+      } else if (process.env.TARGET === 'node') {
         if (index >= firstMasked) {
           this.setRedirectionMask(name, !!cb);
         }
@@ -125,7 +129,12 @@ export default mixin({
       this.finalizeStructure(structure);
     }
   },
+  ...(process.env.TARGET === 'wasm' ? {
+    imports: {
+      initializeLibc: { argType: 'ii' },
+    },
   /* c8 ignore start */
+  } : undefined),
   ...(process.env.DEV ? {
     log(...args) {
       const c = this.console.source ?? globalThis.console;

@@ -4,9 +4,9 @@ import { capture } from '../test-utils.js';
 
 export function addTests(importModule, options) {
   const { target } = options;
-  const importTest = async (name) => {
+  const importTest = async (name, options) => {
     const url = new URL(`./${name}.zig`, import.meta.url).href;
-    return importModule(url);
+    return importModule(url, options);
   };
   describe('System functions', function() {
     skip.entirely.if(target === 'win32').

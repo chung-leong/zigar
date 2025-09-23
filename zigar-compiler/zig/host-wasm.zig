@@ -1,5 +1,5 @@
 const std = @import("std");
-const allocator = std.heap.wasm_allocator;
+const wasm_allocator = std.heap.wasm_allocator;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
@@ -292,10 +292,30 @@ var scratch_allocator: ?std.mem.Allocator = null;
 
 fn getScratchAllocator() std.mem.Allocator {
     if (scratch_allocator == null) {
-        sfa = ScratchAllocator.init(allocator, 64 * 1024);
+        sfa = ScratchAllocator.init(wasm_allocator, 64 * 1024);
         scratch_allocator = sfa.?.allocator();
     }
     return scratch_allocator.?;
+}
+
+comptime {
+    if (builtin.link_libc) @export(&initializeLibc, .{ .name = "initializeLibc" });
+}
+
+fn initializeLibc() callconv(.c) void {
+    var count: usize = undefined;
+    var len: usize = undefined;
+    if (std.os.wasi.environ_sizes_get(&count, &len) != .SUCCESS) {
+        count = 1;
+        len = 0;
+    }
+    const list = wasm_allocator.alloc(?[*:0]u8, count + 1) catch unreachable;
+    const bytes = wasm_allocator.alloc(u8, len) catch unreachable;
+    if (count > 0) {
+        if (std.os.wasi.environ_get(@ptrCast(list.ptr), bytes.ptr) != .SUCCESS) unreachable;
+    }
+    list[count] = null;
+    std.c.environ = @ptrCast(list.ptr);
 }
 
 extern fn _createBool(initializer: bool) AnyValue;
