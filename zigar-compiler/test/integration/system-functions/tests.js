@@ -48,6 +48,7 @@ export function addTests(importModule, options) {
       const result = get('WORLD');
       expect(result).to.equal('123');
     });
+    skip.entirely.unless(target === 'win32').
     it('should print environment variables using win32 functions', async function () {
       this.timeout(0);
       const { __zigar, print, printW, get, getW } = await importTest('print-env-with-win32-functions');

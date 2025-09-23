@@ -2768,6 +2768,37 @@ pub fn LibcSubstitute(comptime redirector: type) type {
     };
 }
 
+pub fn LibcNonIOSubsitute(comptime redirector: type) type {
+    return struct {
+        pub fn getenv(name: [*:0]const u8) callconv(.c) ?[*:0]const u8 {
+            var list: [*:null]?[*:0]const u8 = undefined;
+            var bytes: [*:0]const u8 = undefined;
+            var count: usize = undefined;
+            var len: usize = undefined;
+            if (redirector.environ(&list, &bytes, &count, &len)) {
+                const name_s = name[0..std.mem.len(name)];
+                if (count != 0) {
+                    for (0..count - 1) |i| {
+                        const line = list[i].?;
+                        const line_s = line[0..std.mem.len(line)];
+                        if (std.mem.startsWith(u8, line_s, name_s) and line_s[name_s.len] == '=') {
+                            return line[name_s.len + 1 ..];
+                        }
+                    }
+                }
+                return null;
+            }
+            return Original.getenv(name);
+        }
+
+        const Self = @This();
+        pub const Original = struct {
+            pub var getenv: *const @TypeOf(Self.getenv) = undefined;
+        };
+        pub const calling_convention = std.builtin.CallingConvention.c;
+    };
+}
+
 pub fn LinuxLibcSubstitute(comptime redirector: type) type {
     return struct {
         const libc = LibcSubstitute(redirector);
@@ -2957,39 +2988,6 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
 
             pub extern var __stdio_common_vfprintf_orig: *const @TypeOf(Self.__stdio_common_vfprintf_hook);
             pub extern var __stdio_common_vfscanf_orig: *const @TypeOf(Self.__stdio_common_vfscanf_hook);
-        };
-        pub const calling_convention = std.builtin.CallingConvention.c;
-    };
-}
-
-pub fn Win32NonIOLibcSubsitute(comptime redirector: type) type {
-    return struct {
-        // only needed on Windows; on Posix side the redirection of the environ import makes
-        // getenv works automatically
-        pub fn getenv(name: [*:0]const u8) callconv(.c) ?[*:0]const u8 {
-            var list: [*:null]?[*:0]const u8 = undefined;
-            var bytes: [*:0]const u8 = undefined;
-            var count: usize = undefined;
-            var len: usize = undefined;
-            if (redirector.environ(&list, &bytes, &count, &len)) {
-                const name_s = name[0..std.mem.len(name)];
-                if (count != 0) {
-                    for (0..count - 1) |i| {
-                        const line = list[i].?;
-                        const line_s = line[0..std.mem.len(line)];
-                        if (std.mem.startsWith(u8, line_s, name_s) and line_s[name_s.len] == '=') {
-                            return line[name_s.len + 1 ..];
-                        }
-                    }
-                }
-                return null;
-            }
-            return Original.getenv(name);
-        }
-
-        const Self = @This();
-        pub const Original = struct {
-            pub var getenv: *const @TypeOf(Self.getenv) = undefined;
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
     };
@@ -4301,31 +4299,34 @@ pub fn getHookTable(comptime Host: type, comptime redirect_io: bool) std.StaticS
             PosixSubstitute(redirector),
             PthreadSubstitute(redirector),
             LibcSubstitute(redirector),
+            LibcNonIOSubsitute(redirector),
             LinuxLibcSubstitute(redirector),
         },
         .darwin => .{
             PosixSubstitute(redirector),
             PthreadSubstitute(redirector),
             LibcSubstitute(redirector),
+            LibcNonIOSubsitute(redirector),
         },
         .windows => .{
             PosixSubstitute(redirector),
             PthreadSubstitute(redirector), // in case someone is using pthread-win32
             LibcSubstitute(redirector),
+            LibcNonIOSubsitute(redirector),
             Win32LibcSubsitute(redirector),
             Win32Substitute(redirector),
             Win32NonIOSubstitute(redirector),
-            Win32NonIOLibcSubsitute(redirector),
         },
         else => .{},
     } else switch (os) {
         .darwin, .linux => .{
             PthreadSubstitute(redirector),
+            LibcNonIOSubsitute(redirector),
         },
         .windows => .{
             PthreadSubstitute(redirector),
+            LibcNonIOSubsitute(redirector),
             Win32NonIOSubstitute(redirector),
-            Win32NonIOLibcSubsitute(redirector),
         },
         else => .{},
     };
