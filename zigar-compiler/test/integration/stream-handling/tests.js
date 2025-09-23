@@ -216,14 +216,8 @@ export function addTests(importModule, options) {
       }
       await __zigar.init();
       const path = absolute('./data/test.txt');
-      let event;
-      __zigar.on('open', (evt) => {
-        console.log(evt);
-        event = evt;
-        return undefined;
-      });
+      expect(() => __zigar.on('open', () => {})).to.throw();
       check(path);
-      expect(event).to.be.undefined;
     })
     skip.entirely.if(target !== 'linux').
     it('should open file through direct syscall', async function() {

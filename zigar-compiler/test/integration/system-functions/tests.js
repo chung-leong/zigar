@@ -66,7 +66,6 @@ export function addTests(importModule, options) {
       const lines2 = await capture(() => printW());
       expect(lines2).to.include('HELLO=1');
       expect(lines2).to.include('WORLD=123');
-
       const result = get('WORLD');
       expect(result).to.equal('123');
       const resultW = getW('WORLD');
