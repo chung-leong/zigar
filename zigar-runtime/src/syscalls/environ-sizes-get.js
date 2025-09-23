@@ -5,8 +5,10 @@ import { encodeText } from '../utils.js';
 import './copy-int.js';
 
 export default mixin({
+  environSizesGetEvent: 'env',
   environSizesGet(environCountAddress, environBufSizeAddress) {
-    const result = this.triggerEvent('env') ?? {};
+    const result = this.triggerEvent('env');
+    if (result === undefined) return PosixError.ENOTSUP;
     if (typeof(result) !== 'object') {
       console.error(new TypeMismatch('object', result).message);
       return PosixError.EFAULT;

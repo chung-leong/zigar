@@ -5,6 +5,21 @@ const pollfd = std.c.pollfd;
 const nfds_t = std.c.nfds_t;
 const builtin = @import("builtin");
 
+const dirent_h = @cImport({
+    @cInclude("dirent.h");
+});
+const errno_h = @cImport({
+    @cInclude("errno.h");
+});
+const stdio_h = @cImport({
+    @cInclude("stdio.h");
+    @cInclude("string.h");
+});
+const windows_h = @cImport({
+    @cInclude("windows.h");
+    @cInclude("winternl.h");
+});
+
 const fn_transform = @import("./fn-transform.zig");
 
 const os = switch (builtin.target.os.tag) {
@@ -1964,10 +1979,6 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             } else @compileError("Unable to get error number pointer");
         }
 
-        const errno_h = @cImport({
-            @cInclude("errno.h");
-        });
-
         const Self = @This();
         pub const Original = struct {
             pub var __fxstat: *const @TypeOf(Self.__fxstat) = undefined;
@@ -2063,7 +2074,7 @@ pub fn PthreadSubstitute(comptime redirector: type) type {
             const arg = info.arg;
             const instance = info.instance;
             c_allocator.destroy(info);
-            redirector.Host.initializeThread(instance) catch {};
+            redirector.Host.initializeThread(instance) catch unreachable;
             defer redirector.Host.deinitializeThread() catch {};
             return proc(arg);
         }
@@ -2083,10 +2094,6 @@ const RedirectedDir = struct {
     data_next: usize = 0,
     data_len: usize = 0,
     buffer: [4096]u8 = undefined,
-
-    const dirent_h = @cImport({
-        @cInclude("dirent.h");
-    });
 
     pub const signature = 0x5249_4452_4147_495B;
 
@@ -2711,11 +2718,6 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             .{ .fd = 2, .proxy = true, .flags = .{ .ACCMODE = .WRONLY } },
         };
 
-        const stdio_h = @cImport({
-            @cInclude("stdio.h");
-            @cInclude("string.h");
-        });
-
         const Self = @This();
         pub const Original = struct {
             pub var clearerr: *const @TypeOf(Self.clearerr) = undefined;
@@ -2795,28 +2797,6 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
         const win32 = Win32Substitute(redirector);
 
         pub const lseeki64 = posix.lseek64;
-
-        pub fn getenv(name: [*:0]const u8) callconv(.c) ?[*:0]const u8 {
-            var environ: ?[*:null]?[*:0]const u8 = undefined;
-            if (redirector.environ(&environ)) {
-                if (environ) |list| {
-                    const count = std.mem.len(list);
-                    const name_s = name[0..std.mem.len(name)];
-                    for (0..count) |i| {
-                        if (list[i]) |line| {
-                            const line_s = line[0..std.mem.len(line)];
-                            if (std.mem.startsWith(u8, line_s, name_s)) {
-                                if (line_s[name_s.len] == '=') {
-                                    return line[name_s.len + 1 ..];
-                                }
-                            }
-                        }
-                    }
-                }
-                return null;
-            }
-            return Original.getenv(name);
-        }
 
         pub fn _findclose(handle: isize) callconv(.c) c_int {
             const d: *std.c.DIR = @ptrFromInt(@as(usize, @bitCast(handle)));
@@ -2959,7 +2939,6 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
 
         const Self = @This();
         pub const Original = struct {
-            pub var getenv: *const @TypeOf(Self.getenv) = undefined;
             pub var lseeki64: *const @TypeOf(Self.lseeki64) = undefined;
             pub var _findclose: *const @TypeOf(Self._findclose) = undefined;
             pub var _findfirst32: *const @TypeOf(Self._findfirst32) = undefined;
@@ -2971,6 +2950,37 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
 
             pub extern var __stdio_common_vfprintf_orig: *const @TypeOf(Self.__stdio_common_vfprintf_hook);
             pub extern var __stdio_common_vfscanf_orig: *const @TypeOf(Self.__stdio_common_vfscanf_hook);
+        };
+        pub const calling_convention = std.builtin.CallingConvention.c;
+    };
+}
+
+pub fn Win32NonIOLibcSubsitute(comptime redirector: type) type {
+    return struct {
+        // only needed on Windows; on Posix side the redirection of the environ import makes
+        // getenv works automatically
+        pub fn getenv(name: [*:0]const u8) callconv(.c) ?[*:0]const u8 {
+            var environ: ?[*:null]?[*:0]const u8 = undefined;
+            if (redirector.environ(&environ)) {
+                if (environ) |list| {
+                    const count = std.mem.len(list);
+                    const name_s = name[0..std.mem.len(name)];
+                    for (0..count) |i| {
+                        const line = list[i].?;
+                        const line_s = line[0..std.mem.len(line)];
+                        if (std.mem.startsWith(u8, line_s, name_s) and line_s[name_s.len] == '=') {
+                            return line[name_s.len + 1 ..];
+                        }
+                    }
+                }
+                return null;
+            }
+            return Original.getenv(name);
+        }
+
+        const Self = @This();
+        pub const Original = struct {
+            pub var getenv: *const @TypeOf(Self.getenv) = undefined;
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
     };
@@ -3917,10 +3927,6 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 };
             }
         };
-        const windows_h = @cImport({
-            @cInclude("windows.h");
-            @cInclude("winternl.h");
-        });
 
         const ACCESS_MASK = std.os.windows.ACCESS_MASK;
         const BOOL = std.os.windows.BOOL;
@@ -4038,7 +4044,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
     };
 }
 
-pub fn Win32ThreadSubstitute(comptime redirector: type) type {
+pub fn Win32NonIOSubstitute(comptime redirector: type) type {
     const win32 = Win32Substitute(redirector);
 
     return struct {
@@ -4059,42 +4065,131 @@ pub fn Win32ThreadSubstitute(comptime redirector: type) type {
             return Original.CreateThread(thread_attributes, stack_size, &setThreadContext, info, creation_flags, thread_id);
         }
 
+        pub fn FreeEnvironmentStringsA(penv: LPSTR) callconv(WINAPI) BOOL {
+            _ = penv;
+            return FALSE;
+        }
+
+        pub fn FreeEnvironmentStringsW(penv: LPWSTR) callconv(WINAPI) BOOL {
+            _ = penv;
+            return FALSE;
+        }
+
+        pub fn GetEnvironmentStringsA() callconv(WINAPI) ?LPSTR {
+            return null;
+        }
+
+        pub fn GetEnvironmentStringsW() callconv(WINAPI) ?LPWSTR {
+            return null;
+        }
+
+        pub fn GetEnvironmentVariableA(
+            name: LPCSTR,
+            buffer: ?LPSTR,
+            size: DWORD,
+        ) callconv(WINAPI) DWORD {
+            const result = getEnvVariable(name[0..std.mem.len(name)]) catch {
+                windows_h.SetLastError(windows_h.ERROR_ENVVAR_NOT_FOUND);
+                return 0;
+            };
+            if (result) |value| {
+                if (size >= value.len + 1) {
+                    if (buffer) |buf| {
+                        @memcpy(buf[0..value.len], value);
+                        buf[value.len] = 0;
+                    }
+                }
+                return @intCast(value.len + 1);
+            }
+            return Original.GetEnvironmentVariableA(name, buffer, size);
+        }
+
+        pub fn GetEnvironmentVariableW(
+            name: LPCWSTR,
+            buffer: ?LPWSTR,
+            size: DWORD,
+        ) callconv(WINAPI) DWORD {
+            var sfa = std.heap.stackFallback(4096, c_allocator);
+            const allocator = sfa.get();
+            const name_a = std.unicode.wtf16LeToWtf8Alloc(allocator, name[0..std.mem.len(name)]) catch {
+                windows_h.SetLastError(windows_h.ERROR_NOT_ENOUGH_MEMORY);
+                return 0;
+            };
+            defer allocator.free(name_a);
+            const result = getEnvVariable(name_a) catch {
+                windows_h.SetLastError(windows_h.ERROR_ENVVAR_NOT_FOUND);
+                return 0;
+            };
+            if (result) |value| {
+                const value_w = std.unicode.wtf8ToWtf16LeAlloc(allocator, value) catch {
+                    windows_h.SetLastError(windows_h.ERROR_NOT_ENOUGH_MEMORY);
+                    return 0;
+                };
+                defer allocator.free(value_w);
+                if (size >= value_w.len + 1) {
+                    if (buffer) |buf| {
+                        @memcpy(buf[0..value_w.len], value_w);
+                        buf[value_w.len] = 0;
+                    }
+                }
+                return @intCast(value_w.len + 1);
+            }
+            return Original.GetEnvironmentVariableW(name, buffer, size);
+        }
+
+        fn getEnvVariable(name: []const u8) !?[]const u8 {
+            var environ: ?[*:null]?[*:0]const u8 = undefined;
+            if (redirector.environ(&environ)) {
+                if (environ) |list| {
+                    const count = std.mem.len(list);
+                    for (0..count) |i| {
+                        const line = list[i].?;
+                        const line_s = line[0..std.mem.len(line)];
+                        if (std.mem.startsWith(u8, line_s, name) and line_s[name.len] == '=') {
+                            return line_s[name.len + 1 ..];
+                        }
+                    }
+                    return error.NotFound;
+                } else return error.UnableToGetEnvironmentVariable;
+            }
+            return null;
+        }
+
         fn setThreadContext(ptr: LPVOID) callconv(WINAPI) DWORD {
             const info: *ThreadInfo = @ptrCast(@alignCast(ptr));
             const proc: *const fn (?LPVOID) callconv(WINAPI) DWORD = @ptrCast(info.proc);
             const arg = info.arg;
             const instance = info.instance;
             c_allocator.destroy(info);
-            redirector.Host.initializeThread(instance) catch {
-                @panic("Unable to initialize thread");
-            };
+            redirector.Host.initializeThread(instance) catch unreachable;
             defer redirector.Host.deinitializeThread() catch {};
             return proc(arg);
         }
 
-        const std_stream = struct {
-            var handles: [3]?HANDLE = .{ null, null, null };
-            fn get(comptime index: usize) HANDLE {
-                const ids = .{ std.os.windows.STD_INPUT_HANDLE, std.os.windows.STD_OUTPUT_HANDLE, std.os.windows.STD_ERROR_HANDLE };
-                return handles[index] orelse find: {
-                    const handle = std.os.windows.GetStdHandle(ids[index]) catch std.os.windows.INVALID_HANDLE_VALUE;
-                    handles[index] = handle;
-                    break :find handle;
-                };
-            }
-        };
-
+        const BOOL = std.os.windows.BOOL;
         const DWORD = std.os.windows.DWORD;
         const HANDLE = std.os.windows.HANDLE;
         const LPTHREAD_START_ROUTINE = std.os.windows.LPTHREAD_START_ROUTINE;
+        const LPCSTR = std.os.windows.LPCSTR;
+        const LPCWSTR = std.os.windows.LPCWSTR;
+        const LPSTR = std.os.windows.LPSTR;
         const LPVOID = std.os.windows.LPVOID;
+        const LPWSTR = std.os.windows.LPWSTR;
         const SECURITY_ATTRIBUTES = std.os.windows.SECURITY_ATTRIBUTES;
         const SIZE_T = std.os.windows.SIZE_T;
         const WINAPI: std.builtin.CallingConvention = if (builtin.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c;
+        const TRUE = std.os.windows.TRUE;
+        const FALSE = std.os.windows.FALSE;
 
         const Self = @This();
         pub const Original = struct {
             pub var CreateThread: *const @TypeOf(Self.CreateThread) = undefined;
+            pub var FreeEnvironmentStringsA: *const @TypeOf(Self.FreeEnvironmentStringsA) = undefined;
+            pub var FreeEnvironmentStringsW: *const @TypeOf(Self.FreeEnvironmentStringsW) = undefined;
+            pub var GetEnvironmentStringsA: *const @TypeOf(Self.GetEnvironmentStringsA) = undefined;
+            pub var GetEnvironmentStringsW: *const @TypeOf(Self.GetEnvironmentStringsW) = undefined;
+            pub var GetEnvironmentVariableA: *const @TypeOf(Self.GetEnvironmentVariableA) = undefined;
+            pub var GetEnvironmentVariableW: *const @TypeOf(Self.GetEnvironmentVariableW) = undefined;
         };
         pub const calling_convention = WINAPI;
     };
@@ -4165,9 +4260,10 @@ pub fn getHookTable(comptime Host: type, comptime redirect_io: bool) std.StaticS
             PosixSubstitute(redirector),
             PthreadSubstitute(redirector), // in case someone is using pthread-win32
             LibcSubstitute(redirector),
-            Win32ThreadSubstitute(redirector),
             Win32LibcSubsitute(redirector),
             Win32Substitute(redirector),
+            Win32NonIOSubstitute(redirector),
+            Win32NonIOLibcSubsitute(redirector),
         },
         else => .{},
     } else switch (os) {
@@ -4176,7 +4272,8 @@ pub fn getHookTable(comptime Host: type, comptime redirect_io: bool) std.StaticS
         },
         .windows => .{
             PthreadSubstitute(redirector),
-            Win32ThreadSubstitute(redirector),
+            Win32NonIOSubstitute(redirector),
+            Win32NonIOLibcSubsitute(redirector),
         },
         else => .{},
     };

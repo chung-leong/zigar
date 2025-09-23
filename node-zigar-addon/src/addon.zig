@@ -1347,10 +1347,13 @@ const ModuleHost = struct {
         const env = self.env;
         var count: u32 = undefined;
         var len: u32 = undefined;
-        if (try self.callPosixFunction(self.js.environ_sizes_get, &.{
+        const size_result = try self.callPosixFunction(self.js.environ_sizes_get, &.{
             try env.createUsize(@intFromPtr(&count)),
             try env.createUsize(@intFromPtr(&len)),
-        }) != .SUCCESS) return error.UnableToGetEnvSize;
+        });
+        if (size_result != .SUCCESS) {
+            return if (size_result == .OPNOTSUPP) {} else error.UnableToGetEnvSize;
+        }
         const list = try c_allocator.alloc(?[*:0]const u8, count + 1);
         errdefer c_allocator.free(list);
         const bytes = try c_allocator.alloc(u8, len);

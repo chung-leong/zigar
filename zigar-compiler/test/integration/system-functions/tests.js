@@ -28,9 +28,9 @@ export function addTests(importModule, options) {
       const result = get('WORLD');
       expect(result).to.equal('123');
     });
-    it('should print environment variables using libc', async function () {
+    it('should print environment variables using libc functions', async function () {
       this.timeout(0);
-      const { __zigar, print, get } = await importTest('print-env-with-libc', { useLibc: true });
+      const { __zigar, print, get } = await importTest('print-env-with-libc-functions', { useLibc: true });
       let called = false;
       __zigar.on('env', () => {
         called = true;
@@ -39,14 +39,36 @@ export function addTests(importModule, options) {
           WORLD: 123,
         }
       });
+      expect(called).to.be.true;
       if (print) {
         const lines = await capture(() => print());
-        expect(called).to.be.true;
         expect(lines).to.include('HELLO = 1');
         expect(lines).to.include('WORLD = 123');
       }
       const result = get('WORLD');
       expect(result).to.equal('123');
+    });
+    it('should print environment variables using win32 functions', async function () {
+      this.timeout(0);
+      const { __zigar, print, get, getW } = await importTest('print-env-with-win32-functions');
+      let called = false;
+      __zigar.on('env', () => {
+        called = true;
+        return {
+          HELLO: 1,
+          WORLD: 123,
+        }
+      });
+      expect(called).to.be.true;
+      // if (print) {
+      //   const lines = await capture(() => print());
+      //   expect(lines).to.include('HELLO = 1');
+      //   expect(lines).to.include('WORLD = 123');
+      // }
+      const result = get('WORLD');
+      expect(result).to.equal('123');
+      const resultW = getW('WORLD');
+      expect(resultW).to.equal('123');
     });
     it('should print random numbers', async function () {
       this.timeout(0);
