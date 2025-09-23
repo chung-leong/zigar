@@ -42,15 +42,15 @@ export function addTests(importModule, options) {
       expect(called).to.be.true;
       if (print) {
         const lines = await capture(() => print());
-        expect(lines).to.include('HELLO = 1');
-        expect(lines).to.include('WORLD = 123');
+        expect(lines).to.include('HELLO=1');
+        expect(lines).to.include('WORLD=123');
       }
       const result = get('WORLD');
       expect(result).to.equal('123');
     });
     it('should print environment variables using win32 functions', async function () {
       this.timeout(0);
-      const { __zigar, print, get, getW } = await importTest('print-env-with-win32-functions');
+      const { __zigar, print, printW, get, getW } = await importTest('print-env-with-win32-functions');
       let called = false;
       __zigar.on('env', () => {
         called = true;
@@ -60,11 +60,13 @@ export function addTests(importModule, options) {
         }
       });
       expect(called).to.be.true;
-      // if (print) {
-      //   const lines = await capture(() => print());
-      //   expect(lines).to.include('HELLO = 1');
-      //   expect(lines).to.include('WORLD = 123');
-      // }
+      const lines1 = await capture(() => print());
+      expect(lines1).to.include('HELLO=1');
+      expect(lines1).to.include('WORLD=123');
+      const lines2 = await capture(() => printW());
+      expect(lines2).to.include('HELLO=1');
+      expect(lines2).to.include('WORLD=123');
+
       const result = get('WORLD');
       expect(result).to.equal('123');
       const resultW = getW('WORLD');

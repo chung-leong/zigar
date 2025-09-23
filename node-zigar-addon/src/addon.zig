@@ -1328,8 +1328,11 @@ const ModuleHost = struct {
 
     fn handleGetEnvironmentStrings(self: *@This(), futex: Value, args: anytype) !E {
         var result: E = undefined;
-        if (self.env_variable_list) |list| {
-            args.list = @ptrCast(list.ptr);
+        if (self.env_variable_list != null) {
+            args.list = @ptrCast(self.env_variable_list.?.ptr);
+            args.bytes = @ptrCast(self.env_variable_bytes.?.ptr);
+            args.count = @intCast(self.env_variable_list.?.len);
+            args.len = @intCast(self.env_variable_bytes.?.len);
             result = .SUCCESS;
         } else {
             result = .OPNOTSUPP;
@@ -1356,13 +1359,14 @@ const ModuleHost = struct {
         }
         const list = try c_allocator.alloc(?[*:0]const u8, count + 1);
         errdefer c_allocator.free(list);
-        const bytes = try c_allocator.alloc(u8, len);
+        const bytes = try c_allocator.alloc(u8, len + 1);
         errdefer c_allocator.free(bytes);
         if (try self.callPosixFunction(self.js.environ_get, &.{
             try env.createUsize(@intFromPtr(list.ptr)),
             try env.createUsize(@intFromPtr(bytes.ptr)),
         }) != .SUCCESS) return error.UnableToGetEnv;
-        list[list.len - 1] = null;
+        list[count] = null;
+        bytes[len] = 0;
         self.env_variable_ptr = @ptrCast(list.ptr);
         if (deferred.address != 0) {
             try redirection_controller.installHook(.{

@@ -21,7 +21,7 @@ export default mixin({
       }
       bytes.set(array, b);
       b += array.length;
-    }
+    }   
     this.moveExternBytes(ptrDV, environAddress, true);
     this.moveExternBytes(bytes, environBufAddress, true);
     return 0;

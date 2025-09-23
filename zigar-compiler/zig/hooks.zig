@@ -65,6 +65,9 @@ pub const Syscall = extern struct {
         },
         environ: extern struct {
             list: [*:null]?[*:0]const u8 = undefined,
+            bytes: [*:0]const u8 = undefined,
+            count: u32 = undefined,
+            len: u32 = undefined,
         },
         getfl: extern struct {
             fd: i32,
@@ -466,16 +469,20 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        fn environ(result: *?[*:null]?[*:0]const u8) callconv(.c) bool {
+        fn environ(list: *[*:null]?[*:0]const u8, bytes: *[*:0]const u8, count: *usize, len: *usize) callconv(.c) bool {
             var call: Syscall = .{ .cmd = .environ, .u = .{
                 .environ = .{},
             } };
             const err = Host.redirectSyscall(&call);
             if (err == .SUCCESS) {
-                result.* = call.u.environ.list;
+                list.* = call.u.environ.list;
+                bytes.* = call.u.environ.bytes;
+                count.* = call.u.environ.count;
+                len.* = call.u.environ.len;
                 return true;
             } else if (err != .OPNOTSUPP) {
-                result.* = null;
+                count.* = 0;
+                len.* = 0;
                 return true;
             }
             return false;
@@ -2960,12 +2967,14 @@ pub fn Win32NonIOLibcSubsitute(comptime redirector: type) type {
         // only needed on Windows; on Posix side the redirection of the environ import makes
         // getenv works automatically
         pub fn getenv(name: [*:0]const u8) callconv(.c) ?[*:0]const u8 {
-            var environ: ?[*:null]?[*:0]const u8 = undefined;
-            if (redirector.environ(&environ)) {
-                if (environ) |list| {
-                    const count = std.mem.len(list);
-                    const name_s = name[0..std.mem.len(name)];
-                    for (0..count) |i| {
+            var list: [*:null]?[*:0]const u8 = undefined;
+            var bytes: [*:0]const u8 = undefined;
+            var count: usize = undefined;
+            var len: usize = undefined;
+            if (redirector.environ(&list, &bytes, &count, &len)) {
+                const name_s = name[0..std.mem.len(name)];
+                if (count != 0) {
+                    for (0..count - 1) |i| {
                         const line = list[i].?;
                         const line_s = line[0..std.mem.len(line)];
                         if (std.mem.startsWith(u8, line_s, name_s) and line_s[name_s.len] == '=') {
@@ -4065,22 +4074,65 @@ pub fn Win32NonIOSubstitute(comptime redirector: type) type {
             return Original.CreateThread(thread_attributes, stack_size, &setThreadContext, info, creation_flags, thread_id);
         }
 
-        pub fn FreeEnvironmentStringsA(penv: LPSTR) callconv(WINAPI) BOOL {
-            _ = penv;
-            return FALSE;
+        pub fn FreeEnvironmentStringsA(ptr: LPSTR) callconv(WINAPI) BOOL {
+            var list: [*:null]?[*:0]const u8 = undefined;
+            var bytes: [*:0]const u8 = undefined;
+            var count: usize = undefined;
+            var len: usize = undefined;
+            if (redirector.environ(&list, &bytes, &count, &len)) {
+                return TRUE;
+            }
+            return Original.FreeEnvironmentStringsA(ptr);
         }
 
-        pub fn FreeEnvironmentStringsW(penv: LPWSTR) callconv(WINAPI) BOOL {
-            _ = penv;
-            return FALSE;
+        pub fn FreeEnvironmentStringsW(ptr: LPWSTR) callconv(WINAPI) BOOL {
+            var list: [*:null]?[*:0]const u8 = undefined;
+            var bytes: [*:0]const u8 = undefined;
+            var count: usize = undefined;
+            var len: usize = undefined;
+            if (redirector.environ(&list, &bytes, &count, &len)) {
+                var total: usize = 1;
+                var p = ptr;
+                while (true) {
+                    const line_len = std.mem.len(p);
+                    if (line_len == 0) break;
+                    total += len + 1;
+                    p = p[line_len + 1 ..];
+                }
+                c_allocator.free(ptr[0..total]);
+                return TRUE;
+            }
+            return Original.FreeEnvironmentStringsW(ptr);
         }
 
-        pub fn GetEnvironmentStringsA() callconv(WINAPI) ?LPSTR {
-            return null;
+        pub fn GetEnvironmentStrings() callconv(WINAPI) ?LPSTR {
+            var list: [*:null]?[*:0]const u8 = undefined;
+            var bytes: [*:0]const u8 = undefined;
+            var count: usize = undefined;
+            var len: usize = undefined;
+            if (redirector.environ(&list, &bytes, &count, &len)) {
+                if (count != 0) {
+                    return @constCast(bytes);
+                }
+                return null;
+            }
+            return Original.GetEnvironmentStrings();
         }
 
         pub fn GetEnvironmentStringsW() callconv(WINAPI) ?LPWSTR {
-            return null;
+            var list: [*:null]?[*:0]const u8 = undefined;
+            var bytes: [*:0]const u8 = undefined;
+            var count: usize = undefined;
+            var len: usize = undefined;
+            if (redirector.environ(&list, &bytes, &count, &len)) {
+                const bytes_s = bytes[0..len];
+                if (std.unicode.wtf8ToWtf16LeAlloc(c_allocator, bytes_s)) |bytes_w| {
+                    std.debug.print("bytes_w = {d}\n", .{bytes_w});
+                    return @ptrCast(bytes_w.ptr);
+                } else |_| {}
+                return null;
+            }
+            return Original.GetEnvironmentStringsW();
         }
 
         pub fn GetEnvironmentVariableA(
@@ -4138,19 +4190,20 @@ pub fn Win32NonIOSubstitute(comptime redirector: type) type {
         }
 
         fn getEnvVariable(name: []const u8) !?[]const u8 {
-            var environ: ?[*:null]?[*:0]const u8 = undefined;
-            if (redirector.environ(&environ)) {
-                if (environ) |list| {
-                    const count = std.mem.len(list);
-                    for (0..count) |i| {
-                        const line = list[i].?;
-                        const line_s = line[0..std.mem.len(line)];
-                        if (std.mem.startsWith(u8, line_s, name) and line_s[name.len] == '=') {
-                            return line_s[name.len + 1 ..];
-                        }
+            var list: [*:null]?[*:0]const u8 = undefined;
+            var bytes: [*:0]const u8 = undefined;
+            var count: usize = undefined;
+            var len: usize = undefined;
+            if (redirector.environ(&list, &bytes, &count, &len)) {
+                if (count == 0) return error.UnableToGetEnvironmentVariable;
+                for (0..count - 1) |i| {
+                    const line = list[i].?;
+                    const line_s = line[0..std.mem.len(line)];
+                    if (std.mem.startsWith(u8, line_s, name) and line_s[name.len] == '=') {
+                        return line_s[name.len + 1 ..];
                     }
-                    return error.NotFound;
-                } else return error.UnableToGetEnvironmentVariable;
+                }
+                return error.NotFound;
             }
             return null;
         }
@@ -4186,7 +4239,7 @@ pub fn Win32NonIOSubstitute(comptime redirector: type) type {
             pub var CreateThread: *const @TypeOf(Self.CreateThread) = undefined;
             pub var FreeEnvironmentStringsA: *const @TypeOf(Self.FreeEnvironmentStringsA) = undefined;
             pub var FreeEnvironmentStringsW: *const @TypeOf(Self.FreeEnvironmentStringsW) = undefined;
-            pub var GetEnvironmentStringsA: *const @TypeOf(Self.GetEnvironmentStringsA) = undefined;
+            pub var GetEnvironmentStrings: *const @TypeOf(Self.GetEnvironmentStrings) = undefined;
             pub var GetEnvironmentStringsW: *const @TypeOf(Self.GetEnvironmentStringsW) = undefined;
             pub var GetEnvironmentVariableA: *const @TypeOf(Self.GetEnvironmentVariableA) = undefined;
             pub var GetEnvironmentVariableW: *const @TypeOf(Self.GetEnvironmentVariableW) = undefined;

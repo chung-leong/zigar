@@ -5,7 +5,33 @@ const windows_h = @cImport({
     @cInclude("windows.h");
 });
 
-pub fn print() !void {}
+pub fn print() !void {
+    const p = windows_h.GetEnvironmentStringsA();
+    if (p == null) return error.UnableToRetrieveEnvironmentStrings;
+    var line: [*:0]const u8 = @ptrCast(p);
+    while (true) {
+        const len = std.mem.len(line);
+        if (len == 0) break;
+        std.debug.print("{s}\n", .{line[0..len]});
+        line = line[len + 1 ..];
+    }
+    _ = windows_h.FreeEnvironmentStringsA(p);
+}
+
+pub fn printW() !void {
+    const p = windows_h.GetEnvironmentStringsW();
+    if (p == null) return error.UnableToRetrieveEnvironmentStrings;
+    var line: [*:0]const u16 = @ptrCast(p);
+    while (true) {
+        const len = std.mem.len(line);
+        if (len == 0) break;
+        const line_a = try std.unicode.wtf16LeToWtf8Alloc(std.heap.c_allocator, line[0..len]);
+        defer std.heap.c_allocator.free(line_a);
+        std.debug.print("{s}\n", .{line_a});
+        line = line[len + 1 ..];
+    }
+    _ = windows_h.FreeEnvironmentStringsW(p);
+}
 
 pub fn get(allocator: std.mem.Allocator, name: [*:0]const u8) ![]const u8 {
     const len = windows_h.GetEnvironmentVariableA(name, null, 0);
