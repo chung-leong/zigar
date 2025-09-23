@@ -48,6 +48,9 @@ pub const Syscall = extern struct {
         datasync: extern struct {
             fd: i32,
         },
+        environ: extern struct {
+            list: [*:null]?[*:0]const u8 = undefined,
+        },
         getfl: extern struct {
             fd: i32,
             fdstat: Fdstat = undefined,
@@ -196,6 +199,7 @@ pub const Syscall = extern struct {
         allocate,
         close,
         datasync,
+        environ,
         fstat,
         futimes,
         getdents,
@@ -442,6 +446,21 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 } };
                 const err = Host.redirectSyscall(&call);
                 result.* = intFromError(err);
+                return true;
+            }
+            return false;
+        }
+
+        fn environ(result: *?[*:null]?[*:0]const u8) callconv(.c) bool {
+            var call: Syscall = .{ .cmd = .environ, .u = .{
+                .environ = .{},
+            } };
+            const err = Host.redirectSyscall(&call);
+            if (err == .SUCCESS) {
+                result.* = call.u.environ.list;
+                return true;
+            } else if (err != .OPNOTSUPP) {
+                result.* = null;
                 return true;
             }
             return false;
@@ -2777,6 +2796,28 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
 
         pub const lseeki64 = posix.lseek64;
 
+        pub fn getenv(name: [*:0]const u8) callconv(.c) ?[*:0]const u8 {
+            var environ: ?[*:null]?[*:0]const u8 = undefined;
+            if (redirector.environ(&environ)) {
+                if (environ) |list| {
+                    const count = std.mem.len(list);
+                    const name_s = name[0..std.mem.len(name)];
+                    for (0..count) |i| {
+                        if (list[i]) |line| {
+                            const line_s = line[0..std.mem.len(line)];
+                            if (std.mem.startsWith(u8, line_s, name_s)) {
+                                if (line_s[name_s.len] == '=') {
+                                    return line[name_s.len + 1 ..];
+                                }
+                            }
+                        }
+                    }
+                }
+                return null;
+            }
+            return Original.getenv(name);
+        }
+
         pub fn _findclose(handle: isize) callconv(.c) c_int {
             const d: *std.c.DIR = @ptrFromInt(@as(usize, @bitCast(handle)));
             if (RedirectedDir.cast(d)) |dir| {
@@ -2918,6 +2959,7 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
 
         const Self = @This();
         pub const Original = struct {
+            pub var getenv: *const @TypeOf(Self.getenv) = undefined;
             pub var lseeki64: *const @TypeOf(Self.lseeki64) = undefined;
             pub var _findclose: *const @TypeOf(Self._findclose) = undefined;
             pub var _findfirst32: *const @TypeOf(Self._findfirst32) = undefined;
@@ -3964,7 +4006,6 @@ pub fn Win32Substitute(comptime redirector: type) type {
             pub var CreateDirectoryW: *const @TypeOf(Self.CreateDirectoryW) = undefined;
             pub var CreateFileA: *const @TypeOf(Self.CreateFileA) = undefined;
             pub var CreateFileW: *const @TypeOf(Self.CreateFileW) = undefined;
-            pub var CreateThread: *const @TypeOf(Self.CreateThread) = undefined;
             pub var DeleteFileA: *const @TypeOf(Self.DeleteFileA) = undefined;
             pub var DeleteFileW: *const @TypeOf(Self.DeleteFileW) = undefined;
             pub var GetFileAttributesA: *const @TypeOf(Self.GetFileAttributesA) = undefined;

@@ -21,6 +21,7 @@ const ModuleHost = struct {
     pub const Deferred = struct {
         address: usize = 0,
         read_only: bool = false,
+        installed: bool = false,
     };
     pub const HookEntry = struct {
         handler: *const anyopaque,
@@ -988,6 +989,7 @@ const ModuleHost = struct {
                 .rmdir => try self.handleRmdir(futex, &call.u.rmdir),
                 .unlink => try self.handleUnlink(futex, &call.u.unlink),
                 .poll => try self.handlePoll(futex, &call.u.poll),
+                .environ => try self.handleGetEnvironmentStrings(futex, &call.u.environ),
             };
         } else {
             const func = self.ts.handle_syscall orelse return error.Disabled;
@@ -1324,9 +1326,24 @@ const ModuleHost = struct {
         });
     }
 
+    fn handleGetEnvironmentStrings(self: *@This(), futex: Value, args: anytype) !E {
+        var result: E = undefined;
+        if (self.env_variable_list) |list| {
+            args.list = @ptrCast(list.ptr);
+            result = .SUCCESS;
+        } else {
+            result = .OPNOTSUPP;
+        }
+        const env = self.env;
+        if (env.getValueUsize(futex)) |handle| {
+            try Futex.wake(handle, result);
+        } else |_| {}
+        return result;
+    }
+
     fn obtainEnvVariables(self: *@This()) !void {
+        if (self.env_variable_bytes != null) return;
         const deferred = self.env_variable_deferred;
-        if (deferred.address == 0 or self.env_variable_bytes != null) return;
         const env = self.env;
         var count: u32 = undefined;
         var len: u32 = undefined;
@@ -1344,10 +1361,12 @@ const ModuleHost = struct {
         }) != .SUCCESS) return error.UnableToGetEnv;
         list[list.len - 1] = null;
         self.env_variable_ptr = @ptrCast(list.ptr);
-        try redirection_controller.installHook(.{
-            .handler = @ptrCast(&self.env_variable_ptr),
-            .original = @ptrCast(&self.env_variable_original),
-        }, deferred.address, deferred.read_only);
+        if (deferred.address != 0) {
+            try redirection_controller.installHook(.{
+                .handler = @ptrCast(&self.env_variable_ptr),
+                .original = @ptrCast(&self.env_variable_original),
+            }, deferred.address, deferred.read_only);
+        }
         self.env_variable_list = list;
         self.env_variable_bytes = bytes;
     }
