@@ -373,6 +373,41 @@ describe('Feature: baseline', function() {
       })
     }
   })
+  describe('setObject', function() {
+    it('should throw when name is unknown', function() {
+      const env = new Env();
+      expect(() => env.setObject({})).to.throw(Error);
+    })
+    it('should trigger libc initialization after env object is set', function() {
+      const env = new Env();
+      let called = false;
+      env.libc = true;
+      env.initializeLibc = () => {
+        called = true;
+      };
+      const object = {};
+      env.setObject('env', object);
+      expect(called).to.be.true;
+      expect(env.envVariables).to.equal(object);
+    })
+    it('should throw when argument is not an object', function() {
+      const env = new Env();
+      expect(() => env.setObject('env', undefined)).to.throw();
+      expect(() => env.setObject('env', null)).to.not.throw();
+    })
+    it('should throw when name is unknown', function() {
+      const env = new Env();
+      expect(() => env.setObject('hello', {})).to.throw();
+    })
+    if (process.env.TARGET === 'wasm') {
+      it ('should set wasi interface object', function() {
+        const env = new Env();
+        const object = {};
+        env.setObject('wasi', object);
+        expect(env.customWASI).to.equal(object);
+      })
+    }
+  })
   describe('triggerEvent', function() {
     it('should call listener', function() {
       const env = new Env();
@@ -562,7 +597,7 @@ describe('Feature: baseline', function() {
           }
         };
         const object = env.getSpecialExports();
-        object.wasi(wasi);
+        object.set('wasi', wasi);
         expect(env.customWASI).to.equal(wasi);
       })
     }

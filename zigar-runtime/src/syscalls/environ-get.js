@@ -3,15 +3,16 @@ import { createView, usizeByteSize } from '../utils.js';
 
 export default mixin({
   environGet(environAddress, environBufAddress) {
+    const arrays = this.envVarArrays;
     let size = 0, count = 0;
-    for (const array of this.envVariables) {
+    for (const array of arrays) {
       size += array.length;
       count++;
     }
     const ptrDV = createView(usizeByteSize * count);
     const bytes = new Uint8Array(size);
     let p = 0, b = 0, le = this.littleEndian;
-    for (const array of this.envVariables) {
+    for (const array of arrays) {
       if (process.env.BITS == 64) {
         ptrDV.setBigUint64(p, environBufAddress + BigInt(b), le);
         p += 8;

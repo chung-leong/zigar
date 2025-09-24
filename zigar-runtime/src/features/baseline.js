@@ -1,8 +1,9 @@
 import { structureNames } from '../constants.js';
 import { mixin } from '../environment.js';
+import { TypeMismatch } from '../errors.js';
 import { ALIGN, ENVIRONMENT, MEMORY, SIZE, SLOTS, TYPE } from '../symbols.js';
 
-const events = [ 'log', 'env', 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink', 'syscall' ];
+const events = [ 'log', 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink', 'syscall' ];
 const firstMasked = 1;
 
 export default mixin({
@@ -11,7 +12,7 @@ export default mixin({
     this.listenerMap = new Map([
       [ 'log', (e) => console.log(e.message) ],
     ]);
-    this.lastEvent = '';
+    this.envVariables = this.envVarArrays = null;
   },
   getSpecialExports() {
     const check = (v) => {
@@ -26,7 +27,7 @@ export default mixin({
       alignOf: (T) => check(T?.[ALIGN]),
       typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
       on: (name, cb) => this.addListener(name, cb),
-      wasi: (process.env.TARGET === 'wasm') ? (object) => this.setCustomWASI(object) : undefined,
+      set: (name, value) => this.setObject(name, value),
     };
   },
   addListener(name, cb) {
@@ -36,11 +37,7 @@ export default mixin({
         throw new Error(`Redirection disabled`);
       }
       this.listenerMap.set(name, cb);
-      if (process.env.TARGET === 'wasm') {
-        if (this.libc) {
-          this.initializeLibc();
-        }
-      } else if (process.env.TARGET === 'node') {
+      if (process.env.TARGET === 'node') {
         if (index >= firstMasked) {
           this.setRedirectionMask(name, !!cb);
         }
@@ -52,12 +49,24 @@ export default mixin({
   hasListener(name) {
     return this.listenerMap.get(name);
   },
+  setObject(name, object) {
+    if (typeof(object) !== 'object') {
+      throw new TypeMismatch('object', object);
+    }
+    if (name === 'wasi' && process.env.TARGET === 'wasm') {
+      this.setCustomWASI(object);
+    } else if (name === 'env') {
+      this.envVariables = object;
+      if (this.libc) {
+        this.initializeLibc();
+      }
+    } else {
+      throw new Error(`Unknown object: ${name}`);
+    }
+  },
   triggerEvent(name, event) {
     const listener = this.listenerMap.get(name);
-    this.lastEvent = name;
-    const result = listener?.(event);
-    this.lastEvent = null;
-    return result;
+    return listener?.(event);
   },
   recreateStructures(structures, settings) {
     Object.assign(this, settings);
@@ -134,6 +143,10 @@ export default mixin({
       initializeLibc: { argType: 'ii' },
     },
   /* c8 ignore start */
+  } : process.env.TARGET === 'node' ? {
+    imports: {
+      initializeLibc: {},
+    },
   } : undefined),
   ...(process.env.DEV ? {
     log(...args) {

@@ -2768,6 +2768,37 @@ pub fn LibcSubstitute(comptime redirector: type) type {
     };
 }
 
+pub fn LibcNonIOSubsitute(comptime redirector: type) type {
+    return struct {
+        pub fn getenv(name: [*:0]const u8) callconv(.c) ?[*:0]const u8 {
+            var list: [*:null]?[*:0]const u8 = undefined;
+            var bytes: [*:0]const u8 = undefined;
+            var count: usize = undefined;
+            var len: usize = undefined;
+            if (redirector.environ(&list, &bytes, &count, &len)) {
+                const name_s = name[0..std.mem.len(name)];
+                if (count != 0) {
+                    for (0..count - 1) |i| {
+                        const line = list[i].?;
+                        const line_s = line[0..std.mem.len(line)];
+                        if (std.mem.startsWith(u8, line_s, name_s) and line_s[name_s.len] == '=') {
+                            return line[name_s.len + 1 ..];
+                        }
+                    }
+                }
+                return null;
+            }
+            return Original.getenv(name);
+        }
+
+        const Self = @This();
+        pub const Original = struct {
+            pub var getenv: *const @TypeOf(Self.getenv) = undefined;
+        };
+        pub const calling_convention = std.builtin.CallingConvention.c;
+    };
+}
+
 pub fn LinuxLibcSubstitute(comptime redirector: type) type {
     return struct {
         const libc = LibcSubstitute(redirector);
@@ -2962,39 +2993,6 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
     };
 }
 
-pub fn Win32NonIOLibcSubsitute(comptime redirector: type) type {
-    return struct {
-        // only needed on Windows; on Posix side the redirection of the environ import makes
-        // getenv works automatically
-        pub fn getenv(name: [*:0]const u8) callconv(.c) ?[*:0]const u8 {
-            var list: [*:null]?[*:0]const u8 = undefined;
-            var bytes: [*:0]const u8 = undefined;
-            var count: usize = undefined;
-            var len: usize = undefined;
-            if (redirector.environ(&list, &bytes, &count, &len)) {
-                const name_s = name[0..std.mem.len(name)];
-                if (count != 0) {
-                    for (0..count - 1) |i| {
-                        const line = list[i].?;
-                        const line_s = line[0..std.mem.len(line)];
-                        if (std.mem.startsWith(u8, line_s, name_s) and line_s[name_s.len] == '=') {
-                            return line[name_s.len + 1 ..];
-                        }
-                    }
-                }
-                return null;
-            }
-            return Original.getenv(name);
-        }
-
-        const Self = @This();
-        pub const Original = struct {
-            pub var getenv: *const @TypeOf(Self.getenv) = undefined;
-        };
-        pub const calling_convention = std.builtin.CallingConvention.c;
-    };
-}
-
 pub fn Win32Substitute(comptime redirector: type) type {
     return struct {
         pub fn CloseHandle(handle: HANDLE) callconv(WINAPI) BOOL {
@@ -3007,7 +3005,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return Original.CloseHandle(handle);
         }
 
-        pub fn CreateDirectoryA(
+        pub fn CreateDirectory(
             path: LPCSTR,
             security_attributes: *SECURITY_ATTRIBUTES,
         ) callconv(WINAPI) BOOL {
@@ -3017,7 +3015,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                     return saveError(result);
                 }
             }
-            return Original.CreateDirectoryA(path, security_attributes);
+            return Original.CreateDirectory(path, security_attributes);
         }
 
         pub fn CreateDirectoryW(
@@ -3027,12 +3025,12 @@ pub fn Win32Substitute(comptime redirector: type) type {
             if (redirector.Host.isRedirecting(.mkdir)) {
                 var converter = Wtf8PathConverter.init(path, true) catch return FALSE;
                 defer converter.deinit();
-                return CreateDirectoryA(converter.path, security_attributes);
+                return CreateDirectory(converter.path, security_attributes);
             }
             return Original.CreateDirectoryW(path, security_attributes);
         }
 
-        pub fn CreateFileA(
+        pub fn CreateFile(
             path: LPCSTR,
             desired_access: DWORD,
             share_mode: DWORD,
@@ -3068,7 +3066,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                     return fromDescriptor(fd);
                 }
             }
-            return Original.CreateFileA(path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
+            return Original.CreateFile(path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
         }
 
         pub fn CreateFileW(
@@ -3083,29 +3081,29 @@ pub fn Win32Substitute(comptime redirector: type) type {
             if (redirector.Host.isRedirecting(.mkdir)) {
                 var converter = Wtf8PathConverter.init(path, true) catch return std.os.windows.INVALID_HANDLE_VALUE;
                 defer converter.deinit();
-                return CreateFileA(converter.path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
+                return CreateFile(converter.path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
             }
             return Original.CreateFileW(path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
         }
 
-        pub fn DeleteFileA(path: LPCSTR) callconv(WINAPI) BOOL {
+        pub fn DeleteFile(path: LPCSTR) callconv(WINAPI) BOOL {
             var result: c_int = undefined;
             if (redirector.unlink(path, &result)) {
                 return saveError(result);
             }
-            return Original.DeleteFileA(path);
+            return Original.DeleteFile(path);
         }
 
         pub fn DeleteFileW(path: LPCWSTR) callconv(WINAPI) BOOL {
             if (redirector.Host.isRedirecting(.unlink)) {
                 var converter = Wtf8PathConverter.init(path, true) catch return FALSE;
                 defer converter.deinit();
-                return DeleteFileA(converter.path);
+                return DeleteFile(converter.path);
             }
             return Original.DeleteFileW(path);
         }
 
-        pub fn GetFileAttributesA(path: LPCSTR) callconv(WINAPI) DWORD {
+        pub fn GetFileAttributes(path: LPCSTR) callconv(WINAPI) DWORD {
             var result: c_int = undefined;
             var stat: Stat = undefined;
             if (redirector.stat(path, &stat, &result)) {
@@ -3115,14 +3113,14 @@ pub fn Win32Substitute(comptime redirector: type) type {
                     return std.os.windows.INVALID_FILE_ATTRIBUTES;
                 }
             }
-            return Original.GetFileAttributesA(path);
+            return Original.GetFileAttributes(path);
         }
 
         pub fn GetFileAttributesW(path: LPCWSTR) callconv(WINAPI) DWORD {
             if (redirector.Host.isRedirecting(.stat)) {
                 var converter = Wtf8PathConverter.init(path, true) catch return std.os.windows.INVALID_FILE_ATTRIBUTES;
                 defer converter.deinit();
-                return GetFileAttributesA(converter.path);
+                return GetFileAttributes(converter.path);
             }
             return Original.GetFileAttributesW(path);
         }
@@ -3654,19 +3652,19 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return Original.ReadFile(handle, buffer, len, read, overlapped);
         }
 
-        pub fn RemoveDirectoryA(path: LPCSTR) callconv(WINAPI) BOOL {
+        pub fn RemoveDirectory(path: LPCSTR) callconv(WINAPI) BOOL {
             var result: c_int = undefined;
             if (redirector.rmdir(path, &result)) {
                 return saveError(result);
             }
-            return Original.RemoveDirectoryA(path);
+            return Original.RemoveDirectory(path);
         }
 
         pub fn RemoveDirectoryW(path: LPCWSTR) callconv(WINAPI) BOOL {
             if (redirector.Host.isRedirecting(.rmdir)) {
                 var converter = Wtf8PathConverter.init(path, false) catch return FALSE;
                 defer converter.deinit();
-                return RemoveDirectoryA(converter.path);
+                return RemoveDirectory(converter.path);
             }
             return Original.RemoveDirectoryW(path);
         }
@@ -4017,13 +4015,13 @@ pub fn Win32Substitute(comptime redirector: type) type {
         const Self = @This();
         pub const Original = struct {
             pub var CloseHandle: *const @TypeOf(Self.CloseHandle) = undefined;
-            pub var CreateDirectoryA: *const @TypeOf(Self.CreateDirectoryA) = undefined;
+            pub var CreateDirectory: *const @TypeOf(Self.CreateDirectory) = undefined;
             pub var CreateDirectoryW: *const @TypeOf(Self.CreateDirectoryW) = undefined;
-            pub var CreateFileA: *const @TypeOf(Self.CreateFileA) = undefined;
+            pub var CreateFile: *const @TypeOf(Self.CreateFile) = undefined;
             pub var CreateFileW: *const @TypeOf(Self.CreateFileW) = undefined;
-            pub var DeleteFileA: *const @TypeOf(Self.DeleteFileA) = undefined;
+            pub var DeleteFile: *const @TypeOf(Self.DeleteFile) = undefined;
             pub var DeleteFileW: *const @TypeOf(Self.DeleteFileW) = undefined;
-            pub var GetFileAttributesA: *const @TypeOf(Self.GetFileAttributesA) = undefined;
+            pub var GetFileAttributes: *const @TypeOf(Self.GetFileAttributes) = undefined;
             pub var GetFileAttributesW: *const @TypeOf(Self.GetFileAttributesW) = undefined;
             pub var GetFileInformationByHandle: *const @TypeOf(Self.GetFileInformationByHandle) = undefined;
             pub var GetFileSize: *const @TypeOf(Self.GetFileSize) = undefined;
@@ -4040,7 +4038,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             pub var NtSetInformationFile: *const @TypeOf(Self.NtSetInformationFile) = undefined;
             pub var NtUnlockFile: *const @TypeOf(Self.NtUnlockFile) = undefined;
             pub var ReadFile: *const @TypeOf(Self.ReadFile) = undefined;
-            pub var RemoveDirectoryA: *const @TypeOf(Self.RemoveDirectoryA) = undefined;
+            pub var RemoveDirectory: *const @TypeOf(Self.RemoveDirectory) = undefined;
             pub var RemoveDirectoryW: *const @TypeOf(Self.RemoveDirectoryW) = undefined;
             pub var SetFilePointer: *const @TypeOf(Self.SetFilePointer) = undefined;
             pub var SetFilePointerEx: *const @TypeOf(Self.SetFilePointerEx) = undefined;
@@ -4074,7 +4072,7 @@ pub fn Win32NonIOSubstitute(comptime redirector: type) type {
             return Original.CreateThread(thread_attributes, stack_size, &setThreadContext, info, creation_flags, thread_id);
         }
 
-        pub fn FreeEnvironmentStringsA(ptr: LPSTR) callconv(WINAPI) BOOL {
+        pub fn FreeEnvironmentStrings(ptr: LPSTR) callconv(WINAPI) BOOL {
             var list: [*:null]?[*:0]const u8 = undefined;
             var bytes: [*:0]const u8 = undefined;
             var count: usize = undefined;
@@ -4082,7 +4080,7 @@ pub fn Win32NonIOSubstitute(comptime redirector: type) type {
             if (redirector.environ(&list, &bytes, &count, &len)) {
                 return TRUE;
             }
-            return Original.GetEnvironmentStringsW(ptr);
+            return Original.FreeEnvironmentStrings(ptr);
         }
 
         pub fn FreeEnvironmentStringsW(ptr: LPWSTR) callconv(WINAPI) BOOL {
@@ -4096,27 +4094,27 @@ pub fn Win32NonIOSubstitute(comptime redirector: type) type {
                 while (true) {
                     const line_len = std.mem.len(p);
                     if (line_len == 0) break;
-                    total += len + 1;
+                    total += line_len + 1;
                     p = p[line_len + 1 ..];
                 }
                 c_allocator.free(ptr[0..total]);
                 return TRUE;
             }
-            return FALSE;
+            return Original.FreeEnvironmentStringsW(ptr);
         }
 
-        pub fn GetEnvironmentStringsA() callconv(WINAPI) ?LPSTR {
+        pub fn GetEnvironmentStrings() callconv(WINAPI) ?LPSTR {
             var list: [*:null]?[*:0]const u8 = undefined;
             var bytes: [*:0]const u8 = undefined;
             var count: usize = undefined;
             var len: usize = undefined;
             if (redirector.environ(&list, &bytes, &count, &len)) {
                 if (count != 0) {
-                    return bytes;
+                    return @constCast(bytes);
                 }
                 return null;
             }
-            return Original.GetEnvironmentStringsA();
+            return Original.GetEnvironmentStrings();
         }
 
         pub fn GetEnvironmentStringsW() callconv(WINAPI) ?LPWSTR {
@@ -4127,7 +4125,6 @@ pub fn Win32NonIOSubstitute(comptime redirector: type) type {
             if (redirector.environ(&list, &bytes, &count, &len)) {
                 const bytes_s = bytes[0..len];
                 if (std.unicode.wtf8ToWtf16LeAlloc(c_allocator, bytes_s)) |bytes_w| {
-                    std.debug.print("bytes_w = {d}\n", .{bytes_w});
                     return @ptrCast(bytes_w.ptr);
                 } else |_| {}
                 return null;
@@ -4135,7 +4132,7 @@ pub fn Win32NonIOSubstitute(comptime redirector: type) type {
             return Original.GetEnvironmentStringsW();
         }
 
-        pub fn GetEnvironmentVariableA(
+        pub fn GetEnvironmentVariable(
             name: LPCSTR,
             buffer: ?LPSTR,
             size: DWORD,
@@ -4153,7 +4150,7 @@ pub fn Win32NonIOSubstitute(comptime redirector: type) type {
                 }
                 return @intCast(value.len + 1);
             }
-            return Original.GetEnvironmentVariableA(name, buffer, size);
+            return Original.GetEnvironmentVariable(name, buffer, size);
         }
 
         pub fn GetEnvironmentVariableW(
@@ -4237,11 +4234,11 @@ pub fn Win32NonIOSubstitute(comptime redirector: type) type {
         const Self = @This();
         pub const Original = struct {
             pub var CreateThread: *const @TypeOf(Self.CreateThread) = undefined;
-            pub var FreeEnvironmentStringsA: *const @TypeOf(Self.FreeEnvironmentStringsA) = undefined;
+            pub var FreeEnvironmentStrings: *const @TypeOf(Self.FreeEnvironmentStrings) = undefined;
             pub var FreeEnvironmentStringsW: *const @TypeOf(Self.FreeEnvironmentStringsW) = undefined;
-            pub var GetEnvironmentStringsA: *const @TypeOf(Self.GetEnvironmentStringsA) = undefined;
+            pub var GetEnvironmentStrings: *const @TypeOf(Self.GetEnvironmentStrings) = undefined;
             pub var GetEnvironmentStringsW: *const @TypeOf(Self.GetEnvironmentStringsW) = undefined;
-            pub var GetEnvironmentVariableA: *const @TypeOf(Self.GetEnvironmentVariableA) = undefined;
+            pub var GetEnvironmentVariable: *const @TypeOf(Self.GetEnvironmentVariable) = undefined;
             pub var GetEnvironmentVariableW: *const @TypeOf(Self.GetEnvironmentVariableW) = undefined;
         };
         pub const calling_convention = WINAPI;
@@ -4302,31 +4299,34 @@ pub fn getHookTable(comptime Host: type, comptime redirect_io: bool) std.StaticS
             PosixSubstitute(redirector),
             PthreadSubstitute(redirector),
             LibcSubstitute(redirector),
+            LibcNonIOSubsitute(redirector),
             LinuxLibcSubstitute(redirector),
         },
         .darwin => .{
             PosixSubstitute(redirector),
             PthreadSubstitute(redirector),
             LibcSubstitute(redirector),
+            LibcNonIOSubsitute(redirector),
         },
         .windows => .{
             PosixSubstitute(redirector),
             PthreadSubstitute(redirector), // in case someone is using pthread-win32
             LibcSubstitute(redirector),
+            LibcNonIOSubsitute(redirector),
             Win32LibcSubsitute(redirector),
             Win32Substitute(redirector),
             Win32NonIOSubstitute(redirector),
-            Win32NonIOLibcSubsitute(redirector),
         },
         else => .{},
     } else switch (os) {
         .darwin, .linux => .{
             PthreadSubstitute(redirector),
+            LibcNonIOSubsitute(redirector),
         },
         .windows => .{
             PthreadSubstitute(redirector),
+            LibcNonIOSubsitute(redirector),
             Win32NonIOSubstitute(redirector),
-            Win32NonIOLibcSubsitute(redirector),
         },
         else => .{},
     };

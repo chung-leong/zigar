@@ -13,60 +13,77 @@ export function addTests(importModule, options) {
     it('should print environment variables', async function () {
       this.timeout(0);
       const { __zigar, print, get } = await importTest('print-env');
-      let called = false;
-      __zigar.on('env', () => {
-        called = true;
-        return {
-          HELLO: 1,
-          WORLD: 123,
-        }
+      __zigar.set('env', {
+        HELLO: 1,
+        WORLD: 123,
       });
-      const lines = await capture(() => print());
-      expect(called).to.be.true;
-      expect(lines).to.include('HELLO = 1');
-      expect(lines).to.include('WORLD = 123');
-      const result = get('WORLD');
-      expect(result).to.equal('123');
+      const lines1 = await capture(() => print());
+      expect(lines1).to.include('HELLO = 1');
+      expect(lines1).to.include('WORLD = 123');
+      const result1 = get('WORLD');
+      expect(result1).to.equal('123');
+      __zigar.set('env', {
+        '土耳其': '火雞',
+      });
+      const lines2 = await capture(() => print());
+      expect(lines2).to.include('土耳其 = 火雞');
+      const result2 = get('土耳其');
+      expect(result2).to.equal('火雞');
+      __zigar.set('env', null);
+      const lines3 = await capture(() => print());
+      expect(lines3).to.not.include('土耳其 = 火雞');
+      __zigar.set('env', {});
+      const lines4 = await capture(() => print());
+      expect(lines4).to.have.lengthOf(0);
     });
     it('should print environment variables using libc functions', async function () {
       this.timeout(0);
       const { __zigar, print, get } = await importTest('print-env-with-libc-functions', { useLibc: true });
-      let called = false;
-      __zigar.on('env', () => {
-        called = true;
-        return {
-          HELLO: 1,
-          WORLD: 123,
-        }
+      __zigar.set('env', {
+        HELLO: 1,
+        WORLD: 123,
       });
-      expect(called).to.be.true;
       if (print) {
-        const lines = await capture(() => print());
-        expect(lines).to.include('HELLO=1');
-        expect(lines).to.include('WORLD=123');
+        const lines1 = await capture(() => print());
+        expect(lines1).to.include('HELLO=1');
+        expect(lines1).to.include('WORLD=123');
       }
-      const result = get('WORLD');
-      expect(result).to.equal('123');
+      const result1 = get('WORLD');
+      expect(result1).to.equal('123');
+      __zigar.set('env', {
+        '土耳其': '火雞',
+      });
+      if (print) {
+        const lines2 = await capture(() => print());
+        expect(lines2).to.include('土耳其=火雞');
+      }
+      const result2 = get('土耳其');
+      expect(result2).to.equal('火雞');
+      __zigar.set('env', null);
+      if (print) {
+        const lines3 = await capture(() => print());
+        expect(lines3).to.not.include('土耳其=火雞');
+      }
+      __zigar.set('env', {});
+      const lines4 = await capture(() => print());
+      expect(lines4).to.have.lengthOf(0);
     });
     skip.entirely.unless(target === 'win32').
     it('should print environment variables using win32 functions', async function () {
       this.timeout(0);
       const { __zigar, print, printW, get, getW } = await importTest('print-env-with-win32-functions');
-      let called = false;
-      __zigar.on('env', () => {
-        called = true;
-        return {
-          HELLO: 1,
-          WORLD: 123,
-        }
+      __zigar.set('env', {
+        HELLO: 1,
+        WORLD: 123,
       });
-      expect(called).to.be.true;
       const lines1 = await capture(() => print());
       expect(lines1).to.include('HELLO=1');
       expect(lines1).to.include('WORLD=123');
       const lines2 = await capture(() => printW());
-      expect(lines2).to.include('HELLO=1');
-      expect(lines2).to.include('WORLD=123');
+      __zigar.set('env', {
+        '土耳其': '火雞',
+      });
+      expect(lines2).to.include('土耳其=火雞');
       const result = get('WORLD');
       expect(result).to.equal('123');
       const resultW = getW('WORLD');

@@ -8,11 +8,9 @@ const Env = defineEnvironment();
 describe('Syscall: environ-get', function() {
   it('should copy env variables into given address', function() {
     const env = new Env();
-    env.addListener('env', () => {
-      return {
-        HELLO: 1,
-        WORLD: 123,
-      };
+    env.setObject('env', {
+      HELLO: 1,
+      WORLD: 123,
     });
     if (process.env.TARGET === 'wasm') {
       env.memory = new WebAssembly.Memory({ initial: 1 });
@@ -67,11 +65,9 @@ describe('Syscall: environ-get', function() {
   if (process.env.TARGET === 'wasm') {
     it('should be callable through WASI', function() {
       const env = new Env();
-      env.addListener('env', () => {
-        return {
-          HELLO: 1,
-          WORLD: 123,
-        };
+      env.setObject('env', {
+        HELLO: 1,
+        WORLD: 123,
       });
       env.memory = new WebAssembly.Memory({ initial: 1 });
       const le = env.littleEndian;

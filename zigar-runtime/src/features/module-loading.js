@@ -168,8 +168,6 @@ export default mixin({
             // if we can't fallback onto a custom handler, explain the failure
             if (eventName) {
               console.error(`WASI method '${name}' requires the handling of the '${eventName}' event`);
-            } else if (!handler) {
-              console.error(`No support: ${name}`);
             }
             return PosixError.ENOTSUP;
           }

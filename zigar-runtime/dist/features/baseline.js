@@ -1,8 +1,9 @@
 import { structureNames } from '../constants.js';
 import { mixin } from '../environment.js';
+import { TypeMismatch } from '../errors.js';
 import { MEMORY, SLOTS, TYPE, ALIGN, SIZE, ENVIRONMENT } from '../symbols.js';
 
-const events = [ 'log', 'env', 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink', 'syscall' ];
+const events = [ 'log', 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink', 'syscall' ];
 
 var baseline = mixin({
   init() {
@@ -10,7 +11,7 @@ var baseline = mixin({
     this.listenerMap = new Map([
       [ 'log', (e) => console.log(e.message) ],
     ]);
-    this.lastEvent = '';
+    this.envVariables = this.envVarArrays = null;
   },
   getSpecialExports() {
     const check = (v) => {
@@ -25,7 +26,7 @@ var baseline = mixin({
       alignOf: (T) => check(T?.[ALIGN]),
       typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
       on: (name, cb) => this.addListener(name, cb),
-      wasi: (object) => this.setCustomWASI(object) ,
+      set: (name, value) => this.setObject(name, value),
     };
   },
   addListener(name, cb) {
@@ -35,11 +36,6 @@ var baseline = mixin({
         throw new Error(`Redirection disabled`);
       }
       this.listenerMap.set(name, cb);
-      {
-        if (this.libc) {
-          this.initializeLibc();
-        }
-      }
     } else {
       throw new Error(`Unknown event: ${name}`);
     }
@@ -47,12 +43,24 @@ var baseline = mixin({
   hasListener(name) {
     return this.listenerMap.get(name);
   },
+  setObject(name, object) {
+    if (typeof(object) !== 'object') {
+      throw new TypeMismatch('object', object);
+    }
+    if (name === 'wasi' && "wasm" === 'wasm') {
+      this.setCustomWASI(object);
+    } else if (name === 'env') {
+      this.envVariables = object;
+      if (this.libc) {
+        this.initializeLibc();
+      }
+    } else {
+      throw new Error(`Unknown object: ${name}`);
+    }
+  },
   triggerEvent(name, event) {
     const listener = this.listenerMap.get(name);
-    this.lastEvent = name;
-    const result = listener?.(event);
-    this.lastEvent = null;
-    return result;
+    return listener?.(event);
   },
   recreateStructures(structures, settings) {
     Object.assign(this, settings);

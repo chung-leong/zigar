@@ -246,6 +246,7 @@ const ModuleHost = struct {
             "requireBufferFallback",
             "syncExternalBuffer",
             "setRedirectionMask",
+            "initializeLibc",
             "setSyscallTrap",
         };
         inline for (names) |name| {
@@ -645,6 +646,58 @@ const ModuleHost = struct {
             @memcpy(bytes1[0..len], bytes2[0..len]);
     }
 
+    fn initializeLibc(self: *@This()) !void {
+        // retrieve environment variables through WASI functions and perform deferred import
+        if (self.env_variable_list) |list| {
+            c_allocator.free(list);
+            self.env_variable_list = null;
+        }
+        if (self.env_variable_bytes) |bytes| {
+            c_allocator.free(bytes);
+            self.env_variable_bytes = null;
+        }
+        const deferred = &self.env_variable_deferred;
+        const env = self.env;
+        var count: u32 = undefined;
+        var len: u32 = undefined;
+        const size_result = try self.callPosixFunction(self.js.environ_sizes_get, &.{
+            try env.createUsize(@intFromPtr(&count)),
+            try env.createUsize(@intFromPtr(&len)),
+        });
+        const hook: HookEntry = .{
+            .handler = @ptrCast(&self.env_variable_ptr),
+            .original = @ptrCast(&self.env_variable_original),
+        };
+        if (size_result != .SUCCESS) {
+            if (size_result == .OPNOTSUPP) {
+                if (deferred.installed) {
+                    try redirection_controller.uninstallHook(hook, deferred.address, deferred.read_only);
+                    deferred.installed = false;
+                    return;
+                }
+            } else {
+                return error.UnableToGetEnvSize;
+            }
+        }
+        const list = try c_allocator.alloc(?[*:0]const u8, count + 1);
+        errdefer c_allocator.free(list);
+        const bytes = try c_allocator.alloc(u8, len + 1);
+        errdefer c_allocator.free(bytes);
+        if (try self.callPosixFunction(self.js.environ_get, &.{
+            try env.createUsize(@intFromPtr(list.ptr)),
+            try env.createUsize(@intFromPtr(bytes.ptr)),
+        }) != .SUCCESS) return error.UnableToGetEnv;
+        list[count] = null;
+        bytes[len] = 0;
+        self.env_variable_ptr = @ptrCast(list.ptr);
+        if (deferred.address != 0 and !deferred.installed) {
+            try redirection_controller.installHook(hook, deferred.address, deferred.read_only);
+            deferred.installed = true;
+        }
+        self.env_variable_list = list;
+        self.env_variable_bytes = bytes;
+    }
+
     fn setRedirectionMask(self: *@This(), event: Value, listening: Value) !void {
         const env = self.env;
         const event_len = try env.getValueStringUtf8(event, null);
@@ -653,11 +706,6 @@ const ModuleHost = struct {
         _ = try env.getValueStringUtf8(event, event_bytes);
         const event_name = event_bytes[0..event_len];
         const set = try env.getValueBool(listening);
-        if (std.mem.eql(u8, event_name, "env")) {
-            // retrieve environment variable through WASI functions and insert into module
-            if (set) try self.obtainEnvVariables();
-            return;
-        }
         const empty_mask = hooks.Mask{};
         const empty_before = self.redirection_mask == empty_mask;
         return inline for (std.meta.fields(hooks.Mask)) |field| {
@@ -1342,40 +1390,6 @@ const ModuleHost = struct {
             try Futex.wake(handle, result);
         } else |_| {}
         return result;
-    }
-
-    fn obtainEnvVariables(self: *@This()) !void {
-        if (self.env_variable_bytes != null) return;
-        const deferred = self.env_variable_deferred;
-        const env = self.env;
-        var count: u32 = undefined;
-        var len: u32 = undefined;
-        const size_result = try self.callPosixFunction(self.js.environ_sizes_get, &.{
-            try env.createUsize(@intFromPtr(&count)),
-            try env.createUsize(@intFromPtr(&len)),
-        });
-        if (size_result != .SUCCESS) {
-            return if (size_result == .OPNOTSUPP) {} else error.UnableToGetEnvSize;
-        }
-        const list = try c_allocator.alloc(?[*:0]const u8, count + 1);
-        errdefer c_allocator.free(list);
-        const bytes = try c_allocator.alloc(u8, len + 1);
-        errdefer c_allocator.free(bytes);
-        if (try self.callPosixFunction(self.js.environ_get, &.{
-            try env.createUsize(@intFromPtr(list.ptr)),
-            try env.createUsize(@intFromPtr(bytes.ptr)),
-        }) != .SUCCESS) return error.UnableToGetEnv;
-        list[count] = null;
-        bytes[len] = 0;
-        self.env_variable_ptr = @ptrCast(list.ptr);
-        if (deferred.address != 0) {
-            try redirection_controller.installHook(.{
-                .handler = @ptrCast(&self.env_variable_ptr),
-                .original = @ptrCast(&self.env_variable_original),
-            }, deferred.address, deferred.read_only);
-        }
-        self.env_variable_list = list;
-        self.env_variable_bytes = bytes;
     }
 
     fn getSyscallMask(self: *@This(), ptr: *hooks.Mask) !void {

@@ -436,13 +436,45 @@ describe('Feature: module-loading', function() {
             copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
           };
         }
+        const f = env.getWASIHandler('path_open');
+        let result;
+        const [ error ] = await captureError(() => {
+          result = f(-1);
+        });
+        expect(result).to.equal(PosixError.ENOTSUP);
+        expect(error).to.contain('open');
+      })
+      it('should not display error message when function is not associated with an event', async function() {
+        const env = new Env();
+        if (process.env.TARGET === 'wasm') {
+          env.memory = new WebAssembly.Memory({ initial: 1 });
+        } else {
+          const map = new Map();
+          env.obtainExternBuffer = function (address, len) {
+            let buffer = map.get(address);
+            if (!buffer) {
+              buffer = new ArrayBuffer(len);
+              map.set(address, buffer);
+            }
+            return buffer;
+          };
+          env.moveExternBytes = function(jsDV, address, to) {
+            const len = jsDV.byteLength;
+            const zigDV = this.obtainZigView(address, len);
+            if (!(jsDV instanceof DataView)) {
+              jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+            }
+            const copy = this.getCopyFunction(len);
+            copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+          };
+        }
         const f = env.getWASIHandler('tip_cow');
         let result;
         const [ error ] = await captureError(() => {
-          result = f();
+          result = f(-1);
         });
         expect(result).to.equal(PosixError.ENOTSUP);
-        expect(error).to.contain('tip_cow');
+        expect(error).to.be.undefined;
       })
     })
     describe('setCustomWASI', function() {

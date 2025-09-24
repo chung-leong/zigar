@@ -302,7 +302,18 @@ comptime {
     if (builtin.link_libc) @export(&initializeLibc, .{ .name = "initializeLibc" });
 }
 
+var env_variable_list: ?[]?[*:0]u8 = null;
+var env_variable_bytes: ?[]u8 = null;
+
 fn initializeLibc() callconv(.c) void {
+    if (env_variable_list) |list| {
+        wasm_allocator.free(list);
+        env_variable_list = null;
+    }
+    if (env_variable_bytes) |bytes| {
+        wasm_allocator.free(bytes);
+        env_variable_bytes = null;
+    }
     var count: usize = undefined;
     var len: usize = undefined;
     if (std.os.wasi.environ_sizes_get(&count, &len) != .SUCCESS) {
@@ -316,6 +327,8 @@ fn initializeLibc() callconv(.c) void {
     }
     list[count] = null;
     std.c.environ = @ptrCast(list.ptr);
+    env_variable_list = list;
+    env_variable_bytes = bytes;
 }
 
 extern fn _createBool(initializer: bool) AnyValue;
