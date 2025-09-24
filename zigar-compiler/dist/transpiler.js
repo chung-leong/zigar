@@ -3390,13 +3390,15 @@ function getMemory(arg) {
   return { dv, align, constructor };
 }
 
+const events = [ 'log', 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink', 'syscall' ];
+
 var baseline = mixin({
   init() {
     this.variables = [];
     this.listenerMap = new Map([
       [ 'log', (e) => console.log(e.message) ],
     ]);
-    this.lastEvent = '';
+    this.envVariables = this.envVarArrays = null;
   },
   getSpecialExports() {
     const check = (v) => {
@@ -3411,21 +3413,41 @@ var baseline = mixin({
       alignOf: (T) => check(T?.[ALIGN]),
       typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
       on: (name, cb) => this.addListener(name, cb),
-      wasi: (object) => this.setCustomWASI(object) ,
+      set: (name, value) => this.setObject(name, value),
     };
   },
   addListener(name, cb) {
-    this.listenerMap.set(name, cb);
+    const index = events.indexOf(name);
+    if (index >= 0) {
+      if (!this.ioRedirection) {
+        throw new Error(`Redirection disabled`);
+      }
+      this.listenerMap.set(name, cb);
+    } else {
+      throw new Error(`Unknown event: ${name}`);
+    }
   },
   hasListener(name) {
     return this.listenerMap.get(name);
   },
+  setObject(name, object) {
+    if (typeof(object) !== 'object') {
+      throw new TypeMismatch('object', object);
+    }
+    if (name === 'wasi' && "wasm" === 'wasm') {
+      this.setCustomWASI(object);
+    } else if (name === 'env') {
+      this.envVariables = object;
+      if (this.libc) {
+        this.initializeLibc();
+      }
+    } else {
+      throw new Error(`Unknown object: ${name}`);
+    }
+  },
   triggerEvent(name, event) {
     const listener = this.listenerMap.get(name);
-    this.lastEvent = name;
-    const result = listener?.(event);
-    this.lastEvent = null;
-    return result;
+    return listener?.(event);
   },
   recreateStructures(structures, settings) {
     Object.assign(this, settings);
@@ -3497,6 +3519,11 @@ var baseline = mixin({
       this.finalizeStructure(structure);
     }
   },
+  ...({
+    imports: {
+      initializeLibc: { argType: 'ii' },
+    },
+  } ),
 });
 
 const structureNamesLC = structureNames.map(name => name.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase());
@@ -4847,8 +4874,6 @@ var moduleLoading = mixin({
             // if we can't fallback onto a custom handler, explain the failure
             if (eventName) {
               console.error(`WASI method '${name}' requires the handling of the '${eventName}' event`);
-            } else if (!handler) {
-              console.error(`No support: ${name}`);
             }
             return PosixError.ENOTSUP;
           }
@@ -6072,15 +6097,16 @@ var writer = mixin({
 
 var environGet = mixin({
   environGet(environAddress, environBufAddress) {
+    const arrays = this.envVarArrays;
     let size = 0, count = 0;
-    for (const array of this.envVariables) {
+    for (const array of arrays) {
       size += array.length;
       count++;
     }
     const ptrDV = createView(usizeByteSize * count);
     const bytes = new Uint8Array(size);
     let p = 0, b = 0, le = this.littleEndian;
-    for (const array of this.envVariables) {
+    for (const array of arrays) {
       {
         ptrDV.setUint32(p, environBufAddress + b, le);
         p += 4;
@@ -6109,13 +6135,12 @@ var copyInt = mixin({
 
 var environSizesGet = mixin({
   environSizesGet(environCountAddress, environBufSizeAddress) {
-    const result = this.triggerEvent('env') ?? {};
-    if (typeof(result) !== 'object') {
-      console.error(new TypeMismatch('object', result).message);
-      return PosixError.EFAULT;
+    const object = this.envVariables;
+    if (!object) {
+      return PosixError.ENOTSUP;
     }
-    const env = this.envVariables = [];
-    for (const [ name, value ] of Object.entries(result)) {
+    const env = this.envVarArrays = [];
+    for (const [ name, value ] of Object.entries(object)) {
       const array = encodeText(`${name}=${value}\0`);
       env.push(array);
     }

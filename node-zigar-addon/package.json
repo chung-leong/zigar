@@ -1,6 +1,6 @@
 {
   "name": "node-zigar-addon",
-  "version": "0.14.2-alpha.1",
+  "version": "0.14.2-alpha.2",
   "description": "NodeJS addon for loading Zig native modules",
   "main": "./dist/index.cjs",
   "type": "module",
@@ -44,7 +44,7 @@
     "chai": "^6.0.1",
     "mocha": "^11.7.2",
     "mocha-skip-if": "^1.0.4",
-    "rollup": "^4.50.2",
+    "rollup": "^4.52.2",
     "rollup-plugin-gzip": "^4.1.1"
   }
 }
