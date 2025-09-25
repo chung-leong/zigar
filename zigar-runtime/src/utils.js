@@ -1,5 +1,5 @@
 import { MemberType } from './constants.js';
-import { ENVIRONMENT, LENGTH, PROXY, SIGNATURE } from './symbols.js';
+import { ENVIRONMENT, LENGTH, MEMORY, PROXY, SIGNATURE } from './symbols.js';
 
 export function defineProperty(object, name, descriptor) {
   if (descriptor) {
@@ -332,6 +332,21 @@ export function markAsSpecial({ get, set }) {
 
 export function createView(size) {
   return new DataView(new ArrayBuffer(size));
+}
+
+export function copyView(dest, src, offset = 0) {
+  const destA = new Uint8Array(dest.buffer, dest.byteOffset, dest.byteLength);
+  const srcA = new Uint8Array(src.buffer, src.byteOffset, src.byteLength);
+  destA.set(srcA, offset);  
+}
+
+export function clearView(dest, len = dest.byteLength, offset = 0) {
+  const destA = new Uint8Array(dest.buffer, dest.byteOffset, dest.byteLength);
+  destA.fill(0, offset, len);
+}
+
+export function copyObject(dest, src) {
+  copyView(dest[MEMORY], src[MEMORY]);
 }
 
 export function getSelf() {

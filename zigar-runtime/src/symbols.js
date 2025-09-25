@@ -55,7 +55,6 @@ export const RESTORE = symbol('restore');
 export const RESET = symbol('reset');
 export const VIVIFICATE = symbol('vivificate');
 export const VISIT = symbol('visit');
-export const COPY = symbol('copy');
 export const SHAPE = symbol('shape');
 export const INITIALIZE = symbol('initialize');
 export const RESTRICT = symbol('restrict');

@@ -1,8 +1,8 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, BufferExpected, BufferSizeMismatch } from '../errors.js';
-import { CACHE, CONST_TARGET, COPY, FALLBACK, MEMORY, PROXY, SENTINEL, SHAPE, TYPED_ARRAY, ZIG } from '../symbols.js';
-import { adjustAddress, alignForward, findElements, isCompatibleInstanceOf, usizeInvalid } from '../utils.js';
+import { CACHE, CONST_TARGET, FALLBACK, MEMORY, PROXY, SENTINEL, SHAPE, TYPED_ARRAY, ZIG } from '../symbols.js';
+import { adjustAddress, alignForward, copyObject, copyView, findElements, isCompatibleInstanceOf, usizeInvalid } from '../utils.js';
 
 export default mixin({
   init() {
@@ -80,7 +80,7 @@ export default mixin({
       }
       target[SHAPE](copy ? null : dv, len, allocator);
       if (copy) {
-        target[COPY](source);
+        copyObject(target, source);
       }
     } else {
       const byteLength = (type === StructureType.Slice) ? elementSize * target.length : elementSize;
@@ -89,7 +89,7 @@ export default mixin({
       }
       const source = { [MEMORY]: dv };
       target.constructor[SENTINEL]?.validateData?.(source, target.length);
-      target[COPY](source);
+      copyObject(target, source);
     }
     if (process.env.TARGET === 'node' && this.usingBufferFallback()) {
       const dv = target[MEMORY];
@@ -211,10 +211,22 @@ export default mixin({
         },
       }
     },
+    moveExternBytes(jsDV, address, to) {
+      const { memory } = this;
+      const len = jsDV.byteLength;
+      if (len === 0) return;
+      const zigDV = new DataView(memory.buffer, address, len);
+      if (!(jsDV instanceof DataView)) {
+        // assume it's a typed array
+        jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+      }
+      copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
+    },
   } : process.env.TARGET === 'node' ? {
     imports: {
-      requireBufferFallback: null,
-      syncExternalBuffer: null,
+      requireBufferFallback: {},
+      syncExternalBuffer: {},
+      moveExternBytes: {},
     },
     usingBufferFallback() {
       if (this.needFallback === undefined) {

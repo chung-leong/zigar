@@ -1,8 +1,8 @@
 import { MemberFlag, StructFlag, StructureFlag, StructurePurpose } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidInitializer } from '../errors.js';
-import { COPY, ENTRIES, INITIALIZE, KEYS, PROPS, SETTERS, VISIT, VIVIFICATE } from '../symbols.js';
-import { defineValue, getSelf, isCompatibleInstanceOf } from '../utils.js';
+import { ENTRIES, INITIALIZE, KEYS, PROPS, SETTERS, VISIT, VIVIFICATE } from '../symbols.js';
+import { copyObject, defineValue, getSelf, isCompatibleInstanceOf } from '../utils.js';
 
 export default mixin({
   defineStruct(structure, descriptors) {
@@ -17,7 +17,7 @@ export default mixin({
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', 0, arg);
         }

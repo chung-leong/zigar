@@ -1,7 +1,7 @@
-import { MemberType, OptionalFlag, StructureFlag, VisitorFlag } from '../constants.js';
+import { MemberType, StructureFlag, VisitorFlag, OptionalFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { INITIALIZE, RESET, VIVIFICATE, VISIT, COPY } from '../symbols.js';
-import { defineValue, isCompatibleInstanceOf } from '../utils.js';
+import { INITIALIZE, VIVIFICATE, VISIT, MEMORY } from '../symbols.js';
+import { defineValue, isCompatibleInstanceOf, copyObject, clearView } from '../utils.js';
 
 var optional = mixin({
   defineOptional(structure, descriptors) {
@@ -21,9 +21,10 @@ var optional = mixin({
       }
     };
     const isValueVoid = valueMember.type === MemberType.Void;
+    const { bitOffset, byteSize } = valueMember;
     const initializer = function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           // don't bother copying pointers when it's empty
           if (getPresent.call(this)) {
@@ -32,7 +33,9 @@ var optional = mixin({
         }
       } else if (arg === null) {
         setPresent.call(this, 0);
-        this[RESET]?.();
+        if (flags & OptionalFlag.HasSelector) {
+          clearView(this[MEMORY], byteSize, bitOffset >> 3);
+        }
         // clear references so objects can be garbage-collected
         this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
       } else if (arg !== undefined || isValueVoid) {
@@ -51,13 +54,11 @@ var optional = mixin({
       }
     };
     const constructor = structure.constructor = this.createConstructor(structure);
-    const { bitOffset, byteSize } = valueMember;
     descriptors.$ = { get, set: initializer };
     // we need to clear the value portion when there's a separate bool indicating whether a value
     // is present; for optional pointers, the bool overlaps the usize holding the address; setting
     // it to false automatically clears the address
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[RESET] = (flags & OptionalFlag.HasSelector) && this.defineResetter(bitOffset / 8, byteSize);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorOptional(valueMember, getPresent);
     return constructor;

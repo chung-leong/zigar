@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { PosixDescriptorRight, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { createView, usize, usizeByteSize } from '../../src/utils.js';
+import { copyView, createView, usize, usizeByteSize } from '../../src/utils.js';
 import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -28,8 +28,7 @@ describe('Syscall: fd-fdstat-set-rights', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
       env.setSyscallTrap = () => {};
     }
@@ -73,8 +72,7 @@ describe('Syscall: fd-fdstat-set-rights', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
       env.setSyscallTrap = () => {};
     }
@@ -107,8 +105,7 @@ describe('Syscall: fd-fdstat-set-rights', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
       env.setSyscallTrap = () => {};
     }

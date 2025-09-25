@@ -1,6 +1,4 @@
 import { SENTINEL, SLOTS, MEMORY, ZIG, PROPS, VISIT, ENVIRONMENT } from '../symbols.js';
-import '../accessors/all.js';
-import '../accessors/int.js';
 import { SliceFlag, StructureType, PointerFlag, ErrorSetFlag, StructFlag, MemberType, PrimitiveFlag, structureNames, ModuleAttribute, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import './call-marshaling-inbound.js';
@@ -51,7 +49,6 @@ import '../syscalls/proc-exit.js';
 import '../syscalls/random-get.js';
 import { decodeText, findObjects, adjustAddress } from '../utils.js';
 import './baseline.js';
-import './data-copying.js';
 import './object-linkage.js';
 import './stream-location.js';
 import './stream-redirection.js';

@@ -3,6 +3,7 @@ import { AlignmentConflict } from '../errors.js';
 import { ALIGN, FALLBACK, MEMORY, ZIG } from '../symbols.js';
 import {
   adjustAddress, alignForward,
+  copyView,
   findSortedIndex, isInvalidAddress, isMisaligned, usizeInvalid,
   usizeMax,
   usizeMin
@@ -90,22 +91,20 @@ export default mixin({
     }
   },
   updateShadows(context) {
-    const copy = this.getCopyFunction();
     for (let { targetDV, shadowDV } of context.shadowList) {
       if (process.env.TARGET === 'wasm') {
         shadowDV = this.restoreView(shadowDV);
       }
-      copy(shadowDV, targetDV);
+      copyView(shadowDV, targetDV);
     }
   },
   updateShadowTargets(context) {
-    const copy = this.getCopyFunction();
     for (let { targetDV, shadowDV, writable } of context.shadowList) {
       if (writable) {
         if (process.env.TARGET === 'wasm') {
           shadowDV = this.restoreView(shadowDV);
         }
-        copy(targetDV, shadowDV);
+        copyView(targetDV, shadowDV);
       }
     }
   },
@@ -157,8 +156,7 @@ export default mixin({
         if (process.env.TARGET === 'wasm') {
           shadowDV = this.restoreView(shadowDV);
         }
-        const copy = this.getCopyFunction();
-        copy(targetDV, shadowDV);
+        copyView(targetDV, shadowDV);
       }
     }
     return dv;

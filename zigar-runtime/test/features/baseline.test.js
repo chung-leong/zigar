@@ -3,7 +3,7 @@ import 'mocha-skip-if';
 import { MemberFlag, MemberType, PointerFlag, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { usize, usizeByteSize } from '../../src/utils.js';
+import { copyView, usize, usizeByteSize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 
@@ -321,8 +321,7 @@ describe('Feature: baseline', function() {
           if (!(jsDV instanceof DataView)) {
             jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
           }
-          const copy = this.getCopyFunction(len);
-          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+          copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
         };
       }
       const iovsAddress = usize(0x1000);
@@ -458,8 +457,7 @@ describe('Feature: baseline', function() {
           if (!(jsDV instanceof DataView)) {
             jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
           }
-          const copy = this.getCopyFunction(len);
-          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+          copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
         };
       }
       const iovsAddress = usize(0x1000);
@@ -503,8 +501,7 @@ describe('Feature: baseline', function() {
           if (!(jsDV instanceof DataView)) {
             jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
           }
-          const copy = this.getCopyFunction(len);
-          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+          copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
         };
       }
       const iovsAddress = usize(0x1000);

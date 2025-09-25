@@ -2,7 +2,7 @@ import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { PreviouslyFreed, TypeMismatch } from '../errors.js';
 import { ALIGN, MEMORY, TYPE, ZIG } from '../symbols.js';
-import { encodeText, usizeInvalid } from '../utils.js';
+import { copyView, encodeText, usizeInvalid } from '../utils.js';
 
 export default mixin({
   defineAlloc() {
@@ -48,7 +48,6 @@ export default mixin({
     };
   },
   defineDupe() {
-    const copy = this.getCopyFunction();
     return {
       value(arg) {
         const { dv: src, align, constructor } = getMemory(arg);
@@ -56,7 +55,7 @@ export default mixin({
           throw new TypeMismatch('string, DataView, typed array, or Zig object', arg);
         }
         const dest = this.alloc(src.byteLength, align);
-        copy(dest, src);
+        copyView(dest, src);
         return (constructor) ? constructor(dest) : dest;
       }
     };

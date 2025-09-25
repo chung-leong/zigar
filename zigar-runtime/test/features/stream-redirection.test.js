@@ -3,7 +3,7 @@ import { PosixDescriptor, PosixDescriptorRight, PosixError } from '../../src/con
 import { defineEnvironment } from '../../src/environment.js';
 import { InvalidFileDescriptor, TooManyFiles, Unsupported } from '../../src/errors.js';
 import '../../src/mixins.js';
-import { usize, usizeByteSize } from '../../src/utils.js';
+import { copyView, usize, usizeByteSize } from '../../src/utils.js';
 import { capture, captureError, delay } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -83,8 +83,7 @@ describe('Feature: stream-redirection', function() {
           if (!(jsDV instanceof DataView)) {
             jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
           }
-          const copy = this.getCopyFunction(len);
-          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+          copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
         };
       }
       const stream = env.convertWriter(chunks);
@@ -133,8 +132,7 @@ describe('Feature: stream-redirection', function() {
           if (!(jsDV instanceof DataView)) {
             jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
           }
-          const copy = this.getCopyFunction(len);
-          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+          copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
         };
       }
       env.redirectStream(1, null);
@@ -194,8 +192,7 @@ describe('Feature: stream-redirection', function() {
           if (!(jsDV instanceof DataView)) {
             jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
           }
-          const copy = this.getCopyFunction(len);
-          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+          copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
         };
       }
       env.redirectStream(1, null);
@@ -349,8 +346,7 @@ describe('Feature: stream-redirection', function() {
           if (!(jsDV instanceof DataView)) {
             jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
           }
-          const copy = this.getCopyFunction(len);
-          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+          copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
         };
       }
       const bufferAddress = usize(0x1000);

@@ -1,8 +1,8 @@
 import { StructureType, MemberType, MemberFlag, structureNames, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NoProperty, MissingInitializers, NoInitializer } from '../errors.js';
-import { KEYS, SETTERS, MEMORY, COPY, SLOTS, CACHE, RESTORE, PROPS, ENTRIES, TYPED_ARRAY, FLAGS, TYPE, SIZE, ALIGN, ENVIRONMENT, SIGNATURE, TRANSFORM, SHAPE, INITIALIZE, CAST, RESTRICT, FINALIZE, UPDATE, CONST_TARGET } from '../symbols.js';
-import { ObjectCache, defineProperty, defineValue, defineProperties } from '../utils.js';
+import { KEYS, SETTERS, MEMORY, SLOTS, CACHE, RESTORE, PROPS, ENTRIES, TYPED_ARRAY, FLAGS, TYPE, SIZE, ALIGN, ENVIRONMENT, SIGNATURE, TRANSFORM, SHAPE, INITIALIZE, CAST, RESTRICT, FINALIZE, UPDATE, CONST_TARGET } from '../symbols.js';
+import { copyObject, ObjectCache, defineProperty, defineValue, defineProperties } from '../utils.js';
 
 var all = mixin({
   defineStructure(structure) {
@@ -23,8 +23,6 @@ var all = mixin({
       [CONST_TARGET]: { value: null },
       [SETTERS]: defineValue(setters),
       [KEYS]: defineValue(keys),
-      // add memory copier (from mixin "memory/copying")
-      [COPY]: this.defineCopier(byteSize),
       ...({
         // add method for recoverng from array detachment
         [RESTORE]: this.defineRestorer(),
@@ -275,7 +273,7 @@ var all = mixin({
       if (normalFound < normalCount && specialFound === 0) {
         if (template) {
           if (template[MEMORY]) {
-            this[COPY](template);
+            copyObject(this, template);
           }
         }
       }

@@ -1,6 +1,7 @@
 import { VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MEMORY, CACHE, VISIT, UPDATE, SLOTS } from '../symbols.js';
+import { copyView } from '../utils.js';
 
 var objectLinkage = mixin({
   linkVariables(writeBack) {
@@ -11,7 +12,6 @@ var objectLinkage = mixin({
         return;
       }
     }
-    const copy = this.getCopyFunction();
     for (const { object, handle } of this.variables) {
       const jsDV = object[MEMORY];
       // objects in WebAssembly have fixed addresses so the handle is the address
@@ -20,15 +20,15 @@ var objectLinkage = mixin({
       const address = handle ;
       let zigDV = object[MEMORY] = this.obtainZigView(address, jsDV.byteLength);
       if (writeBack) {
-        copy(zigDV, jsDV);
+        copyView(zigDV, jsDV);
       }
       object.constructor[CACHE]?.save?.(zigDV, object);
       this.destructors.push(() => {
         {
           zigDV = this.restoreView(object[MEMORY]);
         }
-        const jsDV = object[MEMORY] = this.allocateMemory(zigDV.bytelength);
-        copy(jsDV, zigDV);
+        const jsDV = object[MEMORY] = this.allocateMemory(zigDV.byteLength);
+        copyView(jsDV, zigDV);
       });
       const linkChildren = (object) => {
         const slots = object[SLOTS];

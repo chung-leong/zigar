@@ -5,8 +5,8 @@ import { fileURLToPath } from 'url';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ALIGN, COPY, MEMORY, RESTORE, SIZE, ZIG } from '../../src/symbols.js';
-import { defineProperties, usize } from '../../src/utils.js';
+import { ALIGN, MEMORY, RESTORE, SIZE, ZIG } from '../../src/symbols.js';
+import { copyView, defineProperties, usize } from '../../src/utils.js';
 import { captureError, delay } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -45,7 +45,6 @@ describe('Feature: module-loading', function() {
         this[MEMORY] = dv;
       };
       defineProperties(Test.prototype, {
-        [COPY]: env.defineCopier(16),
         [RESTORE]: {
           value: function() {},
         }
@@ -365,8 +364,7 @@ describe('Feature: module-loading', function() {
             if (!(jsDV instanceof DataView)) {
               jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
             }
-            const copy = this.getCopyFunction(len);
-            copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+            copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
           };
         }
         const pathAddress = usize(0x1000);
@@ -397,8 +395,7 @@ describe('Feature: module-loading', function() {
             if (!(jsDV instanceof DataView)) {
               jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
             }
-            const copy = this.getCopyFunction(len);
-            copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+            copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
           };
         }
         const pathAddress = usize(0x1000);
@@ -432,8 +429,7 @@ describe('Feature: module-loading', function() {
             if (!(jsDV instanceof DataView)) {
               jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
             }
-            const copy = this.getCopyFunction(len);
-            copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+            copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
           };
         }
         const f = env.getWASIHandler('path_open');
@@ -464,8 +460,7 @@ describe('Feature: module-loading', function() {
             if (!(jsDV instanceof DataView)) {
               jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
             }
-            const copy = this.getCopyFunction(len);
-            copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+            copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
           };
         }
         const f = env.getWASIHandler('tip_cow');

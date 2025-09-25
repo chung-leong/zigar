@@ -1,8 +1,8 @@
 import { UnionFlag, StructurePurpose, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InactiveUnionProperty, MultipleUnionInitializers, MissingUnionInitializer, InvalidInitializer, InaccessiblePointer } from '../errors.js';
-import { NAME, SETTERS, KEYS, RESTRICT, VISIT, INITIALIZE, TAG, VIVIFICATE, ENTRIES, PROPS, GETTERS, POINTER, TARGET, COPY } from '../symbols.js';
-import { defineValue, empty, defineProperties, isCompatibleInstanceOf } from '../utils.js';
+import { NAME, SETTERS, KEYS, RESTRICT, VISIT, INITIALIZE, TAG, VIVIFICATE, ENTRIES, PROPS, GETTERS, POINTER, TARGET } from '../symbols.js';
+import { defineValue, empty, defineProperties, isCompatibleInstanceOf, copyObject } from '../utils.js';
 
 var union = mixin({
   defineUnion(structure, descriptors) {
@@ -37,7 +37,7 @@ var union = mixin({
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }

@@ -1,7 +1,7 @@
 import { ArgStructFlag, StructureFlag, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch, InvalidVariadicArgument, adjustArgumentError } from '../errors.js';
-import { THROWING, ALIGN, VIVIFICATE, VISIT, RETURN, ALLOCATOR, COPY, MEMORY, SLOTS, PARENT, BIT_SIZE, PRIMITIVE, ATTRIBUTES } from '../symbols.js';
+import { THROWING, ALIGN, VIVIFICATE, VISIT, RETURN, ALLOCATOR, UPDATE, MEMORY, SLOTS, PARENT, BIT_SIZE, PRIMITIVE, ATTRIBUTES } from '../symbols.js';
 import { defineValue, defineProperties } from '../utils.js';
 
 var variadicStruct = mixin({
@@ -50,7 +50,7 @@ var variadicStruct = mixin({
       // set their attributes
       let maxSlot = -1;
       for (const [ index, { bitOffset, bitSize, type, slot, structure: { align } } ] of argMembers.entries()) {
-        attrs.set(index, bitOffset / 8, bitSize, align, type);
+        attrs.set(index, bitOffset >> 3, bitSize, align, type);
         if (slot > maxSlot) {
           maxSlot = slot;
         }
@@ -101,7 +101,7 @@ var variadicStruct = mixin({
       retvalSetter.call(this, value, this[ALLOCATOR]);
     });
     {
-      descriptors[COPY] = this.defineRetvalCopier(members[0]);
+      descriptors[UPDATE] = this.defineRetvalCopier(members[0]);
     }
     return constructor;
   },

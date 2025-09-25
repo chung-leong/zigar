@@ -1,8 +1,8 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { BufferSizeMismatch, ArrayLengthMismatch, BufferExpected } from '../errors.js';
-import { MEMORY, CONST_TARGET, CACHE, PROXY, ZIG, SENTINEL, SHAPE, COPY, TYPED_ARRAY } from '../symbols.js';
-import { usizeInvalid, isCompatibleInstanceOf, findElements } from '../utils.js';
+import { MEMORY, CONST_TARGET, CACHE, PROXY, ZIG, SENTINEL, SHAPE, TYPED_ARRAY } from '../symbols.js';
+import { copyView, usizeInvalid, copyObject, isCompatibleInstanceOf, findElements } from '../utils.js';
 
 var viewManagement = mixin({
   init() {
@@ -72,7 +72,7 @@ var viewManagement = mixin({
       }
       target[SHAPE](copy ? null : dv, len, allocator);
       if (copy) {
-        target[COPY](source);
+        copyObject(target, source);
       }
     } else {
       const byteLength = (type === StructureType.Slice) ? elementSize * target.length : elementSize;
@@ -81,7 +81,7 @@ var viewManagement = mixin({
       }
       const source = { [MEMORY]: dv };
       target.constructor[SENTINEL]?.validateData?.(source, target.length);
-      target[COPY](source);
+      copyObject(target, source);
     }
   },
   findViewAt(buffer, offset, len) {
@@ -182,6 +182,17 @@ var viewManagement = mixin({
           }
         },
       }
+    },
+    moveExternBytes(jsDV, address, to) {
+      const { memory } = this;
+      const len = jsDV.byteLength;
+      if (len === 0) return;
+      const zigDV = new DataView(memory.buffer, address, len);
+      if (!(jsDV instanceof DataView)) {
+        // assume it's a typed array
+        jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+      }
+      copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
     },
   } ),
 });

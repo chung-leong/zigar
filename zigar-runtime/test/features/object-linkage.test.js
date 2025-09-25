@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { CACHE, COPY, MEMORY, RESTORE, SLOTS, VISIT } from '../../src/symbols.js';
+import { CACHE, MEMORY, RESTORE, SLOTS, VISIT } from '../../src/symbols.js';
 import { defineProperties, ObjectCache, usize } from '../../src/utils.js';
 import { delay } from '../test-utils.js';
 
@@ -24,9 +24,6 @@ describe('Feature: object-linkage', function() {
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
-      defineProperties(Test.prototype, {
-        [COPY]: env.defineCopier(4),
-      });
       const object = new Test(new DataView(new ArrayBuffer(4)));
       const dv = object[MEMORY];
       dv.setUint32(0, 1234, true);
@@ -53,9 +50,6 @@ describe('Feature: object-linkage', function() {
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
-      defineProperties(Test.prototype, {
-        [COPY]: env.defineCopier(4),
-      });
       const object = new Test(new DataView(new ArrayBuffer(4)));
       const dv = object[MEMORY];
       dv.setUint32(0, 1234, true);
@@ -82,9 +76,6 @@ describe('Feature: object-linkage', function() {
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
-      defineProperties(Test.prototype, {
-        [COPY]: env.defineCopier(4),
-      });
       const object = new Test(new DataView(new ArrayBuffer(4)));
       const dv = object[MEMORY];
       dv.setUint32(0, 1234, true);
@@ -111,9 +102,6 @@ describe('Feature: object-linkage', function() {
       const Child = function(dv) {
         this[MEMORY] = dv;
       }
-      defineProperties(Child.prototype, {
-        [COPY]: env.defineCopier(4),
-      });
       defineProperties(Child, {
         [CACHE]: { value: new ObjectCache() },
       });
@@ -125,7 +113,6 @@ describe('Feature: object-linkage', function() {
       };
       let visited = false;
       defineProperties(Test.prototype, {
-        [COPY]: env.defineCopier(4),
         [VISIT]: { value: function() { visited = true } },
       });
       defineProperties(Test, {
@@ -149,7 +136,6 @@ describe('Feature: object-linkage', function() {
         const cache = new ObjectCache();
         const Type = function() {};
         defineProperties(Type.prototype, {
-          [COPY]: env.defineCopier(4),
           [RESTORE]: env.defineRestorer(cache),
         });
         const object = new Type();

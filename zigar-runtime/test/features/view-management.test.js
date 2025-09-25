@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { MemberType, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { COPY, FALLBACK, LENGTH, MEMORY, SHAPE, TYPED_ARRAY, ZIG } from '../../src/symbols.js';
+import { FALLBACK, LENGTH, MEMORY, SHAPE, TYPED_ARRAY, ZIG } from '../../src/symbols.js';
 import { defineProperties, usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
@@ -274,7 +274,6 @@ describe('Feature: view-management', function() {
       };
       defineProperties(target, {
         [MEMORY]: { value: new DataView(new ArrayBuffer(16)) },
-        [COPY]: env.defineCopier(16),
         length: { value: 16 },
       });
       const dv = new DataView(new ArrayBuffer(16));
@@ -291,7 +290,6 @@ describe('Feature: view-management', function() {
       };
       defineProperties(target, {
         [MEMORY]: { value: null },
-        [COPY]: env.defineCopier(16),
         [SHAPE]: {
           value(dv, length, allocator) {
             if (!dv) {
@@ -331,7 +329,6 @@ describe('Feature: view-management', function() {
         buffer[FALLBACK] = usize(0x1000);
         const target = {
           [MEMORY]: new DataView(buffer),
-          [COPY]: function() {},
         };
         const dv = new DataView(new ArrayBuffer(16));
         const structure = { byteSize: 16, type: StructureType.Array };

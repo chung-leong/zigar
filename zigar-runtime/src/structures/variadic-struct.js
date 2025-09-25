@@ -2,8 +2,9 @@ import { ArgStructFlag, MemberType, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustArgumentError, ArgumentCountMismatch, InvalidVariadicArgument } from '../errors.js';
 import {
-  ALIGN, ALLOCATOR, ATTRIBUTES, BIT_SIZE, COPY, MEMORY, PARENT, PRIMITIVE, RETURN, SLOTS, THROWING, VISIT,
-  VIVIFICATE,
+  ALIGN, ALLOCATOR, ATTRIBUTES, BIT_SIZE,
+  MEMORY, PARENT, PRIMITIVE, RETURN, SLOTS, THROWING, UPDATE, VISIT,
+  VIVIFICATE
 } from '../symbols.js';
 import { defineProperties, defineValue } from '../utils.js';
 
@@ -56,7 +57,7 @@ export default mixin({
       // set their attributes
       let maxSlot = -1;
       for (const [ index, { bitOffset, bitSize, type, slot, structure: { align } } ] of argMembers.entries()) {
-        attrs.set(index, bitOffset / 8, bitSize, align, type);
+        attrs.set(index, bitOffset >> 3, bitSize, align, type);
         if (slot > maxSlot) {
           maxSlot = slot;
         }
@@ -107,7 +108,7 @@ export default mixin({
       retvalSetter.call(this, value, this[ALLOCATOR]);
     });
     if (process.env.TARGET === 'wasm') {
-      descriptors[COPY] = this.defineRetvalCopier(members[0]);
+      descriptors[UPDATE] = this.defineRetvalCopier(members[0]);
     }
     return constructor;
   },

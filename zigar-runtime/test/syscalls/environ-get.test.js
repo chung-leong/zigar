@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { decodeText, usize, usizeByteSize } from '../../src/utils.js';
+import { copyView, decodeText, usize, usizeByteSize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 
@@ -30,8 +30,7 @@ describe('Syscall: environ-get', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
     }   
     const le = env.littleEndian;

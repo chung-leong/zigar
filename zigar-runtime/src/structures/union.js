@@ -5,10 +5,10 @@ import {
   MultipleUnionInitializers,
 } from '../errors.js';
 import {
-  COPY, ENTRIES, GETTERS, INITIALIZE, KEYS, NAME, POINTER, PROPS, RESTRICT, SETTERS, TAG, TARGET,
+  ENTRIES, GETTERS, INITIALIZE, KEYS, NAME, POINTER, PROPS, RESTRICT, SETTERS, TAG, TARGET,
   VISIT, VIVIFICATE
 } from '../symbols.js';
-import { defineProperties, defineValue, empty, isCompatibleInstanceOf } from '../utils.js';
+import { copyObject, defineProperties, defineValue, empty, isCompatibleInstanceOf } from '../utils.js';
 
 export default mixin({
   defineUnion(structure, descriptors) {
@@ -43,7 +43,7 @@ export default mixin({
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }

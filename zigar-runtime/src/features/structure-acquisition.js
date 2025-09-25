@@ -1,8 +1,6 @@
 import {
   ENVIRONMENT, MEMORY, PROPS, SENTINEL, SLOTS, VISIT, ZIG
 } from '../../src/symbols.js';
-import accessorAll from '../accessors/all.js';
-import accessorInt from '../accessors/int.js';
 import {
   ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag,
   structureNames, StructurePurpose, StructureType,
@@ -56,7 +54,6 @@ import procExit from '../syscalls/proc-exit.js';
 import randomGet from '../syscalls/random-get.js';
 import { adjustAddress, decodeText, findObjects } from '../utils.js';
 import baseline from './baseline.js';
-import dataCopying from './data-copying.js';
 import objectLinkage from './object-linkage.js';
 import streamLocation from './stream-location.js';
 import streamRedirection from './stream-redirection.js';
@@ -225,10 +222,6 @@ export default mixin({
         this.use(moduleLoading);
         this.use(callMarshalingOutbound);
         this.use(pointerSynchronization);
-      }
-      if (this.using(dataCopying)) {
-        this.use(accessorAll);
-        this.use(accessorInt);
       }
       for (const name of Object.keys(this.exportedModules.wasi)) {
         switch (name) {

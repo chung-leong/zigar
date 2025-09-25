@@ -2,8 +2,8 @@ import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import { MemoryType } from '../../src/features/memory-mapping.js';
 import '../../src/mixins.js';
-import { ALIGN, COPY, MEMORY, ZIG } from '../../src/symbols.js';
-import { adjustAddress, defineProperty, usize } from '../../src/utils.js';
+import { ALIGN, MEMORY, ZIG } from '../../src/symbols.js';
+import { adjustAddress, usize } from '../../src/utils.js';
 import { addressSize } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -57,7 +57,6 @@ describe('Feature: memory-mapping', function() {
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
-      defineProperty(Test.prototype, COPY, env.defineCopier(8))
       const object = new Test(new DataView(new ArrayBuffer(8)));
       env.allocateShadowMemory = function(len, align) {
         return new DataView(new ArrayBuffer(len));
@@ -74,7 +73,6 @@ describe('Feature: memory-mapping', function() {
       const Test = function(dv) {
         this[MEMORY] = dv;
       };
-      defineProperty(Test.prototype, COPY, env.defineCopier(8))
       Test[ALIGN] = 4;
       const buffer = new ArrayBuffer(16);
       const object1 = new Test(new DataView(buffer, 0, 8));
@@ -109,7 +107,6 @@ describe('Feature: memory-mapping', function() {
         this[MEMORY] = dv;
         dv[ALIGN] = 4;
       };
-      defineProperty(Test.prototype, COPY, env.defineCopier(8))
       Test[ALIGN] = undefined;
       const buffer = new ArrayBuffer(32);
       const object1 = new Test(new DataView(buffer, 3, 8));

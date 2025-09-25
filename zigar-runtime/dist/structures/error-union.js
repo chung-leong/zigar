@@ -1,8 +1,8 @@
 import { MemberType, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NotInErrorSet, isErrorJSON } from '../errors.js';
-import { INITIALIZE, VIVIFICATE, RESET, VISIT, COPY, CLASS } from '../symbols.js';
-import { defineValue, isCompatibleInstanceOf } from '../utils.js';
+import { INITIALIZE, VIVIFICATE, VISIT, CLASS, MEMORY } from '../symbols.js';
+import { defineValue, isCompatibleInstanceOf, copyObject, clearView } from '../utils.js';
 
 var errorUnion = mixin({
   defineErrorUnion(structure, descriptors) {
@@ -23,14 +23,15 @@ var errorUnion = mixin({
     };
     const isValueVoid = valueMember.type === MemberType.Void;
     const ErrorSet = errorMember.structure.constructor;
+    const { bitOffset, byteSize } = valueMember;
     const clearValue = function() {
-      this[RESET]();
+      clearView(this[MEMORY], byteSize, bitOffset);
       this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
     };
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           if (!getErrorNumber.call(this)) {
             this[VISIT]('copy', 0, arg);
@@ -71,13 +72,10 @@ var errorUnion = mixin({
         }
       }
     };
-    const { bitOffset, byteSize } = valueMember;
     const constructor = this.createConstructor(structure);
     descriptors.$ = { get, set: initializer };
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
-    // for clear value after error union is set to an an error (from mixin "features/data-copying")
-    descriptors[RESET] = this.defineResetter(bitOffset / 8, byteSize);
     // for operating on pointers contained in the error union
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorErrorUnion(valueMember, getErrorNumber);
     return constructor;

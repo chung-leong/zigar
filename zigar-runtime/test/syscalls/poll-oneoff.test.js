@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { PosixError, PosixPollEventType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { createView, usize } from '../../src/utils.js';
+import { copyView, createView, usize } from '../../src/utils.js';
 import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -28,8 +28,7 @@ describe('Syscall: poll-oneoff', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
       env.setSyscallTrap = () => {};
       env.setRedirectionMask = () => {};
@@ -77,8 +76,7 @@ describe('Syscall: poll-oneoff', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
       env.setSyscallTrap = () => {};
       env.setRedirectionMask = () => {};
@@ -126,8 +124,7 @@ describe('Syscall: poll-oneoff', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
       env.setSyscallTrap = () => {};
       env.setRedirectionMask = () => {};
@@ -182,8 +179,7 @@ describe('Syscall: poll-oneoff', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
       env.setSyscallTrap = () => {};
       env.setRedirectionMask = () => {};
@@ -236,8 +232,7 @@ describe('Syscall: poll-oneoff', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
       env.setSyscallTrap = () => {};
       env.setRedirectionMask = () => {};
@@ -291,8 +286,7 @@ describe('Syscall: poll-oneoff', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
       env.setSyscallTrap = () => {};
       env.setRedirectionMask = () => {};
@@ -340,8 +334,7 @@ describe('Syscall: poll-oneoff', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
       env.setSyscallTrap = () => {};
       env.setRedirectionMask = () => {};
@@ -395,8 +388,7 @@ describe('Syscall: poll-oneoff', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
       env.setSyscallTrap = () => {};
       env.setRedirectionMask = () => {};

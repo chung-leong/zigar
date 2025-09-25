@@ -2,11 +2,12 @@ import { MemberFlag, MemberType, StructureFlag, structureNames, StructureType } 
 import { mixin } from '../environment.js';
 import { MissingInitializers, NoInitializer, NoProperty } from '../errors.js';
 import {
-  ALIGN, CACHE, CAST, CONST_TARGET, COPY, ENTRIES, ENVIRONMENT, FINALIZE, FLAGS, INITIALIZE, KEYS,
+  ALIGN, CACHE, CAST, CONST_TARGET,
+  ENTRIES, ENVIRONMENT, FINALIZE, FLAGS, INITIALIZE, KEYS,
   MEMORY, PROPS, RESTORE, RESTRICT, SETTERS, SHAPE, SIGNATURE, SIZE, SLOTS, TRANSFORM, TYPE,
-  TYPED_ARRAY, UPDATE,
+  TYPED_ARRAY, UPDATE
 } from '../symbols.js';
-import { defineProperties, defineProperty, defineValue, ObjectCache } from '../utils.js';
+import { copyObject, defineProperties, defineProperty, defineValue, ObjectCache } from '../utils.js';
 
 export default mixin({
   defineStructure(structure) {
@@ -34,8 +35,6 @@ export default mixin({
       [CONST_TARGET]: { value: null },
       [SETTERS]: defineValue(setters),
       [KEYS]: defineValue(keys),
-      // add memory copier (from mixin "memory/copying")
-      [COPY]: this.defineCopier(byteSize),
       ...(process.env.TARGET === 'wasm' ? {
         // add method for recoverng from array detachment
         [RESTORE]: this.defineRestorer(),
@@ -286,7 +285,7 @@ export default mixin({
       if (normalFound < normalCount && specialFound === 0) {
         if (template) {
           if (template[MEMORY]) {
-            this[COPY](template);
+            copyObject(this, template);
           }
         }
       }

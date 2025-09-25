@@ -1,5 +1,5 @@
 import { MemberType } from './constants.js';
-import { SIGNATURE, ENVIRONMENT, LENGTH, PROXY } from './symbols.js';
+import { SIGNATURE, ENVIRONMENT, MEMORY, LENGTH, PROXY } from './symbols.js';
 
 function defineProperty(object, name, descriptor) {
   if (descriptor) {
@@ -309,6 +309,21 @@ function createView(size) {
   return new DataView(new ArrayBuffer(size));
 }
 
+function copyView(dest, src, offset = 0) {
+  const destA = new Uint8Array(dest.buffer, dest.byteOffset, dest.byteLength);
+  const srcA = new Uint8Array(src.buffer, src.byteOffset, src.byteLength);
+  destA.set(srcA, offset);  
+}
+
+function clearView(dest, len = dest.byteLength, offset = 0) {
+  const destA = new Uint8Array(dest.buffer, dest.byteOffset, dest.byteLength);
+  destA.fill(0, offset, len);
+}
+
+function copyObject(dest, src) {
+  copyView(dest[MEMORY], src[MEMORY]);
+}
+
 function getSelf() {
   return this;
 }
@@ -372,4 +387,4 @@ function extractTimes(st_atim, st_mtim, fst_flags) {
   return times;
 }
 
-export { ObjectCache, adjustAddress, alignForward, always, createView, decodeBase64, decodeEnum, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, extractTimes, findElements, findObjects, findSortedIndex, getEnumNumber, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, maxSafeInteger, minSafeInteger, never, readUsize, readUsizeSafe, safeInt, toString, transformIterable, usize, usizeByteSize, usizeInvalid, usizeMax, usizeMin };
+export { ObjectCache, adjustAddress, alignForward, always, clearView, copyObject, copyView, createView, decodeBase64, decodeEnum, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, extractTimes, findElements, findObjects, findSortedIndex, getEnumNumber, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, maxSafeInteger, minSafeInteger, never, readUsize, readUsizeSafe, safeInt, toString, transformIterable, usize, usizeByteSize, usizeInvalid, usizeMax, usizeMin };

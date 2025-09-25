@@ -9,7 +9,7 @@ import { defineEnvironment } from '../../src/environment.js';
 import { Exit } from '../../src/errors.js';
 import '../../src/mixins.js';
 import {
-  ALIGN, ATTRIBUTES, COPY, FINALIZE, MEMORY, PROMISE, RETURN, SETTERS, SLOTS, VISIT, ZIG,
+  ALIGN, ATTRIBUTES, FINALIZE, MEMORY, PROMISE, RETURN, SETTERS, SLOTS, VISIT, ZIG,
 } from '../../src/symbols.js';
 import { defineProperties, defineProperty, usize } from '../../src/utils.js';
 import { addressByteSize, addressSize } from '../test-utils.js';
@@ -174,9 +174,6 @@ describe('Feature: call-marshaling-outbound', function() {
           this[MEMORY][ALIGN] = 4;
           this.retval = 123;
         };
-        defineProperties(Arg.prototype, {
-          [COPY]: env.defineCopier(4),
-        });
         env.memory = new WebAssembly.Memory({ initial: 1 });
         const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
         const self = env.createOutboundCaller(thunk, Arg);
@@ -203,9 +200,6 @@ describe('Feature: call-marshaling-outbound', function() {
           this[MEMORY][ALIGN] = 4;
           this.retval = 123;
         };
-        defineProperties(Arg.prototype, {
-          [COPY]: env.defineCopier(4),
-        });
         env.memory = new WebAssembly.Memory({ initial: 1 });
         const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
         const self = env.createOutboundCaller(thunk, Arg);
@@ -232,9 +226,6 @@ describe('Feature: call-marshaling-outbound', function() {
           this[MEMORY][ALIGN] = 4;
           this.retval = 123;
         };
-        defineProperties(Arg.prototype, {
-          [COPY]: env.defineCopier(4),
-        });
         env.memory = new WebAssembly.Memory({ initial: 1 });
         const thunk = { [MEMORY]: env.obtainZigView(usize(100), 0) };
         const self = env.createOutboundCaller(thunk, Arg);

@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { PosixDescriptorFlag, PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { usize, usizeByteSize } from '../../src/utils.js';
+import { copyView, usize, usizeByteSize } from '../../src/utils.js';
 import { capture, captureError, delay } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -28,8 +28,7 @@ describe('Syscall: fd-write', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
     }
     const iovsAddress = usize(0x1000);
@@ -77,8 +76,7 @@ describe('Syscall: fd-write', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
     }
     const iovsAddress = usize(0x1000);
@@ -123,8 +121,7 @@ describe('Syscall: fd-write', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
     }
     const iovsAddress = usize(0x1000);
@@ -167,8 +164,7 @@ describe('Syscall: fd-write', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
       env.setSyscallTrap = () => {};
       env.setRedirectionMask = () => {};
@@ -215,8 +211,7 @@ describe('Syscall: fd-write', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
       env.setSyscallTrap = () => {};
       env.setRedirectionMask = () => {};
@@ -294,8 +289,7 @@ describe('Syscall: fd-write', function() {
           if (!(jsDV instanceof DataView)) {
             jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
           }
-          const copy = this.getCopyFunction(len);
-          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+          copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
         };
       }
       const address = usize(0x1000);
@@ -326,8 +320,7 @@ describe('Syscall: fd-write', function() {
           if (!(jsDV instanceof DataView)) {
             jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
           }
-          const copy = this.getCopyFunction(len);
-          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+          copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
         };
       }
       const address1 = usize(0x1000);
@@ -364,8 +357,7 @@ describe('Syscall: fd-write', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
       const address1 = usize(0x1000);
       const writtenAddress = usize(0x3000);
@@ -404,8 +396,7 @@ describe('Syscall: fd-write', function() {
           if (!(jsDV instanceof DataView)) {
             jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
           }
-          const copy = this.getCopyFunction(len);
-          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+          copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
         };
         env.setSyscallTrap = () => {};
         env.setRedirectionMask = () => {};
@@ -443,8 +434,7 @@ describe('Syscall: fd-write', function() {
           if (!(jsDV instanceof DataView)) {
             jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
           }
-          const copy = this.getCopyFunction(len);
-          copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+          copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
         };
         env.setSyscallTrap = () => {};
         env.setRedirectionMask = () => {};

@@ -1,8 +1,8 @@
 import { StructureFlag, VectorFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
-import { ENTRIES, INITIALIZE, VIVIFICATE, VISIT, COPY } from '../symbols.js';
-import { defineValue, getSelf, isCompatibleInstanceOf } from '../utils.js';
+import { ENTRIES, INITIALIZE, VIVIFICATE, VISIT } from '../symbols.js';
+import { defineValue, getSelf, isCompatibleInstanceOf, copyObject } from '../utils.js';
 
 var vector = mixin({
   defineVector(structure, descriptors) {
@@ -14,7 +14,7 @@ var vector = mixin({
     const propApplier = this.createApplier(structure);
     const initializer = function(arg) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }

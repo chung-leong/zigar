@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { PosixError } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { createView, usize, usizeByteSize } from '../../src/utils.js';
+import { copyView, createView, usize, usizeByteSize } from '../../src/utils.js';
 import { captureError } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -28,8 +28,7 @@ describe('Syscall: fd-pread', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
     }   
     const array = new TextEncoder().encode('   Hello world');
@@ -73,8 +72,7 @@ describe('Syscall: fd-pread', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
     }   
     const blob = new Blob([]);
@@ -138,8 +136,7 @@ describe('Syscall: fd-pread', function() {
         if (!(jsDV instanceof DataView)) {
           jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
         }
-        const copy = this.getCopyFunction(len);
-        copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
       const array = new Uint8Array([ 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ]);
       const reader = env.convertReader(array);

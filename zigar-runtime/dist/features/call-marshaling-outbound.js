@@ -1,7 +1,7 @@
 import { StructureType, StructurePurpose, MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ZigError, UndefinedArgument, adjustArgumentError, Exit } from '../errors.js';
-import { ATTRIBUTES, MEMORY, FINALIZE, COPY, TRANSFORM, RETURN, PROMISE, GENERATOR, SETTERS, VISIT, ALLOCATOR } from '../symbols.js';
+import { ATTRIBUTES, MEMORY, FINALIZE, UPDATE, TRANSFORM, RETURN, PROMISE, GENERATOR, SETTERS, VISIT, ALLOCATOR } from '../symbols.js';
 
 var callMarshalingOutbound = mixin({
   createOutboundCaller(thunk, ArgStruct) {
@@ -136,7 +136,7 @@ var callMarshalingOutbound = mixin({
       // finalized can be true here, if a function chooses to immediately invoke a promise's resolve method
       if (!finalized) {
         // copy retval from shadow view
-        argStruct[COPY]?.(this.findShadowView(argStruct[MEMORY]));
+        argStruct[UPDATE]?.(this.findShadowView(argStruct[MEMORY]));
       }
     }
     const transform = fn[TRANSFORM];

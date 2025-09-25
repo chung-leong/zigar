@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { FINALIZE, MEMORY, PROMISE, RETURN, TRANSFORM, ZIG } from '../../src/symbols.js';
-import { usize } from '../../src/utils.js';
+import { copyView, usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 
@@ -48,11 +48,10 @@ describe('Structure: promise', function() {
       const { ptr, callback } = env.createPromise(structure, args, undefined);
       expect(args[PROMISE]).to.be.a('promise');
       args[FINALIZE] = () => {};
-      const copy = env.getCopyFunction();
       const Result = function(other) {
         this[MEMORY] = new DataView(new ArrayBuffer(4));
         if (other) {
-          copy(this[MEMORY], other[MEMORY]);
+          copyView(this[MEMORY], other[MEMORY]);
         }
       };
       const resultFixed = new Result();

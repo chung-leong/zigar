@@ -1,15 +1,14 @@
 import { SliceFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidArrayInitializer, ArrayLengthMismatch } from '../errors.js';
-import { SENTINEL, ENTRIES, COPY, MEMORY, SHAPE, INITIALIZE, FINALIZE, VIVIFICATE, VISIT, LENGTH } from '../symbols.js';
-import { defineValue, getProxy, isCompatibleInstanceOf, transformIterable } from '../utils.js';
+import { SENTINEL, ENTRIES, SHAPE, INITIALIZE, FINALIZE, VIVIFICATE, VISIT, LENGTH, MEMORY } from '../symbols.js';
+import { defineValue, getProxy, copyView, isCompatibleInstanceOf, copyObject, transformIterable } from '../utils.js';
 
 var slice = mixin({
   defineSlice(structure, descriptors) {
     const {
       align,
       flags,
-      byteSize,
       instance: {
         members: [ member ],
       },
@@ -40,7 +39,7 @@ var slice = mixin({
         } else {
           shapeChecker.call(this, arg, arg.length);
         }
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }
@@ -108,13 +107,12 @@ var slice = mixin({
         const dv1 = getSubArrayView.call(this, begin, end);
         const dv2 = thisEnv.allocateMemory(dv1.byteLength, align, zig);
         const slice = constructor(dv2);
-        slice[COPY]({ [MEMORY]: dv1 });
+        copyView(dv2, dv1);
         return slice;
       },
     };
     descriptors[Symbol.iterator] = this.defineArrayIterator();
     descriptors[SHAPE] = defineValue(shapeDefiner);
-    descriptors[COPY] = this.defineCopier(byteSize, true);
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);

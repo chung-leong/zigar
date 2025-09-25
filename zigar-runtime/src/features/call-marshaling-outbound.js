@@ -2,8 +2,10 @@ import { MemberType, StructurePurpose, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { adjustArgumentError, Exit, UndefinedArgument, ZigError } from '../errors.js';
 import {
-  ALLOCATOR, ATTRIBUTES, COPY, FINALIZE, GENERATOR, MEMORY, PROMISE, RETURN, SETTERS, TRANSFORM,
-  VISIT,
+  ALLOCATOR, ATTRIBUTES,
+  FINALIZE, GENERATOR, MEMORY, PROMISE, RETURN, SETTERS, TRANSFORM,
+  UPDATE,
+  VISIT
 } from '../symbols.js';
 
 export default mixin({
@@ -151,7 +153,7 @@ export default mixin({
       // finalized can be true here, if a function chooses to immediately invoke a promise's resolve method
       if (!finalized) {
         // copy retval from shadow view
-        argStruct[COPY]?.(this.findShadowView(argStruct[MEMORY]));
+        argStruct[UPDATE]?.(this.findShadowView(argStruct[MEMORY]));
       }
     }
     const transform = fn[TRANSFORM];

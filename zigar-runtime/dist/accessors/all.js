@@ -24,7 +24,7 @@ var all = mixin({
         name = `Jumbo${name}`;
       }
     }
-    names.push(name, `${(type === MemberType.Bool && byteSize) ? byteSize * 8 : bitSize}`);
+    names.push(name, `${(type === MemberType.Bool && byteSize) ? byteSize << 3 : bitSize}`);
     if (unaligned) {
       names.push(`@${bitOffset}`);
     }

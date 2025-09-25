@@ -19,7 +19,6 @@ export { default as FeatureAllocatorMethods } from './features/allocator-methods
 export { default as FeatureBaseline } from './features/baseline.js';
 export { default as FeatureCallMarshalingInbound } from './features/call-marshaling-inbound.js';
 export { default as FeatureCallMarshalingOutbound } from './features/call-marshaling-outbound.js';
-export { default as FeatureDataCopying } from './features/data-copying.js';
 export { default as FeatureDirConversion } from './features/dir-conversion.js';
 export { default as FeatureIntConversion } from './features/int-conversion.js';
 export { default as FeatureMemoryMapping } from './features/memory-mapping.js';
@@ -52,6 +51,7 @@ export { default as MemberLiteral } from './members/literal.js';
 export { default as MemberNull } from './members/null.js';
 export { default as MemberObject } from './members/object.js';
 export { default as MemberPrimitive } from './members/primitive.js';
+export { default as MemberRetval } from './members/retval.js';
 export { default as MemberSentinel } from './members/sentinel.js';
 export { default as MemberString } from './members/string.js';
 export { default as MemberToJson } from './members/to-json.js';

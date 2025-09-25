@@ -1,8 +1,8 @@
 import { ArrayFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
-import { SENTINEL, ENTRIES, INITIALIZE, FINALIZE, VIVIFICATE, VISIT, COPY } from '../symbols.js';
-import { defineValue, getProxy, isCompatibleInstanceOf, transformIterable } from '../utils.js';
+import { SENTINEL, ENTRIES, INITIALIZE, FINALIZE, VIVIFICATE, VISIT } from '../symbols.js';
+import { defineValue, getProxy, isCompatibleInstanceOf, copyObject, transformIterable } from '../utils.js';
 
 var array = mixin({
   defineArray(structure, descriptors) {
@@ -17,7 +17,7 @@ var array = mixin({
     const constructor = this.createConstructor(structure);
     const initializer = function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }

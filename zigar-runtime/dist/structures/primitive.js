@@ -1,7 +1,7 @@
 import { mixin } from '../environment.js';
 import { InvalidInitializer } from '../errors.js';
-import { BIT_SIZE, PRIMITIVE, INITIALIZE, COPY } from '../symbols.js';
-import { defineValue, isCompatibleInstanceOf, getPrimitiveName } from '../utils.js';
+import { BIT_SIZE, PRIMITIVE, INITIALIZE } from '../symbols.js';
+import { defineValue, isCompatibleInstanceOf, copyObject, getPrimitiveName } from '../utils.js';
 
 var primitive = mixin({
   definePrimitive(structure, descriptors) {
@@ -12,7 +12,7 @@ var primitive = mixin({
     const { get, set } = this.defineMember(member);
     const initializer = function(arg) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
       } else {
         if (arg && typeof(arg) === 'object') {
           if (propApplier.call(this, arg) === 0) {

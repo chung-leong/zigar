@@ -1,7 +1,7 @@
 import { mixin } from '../environment.js';
 import { AlignmentConflict } from '../errors.js';
 import { MEMORY, ZIG, ALIGN } from '../symbols.js';
-import { isInvalidAddress, usizeMax, usizeMin, adjustAddress, usizeInvalid, alignForward, isMisaligned, findSortedIndex } from '../utils.js';
+import { isInvalidAddress, usizeMax, usizeMin, adjustAddress, usizeInvalid, copyView, alignForward, isMisaligned, findSortedIndex } from '../utils.js';
 
 var memoryMapping = mixin({
   init() {
@@ -79,22 +79,20 @@ var memoryMapping = mixin({
     }
   },
   updateShadows(context) {
-    const copy = this.getCopyFunction();
     for (let { targetDV, shadowDV } of context.shadowList) {
       {
         shadowDV = this.restoreView(shadowDV);
       }
-      copy(shadowDV, targetDV);
+      copyView(shadowDV, targetDV);
     }
   },
   updateShadowTargets(context) {
-    const copy = this.getCopyFunction();
     for (let { targetDV, shadowDV, writable } of context.shadowList) {
       if (writable) {
         {
           shadowDV = this.restoreView(shadowDV);
         }
-        copy(targetDV, shadowDV);
+        copyView(targetDV, shadowDV);
       }
     }
   },
@@ -146,8 +144,7 @@ var memoryMapping = mixin({
         {
           shadowDV = this.restoreView(shadowDV);
         }
-        const copy = this.getCopyFunction();
-        copy(targetDV, shadowDV);
+        copyView(targetDV, shadowDV);
       }
     }
     return dv;

@@ -24,7 +24,7 @@ export default mixin({
         name = `Jumbo${name}`;
       }
     }
-    names.push(name, `${(type === MemberType.Bool && byteSize) ? byteSize * 8 : bitSize}`);
+    names.push(name, `${(type === MemberType.Bool && byteSize) ? byteSize << 3 : bitSize}`);
     if (unaligned) {
       names.push(`@${bitOffset}`);
     }
@@ -39,7 +39,7 @@ export default mixin({
           const { buffer, byteOffset, byteLength } = this;
           const base = buffer[FALLBACK];
           if (base) {
-            if (offset < 0 || (offset + bitSize / 8) > byteLength) {
+            if (offset < 0 || (offset + (bitSize >> 3)) > byteLength) {
               throw new RangeError('Offset is outside the bounds of the DataView');
             }
             return base + usize(byteOffset + offset);

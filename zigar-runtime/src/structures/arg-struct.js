@@ -1,7 +1,7 @@
 import { ArgStructFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch } from '../errors.js';
-import { ALLOCATOR, COPY, FINALIZE, MEMORY, RETURN, SLOTS, THROWING, VISIT, VIVIFICATE } from '../symbols.js';
+import { ALLOCATOR, FINALIZE, MEMORY, RETURN, SLOTS, THROWING, UPDATE, VISIT, VIVIFICATE } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 export default mixin({
@@ -61,7 +61,7 @@ export default mixin({
     });
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     if (process.env.TARGET === 'wasm') {
-      descriptors[COPY] = this.defineRetvalCopier(members[0]);
+      descriptors[UPDATE] = this.defineRetvalCopier(members[0]);
     }
     return constructor;
   },
