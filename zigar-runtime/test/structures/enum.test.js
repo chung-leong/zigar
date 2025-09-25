@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { EnumFlag, MemberFlag, MemberType, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
+import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, RESTORE, SLOTS } from '../../src/symbols.js';
 
 const Env = defineEnvironment();
 
@@ -104,6 +104,7 @@ describe('Structure: enum', function() {
       const Item = function(number) {
         this[MEMORY] = new DataView(new ArrayBuffer(1));
         this[MEMORY].setInt8(0, number);
+        this[RESTORE] = function () { return this[MEMORY] };
       };
       const dog = new Item(77);
       const cat = new Item(88);

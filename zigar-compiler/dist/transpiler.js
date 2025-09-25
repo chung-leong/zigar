@@ -286,7 +286,6 @@ const RESTORE = symbol('restore');
 const RESET = symbol('reset');
 const VIVIFICATE = symbol('vivificate');
 const VISIT = symbol('visit');
-const COPY = symbol('copy');
 const SHAPE = symbol('shape');
 const INITIALIZE = symbol('initialize');
 const RESTRICT = symbol('restrict');
@@ -594,6 +593,30 @@ function markAsSpecial({ get, set }) {
 
 function createView(size) {
   return new DataView(new ArrayBuffer(size));
+}
+
+function copyView(dest, src, offset = 0) {
+  const destA = new Uint8Array(dest.buffer, dest.byteOffset, dest.byteLength);
+  const srcA = new Uint8Array(src.buffer, src.byteOffset, src.byteLength);
+  destA.set(srcA, offset);  
+}
+
+function clearView(dest, len = dest.byteLength, offset = 0) {
+  const destA = new Uint8Array(dest.buffer, dest.byteOffset, dest.byteLength);
+  destA.fill(0, offset, len);
+}
+
+const isDetached = (Object.hasOwn(ArrayBuffer.prototype, 'detached')) 
+? function(buffer) {
+    return buffer.detached;
+  }
+: function(buffer) {
+  return buffer.byteLength === 0;
+};
+function copyObject(dest, src) {
+  const destDV = dest[RESTORE]() ;
+  const srcDV = src[RESTORE]() ;
+  copyView(destDV, srcDV);
 }
 
 function getSelf() {
@@ -2057,7 +2080,7 @@ function defineClass(name, mixins) {
 
 // handle retrieval of accessors
 
-var accessorAll = mixin({
+var all$3 = mixin({
   init() {
     this.accessorCache = new Map();
   },
@@ -2076,7 +2099,7 @@ var accessorAll = mixin({
         name = `Jumbo${name}`;
       }
     }
-    names.push(name, `${(type === MemberType.Bool && byteSize) ? byteSize * 8 : bitSize}`);
+    names.push(name, `${(type === MemberType.Bool && byteSize) ? byteSize << 3 : bitSize}`);
     if (unaligned) {
       names.push(`@${bitOffset}`);
     }
@@ -2354,7 +2377,7 @@ var float80 = mixin({
 
 // handle non-standard ints 32-bit or smaller
 
-var accessorInt = mixin({
+var int$1 = mixin({
   getAccessorInt(access, member) {
     const { bitSize, byteSize } = member;
     if (byteSize) {
@@ -3172,13 +3195,6 @@ function adjustStack(stack, search) {
   return stack;
 }
 
-function replaceRangeError(member, index, err) {
-  if (err instanceof RangeError && !(err instanceof OutOfBound)) {
-    err = new OutOfBound(member, index);
-  }
-  return err;
-}
-
 function throwReadOnly() {
   throw new ReadOnly();
 }
@@ -3343,7 +3359,6 @@ var allocatorMethods = mixin({
     };
   },
   defineDupe() {
-    const copy = this.getCopyFunction();
     return {
       value(arg) {
         const { dv: src, align, constructor } = getMemory(arg);
@@ -3351,7 +3366,7 @@ var allocatorMethods = mixin({
           throw new TypeMismatch('string, DataView, typed array, or Zig object', arg);
         }
         const dest = this.alloc(src.byteLength, align);
-        copy(dest, src);
+        copyView(dest, src);
         return (constructor) ? constructor(dest) : dest;
       }
     };
@@ -3854,7 +3869,7 @@ var callMarshalingOutbound = mixin({
       // finalized can be true here, if a function chooses to immediately invoke a promise's resolve method
       if (!finalized) {
         // copy retval from shadow view
-        argStruct[COPY]?.(this.findShadowView(argStruct[MEMORY]));
+        argStruct[UPDATE]?.(this.findShadowView(argStruct[MEMORY]));
       }
     }
     const transform = fn[TRANSFORM];
@@ -3897,151 +3912,6 @@ var callMarshalingOutbound = mixin({
       runVariadicThunk: { argType: 'iiiii', returnType: 'b' },
     },
   } ),
-});
-
-var dataCopying = mixin({
-  init() {
-    const int8 = { type: MemberType.Int, bitSize: 8, byteSize: 1 };
-    const int16 = { type: MemberType.Int, bitSize: 16, byteSize: 2 };
-    const int32 = { type: MemberType.Int, bitSize: 32, byteSize: 4 };
-    const getInt8 = this.getAccessor('get', int8);
-    const setInt8 = this.getAccessor('set', int8);
-    const getInt16 = this.getAccessor('get', int16);
-    const setInt16 = this.getAccessor('set', int16);
-    const getInt32 = this.getAccessor('get', int32);
-    const setInt32 = this.getAccessor('set', int32);
-    this.copiers = {
-      0: empty,
-      1: function(dest, src) {
-        setInt8.call(dest, 0, getInt8.call(src, 0));
-      },
-      2: function(dest, src) {
-        setInt16.call(dest, 0, getInt16.call(src, 0, true), true);
-
-      },
-      4: function(dest, src) {
-        setInt32.call(dest, 0, getInt32.call(src, 0, true), true);
-      },
-      8: function(dest, src) {
-        setInt32.call(dest, 0, getInt32.call(src, 0, true), true);
-        setInt32.call(dest, 4, getInt32.call(src, 4, true), true);
-      },
-      16: function(dest, src) {
-        setInt32.call(dest, 0, getInt32.call(src, 0, true), true);
-        setInt32.call(dest, 4, getInt32.call(src, 4, true), true);
-        setInt32.call(dest, 8, getInt32.call(src, 8, true), true);
-        setInt32.call(dest, 12, getInt32.call(src, 12, true), true);
-      },
-      'any': function(dest, src) {
-        let i = 0, len = dest.byteLength;
-        while (i + 4 <= len) {
-          setInt32.call(dest, i, getInt32.call(src, i, true), true);
-          i += 4;
-        }
-        while (i + 1 <= len) {
-          setInt8.call(dest, i, getInt8.call(src, i));
-          i++;
-        }
-      },
-    };
-    this.resetters = {
-      0: empty,
-      1: function(dest, offset) {
-        setInt8.call(dest, offset, 0);
-      },
-      2: function(dest, offset) {
-        setInt16.call(dest, offset, 0, true);
-
-      },
-      4: function(dest, offset) {
-        setInt32.call(dest, offset, 0, true);
-      },
-      8: function(dest, offset) {
-        setInt32.call(dest, offset + 0, 0, true);
-        setInt32.call(dest, offset + 4, 0, true);
-      },
-      16: function(dest, offset) {
-        setInt32.call(dest, offset + 0, 0, true);
-        setInt32.call(dest, offset + 4, 0, true);
-        setInt32.call(dest, offset + 8, 0, true);
-        setInt32.call(dest, offset + 12, 0, true);
-      },
-      any: function(dest, offset, len) {
-        let i = offset;
-        while (i + 4 <= len) {
-          setInt32.call(dest, i, 0, true);
-          i += 4;
-        }
-        while (i + 1 <= len) {
-          setInt8.call(dest, i, 0);
-          i++;
-        }
-      },
-    };
-  },
-  defineCopier(size, multiple) {
-    const copy = this.getCopyFunction(size, multiple);
-    return {
-      value(target) {
-        {
-          this[RESTORE]?.();
-          target[RESTORE]?.();
-        }
-        const src = target[MEMORY];
-        const dest = this[MEMORY];
-        copy(dest, src);
-      },
-    };
-  },
-  defineResetter(offset, size) {
-    const reset = this.getResetFunction(size);
-    return {
-      value() {
-        {
-          this[RESTORE]?.();
-        }
-        const dest = this[MEMORY];
-        reset(dest, offset, size);
-      }
-    };
-  },
-  getCopyFunction(size, multiple = false) {
-    const f = !multiple ? this.copiers[size] : undefined;
-    return f ?? this.copiers.any;
-  },
-  getResetFunction(size) {
-    return this.resetters[size] ?? this.resetters.any;
-  },
-  ...({
-    defineRetvalCopier({ byteSize, bitOffset }) {
-      if (byteSize > 0) {
-        const thisEnv = this;
-        const offset = bitOffset >> 3;
-        const copy = this.getCopyFunction(byteSize);
-        return {
-          value(shadowDV) {
-            const dv = this[MEMORY];
-            const { address } = shadowDV[ZIG];
-            const src = new DataView(thisEnv.memory.buffer, address + offset, byteSize);
-            const dest = new DataView(dv.buffer, dv.byteOffset + offset, byteSize);
-            copy(dest, src);
-          }
-        };
-      }
-    },
-    moveExternBytes(jsDV, address, to) {
-      const { memory } = this;
-      const len = jsDV.byteLength;
-      if (len === 0) return;
-      const zigDV = new DataView(memory.buffer, address, len);
-      if (!(jsDV instanceof DataView)) {
-        // assume it's a typed array
-        jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
-      }
-      const copy = this.getCopyFunction(len);
-      copy(to ? zigDV : jsDV, to ? jsDV : zigDV);
-    },
-  } )
 });
 
 class AsyncReader {
@@ -4530,22 +4400,20 @@ var memoryMapping = mixin({
     }
   },
   updateShadows(context) {
-    const copy = this.getCopyFunction();
     for (let { targetDV, shadowDV } of context.shadowList) {
       {
         shadowDV = this.restoreView(shadowDV);
       }
-      copy(shadowDV, targetDV);
+      copyView(shadowDV, targetDV);
     }
   },
   updateShadowTargets(context) {
-    const copy = this.getCopyFunction();
     for (let { targetDV, shadowDV, writable } of context.shadowList) {
       if (writable) {
         {
           shadowDV = this.restoreView(shadowDV);
         }
-        copy(targetDV, shadowDV);
+        copyView(targetDV, shadowDV);
       }
     }
   },
@@ -4597,8 +4465,7 @@ var memoryMapping = mixin({
         {
           shadowDV = this.restoreView(shadowDV);
         }
-        const copy = this.getCopyFunction();
-        copy(targetDV, shadowDV);
+        copyView(targetDV, shadowDV);
       }
     }
     return dv;
@@ -4920,7 +4787,6 @@ var objectLinkage = mixin({
         return;
       }
     }
-    const copy = this.getCopyFunction();
     for (const { object, handle } of this.variables) {
       const jsDV = object[MEMORY];
       // objects in WebAssembly have fixed addresses so the handle is the address
@@ -4929,15 +4795,16 @@ var objectLinkage = mixin({
       const address = handle ;
       let zigDV = object[MEMORY] = this.obtainZigView(address, jsDV.byteLength);
       if (writeBack) {
-        copy(zigDV, jsDV);
+        copyView(zigDV, jsDV);
       }
       object.constructor[CACHE]?.save?.(zigDV, object);
       this.destructors.push(() => {
         {
+          debugger;
           zigDV = this.restoreView(object[MEMORY]);
         }
-        const jsDV = object[MEMORY] = this.allocateMemory(zigDV.bytelength);
-        copy(jsDV, zigDV);
+        const jsDV = object[MEMORY] = this.allocateMemory(zigDV.byteLength);
+        copyView(jsDV, zigDV);
       });
       const linkChildren = (object) => {
         const slots = object[SLOTS];
@@ -7107,10 +6974,6 @@ var structureAcquisition = mixin({
         this.use(callMarshalingOutbound);
         this.use(pointerSynchronization);
       }
-      if (this.using(dataCopying)) {
-        this.use(accessorAll);
-        this.use(accessorInt);
-      }
       for (const name of Object.keys(this.exportedModules.wasi)) {
         switch (name) {
           case 'thread-spawn': this.use(workerSupport); break;
@@ -7465,12 +7328,13 @@ var viewManagement = mixin({
   assignView(target, dv, structure, copy, allocator) {
     const { byteSize, type } = structure;
     const elementSize = byteSize ?? 1;
+    const source = { [MEMORY]: dv, [RESTORE]() { return this[MEMORY] } }
+    ;
     if (!target[MEMORY]) {
       if (byteSize !== undefined) {
         checkDataViewSize(dv, structure);
       }
       const len = dv.byteLength / elementSize;
-      const source = { [MEMORY]: dv };
       target.constructor[SENTINEL]?.validateData?.(source, len);
       if (allocator) {
         // need to copy when target object is in Zig memory
@@ -7478,16 +7342,15 @@ var viewManagement = mixin({
       }
       target[SHAPE](copy ? null : dv, len, allocator);
       if (copy) {
-        target[COPY](source);
+        copyObject(target, source);
       }
     } else {
       const byteLength = (type === StructureType.Slice) ? elementSize * target.length : elementSize;
       if (dv.byteLength !== byteLength) {
         throw new BufferSizeMismatch(structure, dv, target);
       }
-      const source = { [MEMORY]: dv };
       target.constructor[SENTINEL]?.validateData?.(source, target.length);
-      target[COPY](source);
+      copyObject(target, source);
     }
   },
   findViewAt(buffer, offset, len) {
@@ -7563,7 +7426,7 @@ var viewManagement = mixin({
     },
     restoreView(dv) {
       const zig = dv?.[ZIG];
-      if (zig?.len > 0 && dv.buffer.byteLength === 0) {
+      if (isDetached(dv.buffer)) {
         dv = this.obtainZigView(zig.address, zig.len);
         if (zig.align) {
           dv[ZIG].align = zig.align;
@@ -7582,12 +7445,21 @@ var viewManagement = mixin({
             target[MEMORY] = newDV;
             // pointers are referenced by their proxies in the cache
             target.constructor[CACHE]?.save?.(newDV, target[PROXY] ?? target);
-            return true;
-          } else {
-            return false;
           }
+          return newDV;
         },
       }
+    },
+    moveExternBytes(jsDV, address, to) {
+      const { memory } = this;
+      const len = jsDV.byteLength;
+      if (len === 0) return;
+      const zigDV = new DataView(memory.buffer, address, len);
+      if (!(jsDV instanceof DataView)) {
+        // assume it's a typed array
+        jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+      }
+      copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
     },
   } ),
 });
@@ -7962,10 +7834,7 @@ var dataView = mixin({
     const thisEnv = this;
     return markAsSpecial({
       get() {
-        {
-          this[RESTORE]?.();
-        }
-        const dv = this[MEMORY];
+        const dv = this[RESTORE]() ;
         return dv;
       },
       set(dv, allocator) {
@@ -8078,53 +7947,45 @@ var primitive$1 = mixin({
         const offset = bitOffset >> 3;
         return {
           get: function getValue() {
-            try {
-              return getter.call(this[MEMORY], offset, littleEndian);
-            } catch (err) {
-              if (err instanceof TypeError && this[RESTORE]?.()) {
-                return getter.call(this[MEMORY], offset, littleEndian);
-              } else {
-                throw err;
-              }
-            }
+            const dv = this[RESTORE]() ;
+            return getter.call(dv, offset, littleEndian);
           },
           set: function setValue(value) {
-            try {
-              return setter.call(this[MEMORY], offset, value, littleEndian);
-            } catch (err) {
-              if (err instanceof TypeError && this[RESTORE]?.()) {
-                return setter.call(this[MEMORY], offset, value, littleEndian);
-              } else {
-                throw err;
-              }
-            }
+            const dv = this[RESTORE]() ;
+            return setter.call(dv, offset, value, littleEndian);
           }
         }
       } else {
         return {
           get: function getElement(index) {
-            try {
-              return getter.call(this[MEMORY], index * byteSize, littleEndian);
-            } catch (err) {
-              if (err instanceof TypeError && this[RESTORE]?.()) {
-                return getter.call(this[MEMORY], index * byteSize, littleEndian);
-              } else {
-                throw replaceRangeError(member, index, err);
-              }
-            }
+            const dv = this[RESTORE]() ;
+            return getter.call(dv, index * byteSize, littleEndian);
           },
           set: function setElement(index, value) {
-            try {
-              return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
-            } catch (err) {
-              if (err instanceof TypeError && this[RESTORE]?.()) {
-                return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
-              } else {
-                throw replaceRangeError(member, index, err);
-              }
-            }
+            const dv = this[RESTORE]() ;
+            return setter.call(dv, index * byteSize, value, littleEndian);
           },
         }
+      }
+    },
+  } ),
+});
+
+var retval = mixin({
+  ...({
+    defineRetvalCopier({ byteSize, bitOffset }) {
+      if (byteSize > 0) {
+        const thisEnv = this;
+        const offset = bitOffset >> 3;
+        return {
+          value(shadowDV) {
+            const dv = this[MEMORY];
+            const { address } = shadowDV[ZIG];
+            const src = new DataView(thisEnv.memory.buffer, address + offset, byteSize);
+            const dest = new DataView(dv.buffer, dv.byteOffset + offset, byteSize);
+            copyView(dest, src);
+          }
+        };
       }
     },
   } ),
@@ -8138,7 +7999,11 @@ var sentinel = mixin({
     } = structure;
     const { get: getSentinelValue } = this.defineMember(sentinel);
     const { get } = this.defineMember(member);
-    const value = getSentinelValue.call(template, 0);
+    const value = getSentinelValue.call({ 
+      [MEMORY]: template[MEMORY],
+      [RESTORE]() { return this[MEMORY] },
+    }, 0)
+    ;
     const isRequired = !!(sentinel.flags & MemberFlag.IsRequired);
     const { runtimeSafety } = this;
     return defineValue({
@@ -8430,8 +8295,6 @@ var all$1 = mixin({
       [CONST_TARGET]: { value: null },
       [SETTERS]: defineValue(setters),
       [KEYS]: defineValue(keys),
-      // add memory copier (from mixin "memory/copying")
-      [COPY]: this.defineCopier(byteSize),
       ...({
         // add method for recoverng from array detachment
         [RESTORE]: this.defineRestorer(),
@@ -8682,7 +8545,7 @@ var all$1 = mixin({
       if (normalFound < normalCount && specialFound === 0) {
         if (template) {
           if (template[MEMORY]) {
-            this[COPY](template);
+            copyObject(this, template);
           }
         }
       }
@@ -8773,7 +8636,7 @@ var argStruct = mixin({
     });
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     {
-      descriptors[COPY] = this.defineRetvalCopier(members[0]);
+      descriptors[UPDATE] = this.defineRetvalCopier(members[0]);
     }
     return constructor;
   },
@@ -8803,10 +8666,7 @@ var arrayLike = mixin({
     const thisEnv = this;
     const value = function getChild(index) {
       const { constructor } = elementStructure;
-      {
-        this[RESTORE]?.();
-      }
-      const dv = this[MEMORY];
+      const dv = this[RESTORE]() ;
       const parentOffset = dv.byteOffset;
       const offset = parentOffset + byteSize * index;
       const childDV = thisEnv.obtainView(dv.buffer, offset, byteSize);
@@ -8887,7 +8747,7 @@ var array = mixin({
     const constructor = this.createConstructor(structure);
     const initializer = function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }
@@ -9291,14 +9151,15 @@ var errorUnion = mixin({
     };
     const isValueVoid = valueMember.type === MemberType.Void;
     const ErrorSet = errorMember.structure.constructor;
+    const { bitOffset, byteSize } = valueMember;
     const clearValue = function() {
-      this[RESET]();
+      clearView(this[MEMORY], byteSize, bitOffset);
       this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
     };
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           if (!getErrorNumber.call(this)) {
             this[VISIT]('copy', 0, arg);
@@ -9339,13 +9200,10 @@ var errorUnion = mixin({
         }
       }
     };
-    const { bitOffset, byteSize } = valueMember;
     const constructor = this.createConstructor(structure);
     descriptors.$ = { get, set: initializer };
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
-    // for clear value after error union is set to an an error (from mixin "features/data-copying")
-    descriptors[RESET] = this.defineResetter(bitOffset / 8, byteSize);
     // for operating on pointers contained in the error union
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorErrorUnion(valueMember, getErrorNumber);
     return constructor;
@@ -9469,9 +9327,10 @@ var optional = mixin({
       }
     };
     const isValueVoid = valueMember.type === MemberType.Void;
+    const { bitOffset, byteSize } = valueMember;
     const initializer = function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           // don't bother copying pointers when it's empty
           if (getPresent.call(this)) {
@@ -9480,7 +9339,9 @@ var optional = mixin({
         }
       } else if (arg === null) {
         setPresent.call(this, 0);
-        this[RESET]?.();
+        if (flags & OptionalFlag.HasSelector) {
+          clearView(this[MEMORY], byteSize, bitOffset >> 3);
+        }
         // clear references so objects can be garbage-collected
         this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
       } else if (arg !== undefined || isValueVoid) {
@@ -9499,13 +9360,11 @@ var optional = mixin({
       }
     };
     const constructor = structure.constructor = this.createConstructor(structure);
-    const { bitOffset, byteSize } = valueMember;
     descriptors.$ = { get, set: initializer };
     // we need to clear the value portion when there's a separate bool indicating whether a value
     // is present; for optional pointers, the bool overlaps the usize holding the address; setting
     // it to false automatically clears the address
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[RESET] = (flags & OptionalFlag.HasSelector) && this.defineResetter(bitOffset / 8, byteSize);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorOptional(valueMember, getPresent);
     return constructor;
@@ -9653,10 +9512,7 @@ var pointer = mixin({
         }
         return;
       }
-      {
-        target[RESTORE]?.();
-      }
-      const dv = target[MEMORY];
+      const dv = target[RESTORE]() ;
       const zig = dv[ZIG];
       // determine the maximum length
       let max;
@@ -9709,7 +9565,7 @@ var pointer = mixin({
       }
       if (arg instanceof Target) {
         {
-          arg[RESTORE]?.();
+          arg[RESTORE]();
         }
         const constTarget = arg[CONST_TARGET];
         if (constTarget) {
@@ -9994,7 +9850,7 @@ var primitive = mixin({
     const { get, set } = this.defineMember(member);
     const initializer = function(arg) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
       } else {
         if (arg && typeof(arg) === 'object') {
           if (propApplier.call(this, arg) === 0) {
@@ -10026,12 +9882,11 @@ var slice = mixin({
     const {
       align,
       flags,
-      byteSize,
       instance: {
         members: [ member ],
       },
     } = structure;
-    const { byteSize: elementSize, structure: elementStructure } = member;
+    const { byteSize: elementSize } = member;
     const thisEnv = this;
     const shapeDefiner = function(dv, length, allocator) {
       if (!dv) {
@@ -10057,7 +9912,7 @@ var slice = mixin({
         } else {
           shapeChecker.call(this, arg, arg.length);
         }
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }
@@ -10125,13 +9980,12 @@ var slice = mixin({
         const dv1 = getSubArrayView.call(this, begin, end);
         const dv2 = thisEnv.allocateMemory(dv1.byteLength, align, zig);
         const slice = constructor(dv2);
-        slice[COPY]({ [MEMORY]: dv1 });
+        copyView(dv2, dv1);
         return slice;
       },
     };
     descriptors[Symbol.iterator] = this.defineArrayIterator();
     descriptors[SHAPE] = defineValue(shapeDefiner);
-    descriptors[COPY] = this.defineCopier(byteSize, true);
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
@@ -10179,10 +10033,7 @@ var structLike = mixin({
       value(slot) {
         const member = objectMembers[slot];
         const { bitOffset, byteSize, structure: { constructor } } = member;
-        {
-          this[RESTORE]?.();
-        }
-        const dv = this[MEMORY];
+        const dv = this[RESTORE]() ;
         const parentOffset = dv.byteOffset;
         const offset = parentOffset + (bitOffset >> 3);
         let len = byteSize;
@@ -10213,7 +10064,7 @@ var struct = mixin({
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', 0, arg);
         }
@@ -10309,7 +10160,7 @@ var union = mixin({
     const propApplier = this.createApplier(structure);
     const initializer = function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }
@@ -10486,7 +10337,7 @@ var variadicStruct = mixin({
       // set their attributes
       let maxSlot = -1;
       for (const [ index, { bitOffset, bitSize, type, slot, structure: { align } } ] of argMembers.entries()) {
-        attrs.set(index, bitOffset / 8, bitSize, align, type);
+        attrs.set(index, bitOffset >> 3, bitSize, align, type);
         if (slot > maxSlot) {
           maxSlot = slot;
         }
@@ -10537,7 +10388,7 @@ var variadicStruct = mixin({
       retvalSetter.call(this, value, this[ALLOCATOR]);
     });
     {
-      descriptors[COPY] = this.defineRetvalCopier(members[0]);
+      descriptors[UPDATE] = this.defineRetvalCopier(members[0]);
     }
     return constructor;
   },
@@ -10560,7 +10411,7 @@ var vector = mixin({
     const propApplier = this.createApplier(structure);
     const initializer = function(arg) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }
@@ -10864,14 +10715,14 @@ var inVariadicStruct = mixin({
 
 var mixins = /*#__PURE__*/Object.freeze({
   __proto__: null,
-  AccessorAll: accessorAll,
+  AccessorAll: all$3,
   AccessorBigInt: bigInt,
   AccessorBigUint: bigUint,
   AccessorBool: bool$1,
   AccessorFloat128: float128,
   AccessorFloat16: float16,
   AccessorFloat80: float80,
-  AccessorInt: accessorInt,
+  AccessorInt: int$1,
   AccessorJumbo: jumbo,
   AccessorJumboInt: jumboInt,
   AccessorJumboUint: jumboUint,
@@ -10884,7 +10735,6 @@ var mixins = /*#__PURE__*/Object.freeze({
   FeatureBaseline: baseline,
   FeatureCallMarshalingInbound: callMarshalingInbound,
   FeatureCallMarshalingOutbound: callMarshalingOutbound,
-  FeatureDataCopying: dataCopying,
   FeatureDirConversion: dirConversion,
   FeatureIntConversion: intConversion,
   FeatureMemoryMapping: memoryMapping,
@@ -10917,6 +10767,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   MemberNull: _null,
   MemberObject: object,
   MemberPrimitive: primitive$1,
+  MemberRetval: retval,
   MemberSentinel: sentinel,
   MemberString: string,
   MemberToJson: toJson,

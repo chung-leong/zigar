@@ -79,8 +79,11 @@ async function importModule(url, options) {
   } finally {
     await bundle.close();
   }
-  currentModule = await import(jsPath);
-  return currentModule;
+  const module = await import(jsPath);
+  if (!options.preserve) {
+    currentModule = module;
+  }
+  return module;
 }
 
 function sha1(text) {

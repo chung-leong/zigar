@@ -628,7 +628,7 @@ export function addTests(importModule, options) {
       const { __zigar, fwrite, fopen, fclose } = await importTest('call-fwrite', { useLibc: true });
       if (target == 'wasm32') {
         const { WASI } = await import('wasi');
-        __zigar.wasi(new WASI({
+        __zigar.set('wasi', new WASI({
             version: 'preview1',
             args: [],
             env: {},
@@ -653,7 +653,7 @@ export function addTests(importModule, options) {
       const { __zigar, fread, fopen, fclose } = await importTest('call-fread', { useLibc: true });
       if (target == 'wasm32') {
         const { WASI } = await import('wasi');
-        __zigar.wasi(new WASI({
+        __zigar.set('wasi', new WASI({
           version: 'preview1',
           args: [],
           env: {},
@@ -788,7 +788,7 @@ export function addTests(importModule, options) {
       const { __zigar, fprintf, fopen, fclose, Int, StrPtr } = await importTest('call-fprintf', { useLibc: true });
       if (target == 'wasm32') {
         const { WASI } = await import('wasi');
-        __zigar.wasi(
+        __zigar.set('wasi', 
           new WASI({
           version: 'preview1',
           args: [],

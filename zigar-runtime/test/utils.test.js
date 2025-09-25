@@ -1,11 +1,15 @@
 import { expect } from 'chai';
 
 import { MemberType, PosixDescriptor, PosixDescriptorFlag } from '../src/constants.js';
-import { LENGTH, MEMORY, PROXY } from '../src/symbols.js';
+import { LENGTH, MEMORY, PROXY, RESTORE } from '../src/symbols.js';
 import {
   adjustAddress,
   alignForward,
   always,
+  clearView,
+  copyObject,
+  copyView,
+  createView,
   decodeBase64,
   decodeEnum,
   decodeFlags,
@@ -28,7 +32,7 @@ import {
   safeInt,
   toString,
   transformIterable,
-  usize
+  usize,
 } from '../src/utils.js';
 
 describe('Utility functions', function() {
@@ -423,6 +427,49 @@ describe('Utility functions', function() {
       expect(result2).to.be.false;
       const result3 = hasMethod({ hello: 123 }, 'hello');
       expect(result3).to.be.false;
+    })
+  })
+  describe('createView', function() {
+    it('should create a view with specified number of bytes', function() {
+      const dv = createView(32);
+      expect(dv).to.a('DataView');
+    })
+  })
+  describe('copyView', function() {
+    it('should copy the content of one view to another', function() {
+      const dst = createView(32);
+      const src = createView(32);
+      src.setUint32(4, 1234, true);
+      copyView(dst, src);
+      expect(dst.getUint32(4, true)).to.equal(1234);
+    })
+  })
+  describe('clearView', function() {
+    it('should clear bytes of view', function() {
+      const dv = createView(32);
+      dv.setUint32(4, 1234, true);
+      clearView(dv);
+      expect(dv.getUint32(4, true)).to.equal(0);
+      dv.setUint32(4, 1234, true);
+      clearView(dv, 8, 8);
+      expect(dv.getUint32(4, true)).to.equal(1234);
+    })
+  })
+  describe('copyObject', function() {
+    it('should copy content of object to another', function() {
+      const dstDV = createView(32);
+      const srcDV = createView(32);
+      const dst = {
+        [MEMORY]: dstDV,
+        [RESTORE]() { return this[MEMORY] },
+      };
+      const src = {
+        [MEMORY]: srcDV,
+        [RESTORE]() { return this[MEMORY] },
+      };
+      srcDV.setUint32(4, 1234, true);
+      copyObject(dst, src);
+      expect(dstDV.getUint32(4, true)).to.equal(1234);
     })
   })
 })

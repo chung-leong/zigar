@@ -25,6 +25,7 @@ export default mixin({
       object.constructor[CACHE]?.save?.(zigDV, object);
       this.destructors.push(() => {
         if (process.env.TARGET === 'wasm') {
+          debugger;
           zigDV = this.restoreView(object[MEMORY]);
         }
         const jsDV = object[MEMORY] = this.allocateMemory(zigDV.byteLength);

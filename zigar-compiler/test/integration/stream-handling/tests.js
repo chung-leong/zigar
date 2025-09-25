@@ -131,7 +131,7 @@ export function addTests(importModule, options) {
       const { __zigar, hash } = await importTest('open-and-read-from-file-system');
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
-        __zigar.wasi(new WASI({
+        __zigar.set('wasi', new WASI({
           version: 'preview1',
           args: [],
           env: {},
@@ -157,7 +157,7 @@ export function addTests(importModule, options) {
       const { __zigar, hash } = await importTest('open-and-read-from-file-system-with-posix-function', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
-        __zigar.wasi(new WASI({
+        __zigar.set('wasi', new WASI({
           version: 'preview1',
           args: [],
           env: {},
@@ -181,7 +181,7 @@ export function addTests(importModule, options) {
       const { __zigar, hash } = await importTest('open-and-read-from-file-system-with-libc-function', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
-        __zigar.wasi(new WASI({
+        __zigar.set('wasi', new WASI({
           version: 'preview1',
           args: [],
           env: {},
@@ -205,7 +205,7 @@ export function addTests(importModule, options) {
       const { __zigar, check } = await importTest('open-and-close-file', { useRedirection: false, topLevelAwait: false });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
-        __zigar.wasi(new WASI({
+        __zigar.set('wasi', new WASI({
           version: 'preview1',
           args: [],
           env: {},
@@ -638,7 +638,7 @@ export function addTests(importModule, options) {
       const { __zigar, check } = await importTest('check-access-at-dir-in-file-system-with-posix-function', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
-        __zigar.wasi(new WASI({
+        __zigar.set('wasi', new WASI({
           version: 'preview1',
           args: [],
           env: {},
@@ -698,7 +698,7 @@ export function addTests(importModule, options) {
       const { __zigar, write } = await importTest('open-file-at-dir-in-file-system-with-posix-function', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
-        __zigar.wasi(new WASI({
+        __zigar.set('wasi', new WASI({
           version: 'preview1',
           args: [],
           env: {},
@@ -781,7 +781,7 @@ export function addTests(importModule, options) {
       const { __zigar, stat } = await importTest('stat-file-at-dir-in-file-system-with-posix-function', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
-        __zigar.wasi(new WASI({
+        __zigar.set('wasi', new WASI({
           version: 'preview1',
           args: [],
           env: {},
@@ -925,7 +925,7 @@ export function addTests(importModule, options) {
       const { __zigar, print } = await importTest('stat-opened-file-in-file-system-with-posix-function', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
-        __zigar.wasi(new WASI({
+        __zigar.set('wasi', new WASI({
           version: 'preview1',
           args: [],
           env: {},
@@ -2124,7 +2124,7 @@ export function addTests(importModule, options) {
       const { __zigar, makeDirectory } = await importTest('create-directory-in-file-system-with-posix-function', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
-        __zigar.wasi(new WASI({
+        __zigar.set('wasi', new WASI({
           version: 'preview1',
           args: [],
           env: {},
@@ -2159,7 +2159,7 @@ export function addTests(importModule, options) {
       const { __zigar, makeDirectory } = await importTest('create-directory-at-dir-in-file-system-with-posix-function', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
-        __zigar.wasi(new WASI({
+        __zigar.set('wasi', new WASI({
           version: 'preview1',
           args: [],
           env: {},
@@ -2190,7 +2190,7 @@ export function addTests(importModule, options) {
       const { __zigar, removeDirectory } = await importTest('remove-directory-in-file-system-with-posix-function', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
-        __zigar.wasi(new WASI({
+        __zigar.set('wasi', new WASI({
           version: 'preview1',
           args: [],
           env: {},
@@ -2225,7 +2225,7 @@ export function addTests(importModule, options) {
       const { __zigar, removeFile } = await importTest('remove-file-in-file-system-with-posix-function', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
-        __zigar.wasi(new WASI({
+        __zigar.set('wasi', new WASI({
           version: 'preview1',
           args: [],
           env: {},
@@ -2261,7 +2261,7 @@ export function addTests(importModule, options) {
       const { __zigar, setTimes } = await importTest('set-times-of-file-in-file-system-with-posix-functions', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
-        __zigar.wasi(new WASI({
+        __zigar.set('wasi', new WASI({
           version: 'preview1',
           args: [],
           env: {},
@@ -2304,7 +2304,7 @@ export function addTests(importModule, options) {
       const { __zigar, print } = await importTest('scan-directory-in-file-system-with-posix-functions', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');
-        __zigar.wasi(new WASI({
+        __zigar.set('wasi', new WASI({
           version: 'preview1',
           args: [],
           env: {},

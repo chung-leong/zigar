@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { MemberType, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { FALLBACK, LENGTH, MEMORY, SHAPE, TYPED_ARRAY, ZIG } from '../../src/symbols.js';
+import { FALLBACK, LENGTH, MEMORY, RESTORE, SHAPE, TYPED_ARRAY, ZIG } from '../../src/symbols.js';
 import { defineProperties, usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
@@ -274,6 +274,7 @@ describe('Feature: view-management', function() {
       };
       defineProperties(target, {
         [MEMORY]: { value: new DataView(new ArrayBuffer(16)) },
+        [RESTORE]: { value: function() { return this[MEMORY] } },
         length: { value: 16 },
       });
       const dv = new DataView(new ArrayBuffer(16));
@@ -290,6 +291,7 @@ describe('Feature: view-management', function() {
       };
       defineProperties(target, {
         [MEMORY]: { value: null },
+        [RESTORE]: { value: function() { return this[MEMORY] } },
         [SHAPE]: {
           value(dv, length, allocator) {
             if (!dv) {

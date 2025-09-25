@@ -1,7 +1,7 @@
 import { MemberFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MisplacedSentinel, MissingSentinel } from '../errors.js';
-import { MEMORY } from '../symbols.js';
+import { RESTORE, MEMORY } from '../symbols.js';
 import { defineValue } from '../utils.js';
 
 var sentinel = mixin({
@@ -12,7 +12,11 @@ var sentinel = mixin({
     } = structure;
     const { get: getSentinelValue } = this.defineMember(sentinel);
     const { get } = this.defineMember(member);
-    const value = getSentinelValue.call(template, 0);
+    const value = getSentinelValue.call({ 
+      [MEMORY]: template[MEMORY],
+      [RESTORE]() { return this[MEMORY] },
+    }, 0)
+    ;
     const isRequired = !!(sentinel.flags & MemberFlag.IsRequired);
     const { runtimeSafety } = this;
     return defineValue({

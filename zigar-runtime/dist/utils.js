@@ -1,5 +1,5 @@
 import { MemberType } from './constants.js';
-import { SIGNATURE, ENVIRONMENT, MEMORY, LENGTH, PROXY } from './symbols.js';
+import { SIGNATURE, ENVIRONMENT, RESTORE, LENGTH, PROXY } from './symbols.js';
 
 function defineProperty(object, name, descriptor) {
   if (descriptor) {
@@ -320,8 +320,17 @@ function clearView(dest, len = dest.byteLength, offset = 0) {
   destA.fill(0, offset, len);
 }
 
+const isDetached = (Object.hasOwn(ArrayBuffer.prototype, 'detached')) 
+? function(buffer) {
+    return buffer.detached;
+  }
+: function(buffer) {
+  return buffer.byteLength === 0;
+};
 function copyObject(dest, src) {
-  copyView(dest[MEMORY], src[MEMORY]);
+  const destDV = dest[RESTORE]() ;
+  const srcDV = src[RESTORE]() ;
+  copyView(destDV, srcDV);
 }
 
 function getSelf() {
@@ -387,4 +396,4 @@ function extractTimes(st_atim, st_mtim, fst_flags) {
   return times;
 }
 
-export { ObjectCache, adjustAddress, alignForward, always, clearView, copyObject, copyView, createView, decodeBase64, decodeEnum, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, extractTimes, findElements, findObjects, findSortedIndex, getEnumNumber, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, maxSafeInteger, minSafeInteger, never, readUsize, readUsizeSafe, safeInt, toString, transformIterable, usize, usizeByteSize, usizeInvalid, usizeMax, usizeMin };
+export { ObjectCache, adjustAddress, alignForward, always, clearView, copyObject, copyView, createView, decodeBase64, decodeEnum, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, extractTimes, findElements, findObjects, findSortedIndex, getEnumNumber, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isDetached, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, maxSafeInteger, minSafeInteger, never, readUsize, readUsizeSafe, safeInt, toString, transformIterable, usize, usizeByteSize, usizeInvalid, usizeMax, usizeMin };

@@ -15,10 +15,7 @@ export default mixin({
       value(slot) {
         const member = objectMembers[slot];
         const { bitOffset, byteSize, structure: { constructor } } = member;
-        if (process.env.TARGET === 'wasm') {
-          this[RESTORE]?.();
-        }
-        const dv = this[MEMORY];
+        const dv = (process.env.TARGET === 'wasm') ? this[RESTORE]() : this[MEMORY];
         const parentOffset = dv.byteOffset;
         const offset = parentOffset + (bitOffset >> 3);
         let len = byteSize;

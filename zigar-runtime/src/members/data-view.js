@@ -8,10 +8,7 @@ export default mixin({
     const thisEnv = this;
     return markAsSpecial({
       get() {
-        if (process.env.TARGET === 'wasm') {
-          this[RESTORE]?.();
-        }
-        const dv = this[MEMORY];
+        const dv = (process.env.TARGET === 'wasm') ? this[RESTORE]() : this[MEMORY];
         if (process.env.TARGET === 'node' && thisEnv.usingBufferFallback()) {
           const address = dv.buffer[FALLBACK];
           if (address !== undefined) {

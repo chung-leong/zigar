@@ -1,8 +1,8 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, BufferExpected, BufferSizeMismatch } from '../errors.js';
-import { CACHE, CONST_TARGET, FALLBACK, MEMORY, PROXY, SENTINEL, SHAPE, TYPED_ARRAY, ZIG } from '../symbols.js';
-import { adjustAddress, alignForward, copyObject, copyView, findElements, isCompatibleInstanceOf, usizeInvalid } from '../utils.js';
+import { CACHE, CONST_TARGET, FALLBACK, MEMORY, PROXY, RESTORE, SENTINEL, SHAPE, TYPED_ARRAY, ZIG } from '../symbols.js';
+import { adjustAddress, alignForward, copyObject, copyView, findElements, isCompatibleInstanceOf, isDetached, usizeInvalid } from '../utils.js';
 
 export default mixin({
   init() {
@@ -67,12 +67,14 @@ export default mixin({
   assignView(target, dv, structure, copy, allocator) {
     const { byteSize, type } = structure;
     const elementSize = byteSize ?? 1;
+    const source = (process.env.TARGET === 'wasm') 
+    ? { [MEMORY]: dv, [RESTORE]() { return this[MEMORY] } }
+    : { [MEMORY]: dv };
     if (!target[MEMORY]) {
       if (byteSize !== undefined) {
         checkDataViewSize(dv, structure);
       }
       const len = dv.byteLength / elementSize;
-      const source = { [MEMORY]: dv };
       target.constructor[SENTINEL]?.validateData?.(source, len);
       if (allocator) {
         // need to copy when target object is in Zig memory
@@ -87,7 +89,6 @@ export default mixin({
       if (dv.byteLength !== byteLength) {
         throw new BufferSizeMismatch(structure, dv, target);
       }
-      const source = { [MEMORY]: dv };
       target.constructor[SENTINEL]?.validateData?.(source, target.length);
       copyObject(target, source);
     }
@@ -185,7 +186,7 @@ export default mixin({
     },
     restoreView(dv) {
       const zig = dv?.[ZIG];
-      if (zig?.len > 0 && dv.buffer.byteLength === 0) {
+      if (isDetached(dv.buffer)) {
         dv = this.obtainZigView(zig.address, zig.len);
         if (zig.align) {
           dv[ZIG].align = zig.align;
@@ -204,10 +205,8 @@ export default mixin({
             target[MEMORY] = newDV;
             // pointers are referenced by their proxies in the cache
             target.constructor[CACHE]?.save?.(newDV, target[PROXY] ?? target);
-            return true;
-          } else {
-            return false;
           }
+          return newDV;
         },
       }
     },

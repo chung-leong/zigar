@@ -37,6 +37,9 @@ async function importModule(path, options) {
     omitVariables,
     useRedirection,
   };
-  currentModule = await import(path + '?' + query);
-  return currentModule;
+  const module = await import(path + '?' + query);
+  if (!options.preserve) {
+    currentModule = module;
+  }
+  return module;
 }

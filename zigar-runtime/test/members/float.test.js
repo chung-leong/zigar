@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { MemberType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { MEMORY } from '../../src/symbols.js';
+import { MEMORY, RESTORE } from '../../src/symbols.js';
 
 const Env = defineEnvironment();
 
@@ -18,7 +18,10 @@ describe('Member: float', function() {
         structure: {},
       };
       const { get, set } = env.defineMemberFloat(member);
-      const object = { [MEMORY]: new DataView(new ArrayBuffer(3)) };
+      const object = { 
+        [MEMORY]: new DataView(new ArrayBuffer(3)),
+        [RESTORE]() { return this[MEMORY] },
+      };
       set.call(object, 3.25);
       expect(get.call(object)).to.equal(3.25);
     })

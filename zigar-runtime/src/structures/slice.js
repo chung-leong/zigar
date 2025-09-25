@@ -25,7 +25,7 @@ export default mixin({
       }
     }
     /* c8 ignore end */
-    const { byteSize: elementSize, structure: elementStructure } = member;
+    const { byteSize: elementSize } = member;
     const thisEnv = this;
     const shapeDefiner = function(dv, length, allocator) {
       if (!dv) {

@@ -145,10 +145,7 @@ var pointer = mixin({
         }
         return;
       }
-      {
-        target[RESTORE]?.();
-      }
-      const dv = target[MEMORY];
+      const dv = target[RESTORE]() ;
       const zig = dv[ZIG];
       // determine the maximum length
       let max;
@@ -201,7 +198,7 @@ var pointer = mixin({
       }
       if (arg instanceof Target) {
         {
-          arg[RESTORE]?.();
+          arg[RESTORE]();
         }
         const constTarget = arg[CONST_TARGET];
         if (constTarget) {

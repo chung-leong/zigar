@@ -1,5 +1,5 @@
 import { MemberType } from './constants.js';
-import { ENVIRONMENT, LENGTH, MEMORY, PROXY, SIGNATURE } from './symbols.js';
+import { ENVIRONMENT, LENGTH, MEMORY, PROXY, RESTORE, SIGNATURE } from './symbols.js';
 
 export function defineProperty(object, name, descriptor) {
   if (descriptor) {
@@ -345,8 +345,20 @@ export function clearView(dest, len = dest.byteLength, offset = 0) {
   destA.fill(0, offset, len);
 }
 
+/* c8 ignore start */
+export const isDetached = (Object.hasOwn(ArrayBuffer.prototype, 'detached')) 
+? function(buffer) {
+    return buffer.detached;
+  }
+: function(buffer) {
+  return buffer.byteLength === 0;
+}
+/* c8 ignore end */
+
 export function copyObject(dest, src) {
-  copyView(dest[MEMORY], src[MEMORY]);
+  const destDV = (process.env.TARGET === 'wasm') ? dest[RESTORE]() : dest[MEMORY];
+  const srcDV = (process.env.TARGET === 'wasm') ? src[RESTORE]() : src[MEMORY];
+  copyView(destDV, srcDV);
 }
 
 export function getSelf() {

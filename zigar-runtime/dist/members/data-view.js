@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
-import { RESTORE, MEMORY } from '../symbols.js';
+import { RESTORE } from '../symbols.js';
 import { markAsSpecial } from '../utils.js';
 
 var dataView = mixin({
@@ -8,10 +8,7 @@ var dataView = mixin({
     const thisEnv = this;
     return markAsSpecial({
       get() {
-        {
-          this[RESTORE]?.();
-        }
-        const dv = this[MEMORY];
+        const dv = this[RESTORE]() ;
         return dv;
       },
       set(dv, allocator) {

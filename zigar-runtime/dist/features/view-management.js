@@ -1,8 +1,8 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { BufferSizeMismatch, ArrayLengthMismatch, BufferExpected } from '../errors.js';
-import { MEMORY, CONST_TARGET, CACHE, PROXY, ZIG, SENTINEL, SHAPE, TYPED_ARRAY } from '../symbols.js';
-import { copyView, usizeInvalid, copyObject, isCompatibleInstanceOf, findElements } from '../utils.js';
+import { MEMORY, CONST_TARGET, CACHE, PROXY, ZIG, SENTINEL, SHAPE, TYPED_ARRAY, RESTORE } from '../symbols.js';
+import { copyView, isDetached, usizeInvalid, copyObject, isCompatibleInstanceOf, findElements } from '../utils.js';
 
 var viewManagement = mixin({
   init() {
@@ -59,12 +59,13 @@ var viewManagement = mixin({
   assignView(target, dv, structure, copy, allocator) {
     const { byteSize, type } = structure;
     const elementSize = byteSize ?? 1;
+    const source = { [MEMORY]: dv, [RESTORE]() { return this[MEMORY] } }
+    ;
     if (!target[MEMORY]) {
       if (byteSize !== undefined) {
         checkDataViewSize(dv, structure);
       }
       const len = dv.byteLength / elementSize;
-      const source = { [MEMORY]: dv };
       target.constructor[SENTINEL]?.validateData?.(source, len);
       if (allocator) {
         // need to copy when target object is in Zig memory
@@ -79,7 +80,6 @@ var viewManagement = mixin({
       if (dv.byteLength !== byteLength) {
         throw new BufferSizeMismatch(structure, dv, target);
       }
-      const source = { [MEMORY]: dv };
       target.constructor[SENTINEL]?.validateData?.(source, target.length);
       copyObject(target, source);
     }
@@ -157,7 +157,7 @@ var viewManagement = mixin({
     },
     restoreView(dv) {
       const zig = dv?.[ZIG];
-      if (zig?.len > 0 && dv.buffer.byteLength === 0) {
+      if (isDetached(dv.buffer)) {
         dv = this.obtainZigView(zig.address, zig.len);
         if (zig.align) {
           dv[ZIG].align = zig.align;
@@ -176,10 +176,8 @@ var viewManagement = mixin({
             target[MEMORY] = newDV;
             // pointers are referenced by their proxies in the cache
             target.constructor[CACHE]?.save?.(newDV, target[PROXY] ?? target);
-            return true;
-          } else {
-            return false;
           }
+          return newDV;
         },
       }
     },

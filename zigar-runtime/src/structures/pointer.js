@@ -156,10 +156,7 @@ export default mixin({
         }
         return;
       }
-      if (process.env.TARGET === 'wasm') {
-        target[RESTORE]?.();
-      }
-      const dv = target[MEMORY];
+      const dv = (process.env.TARGET === 'wasm') ? target[RESTORE]() : target[MEMORY];
       const zig = dv[ZIG];
       // determine the maximum length
       let max;
@@ -212,7 +209,7 @@ export default mixin({
       }
       if (arg instanceof Target) {
         if (process.env.TARGET === 'wasm') {
-          arg[RESTORE]?.();
+          arg[RESTORE]();
         }
         const constTarget = arg[CONST_TARGET];
         if (constTarget) {

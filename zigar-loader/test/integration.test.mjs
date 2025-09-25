@@ -100,8 +100,11 @@ async function importModule(url, options) {
       }
     });
   });
-  currentModule = await import(jsPath);
-  return currentModule;
+  const module = await import(jsPath);
+  if (!options.preserve) {
+    currentModule = module;
+  }
+  return module;
 }
 
 function md5(text) {

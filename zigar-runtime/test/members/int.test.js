@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { MemberType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { MEMORY } from '../../src/symbols.js';
+import { MEMORY, RESTORE } from '../../src/symbols.js';
 
 const Env = defineEnvironment();
 
@@ -18,7 +18,10 @@ describe('Member: int', function() {
         structure: {},
       };
       const { get, set } = env.defineMemberInt(member);
-      const object = { [MEMORY]: new DataView(new ArrayBuffer(5)) };
+      const object = { 
+        [MEMORY]: new DataView(new ArrayBuffer(5)),
+        [RESTORE]() { return this[MEMORY] },
+      };
       set.call(object, -1234);
       expect(get.call(object)).to.equal(-1234);
     })

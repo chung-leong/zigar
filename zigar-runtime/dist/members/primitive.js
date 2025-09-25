@@ -1,6 +1,6 @@
 import { mixin } from '../environment.js';
-import { replaceRangeError } from '../errors.js';
-import { MEMORY, RESTORE } from '../symbols.js';
+import '../errors.js';
+import { RESTORE } from '../symbols.js';
 
 var primitive = mixin({
   ...({
@@ -13,51 +13,23 @@ var primitive = mixin({
         const offset = bitOffset >> 3;
         return {
           get: function getValue() {
-            try {
-              return getter.call(this[MEMORY], offset, littleEndian);
-            } catch (err) {
-              if (err instanceof TypeError && this[RESTORE]?.()) {
-                return getter.call(this[MEMORY], offset, littleEndian);
-              } else {
-                throw err;
-              }
-            }
+            const dv = this[RESTORE]() ;
+            return getter.call(dv, offset, littleEndian);
           },
           set: function setValue(value) {
-            try {
-              return setter.call(this[MEMORY], offset, value, littleEndian);
-            } catch (err) {
-              if (err instanceof TypeError && this[RESTORE]?.()) {
-                return setter.call(this[MEMORY], offset, value, littleEndian);
-              } else {
-                throw err;
-              }
-            }
+            const dv = this[RESTORE]() ;
+            return setter.call(dv, offset, value, littleEndian);
           }
         }
       } else {
         return {
           get: function getElement(index) {
-            try {
-              return getter.call(this[MEMORY], index * byteSize, littleEndian);
-            } catch (err) {
-              if (err instanceof TypeError && this[RESTORE]?.()) {
-                return getter.call(this[MEMORY], index * byteSize, littleEndian);
-              } else {
-                throw replaceRangeError(member, index, err);
-              }
-            }
+            const dv = this[RESTORE]() ;
+            return getter.call(dv, index * byteSize, littleEndian);
           },
           set: function setElement(index, value) {
-            try {
-              return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
-            } catch (err) {
-              if (err instanceof TypeError && this[RESTORE]?.()) {
-                return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
-              } else {
-                throw replaceRangeError(member, index, err);
-              }
-            }
+            const dv = this[RESTORE]() ;
+            return setter.call(dv, index * byteSize, value, littleEndian);
           },
         }
       }

@@ -24,8 +24,9 @@ describe('Member: retval', function() {
         });
         memory.grow(1);
         expect(() => dv.getUint8(0)).to.throw(TypeError);
-        object[RESTORE]();
+        const newDV = object[RESTORE]();
         expect(object[MEMORY]).to.not.equal(dv);
+        expect(object[MEMORY]).to.equal(newDV);
         expect(() => object[MEMORY].getUint8(0)).to.not.throw();
         expect(constructor[CACHE].find(object[MEMORY])).to.equal(object);
       })
@@ -45,8 +46,9 @@ describe('Member: retval', function() {
         });
         memory.grow(1);
         expect(() => dv.getUint8(0)).to.throw(TypeError);
-        object[RESTORE]();
+        const newDV = object[RESTORE]();
         expect(object[MEMORY]).to.not.equal(dv);
+        expect(object[MEMORY]).to.equal(newDV);
         expect(() => object[MEMORY].getUint8(0)).to.not.throw();
         expect(object[MEMORY][ZIG].align).to.equal(4);
       })

@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { ErrorSetFlag, MemberFlag, MemberType, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, SLOTS } from '../../src/symbols.js';
+import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, RESTORE, SLOTS } from '../../src/symbols.js';
 
 const Env = defineEnvironment();
 
@@ -114,6 +114,7 @@ describe('Structure: error-set', function() {
       const Item = function(number) {
         this[MEMORY] = new DataView(new ArrayBuffer(2));
         this[MEMORY].setInt16(0, number, true);
+        this[RESTORE] = function() { return this[MEMORY] };
       };
       const dog = new Item(77);
       const cat = new Item(88);

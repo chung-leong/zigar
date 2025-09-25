@@ -22,10 +22,7 @@ export default mixin({
     const thisEnv = this;
     const value = function getChild(index) {
       const { constructor } = elementStructure;
-      if (process.env.TARGET === 'wasm') {
-        this[RESTORE]?.();
-      }
-      const dv = this[MEMORY];
+      const dv = (process.env.TARGET === 'wasm') ? this[RESTORE]() : this[MEMORY];
       const parentOffset = dv.byteOffset;
       const offset = parentOffset + byteSize * index;
       const childDV = thisEnv.obtainView(dv.buffer, offset, byteSize);
