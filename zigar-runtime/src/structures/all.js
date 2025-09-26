@@ -4,6 +4,7 @@ import { MissingInitializers, NoInitializer, NoProperty } from '../errors.js';
 import { getProxyTarget } from '../proxies.js';
 import {
   ALIGN, CACHE, CAST, ENTRIES, ENVIRONMENT, FINALIZE, FLAGS, INITIALIZE, KEYS, MEMORY, PROPS,
+  PROXY,
   RESTORE, RESTRICT, SETTERS, SHAPE, SIGNATURE, SIZE, SLOTS, TRANSFORM, TYPE, TYPED_ARRAY, UPDATE
 } from '../symbols.js';
 import { copyObject, defineProperties, defineProperty, defineValue, ObjectCache } from '../utils.js';
@@ -221,9 +222,10 @@ export default mixin({
         }
       }
       if (FINALIZE in self) {
-        self = self[FINALIZE](this !== ENVIRONMENT);
+        self = self[FINALIZE]();
       }
-      return cache.save(dv, self);
+      cache.save(dv, self);
+      return (this !== ENVIRONMENT && PROXY in self) ? self[PROXY]() : self;
     };
     defineProperty(constructor, CACHE, defineValue(cache));
     if (process.env.TARGET === 'wasm') {

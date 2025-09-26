@@ -9,7 +9,7 @@ import {
 import { getPointerProxy, getProxy, getProxyTarget } from '../proxies.js';
 import {
   ADDRESS, CAST, ENVIRONMENT, FINALIZE, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MAX_LENGTH,
-  MEMORY, PARENT, RESTORE, SENTINEL, SETTERS, SIZE, SLOTS, TARGET, TYPE, TYPED_ARRAY, UPDATE,
+  MEMORY, PARENT, PROXY, RESTORE, SENTINEL, SETTERS, SIZE, SLOTS, TARGET, TYPE, TYPED_ARRAY, UPDATE,
   VISIT, ZIG
 } from '../symbols.js';
 import {
@@ -93,7 +93,7 @@ export default mixin({
     if (flags & PointerFlag.IsConst) {
       targetProxyType |= ProxyType.Const;
     }
-    const getTargetObject = function() {
+    const getTargetObject = function(useProxy = true) {
       const empty = !this[SLOTS][0];
       const target = updateTarget.call(this, null, empty);
       if (!target) {
@@ -102,7 +102,7 @@ export default mixin({
         }
         throw new NullPointer();
       }
-      return (targetProxyType) ? getProxy(target, targetProxyType) : target;
+      return (targetProxyType && useProxy) ? getProxy(target, targetProxyType) : target;
     };
     const setTargetObject = function(arg) {
       if (arg === undefined) {
@@ -143,12 +143,12 @@ export default mixin({
         return target.$ = value;
       };
     const getTargetLength = function() {
-      const target = getTargetObject.call(this);
+      const target = getTargetObject.call(this, false);
       return (target) ? target.length : 0;
     }
     const setTargetLength = function(len) {
       len = len | 0;
-      const target = getTargetObject.call(this);
+      const target = getTargetObject.call(this, false);
       if (target) {
         if (target.length === len) {
           return;
@@ -294,23 +294,22 @@ export default mixin({
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[FINALIZE] = {
-      value(proxying) {
-        if (targetType === StructureType.Pointer) {
-          return this;
-        } else if (targetType === StructureType.Function) {
-          const self = (...args) => {
-            const f = this['*'];
-            return f.call(this, ...args);
-          };
-          self[MEMORY] = this[MEMORY];
-          self[SLOTS] = this[SLOTS];
-          Object.setPrototypeOf(self, constructor.prototype);
-          return self;
-        } else {
-          return (proxying) ? getProxy(this, ProxyType.Pointer) : this;
-        }
+    descriptors[FINALIZE] = (targetType === StructureType.Function) && {
+      value() {
+        const self = (...args) => {
+          const f = this['*'];
+          return f.call(this, ...args);
+        };
+        self[MEMORY] = this[MEMORY];
+        self[SLOTS] = this[SLOTS];
+        Object.setPrototypeOf(self, constructor.prototype);
+        return self;
       }
+    };
+    descriptors[PROXY] = (targetType !== StructureType.Function && targetType !== StructureType.Pointer) && {
+      value() {
+        return getProxy(this, ProxyType.Pointer);
+      },
     };
     descriptors[TARGET] = { get: getTargetObject, set: setTargetObject };
     descriptors[UPDATE] = defineValue(updateTarget);

@@ -1,8 +1,8 @@
-import { ArrayFlag, StructureFlag, VisitorFlag } from '../constants.js';
+import { ArrayFlag, ProxyType, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
-import { getArrayProxy } from '../proxies.js';
-import { ENTRIES, FINALIZE, INITIALIZE, SENTINEL, VISIT, VIVIFICATE } from '../symbols.js';
+import { getArrayProxy, getProxy } from '../proxies.js';
+import { ENTRIES, FINALIZE, INITIALIZE, PROXY, SENTINEL, VISIT, VIVIFICATE } from '../symbols.js';
 import { copyObject, defineValue, isCompatibleInstanceOf, transformIterable } from '../utils.js';
 
 export default mixin({
@@ -69,6 +69,11 @@ export default mixin({
     descriptors[Symbol.iterator] = this.defineArrayIterator();
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
+    descriptors[PROXY] = {
+      value() {
+        return getProxy(this, ProxyType.Array);
+      }
+    };
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
     return constructor;

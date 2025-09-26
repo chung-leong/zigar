@@ -1,18 +1,16 @@
-import { ProxyType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { getProxy } from '../proxies.js';
 import { MEMORY, PARENT, RESTORE, SLOTS } from '../symbols.js';
 import { defineProperties } from '../utils.js';
 
 export default mixin({
   defineFinalizerArray({ get, set }) {
     return {
-      value(proxying) {
+      value() {
         defineProperties(this, {
           get: { value: get.bind(this) },
           set: set && { value: set.bind(this) },
         });
-        return (proxying) ? getProxy(this, ProxyType.Array) : this;
+        return this;
       },
     };
   },

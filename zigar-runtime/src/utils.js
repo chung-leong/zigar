@@ -392,7 +392,6 @@ export class ObjectCache {
 
   save(dv, object) {
     this.map.set(dv, object);
-    return object;
   }
 }
 

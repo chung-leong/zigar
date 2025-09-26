@@ -3427,9 +3427,6 @@ describe('Structure: pointer', function() {
       expect(() => pointer.length = 3).to.not.throw();
       const slice4 = pointer['*'];
       expect(slice4.valueOf()).to.eql([ { cat: 123, dog: 456 }, { cat: 1230, dog: 4560 }, { cat: 12300, dog: 45600 } ]);
-      debugger;
-      console.log(slice4);
-      console.log(slice1);
       expect(slice4).to.equal(slice1);
     })
     it('should allow modification of the length of a multi pointer', function() {
