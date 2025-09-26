@@ -1,5 +1,6 @@
+import { ProxyType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { ARRAY } from '../symbols.js';
+import { getProxyTarget } from '../proxies.js';
 import { defineValue, getErrorHandler } from '../utils.js';
 
 export default mixin({
@@ -11,16 +12,25 @@ export default mixin({
   }
 });
 
+function getArray(arg) {
+  const proxy = getProxyTarget(arg);
+  if (proxy) {
+    const { target } = proxy;
+    return (proxy.type === ProxyType.Pointer) ? target['*'] : target;
+  }
+  return arg;
+}
+
 function getArrayIterator() {
-  const self = this[ARRAY] ?? this;
-  const length = this.length;
+  const array = getArray(this);
+  const length = array.length;
   let index = 0;
   return {
     next() {
       let value, done;
       if (index < length) {
         const current = index++;
-        value = self.get(current);
+        value = array.get(current);
         done = false;
       } else {
         done = true;
@@ -32,15 +42,15 @@ function getArrayIterator() {
 
 function getArrayEntriesIterator(options) {
   const handleError = getErrorHandler(options);
-  const self = this[ARRAY] ?? this;
-  const length = this.length;
+  const array = getArray(this);
+  const length = array.length;
   let index = 0;
   return {
     next() {
       let value, done;
       if (index < length) {
         const current = index++;
-        value = [ current, handleError(() => self.get(current)) ];
+        value = [ current, handleError(() => array.get(current)) ];
         done = false;
       } else {
         done = true;

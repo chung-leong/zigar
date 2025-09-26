@@ -1,18 +1,18 @@
+import { ProxyType } from '../constants.js';
 import { mixin } from '../environment.js';
-import { ARRAY, MEMORY, PARENT, PROXY, RESTORE, SLOTS } from '../symbols.js';
+import { getProxy } from '../proxies.js';
+import { MEMORY, PARENT, RESTORE, SLOTS } from '../symbols.js';
 import { defineProperties } from '../utils.js';
 
 export default mixin({
   defineFinalizerArray({ get, set }) {
     return {
-      value() {
-        const value = new Proxy(this, proxyHandlers);
+      value(proxying) {
         defineProperties(this, {
-          [PROXY]: { value },
           get: { value: get.bind(this) },
           set: set && { value: set.bind(this) },
         });
-        return value;
+        return (proxying) ? getProxy(this, ProxyType.Array) : this;
       },
     };
   },
@@ -33,59 +33,3 @@ export default mixin({
   },
 });
 
-const proxyHandlers = {
-  get(array, name) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      return array.get(index);
-    } else if (name === ARRAY) {
-      return array;
-    } else {
-      return array[name];
-    }
-  },
-  set(array, name, value) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      array.set(index, value);
-    } else {
-      array[name] = value;
-    }
-    return true;
-  },
-  deleteProperty(array, name) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      return false;
-    } else {
-      delete array[name];
-      return true;
-    }
-  },
-  has(array, name) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      return (index >= 0 && index < array.length);
-    } else {
-      return array[name];
-    }
-  },
-  ownKeys(array) {
-    const keys = [];
-    for (let i = 0, len = array.length; i < len; i++) {
-      keys.push(`${i}`);
-    }
-    keys.push('length', PROXY);
-    return keys;
-  },
-  getOwnPropertyDescriptor(array, name) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      if (index >= 0 && index < array.length) {
-        return { value: array.get(index), enumerable: true, writable: true, configurable: true };
-      }
-    } else {
-      return Object.getOwnPropertyDescriptor(array, name);
-    }
-  },
-};

@@ -93,7 +93,6 @@ export const ArgStructFlag = {
   IsThrowing:       0x0020,
   IsAsync:          0x0040,
 };
-
 export const MemberType = {
   Void: 0,
   Bool: 1,
@@ -120,14 +119,17 @@ export const MemberFlag = {
   IsPlain:          0x0100,
   IsTypedArray:     0x0200,
 };
-
+export const ProxyType = {
+  Pointer: 0,
+  Array: 1,
+  Const: 2,
+};
 export const ModuleAttribute = {
   LittleEndian:     0x0001,
   RuntimeSafety:    0x0002,
   LibC:             0x0004,
   IoRedirection:    0x0008,
 };
-
 export const VisitorFlag = {
   IsInactive:       0x0001,
   IsImmutable:      0x0002,
@@ -137,9 +139,7 @@ export const VisitorFlag = {
   IgnoreArguments:  0x0010,
   IgnoreRetval:     0x0020,
 };
-
-// values here mirror std.os.wasi.errno_t
-export const PosixError = {
+export const PosixError = { // values mirror std.os.wasi.errno_t
   NONE: 0,  
   EACCES: 2,
   EAGAIN: 6,

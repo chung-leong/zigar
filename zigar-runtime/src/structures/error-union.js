@@ -29,7 +29,7 @@ export default mixin({
       this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
     };
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -71,7 +71,7 @@ export default mixin({
           }
         }
       }
-    };
+    });
     const constructor = this.createConstructor(structure);
     descriptors.$ = { get, set: initializer };
     descriptors[INITIALIZE] = defineValue(initializer);

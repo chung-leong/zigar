@@ -1,6 +1,6 @@
-import { mixin } from "../environment.js";
-import { MEMORY, ZIG } from "../symbols.js";
-import { copyView } from "../utils.js";
+import { mixin } from '../environment.js';
+import { MEMORY, ZIG } from '../symbols.js';
+import { copyView } from '../utils.js';
 
 export default mixin({
   ...(process.env.TARGET === 'wasm' ? {

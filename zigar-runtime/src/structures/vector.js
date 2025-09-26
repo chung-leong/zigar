@@ -22,7 +22,7 @@ export default mixin({
       /* c8 ignore end */
     }
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg) {
+    const initializer = this.createInitializer(function(arg) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -48,8 +48,8 @@ export default mixin({
       } else if (arg !== undefined) {
         throw new InvalidArrayInitializer(structure, arg);
       }
-    };
-    const constructor = this.createConstructor(structure, { initializer });
+    });
+    const constructor = this.createConstructor(structure);
     const { bitSize: elementBitSize } = member;
     for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
       if (flags & StructureFlag.HasPointer) {

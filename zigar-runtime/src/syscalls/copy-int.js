@@ -1,5 +1,5 @@
-import { mixin } from "../environment.js";
-import { createView } from "../utils.js";
+import { mixin } from '../environment.js';
+import { createView } from '../utils.js';
 
 export default mixin({
   copyUint64(bufAddress, value) {

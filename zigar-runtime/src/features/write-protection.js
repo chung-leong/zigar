@@ -1,6 +1,8 @@
+import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { throwReadOnly } from '../errors.js';
-import { ARRAY, CONST_TARGET, POINTER } from '../symbols.js';
+import { addConstTarget, getProxyTarget } from '../proxies.js';
+import { TYPE } from '../symbols.js';
 
 export default mixin({
   makeReadOnly(object) {
@@ -12,17 +14,15 @@ const gp = Object.getOwnPropertyDescriptors;
 const df = Object.defineProperty;
 
 function protect(object) {
-  const pointer = object[POINTER];
-  if (pointer) {
-    protectProperties(pointer, [ 'length' ]);
+  const type = object.constructor[TYPE]
+  if (type === StructureType.Pointer) {
+    // protect all properties except length
+    protectProperties(object, [ 'length' ]);
+  } else if (type === StructureType.Array || type === StructureType.Slice) {
+    protectProperties(object);
+    protectElements(object);
   } else {
-    const array = object[ARRAY];
-    if (array) {
-      protectProperties(array);
-      protectElements(array);
-    } else {
-      protectProperties(object);
-    }
+    protectProperties(object);
   }
 }
 
@@ -34,16 +34,18 @@ function protectProperties(object, exclude = []) {
       df(object, name, descriptor);
     }
   }
-  df(object, CONST_TARGET, { value: object });
+  addConstTarget(object);
 }
 
 function protectElements(array) {
   df(array, 'set', { value: throwReadOnly });
   const get = array.get;
   const getReadOnly = function(index) {
-    const element = get.call(this, index);
-    if (element?.[CONST_TARGET] === null) {
-      protect(element);
+    const element = get.call(this, index);    
+    if (typeof(element) === 'object') {
+      if (!getProxyTarget(element)) {
+        protect(element);
+      }
     }
     return element;
   };

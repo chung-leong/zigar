@@ -1362,7 +1362,7 @@ const StructureFlags = struct {
         _: u27 = 0,
     };
     pub const Array = packed struct(u32) {
-        has_value: bool = false,
+        has_value: bool = true, // the value in this case is the array proxy
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
@@ -1437,7 +1437,7 @@ const StructureFlags = struct {
         _: u27 = 0,
     };
     pub const Pointer = packed struct(u32) {
-        has_value: bool = false,
+        has_value: bool = true, // the value in this case is the pointer proxy
         has_object: bool = false,
         has_pointer: bool = true,
         has_slot: bool = true,
@@ -1451,7 +1451,7 @@ const StructureFlags = struct {
         _: u23 = 0,
     };
     pub const Slice = packed struct(u32) {
-        has_value: bool = false,
+        has_value: bool = true,
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,

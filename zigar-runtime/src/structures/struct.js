@@ -15,7 +15,7 @@ export default mixin({
     const backingIntMember = members.find(m => m.flags & MemberFlag.IsBackingInt);
     const backingInt = backingIntMember && this.defineMember(backingIntMember);
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -28,7 +28,7 @@ export default mixin({
       } else if (arg !== undefined) {
         throw new InvalidInitializer(structure, 'object', arg);
       }
-    };
+    });
     const constructor = this.createConstructor(structure);
     // add descriptors of struct field
     const setters = descriptors[SETTERS].value;

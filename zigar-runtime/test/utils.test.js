@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 
 import { MemberType, PosixDescriptor, PosixDescriptorFlag } from '../src/constants.js';
-import { LENGTH, MEMORY, PROXY, RESTORE } from '../src/symbols.js';
+import { LENGTH, MEMORY, RESTORE } from '../src/symbols.js';
 import {
   adjustAddress,
   alignForward,
@@ -21,7 +21,6 @@ import {
   findSortedIndex,
   getLength,
   getPrimitiveName,
-  getProxy,
   getSelf,
   hasMethod,
   isInvalidAddress,
@@ -330,14 +329,6 @@ describe('Utility functions', function() {
         [LENGTH]: 123,
       };
       expect(getLength.call(object)).to.equal(123);
-    })
-  })
-  describe('getProxy', function() {
-    it('should return this[PROXY]', function() {
-      const object = {
-        [PROXY]: 123,
-      };
-      expect(getProxy.call(object)).to.equal(123);
     })
   })
   describe('toString', function() {

@@ -22,7 +22,7 @@ export default mixin({
     };
     const isValueVoid = valueMember.type === MemberType.Void;
     const { bitOffset, byteSize } = valueMember;
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -52,7 +52,7 @@ export default mixin({
           }
         }
       }
-    };
+    });
     const constructor = structure.constructor = this.createConstructor(structure);
     descriptors.$ = { get, set: initializer };
     // we need to clear the value portion when there's a separate bool indicating whether a value

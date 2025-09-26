@@ -5,10 +5,12 @@ import {
   MultipleUnionInitializers,
 } from '../errors.js';
 import {
-  ENTRIES, GETTERS, INITIALIZE, KEYS, NAME, POINTER, PROPS, RESTRICT, SETTERS, TAG, TARGET,
-  VISIT, VIVIFICATE
+  ENTRIES, GETTERS, INITIALIZE, KEYS, NAME, PROPS, RESTRICT, SETTERS, TAG, TARGET, VISIT,
+  VIVIFICATE
 } from '../symbols.js';
-import { copyObject, defineProperties, defineValue, empty, isCompatibleInstanceOf } from '../utils.js';
+import {
+  copyObject, defineProperties, defineValue, empty, isCompatibleInstanceOf
+} from '../utils.js';
 
 export default mixin({
   defineUnion(structure, descriptors) {
@@ -41,7 +43,7 @@ export default mixin({
         setSelector.call(this, index);
       };
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -63,7 +65,7 @@ export default mixin({
       } else if (arg !== undefined) {
         throw new InvalidInitializer(structure, 'object with a single property', arg);
       }
-    };
+    });
     const constructor = this.createConstructor(structure);
     const getters = {};
     const setters = descriptors[SETTERS].value;
@@ -167,10 +169,9 @@ function throwInaccessible() {
 
 function disablePointer() {
   const disabledProp = { get: throwInaccessible, set: throwInaccessible };
-  defineProperties(this[POINTER], {
+  defineProperties(this, {
     '*': disabledProp,
     '$': disabledProp,
-    [POINTER]: disabledProp,
     [TARGET]: disabledProp,
   });
 };

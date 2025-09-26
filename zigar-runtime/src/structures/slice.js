@@ -1,10 +1,13 @@
 import { SliceFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
+import { getArrayProxy } from '../proxies.js';
 import {
   ENTRIES, FINALIZE, INITIALIZE, LENGTH, MEMORY, SENTINEL, SHAPE, VISIT, VIVIFICATE
 } from '../symbols.js';
-import { copyObject, copyView, defineValue, getProxy, isCompatibleInstanceOf, transformIterable } from '../utils.js';
+import {
+  copyObject, copyView, defineValue, isCompatibleInstanceOf, transformIterable
+} from '../utils.js';
 
 export default mixin({
   defineSlice(structure, descriptors) {
@@ -44,7 +47,7 @@ export default mixin({
     // the initializer behave differently depending on whether it's called by the
     // constructor or by a member setter (i.e. after object's shape has been established)
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         if (!this[MEMORY]) {
           shapeDefiner.call(this, null, arg.length, allocator);
@@ -82,7 +85,7 @@ export default mixin({
       } else if (arg !== undefined) {
         throw new InvalidArrayInitializer(structure, arg);
       }
-    };
+    });
     const getSubArrayView = function(begin, end) {
       const length = this[LENGTH];
       const dv = this[MEMORY];
@@ -93,7 +96,7 @@ export default mixin({
       return thisEnv.obtainView(dv.buffer, dv.byteOffset + offset, len);
     };
     const constructor = this.createConstructor(structure);
-    descriptors.$ = { get: getProxy, set: initializer };
+    descriptors.$ = { get: getArrayProxy, set: initializer };
     descriptors.length = { get: getLength };
     if (flags & SliceFlag.IsTypedArray) {
       descriptors.typedArray = this.defineTypedArray(structure);

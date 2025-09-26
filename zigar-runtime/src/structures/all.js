@@ -1,11 +1,10 @@
 import { MemberFlag, MemberType, StructureFlag, structureNames, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MissingInitializers, NoInitializer, NoProperty } from '../errors.js';
+import { getProxyTarget } from '../proxies.js';
 import {
-  ALIGN, CACHE, CAST, CONST_TARGET,
-  ENTRIES, ENVIRONMENT, FINALIZE, FLAGS, INITIALIZE, KEYS,
-  MEMORY, PROPS, RESTORE, RESTRICT, SETTERS, SHAPE, SIGNATURE, SIZE, SLOTS, TRANSFORM, TYPE,
-  TYPED_ARRAY, UPDATE
+  ALIGN, CACHE, CAST, ENTRIES, ENVIRONMENT, FINALIZE, FLAGS, INITIALIZE, KEYS, MEMORY, PROPS,
+  RESTORE, RESTRICT, SETTERS, SHAPE, SIGNATURE, SIZE, SLOTS, TRANSFORM, TYPE, TYPED_ARRAY, UPDATE
 } from '../symbols.js';
 import { copyObject, defineProperties, defineProperty, defineValue, ObjectCache } from '../utils.js';
 
@@ -32,7 +31,6 @@ export default mixin({
       base64: this.defineBase64(structure),
       toJSON: this.defineToJSON(),
       valueOf: this.defineValueOf(),
-      [CONST_TARGET]: { value: null },
       [SETTERS]: defineValue(setters),
       [KEYS]: defineValue(keys),
       ...(process.env.TARGET === 'wasm' ? {
@@ -223,7 +221,7 @@ export default mixin({
         }
       }
       if (FINALIZE in self) {
-        self = self[FINALIZE]();
+        self = self[FINALIZE](this !== ENVIRONMENT);
       }
       return cache.save(dv, self);
     };
@@ -234,6 +232,15 @@ export default mixin({
       }
     }
     return constructor;
+  },
+  createInitializer(handler) {
+    return function(arg, allocator) {
+      const argProxy = getProxyTarget(arg);
+      if (argProxy) {
+        arg = argProxy.target;
+      }
+      return handler.call(this, arg, allocator, argProxy?.type);
+    }
   },
   createApplier(structure) {
     const { instance: { template } } = structure;

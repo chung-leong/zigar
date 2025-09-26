@@ -1,5 +1,5 @@
 import { MemberType } from './constants.js';
-import { ENVIRONMENT, LENGTH, MEMORY, PROXY, RESTORE, SIGNATURE } from './symbols.js';
+import { ENVIRONMENT, LENGTH, MEMORY, RESTORE, SIGNATURE } from './symbols.js';
 
 export function defineProperty(object, name, descriptor) {
   if (descriptor) {
@@ -369,10 +369,6 @@ export function getLength() {
   return this[LENGTH];
 }
 
-export function getProxy() {
-  return this[PROXY];
-}
-
 export function toString() {
   return String(this);
 }
@@ -423,3 +419,4 @@ export function extractTimes(st_atim, st_mtim, fst_flags) {
   }
   return times;
 }
+

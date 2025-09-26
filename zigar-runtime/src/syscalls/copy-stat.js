@@ -1,7 +1,7 @@
-import { PosixError, PosixFileType } from "../constants.js";
-import { mixin } from "../environment.js";
-import { InvalidEnumValue, TypeMismatch } from "../errors.js";
-import { createView, getEnumNumber, hasMethod } from "../utils.js";
+import { PosixError, PosixFileType } from '../constants.js';
+import { mixin } from '../environment.js';
+import { InvalidEnumValue, TypeMismatch } from '../errors.js';
+import { createView, getEnumNumber, hasMethod } from '../utils.js';
 
 export default mixin({
   copyStat(bufAddress, stat) {

@@ -1,18 +1,19 @@
 import {
-  MemberType, PointerFlag, PrimitiveFlag, SliceFlag, StructureFlag, StructureType,
+  MemberType, PointerFlag, PrimitiveFlag, ProxyType, SliceFlag, StructureFlag, StructureType,
 } from '../constants.js';
 import { mixin } from '../environment.js';
 import {
   ConstantConstraint, InvalidPointerTarget, InvalidSliceLength, NoCastingToPointer, NullPointer,
   PreviouslyFreed, ReadOnlyTarget, throwReadOnly, ZigMemoryTargetRequired
 } from '../errors.js';
+import { getPointerProxy, getProxy } from '../proxies.js';
 import {
-  ADDRESS, CAST, CONST_TARGET, ENVIRONMENT, FINALIZE, INITIALIZE, LAST_ADDRESS, LAST_LENGTH,
-  LENGTH, MAX_LENGTH, MEMORY, PARENT, POINTER, PROXY, RESTORE, SENTINEL, SETTERS, SIZE, SLOTS,
-  TARGET, TYPE, TYPED_ARRAY, UPDATE, VISIT, ZIG
+  ADDRESS, CAST, ENVIRONMENT, FINALIZE, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MAX_LENGTH,
+  MEMORY, PARENT, RESTORE, SENTINEL, SETTERS, SIZE, SLOTS, TARGET, TYPE, TYPED_ARRAY, UPDATE,
+  VISIT, ZIG
 } from '../symbols.js';
 import {
-  defineValue, findElements, getProxy, isCompatibleInstanceOf, isCompatibleType, usizeInvalid,
+  defineValue, findElements, getSelf, isCompatibleInstanceOf, isCompatibleType, usizeInvalid
 } from '../utils.js';
 
 export default mixin({
@@ -86,22 +87,20 @@ export default mixin({
       }
     : null;
     const getTargetObject = function() {
-      const pointer = this[POINTER] ?? this;
-      const empty = !pointer[SLOTS][0];
-      const target = updateTarget.call(pointer, null, empty);
+      const empty = !this[SLOTS][0];
+      const target = updateTarget.call(this, null, empty);
       if (!target) {
         if (flags & PointerFlag.IsNullable) {
           return null;
         }
         throw new NullPointer();
       }
-      return (flags & PointerFlag.IsConst) ? getConstProxy(target) : target;
+      return (flags & PointerFlag.IsConst) ? getProxy(target, ProxyType.Const) : target;
     };
     const setTargetObject = function(arg) {
       if (arg === undefined) {
         return;
       }
-      const pointer = this[POINTER] ?? this;
       if (arg) {
         const zig = arg[MEMORY][ZIG];
         if (zig) {
@@ -114,23 +113,24 @@ export default mixin({
             arg[MEMORY][ZIG] = undefined;
           }
         } else {
-          if (pointer[MEMORY][ZIG]) {
+          if (this[MEMORY][ZIG]) {
             throw new ZigMemoryTargetRequired();
           }
         }
-      } else if (pointer[MEMORY][ZIG]) {
+      } else if (this[MEMORY][ZIG]) {
         setAddress.call(this, 0);
         setLength?.call?.(this, 0);
       }
-      pointer[SLOTS][0] = arg ?? null;
+      this[SLOTS][0] = arg ?? null;
       if (flags & PointerFlag.HasLength) {
-        pointer[MAX_LENGTH] = null;
+        this[MAX_LENGTH] = null;
       }
     };
     const getTarget = (targetFlags & StructureFlag.HasValue)
     ? function() {
         const target = getTargetObject.call(this);
-        return target.$;
+        const value = target.$;
+        return ((flags & PointerFlag.IsConst) && typeof(value) === 'object') ? getProxy(value, ProxyType.Const) : value;
       }
     : getTargetObject;
     const setTarget = (flags & PointerFlag.IsConst)
@@ -181,13 +181,13 @@ export default mixin({
       setLength?.call?.(this, len);
     };
     const thisEnv = this;
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator, proxyType) {
       const Target = targetStructure.constructor;
       if (isPointerOf(arg, Target)) {
-        // initialize with the other pointer'structure target
         if (!(flags & PointerFlag.IsConst) && arg.constructor.const) {
           throw new ConstantConstraint(structure, arg);
         }
+        // initialize with the other pointer's target
         arg = arg[SLOTS][0];
       } else if (flags & PointerFlag.IsMultiple) {
         if (isCompatiblePointer(arg, Target, flags)) {
@@ -211,11 +211,9 @@ export default mixin({
         if (process.env.TARGET === 'wasm') {
           arg[RESTORE]();
         }
-        const constTarget = arg[CONST_TARGET];
-        if (constTarget) {
-          if (flags & PointerFlag.IsConst) {
-            arg = constTarget;
-          } else {
+        // if the target is read-only, then only a const pointer can point to it
+        if (proxyType === ProxyType.Const) {
+          if (!(flags & PointerFlag.IsConst)) {
             throw new ReadOnlyTarget(structure);
           }
         }
@@ -264,10 +262,13 @@ export default mixin({
         throw new PreviouslyFreed(arg);
       }
       this[TARGET] = arg;
-    };
+    });
     const constructor = this.createConstructor(structure);
     descriptors['*'] = { get: getTarget, set: setTarget };
-    descriptors.$ = { get: getProxy, set: initializer };
+    descriptors.$ = { 
+      get: (targetType === StructureType.Pointer) ? getSelf : getPointerProxy, 
+      set: initializer 
+    };
     descriptors.length = { get: getTargetLength, set: setTargetLength };
     descriptors.slice = (targetType === StructureType.Slice) && {
       value(begin, end) {
@@ -288,22 +289,21 @@ export default mixin({
     };
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = {
-      value() {
-        const handlers = (targetType !== StructureType.Pointer) ? proxyHandlers : {};
-        let self;
-        if (targetType === StructureType.Function) {
-          // use an empty function as object so the proxy's apply() method is triggered
-          self = /* c8 ignore next */ function() {};
+      value(proxying) {
+        if (targetType === StructureType.Pointer) {
+          return this;
+        } else if (targetType === StructureType.Function) {
+          const self = (...args) => {
+            const f = this['*'];
+            return f.call(this, ...args);
+          };
           self[MEMORY] = this[MEMORY];
           self[SLOTS] = this[SLOTS];
           Object.setPrototypeOf(self, constructor.prototype);
+          return self;
         } else {
-          self = this;
+          return (proxying) ? getProxy(this, ProxyType.Pointer) : this;
         }
-        const proxy = new Proxy(self, handlers);
-        // hide the proxy so console wouldn't display a recursive structure
-        Object.defineProperty(self, PROXY, { value: proxy });
-        return proxy;
       }
     };
     descriptors[TARGET] = { get: getTargetObject, set: setTargetObject };
@@ -369,96 +369,6 @@ function isCompatiblePointer(arg, Target, flags) {
   }
   return false;
 }
-
-const constProxies = new WeakMap();
-
-function getConstProxy(target) {
-  let proxy = constProxies.get(target);
-  if (!proxy) {
-    const pointer = target[POINTER];
-    if (pointer) {
-      proxy = new Proxy(pointer, readOnlyProxyHandlers);
-    } else {
-      proxy = new Proxy(target, constTargetProxyHandlers);
-    }
-    constProxies.set(target, proxy);
-  }
-  return proxy;
-}
-
-const proxyHandlers = {
-  get(pointer, name) {
-    if (name === POINTER) {
-      return pointer;
-    } else if (name in pointer) {
-      return pointer[name];
-    } else {
-      const target = pointer[TARGET];
-      return target[name];
-    }
-  },
-  set(pointer, name, value) {
-    if (name in pointer) {
-      pointer[name] = value;
-    } else {
-      const target = pointer[TARGET];
-      target[name] = value;
-    }
-    return true;
-  },
-  deleteProperty(pointer, name) {
-    if (name in pointer) {
-      delete pointer[name];
-    } else {
-      const target = pointer[TARGET];
-      delete target[name];
-    }
-    return true;
-  },
-  has(pointer, name) {
-    if (name in pointer) {
-      return true;
-    } else {
-      const target = pointer[TARGET];
-      return name in target;
-    }
-  },
-  apply(pointer, thisArg, args) {
-    const f = pointer['*'];
-    return f.apply(thisArg, args);
-  },
-};
-
-const readOnlyProxyHandlers = {
-  ...proxyHandlers,
-  set(pointer, name, value) {
-    if (name in pointer) {
-      throwReadOnly();
-    } else {
-      const target = pointer[TARGET];
-      target[name] = value;
-    }
-    return true;
-  },
-};
-
-const constTargetProxyHandlers = {
-  get(target, name) {
-    if (name === CONST_TARGET) {
-      return target;
-    } else {
-      const value = target[name];
-      if (value?.[MEMORY]) {
-        return getConstProxy(value);
-      } else {
-        return value;
-      }
-    }
-  },
-  set(target, name, value) {
-    throwReadOnly();
-  }
-};
 
 function isCompatibleBuffer(arg, constructor) {
   // TODO: merge this with extractView in mixin "view-management"
