@@ -11,8 +11,6 @@ export function getProxy(target, type) {
   const map = (type & ProxyType.Const) ? constProxyMap : proxyMap;
   let proxy = map.get(key);
   if (!proxy) {
-    // const existing = getProxyTarget(target);
-    // console.log({ existing });
     proxy = new Proxy(target, handlersHash[type]);
     map.set(key, proxy);
     proxyTargetMap.set(proxy, { target, type });
@@ -204,6 +202,6 @@ const handlersHash = {
   [ProxyType.Pointer]: pointerHandlers,
   [ProxyType.Array]: arrayHandlers,
   [ProxyType.Const]: constTargetHandlers,
-  [ProxyType.Const | ProxyType.PointerConst]: constPointerHandlers,
+  [ProxyType.Const | ProxyType.Pointer]: constPointerHandlers,
   [ProxyType.Const | ProxyType.Array] : constArrayHandlers,
 };
