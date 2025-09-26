@@ -166,7 +166,7 @@ export default mixin({
         allocator,
       } = options;
       const creating = this instanceof constructor;
-      let self, dv;
+      let self, dv, cached = false;
       if (creating) {
         if (arguments.length === 0) {
           throw new NoInitializer(structure);
@@ -197,34 +197,37 @@ export default mixin({
         // look for buffer
         dv = thisEnv.extractView(structure, arg, onCastError);
         if (self = cache.find(dv)) {
-          return self;
-        }
-        self = Object.create(constructor.prototype);
-        if (SHAPE in self) {
-          thisEnv.assignView(self, dv, structure, false, false);
+          cached = true;
         } else {
-          self[MEMORY] = dv;
-        }
-        if (flags & StructureFlag.HasSlot) {
-          self[SLOTS] = {};
-        }
-      }
-      if (comptimeFieldSlots) {
-        for (const slot of comptimeFieldSlots) {
-          self[SLOTS][slot] = template[SLOTS][slot];
-        }
-      }
-      self[RESTRICT]?.();
-      if (creating) {
-        // initialize object unless that's done already
-        if (!(SHAPE in self)) {
-          self[INITIALIZE](arg, allocator);
+          self = Object.create(constructor.prototype);
+          if (SHAPE in self) {
+            thisEnv.assignView(self, dv, structure, false, false);
+          } else {
+            self[MEMORY] = dv;
+          }
+          if (flags & StructureFlag.HasSlot) {
+            self[SLOTS] = {};
+          }
         }
       }
-      if (FINALIZE in self) {
-        self = self[FINALIZE]();
+      if (!cached) {
+        if (comptimeFieldSlots) {
+          for (const slot of comptimeFieldSlots) {
+            self[SLOTS][slot] = template[SLOTS][slot];
+          }
+        }
+        self[RESTRICT]?.();
+        if (creating) {
+          // initialize object unless that's done already
+          if (!(SHAPE in self)) {
+            self[INITIALIZE](arg, allocator);
+          }
+        }
+        if (FINALIZE in self) {
+          self = self[FINALIZE]();
+        }
+        cache.save(dv, self);
       }
-      cache.save(dv, self);
       return (this !== ENVIRONMENT && PROXY in self) ? self[PROXY]() : self;
     };
     defineProperty(constructor, CACHE, defineValue(cache));

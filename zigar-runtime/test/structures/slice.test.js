@@ -95,6 +95,7 @@ describe('Structure: slice', function() {
       const constructor = function() {};
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: 'Slice',
         byteSize: 4,
         signature: 0n,
@@ -143,6 +144,7 @@ describe('Structure: slice', function() {
       const constructor = function() {};
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: 'Slice',
         byteSize: 4,
         signature: 0n,
@@ -171,6 +173,7 @@ describe('Structure: slice', function() {
       const constructor = function() {};
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: 'Slice',
         byteSize: 4,
         signature: 0n,
@@ -196,6 +199,7 @@ describe('Structure: slice', function() {
       const constructor = function() {};
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: 'Slice',
         byteSize: 4,
         signature: 0n,
@@ -222,6 +226,7 @@ describe('Structure: slice', function() {
       const constructor = function() {};
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: 'Slice',
         byteSize: 4,
         signature: 0n,
@@ -253,6 +258,7 @@ describe('Structure: slice', function() {
       const constructor = function() {};
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: 'Slice',
         byteSize: 4,
         signature: 0n,
@@ -305,7 +311,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: 'Slice',
         byteSize: 1,
         signature: 0n,
@@ -357,7 +363,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: 'Slice',
         byteSize: 2,
         signature: 0n,
@@ -408,6 +414,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: '[_]u32',
         byteSize: 4,
         signature: 0n,
@@ -455,6 +462,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: '[_]u32',
         byteSize: 4,
         signature: 0n,
@@ -499,6 +507,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: '[_]u32',
         byteSize: 4,
         signature: 0n,
@@ -544,7 +553,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
         signature: 0n,
@@ -594,7 +603,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u16',
         byteSize: 2,
         signature: 0n,
@@ -644,7 +653,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u16',
         byteSize: 2,
         signature: 0n,
@@ -695,7 +704,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u16',
         byteSize: 2,
         signature: 0n,
@@ -752,7 +761,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
         signature: 0n,
@@ -802,7 +811,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u16',
         byteSize: 2,
         signature: 0n,
@@ -852,7 +861,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u16',
         byteSize: 2,
         signature: 0n,
@@ -899,6 +908,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: '[_]u16',
         byteSize: 2,
         signature: 0n,
@@ -943,6 +953,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: '[_]u16',
         byteSize: 2,
         signature: 0n,
@@ -986,6 +997,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: '[_]u8',
         byteSize: 1,
         signature: 0n,
@@ -1035,7 +1047,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | SliceFlag.IsString | SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
         signature: 0n,
@@ -1084,7 +1096,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
         signature: 0n,
@@ -1135,7 +1147,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
         signature: 0n,
@@ -1184,7 +1196,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | SliceFlag.IsTypedArray,
         name: '[_]u8',
         byteSize: 1,
         signature: 0n,
@@ -1230,6 +1242,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: '[_]u8',
         byteSize: 1,
         signature: 0n,
@@ -1281,6 +1294,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: '[_]u8',
         byteSize: 1,
         signature: 0n,
@@ -1331,6 +1345,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: '[_]u8',
         byteSize: 1,
         signature: 0n,
@@ -1379,6 +1394,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: '[_]u8',
         byteSize: 1,
         signature: 0n,
@@ -1433,6 +1449,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: '[_]u8',
         byteSize: 1,
         signature: 0n,
@@ -1527,7 +1544,7 @@ describe('Structure: slice', function() {
       env.finishStructure(structStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasProxy | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Slice',
         byteSize: 8,
         signature: 0n,
@@ -1622,7 +1639,7 @@ describe('Structure: slice', function() {
       env.finishStructure(structStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasProxy | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Slice',
         byteSize: 8,
         signature: 0n,
@@ -1671,6 +1688,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: 'Slice',
         byteSize: 8,
         signature: 0n,
@@ -1723,6 +1741,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: '[_]u8',
         byteSize: 1,
         signature: 0n,
@@ -1769,6 +1788,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: '[_]u8',
         byteSize: 1,
         signature: 0n,
@@ -1816,6 +1836,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const sliceStructure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: '[_]u64',
         byteSize: 8,
         signature: 0n,
@@ -1883,6 +1904,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const sliceStructure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: '[_]u64',
         byteSize: 8,
         signature: 0n,
@@ -1970,6 +1992,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const sliceStructure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: '[_]i64',
         byteSize: 8,
         signature: 0n,
@@ -2067,7 +2090,7 @@ describe('Structure: slice', function() {
       env.finishStructure(structStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasProxy | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'Slice',
         byteSize: 8,
         signature: 0n,
@@ -2135,6 +2158,7 @@ describe('Structure: slice', function() {
       env.finishStructure(structStructure);
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: 'Slice',
         byteSize: 8,
         signature: 0n,
@@ -2202,7 +2226,7 @@ describe('Structure: slice', function() {
       env.finishStructure(ptrStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[_]i32',
         byteSize: 8,
         signature: 0n,
@@ -2251,7 +2275,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
+        flags: StructureFlag.HasProxy | SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
         signature: 0n,
@@ -2310,7 +2334,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
+        flags: StructureFlag.HasProxy | SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
         signature: 0n,
@@ -2367,7 +2391,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
+        flags: StructureFlag.HasProxy | SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
         signature: 0n,
@@ -2424,7 +2448,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
+        flags: StructureFlag.HasProxy | SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
         signature: 0n,
@@ -2485,7 +2509,7 @@ describe('Structure: slice', function() {
       env.finalizeStructure(uintStructure);
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
+        flags: StructureFlag.HasProxy | SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
         signature: 0n,
@@ -2548,7 +2572,7 @@ describe('Structure: slice', function() {
       env.runtimeSafety = false;
       const structure = {
         type: StructureType.Slice,
-        flags: SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
+        flags: StructureFlag.HasProxy | SliceFlag.IsString | SliceFlag.IsTypedArray | SliceFlag.HasSentinel,
         name: '[_:0]u8',
         byteSize: 1,
         signature: 0n,
@@ -2610,6 +2634,7 @@ describe('Structure: slice', function() {
         env.finalizeStructure(uintStructure);
         const structure = {
           type: StructureType.Slice,
+          flags: StructureFlag.HasProxy,
           name: '[_]u32',
           byteSize: 4,
           signature: 0n,
