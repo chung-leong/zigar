@@ -29,69 +29,65 @@ export const StructurePurpose = {
 };
 export const structureNames = Object.keys(StructureType);
 export const StructureFlag = {
-  HasValue:         0x0001,
-  HasObject:        0x0002,
-  HasPointer:       0x0004,
-  HasSlot:          0x0008,
+  HasValue: 1 << 0,
+  HasObject: 1 << 1,
+  HasPointer: 1 << 2,
+  HasSlot: 1 << 3,
+  HasProxy: 1 << 4,
 };
 export const PrimitiveFlag = {
-  IsSize:           0x0010,
+  IsSize: 1 << 5,
 };
 export const ArrayFlag = {
-  HasSentinel:      0x0010,
-  IsString:         0x0020,
-  IsTypedArray:     0x0040,
-  IsClampedArray:   0x0080,
+  HasSentinel: 1 << 5,
+  IsString: 1 << 6,
+  IsTypedArray: 1 << 7,
+  IsClampedArray: 1 << 8,
 };
 export const StructFlag = {
-  IsExtern:         0x0010,
-  IsPacked:         0x0020,
-  IsTuple:          0x0040,
-  IsOptional:       0x0080,
+  IsExtern: 1 << 5,
+  IsPacked: 1 << 6,
+  IsTuple: 1 << 7,
+  IsOptional: 1 << 8,
 };
 export const UnionFlag = {
-  HasSelector:      0x0010,
-  HasTag:           0x0020,
-  HasInaccessible:  0x0040,
-  IsExtern:         0x0080,
-
-  IsPacked:         0x0100,
+  HasSelector: 1 << 5,
+  HasTag: 1 << 6,
+  HasInaccessible: 1 << 7,
+  IsExtern: 1 << 8,
+  IsPacked: 1 << 9,
 };
 export const EnumFlag = {
-  IsOpenEnded:      0x0010,
+  IsOpenEnded: 1 << 5,
 };
 export const OptionalFlag = {
-  HasSelector:      0x0010,
+  HasSelector: 1 << 5,
 };
 export const PointerFlag = {
-  HasLength:        0x0010,
-  IsMultiple:       0x0020,
-  IsSingle:         0x0040,
-  IsConst:          0x0080,
-
-  IsNullable:       0x0100,
+  HasLength: 1 << 5,
+  IsMultiple: 1 << 6,
+  IsSingle: 1 << 7,
+  IsConst: 1 << 8,
+  IsNullable: 1 << 9,
 };
 export const SliceFlag = {
-  HasSentinel:      0x0010,
-  IsString:         0x0020,
-  IsTypedArray:     0x0040,
-  IsClampedArray:   0x0080,
-
-  IsOpaque:         0x0100,
+  HasSentinel: 1 << 5,
+  IsString: 1 << 6,
+  IsTypedArray: 1 << 7,
+  IsClampedArray: 1 << 8,
+  IsOpaque: 1 << 9,
 };
 export const ErrorSetFlag = {
-  IsGlobal:         0x0010,
-};
-export const OpaqueFlag = {
+  IsGlobal: 1 << 5,
 };
 export const VectorFlag = {
-  IsTypedArray:     0x0010,
-  IsClampedArray:   0x0020,
+  IsTypedArray: 1 << 5,
+  IsClampedArray: 1 << 6,
 };
 export const ArgStructFlag = {
-  HasOptions:       0x0010,
-  IsThrowing:       0x0020,
-  IsAsync:          0x0040,
+  HasOptions: 1 << 5,
+  IsThrowing: 1 << 6,
+  IsAsync: 1 << 7,
 };
 export const MemberType = {
   Void: 0,
@@ -120,9 +116,10 @@ export const MemberFlag = {
   IsTypedArray:     0x0200,
 };
 export const ProxyType = {
-  Pointer: 0,
-  Array: 1,
-  Const: 2,
+  Pointer: 2,
+  Array: 4,
+
+  Const: 1,
 };
 export const ModuleAttribute = {
   LittleEndian:     0x0001,

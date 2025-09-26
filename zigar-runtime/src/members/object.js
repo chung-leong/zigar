@@ -13,7 +13,7 @@ export default mixin({
       get = getTypedArray;
     } else if (member.flags & MemberFlag.IsPlain) {
       get = getPlain;
-    } else if (member.structure.flags & StructureFlag.HasValue) {
+    } else if (member.structure.flags & (StructureFlag.HasValue | StructureFlag.HasProxy)) {
       get = getValue;
     } else {
       get = getObject;

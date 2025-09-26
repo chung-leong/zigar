@@ -1357,15 +1357,17 @@ const StructureFlags = struct {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+        has_proxy: bool = false,
 
         is_size: bool = false,
         _: u27 = 0,
     };
     pub const Array = packed struct(u32) {
-        has_value: bool = true, // the value in this case is the array proxy
+        has_value: bool = false,
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+        has_proxy: bool = true,
 
         has_sentinel: bool = false,
         is_string: bool = false,
@@ -1379,6 +1381,7 @@ const StructureFlags = struct {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+        has_proxy: bool = false,
 
         is_extern: bool = false,
         is_packed: bool = false,
@@ -1392,6 +1395,7 @@ const StructureFlags = struct {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+        has_proxy: bool = false,
 
         has_selector: bool = false,
         has_tag: bool = false,
@@ -1406,6 +1410,7 @@ const StructureFlags = struct {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+        has_proxy: bool = false,
 
         _: u28 = 0,
     };
@@ -1414,6 +1419,7 @@ const StructureFlags = struct {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+        has_proxy: bool = false,
 
         is_global: bool = false,
         _: u27 = 0,
@@ -1423,6 +1429,7 @@ const StructureFlags = struct {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+        has_proxy: bool = false,
 
         is_open_ended: bool = false,
         _: u27 = 0,
@@ -1432,15 +1439,17 @@ const StructureFlags = struct {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+        has_proxy: bool = false,
 
         has_selector: bool = false,
         _: u27 = 0,
     };
     pub const Pointer = packed struct(u32) {
-        has_value: bool = true, // the value in this case is the pointer proxy
+        has_value: bool = false,
         has_object: bool = false,
         has_pointer: bool = true,
         has_slot: bool = true,
+        has_proxy: bool = true,
 
         has_length: bool = false,
         is_multiple: bool = false,
@@ -1451,10 +1460,11 @@ const StructureFlags = struct {
         _: u23 = 0,
     };
     pub const Slice = packed struct(u32) {
-        has_value: bool = true,
+        has_value: bool = false,
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+        has_proxy: bool = false,
 
         has_sentinel: bool = false,
         is_string: bool = false,
@@ -1469,6 +1479,7 @@ const StructureFlags = struct {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+        has_proxy: bool = false,
 
         is_typed_array: bool = false,
         is_clamped_array: bool = false,
@@ -1479,6 +1490,7 @@ const StructureFlags = struct {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+        has_proxy: bool = false,
 
         _: u28 = 0,
     };
@@ -1487,6 +1499,7 @@ const StructureFlags = struct {
         has_object: bool = false,
         has_pointer: bool = true,
         has_slot: bool = true,
+        has_proxy: bool = false,
 
         has_options: bool = false,
         is_throwing: bool = false,
@@ -1498,6 +1511,7 @@ const StructureFlags = struct {
         has_object: bool = false,
         has_pointer: bool = true,
         has_slot: bool = true,
+        has_proxy: bool = false,
 
         has_options: bool = false,
         is_throwing: bool = false,
@@ -1509,6 +1523,7 @@ const StructureFlags = struct {
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
+        has_proxy: bool = false,
 
         _: u28 = 0,
     };

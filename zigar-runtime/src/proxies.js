@@ -1,6 +1,6 @@
-import { ProxyType } from './constants.js';
+import { ProxyType, StructureType } from './constants.js';
 import { throwReadOnly } from './errors.js';
-import { MEMORY, TARGET } from './symbols.js';
+import { MEMORY, TARGET, TYPE } from './symbols.js';
 
 const proxyMap = new WeakMap();
 const constProxyMap = new WeakMap();
@@ -8,29 +8,12 @@ const proxyTargetMap = new WeakMap();
 
 export function getProxy(target, type) {
   const key = target;
-  const map = (type === ProxyType.Const) ? constProxyMap : proxyMap;
+  const map = (type & ProxyType.Const) ? constProxyMap : proxyMap;
   let proxy = map.get(key);
   if (!proxy) {
-    let handlers;
-    if (type === ProxyType.Pointer) {
-      handlers = pointerHandlers;
-    } else if (type === ProxyType.Array) {
-      handlers = arrayHandlers;
-    } else {
-      handlers = constTargetHandlers;
-      const proxy = proxyTargetMap.get(target);
-      if (proxy) {
-        target = proxy.target;
-        if (proxy.type === ProxyType.Array) {
-          handlers = constArrayHandlers;
-        } else if (proxy.type === ProxyType.Pointer) {
-          handlers = constPointerHandlers;
-        }
-      } else if (TARGET in target) {
-        handlers = constPointerHandlers;
-      }
-    }
-    proxy = new Proxy(target, handlers);
+    // const existing = getProxyTarget(target);
+    // console.log({ existing });
+    proxy = new Proxy(target, handlersHash[type]);
     map.set(key, proxy);
     proxyTargetMap.set(proxy, { target, type });
   }
@@ -45,14 +28,32 @@ export function getArrayProxy() {
   return getProxy(this, ProxyType.Array);
 }
 
-export function getConstProxy() {
-  return getProxy(this, ProxyType.Const);
-}
-
 export function getProxyTarget(proxy) {
   if (typeof(proxy) === 'object' && proxy) {
     return proxyTargetMap.get(proxy);
   }
+}
+
+export function getConstProxy(value) {
+  const proxy = getProxyTarget(value);
+  let proxyType = ProxyType.Const;
+  if (proxy) {
+    if (proxy.type & ProxyType.Const) {
+      // it's already a const proxy
+      return value;
+    } else {
+      proxyType |= proxy.type;
+      value = proxy.target;
+    }
+  } else {
+    const structureType = value.constructor[TYPE];
+    if (structureType === StructureType.Pointer) {
+      proxyType |= ProxyType.Pointer;
+    } else if (structureType === StructureType.Array || structureType === StructureType.Slice) {
+      proxyType |= ProxyType.Array;
+    }
+  }
+  return getProxy(value, proxyType);
 }
 
 export function addConstTarget(object) {
@@ -114,7 +115,7 @@ const constTargetHandlers = {
   get(target, name) {
     const value = target[name];
     if (value?.[MEMORY]) {
-      return getProxy(value, ProxyType.Const);
+      return getConstProxy(value);
     } else {
       return value;
     }
@@ -184,7 +185,12 @@ const constArrayHandlers = {
   get (array, name) {
     const index = (typeof(name) === 'symbol') ? 0 : name|0;
     if (index !== 0 || index == name) {
-      return array.get(index);
+      const value = array.get(index);
+      if (value?.[MEMORY]) {       
+        return getConstProxy(value);
+      } else {
+        return value;
+      }
     } else if (name === 'set') {
       return throwReadOnly;
     } else {
@@ -192,4 +198,12 @@ const constArrayHandlers = {
     }
   },
   set: throwReadOnly,
-}
+};
+
+const handlersHash = {
+  [ProxyType.Pointer]: pointerHandlers,
+  [ProxyType.Array]: arrayHandlers,
+  [ProxyType.Const]: constTargetHandlers,
+  [ProxyType.Const | ProxyType.PointerConst]: constPointerHandlers,
+  [ProxyType.Const | ProxyType.Array] : constArrayHandlers,
+};

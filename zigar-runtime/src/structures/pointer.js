@@ -6,7 +6,7 @@ import {
   ConstantConstraint, InvalidPointerTarget, InvalidSliceLength, NoCastingToPointer, NullPointer,
   PreviouslyFreed, ReadOnlyTarget, throwReadOnly, ZigMemoryTargetRequired
 } from '../errors.js';
-import { getPointerProxy, getProxy } from '../proxies.js';
+import { getPointerProxy, getProxy, getProxyTarget } from '../proxies.js';
 import {
   ADDRESS, CAST, ENVIRONMENT, FINALIZE, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MAX_LENGTH,
   MEMORY, PARENT, RESTORE, SENTINEL, SETTERS, SIZE, SLOTS, TARGET, TYPE, TYPED_ARRAY, UPDATE,
@@ -86,6 +86,13 @@ export default mixin({
         this[LAST_LENGTH] = length;
       }
     : null;
+    let targetProxyType = 0;
+    if (targetFlags & StructureFlag.HasProxy) {
+      targetProxyType = (targetType == StructureType.Pointer) ? ProxyType.Pointer : ProxyType.Array;
+    }
+    if (flags & PointerFlag.IsConst) {
+      targetProxyType |= ProxyType.Const;
+    }
     const getTargetObject = function() {
       const empty = !this[SLOTS][0];
       const target = updateTarget.call(this, null, empty);
@@ -95,7 +102,7 @@ export default mixin({
         }
         throw new NullPointer();
       }
-      return (flags & PointerFlag.IsConst) ? getProxy(target, ProxyType.Const) : target;
+      return (targetProxyType) ? getProxy(target, targetProxyType) : target;
     };
     const setTargetObject = function(arg) {
       if (arg === undefined) {
@@ -127,11 +134,7 @@ export default mixin({
       }
     };
     const getTarget = (targetFlags & StructureFlag.HasValue)
-    ? function() {
-        const target = getTargetObject.call(this);
-        const value = target.$;
-        return ((flags & PointerFlag.IsConst) && typeof(value) === 'object') ? getProxy(value, ProxyType.Const) : value;
-      }
+    ? function() { return getTargetObject.call(this).$ }
     : getTargetObject;
     const setTarget = (flags & PointerFlag.IsConst)
     ? throwReadOnly
@@ -191,7 +194,7 @@ export default mixin({
         arg = arg[SLOTS][0];
       } else if (flags & PointerFlag.IsMultiple) {
         if (isCompatiblePointer(arg, Target, flags)) {
-          arg = Target(arg[SLOTS][0][MEMORY]);
+          arg = Target.call(ENVIRONMENT, arg[SLOTS][0][MEMORY]);
         }
       } else if (targetType === StructureType.Slice && (targetFlags & SliceFlag.IsOpaque) && arg) {
         if (arg.constructor[TYPE] === StructureType.Pointer) {
@@ -222,11 +225,11 @@ export default mixin({
         arg = Target.call(ENVIRONMENT, arg[MEMORY]);
       } else if (flags & PointerFlag.IsSingle && flags & PointerFlag.IsMultiple && arg instanceof Target.child) {
         // C pointer
-        arg = Target(arg[MEMORY]);
+        arg = Target.call(ENVIRONMENT, arg[MEMORY]);
       } else if (isCompatibleBuffer(arg, Target)) {
         // autocast to target type
         const dv = thisEnv.extractView(targetStructure, arg);
-        arg = Target(dv);
+        arg = Target.call(ENVIRONMENT, dv);
       } else if (arg != undefined && !arg[MEMORY]) {
         if (flags & PointerFlag.IsSingle && flags & PointerFlag.IsMultiple) {
           // C pointer
@@ -250,8 +253,11 @@ export default mixin({
           throw new InvalidPointerTarget(structure, arg);
         }
         // autovivificate target object
-        const autoObj = new Target(arg, { allocator });
-        arg = autoObj;
+        const autoObj = arg = new Target(arg, { allocator });
+        if (targetFlags & StructureFlag.HasProxy) {
+          // point to the actual object instead of the proxy
+          arg = getProxyTarget(autoObj).target;
+        }
       } else if (arg !== undefined) {
         if (!(flags & PointerFlag.IsNullable) || arg !== null) {
           throw new InvalidPointerTarget(structure, arg);
