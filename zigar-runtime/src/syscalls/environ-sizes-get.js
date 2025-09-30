@@ -5,9 +5,17 @@ import './copy-int.js';
 
 export default mixin({
   environSizesGet(environCountAddress, environBufSizeAddress) {
-    const object = this.envVariables;
+    let object = this.envVariables;
     if (!object) {
-      return PosixError.ENOTSUP;
+      if (process.env.TARGET === 'wasm') {
+        if (!this.customWASI?.wasiImport?.environ_sizes_get) {
+          object = {};
+        } else {
+          return PosixError.ENOTSUP;
+        }
+      } else {
+        return PosixError.ENOTSUP;
+      }
     }
     const env = this.envVarArrays = [];
     for (const [ name, value ] of Object.entries(object)) {
