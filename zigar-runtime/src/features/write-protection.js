@@ -1,8 +1,9 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { throwReadOnly } from '../errors.js';
-import { addConstTarget, getProxyTarget } from '../proxies.js';
-import { TYPE } from '../symbols.js';
+import { removeProxy } from '../proxies.js';
+import { MEMORY, READ_ONLY, TYPE } from '../symbols.js';
+import { defineProperties, defineProperty, defineValue } from '../utils.js';
 
 export default mixin({
   makeReadOnly(object) {
@@ -10,44 +11,44 @@ export default mixin({
   }
 });
 
-const gp = Object.getOwnPropertyDescriptors;
-const df = Object.defineProperty;
-
 function protect(object) {
-  const type = object.constructor[TYPE]
-  if (type === StructureType.Pointer) {
-    // protect all properties except length
-    protectProperties(object, [ 'length' ]);
-  } else if (type === StructureType.Array || type === StructureType.Slice) {
-    protectProperties(object);
-    protectElements(object);
-  } else {
-    protectProperties(object);
+  const [ objectNoProxy ] = removeProxy(object);
+  if (objectNoProxy?.[MEMORY] && !objectNoProxy[READ_ONLY]) {
+    objectNoProxy[READ_ONLY] = true;
+    const type = objectNoProxy.constructor[TYPE];
+    if (type === StructureType.Pointer) {
+      // protect all properties except length
+      protectProperties(objectNoProxy, [ 'length' ]);
+    } else if (type === StructureType.Array || type === StructureType.Slice) {
+      protectProperties(objectNoProxy);
+      protectElements(objectNoProxy);
+    } else {
+      protectProperties(objectNoProxy);
+    }
   }
+  return object;
 }
 
 function protectProperties(object, exclude = []) {
-  const descriptors = gp(object.constructor.prototype);
+  const descriptors = Object.getOwnPropertyDescriptors(object.constructor.prototype);
   for (const [ name, descriptor ] of Object.entries(descriptors)) {
-    if (descriptor.set && !exclude.includes(name)) {
-      descriptor.set = throwReadOnly;
-      df(object, name, descriptor);
+    if (!exclude.includes(name)) {
+      const { get, set } = descriptor;
+      descriptor.get = (get) ? function() {
+        return protect(get.call(this));
+      } : undefined;
+      descriptor.set = (set) ? throwReadOnly : undefined;
+      defineProperty(object, name, descriptor);
     }
   }
-  addConstTarget(object);
 }
 
 function protectElements(array) {
-  df(array, 'set', { value: throwReadOnly });
-  const get = array.get;
-  const getReadOnly = function(index) {
-    const element = get.call(this, index);    
-    if (typeof(element) === 'object') {
-      if (!getProxyTarget(element)) {
-        protect(element);
-      }
-    }
-    return element;
-  };
-  df(array, 'get', { value: getReadOnly });
+  const { get } = array;
+  defineProperties(array, {
+    get: defineValue(function(index) { 
+      return protect(get.call(this, index));
+    }),
+    set: defineValue(throwReadOnly),
+  })
 }

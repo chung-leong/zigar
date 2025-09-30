@@ -6,11 +6,11 @@ import {
   ConstantConstraint, InvalidPointerTarget, InvalidSliceLength, NoCastingToPointer, NullPointer,
   PreviouslyFreed, ReadOnlyTarget, throwReadOnly, ZigMemoryTargetRequired
 } from '../errors.js';
-import { getPointerProxy, getProxy, getProxyTarget } from '../proxies.js';
+import { getProxy, getProxyTarget, getProxyType } from '../proxies.js';
 import {
   ADDRESS, CAST, ENVIRONMENT, FINALIZE, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MAX_LENGTH,
-  MEMORY, PARENT, PROXY, RESTORE, SENTINEL, SETTERS, SIZE, SLOTS, TARGET, TYPE, TYPED_ARRAY, UPDATE,
-  VISIT, ZIG
+  MEMORY, PARENT, PROXY, PROXY_TYPE, RESTORE, SENTINEL, SETTERS, SIZE, SLOTS, TARGET, TYPE,
+  TYPED_ARRAY, UPDATE, VISIT, ZIG
 } from '../symbols.js';
 import {
   defineValue, findElements, getSelf, isCompatibleInstanceOf, isCompatibleType, usizeInvalid
@@ -19,6 +19,7 @@ import {
 export default mixin({
   definePointer(structure, descriptors) {
     const {
+      type,
       flags,
       byteSize,
       instance: { members: [ member ] },
@@ -86,13 +87,8 @@ export default mixin({
         this[LAST_LENGTH] = length;
       }
     : null;
-    let targetProxyType = 0;
-    if (targetFlags & StructureFlag.HasProxy) {
-      targetProxyType = (targetType == StructureType.Pointer) ? ProxyType.Pointer : ProxyType.Array;
-    }
-    if (flags & PointerFlag.IsConst) {
-      targetProxyType |= ProxyType.Const;
-    }
+    const proxyType = getProxyType(structure);
+    const targetProxyType = getProxyType(targetStructure, flags & PointerFlag.IsConst);
     const getTargetObject = function(useProxy = true) {
       const empty = !this[SLOTS][0];
       const target = updateTarget.call(this, null, empty);
@@ -272,7 +268,9 @@ export default mixin({
     const constructor = this.createConstructor(structure);
     descriptors['*'] = { get: getTarget, set: setTarget };
     descriptors.$ = { 
-      get: (targetType === StructureType.Pointer) ? getSelf : getPointerProxy, 
+      get: (targetType === StructureType.Pointer) 
+      ? getSelf 
+      : function() { return getProxy(this, proxyType) }, 
       set: initializer 
     };
     descriptors.length = { get: getTargetLength, set: setTargetLength };
@@ -308,9 +306,10 @@ export default mixin({
     };
     descriptors[PROXY] = (targetType !== StructureType.Function && targetType !== StructureType.Pointer) && {
       value() {
-        return getProxy(this, ProxyType.Pointer);
+        return getProxy(this, proxyType);
       },
     };
+    descriptors[PROXY_TYPE] = defineValue(proxyType);
     descriptors[TARGET] = { get: getTargetObject, set: setTargetObject };
     descriptors[UPDATE] = defineValue(updateTarget);
     descriptors[ADDRESS] = { set: setAddress };

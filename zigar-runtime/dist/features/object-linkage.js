@@ -25,7 +25,6 @@ var objectLinkage = mixin({
       object.constructor[CACHE]?.save?.(zigDV, object);
       this.destructors.push(() => {
         {
-          debugger;
           zigDV = this.restoreView(object[MEMORY]);
         }
         const jsDV = object[MEMORY] = this.allocateMemory(zigDV.byteLength);

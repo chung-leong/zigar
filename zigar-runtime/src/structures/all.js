@@ -1,7 +1,7 @@
 import { MemberFlag, MemberType, StructureFlag, structureNames, StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { MissingInitializers, NoInitializer, NoProperty } from '../errors.js';
-import { getProxyTarget } from '../proxies.js';
+import { removeProxy } from '../proxies.js';
 import {
   ALIGN, CACHE, CAST, ENTRIES, ENVIRONMENT, FINALIZE, FLAGS, INITIALIZE, KEYS, MEMORY, PROPS,
   PROXY,
@@ -228,7 +228,12 @@ export default mixin({
         }
         cache.save(dv, self);
       }
-      return (this !== ENVIRONMENT && PROXY in self) ? self[PROXY]() : self;
+      if (flags & StructureFlag.HasProxy) {
+        if (creating || !this) {
+          return self[PROXY]();
+        }
+      }
+      return self;
     };
     defineProperty(constructor, CACHE, defineValue(cache));
     if (process.env.TARGET === 'wasm') {
@@ -240,19 +245,22 @@ export default mixin({
   },
   createInitializer(handler) {
     return function(arg, allocator) {
-      const argProxy = getProxyTarget(arg);
-      if (argProxy) {
-        arg = argProxy.target;
-      }
-      return handler.call(this, arg, allocator, argProxy?.type);
+      const [ argNoProxy, argProxyType ] = removeProxy(arg);
+      const [ self ] = removeProxy(this);
+      return handler.call(self, argNoProxy, allocator, argProxyType);
     }
   },
   createApplier(structure) {
     const { instance: { template } } = structure;
     return function(arg, allocator) {
-      const argKeys = Object.keys(arg);
-      const keys = this[KEYS];
-      const setters = this[SETTERS];
+      const [ argNoProxy ] = removeProxy(arg);
+      const [ self ] = removeProxy(this);
+      const argKeys = Object.keys(argNoProxy);
+      if (argNoProxy instanceof Error) {
+        throw argNoProxy;
+      }
+      const keys = self[KEYS];
+      const setters = self[SETTERS];
       // don't accept unknown props
       for (const key of argKeys) {
         if (!(key in setters)) {
@@ -267,12 +275,12 @@ export default mixin({
       for (const key of keys) {
         const set = setters[key];
         if (set.special) {
-          if (key in arg) {
+          if (key in argNoProxy) {
             specialFound++;
           }
         } else {
           normalCount++;
-          if (key in arg) {
+          if (key in argNoProxy) {
             normalFound++;
           } else if (set.required) {
             normalMissing++;
@@ -280,13 +288,13 @@ export default mixin({
         }
       }
       if (normalMissing !== 0 && specialFound === 0) {
-        const missing = keys.filter(k => setters[k].required && !(k in arg));
+        const missing = keys.filter(k => setters[k].required && !(k in argNoProxy));
         throw new MissingInitializers(structure, missing);
       }
       if (specialFound + normalFound > argKeys.length) {
         // some props aren't enumerable
         for (const key of keys) {
-          if (key in arg) {
+          if (key in argNoProxy) {
             if (!argKeys.includes(key)) {
               argKeys.push(key)
             }
@@ -297,13 +305,13 @@ export default mixin({
       if (normalFound < normalCount && specialFound === 0) {
         if (template) {
           if (template[MEMORY]) {
-            copyObject(this, template);
+            copyObject(self, template);
           }
         }
       }
       for (const key of argKeys) {
         const set = setters[key];
-        set.call(this, arg[key], allocator);
+        set.call(self, argNoProxy[key], allocator);
       }
       return argKeys.length;
     };

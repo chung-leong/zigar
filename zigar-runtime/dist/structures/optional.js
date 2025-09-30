@@ -1,7 +1,7 @@
 import { MemberType, StructureFlag, VisitorFlag, OptionalFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { INITIALIZE, VIVIFICATE, VISIT, MEMORY } from '../symbols.js';
-import { defineValue, isCompatibleInstanceOf, copyObject, clearView } from '../utils.js';
+import { VISIT, MEMORY, INITIALIZE, VIVIFICATE } from '../symbols.js';
+import { isCompatibleInstanceOf, copyObject, clearView, defineValue } from '../utils.js';
 
 var optional = mixin({
   defineOptional(structure, descriptors) {
@@ -22,7 +22,7 @@ var optional = mixin({
     };
     const isValueVoid = valueMember.type === MemberType.Void;
     const { bitOffset, byteSize } = valueMember;
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -52,7 +52,7 @@ var optional = mixin({
           }
         }
       }
-    };
+    });
     const constructor = structure.constructor = this.createConstructor(structure);
     descriptors.$ = { get, set: initializer };
     // we need to clear the value portion when there's a separate bool indicating whether a value

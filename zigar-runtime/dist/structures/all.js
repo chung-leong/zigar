@@ -1,7 +1,8 @@
 import { StructureType, MemberType, MemberFlag, structureNames, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NoProperty, MissingInitializers, NoInitializer } from '../errors.js';
-import { KEYS, SETTERS, MEMORY, SLOTS, CACHE, RESTORE, PROPS, ENTRIES, TYPED_ARRAY, FLAGS, TYPE, SIZE, ALIGN, ENVIRONMENT, SIGNATURE, TRANSFORM, SHAPE, INITIALIZE, CAST, RESTRICT, FINALIZE, UPDATE, CONST_TARGET } from '../symbols.js';
+import { removeProxy } from '../proxies.js';
+import { KEYS, SETTERS, MEMORY, SLOTS, CACHE, RESTORE, PROPS, ENTRIES, TYPED_ARRAY, FLAGS, TYPE, SIZE, ALIGN, ENVIRONMENT, SIGNATURE, TRANSFORM, SHAPE, INITIALIZE, CAST, RESTRICT, FINALIZE, PROXY, UPDATE } from '../symbols.js';
 import { copyObject, ObjectCache, defineProperty, defineValue, defineProperties } from '../utils.js';
 
 var all = mixin({
@@ -20,7 +21,6 @@ var all = mixin({
       base64: this.defineBase64(structure),
       toJSON: this.defineToJSON(),
       valueOf: this.defineValueOf(),
-      [CONST_TARGET]: { value: null },
       [SETTERS]: defineValue(setters),
       [KEYS]: defineValue(keys),
       ...({
@@ -155,7 +155,7 @@ var all = mixin({
         allocator,
       } = options;
       const creating = this instanceof constructor;
-      let self, dv;
+      let self, dv, cached = false;
       if (creating) {
         if (arguments.length === 0) {
           throw new NoInitializer(structure);
@@ -186,34 +186,43 @@ var all = mixin({
         // look for buffer
         dv = thisEnv.extractView(structure, arg, onCastError);
         if (self = cache.find(dv)) {
-          return self;
-        }
-        self = Object.create(constructor.prototype);
-        if (SHAPE in self) {
-          thisEnv.assignView(self, dv, structure, false, false);
+          cached = true;
         } else {
-          self[MEMORY] = dv;
-        }
-        if (flags & StructureFlag.HasSlot) {
-          self[SLOTS] = {};
-        }
-      }
-      if (comptimeFieldSlots) {
-        for (const slot of comptimeFieldSlots) {
-          self[SLOTS][slot] = template[SLOTS][slot];
-        }
-      }
-      self[RESTRICT]?.();
-      if (creating) {
-        // initialize object unless that's done already
-        if (!(SHAPE in self)) {
-          self[INITIALIZE](arg, allocator);
+          self = Object.create(constructor.prototype);
+          if (SHAPE in self) {
+            thisEnv.assignView(self, dv, structure, false, false);
+          } else {
+            self[MEMORY] = dv;
+          }
+          if (flags & StructureFlag.HasSlot) {
+            self[SLOTS] = {};
+          }
         }
       }
-      if (FINALIZE in self) {
-        self = self[FINALIZE]();
+      if (!cached) {
+        if (comptimeFieldSlots) {
+          for (const slot of comptimeFieldSlots) {
+            self[SLOTS][slot] = template[SLOTS][slot];
+          }
+        }
+        self[RESTRICT]?.();
+        if (creating) {
+          // initialize object unless that's done already
+          if (!(SHAPE in self)) {
+            self[INITIALIZE](arg, allocator);
+          }
+        }
+        if (FINALIZE in self) {
+          self = self[FINALIZE]();
+        }
+        cache.save(dv, self);
       }
-      return cache.save(dv, self);
+      if (flags & StructureFlag.HasProxy) {
+        if (creating || !this) {
+          return self[PROXY]();
+        }
+      }
+      return self;
     };
     defineProperty(constructor, CACHE, defineValue(cache));
     {
@@ -223,12 +232,24 @@ var all = mixin({
     }
     return constructor;
   },
+  createInitializer(handler) {
+    return function(arg, allocator) {
+      const [ argNoProxy, argProxyType ] = removeProxy(arg);
+      const [ self ] = removeProxy(this);
+      return handler.call(self, argNoProxy, allocator, argProxyType);
+    }
+  },
   createApplier(structure) {
     const { instance: { template } } = structure;
     return function(arg, allocator) {
-      const argKeys = Object.keys(arg);
-      const keys = this[KEYS];
-      const setters = this[SETTERS];
+      const [ argNoProxy ] = removeProxy(arg);
+      const [ self ] = removeProxy(this);
+      const argKeys = Object.keys(argNoProxy);
+      if (argNoProxy instanceof Error) {
+        throw argNoProxy;
+      }
+      const keys = self[KEYS];
+      const setters = self[SETTERS];
       // don't accept unknown props
       for (const key of argKeys) {
         if (!(key in setters)) {
@@ -243,12 +264,12 @@ var all = mixin({
       for (const key of keys) {
         const set = setters[key];
         if (set.special) {
-          if (key in arg) {
+          if (key in argNoProxy) {
             specialFound++;
           }
         } else {
           normalCount++;
-          if (key in arg) {
+          if (key in argNoProxy) {
             normalFound++;
           } else if (set.required) {
             normalMissing++;
@@ -256,13 +277,13 @@ var all = mixin({
         }
       }
       if (normalMissing !== 0 && specialFound === 0) {
-        const missing = keys.filter(k => setters[k].required && !(k in arg));
+        const missing = keys.filter(k => setters[k].required && !(k in argNoProxy));
         throw new MissingInitializers(structure, missing);
       }
       if (specialFound + normalFound > argKeys.length) {
         // some props aren't enumerable
         for (const key of keys) {
-          if (key in arg) {
+          if (key in argNoProxy) {
             if (!argKeys.includes(key)) {
               argKeys.push(key);
             }
@@ -273,13 +294,13 @@ var all = mixin({
       if (normalFound < normalCount && specialFound === 0) {
         if (template) {
           if (template[MEMORY]) {
-            copyObject(this, template);
+            copyObject(self, template);
           }
         }
       }
       for (const key of argKeys) {
         const set = setters[key];
-        set.call(this, arg[key], allocator);
+        set.call(self, argNoProxy[key], allocator);
       }
       return argKeys.length;
     };

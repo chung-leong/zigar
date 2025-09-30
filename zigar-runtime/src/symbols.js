@@ -45,6 +45,8 @@ export const ALLOCATOR = symbol('allocator');
 export const FALLBACK = symbol('fallback');
 export const SIGNATURE = symbol('signature');
 export const CONTROLLER = symbol('controller');
+export const PROXY_TYPE = symbol('proxy type');
+export const READ_ONLY = symbol('read only');
 
 export const UPDATE = symbol('update');
 export const RESTORE = symbol('restore');

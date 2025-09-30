@@ -161,6 +161,7 @@ export function addTests(importModule, options) {
       expect(() => module.error_union).to.throw(Error.GoldfishDied);
       const [ after1 ] = await capture(() => print());
       expect(after1).to.equal('error.GoldfishDied');
+      debugger;
       module.error_union = FileError.Corrupted;
       const [ after2 ] = await capture(() => print());
       expect(after2).to.equal('error.Corrupted');

@@ -94,9 +94,9 @@ class ErrorExpected extends TypeError {
 }
 
 class NotInErrorSet extends TypeError {
-  constructor(structure) {
+  constructor(structure, err) {
     const { name } = structure;
-    super(`Error given is not a part of error set ${name}`);
+    super(`Error given is not a part of error set ${name}: ${err}`);
   }
 }
 
@@ -553,6 +553,7 @@ function replaceRangeError(member, index, err) {
 }
 
 function throwReadOnly() {
+  debugger;
   throw new ReadOnly();
 }
 

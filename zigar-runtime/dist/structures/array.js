@@ -1,8 +1,9 @@
-import { ArrayFlag, StructureFlag, VisitorFlag } from '../constants.js';
+import { ArrayFlag, StructureFlag, VisitorFlag, ProxyType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
-import { SENTINEL, ENTRIES, INITIALIZE, FINALIZE, VIVIFICATE, VISIT } from '../symbols.js';
-import { defineValue, getProxy, isCompatibleInstanceOf, copyObject, transformIterable } from '../utils.js';
+import { getProxy } from '../proxies.js';
+import { SENTINEL, VISIT, ENTRIES, INITIALIZE, FINALIZE, VIVIFICATE, PROXY, PROXY_TYPE } from '../symbols.js';
+import { defineValue, isCompatibleInstanceOf, copyObject, transformIterable } from '../utils.js';
 
 var array = mixin({
   defineArray(structure, descriptors) {
@@ -15,7 +16,7 @@ var array = mixin({
     const descriptor = this.defineMember(member);
     const { set } = descriptor;
     const constructor = this.createConstructor(structure);
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -42,8 +43,11 @@ var array = mixin({
           throw new InvalidArrayInitializer(structure, arg);
         }
       }
+    });
+    descriptors.$ = { 
+      get: function() { return getProxy(this, ProxyType.Slice) },
+      set: initializer 
     };
-    descriptors.$ = { get: getProxy, set: initializer };
     descriptors.length = defineValue(length);
     descriptors.entries = descriptors[ENTRIES] = this.defineArrayEntries();
     if (flags & ArrayFlag.IsTypedArray) {
@@ -60,6 +64,12 @@ var array = mixin({
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
+    descriptors[PROXY] = {
+      value() {
+        return getProxy(this, ProxyType.Slice);
+      }
+    };
+    descriptors[PROXY_TYPE] = defineValue(ProxyType.Slice);
     return constructor;
   },
   finalizeArray(structure, staticDescriptors) {

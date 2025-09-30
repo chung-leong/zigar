@@ -39,65 +39,63 @@ const StructurePurpose = {
 };
 const structureNames = Object.keys(StructureType);
 const StructureFlag = {
-  HasValue:         0x0001,
-  HasObject:        0x0002,
-  HasPointer:       0x0004,
-  HasSlot:          0x0008,
+  HasValue: 1 << 0,
+  HasObject: 1 << 1,
+  HasPointer: 1 << 2,
+  HasSlot: 1 << 3,
+  HasProxy: 1 << 4,
 };
 const PrimitiveFlag = {
-  IsSize:           0x0010,
+  IsSize: 1 << 5,
 };
 const ArrayFlag = {
-  HasSentinel:      0x0010,
-  IsString:         0x0020,
-  IsTypedArray:     0x0040,
-  IsClampedArray:   0x0080,
+  HasSentinel: 1 << 5,
+  IsString: 1 << 6,
+  IsTypedArray: 1 << 7,
+  IsClampedArray: 1 << 8,
 };
 const StructFlag = {
-  IsExtern:         0x0010,
-  IsPacked:         0x0020,
-  IsTuple:          0x0040,
-  IsOptional:       0x0080,
+  IsExtern: 1 << 5,
+  IsPacked: 1 << 6,
+  IsTuple: 1 << 7,
+  IsOptional: 1 << 8,
 };
 const UnionFlag = {
-  HasSelector:      0x0010,
-  HasTag:           0x0020,
-  HasInaccessible:  0x0040};
+  HasSelector: 1 << 5,
+  HasTag: 1 << 6,
+  HasInaccessible: 1 << 7};
 const EnumFlag = {
-  IsOpenEnded:      0x0010,
+  IsOpenEnded: 1 << 5,
 };
 const OptionalFlag = {
-  HasSelector:      0x0010,
+  HasSelector: 1 << 5,
 };
 const PointerFlag = {
-  HasLength:        0x0010,
-  IsMultiple:       0x0020,
-  IsSingle:         0x0040,
-  IsConst:          0x0080,
-
-  IsNullable:       0x0100,
+  HasLength: 1 << 5,
+  IsMultiple: 1 << 6,
+  IsSingle: 1 << 7,
+  IsConst: 1 << 8,
+  IsNullable: 1 << 9,
 };
 const SliceFlag = {
-  HasSentinel:      0x0010,
-  IsString:         0x0020,
-  IsTypedArray:     0x0040,
-  IsClampedArray:   0x0080,
-
-  IsOpaque:         0x0100,
+  HasSentinel: 1 << 5,
+  IsString: 1 << 6,
+  IsTypedArray: 1 << 7,
+  IsClampedArray: 1 << 8,
+  IsOpaque: 1 << 9,
 };
 const ErrorSetFlag = {
-  IsGlobal:         0x0010,
+  IsGlobal: 1 << 5,
 };
 const VectorFlag = {
-  IsTypedArray:     0x0010,
-  IsClampedArray:   0x0020,
+  IsTypedArray: 1 << 5,
+  IsClampedArray: 1 << 6,
 };
 const ArgStructFlag = {
-  HasOptions:       0x0010,
-  IsThrowing:       0x0020,
-  IsAsync:          0x0040,
+  HasOptions: 1 << 5,
+  IsThrowing: 1 << 6,
+  IsAsync: 1 << 7,
 };
-
 const MemberType = {
   Void: 0,
   Bool: 1,
@@ -122,14 +120,18 @@ const MemberFlag = {
   IsPlain:          0x0100,
   IsTypedArray:     0x0200,
 };
-
+const ProxyType = {
+  Pointer: 1 << 0,
+  Slice: 1 << 1,
+  Const: 1 << 2,  
+  ReadOnly: 1 << 3,
+};
 const ModuleAttribute = {
   LittleEndian:     0x0001,
   RuntimeSafety:    0x0002,
   LibC:             0x0004,
   IoRedirection:    0x0008,
 };
-
 const VisitorFlag = {
   IsInactive:       0x0001,
   IsImmutable:      0x0002,
@@ -139,9 +141,7 @@ const VisitorFlag = {
   IgnoreArguments:  0x0010,
   IgnoreRetval:     0x0020,
 };
-
-// values here mirror std.os.wasi.errno_t
-const PosixError = {
+const PosixError = { // values mirror std.os.wasi.errno_t
   NONE: 0,  
   EACCES: 2,
   EAGAIN: 6,
@@ -251,9 +251,7 @@ const FLAGS = symbol('flags');
 const CLASS = symbol('class');
 const TAG = symbol('tag');
 const PROPS = symbol('props');
-const POINTER = symbol('pointer');
 const SENTINEL = symbol('sentinel');
-const ARRAY = symbol('array');
 const TARGET = symbol('target');
 const ENTRIES = symbol('entries');
 const MAX_LENGTH = symbol('max length');
@@ -262,12 +260,10 @@ const ADDRESS = symbol('address');
 const LENGTH = symbol('length');
 const LAST_ADDRESS = symbol('last address');
 const LAST_LENGTH = symbol('last length');
-const PROXY = symbol('proxy');
 const CACHE = symbol('cache');
 const SIZE = symbol('size');
 const BIT_SIZE = symbol('bit size');
 const ALIGN = symbol('align');
-const CONST_TARGET = symbol('const target');
 const ENVIRONMENT = symbol('environment');
 const ATTRIBUTES = symbol('attributes');
 const PRIMITIVE = symbol('primitive');
@@ -280,6 +276,8 @@ const GENERATOR = symbol('generator');
 const ALLOCATOR = symbol('allocator');
 const SIGNATURE = symbol('signature');
 const CONTROLLER = symbol('controller');
+const PROXY_TYPE = symbol('proxy type');
+const READ_ONLY = symbol('read only');
 
 const UPDATE = symbol('update');
 const RESTORE = symbol('restore');
@@ -290,6 +288,7 @@ const SHAPE = symbol('shape');
 const INITIALIZE = symbol('initialize');
 const RESTRICT = symbol('restrict');
 const FINALIZE = symbol('finalize');
+const PROXY = symbol('proxy');
 const CAST = symbol('cast');
 const RETURN = symbol('return');
 const YIELD = symbol('yield');
@@ -623,10 +622,6 @@ function getSelf() {
   return this;
 }
 
-function getProxy() {
-  return this[PROXY];
-}
-
 function toString() {
   return String(this);
 }
@@ -642,7 +637,6 @@ class ObjectCache {
 
   save(dv, object) {
     this.map.set(dv, object);
-    return object;
   }
 }
 
@@ -1229,9 +1223,6 @@ function addStructureDefinitions(lines, definition) {
         const { handle } = dv;
         if (handle) {
           add(`handle: ${handle},`);
-        }
-        if (object[CONST_TARGET]) {
-          add(`const: true,`);
         }
       }
       if (slots) {
@@ -2773,9 +2764,9 @@ class ErrorExpected extends TypeError {
 }
 
 class NotInErrorSet extends TypeError {
-  constructor(structure) {
+  constructor(structure, err) {
     const { name } = structure;
-    super(`Error given is not a part of error set ${name}`);
+    super(`Error given is not a part of error set ${name}: ${err}`);
   }
 }
 
@@ -3196,6 +3187,7 @@ function adjustStack(stack, search) {
 }
 
 function throwReadOnly() {
+  debugger;
   throw new ReadOnly();
 }
 
@@ -3472,30 +3464,40 @@ var baseline = mixin({
       }
       return dest;
     };
+    const readOnlyObjects = [];
     // empty arrays aren't replicated
     const getBuffer = a => (a.length) ? a.buffer : new ArrayBuffer(0);
     const createObject = (placeholder) => {
-      const { memory, structure, actual } = placeholder;
+      const { memory, structure, actual, slots } = placeholder;
       if (memory) {
         if (actual) {
           return actual;
         } else {
           const { array, offset, length } = memory;
           const dv = this.obtainView(getBuffer(array), offset, length);
-          const { handle, const: isConst } = placeholder;
-          const constructor = structure?.constructor;
-          const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
-          if (isConst) {
-            this.makeReadOnly(object);
+          const { handle } = placeholder;
+          let object;
+          if (structure) {
+            const { constructor } = structure;
+            object = constructor.call(ENVIRONMENT, dv);
+            if (slots) {
+              insertObjects(object[SLOTS], slots);
+            }
+            if (handle) {
+              // need to replace dataview with one pointing to Zig memory later,
+              // when the VM is up and running
+              this.variables.push({ handle, object });
+            } else if (offset === undefined) {
+              // save the object for later, since it constructor isn't isn't finalized yet
+              // when offset is not undefined, the object is a child of another object and 
+              // will be made read-only thru the parent (which might have a linkage handle)
+              readOnlyObjects.push(object);
+            }
+          } else {
+            // console.log({ dv, placeholder });
+            object = { [MEMORY]: dv };
           }
-          if (placeholder.slots) {
-            insertObjects(object[SLOTS], placeholder.slots);
-          }
-          if (handle) {
-            // need to replace dataview with one pointing to Zig memory later,
-            // when the VM is up and running
-            this.variables.push({ handle, object });
-          }
+          placeholder.actual = object;
           return object;
         }
       } else {
@@ -3532,6 +3534,11 @@ var baseline = mixin({
     // add static members, methods, etc.
     for (const structure of structures) {
       this.finalizeStructure(structure);
+    }
+    // after finalization, constructors of objects will have the properties needed 
+    // for proper detection of what they are
+    for (const object of readOnlyObjects) {
+      this.makeReadOnly(object);
     }
   },
   ...({
@@ -4800,7 +4807,6 @@ var objectLinkage = mixin({
       object.constructor[CACHE]?.save?.(zigDV, object);
       this.destructors.push(() => {
         {
-          debugger;
           zigDV = this.restoreView(object[MEMORY]);
         }
         const jsDV = object[MEMORY] = this.allocateMemory(zigDV.byteLength);
@@ -4845,16 +4851,15 @@ var pointerSynchronization = mixin({
     const potentialClusters = [];
     const callback = function(flags) {
       // bypass proxy
-      const pointer = this[POINTER];
-      if (pointerMap.get(pointer) === undefined) {
-        const target = pointer[SLOTS][0];
+      if (pointerMap.get(this) === undefined) {
+        const target = this[SLOTS][0];
         if (target) {
-          const writable = !pointer.constructor.const;
+          const writable = !this.constructor.const;
           const entry = { target, writable };
           // only targets in JS memory need updating
           const dv = target[MEMORY];
           if (!dv[ZIG]) {
-            pointerMap.set(pointer, target);
+            pointerMap.set(this, target);
             // see if the buffer is shared with other objects
             const other = bufferMap.get(dv.buffer);
             if (other) {
@@ -4872,7 +4877,7 @@ var pointerSynchronization = mixin({
             target[VISIT]?.(callback, 0);
           } else {
             // in Zig memory--no need to update
-            pointerMap.set(pointer, null);
+            pointerMap.set(this, null);
           }
         }
       }
@@ -4903,14 +4908,13 @@ var pointerSynchronization = mixin({
     const pointerMap = new Map();
     const callback = function(flags) {
       // bypass proxy
-      const pointer = this[POINTER];
-      if (!pointerMap.get(pointer)) {
-        pointerMap.set(pointer, true);
-        const currentTarget = pointer[SLOTS][0];
+      if (!pointerMap.get(this)) {
+        pointerMap.set(this, true);
+        const currentTarget = this[SLOTS][0];
         const newTarget = (!currentTarget || !(flags & VisitorFlag.IsImmutable))
-        ? pointer[UPDATE](context, true, !(flags & VisitorFlag.IsInactive))
+        ? this[UPDATE](context, true, !(flags & VisitorFlag.IsInactive))
         : currentTarget;
-        const targetFlags = (pointer.constructor.const) ? VisitorFlag.IsImmutable : 0;
+        const targetFlags = (this.constructor.const) ? VisitorFlag.IsImmutable : 0;
         if (!(targetFlags & VisitorFlag.IsImmutable)) {
           // update targets of pointers in original target if it's in JS memory
           // pointers in Zig memory are updated on access so we don't need to do it here
@@ -6002,9 +6006,15 @@ var copyInt = mixin({
 
 var environSizesGet = mixin({
   environSizesGet(environCountAddress, environBufSizeAddress) {
-    const object = this.envVariables;
+    let object = this.envVariables;
     if (!object) {
-      return PosixError.ENOTSUP;
+      {
+        if (!this.customWASI?.wasiImport?.environ_sizes_get) {
+          object = {};
+        } else {
+          return PosixError.ENOTSUP;
+        }
+      }
     }
     const env = this.envVarArrays = [];
     for (const [ name, value ] of Object.entries(object)) {
@@ -6854,9 +6864,6 @@ var structureAcquisition = mixin({
     if (slots) {
       Object.assign(object[SLOTS], slots);
     }
-    if (!dv[ZIG]) {
-      this.makeReadOnly?.(object);
-    }
     return object;
   },
   createTemplate(dv, slots) {
@@ -6944,6 +6951,10 @@ var structureAcquisition = mixin({
           jsDV.handle = handle;
         }
         list.push({ address, len, owner: object, replaced: false, handle });
+      } else {
+        // make const object read-only, for no other reasons than to force the inclusion 
+        // of the features/write-protection mixin
+        this.makeReadOnly(object);
       }
     }
     // larger memory blocks come first
@@ -7426,7 +7437,7 @@ var viewManagement = mixin({
     },
     restoreView(dv) {
       const zig = dv?.[ZIG];
-      if (isDetached(dv.buffer)) {
+      if (zig && isDetached(dv.buffer)) {
         dv = this.obtainZigView(zig.address, zig.len);
         if (zig.align) {
           dv[ZIG].align = zig.align;
@@ -7441,10 +7452,8 @@ var viewManagement = mixin({
           const dv = this[MEMORY];
           const newDV = thisEnv.restoreView(dv);
           if (dv !== newDV) {
-            const target = this[CONST_TARGET] ?? this;
-            target[MEMORY] = newDV;
-            // pointers are referenced by their proxies in the cache
-            target.constructor[CACHE]?.save?.(newDV, target[PROXY] ?? target);
+            this[MEMORY] = newDV;
+            this.constructor[CACHE]?.save?.(newDV, this);
           }
           return newDV;
         },
@@ -7482,52 +7491,292 @@ function throwError(structure) {
   throw new BufferExpected(structure);
 }
 
+const proxyMaps = [ 
+  0, 
+  ProxyType.Const, 
+  ProxyType.ReadOnly, 
+  ProxyType.Const | ProxyType.ReadOnly 
+].reduce((hash, type) => {
+  hash[type] = new WeakMap();
+  return hash;
+}, {});
+const proxyTargetMap = new WeakMap();
+
+function getProxy(target, type) {
+  const key = target;
+  const map = proxyMaps[type & (ProxyType.Const | ProxyType.ReadOnly)];
+  let proxy = map.get(key);
+  if (!proxy) {
+    proxy = new Proxy(target, handlersHash[type]);
+    map.set(key, proxy);
+    proxyTargetMap.set(proxy, { target, type });
+  }
+  return proxy;
+}
+
+function getProxyType(structure, readOnly = false) {
+  const { type, flags } = structure;
+  let proxyType = (readOnly) ? ProxyType.ReadOnly : 0;
+  if (flags & StructureFlag.HasProxy) {
+    if (type === StructureType.Pointer) {
+      proxyType |= ProxyType.Pointer;
+      if (flags & PointerFlag.IsConst) {
+        proxyType |= ProxyType.Const;
+      }
+    } else if (type === StructureType.Function) {
+      proxyType = 0;
+    } else {
+      proxyType |= ProxyType.Slice;
+    }
+  }
+  return proxyType;
+}
+
+function getProxyTarget(arg) {
+  if ((typeof(arg) === 'object' || typeof(arg) === 'function') && arg) {
+    return proxyTargetMap.get(arg);
+  }
+}
+
+function removeProxy(arg) {
+  const proxy = getProxyTarget(arg);
+  return (proxy) ? [ proxy.target, proxy.type ] : [ arg, 0 ];
+}
+
+function getReadOnlyProxy(object) {
+  const proxy = getProxyTarget(object);
+  let proxyType;
+  if (proxy) {
+    if (proxy.type & ProxyType.ReadOnly) {
+      // it's already a read-only proxy
+      return object;
+    } else {
+      proxyType = proxy.type | ProxyType.ReadOnly;
+      object = proxy.target;
+    }
+  } else {
+    // the check below will filter out functions, which doesn't need the protection
+    if (!object || typeof(object) !== 'object' || object[READ_ONLY]) {
+      return object;
+    }
+    proxyType = object.constructor[PROXY_TYPE] ?? ProxyType.ReadOnly;
+  }
+  return getProxy(object, proxyType);
+}
+
+const pointerHandlers = {
+  get(pointer, name) {
+    if (name in pointer) {
+      return pointer[name];
+    } else {
+      const target = pointer[TARGET];
+      return target[name];
+    }
+  },
+  set(pointer, name, value) {
+    if (name in pointer) {
+      pointer[name] = value;
+    } else {
+      const target = pointer[TARGET];
+      target[name] = value;
+    }
+    return true;
+  },
+  deleteProperty(pointer, name) {
+    if (name in pointer) {
+      delete pointer[name];
+    } else {
+      const target = pointer[TARGET];
+      delete target[name];
+    }
+    return true;
+  },
+  has(pointer, name) {
+    if (name in pointer) {
+      return true;
+    } else {
+      const target = pointer[TARGET];
+      return name in target;
+    }
+  },
+  apply(pointer, thisArg, args) {
+    const f = pointer['*'];
+    return f.apply(thisArg, args);
+  },
+};
+
+const readOnlyPointerHandlers = {
+  ...pointerHandlers,
+  set(pointer, name, value) {
+    if (name in pointer) {
+      throwReadOnly();
+    } else {
+      const target = pointer[TARGET];
+      target[name] = value;
+    }
+    return true;
+  },
+};
+
+const readOnlyHandlers = {
+  get(target, name) {
+    return getReadOnlyProxy(target[name]);
+  },
+  set(target, name, value) {
+    throwReadOnly();
+  }
+};
+
+const constPointerHandlers = {
+  ...pointerHandlers,
+  get(pointer, name) {
+    if (name in pointer) {
+      return pointer[name];
+    } else {
+      return readOnlyHandlers.get(pointer[TARGET], name);
+    }
+  },
+  set(pointer, name, value) {
+    if (name in pointer) {
+      pointer[name] = value;
+    } else {
+      throwReadOnly();
+    }
+    return true;
+  },
+};
+
+const readOnlyConstPointerHandlers = {
+  ...readOnlyPointerHandlers,
+  set: readOnlyHandlers.set,
+};
+
+const sliceHandlers = {
+  get(slice, name) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      return slice.get(index);
+    } else {
+      return slice[name];
+    }
+  },
+  set(slice, name, value) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      slice.set(index, value);
+    } else {
+      slice[name] = value;
+    }
+    return true;
+  },
+  deleteProperty(slice, name) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      return false;
+    } else {
+      delete slice[name];
+      return true;
+    }
+  },
+  has(slice, name) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      return (index >= 0 && index < slice.length);
+    } else {
+      return slice[name];
+    }
+  },
+  ownKeys(slice) {
+    const keys = [];
+    for (let i = 0, len = slice.length; i < len; i++) {
+      keys.push(`${i}`);
+    }
+    keys.push('length');
+    return keys;
+  },
+  getOwnPropertyDescriptor(slice, name) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      if (index >= 0 && index < slice.length) {
+        return { value: slice.get(index), enumerable: true, writable: true, configurable: true };
+      }
+    } else {
+      return Object.getOwnPropertyDescriptor(slice, name);
+    }
+  },
+};
+
+const readOnlySliceHandlers = {
+  ...sliceHandlers,
+  get (slice, name) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      return getReadOnlyProxy(slice.get(index));
+    } else if (name === 'set') {
+      return throwReadOnly;
+    } else {
+      return slice[name];
+    }
+  },
+  set: throwReadOnly,
+};
+
+const handlersHash = {
+  [ProxyType.Pointer]: pointerHandlers,
+  [ProxyType.Pointer | ProxyType.Const]: constPointerHandlers,
+  [ProxyType.Pointer | ProxyType.ReadOnly]: readOnlyPointerHandlers,
+  [ProxyType.Pointer | ProxyType.ReadOnly | ProxyType.Const ]: readOnlyConstPointerHandlers,
+  [ProxyType.Slice]: sliceHandlers,
+  [ProxyType.Slice | ProxyType.ReadOnly]: readOnlySliceHandlers,
+  [ProxyType.ReadOnly]: readOnlyHandlers,
+};
+
 var writeProtection = mixin({
   makeReadOnly(object) {
     protect(object);
   }
 });
 
-const gp = Object.getOwnPropertyDescriptors;
-const df = Object.defineProperty;
-
 function protect(object) {
-  const pointer = object[POINTER];
-  if (pointer) {
-    protectProperties(pointer, [ 'length' ]);
-  } else {
-    const array = object[ARRAY];
-    if (array) {
-      protectProperties(array);
-      protectElements(array);
+  const [ objectNoProxy ] = removeProxy(object);
+  if (objectNoProxy?.[MEMORY] && !objectNoProxy[READ_ONLY]) {
+    objectNoProxy[READ_ONLY] = true;
+    const type = objectNoProxy.constructor[TYPE];
+    if (type === StructureType.Pointer) {
+      // protect all properties except length
+      protectProperties(objectNoProxy, [ 'length' ]);
+    } else if (type === StructureType.Array || type === StructureType.Slice) {
+      protectProperties(objectNoProxy);
+      protectElements(objectNoProxy);
     } else {
-      protectProperties(object);
+      protectProperties(objectNoProxy);
     }
   }
+  return object;
 }
 
 function protectProperties(object, exclude = []) {
-  const descriptors = gp(object.constructor.prototype);
+  const descriptors = Object.getOwnPropertyDescriptors(object.constructor.prototype);
   for (const [ name, descriptor ] of Object.entries(descriptors)) {
-    if (descriptor.set && !exclude.includes(name)) {
-      descriptor.set = throwReadOnly;
-      df(object, name, descriptor);
+    if (!exclude.includes(name)) {
+      const { get, set } = descriptor;
+      descriptor.get = (get) ? function() {
+        return protect(get.call(this));
+      } : undefined;
+      descriptor.set = (set) ? throwReadOnly : undefined;
+      defineProperty(object, name, descriptor);
     }
   }
-  df(object, CONST_TARGET, { value: object });
 }
 
 function protectElements(array) {
-  df(array, 'set', { value: throwReadOnly });
-  const get = array.get;
-  const getReadOnly = function(index) {
-    const element = get.call(this, index);
-    if (element?.[CONST_TARGET] === null) {
-      protect(element);
-    }
-    return element;
-  };
-  df(array, 'get', { value: getReadOnly });
+  const { get } = array;
+  defineProperties(array, {
+    get: defineValue(function(index) { 
+      return protect(get.call(this, index));
+    }),
+    set: defineValue(throwReadOnly),
+  });
 }
 
 var forArray = mixin({
@@ -7539,16 +7788,25 @@ var forArray = mixin({
   }
 });
 
+function getArray(arg) {
+  const proxy = getProxyTarget(arg);
+  if (proxy) {
+    const { target } = proxy;
+    return (proxy.type & ProxyType.Pointer) ? target['*'] : target;
+  }
+  return arg;
+}
+
 function getArrayIterator() {
-  const self = this[ARRAY] ?? this;
-  const length = this.length;
+  const array = getArray(this);
+  const length = array.length;
   let index = 0;
   return {
     next() {
       let value, done;
       if (index < length) {
         const current = index++;
-        value = self.get(current);
+        value = array.get(current);
         done = false;
       } else {
         done = true;
@@ -7560,15 +7818,15 @@ function getArrayIterator() {
 
 function getArrayEntriesIterator(options) {
   const handleError = getErrorHandler(options);
-  const self = this[ARRAY] ?? this;
-  const length = this.length;
+  const array = getArray(this);
+  const length = array.length;
   let index = 0;
   return {
     next() {
       let value, done;
       if (index < length) {
         const current = index++;
-        value = [ current, handleError(() => self.get(current)) ];
+        value = [ current, handleError(() => array.get(current)) ];
         done = false;
       } else {
         done = true;
@@ -7897,7 +8155,7 @@ var object = mixin({
       get = getTypedArray;
     } else if (member.flags & MemberFlag.IsPlain) {
       get = getPlain;
-    } else if (member.structure.flags & StructureFlag.HasValue) {
+    } else if (member.structure.flags & (StructureFlag.HasValue | StructureFlag.HasProxy)) {
       get = getValue;
     } else {
       get = getObject;
@@ -8292,7 +8550,6 @@ var all$1 = mixin({
       base64: this.defineBase64(structure),
       toJSON: this.defineToJSON(),
       valueOf: this.defineValueOf(),
-      [CONST_TARGET]: { value: null },
       [SETTERS]: defineValue(setters),
       [KEYS]: defineValue(keys),
       ...({
@@ -8427,7 +8684,7 @@ var all$1 = mixin({
         allocator,
       } = options;
       const creating = this instanceof constructor;
-      let self, dv;
+      let self, dv, cached = false;
       if (creating) {
         if (arguments.length === 0) {
           throw new NoInitializer(structure);
@@ -8458,34 +8715,43 @@ var all$1 = mixin({
         // look for buffer
         dv = thisEnv.extractView(structure, arg, onCastError);
         if (self = cache.find(dv)) {
-          return self;
-        }
-        self = Object.create(constructor.prototype);
-        if (SHAPE in self) {
-          thisEnv.assignView(self, dv, structure, false, false);
+          cached = true;
         } else {
-          self[MEMORY] = dv;
-        }
-        if (flags & StructureFlag.HasSlot) {
-          self[SLOTS] = {};
-        }
-      }
-      if (comptimeFieldSlots) {
-        for (const slot of comptimeFieldSlots) {
-          self[SLOTS][slot] = template[SLOTS][slot];
-        }
-      }
-      self[RESTRICT]?.();
-      if (creating) {
-        // initialize object unless that's done already
-        if (!(SHAPE in self)) {
-          self[INITIALIZE](arg, allocator);
+          self = Object.create(constructor.prototype);
+          if (SHAPE in self) {
+            thisEnv.assignView(self, dv, structure, false, false);
+          } else {
+            self[MEMORY] = dv;
+          }
+          if (flags & StructureFlag.HasSlot) {
+            self[SLOTS] = {};
+          }
         }
       }
-      if (FINALIZE in self) {
-        self = self[FINALIZE]();
+      if (!cached) {
+        if (comptimeFieldSlots) {
+          for (const slot of comptimeFieldSlots) {
+            self[SLOTS][slot] = template[SLOTS][slot];
+          }
+        }
+        self[RESTRICT]?.();
+        if (creating) {
+          // initialize object unless that's done already
+          if (!(SHAPE in self)) {
+            self[INITIALIZE](arg, allocator);
+          }
+        }
+        if (FINALIZE in self) {
+          self = self[FINALIZE]();
+        }
+        cache.save(dv, self);
       }
-      return cache.save(dv, self);
+      if (flags & StructureFlag.HasProxy) {
+        if (creating || !this) {
+          return self[PROXY]();
+        }
+      }
+      return self;
     };
     defineProperty(constructor, CACHE, defineValue(cache));
     {
@@ -8495,12 +8761,21 @@ var all$1 = mixin({
     }
     return constructor;
   },
+  createInitializer(handler) {
+    return function(arg, allocator) {
+      const [ argNoProxy, argProxyType ] = removeProxy(arg);
+      const [ self ] = removeProxy(this);
+      return handler.call(self, argNoProxy, allocator, argProxyType);
+    }
+  },
   createApplier(structure) {
     const { instance: { template } } = structure;
     return function(arg, allocator) {
-      const argKeys = Object.keys(arg);
-      const keys = this[KEYS];
-      const setters = this[SETTERS];
+      const [ argNoProxy] = removeProxy(arg);
+      const [ self ] = removeProxy(this);
+      const argKeys = Object.keys(argNoProxy);
+      const keys = self[KEYS];
+      const setters = self[SETTERS];
       // don't accept unknown props
       for (const key of argKeys) {
         if (!(key in setters)) {
@@ -8515,12 +8790,12 @@ var all$1 = mixin({
       for (const key of keys) {
         const set = setters[key];
         if (set.special) {
-          if (key in arg) {
+          if (key in argNoProxy) {
             specialFound++;
           }
         } else {
           normalCount++;
-          if (key in arg) {
+          if (key in argNoProxy) {
             normalFound++;
           } else if (set.required) {
             normalMissing++;
@@ -8528,13 +8803,13 @@ var all$1 = mixin({
         }
       }
       if (normalMissing !== 0 && specialFound === 0) {
-        const missing = keys.filter(k => setters[k].required && !(k in arg));
+        const missing = keys.filter(k => setters[k].required && !(k in argNoProxy));
         throw new MissingInitializers(structure, missing);
       }
       if (specialFound + normalFound > argKeys.length) {
         // some props aren't enumerable
         for (const key of keys) {
-          if (key in arg) {
+          if (key in argNoProxy) {
             if (!argKeys.includes(key)) {
               argKeys.push(key);
             }
@@ -8545,13 +8820,13 @@ var all$1 = mixin({
       if (normalFound < normalCount && specialFound === 0) {
         if (template) {
           if (template[MEMORY]) {
-            copyObject(this, template);
+            copyObject(self, template);
           }
         }
       }
       for (const key of argKeys) {
         const set = setters[key];
-        set.call(this, arg[key], allocator);
+        set.call(self, argNoProxy[key], allocator);
       }
       return argKeys.length;
     };
@@ -8650,13 +8925,11 @@ var arrayLike = mixin({
   defineFinalizerArray({ get, set }) {
     return {
       value() {
-        const value = new Proxy(this, proxyHandlers$1);
         defineProperties(this, {
-          [PROXY]: { value },
           get: { value: get.bind(this) },
           set: set && { value: set.bind(this) },
         });
-        return value;
+        return this;
       },
     };
   },
@@ -8677,63 +8950,6 @@ var arrayLike = mixin({
   },
 });
 
-const proxyHandlers$1 = {
-  get(array, name) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      return array.get(index);
-    } else if (name === ARRAY) {
-      return array;
-    } else {
-      return array[name];
-    }
-  },
-  set(array, name, value) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      array.set(index, value);
-    } else {
-      array[name] = value;
-    }
-    return true;
-  },
-  deleteProperty(array, name) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      return false;
-    } else {
-      delete array[name];
-      return true;
-    }
-  },
-  has(array, name) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      return (index >= 0 && index < array.length);
-    } else {
-      return array[name];
-    }
-  },
-  ownKeys(array) {
-    const keys = [];
-    for (let i = 0, len = array.length; i < len; i++) {
-      keys.push(`${i}`);
-    }
-    keys.push('length', PROXY);
-    return keys;
-  },
-  getOwnPropertyDescriptor(array, name) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      if (index >= 0 && index < array.length) {
-        return { value: array.get(index), enumerable: true, writable: true, configurable: true };
-      }
-    } else {
-      return Object.getOwnPropertyDescriptor(array, name);
-    }
-  },
-};
-
 var array = mixin({
   defineArray(structure, descriptors) {
     const {
@@ -8745,7 +8961,7 @@ var array = mixin({
     const descriptor = this.defineMember(member);
     const { set } = descriptor;
     const constructor = this.createConstructor(structure);
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -8772,8 +8988,11 @@ var array = mixin({
           throw new InvalidArrayInitializer(structure, arg);
         }
       }
+    });
+    descriptors.$ = { 
+      get: function() { return getProxy(this, ProxyType.Slice) },
+      set: initializer 
     };
-    descriptors.$ = { get: getProxy, set: initializer };
     descriptors.length = defineValue(length);
     descriptors.entries = descriptors[ENTRIES] = this.defineArrayEntries();
     if (flags & ArrayFlag.IsTypedArray) {
@@ -8790,6 +9009,12 @@ var array = mixin({
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
+    descriptors[PROXY] = {
+      value() {
+        return getProxy(this, ProxyType.Slice);
+      }
+    };
+    descriptors[PROXY_TYPE] = defineValue(ProxyType.Slice);
     return constructor;
   },
   finalizeArray(structure, staticDescriptors) {
@@ -9077,7 +9302,7 @@ var errorSet = mixin({
           }
         }
         if (value instanceof Error) {
-          throw new NotInErrorSet(structure);
+          throw new NotInErrorSet(structure, value);
         } else {
           throw new ErrorExpected(structure, value);
         }
@@ -9157,7 +9382,7 @@ var errorUnion = mixin({
       this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
     };
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -9169,37 +9394,42 @@ var errorUnion = mixin({
         setError.call(this, arg);
         clearValue.call(this);
       } else if (arg !== undefined || isValueVoid) {
-        try {
-          // call setValue() first, in case it throws
-          setValue.call(this, arg, allocator);
-          setErrorNumber.call(this, 0);
-        } catch (err) {
-          if (arg instanceof Error) {
-            const match = ErrorSet(arg) ?? ErrorSet.Unexpected;
-            if (match) {
-              setError.call(this, match);
-              clearValue.call(this);
-            } else {
-              // we gave setValue a chance to see if the error is actually an acceptable value
-              // now is time to throw an error
-              throw new NotInErrorSet(errorMember.structure);
-            }
-          } else if (isErrorJSON(arg)) {
-            // setValue() failed because the argument actually is an error as JSON
-            setError.call(this, arg);
-            clearValue.call(this);
-          } else if (arg && typeof(arg) === 'object') {
-            // maybe the argument contains a special property like `dataView` or `base64`
-            if (propApplier.call(this, arg) === 0) {
-              // propApplier() found zero prop, so it's time to throw
-              throw err;
-            }
-          } else {
-            throw err;
+        if (!(arg instanceof Error)) {
+          try {
+            // call setValue() first, in case it throws
+            setValue.call(this, arg, allocator);
+            setErrorNumber.call(this, 0);
+            return;
+          } catch (err) {
+            console.error(err);
+            arg = err;
           }
         }
+        if (arg instanceof Error) {
+          const match = ErrorSet(arg) ?? ErrorSet.Unexpected;
+          if (match) {
+            setError.call(this, match);
+            clearValue.call(this);
+          } else {
+            // we gave setValue a chance to see if the error is actually an acceptable value
+            // now is time to throw an error
+            throw new NotInErrorSet(errorMember.structure, arg);
+          }
+        } else if (isErrorJSON(arg)) {
+          // setValue() failed because the argument actually is an error as JSON
+          setError.call(this, arg);
+          clearValue.call(this);
+        } else if (arg && typeof(arg) === 'object') {
+          // maybe the argument contains a special property like `dataView` or `base64`
+          if (propApplier.call(this, arg) === 0) {
+            // propApplier() found zero prop, so it's time to throw
+            throw err;
+          }
+        } else {
+          throw err;
+        }
       }
-    };
+    });
     const constructor = this.createConstructor(structure);
     descriptors.$ = { get, set: initializer };
     descriptors[INITIALIZE] = defineValue(initializer);
@@ -9328,7 +9558,7 @@ var optional = mixin({
     };
     const isValueVoid = valueMember.type === MemberType.Void;
     const { bitOffset, byteSize } = valueMember;
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -9358,7 +9588,7 @@ var optional = mixin({
           }
         }
       }
-    };
+    });
     const constructor = structure.constructor = this.createConstructor(structure);
     descriptors.$ = { get, set: initializer };
     // we need to clear the value portion when there's a separate bool indicating whether a value
@@ -9374,6 +9604,7 @@ var optional = mixin({
 var pointer = mixin({
   definePointer(structure, descriptors) {
     const {
+      type,
       flags,
       byteSize,
       instance: { members: [ member ] },
@@ -9441,23 +9672,23 @@ var pointer = mixin({
         this[LAST_LENGTH] = length;
       }
     : null;
-    const getTargetObject = function() {
-      const pointer = this[POINTER] ?? this;
-      const empty = !pointer[SLOTS][0];
-      const target = updateTarget.call(pointer, null, empty);
+    const proxyType = getProxyType(structure);
+    const targetProxyType = getProxyType(targetStructure, flags & PointerFlag.IsConst);
+    const getTargetObject = function(useProxy = true) {
+      const empty = !this[SLOTS][0];
+      const target = updateTarget.call(this, null, empty);
       if (!target) {
         if (flags & PointerFlag.IsNullable) {
           return null;
         }
         throw new NullPointer();
       }
-      return (flags & PointerFlag.IsConst) ? getConstProxy(target) : target;
+      return (targetProxyType && useProxy) ? getProxy(target, targetProxyType) : target;
     };
     const setTargetObject = function(arg) {
       if (arg === undefined) {
         return;
       }
-      const pointer = this[POINTER] ?? this;
       if (arg) {
         const zig = arg[MEMORY][ZIG];
         if (zig) {
@@ -9470,24 +9701,21 @@ var pointer = mixin({
             arg[MEMORY][ZIG] = undefined;
           }
         } else {
-          if (pointer[MEMORY][ZIG]) {
+          if (this[MEMORY][ZIG]) {
             throw new ZigMemoryTargetRequired();
           }
         }
-      } else if (pointer[MEMORY][ZIG]) {
+      } else if (this[MEMORY][ZIG]) {
         setAddress.call(this, 0);
         setLength?.call?.(this, 0);
       }
-      pointer[SLOTS][0] = arg ?? null;
+      this[SLOTS][0] = arg ?? null;
       if (flags & PointerFlag.HasLength) {
-        pointer[MAX_LENGTH] = null;
+        this[MAX_LENGTH] = null;
       }
     };
     const getTarget = (targetFlags & StructureFlag.HasValue)
-    ? function() {
-        const target = getTargetObject.call(this);
-        return target.$;
-      }
+    ? function() { return getTargetObject.call(this).$ }
     : getTargetObject;
     const setTarget = (flags & PointerFlag.IsConst)
     ? throwReadOnly
@@ -9496,12 +9724,12 @@ var pointer = mixin({
         return target.$ = value;
       };
     const getTargetLength = function() {
-      const target = getTargetObject.call(this);
+      const target = getTargetObject.call(this, false);
       return (target) ? target.length : 0;
     };
     const setTargetLength = function(len) {
       len = len | 0;
-      const target = getTargetObject.call(this);
+      const target = getTargetObject.call(this, false);
       if (target) {
         if (target.length === len) {
           return;
@@ -9537,17 +9765,17 @@ var pointer = mixin({
       setLength?.call?.(this, len);
     };
     const thisEnv = this;
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator, proxyType) {
       const Target = targetStructure.constructor;
       if (isPointerOf(arg, Target)) {
-        // initialize with the other pointer'structure target
         if (!(flags & PointerFlag.IsConst) && arg.constructor.const) {
           throw new ConstantConstraint(structure, arg);
         }
+        // initialize with the other pointer's target
         arg = arg[SLOTS][0];
       } else if (flags & PointerFlag.IsMultiple) {
         if (isCompatiblePointer(arg, Target, flags)) {
-          arg = Target(arg[SLOTS][0][MEMORY]);
+          arg = Target.call(ENVIRONMENT, arg[SLOTS][0][MEMORY]);
         }
       } else if (targetType === StructureType.Slice && (targetFlags & SliceFlag.IsOpaque) && arg) {
         if (arg.constructor[TYPE] === StructureType.Pointer) {
@@ -9567,11 +9795,9 @@ var pointer = mixin({
         {
           arg[RESTORE]();
         }
-        const constTarget = arg[CONST_TARGET];
-        if (constTarget) {
-          if (flags & PointerFlag.IsConst) {
-            arg = constTarget;
-          } else {
+        // if the target is read-only, then only a const pointer can point to it
+        if (proxyType === ProxyType.Const) {
+          if (!(flags & PointerFlag.IsConst)) {
             throw new ReadOnlyTarget(structure);
           }
         }
@@ -9580,11 +9806,11 @@ var pointer = mixin({
         arg = Target.call(ENVIRONMENT, arg[MEMORY]);
       } else if (flags & PointerFlag.IsSingle && flags & PointerFlag.IsMultiple && arg instanceof Target.child) {
         // C pointer
-        arg = Target(arg[MEMORY]);
+        arg = Target.call(ENVIRONMENT, arg[MEMORY]);
       } else if (isCompatibleBuffer(arg, Target)) {
         // autocast to target type
         const dv = thisEnv.extractView(targetStructure, arg);
-        arg = Target(dv);
+        arg = Target.call(ENVIRONMENT, dv);
       } else if (arg != undefined && !arg[MEMORY]) {
         if (flags & PointerFlag.IsSingle && flags & PointerFlag.IsMultiple) {
           // C pointer
@@ -9608,8 +9834,11 @@ var pointer = mixin({
           throw new InvalidPointerTarget(structure, arg);
         }
         // autovivificate target object
-        const autoObj = new Target(arg, { allocator });
-        arg = autoObj;
+        const autoObj = arg = new Target(arg, { allocator });
+        if (targetFlags & StructureFlag.HasProxy) {
+          // point to the actual object instead of the proxy
+          arg = getProxyTarget(autoObj).target;
+        }
       } else if (arg !== undefined) {
         if (!(flags & PointerFlag.IsNullable) || arg !== null) {
           throw new InvalidPointerTarget(structure, arg);
@@ -9620,10 +9849,15 @@ var pointer = mixin({
         throw new PreviouslyFreed(arg);
       }
       this[TARGET] = arg;
-    };
+    });
     const constructor = this.createConstructor(structure);
     descriptors['*'] = { get: getTarget, set: setTarget };
-    descriptors.$ = { get: getProxy, set: initializer };
+    descriptors.$ = { 
+      get: (targetType === StructureType.Pointer) 
+      ? getSelf 
+      : function() { return getProxy(this, proxyType) }, 
+      set: initializer 
+    };
     descriptors.length = { get: getTargetLength, set: setTargetLength };
     descriptors.slice = (targetType === StructureType.Slice) && {
       value(begin, end) {
@@ -9643,25 +9877,24 @@ var pointer = mixin({
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[FINALIZE] = {
+    descriptors[FINALIZE] = (targetType === StructureType.Function) && {
       value() {
-        const handlers = (targetType !== StructureType.Pointer) ? proxyHandlers : {};
-        let self;
-        if (targetType === StructureType.Function) {
-          // use an empty function as object so the proxy's apply() method is triggered
-          self = function() {};
-          self[MEMORY] = this[MEMORY];
-          self[SLOTS] = this[SLOTS];
-          Object.setPrototypeOf(self, constructor.prototype);
-        } else {
-          self = this;
-        }
-        const proxy = new Proxy(self, handlers);
-        // hide the proxy so console wouldn't display a recursive structure
-        Object.defineProperty(self, PROXY, { value: proxy });
-        return proxy;
+        const self = (...args) => {
+          const f = this['*'];
+          return f.call(this, ...args);
+        };
+        self[MEMORY] = this[MEMORY];
+        self[SLOTS] = this[SLOTS];
+        Object.setPrototypeOf(self, constructor.prototype);
+        return self;
       }
     };
+    descriptors[PROXY] = (targetType !== StructureType.Function && targetType !== StructureType.Pointer) && {
+      value() {
+        return getProxy(this, proxyType);
+      },
+    };
+    descriptors[PROXY_TYPE] = defineValue(proxyType);
     descriptors[TARGET] = { get: getTargetObject, set: setTargetObject };
     descriptors[UPDATE] = defineValue(updateTarget);
     descriptors[ADDRESS] = { set: setAddress };
@@ -9725,96 +9958,6 @@ function isCompatiblePointer(arg, Target, flags) {
   }
   return false;
 }
-
-const constProxies = new WeakMap();
-
-function getConstProxy(target) {
-  let proxy = constProxies.get(target);
-  if (!proxy) {
-    const pointer = target[POINTER];
-    if (pointer) {
-      proxy = new Proxy(pointer, readOnlyProxyHandlers);
-    } else {
-      proxy = new Proxy(target, constTargetProxyHandlers);
-    }
-    constProxies.set(target, proxy);
-  }
-  return proxy;
-}
-
-const proxyHandlers = {
-  get(pointer, name) {
-    if (name === POINTER) {
-      return pointer;
-    } else if (name in pointer) {
-      return pointer[name];
-    } else {
-      const target = pointer[TARGET];
-      return target[name];
-    }
-  },
-  set(pointer, name, value) {
-    if (name in pointer) {
-      pointer[name] = value;
-    } else {
-      const target = pointer[TARGET];
-      target[name] = value;
-    }
-    return true;
-  },
-  deleteProperty(pointer, name) {
-    if (name in pointer) {
-      delete pointer[name];
-    } else {
-      const target = pointer[TARGET];
-      delete target[name];
-    }
-    return true;
-  },
-  has(pointer, name) {
-    if (name in pointer) {
-      return true;
-    } else {
-      const target = pointer[TARGET];
-      return name in target;
-    }
-  },
-  apply(pointer, thisArg, args) {
-    const f = pointer['*'];
-    return f.apply(thisArg, args);
-  },
-};
-
-const readOnlyProxyHandlers = {
-  ...proxyHandlers,
-  set(pointer, name, value) {
-    if (name in pointer) {
-      throwReadOnly();
-    } else {
-      const target = pointer[TARGET];
-      target[name] = value;
-    }
-    return true;
-  },
-};
-
-const constTargetProxyHandlers = {
-  get(target, name) {
-    if (name === CONST_TARGET) {
-      return target;
-    } else {
-      const value = target[name];
-      if (value?.[MEMORY]) {
-        return getConstProxy(value);
-      } else {
-        return value;
-      }
-    }
-  },
-  set(target, name, value) {
-    throwReadOnly();
-  }
-};
 
 function isCompatibleBuffer(arg, constructor) {
   // TODO: merge this with extractView in mixin "view-management"
@@ -9905,7 +10048,7 @@ var slice = mixin({
     // the initializer behave differently depending on whether it's called by the
     // constructor or by a member setter (i.e. after object's shape has been established)
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         if (!this[MEMORY]) {
           shapeDefiner.call(this, null, arg.length, allocator);
@@ -9943,7 +10086,7 @@ var slice = mixin({
       } else if (arg !== undefined) {
         throw new InvalidArrayInitializer(structure, arg);
       }
-    };
+    });
     const getSubArrayView = function(begin, end) {
       const length = this[LENGTH];
       const dv = this[MEMORY];
@@ -9954,7 +10097,10 @@ var slice = mixin({
       return thisEnv.obtainView(dv.buffer, dv.byteOffset + offset, len);
     };
     const constructor = this.createConstructor(structure);
-    descriptors.$ = { get: getProxy, set: initializer };
+    descriptors.$ = { 
+      get: function() { return getProxy(this, ProxyType.Slice) },
+      set: initializer 
+    };
     descriptors.length = { get: getLength };
     if (flags & SliceFlag.IsTypedArray) {
       descriptors.typedArray = this.defineTypedArray(structure);
@@ -9990,6 +10136,12 @@ var slice = mixin({
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
+    descriptors[PROXY] = {
+      value() {
+        return getProxy(this, ProxyType.Slice);
+      }
+    };    
+    descriptors[PROXY_TYPE] = defineValue(ProxyType.Slice);
     return constructor;
   },
   finalizeSlice(structure, staticDescriptors) {
@@ -10062,7 +10214,7 @@ var struct = mixin({
     const backingIntMember = members.find(m => m.flags & MemberFlag.IsBackingInt);
     const backingInt = backingIntMember && this.defineMember(backingIntMember);
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -10075,7 +10227,7 @@ var struct = mixin({
       } else if (arg !== undefined) {
         throw new InvalidInitializer(structure, 'object', arg);
       }
-    };
+    });
     const constructor = this.createConstructor(structure);
     // add descriptors of struct field
     const setters = descriptors[SETTERS].value;
@@ -10158,7 +10310,7 @@ var union = mixin({
         setSelector.call(this, index);
       };
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -10180,7 +10332,7 @@ var union = mixin({
       } else if (arg !== undefined) {
         throw new InvalidInitializer(structure, 'object with a single property', arg);
       }
-    };
+    });
     const constructor = this.createConstructor(structure);
     const getters = {};
     const setters = descriptors[SETTERS].value;
@@ -10283,10 +10435,9 @@ function throwInaccessible() {
 }
 function disablePointer() {
   const disabledProp = { get: throwInaccessible, set: throwInaccessible };
-  defineProperties(this[POINTER], {
+  defineProperties(this, {
     '*': disabledProp,
     '$': disabledProp,
-    [POINTER]: disabledProp,
     [TARGET]: disabledProp,
   });
 }
@@ -10409,7 +10560,7 @@ var vector = mixin({
       instance: { members: [ member ] },
     } = structure;
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg) {
+    const initializer = this.createInitializer(function(arg) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -10435,8 +10586,8 @@ var vector = mixin({
       } else if (arg !== undefined) {
         throw new InvalidArrayInitializer(structure, arg);
       }
-    };
-    const constructor = this.createConstructor(structure, { initializer });
+    });
+    const constructor = this.createConstructor(structure);
     const { bitSize: elementBitSize } = member;
     for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
       if (flags & StructureFlag.HasPointer) {

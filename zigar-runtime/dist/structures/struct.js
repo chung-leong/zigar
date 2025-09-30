@@ -1,8 +1,8 @@
-import { MemberFlag, StructFlag, StructurePurpose, StructureFlag } from '../constants.js';
+import { MemberFlag, StructureFlag, StructFlag, StructurePurpose } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidInitializer } from '../errors.js';
-import { SETTERS, KEYS, INITIALIZE, VIVIFICATE, VISIT, ENTRIES, PROPS } from '../symbols.js';
-import { getSelf, defineValue, isCompatibleInstanceOf, copyObject } from '../utils.js';
+import { VISIT, SETTERS, KEYS, INITIALIZE, VIVIFICATE, ENTRIES, PROPS } from '../symbols.js';
+import { isCompatibleInstanceOf, copyObject, getSelf, defineValue } from '../utils.js';
 
 var struct = mixin({
   defineStruct(structure, descriptors) {
@@ -15,7 +15,7 @@ var struct = mixin({
     const backingIntMember = members.find(m => m.flags & MemberFlag.IsBackingInt);
     const backingInt = backingIntMember && this.defineMember(backingIntMember);
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -28,7 +28,7 @@ var struct = mixin({
       } else if (arg !== undefined) {
         throw new InvalidInitializer(structure, 'object', arg);
       }
-    };
+    });
     const constructor = this.createConstructor(structure);
     // add descriptors of struct field
     const setters = descriptors[SETTERS].value;

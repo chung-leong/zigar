@@ -1,6 +1,6 @@
 import { VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
-import { MEMORY, VISIT, ADDRESS, LENGTH, POINTER, SLOTS, UPDATE, ZIG } from '../symbols.js';
+import { MEMORY, VISIT, ADDRESS, LENGTH, SLOTS, UPDATE, ZIG } from '../symbols.js';
 import { findSortedIndex } from '../utils.js';
 
 var pointerSynchronization = mixin({
@@ -11,16 +11,15 @@ var pointerSynchronization = mixin({
     const potentialClusters = [];
     const callback = function(flags) {
       // bypass proxy
-      const pointer = this[POINTER];
-      if (pointerMap.get(pointer) === undefined) {
-        const target = pointer[SLOTS][0];
+      if (pointerMap.get(this) === undefined) {
+        const target = this[SLOTS][0];
         if (target) {
-          const writable = !pointer.constructor.const;
+          const writable = !this.constructor.const;
           const entry = { target, writable };
           // only targets in JS memory need updating
           const dv = target[MEMORY];
           if (!dv[ZIG]) {
-            pointerMap.set(pointer, target);
+            pointerMap.set(this, target);
             // see if the buffer is shared with other objects
             const other = bufferMap.get(dv.buffer);
             if (other) {
@@ -38,7 +37,7 @@ var pointerSynchronization = mixin({
             target[VISIT]?.(callback, 0);
           } else {
             // in Zig memory--no need to update
-            pointerMap.set(pointer, null);
+            pointerMap.set(this, null);
           }
         }
       }
@@ -69,14 +68,13 @@ var pointerSynchronization = mixin({
     const pointerMap = new Map();
     const callback = function(flags) {
       // bypass proxy
-      const pointer = this[POINTER];
-      if (!pointerMap.get(pointer)) {
-        pointerMap.set(pointer, true);
-        const currentTarget = pointer[SLOTS][0];
+      if (!pointerMap.get(this)) {
+        pointerMap.set(this, true);
+        const currentTarget = this[SLOTS][0];
         const newTarget = (!currentTarget || !(flags & VisitorFlag.IsImmutable))
-        ? pointer[UPDATE](context, true, !(flags & VisitorFlag.IsInactive))
+        ? this[UPDATE](context, true, !(flags & VisitorFlag.IsInactive))
         : currentTarget;
-        const targetFlags = (pointer.constructor.const) ? VisitorFlag.IsImmutable : 0;
+        const targetFlags = (this.constructor.const) ? VisitorFlag.IsImmutable : 0;
         if (!(targetFlags & VisitorFlag.IsImmutable)) {
           // update targets of pointers in original target if it's in JS memory
           // pointers in Zig memory are updated on access so we don't need to do it here

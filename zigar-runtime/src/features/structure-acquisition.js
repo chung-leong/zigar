@@ -101,9 +101,6 @@ export default mixin({
     if (slots) {
       Object.assign(object[SLOTS], slots);
     }
-    if (!dv[ZIG]) {
-      this.makeReadOnly?.(object);
-    }
     return object;
   },
   createTemplate(dv, slots) {
@@ -192,6 +189,10 @@ export default mixin({
           jsDV.handle = handle;
         }
         list.push({ address, len, owner: object, replaced: false, handle });
+      } else {
+        // make const object read-only, for no other reasons than to force the inclusion 
+        // of the features/write-protection mixin
+        this.makeReadOnly(object);
       }
     }
     // larger memory blocks come first

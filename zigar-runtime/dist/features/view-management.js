@@ -1,7 +1,7 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { BufferSizeMismatch, ArrayLengthMismatch, BufferExpected } from '../errors.js';
-import { MEMORY, CONST_TARGET, CACHE, PROXY, ZIG, SENTINEL, SHAPE, TYPED_ARRAY, RESTORE } from '../symbols.js';
+import { MEMORY, CACHE, ZIG, SENTINEL, SHAPE, TYPED_ARRAY, RESTORE } from '../symbols.js';
 import { copyView, isDetached, usizeInvalid, copyObject, isCompatibleInstanceOf, findElements } from '../utils.js';
 
 var viewManagement = mixin({
@@ -157,7 +157,7 @@ var viewManagement = mixin({
     },
     restoreView(dv) {
       const zig = dv?.[ZIG];
-      if (isDetached(dv.buffer)) {
+      if (zig && isDetached(dv.buffer)) {
         dv = this.obtainZigView(zig.address, zig.len);
         if (zig.align) {
           dv[ZIG].align = zig.align;
@@ -172,10 +172,8 @@ var viewManagement = mixin({
           const dv = this[MEMORY];
           const newDV = thisEnv.restoreView(dv);
           if (dv !== newDV) {
-            const target = this[CONST_TARGET] ?? this;
-            target[MEMORY] = newDV;
-            // pointers are referenced by their proxies in the cache
-            target.constructor[CACHE]?.save?.(newDV, target[PROXY] ?? target);
+            this[MEMORY] = newDV;
+            this.constructor[CACHE]?.save?.(newDV, this);
           }
           return newDV;
         },

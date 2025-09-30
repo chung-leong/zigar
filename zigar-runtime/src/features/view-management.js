@@ -186,7 +186,7 @@ export default mixin({
     },
     restoreView(dv) {
       const zig = dv?.[ZIG];
-      if (isDetached(dv.buffer)) {
+      if (zig && isDetached(dv.buffer)) {
         dv = this.obtainZigView(zig.address, zig.len);
         if (zig.align) {
           dv[ZIG].align = zig.align;

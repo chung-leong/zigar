@@ -1,6 +1,6 @@
-import { PointerFlag, ProxyType, StructureFlag, StructureType } from './constants.js';
+import { ProxyType, StructureFlag, StructureType, PointerFlag } from './constants.js';
 import { throwReadOnly } from './errors.js';
-import { PROXY_TYPE, READ_ONLY, TARGET } from './symbols.js';
+import { READ_ONLY, PROXY_TYPE, TARGET } from './symbols.js';
 
 const proxyMaps = [ 
   0, 
@@ -13,7 +13,7 @@ const proxyMaps = [
 }, {});
 const proxyTargetMap = new WeakMap();
 
-export function getProxy(target, type) {
+function getProxy(target, type) {
   const key = target;
   const map = proxyMaps[type & (ProxyType.Const | ProxyType.ReadOnly)];
   let proxy = map.get(key);
@@ -25,7 +25,7 @@ export function getProxy(target, type) {
   return proxy;
 }
 
-export function getProxyType(structure, readOnly = false) {
+function getProxyType(structure, readOnly = false) {
   const { type, flags } = structure;
   let proxyType = (readOnly) ? ProxyType.ReadOnly : 0;
   if (flags & StructureFlag.HasProxy) {
@@ -43,18 +43,18 @@ export function getProxyType(structure, readOnly = false) {
   return proxyType;
 }
 
-export function getProxyTarget(arg) {
+function getProxyTarget(arg) {
   if ((typeof(arg) === 'object' || typeof(arg) === 'function') && arg) {
     return proxyTargetMap.get(arg);
   }
 }
 
-export function removeProxy(arg) {
+function removeProxy(arg) {
   const proxy = getProxyTarget(arg);
   return (proxy) ? [ proxy.target, proxy.type ] : [ arg, 0 ];
 }
 
-export function getReadOnlyProxy(object) {
+function getReadOnlyProxy(object) {
   const proxy = getProxyTarget(object);
   let proxyType;
   if (proxy) {
@@ -75,7 +75,7 @@ export function getReadOnlyProxy(object) {
   return getProxy(object, proxyType);
 }
 
-export function addConstTarget(object) {
+function addConstTarget(object) {
   // pretend a read-only object is a proxy to itself
   return proxyTargetMap.set(object, { target: object, type: ProxyType.Const });
 }
@@ -247,3 +247,4 @@ const handlersHash = {
   [ProxyType.ReadOnly]: readOnlyHandlers,
 };
 
+export { addConstTarget, getProxy, getProxyTarget, getProxyType, getReadOnlyProxy, removeProxy };

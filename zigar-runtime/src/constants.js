@@ -116,10 +116,10 @@ export const MemberFlag = {
   IsTypedArray:     0x0200,
 };
 export const ProxyType = {
-  Pointer: 2,
-  Array: 4,
-
-  Const: 1,
+  Pointer: 1 << 0,
+  Slice: 1 << 1,
+  Const: 1 << 2,  
+  ReadOnly: 1 << 3,
 };
 export const ModuleAttribute = {
   LittleEndian:     0x0001,

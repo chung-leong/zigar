@@ -15,7 +15,6 @@ const StructureType = {
   Primitive: 0};
 const StructurePurpose = {
   Unknown: 0};
-
 const MemberType = {
   Void: 0};
 const MemberFlag = {
@@ -33,7 +32,6 @@ function symbol(name) {
 
 const MEMORY = symbol('memory');
 const SLOTS = symbol('slots');
-const CONST_TARGET = symbol('const target');
 
 (process.env.BITS == 64) ? 0n : 0;
 (process.env.BITS == 64) ? 0xFFFF_FFFF_FFFF_FFFFn : 0xFFFF_FFFF;
@@ -626,9 +624,6 @@ function addStructureDefinitions(lines, definition) {
         const { handle } = dv;
         if (handle) {
           add(`handle: ${handle},`);
-        }
-        if (object[CONST_TARGET]) {
-          add(`const: true,`);
         }
       }
       if (slots) {

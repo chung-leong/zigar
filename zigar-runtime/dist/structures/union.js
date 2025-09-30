@@ -1,8 +1,8 @@
-import { UnionFlag, StructurePurpose, StructureFlag, VisitorFlag } from '../constants.js';
+import { UnionFlag, StructureFlag, VisitorFlag, StructurePurpose } from '../constants.js';
 import { mixin } from '../environment.js';
-import { InactiveUnionProperty, MultipleUnionInitializers, MissingUnionInitializer, InvalidInitializer, InaccessiblePointer } from '../errors.js';
-import { NAME, SETTERS, KEYS, RESTRICT, VISIT, INITIALIZE, TAG, VIVIFICATE, ENTRIES, PROPS, GETTERS, POINTER, TARGET } from '../symbols.js';
-import { defineValue, empty, defineProperties, isCompatibleInstanceOf, copyObject } from '../utils.js';
+import { MultipleUnionInitializers, MissingUnionInitializer, InvalidInitializer, InactiveUnionProperty, InaccessiblePointer } from '../errors.js';
+import { NAME, VISIT, SETTERS, KEYS, RESTRICT, INITIALIZE, TAG, VIVIFICATE, ENTRIES, PROPS, GETTERS, TARGET } from '../symbols.js';
+import { defineValue, isCompatibleInstanceOf, copyObject, empty, defineProperties } from '../utils.js';
 
 var union = mixin({
   defineUnion(structure, descriptors) {
@@ -35,7 +35,7 @@ var union = mixin({
         setSelector.call(this, index);
       };
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -57,7 +57,7 @@ var union = mixin({
       } else if (arg !== undefined) {
         throw new InvalidInitializer(structure, 'object with a single property', arg);
       }
-    };
+    });
     const constructor = this.createConstructor(structure);
     const getters = {};
     const setters = descriptors[SETTERS].value;
@@ -160,10 +160,9 @@ function throwInaccessible() {
 }
 function disablePointer() {
   const disabledProp = { get: throwInaccessible, set: throwInaccessible };
-  defineProperties(this[POINTER], {
+  defineProperties(this, {
     '*': disabledProp,
     '$': disabledProp,
-    [POINTER]: disabledProp,
     [TARGET]: disabledProp,
   });
 }

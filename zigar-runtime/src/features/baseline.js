@@ -76,30 +76,40 @@ export default mixin({
       }
       return dest;
     };
+    const readOnlyObjects = [];
     // empty arrays aren't replicated
     const getBuffer = a => (a.length) ? a.buffer : new ArrayBuffer(0);
     const createObject = (placeholder) => {
-      const { memory, structure, actual } = placeholder;
+      const { memory, structure, actual, slots } = placeholder;
       if (memory) {
         if (actual) {
           return actual;
         } else {
           const { array, offset, length } = memory;
           const dv = this.obtainView(getBuffer(array), offset, length);
-          const { handle, const: isConst } = placeholder;
-          const constructor = structure?.constructor;
-          const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
-          if (isConst) {
-            this.makeReadOnly(object);
+          const { handle } = placeholder;
+          let object;
+          if (structure) {
+            const { constructor } = structure;
+            object = constructor.call(ENVIRONMENT, dv);
+            if (slots) {
+              insertObjects(object[SLOTS], slots);
+            }
+            if (handle) {
+              // need to replace dataview with one pointing to Zig memory later,
+              // when the VM is up and running
+              this.variables.push({ handle, object });
+            } else if (offset === undefined) {
+              // save the object for later, since it constructor isn't isn't finalized yet
+              // when offset is not undefined, the object is a child of another object and 
+              // will be made read-only thru the parent (which might have a linkage handle)
+              readOnlyObjects.push(object);
+            }
+          } else {
+            // console.log({ dv, placeholder });
+            object = { [MEMORY]: dv };
           }
-          if (placeholder.slots) {
-            insertObjects(object[SLOTS], placeholder.slots);
-          }
-          if (handle) {
-            // need to replace dataview with one pointing to Zig memory later,
-            // when the VM is up and running
-            this.variables.push({ handle, object });
-          }
+          placeholder.actual = object;
           return object;
         }
       } else {
@@ -136,6 +146,11 @@ export default mixin({
     // add static members, methods, etc.
     for (const structure of structures) {
       this.finalizeStructure(structure);
+    }
+    // after finalization, constructors of objects will have the properties needed 
+    // for proper detection of what they are
+    for (const object of readOnlyObjects) {
+      this.makeReadOnly(object);
     }
   },
   ...(process.env.TARGET === 'wasm' ? {

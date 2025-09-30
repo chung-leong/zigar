@@ -1,8 +1,8 @@
-import { StructureFlag, VectorFlag, VisitorFlag } from '../constants.js';
+import { StructureFlag, VisitorFlag, VectorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
-import { ENTRIES, INITIALIZE, VIVIFICATE, VISIT } from '../symbols.js';
-import { defineValue, getSelf, isCompatibleInstanceOf, copyObject } from '../utils.js';
+import { VISIT, ENTRIES, INITIALIZE, VIVIFICATE } from '../symbols.js';
+import { defineValue, isCompatibleInstanceOf, copyObject, getSelf } from '../utils.js';
 
 var vector = mixin({
   defineVector(structure, descriptors) {
@@ -12,7 +12,7 @@ var vector = mixin({
       instance: { members: [ member ] },
     } = structure;
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg) {
+    const initializer = this.createInitializer(function(arg) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -38,8 +38,8 @@ var vector = mixin({
       } else if (arg !== undefined) {
         throw new InvalidArrayInitializer(structure, arg);
       }
-    };
-    const constructor = this.createConstructor(structure, { initializer });
+    });
+    const constructor = this.createConstructor(structure);
     const { bitSize: elementBitSize } = member;
     for (let i = 0, bitOffset = 0; i < length; i++, bitOffset += elementBitSize) {
       if (flags & StructureFlag.HasPointer) {

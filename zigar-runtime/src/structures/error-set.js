@@ -144,7 +144,7 @@ export default mixin({
           }
         }
         if (value instanceof Error) {
-          throw new NotInErrorSet(structure);
+          throw new NotInErrorSet(structure, value);
         } else {
           throw new ErrorExpected(structure, value);
         }

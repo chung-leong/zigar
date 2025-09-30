@@ -1,9 +1,10 @@
 import { ProxyType, SliceFlag, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, InvalidArrayInitializer } from '../errors.js';
-import { getArrayProxy, getProxy } from '../proxies.js';
+import { getProxy } from '../proxies.js';
 import {
-  ENTRIES, FINALIZE, INITIALIZE, LENGTH, MEMORY, PROXY, SENTINEL, SHAPE, VISIT, VIVIFICATE
+  ENTRIES, FINALIZE, INITIALIZE, LENGTH, MEMORY, PROXY, PROXY_TYPE, SENTINEL, SHAPE, VISIT,
+  VIVIFICATE
 } from '../symbols.js';
 import {
   copyObject, copyView, defineValue, isCompatibleInstanceOf, transformIterable
@@ -96,7 +97,10 @@ export default mixin({
       return thisEnv.obtainView(dv.buffer, dv.byteOffset + offset, len);
     };
     const constructor = this.createConstructor(structure);
-    descriptors.$ = { get: getArrayProxy, set: initializer };
+    descriptors.$ = { 
+      get: function() { return getProxy(this, ProxyType.Slice) },
+      set: initializer 
+    };
     descriptors.length = { get: getLength };
     if (flags & SliceFlag.IsTypedArray) {
       descriptors.typedArray = this.defineTypedArray(structure);
@@ -130,13 +134,14 @@ export default mixin({
     descriptors[SHAPE] = defineValue(shapeDefiner);
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
-    descriptors[PROXY] = {
-      value() {
-        return getProxy(this, ProxyType.Array);
-      }
-    };    
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
+    descriptors[PROXY] = {
+      value() {
+        return getProxy(this, ProxyType.Slice);
+      }
+    };    
+    descriptors[PROXY_TYPE] = defineValue(ProxyType.Slice);
     return constructor;
   },
   finalizeSlice(structure, staticDescriptors) {

@@ -1,7 +1,8 @@
 import {
-  MemberFlag, MemberType, StructurePurpose, StructureType
+  MemberFlag, MemberType,
+  StructurePurpose, StructureType
 } from '../../zigar-runtime/src/constants.js';
-import { CONST_TARGET, MEMORY, SLOTS } from '../../zigar-runtime/src/symbols.js';
+import { MEMORY, SLOTS } from '../../zigar-runtime/src/symbols.js';
 import { findObjects } from '../../zigar-runtime/src/utils.js';
 import { getArch, getLibraryExt, getPlatform } from './utility-functions.js';
 
@@ -285,9 +286,6 @@ function addStructureDefinitions(lines, definition) {
         const { handle } = dv;
         if (handle) {
           add(`handle: ${handle},`);
-        }
-        if (object[CONST_TARGET]) {
-          add(`const: true,`);
         }
       }
       if (slots) {

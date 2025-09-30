@@ -1,8 +1,9 @@
-import { SliceFlag, StructureFlag, VisitorFlag } from '../constants.js';
+import { SliceFlag, StructureFlag, VisitorFlag, ProxyType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { InvalidArrayInitializer, ArrayLengthMismatch } from '../errors.js';
-import { SENTINEL, ENTRIES, SHAPE, INITIALIZE, FINALIZE, VIVIFICATE, VISIT, LENGTH, MEMORY } from '../symbols.js';
-import { defineValue, getProxy, copyView, isCompatibleInstanceOf, copyObject, transformIterable } from '../utils.js';
+import { getProxy } from '../proxies.js';
+import { SENTINEL, MEMORY, VISIT, ENTRIES, SHAPE, INITIALIZE, FINALIZE, VIVIFICATE, PROXY, PROXY_TYPE, LENGTH } from '../symbols.js';
+import { defineValue, isCompatibleInstanceOf, copyObject, transformIterable, copyView } from '../utils.js';
 
 var slice = mixin({
   defineSlice(structure, descriptors) {
@@ -32,7 +33,7 @@ var slice = mixin({
     // the initializer behave differently depending on whether it's called by the
     // constructor or by a member setter (i.e. after object's shape has been established)
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         if (!this[MEMORY]) {
           shapeDefiner.call(this, null, arg.length, allocator);
@@ -70,7 +71,7 @@ var slice = mixin({
       } else if (arg !== undefined) {
         throw new InvalidArrayInitializer(structure, arg);
       }
-    };
+    });
     const getSubArrayView = function(begin, end) {
       const length = this[LENGTH];
       const dv = this[MEMORY];
@@ -81,7 +82,10 @@ var slice = mixin({
       return thisEnv.obtainView(dv.buffer, dv.byteOffset + offset, len);
     };
     const constructor = this.createConstructor(structure);
-    descriptors.$ = { get: getProxy, set: initializer };
+    descriptors.$ = { 
+      get: function() { return getProxy(this, ProxyType.Slice) },
+      set: initializer 
+    };
     descriptors.length = { get: getLength };
     if (flags & SliceFlag.IsTypedArray) {
       descriptors.typedArray = this.defineTypedArray(structure);
@@ -117,6 +121,12 @@ var slice = mixin({
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
+    descriptors[PROXY] = {
+      value() {
+        return getProxy(this, ProxyType.Slice);
+      }
+    };    
+    descriptors[PROXY_TYPE] = defineValue(ProxyType.Slice);
     return constructor;
   },
   finalizeSlice(structure, staticDescriptors) {

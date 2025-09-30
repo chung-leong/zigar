@@ -1,5 +1,5 @@
 import { MemberType } from './constants.js';
-import { SIGNATURE, ENVIRONMENT, RESTORE, LENGTH, PROXY } from './symbols.js';
+import { SIGNATURE, ENVIRONMENT, RESTORE, LENGTH } from './symbols.js';
 
 function defineProperty(object, name, descriptor) {
   if (descriptor) {
@@ -341,10 +341,6 @@ function getLength() {
   return this[LENGTH];
 }
 
-function getProxy() {
-  return this[PROXY];
-}
-
 function toString() {
   return String(this);
 }
@@ -368,7 +364,6 @@ class ObjectCache {
 
   save(dv, object) {
     this.map.set(dv, object);
-    return object;
   }
 }
 
@@ -396,4 +391,4 @@ function extractTimes(st_atim, st_mtim, fst_flags) {
   return times;
 }
 
-export { ObjectCache, adjustAddress, alignForward, always, clearView, copyObject, copyView, createView, decodeBase64, decodeEnum, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, extractTimes, findElements, findObjects, findSortedIndex, getEnumNumber, getErrorHandler, getLength, getPrimitiveName, getProxy, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isDetached, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, maxSafeInteger, minSafeInteger, never, readUsize, readUsizeSafe, safeInt, toString, transformIterable, usize, usizeByteSize, usizeInvalid, usizeMax, usizeMin };
+export { ObjectCache, adjustAddress, alignForward, always, clearView, copyObject, copyView, createView, decodeBase64, decodeEnum, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, extractTimes, findElements, findObjects, findSortedIndex, getEnumNumber, getErrorHandler, getLength, getPrimitiveName, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isDetached, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, maxSafeInteger, minSafeInteger, never, readUsize, readUsizeSafe, safeInt, toString, transformIterable, usize, usizeByteSize, usizeInvalid, usizeMax, usizeMin };

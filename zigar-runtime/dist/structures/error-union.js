@@ -1,8 +1,8 @@
 import { MemberType, StructureFlag, VisitorFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NotInErrorSet, isErrorJSON } from '../errors.js';
-import { INITIALIZE, VIVIFICATE, VISIT, CLASS, MEMORY } from '../symbols.js';
-import { defineValue, isCompatibleInstanceOf, copyObject, clearView } from '../utils.js';
+import { VISIT, CLASS, INITIALIZE, VIVIFICATE, MEMORY } from '../symbols.js';
+import { isCompatibleInstanceOf, copyObject, defineValue, clearView } from '../utils.js';
 
 var errorUnion = mixin({
   defineErrorUnion(structure, descriptors) {
@@ -29,7 +29,7 @@ var errorUnion = mixin({
       this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
     };
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
@@ -45,6 +45,7 @@ var errorUnion = mixin({
           // call setValue() first, in case it throws
           setValue.call(this, arg, allocator);
           setErrorNumber.call(this, 0);
+          return;
         } catch (err) {
           if (arg instanceof Error) {
             const match = ErrorSet(arg) ?? ErrorSet.Unexpected;
@@ -54,7 +55,7 @@ var errorUnion = mixin({
             } else {
               // we gave setValue a chance to see if the error is actually an acceptable value
               // now is time to throw an error
-              throw new NotInErrorSet(errorMember.structure);
+              throw new NotInErrorSet(errorMember.structure, arg);
             }
           } else if (isErrorJSON(arg)) {
             // setValue() failed because the argument actually is an error as JSON
@@ -71,7 +72,7 @@ var errorUnion = mixin({
           }
         }
       }
-    };
+    });
     const constructor = this.createConstructor(structure);
     descriptors.$ = { get, set: initializer };
     descriptors[INITIALIZE] = defineValue(initializer);

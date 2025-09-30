@@ -16,7 +16,7 @@ function getArray(arg) {
   const proxy = getProxyTarget(arg);
   if (proxy) {
     const { target } = proxy;
-    return (proxy.type === ProxyType.Pointer) ? target['*'] : target;
+    return (proxy.type & ProxyType.Pointer) ? target['*'] : target;
   }
   return arg;
 }
