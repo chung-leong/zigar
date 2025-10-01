@@ -188,10 +188,6 @@ export default mixin({
       return adjustAddress(address, dv.byteOffset);
     }
   },
-  obtainZigArray(address, len) {
-    const dv = this.obtainZigView(address, len, false);
-    return new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
-  },
   ...(process.env.TARGET === 'wasm' ? {
     imports: {
       allocateScratchMemory: { argType: 'ii', returnType: 'i' },
@@ -240,15 +236,7 @@ export default mixin({
         address = usizeMin;
         len = 0;
       }
-      let dv;
-      if (cache) {
-        dv = this.obtainView(buffer, address, len);
-      } else {
-        // don't attach the view to the buffer so that it'd get garbage-collected
-        dv = new DataView(buffer, address, len);
-        dv[ZIG] = { address, len };
-      }
-      return dv;
+      return this.obtainView(buffer, address, len, cache);
     },
     getTargetAddress(context, target, cluster, writable) {
       const dv = target[MEMORY];
@@ -299,19 +287,18 @@ export default mixin({
         if (entry?.address <= address && adjustAddress(address, len) <= adjustAddress(entry.address, entry.len)) {
           buffer = entry.buffer;
           offset = Number(address - entry.address);
-        } else {
-          // cannot obtain zero-length buffer
-          buffer = (len > 0) ? this.obtainExternBuffer(address, len, FALLBACK) : new ArrayBuffer(0);
-          buffer[ZIG] = { address, len };
-          offset = 0;
-          this.externBufferList.splice(index, 0, { address, len, buffer })
         }
-      } else {
+      } 
+      if (!buffer) {
+        // cannot obtain zero-length buffer
         buffer = (len > 0) ? this.obtainExternBuffer(address, len, FALLBACK) : new ArrayBuffer(0);
         buffer[ZIG] = { address, len };
         offset = 0;
+        if (cache) {
+          this.externBufferList.splice(index, 0, { address, len, buffer })
+        }
       }
-      return this.obtainView(buffer, offset, len);  
+      return this.obtainView(buffer, offset, len, cache);  
     },
     unregisterBuffer(address) {
       const index = findMemoryIndex(this.externBufferList, address);

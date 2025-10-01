@@ -28,7 +28,8 @@ describe('Syscalls: stream-location', function() {
       const encoder = new TextEncoder();
       const pathSrc = encoder.encode(path);
       const pathLen = pathSrc.length;
-      const pathArray = env.obtainZigArray(pathAddress, pathLen);
+      const pathDV = env.obtainZigView(pathAddress, pathLen, false);
+      const pathArray = new Uint8Array(pathDV.buffer, pathDV.byteOffset, pathDV.byteLength);
       for (let i = 0; i < pathLen; i++) pathArray[i] = pathSrc[i];
       const result = env.obtainStreamLocation(3, pathAddress, pathLen);
       expect(result).to.eql({
@@ -61,7 +62,8 @@ describe('Syscalls: stream-location', function() {
       const encoder = new TextEncoder();
       const pathSrc = encoder.encode(path);
       const pathLen = pathSrc.length;
-      const pathArray = env.obtainZigArray(pathAddress, pathLen);
+      const pathDV = env.obtainZigView(pathAddress, pathLen, false);
+      const pathArray = new Uint8Array(pathDV.buffer, pathDV.byteOffset, pathDV.byteLength);
       for (let i = 0; i < pathLen; i++) pathArray[i] = pathSrc[i];
       const result = env.obtainStreamLocation(dirFd, pathAddress, pathLen);
       expect(result).to.eql({
@@ -94,7 +96,8 @@ describe('Syscalls: stream-location', function() {
       const encoder = new TextEncoder();
       const pathSrc = encoder.encode(path);
       const pathLen = pathSrc.length;
-      const pathArray = env.obtainZigArray(pathAddress, pathLen);
+      const pathDV = env.obtainZigView(pathAddress, pathLen, false);
+      const pathArray = new Uint8Array(pathDV.buffer, pathDV.byteOffset, pathDV.byteLength);
       for (let i = 0; i < pathLen; i++) pathArray[i] = pathSrc[i];
       const result = env.obtainStreamLocation(dirFd, pathAddress, pathLen);
       expect(result).to.eql({
@@ -127,7 +130,8 @@ describe('Syscalls: stream-location', function() {
       const encoder = new TextEncoder();
       const pathSrc = encoder.encode(path);
       const pathLen = pathSrc.length;
-      const pathArray = env.obtainZigArray(pathAddress, pathLen);
+      const pathDV = env.obtainZigView(pathAddress, pathLen, false);
+      const pathArray = new Uint8Array(pathDV.buffer, pathDV.byteOffset, pathDV.byteLength);
       for (let i = 0; i < pathLen; i++) pathArray[i] = pathSrc[i];
       expect(() => {
         env.obtainStreamLocation(dirFd, pathAddress, pathLen);
@@ -158,7 +162,8 @@ describe('Syscalls: stream-location', function() {
       const encoder = new TextEncoder();
       const pathSrc = encoder.encode(path);
       const pathLen = pathSrc.length;
-      const pathArray = env.obtainZigArray(pathAddress, pathLen);
+      const pathDV = env.obtainZigView(pathAddress, pathLen, false);
+      const pathArray = new Uint8Array(pathDV.buffer, pathDV.byteOffset, pathDV.byteLength);
       for (let i = 0; i < pathLen; i++) pathArray[i] = pathSrc[i];
       const result = env.obtainStreamLocation(4, pathAddress, pathLen);
       expect(result).to.eql({

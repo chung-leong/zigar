@@ -8,7 +8,8 @@ var streamLocation = mixin({
     this.streamLocationMap = new Map([ [ PosixDescriptor.root, '' ]]);
   },
   obtainStreamLocation(dirFd, pathAddress, pathLen) {
-    const pathArray = this.obtainZigArray(pathAddress, pathLen);
+    const pathDV = this.obtainZigView(pathAddress, pathLen, false);
+    const pathArray = new Uint8Array(pathDV.buffer, pathDV.byteOffset, pathDV.byteLength);
     let path = decodeText(pathArray).trim();
     if (path.endsWith('/')) {
       path = path.slice(0, -1);

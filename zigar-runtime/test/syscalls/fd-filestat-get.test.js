@@ -205,7 +205,8 @@ describe('Syscall: fd-filestat-get', function() {
       const pathAddress = 0x1000;
       const pathLen = src.length;
       const fdAddress = 0x2000;
-      const pathArray = env.obtainZigArray(pathAddress, pathLen);
+      const pathDV = env.obtainZigView(pathAddress, pathLen, false);
+      const pathArray = new Uint8Array(pathDV.buffer, pathDV.byteOffset, pathDV.byteLength);
       for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
       const open = env.getWASIHandler('path_open');
       const result1 = open(PosixDescriptor.root, 0, pathAddress, pathLen, 0, 2n, 0n, 0, fdAddress);

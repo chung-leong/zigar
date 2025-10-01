@@ -1,7 +1,7 @@
 import { MemberType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { NotOnByteBoundary } from '../errors.js';
-import { MEMORY, PARENT, RESTORE, SLOTS } from '../symbols.js';
+import { MEMORY, NO_CACHE, PARENT, RESTORE, SLOTS } from '../symbols.js';
 
 export default mixin({
   defineVivificatorStruct(structure) {
@@ -25,7 +25,7 @@ export default mixin({
           }
           len = member.bitSize >> 3;
         }
-        const childDV = thisEnv.obtainView(dv.buffer, offset, len);
+        const childDV = thisEnv.obtainView(dv.buffer, offset, len, !dv[NO_CACHE]);
         const object = this[SLOTS][slot] = constructor.call(PARENT, childDV);
         return object;
       }

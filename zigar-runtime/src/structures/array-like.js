@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { MEMORY, PARENT, RESTORE, SLOTS } from '../symbols.js';
+import { MEMORY, NO_CACHE, PARENT, RESTORE, SLOTS } from '../symbols.js';
 import { defineProperties } from '../utils.js';
 
 export default mixin({
@@ -23,7 +23,7 @@ export default mixin({
       const dv = (process.env.TARGET === 'wasm') ? this[RESTORE]() : this[MEMORY];
       const parentOffset = dv.byteOffset;
       const offset = parentOffset + byteSize * index;
-      const childDV = thisEnv.obtainView(dv.buffer, offset, byteSize);
+      const childDV = thisEnv.obtainView(dv.buffer, offset, byteSize, !dv[NO_CACHE]);
       const object = this[SLOTS][index] = constructor.call(PARENT, childDV);
       return object;
     };

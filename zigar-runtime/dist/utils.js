@@ -1,5 +1,5 @@
 import { MemberType } from './constants.js';
-import { SIGNATURE, ENVIRONMENT, RESTORE, LENGTH } from './symbols.js';
+import { SIGNATURE, ENVIRONMENT, RESTORE, LENGTH, NO_CACHE } from './symbols.js';
 
 function defineProperty(object, name, descriptor) {
   if (descriptor) {
@@ -359,11 +359,13 @@ class ObjectCache {
   map = new WeakMap();
 
   find(dv) {
-    return this.map.get(dv);
+    return (!dv[NO_CACHE]) ? this.map.get(dv) : undefined;
   }
 
   save(dv, object) {
-    this.map.set(dv, object);
+    if (!dv[NO_CACHE]) {
+      this.map.set(dv, object);
+    }
   }
 }
 

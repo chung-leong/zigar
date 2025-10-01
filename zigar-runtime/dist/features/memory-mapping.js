@@ -173,10 +173,6 @@ var memoryMapping = mixin({
       return adjustAddress(address, dv.byteOffset);
     }
   },
-  obtainZigArray(address, len) {
-    const dv = this.obtainZigView(address, len, false);
-    return new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
-  },
   ...({
     imports: {
       allocateScratchMemory: { argType: 'ii', returnType: 'i' },
@@ -219,15 +215,7 @@ var memoryMapping = mixin({
         address = usizeMin;
         len = 0;
       }
-      let dv;
-      if (cache) {
-        dv = this.obtainView(buffer, address, len);
-      } else {
-        // don't attach the view to the buffer so that it'd get garbage-collected
-        dv = new DataView(buffer, address, len);
-        dv[ZIG] = { address, len };
-      }
-      return dv;
+      return this.obtainView(buffer, address, len, cache);
     },
     getTargetAddress(context, target, cluster, writable) {
       const dv = target[MEMORY];

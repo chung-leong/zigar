@@ -180,7 +180,8 @@ describe('Syscall: path-filestat-set-times', function() {
       const src = encoder.encode('/world');
       const pathAddress = 0x1000;
       const pathLen = src.length;
-      const pathArray = env.obtainZigArray(pathAddress, pathLen);
+      const pathDV = env.obtainZigView(pathAddress, pathLen, false);
+      const pathArray = new Uint8Array(pathDV.buffer, pathDV.byteOffset, pathDV.byteLength);
       for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
       const f = env.getWASIHandler('path_filestat_set_times');
       const result1 = f(PosixDescriptor.root, 0, pathAddress, pathLen, 123n, 456n, 1 << 0 | 1 << 2);

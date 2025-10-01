@@ -1,7 +1,7 @@
 import { StructureType } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArrayLengthMismatch, BufferExpected, BufferSizeMismatch } from '../errors.js';
-import { CACHE, FALLBACK, MEMORY, RESTORE, SENTINEL, SHAPE, TYPED_ARRAY, ZIG } from '../symbols.js';
+import { CACHE, FALLBACK, MEMORY, NO_CACHE, RESTORE, SENTINEL, SHAPE, TYPED_ARRAY, ZIG } from '../symbols.js';
 import { adjustAddress, alignForward, copyObject, copyView, findElements, isCompatibleInstanceOf, isDetached, usizeInvalid } from '../utils.js';
 
 export default mixin({
@@ -134,18 +134,23 @@ export default mixin({
     }
     return { existing, entry };
   },
-  obtainView(buffer, offset, len) {
-    const { existing, entry } = this.findViewAt(buffer, offset, len);
+  obtainView(buffer, offset, len, cache = true) {
     let dv;
-    if (existing) {
-      return existing;
-    }
-    dv = new DataView(buffer, offset, len);
-    if (entry) {
-      entry.set(`${offset}:${len}`, dv);
+    if (cache) {
+      const { existing, entry } = this.findViewAt(buffer, offset, len);
+      if (existing) {
+        return existing;
+      }
+      dv = new DataView(buffer, offset, len);
+      if (entry) {
+        entry.set(`${offset}:${len}`, dv);
+      } else {
+        // just one view of this buffer for now
+        this.viewMap.set(buffer, dv);
+      }
     } else {
-      // just one view of this buffer for now
-      this.viewMap.set(buffer, dv);
+      dv = new DataView(buffer, offset, len);
+      dv[NO_CACHE] = true;
     }
     if (process.env.TARGET === 'wasm') {
       if (buffer === this.memory?.buffer || buffer === this.usizeMaxBuffer) {

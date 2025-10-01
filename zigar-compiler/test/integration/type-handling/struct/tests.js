@@ -30,6 +30,8 @@ export function addTests(importModule, options) {
           params: [ 0, 1, 2, 3 ],
         }
       });
+      expect(() => constant.number1 = 1234).to.throw(TypeError);
+      expect(() => constant.$ = { number1: 1234, number2: 3 }).to.throw(TypeError);
       expect(tuple.valueOf()).to.eql([ 123, 3.14, 'evil' ]);
       expect(() => comptime_struct.input.src.channels = 5).to.throw(TypeError);
       expect(() => comptime_struct.input.src = { channels: 5 }).to.throw(TypeError);

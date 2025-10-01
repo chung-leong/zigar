@@ -12,9 +12,9 @@ export function addTests(importModule, options) {
       const { hello } = await importTest('issue-689');
       const [ line ] = await capture(() => {
         hello({
-            linear: {
-                stops: [ 1, 2, 3 ],
-            }
+          linear: {
+            stops: [ 1, 2, 3 ],
+          }
         });
       })
       expect(line).to.contain('.stops = { 1, 2, 3 }')
@@ -22,13 +22,36 @@ export function addTests(importModule, options) {
     it('should fix issue 697', async function() {
       const { Callback, runCallback, setCallback } = await importTest('issue-697', { topLevelAwait: false });
       function hello(number, text) {
-          console.log(`number = ${number}, text = ${text.string}`);
+        console.log(`number = ${number}, text = ${text.string}`);
       }
       const callback = new Callback(hello);
       await setCallback(callback);
       const [ line ] = await capture(() => runCallback());
       setCallback(null);
       expect(line).to.equal('number = 123, text = Hello world');
+    })
+    it('should fix issue 723', async function() {
+      const { runCallback, setCallback } = await importTest('issue-723');
+      const array = [];
+      function hello(s) {
+        array.push(s.text.string);
+      }
+      await setCallback(hello);
+      for (let i = 0; i < 10; i++) {
+        runCallback(`line ${i + 1}`);
+      }
+      expect(array).to.eql([
+        'line 1',
+        'line 2',
+        'line 3',
+        'line 4',
+        'line 5',
+        'line 6',
+        'line 7',
+        'line 8',
+        'line 9',
+        'line 10',
+      ]);
     })
     it('should fix issue 726', async function() {
       const { __zigar: __zigarA, print: printA } = await importTest('issue-726a', { preserve: true });

@@ -71,7 +71,8 @@ describe('Syscall: fd-fdstat-get', function() {
     const pathAddress = usize(0x1000);
     const pathLen = src.length;
     const fdAddress = usize(0x2000);
-    const pathArray = env.obtainZigArray(pathAddress, pathLen);
+      const pathDV = env.obtainZigView(pathAddress, pathLen, false);
+      const pathArray = new Uint8Array(pathDV.buffer, pathDV.byteOffset, pathDV.byteLength);
     for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
     const result1 = env.pathOpen(PosixDescriptor.root, 0, pathAddress, pathLen, 0, BigInt(PosixDescriptorRight.fd_read), 0n, 0, fdAddress);
     expect(result1).to.equal(0);
@@ -117,7 +118,8 @@ describe('Syscall: fd-fdstat-get', function() {
     const pathAddress = usize(0x1000);
     const pathLen = src.length;
     const fdAddress = usize(0x2000);
-    const pathArray = env.obtainZigArray(pathAddress, pathLen);
+      const pathDV = env.obtainZigView(pathAddress, pathLen, false);
+      const pathArray = new Uint8Array(pathDV.buffer, pathDV.byteOffset, pathDV.byteLength);
     for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
     const result1 = env.pathOpen(PosixDescriptor.root, 0, pathAddress, pathLen, 0, BigInt(PosixDescriptorRight.fd_readdir), 0n, 0, fdAddress);
     expect(result1).to.equal(0);
@@ -166,7 +168,8 @@ describe('Syscall: fd-fdstat-get', function() {
     const pathAddress = usize(0x1000);
     const pathLen = src.length;
     const fdAddress = usize(0x2000);
-    const pathArray = env.obtainZigArray(pathAddress, pathLen);
+    const pathDV = env.obtainZigView(pathAddress, pathLen, false);
+    const pathArray = new Uint8Array(pathDV.buffer, pathDV.byteOffset, pathDV.byteLength);
     for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
     const result1 = env.pathOpen(PosixDescriptor.root, 0, pathAddress, pathLen, 0, BigInt(PosixDescriptorRight.fd_readdir), 0n, 0, fdAddress);
     expect(result1).to.equal(0);
@@ -215,7 +218,8 @@ describe('Syscall: fd-fdstat-get', function() {
     const pathAddress = usize(0x1000);
     const pathLen = src.length;
     const fdAddress = usize(0x2000);
-    const pathArray = env.obtainZigArray(pathAddress, pathLen);
+    const pathDV = env.obtainZigView(pathAddress, pathLen, false);
+    const pathArray = new Uint8Array(pathDV.buffer, pathDV.byteOffset, pathDV.byteLength);
     for (let i = 0; i < pathLen; i++) pathArray[i] = src[i];
     const result1 = env.pathOpen(PosixDescriptor.root, 0, pathAddress, pathLen, 0, BigInt(PosixDescriptorRight.fd_readdir), 0n, 0, fdAddress);
     expect(result1).to.equal(0);
