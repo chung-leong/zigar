@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { RESTORE, SLOTS, PARENT } from '../symbols.js';
+import { RESTORE, NO_CACHE, SLOTS, PARENT } from '../symbols.js';
 import { defineProperties } from '../utils.js';
 
 var arrayLike = mixin({
@@ -23,7 +23,7 @@ var arrayLike = mixin({
       const dv = this[RESTORE]() ;
       const parentOffset = dv.byteOffset;
       const offset = parentOffset + byteSize * index;
-      const childDV = thisEnv.obtainView(dv.buffer, offset, byteSize);
+      const childDV = thisEnv.obtainView(dv.buffer, offset, byteSize, !dv[NO_CACHE]);
       const object = this[SLOTS][index] = constructor.call(PARENT, childDV);
       return object;
     };

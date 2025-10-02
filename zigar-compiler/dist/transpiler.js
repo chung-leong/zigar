@@ -278,6 +278,7 @@ const SIGNATURE = symbol('signature');
 const CONTROLLER = symbol('controller');
 const PROXY_TYPE = symbol('proxy type');
 const READ_ONLY = symbol('read only');
+const NO_CACHE = symbol('no cache');
 
 const UPDATE = symbol('update');
 const RESTORE = symbol('restore');
@@ -632,11 +633,13 @@ class ObjectCache {
   map = new WeakMap();
 
   find(dv) {
-    return this.map.get(dv);
+    return (!dv[NO_CACHE]) ? this.map.get(dv) : undefined;
   }
 
   save(dv, object) {
-    this.map.set(dv, object);
+    if (!dv[NO_CACHE]) {
+      this.map.set(dv, object);
+    }
   }
 }
 
@@ -4501,10 +4504,6 @@ var memoryMapping = mixin({
       return adjustAddress(address, dv.byteOffset);
     }
   },
-  obtainZigArray(address, len) {
-    const dv = this.obtainZigView(address, len, false);
-    return new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
-  },
   ...({
     imports: {
       allocateScratchMemory: { argType: 'ii', returnType: 'i' },
@@ -4547,15 +4546,7 @@ var memoryMapping = mixin({
         address = usizeMin;
         len = 0;
       }
-      let dv;
-      if (cache) {
-        dv = this.obtainView(buffer, address, len);
-      } else {
-        // don't attach the view to the buffer so that it'd get garbage-collected
-        dv = new DataView(buffer, address, len);
-        dv[ZIG] = { address, len };
-      }
-      return dv;
+      return this.obtainView(buffer, address, len, cache);
     },
     getTargetAddress(context, target, cluster, writable) {
       const dv = target[MEMORY];
@@ -5040,7 +5031,8 @@ var streamLocation = mixin({
     this.streamLocationMap = new Map([ [ PosixDescriptor.root, '' ]]);
   },
   obtainStreamLocation(dirFd, pathAddress, pathLen) {
-    const pathArray = this.obtainZigArray(pathAddress, pathLen);
+    const pathDV = this.obtainZigView(pathAddress, pathLen, false);
+    const pathArray = new Uint8Array(pathDV.buffer, pathDV.byteOffset, pathDV.byteLength);
     let path = decodeText(pathArray).trim();
     if (path.endsWith('/')) {
       path = path.slice(0, -1);
@@ -7392,18 +7384,23 @@ var viewManagement = mixin({
     }
     return { existing, entry };
   },
-  obtainView(buffer, offset, len) {
-    const { existing, entry } = this.findViewAt(buffer, offset, len);
+  obtainView(buffer, offset, len, cache = true) {
     let dv;
-    if (existing) {
-      return existing;
-    }
-    dv = new DataView(buffer, offset, len);
-    if (entry) {
-      entry.set(`${offset}:${len}`, dv);
+    if (cache) {
+      const { existing, entry } = this.findViewAt(buffer, offset, len);
+      if (existing) {
+        return existing;
+      }
+      dv = new DataView(buffer, offset, len);
+      if (entry) {
+        entry.set(`${offset}:${len}`, dv);
+      } else {
+        // just one view of this buffer for now
+        this.viewMap.set(buffer, dv);
+      }
     } else {
-      // just one view of this buffer for now
-      this.viewMap.set(buffer, dv);
+      dv = new DataView(buffer, offset, len);
+      dv[NO_CACHE] = true;
     }
     {
       if (buffer === this.memory?.buffer || buffer === this.usizeMaxBuffer) {
@@ -8771,9 +8768,12 @@ var all$1 = mixin({
   createApplier(structure) {
     const { instance: { template } } = structure;
     return function(arg, allocator) {
-      const [ argNoProxy] = removeProxy(arg);
+      const [ argNoProxy ] = removeProxy(arg);
       const [ self ] = removeProxy(this);
       const argKeys = Object.keys(argNoProxy);
+      if (argNoProxy instanceof Error) {
+        throw argNoProxy;
+      }
       const keys = self[KEYS];
       const setters = self[SETTERS];
       // don't accept unknown props
@@ -8942,7 +8942,7 @@ var arrayLike = mixin({
       const dv = this[RESTORE]() ;
       const parentOffset = dv.byteOffset;
       const offset = parentOffset + byteSize * index;
-      const childDV = thisEnv.obtainView(dv.buffer, offset, byteSize);
+      const childDV = thisEnv.obtainView(dv.buffer, offset, byteSize, !dv[NO_CACHE]);
       const object = this[SLOTS][index] = constructor.call(PARENT, childDV);
       return object;
     };
@@ -9394,39 +9394,35 @@ var errorUnion = mixin({
         setError.call(this, arg);
         clearValue.call(this);
       } else if (arg !== undefined || isValueVoid) {
-        if (!(arg instanceof Error)) {
-          try {
-            // call setValue() first, in case it throws
-            setValue.call(this, arg, allocator);
-            setErrorNumber.call(this, 0);
-            return;
-          } catch (err) {
-            console.error(err);
-            arg = err;
-          }
-        }
-        if (arg instanceof Error) {
-          const match = ErrorSet(arg) ?? ErrorSet.Unexpected;
-          if (match) {
-            setError.call(this, match);
+        try {
+          // call setValue() first, in case it throws
+          setValue.call(this, arg, allocator);
+          setErrorNumber.call(this, 0);
+          return;
+        } catch (err) {
+          if (arg instanceof Error) {
+            const match = ErrorSet(arg) ?? ErrorSet.Unexpected;
+            if (match) {
+              setError.call(this, match);
+              clearValue.call(this);
+            } else {
+              // we gave setValue a chance to see if the error is actually an acceptable value
+              // now is time to throw an error
+              throw new NotInErrorSet(errorMember.structure, arg);
+            }
+          } else if (isErrorJSON(arg)) {
+            // setValue() failed because the argument actually is an error as JSON
+            setError.call(this, arg);
             clearValue.call(this);
+          } else if (arg && typeof(arg) === 'object') {
+            // maybe the argument contains a special property like `dataView` or `base64`
+            if (propApplier.call(this, arg) === 0) {
+              // propApplier() found zero prop, so it's time to throw
+              throw err;
+            }
           } else {
-            // we gave setValue a chance to see if the error is actually an acceptable value
-            // now is time to throw an error
-            throw new NotInErrorSet(errorMember.structure, arg);
-          }
-        } else if (isErrorJSON(arg)) {
-          // setValue() failed because the argument actually is an error as JSON
-          setError.call(this, arg);
-          clearValue.call(this);
-        } else if (arg && typeof(arg) === 'object') {
-          // maybe the argument contains a special property like `dataView` or `base64`
-          if (propApplier.call(this, arg) === 0) {
-            // propApplier() found zero prop, so it's time to throw
             throw err;
           }
-        } else {
-          throw err;
         }
       }
     });
@@ -10195,7 +10191,7 @@ var structLike = mixin({
           }
           len = member.bitSize >> 3;
         }
-        const childDV = thisEnv.obtainView(dv.buffer, offset, len);
+        const childDV = thisEnv.obtainView(dv.buffer, offset, len, !dv[NO_CACHE]);
         const object = this[SLOTS][slot] = constructor.call(PARENT, childDV);
         return object;
       }
