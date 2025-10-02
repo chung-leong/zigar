@@ -1476,18 +1476,30 @@ async function compile(srcPath, modPath, options) {
   return { outputPath, changed, sourcePaths }
 }
 
+let lock = null;
+
+async function getLock() {
+  const previous = lock;  
+  let unlock;
+  lock = new Promise(resolve => unlock = resolve);
+  await previous;
+  return unlock;
+}
+
 async function runCompiler(path, args, options) {
   const {
     cwd,
     onStart,
     onEnd,
   } = options;
+  const unlock = await getLock();
   try {
     onStart?.();
     return await execFile(path, args, { cwd, windowsHide: true });
   } catch (err) {
     throw new CompilationError(path, args, cwd, err);
   } finally {
+    unlock();
     onEnd?.();
   }
 }
