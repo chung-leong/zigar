@@ -38,6 +38,18 @@ const ModuleHost = struct {
     library: ?std.DynLib = null,
     base_address: usize = 0,
     is_bun: bool = false,
+    external_buffer_disabled: bool = false,
+    multithread_count: std.atomic.Value(usize) = .init(0),
+    redirection_mask: hooks.Mask = .{},
+    syscall_trap_installed: bool = false,
+    syscall_trap_count: usize = 0,
+    thread_syscall_trap_mutex: std.Thread.Mutex = undefined,
+    thread_syscall_trap_switches: std.ArrayList(*bool) = undefined,
+    env_variable_deferred: Deferred = .{},
+    env_variable_list: ?[]?[*:0]const u8 = null,
+    env_variable_bytes: ?[]const u8 = null,
+    env_variable_ptr: *[*:null]?[*:0]const u8 = undefined,
+    env_variable_original: *[*:null]?[*:0]const u8 = undefined,
     js: struct {
         create_view: ?Ref = null,
         create_instance: ?Ref = null,
@@ -89,17 +101,6 @@ const ModuleHost = struct {
         handle_syscall: ?ThreadsafeFunction = null,
         release_function: ?ThreadsafeFunction = null,
     } = .{},
-    multithread_count: std.atomic.Value(usize) = .init(0),
-    redirection_mask: hooks.Mask = .{},
-    syscall_trap_installed: bool = false,
-    syscall_trap_count: usize = 0,
-    thread_syscall_trap_mutex: std.Thread.Mutex = undefined,
-    thread_syscall_trap_switches: std.ArrayList(*bool) = undefined,
-    env_variable_deferred: Deferred = .{},
-    env_variable_list: ?[]?[*:0]const u8 = null,
-    env_variable_bytes: ?[]const u8 = null,
-    env_variable_ptr: *[*:null]?[*:0]const u8 = undefined,
-    env_variable_original: *[*:null]?[*:0]const u8 = undefined,
 
     pub threadlocal var trapping_syscalls: bool = false;
     threadlocal var main_thread_syscall_trap_count: usize = 0;
@@ -126,7 +127,7 @@ const ModuleHost = struct {
         redirection_controller.uninstallSignalHandler();
     }
 
-    fn createEnvironment(env: Env) !Value {
+    fn createEnvironment(env: Env, disableExternalBuffer: Value) !Value {
         // this function is only called from a main thread (where the event loop runs)
         in_main_thread = true;
         // compile embedded JavaScript
@@ -151,6 +152,9 @@ const ModuleHost = struct {
         const global = try env.getGlobal();
         if (env.getNamedProperty(global, "Bun")) |_| {
             self.is_bun = true;
+        } else |_| {}
+        if (env.getValueBool(disableExternalBuffer)) |disabled| {
+            self.external_buffer_disabled = disabled;
         } else |_| {}
         return js_env;
     }
@@ -241,10 +245,7 @@ const ModuleHost = struct {
             "destroyJsThunk",
             "recreateAddress",
             "finalizeAsyncCall",
-            "getNumericValue",
-            "setNumericValue",
             "requireBufferFallback",
-            "syncExternalBuffer",
             "setRedirectionMask",
             "initializeLibc",
             "setSyscallTrap",
@@ -371,13 +372,12 @@ const ModuleHost = struct {
         const env = self.env;
         const src_bytes: [*]u8 = @ptrFromInt(try env.getValueUsize(address));
         const src_len: usize = @intFromFloat(try env.getValueDouble(len));
-        const buffer = switch (canCreateExternalBuffer(env)) {
+        const buffer = switch (self.canCreateExternalBuffer()) {
             true => try env.createExternalArraybuffer(src_bytes[0..src_len], finalizeExternalBuffer, self),
             false => create: {
-                // make copy of external memory instead
-                const copy_opaque, const buffer = try env.createArraybuffer(src_len);
-                const copy_bytes: [*]u8 = @ptrCast(copy_opaque);
-                @memcpy(copy_bytes[0..src_len], src_bytes[0..src_len]);
+                // use a regular buffer instead, which is empty initially; copying will occur on the
+                // JavaScript side
+                _, const buffer = try env.createArraybuffer(src_len);
                 // attach address as fallback property
                 try env.setProperty(buffer, fallback_symbol, address);
                 // add finalizer
@@ -392,7 +392,9 @@ const ModuleHost = struct {
         return buffer;
     }
 
-    fn canCreateExternalBuffer(env: Env) bool {
+    fn canCreateExternalBuffer(self: *@This()) bool {
+        if (self.external_buffer_disabled) return false;
+        const env = self.env;
         const ns = struct {
             var supported: ?bool = null;
 
@@ -424,12 +426,17 @@ const ModuleHost = struct {
             }
         }
         // offset is not needed, since it's already applied to the pointer returned
-        const len, const js_opaque, _, _ = env.getDataviewInfo(view) catch ta: {
-            _, const len, const ptr, const ab, const offset = try env.getTypedarrayInfo(view);
-            break :ta .{ len, ptr, ab, offset };
+        const len, const js_opaque = get: {
+            if (env.getDataviewInfo(view)) |tuple| {
+                break :get .{ tuple[0], tuple[1] };
+            } else |_| {
+                const tuple = try env.getTypedarrayInfo(view);
+                break :get .{ tuple[1], tuple[2] };
+            }
         };
+        const address_v = try env.getValueUsize(address);
         if (len > 0) {
-            const zig_bytes: [*]u8 = @ptrFromInt(try env.getValueUsize(address));
+            const zig_bytes: [*]u8 = @ptrFromInt(address_v);
             const js_bytes: [*]u8 = @ptrCast(js_opaque);
             const src = if (js_to_zig) js_bytes else zig_bytes;
             const dst = if (js_to_zig) zig_bytes else js_bytes;
@@ -551,99 +558,9 @@ const ModuleHost = struct {
         float,
     };
 
-    fn getNumericValue(self: *@This(), member_type: Value, bits: Value, address: Value) !Value {
-        const env = self.env;
-        const type_enum = try std.meta.intToEnum(NumberType, try env.getValueUint32(member_type));
-        const bit_size = try env.getValueUint32(bits);
-        const addr_value = try env.getValueUsize(address);
-        if (!std.mem.isAligned(addr_value, bit_size / 8)) return error.PointerMisalignment;
-        const src: *const anyopaque = @ptrFromInt(addr_value);
-        return switch (type_enum) {
-            .int => switch (bit_size) {
-                64 => try env.createBigintInt64(@as(*const i64, @ptrCast(@alignCast(src))).*),
-                32 => try env.createInt32(@as(*const i32, @ptrCast(@alignCast(src))).*),
-                16 => try env.createInt32(@as(*const i16, @ptrCast(@alignCast(src))).*),
-                8 => try env.createInt32(@as(*const i16, @ptrCast(@alignCast(src))).*),
-                else => error.InvalidArg,
-            },
-            .uint => switch (bit_size) {
-                64 => try env.createBigintUint64(@as(*const u64, @ptrCast(@alignCast(src))).*),
-                32 => try env.createUint32(@as(*const u32, @ptrCast(@alignCast(src))).*),
-                16 => try env.createUint32(@as(*const u16, @ptrCast(@alignCast(src))).*),
-                8 => try env.createUint32(@as(*const u16, @ptrCast(@alignCast(src))).*),
-                else => error.InvalidArg,
-            },
-            .float => switch (bit_size) {
-                64 => try env.createDouble(@as(*const f64, @ptrCast(@alignCast(src))).*),
-                32 => try env.createDouble(@as(*const f32, @ptrCast(@alignCast(src))).*),
-                else => return error.InvalidArg,
-            },
-        };
-    }
-
-    fn setNumericValue(self: *@This(), member_type: Value, bits: Value, address: Value, value: Value) !void {
-        const env = self.env;
-        const type_enum = try std.meta.intToEnum(NumberType, try env.getValueUint32(member_type));
-        const bit_size = try env.getValueUint32(bits);
-        const addr_value = try env.getValueUsize(address);
-        if (!std.mem.isAligned(addr_value, bit_size / 8)) return error.PointerMisalignment;
-        const src: *anyopaque = @ptrFromInt(addr_value);
-        switch (type_enum) {
-            .int => switch (bit_size) {
-                64 => {
-                    const i64_value, _ = try env.getValueBigintInt64(value);
-                    @as(*i64, @ptrCast(@alignCast(src))).* = i64_value;
-                },
-                else => {
-                    const i32_value = try env.getValueInt32(value);
-                    switch (bit_size) {
-                        32 => @as(*i32, @ptrCast(@alignCast(src))).* = i32_value,
-                        16 => @as(*i16, @ptrCast(@alignCast(src))).* = @truncate(i32_value),
-                        8 => @as(*i8, @ptrCast(@alignCast(src))).* = @truncate(i32_value),
-                        else => return error.InvalidArg,
-                    }
-                },
-            },
-            .uint => switch (bit_size) {
-                64 => {
-                    const u64_value, _ = try env.getValueBigintUint64(value);
-                    @as(*u64, @ptrCast(@alignCast(src))).* = u64_value;
-                },
-                else => {
-                    const u32_value = try env.getValueUint32(value);
-                    switch (bit_size) {
-                        32 => @as(*u32, @ptrCast(@alignCast(src))).* = u32_value,
-                        16 => @as(*u16, @ptrCast(@alignCast(src))).* = @truncate(u32_value),
-                        8 => @as(*u8, @ptrCast(@alignCast(src))).* = @truncate(u32_value),
-                        else => return error.InvalidArg,
-                    }
-                },
-            },
-            .float => {
-                const f64_value = try env.getValueDouble(value);
-                switch (bit_size) {
-                    64 => @as(*f64, @ptrCast(@alignCast(src))).* = f64_value,
-                    32 => @as(*f32, @ptrCast(@alignCast(src))).* = @floatCast(f64_value),
-                    else => return error.InvalidArg,
-                }
-            },
-        }
-    }
-
     fn requireBufferFallback(self: *@This()) !Value {
         const env = self.env;
-        return try env.getBoolean(!canCreateExternalBuffer(env));
-    }
-
-    fn syncExternalBuffer(self: *@This(), buffer: Value, address: Value, to: Value) !void {
-        const env = self.env;
-        const opaque1, const len = try env.getArraybufferInfo(buffer);
-        const bytes1: [*]u8 = @ptrCast(opaque1);
-        const bytes2: [*]u8 = @ptrFromInt(try env.getValueUsize(address));
-        if (try env.getValueBool(to))
-            @memcpy(bytes2[0..len], bytes1[0..len])
-        else
-            @memcpy(bytes1[0..len], bytes2[0..len]);
+        return try env.getBoolean(!self.canCreateExternalBuffer());
     }
 
     fn initializeLibc(self: *@This()) !void {

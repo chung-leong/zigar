@@ -8,6 +8,7 @@
 * Added support for packed union
 * Added option to set optimization of NAPI addon
 * Changed how custom WASI interface is specified
+* Fixed numerous bugs related to external buffer fallback mechanism on Electron
 * Fixed bug preventing creation of function pointer precompilation (#697)
 * Fixed pointer disappearance bug in tagged union (#689) 
 * Fixed bug due to undefined structure name (#656)

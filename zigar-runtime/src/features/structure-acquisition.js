@@ -1,9 +1,8 @@
+import { ENVIRONMENT, MEMORY, PROPS, SENTINEL, SLOTS, VISIT, ZIG } from '../../src/symbols.js';
 import {
-  ENVIRONMENT, MEMORY, PROPS, SENTINEL, SLOTS, VISIT, ZIG
-} from '../../src/symbols.js';
-import {
-  ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, SliceFlag, StructFlag, StructureFlag,
-  structureNames, StructurePurpose, StructureType,
+  ErrorSetFlag, MemberType, ModuleAttribute, PointerFlag, PrimitiveFlag, SliceFlag, StructFlag,
+  StructureFlag,
+  structureNames, StructurePurpose, StructureType
 } from '../constants.js';
 import { mixin } from '../environment.js';
 import callMarshalingInbound from '../features/call-marshaling-inbound.js';

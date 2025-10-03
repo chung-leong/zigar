@@ -9,11 +9,8 @@ export default mixin({
     return markAsSpecial({
       get() {
         const dv = (process.env.TARGET === 'wasm') ? this[RESTORE]() : this[MEMORY];
-        if (process.env.TARGET === 'node' && thisEnv.usingBufferFallback()) {
-          const address = dv.buffer[FALLBACK];
-          if (address !== undefined) {
-            thisEnv.syncExternalBuffer(dv.buffer, address, false);
-          }
+        if (process.env.TARGET === 'node') {
+          dv[FALLBACK]?.(false);
         }
         return dv;
       },

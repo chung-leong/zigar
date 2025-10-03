@@ -34,7 +34,7 @@ export default mixin({
       } else if (arg === null) {
         setPresent.call(this, 0);
         if (flags & OptionalFlag.HasSelector) {
-          clearView(this[MEMORY], byteSize, bitOffset >> 3);
+          clearView(this[MEMORY], bitOffset >> 3, byteSize);
         }
         // clear references so objects can be garbage-collected
         this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);

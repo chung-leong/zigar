@@ -29,27 +29,27 @@ var all = mixin({
       names.push(`@${bitOffset}`);
     }
     const accessorName = access + names.join('');
+    let accessor = this.accessorCache.get(accessorName);
+    if (accessor) {
+      return accessor;
+    }
     // see if it's a built-in method of DataView
-    let accessor = DataView.prototype[accessorName];
-    if (accessor) {
-      return accessor;
-    }
-    // check cache
-    accessor = this.accessorCache.get(accessorName);
-    if (accessor) {
-      return accessor;
-    }
-    while (names.length > 0) {
-      const handlerName = `getAccessor${names.join('')}`;
-      if (accessor = this[handlerName]?.(access, member)) {
-        break;
-      }
-      names.pop();
-    }
+    accessor = DataView.prototype[accessorName];
     if (!accessor) {
-      throw new Error(`No accessor available: ${accessorName}`);
+      while (names.length > 0) {
+        const handlerName = `getAccessor${names.join('')}`;
+        if (accessor = this[handlerName]?.(access, member)) {
+          break;
+        }
+        names.pop();
+      }
+      if (!accessor) {
+        throw new Error(`No accessor available: ${accessorName}`);
+      }
     }
-    defineProperty(accessor, 'name', defineValue(accessorName));
+    if (!accessor.name) {
+      defineProperty(accessor, 'name', defineValue(accessorName));
+    }
     this.accessorCache.set(accessorName, accessor);
     return accessor;
   },

@@ -8,6 +8,16 @@ export default mixin({
   init() {
     this.viewMap = new WeakMap();
     if (process.env.TARGET === 'node') {
+      const thisEnv = this;
+      this.fallbackHandler = function(to, offset, len) {
+        let { address } = this[ZIG];
+        let dv = this;
+        if (offset > 0 || len !== undefined) {
+          dv = new DataView(dv.buffer, dv.byteOffset + offset, len);
+          address = adjustAddress(address, offset);
+        }
+        thisEnv.moveExternBytes(dv, address, to);
+      };
       this.needFallback = undefined;
     }
     if (process.env.DEV) {
@@ -92,13 +102,6 @@ export default mixin({
       target.constructor[SENTINEL]?.validateData?.(source, target.length);
       copyObject(target, source);
     }
-    if (process.env.TARGET === 'node' && this.usingBufferFallback()) {
-      const dv = target[MEMORY];
-      const address = dv.buffer[FALLBACK];
-      if (address !== undefined) {
-        this.syncExternalBuffer(dv.buffer, address, true);
-      }
-    }
   },
   findViewAt(buffer, offset, len) {
     let entry = this.viewMap.get(buffer);
@@ -160,8 +163,12 @@ export default mixin({
     } else if (process.env.TARGET === 'node') {
       const zig = buffer[ZIG];
       if (zig) {
-        // attach address to view of zig buffer
-        dv[ZIG] = { address: adjustAddress(zig.address, offset), len };
+        // attach fallback handler
+        const address = adjustAddress(zig.address, offset);
+        dv[ZIG] = { address, len };
+        if (buffer[FALLBACK]) {
+          dv[FALLBACK] = this.fallbackHandler;
+        }
       }
     }
     return dv;

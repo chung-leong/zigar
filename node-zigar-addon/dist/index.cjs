@@ -7,7 +7,7 @@ const { join, resolve } = require('path');
 
 function createEnvironment() {
   const { createEnvironment } = loadAddon();
-  return createEnvironment();
+  return createEnvironment(!!parseInt(process.env.DISABLE_EXTERNAL_BUFFER));
 }
 
 function importModule(soPath, options) {

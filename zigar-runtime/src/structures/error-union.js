@@ -25,7 +25,7 @@ export default mixin({
     const ErrorSet = errorMember.structure.constructor;
     const { bitOffset, byteSize } = valueMember;
     const clearValue = function() {
-      clearView(this[MEMORY], byteSize, bitOffset);
+      clearView(this[MEMORY], bitOffset >> 3, byteSize);
       this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
     };
     const propApplier = this.createApplier(structure);

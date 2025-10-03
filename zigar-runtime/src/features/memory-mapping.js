@@ -280,9 +280,9 @@ export default mixin({
       if (!address && len) {
         return null;
       }
-      let buffer, offset;
+      let buffer, offset, index;
       if (cache) {
-        const index = findMemoryIndex(this.externBufferList, address);
+        index = findMemoryIndex(this.externBufferList, address);
         const entry = this.externBufferList[index - 1];
         if (entry?.address <= address && adjustAddress(address, len) <= adjustAddress(entry.address, entry.len)) {
           buffer = entry.buffer;
@@ -298,7 +298,11 @@ export default mixin({
           this.externBufferList.splice(index, 0, { address, len, buffer })
         }
       }
-      return this.obtainView(buffer, offset, len, cache);  
+      const dv = this.obtainView(buffer, offset, len, cache);  
+      if (process.env.TARGET === 'node') {
+          dv[FALLBACK]?.(false);
+      }
+      return dv;
     },
     unregisterBuffer(address) {
       const index = findMemoryIndex(this.externBufferList, address);

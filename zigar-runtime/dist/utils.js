@@ -312,12 +312,12 @@ function createView(size) {
 function copyView(dest, src, offset = 0) {
   const destA = new Uint8Array(dest.buffer, dest.byteOffset, dest.byteLength);
   const srcA = new Uint8Array(src.buffer, src.byteOffset, src.byteLength);
-  destA.set(srcA, offset);  
+  destA.set(srcA, offset);
 }
 
-function clearView(dest, len = dest.byteLength, offset = 0) {
+function clearView(dest, offset = 0, len = dest.byteLength - offset) {
   const destA = new Uint8Array(dest.buffer, dest.byteOffset, dest.byteLength);
-  destA.fill(0, offset, len);
+  destA.fill(0, offset, offset + len);
 }
 
 const isDetached = (Object.hasOwn(ArrayBuffer.prototype, 'detached')) 
