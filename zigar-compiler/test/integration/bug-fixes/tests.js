@@ -104,5 +104,17 @@ export function addTests(importModule, options) {
         __zigarC.abandon();
       }
     })
+    it('should fix issue 741', async function() {
+      const { __zigar, printInfo, printError } = await importTest('issue-741');
+      const log = [];
+      __zigar.on('log', (evt) => {
+        log.push(evt);
+      });
+      printInfo();
+      expect(log).to.have.lengthOf(0);
+      printError();
+      expect(log).to.have.lengthOf(1);
+      expect(log[0]).to.eql({ source: 'stderr', message: 'error: std.log.err\n' });
+    })
   })
 }

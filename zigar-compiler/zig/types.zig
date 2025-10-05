@@ -833,7 +833,10 @@ pub const TypeDataCollector = struct {
                 td.attrs.has_pointer = child_attrs.has_pointer;
             },
             .@"struct" => |st| {
-                td.attrs.is_supported = true;
+                td.attrs.is_supported = switch (td.type) {
+                    std.Options => false,
+                    else => true,
+                };
                 inline for (st.fields) |field| {
                     if (!field.is_comptime) {
                         const field_attrs = self.getAttributes(field.type);
@@ -883,7 +886,7 @@ pub const TypeDataCollector = struct {
     }
 
     fn setSignature(comptime self: *@This(), comptime td: *TypeData) void {
-        if (td.attrs.signature_known) {
+        if (td.attrs.signature_known or td.attrs.is_supported) {
             return;
         }
         td.attrs.signature_known = true;

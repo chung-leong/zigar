@@ -12,6 +12,7 @@
 * Fixed bug preventing creation of function pointer precompilation (#697)
 * Fixed pointer disappearance bug in tagged union (#689) 
 * Fixed bug due to undefined structure name (#656)
+* Fixed inability to use std_options (#741)
 
 ## 0.14.1
 
