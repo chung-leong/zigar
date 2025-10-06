@@ -598,12 +598,12 @@ function createView(size) {
 function copyView(dest, src, offset = 0) {
   const destA = new Uint8Array(dest.buffer, dest.byteOffset, dest.byteLength);
   const srcA = new Uint8Array(src.buffer, src.byteOffset, src.byteLength);
-  destA.set(srcA, offset);  
+  destA.set(srcA, offset);
 }
 
-function clearView(dest, len = dest.byteLength, offset = 0) {
+function clearView(dest, offset = 0, len = dest.byteLength - offset) {
   const destA = new Uint8Array(dest.buffer, dest.byteOffset, dest.byteLength);
-  destA.fill(0, offset, len);
+  destA.fill(0, offset, offset + len);
 }
 
 const isDetached = (Object.hasOwn(ArrayBuffer.prototype, 'detached')) 
@@ -2110,27 +2110,27 @@ var all$3 = mixin({
       names.push(`@${bitOffset}`);
     }
     const accessorName = access + names.join('');
+    let accessor = this.accessorCache.get(accessorName);
+    if (accessor) {
+      return accessor;
+    }
     // see if it's a built-in method of DataView
-    let accessor = DataView.prototype[accessorName];
-    if (accessor) {
-      return accessor;
-    }
-    // check cache
-    accessor = this.accessorCache.get(accessorName);
-    if (accessor) {
-      return accessor;
-    }
-    while (names.length > 0) {
-      const handlerName = `getAccessor${names.join('')}`;
-      if (accessor = this[handlerName]?.(access, member)) {
-        break;
-      }
-      names.pop();
-    }
+    accessor = DataView.prototype[accessorName];
     if (!accessor) {
-      throw new Error(`No accessor available: ${accessorName}`);
+      while (names.length > 0) {
+        const handlerName = `getAccessor${names.join('')}`;
+        if (accessor = this[handlerName]?.(access, member)) {
+          break;
+        }
+        names.pop();
+      }
+      if (!accessor) {
+        throw new Error(`No accessor available: ${accessorName}`);
+      }
     }
-    defineProperty(accessor, 'name', defineValue(accessorName));
+    if (!accessor.name) {
+      defineProperty(accessor, 'name', defineValue(accessorName));
+    }
     this.accessorCache.set(accessorName, accessor);
     return accessor;
   },
@@ -9390,7 +9390,7 @@ var errorUnion = mixin({
     const ErrorSet = errorMember.structure.constructor;
     const { bitOffset, byteSize } = valueMember;
     const clearValue = function() {
-      clearView(this[MEMORY], byteSize, bitOffset);
+      clearView(this[MEMORY], bitOffset >> 3, byteSize);
       this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
     };
     const propApplier = this.createApplier(structure);
@@ -9578,7 +9578,7 @@ var optional = mixin({
       } else if (arg === null) {
         setPresent.call(this, 0);
         if (flags & OptionalFlag.HasSelector) {
-          clearView(this[MEMORY], byteSize, bitOffset >> 3);
+          clearView(this[MEMORY], bitOffset >> 3, byteSize);
         }
         // clear references so objects can be garbage-collected
         this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
