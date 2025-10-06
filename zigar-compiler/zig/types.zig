@@ -2029,7 +2029,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
         pub fn init(self: *@This(), options: Options) !void {
             switch (self.status) {
                 .uninitialized => {},
-                .initialized => return error.AlreadyInitialized,
+                .initialized => return,
                 .deinitializing => return error.Deinitializing,
             }
             const allocator = options.allocator;
