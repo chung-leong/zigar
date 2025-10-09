@@ -80,6 +80,7 @@ describe('Feature: write-protection', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         name: '[8]u32',
         length: 8,
         byteSize: 4 * 8,

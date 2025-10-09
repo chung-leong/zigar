@@ -12,6 +12,7 @@ describe('Structure: array', function() {
     it('should return a function', function() {
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         byteSize: 8,
         instance: {
           members: [
@@ -33,6 +34,7 @@ describe('Structure: array', function() {
     it('should add descriptors to the given object', function() {
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         byteSize: 8,
         instance: {
           members: [
@@ -62,6 +64,7 @@ describe('Structure: array', function() {
     it('should add static descriptors to the given object', function() {
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         name: 'Array',
         byteSize: 2,
         instance: {
@@ -107,7 +110,7 @@ describe('Structure: array', function() {
       const Uint32 = intStructure.constructor;
       const structure = {
         type: StructureType.Array,
-        flags: ArrayFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | ArrayFlag.IsTypedArray,
         length: 8,
         byteSize: 4 * 8,
         signature: 0n,
@@ -160,6 +163,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 8,
         byteSize: 4 * 8,
         signature: 0n,
@@ -206,6 +210,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 8,
         byteSize: 4 * 8,
         signature: 0n,
@@ -268,6 +273,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 8,
         byteSize: 4 * 8,
         signature: 0n,
@@ -313,6 +319,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 8,
         byteSize: 4 * 8,
         signature: 0n,
@@ -363,6 +370,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 8,
         byteSize: 4 * 8,
         signature: 0n,
@@ -414,6 +422,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 8,
         byteSize: 4 * 8,
         signature: 0n,
@@ -468,6 +477,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 8,
         byteSize: 4 * 8,
         signature: 0n,
@@ -511,6 +521,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 8,
         byteSize: 4 * 8,
         signature: 0n,
@@ -557,6 +568,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 8,
         byteSize: 4 * 8,
         signature: 0n,
@@ -602,6 +614,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 4,
         byteSize: 8 * 4,
         signature: 0n,
@@ -648,7 +661,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
-        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         length: 11,
         byteSize: 11,
         signature: 0n,
@@ -668,6 +681,7 @@ describe('Structure: array', function() {
       env.finishStructure(structure);
       const Array = structure.constructor;
       const str = 'Hello world';
+      debugger;
       const array = new Array(str);            
       expect(array).to.have.lengthOf(str.length);
       for (let i = 0; i < str.length; i++) {
@@ -697,7 +711,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
-        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         length: 11,
         byteSize: 22,
         signature: 0n,
@@ -747,7 +761,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
-        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
@@ -799,7 +813,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
-        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
@@ -850,7 +864,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
-        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
@@ -878,6 +892,7 @@ describe('Structure: array', function() {
       const env = new Env();
       const intStructure = {
         type: StructureType.Primitive,
+        flags: StructureFlag.HasProxy,
         name: 'u16',
         byteSize: 2,
         signature: 0n,
@@ -898,6 +913,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
@@ -943,7 +959,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
-        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u16',
         length: 11,
         byteSize: 22,
@@ -988,7 +1004,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
-        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         length: 11,
         byteSize: 11,
         signature: 0n,
@@ -1038,7 +1054,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
-        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         length: 11,
         byteSize: 11,
         signature: 0n,
@@ -1087,7 +1103,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
-        flags: ArrayFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | ArrayFlag.IsTypedArray,
         length: 8,
         byteSize: 8,
         signature: 0n,
@@ -1139,7 +1155,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
-        flags: ArrayFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | ArrayFlag.IsTypedArray,
         length: 8,
         byteSize: 8,
         signature: 0n,
@@ -1188,7 +1204,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
-        flags: ArrayFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | ArrayFlag.IsTypedArray,
         length: 8,
         byteSize: 8,
         signature: 0n,
@@ -1234,6 +1250,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 8,
         byteSize: 8,
         signature: 0n,
@@ -1285,6 +1302,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 8,
         byteSize: 8,
         signature: 0n,
@@ -1335,6 +1353,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 8,
         byteSize: 8,
         signature: 0n,
@@ -1383,6 +1402,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 8,
         byteSize: 8,
         signature: 0n,
@@ -1437,6 +1457,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 8,
         byteSize: 4 * 8,
         signature: 0n,
@@ -1480,6 +1501,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 8,
         byteSize: 4 * 8,
         signature: 0n,
@@ -1553,7 +1575,7 @@ describe('Structure: array', function() {
       const Hello = structStructure.constructor;
       const ptrStructure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
         signature: 0n,
         instance: {
@@ -1575,7 +1597,7 @@ describe('Structure: array', function() {
       env.finishStructure(ptrStructure);
       const structure = {
         type: StructureType.Array,
-        flags: StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasPointer,
+        flags: StructureFlag.HasProxy | StructureFlag.HasObject | StructureFlag.HasSlot | StructureFlag.HasPointer,
         name: '[4]*Hello',
         length: 4,
         byteSize: 8 * 4,
@@ -1657,7 +1679,7 @@ describe('Structure: array', function() {
       env.finishStructure(structStructure);
       const structure = {
         type: StructureType.Array,
-        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasProxy | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[4]Hello',
         length: 4,
         byteSize: 8 * 4,
@@ -1708,6 +1730,7 @@ describe('Structure: array', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         name: '[4]u64',
         length: 4,
         byteSize: 8 * 4,
@@ -1759,7 +1782,7 @@ describe('Structure: array', function() {
       env.finishStructure(intStructure)
       const ptrStructure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
         signature: 0n,
         instance: {
@@ -1780,7 +1803,7 @@ describe('Structure: array', function() {
       env.finishStructure(ptrStructure);
       const structure = {
         type: StructureType.Array,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[4]*i32',
         length: 4,
         byteSize: 8 * 4,
@@ -1848,7 +1871,7 @@ describe('Structure: array', function() {
       const Int32 = intStructure.constructor
       const ptrStructure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
         signature: 0n,
         instance: {
@@ -1869,7 +1892,7 @@ describe('Structure: array', function() {
       env.finishStructure(ptrStructure);
       const structure = {
         type: StructureType.Array,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         length: 4,
         byteSize: 8 * 4,
         signature: 0n,
@@ -1920,7 +1943,7 @@ describe('Structure: array', function() {
       const Int32 = intStructure.constructor
       const ptrStructure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
         signature: 0n,
         instance: {
@@ -1941,7 +1964,7 @@ describe('Structure: array', function() {
       env.finishStructure(ptrStructure);
       const structure = {
         type: StructureType.Array,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '[4]*i32',
         length: 4,
         byteSize: 8 * 4,
@@ -2012,6 +2035,7 @@ describe('Structure: array', function() {
       env.finishStructure(sliceStructure);
       const arrayStructure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         name: 'Int64Array',
         length: 4,
         byteSize: 8 * 4,
@@ -2058,6 +2082,7 @@ describe('Structure: array', function() {
       env.finishStructure(intStructure)
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 8,
         byteSize: 4 * 8,
         signature: 0n,
@@ -2112,6 +2137,7 @@ describe('Structure: array', function() {
       env.finishStructure(intStructure)
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         length: 8,
         byteSize: 4 * 8,
         signature: 0n,

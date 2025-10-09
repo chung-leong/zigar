@@ -230,6 +230,10 @@ fn Factory(comptime host: type, comptime module: type) type {
                 },
                 .pointer => |pt| .{
                     .has_length = pt.size == .slice,
+                    .has_proxy = switch (@typeInfo(pt.child)) {
+                        .pointer, .@"fn" => false,
+                        else => true,
+                    },
                     .is_const = pt.is_const,
                     .is_single = pt.size == .one or pt.size == .c,
                     .is_multiple = pt.size != .one,

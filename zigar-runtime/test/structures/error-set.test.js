@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { ErrorSetFlag, MemberFlag, MemberType, StructureType } from '../../src/constants.js';
+import { ErrorSetFlag, MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, RESTORE, SLOTS } from '../../src/symbols.js';
@@ -482,6 +482,7 @@ describe('Structure: error-set', function() {
       env.finishStructure(structure);
       const arrayStructure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         name: '[4]ErrorSet',
         length: 4,
         byteSize: 2 * 4,

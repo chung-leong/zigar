@@ -1857,6 +1857,7 @@ describe('Structure: slice', function() {
       const U64Slice = sliceStructure.constructor;
       const arrayStructure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         name: '[4]u64',
         length: 4,
         byteSize: 8 * 4,
@@ -2013,6 +2014,7 @@ describe('Structure: slice', function() {
       const I64Slice = sliceStructure.constructor;
       const arrayStructure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         name: '[4]u64',
         length: 4,
         byteSize: 8 * 4,

@@ -135,7 +135,7 @@ describe('Syscalls: stream-location', function() {
       for (let i = 0; i < pathLen; i++) pathArray[i] = pathSrc[i];
       expect(() => {
         env.obtainStreamLocation(dirFd, pathAddress, pathLen);
-      }).to.throw(Error).with.property('code').that.equal(PosixError.ENOENT);
+      }).to.throw(Error).with.property('errno').that.equal(PosixError.ENOENT);
     })
     it('should remove trailing slash', async function() {
       const env = new Env();

@@ -35,6 +35,7 @@ export function getProxyType(structure, readOnly = false) {
         proxyType |= ProxyType.Const;
       }
     } else if (type === StructureType.Function) {
+      // functions don't mean to be made read-only
       proxyType = 0;
     } else {
       proxyType |= ProxyType.Slice;
@@ -136,7 +137,8 @@ const readOnlyPointerHandlers = {
 
 const readOnlyHandlers = {
   get(target, name) {
-    return getReadOnlyProxy(target[name]);
+    const value = target[name];
+    return (typeof(name) === 'string') ? getReadOnlyProxy(value) : value;
   },
   set(target, name, value) {
     throwReadOnly();

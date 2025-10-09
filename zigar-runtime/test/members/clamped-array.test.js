@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { ArrayFlag, MemberType, StructureType } from '../../src/constants.js';
+import { ArrayFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 
@@ -30,7 +30,7 @@ describe('Member: clampedArray', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
-        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray,
+        flags: StructureFlag.HasProxy | ArrayFlag.IsString | ArrayFlag.IsTypedArray,
         name: '[11]u8',
         length: 11,
         byteSize: 11,
@@ -77,7 +77,7 @@ describe('Member: clampedArray', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
-        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray | ArrayFlag.IsClampedArray,
+        flags: StructureFlag.HasProxy | ArrayFlag.IsString | ArrayFlag.IsTypedArray | ArrayFlag.IsClampedArray,
         name: '[11]u8',
         length: 11,
         byteSize: 11,
@@ -129,7 +129,7 @@ describe('Member: clampedArray', function() {
       env.finalizeStructure(intStructure);
       const structure = {
         type: StructureType.Array,
-        flags: ArrayFlag.IsString | ArrayFlag.IsTypedArray | ArrayFlag.IsClampedArray,
+        flags: StructureFlag.HasProxy | ArrayFlag.IsString | ArrayFlag.IsTypedArray | ArrayFlag.IsClampedArray,
         name: '[11]u8',
         length: 11,
         byteSize: 11,

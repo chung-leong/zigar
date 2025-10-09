@@ -473,7 +473,7 @@ describe('Structure: optional', function() {
       const Int32 = intStructure.constructor;
       const ptrStructure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Int32',
         byteSize: 8,
         signature: 0n,
@@ -573,7 +573,7 @@ describe('Structure: optional', function() {
       env.finishStructure(sliceStructure);
       const ptrStructure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]Uint8',
         byteSize: 16,
         signature: 0n,
@@ -678,7 +678,7 @@ describe('Structure: optional', function() {
       env.finishStructure(sliceStructure);
       const ptrStructure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.HasLength | PointerFlag.IsMultiple,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.HasLength | PointerFlag.IsMultiple,
         name: '[]u8',
         byteSize: 16,
         signature: 0n,
@@ -760,7 +760,7 @@ describe('Structure: optional', function() {
       env.finishStructure(intStructure);
       const ptrStructure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureType.IsSingle,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureType.IsSingle,
         name: '*Int32',
         byteSize: 8,
         signature: 0n,
@@ -875,7 +875,7 @@ describe('Structure: optional', function() {
       env.finishStructure(intStructure);
       const ptrStructure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureType.IsSingle,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | StructureType.IsSingle,
         name: '*Int32',
         byteSize: 8,
         signature: 0n,
@@ -989,7 +989,7 @@ describe('Structure: optional', function() {
       const Int32 = intStructure.constructor;
       const ptrStructure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Int32',
         byteSize: 8,
         signature: 0n,

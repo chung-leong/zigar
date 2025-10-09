@@ -688,7 +688,7 @@ describe('Structure: error-union', function() {
       const Int32 = intStructure.constructor;
       const ptrStructure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Int32',
         byteSize: 8,
         signature: 0n,
@@ -833,7 +833,7 @@ describe('Structure: error-union', function() {
       env.finishStructure(sliceStructure);
       const ptrStructure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsMultiple | PointerFlag.HasLength,
         name: '[]u8',
         byteSize: 16,
         signature: 0n,
@@ -962,7 +962,7 @@ describe('Structure: error-union', function() {
       const Int32 = intStructure.constructor;
       const ptrStructure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Int32',
         byteSize: 8,
         signature: 0n,
@@ -1087,7 +1087,7 @@ describe('Structure: error-union', function() {
       const Int32 = intStructure.constructor;
       const ptrStructure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Int32',
         byteSize: 8,
         signature: 0n,

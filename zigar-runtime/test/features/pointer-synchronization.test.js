@@ -649,7 +649,7 @@ describe('Feature: pointer-synchronization', function() {
       env.finishStructure(structStructure);
       const arrayStructure = {
         type: StructureType.Array,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[4]*Int32',
         length: 4,
         byteSize: 8 * 4,
@@ -1336,7 +1336,7 @@ describe('Feature: pointer-synchronization', function() {
       env.finishStructure(opaqueStructure);
       const ptrStructure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
         name: '*Hello',
         byteSize: addressByteSize,
         signature: 0n,

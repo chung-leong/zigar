@@ -390,7 +390,7 @@ describe('Structure: pointer', function() {
       env.finishStructure(ptrStructure);
       const structure = {
         type: StructureType.Array,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[2]*Int32',
         byteSize: 16,
         signature: 0n,
@@ -597,7 +597,7 @@ describe('Structure: pointer', function() {
       const Fn = fnStructure.constructor;
       const structure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
         signature: 0n,
         instance: {
@@ -1136,7 +1136,7 @@ describe('Structure: pointer', function() {
       const { constructor: HelloPtr } = ptrStructure;
       const structure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: 8,
         signature: 0n,
         instance: {
@@ -1659,6 +1659,7 @@ describe('Structure: pointer', function() {
       const { constructor: Int32Slice } = sliceStructure;
       const arrayStructure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         name: '[8]i32',
         length: 8,
         byteSize: 8 * 4,
@@ -2365,7 +2366,7 @@ describe('Structure: pointer', function() {
       const TargetPtr = ptrStructure.constructor;
       const constStructure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle | PointerFlag.IsConst,
         byteSize: addressByteSize,
         signature: 0n,
         instance: {

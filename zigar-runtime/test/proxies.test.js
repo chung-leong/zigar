@@ -37,7 +37,7 @@ describe('Proxies', function() {
       const { constructor: Int32 } = intStructure;
       const structure = {
         type: StructureType.Pointer,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot | PointerFlag.IsSingle,
+        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasProxy | StructureFlag.HasSlot | PointerFlag.IsSingle,
         byteSize: addressByteSize,
         signature: 0n,
         instance: {

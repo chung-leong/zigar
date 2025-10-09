@@ -227,6 +227,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         byteSize: 8,
         instance: {
           members: [
@@ -245,6 +246,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         byteSize: 8,
         instance: {
           members: [
@@ -266,6 +268,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         byteSize: 8,
         instance: {
           members: [
@@ -287,6 +290,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         byteSize: 8,
         instance: {
           members: [
@@ -310,6 +314,7 @@ describe('Error functions', function() {
       const structure = {
         name: 'Hello',
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         byteSize: 8,
         instance: {
           members: [

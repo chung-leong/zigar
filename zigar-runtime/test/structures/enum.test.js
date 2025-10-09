@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { EnumFlag, MemberFlag, MemberType, StructureType } from '../../src/constants.js';
+import { EnumFlag, MemberFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { CAST, ENVIRONMENT, INITIALIZE, MEMORY, RESTORE, SLOTS } from '../../src/symbols.js';
@@ -354,6 +354,7 @@ describe('Structure: enum', function() {
       env.finishStructure(structure);
       const arrayStructure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         name: '[4]Hello',
         length: 4,
         byteSize: 4 * 4,

@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberType, StructureType } from '../../src/constants.js';
+import { MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { FALLBACK, LENGTH, MEMORY, RESTORE, SHAPE, TYPED_ARRAY, ZIG } from '../../src/symbols.js';
@@ -12,6 +12,7 @@ describe('Feature: view-management', function() {
     it('should return a DataView when given an ArrayBuffer', function() {
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         name: 'Test',
         byteSize: 8
       };
@@ -23,6 +24,7 @@ describe('Feature: view-management', function() {
     it('should return a DataView when given an DataView', function() {
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         name: 'Test',
         byteSize: 8
       };
@@ -78,11 +80,13 @@ describe('Feature: view-management', function() {
     it('should throw when there is a size mismatch', function() {
       const structure1 = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         name: 'Test',
         byteSize: 17
       };
       const structure2 = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: 'Test',
         byteSize: 3
       };
@@ -98,6 +102,7 @@ describe('Feature: view-management', function() {
       constructor[TYPED_ARRAY] = Uint32Array;
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: 'Test',
         byteSize: 3,
         constructor,
@@ -114,6 +119,7 @@ describe('Feature: view-management', function() {
       const elementConstructor = function() {};
       const structure = {
         type: StructureType.Slice,
+        flags: StructureFlag.HasProxy,
         name: 'Test',
         byteSize: 2,
         instance: {
@@ -141,6 +147,7 @@ describe('Feature: view-management', function() {
       const elementConstructor = function() {};
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         name: 'Test',
         byteSize: 6,
         length: 3,
@@ -169,6 +176,7 @@ describe('Feature: view-management', function() {
       const elementConstructor = function() {};
       const structure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         name: 'Test',
         byteSize: 6,
         length: 3,

@@ -50,7 +50,7 @@ describe('Member: toJSON', function() {
       env.finishStructure(structStructure);
       const arrayStructure = {
         type: StructureType.Array,
-        flags: StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasProxy | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: 'HelloArray',
         length: 4,
         byteSize: structStructure.byteSize * 4,

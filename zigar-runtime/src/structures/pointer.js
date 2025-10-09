@@ -9,7 +9,7 @@ import {
 import { getProxy, getProxyTarget, getProxyType } from '../proxies.js';
 import {
   ADDRESS, CAST, ENVIRONMENT, FINALIZE, INITIALIZE, LAST_ADDRESS, LAST_LENGTH, LENGTH, MAX_LENGTH,
-  MEMORY, PARENT, PROXY, PROXY_TYPE, RESTORE, SENTINEL, SETTERS, SIZE, SLOTS, TARGET, TYPE,
+  MEMORY, PARENT, PROXY, PROXY_TYPE, READ_ONLY, RESTORE, SENTINEL, SETTERS, SIZE, SLOTS, TARGET, TYPE,
   TYPED_ARRAY, UPDATE, VISIT, ZIG
 } from '../symbols.js';
 import {
@@ -180,7 +180,7 @@ export default mixin({
       setLength?.call?.(this, len);
     };
     const thisEnv = this;
-    const initializer = this.createInitializer(function(arg, allocator, proxyType) {
+    const initializer = this.createInitializer(function(arg, allocator, targetProxyType) {
       const Target = targetStructure.constructor;
       if (isPointerOf(arg, Target)) {
         if (!(flags & PointerFlag.IsConst) && arg.constructor.const) {
@@ -211,7 +211,7 @@ export default mixin({
           arg[RESTORE]();
         }
         // if the target is read-only, then only a const pointer can point to it
-        if (proxyType === ProxyType.Const) {
+        if (targetProxyType === ProxyType.ReadOnly || arg[READ_ONLY]) {
           if (!(flags & PointerFlag.IsConst)) {
             throw new ReadOnlyTarget(structure);
           }
@@ -294,6 +294,7 @@ export default mixin({
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = (targetType === StructureType.Function) && {
       value() {
+        // use a function object to represent the pointer so that apply() on the proxy gets called
         const self = (...args) => {
           const f = this['*'];
           return f.call(this, ...args);
@@ -304,7 +305,7 @@ export default mixin({
         return self;
       }
     };
-    descriptors[PROXY] = (targetType !== StructureType.Function && targetType !== StructureType.Pointer) && {
+    descriptors[PROXY] = (proxyType) && {
       value() {
         return getProxy(this, proxyType);
       },

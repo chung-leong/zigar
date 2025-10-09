@@ -695,7 +695,7 @@ describe('Structure: union', function() {
       env.finishStructure(structStructure);
       const arrayStructure = {
         type: StructureType.Array,
-        flags: StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
+        flags: StructureFlag.HasProxy | StructureFlag.HasPointer | StructureFlag.HasObject | StructureFlag.HasSlot,
         name: '[4]*Int32',
         length: 4,
         byteSize: 8 * 4,

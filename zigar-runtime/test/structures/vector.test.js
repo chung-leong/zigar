@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { MemberType, StructureType, VectorFlag } from '../../src/constants.js';
+import { MemberType, StructureFlag, StructureType, VectorFlag } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { INITIALIZE, SLOTS } from '../../src/symbols.js';
@@ -725,6 +725,7 @@ describe('Structure: vector', function() {
       const Vector = vectorStructure.constructor
       const arrayStructure = {
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         name: 'Array',
         length: 4,
         byteSize: 4 * 4,

@@ -791,6 +791,7 @@ describe('Feature: structure-acquisition', function() {
       const env = new Env();
       const name = env.getArrayName({
         type: StructureType.Array,
+        flags: StructureFlag.HasProxy,
         instance: {
           members: [
             {
