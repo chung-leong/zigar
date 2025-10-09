@@ -7,6 +7,7 @@
 * Added asyncify/promisify function to WorkQueue
 * Added support for packed union
 * Added option to set optimization of NAPI addon
+* Changed initialization of an initiatized work queue from error to noop
 * Changed how custom WASI interface is specified
 * Fixed numerous bugs related to external buffer fallback mechanism on Electron
 * Fixed bug preventing creation of function pointer precompilation (#697)
