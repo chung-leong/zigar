@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { ArrayFlag, MemberType, StructureFlag, StructureType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { FALLBACK } from '../../src/symbols.js';
+import { FALLBACK, ZIG } from '../../src/symbols.js';
 import { usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
@@ -195,23 +195,35 @@ describe('Member: dataView', function() {
         env.beginStructure(structure);
         env.finalizeStructure(structure);
         const Array = structure.constructor;
-        const buffer = new ArrayBuffer(11);
+        const address = usize(0x1234);
+        const len = 11;
+        const buffer = new ArrayBuffer(len);
+        buffer[FALLBACK] = address;
+        buffer[ZIG] = { address, len };
         const dv = env.obtainView(buffer, 0, 11);
+        expect(dv[FALLBACK]).to.be.a('function');
         const array = Array(dv);
+        let called = 0;
+        env.moveExternBytes = (argDV, argAddress, to) => {
+          expect(to).to.be.true;
+          expect(argAddress).to.equal(address);
+          expect(argDV).to.equal(dv);
+          called++;
+        }
         array.string = 'Hello world';
-        env.requireBufferFallback = () => true;
-        buffer[FALLBACK] = usize(0x1234);
-        let count = 0;
-        env.syncExternalBuffer = (buffer, address) => {
-          expect(buffer).to.be.an('ArrayBuffer');
-          expect(address).to.equal(usize(0x1234));
-          count++;
-        };
+        expect(called).to.equal(1);
+        env.moveExternBytes = (argDV, argAddress, to) => {
+          expect(to).to.be.false;
+          called++;
+        }
         expect(array.string).to.equal('Hello world');
+        expect(called).to.equal(2);
         expect(array.dataView).to.be.a('DataView');
+        expect(called).to.equal(3);
         expect(array.typedArray).to.be.a('Uint8Array');
+        expect(called).to.equal(4);
         expect(array.base64).to.be.a('string');
-        expect(count).to.equal(4);
+        expect(called).to.equal(5);
       })
     }
   })

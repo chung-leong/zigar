@@ -46,10 +46,15 @@ describe('Syscall: environ-sizes-get', function() {
     expect(count).to.equal(2);
     expect(size).to.equal(8 + 10);
   })
-  it('should return ENOTSUP when env object is set to null', function() {
+  it('should return ENOTSUP when env object is set to null and fallback is available', function() {
     const env = new Env();
     if (process.env.TARGET === 'wasm') {
       env.memory = new WebAssembly.Memory({ initial: 1 });
+      env.setObject('wasi', {
+        wasiImport: {
+          environ_sizes_get() {}
+        }
+      });
     } else {
       const map = new Map();
       env.obtainExternBuffer = function(address, len) {
@@ -81,6 +86,22 @@ describe('Syscall: environ-sizes-get', function() {
     expect(result).to.equal(PosixError.ENOTSUP);
   })
   if (process.env.TARGET === 'wasm') {
+    it('should default to no env variables when env object is set to null and no fallback is available', function() {
+      const env = new Env();
+      env.memory = new WebAssembly.Memory({ initial: 1 });
+      const le = env.littleEndian;
+      const countAddress = usize(0x1000);
+      const sizeAddress = usize(0x2000);
+      const countDV = env.obtainZigView(countAddress, 4);
+      const sizeDV = env.obtainZigView(sizeAddress, 4);
+      countDV.setUint32(0, 0xaaaa_aaaa, le);
+      sizeDV.setUint32(0, 0xaaaa_aaaa, le);
+      env.setObject('env', null);
+      const result = env.environSizesGet(countAddress, sizeAddress);
+      expect(result).to.equal(PosixError.NONE);
+      expect(countDV.getUint32(0, le)).to.equal(0);
+      expect(sizeDV.getUint32(0, le)).to.equal(0);
+    })
     it('should be callable through WASI', function() {
       const env = new Env();
       env.setObject('env', {

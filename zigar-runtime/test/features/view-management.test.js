@@ -3,7 +3,7 @@ import { MemberType, StructureFlag, StructureType } from '../../src/constants.js
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
 import { FALLBACK, LENGTH, MEMORY, RESTORE, SHAPE, TYPED_ARRAY, ZIG } from '../../src/symbols.js';
-import { defineProperties, usize } from '../../src/utils.js';
+import { createView, defineProperties, usize } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 
@@ -333,25 +333,17 @@ describe('Feature: view-management', function() {
       expect(target[MEMORY].getInt8(9)).to.equal(123);
     })
     if (process.env.TARGET === 'node') {
-      it('should call syncExternalBuffer when target buffer requires fallback support', function() {
+      it('should call fallback function when one is attached to view support', function() {
         const env = new Env();
-        const buffer = new ArrayBuffer(16);
-        buffer[FALLBACK] = usize(0x1000);
-        const target = {
-          [MEMORY]: new DataView(buffer),
-        };
-        const dv = new DataView(new ArrayBuffer(16));
-        const structure = { byteSize: 16, type: StructureType.Array };
-        env.requireBufferFallback = () => true;
-        let targetBuffer, targetAddress, syncTo;
-        env.syncExternalBuffer = (buffer, address, to) => {
-          targetBuffer = buffer;
-          targetAddress = address;
+        const dv = createView(16);
+        let syncTo;
+        dv[FALLBACK] = (to) => {
           syncTo = to;
         };
-        env.assignView(target, dv, structure);
-        expect(targetBuffer).to.equal(buffer);
-        expect(targetAddress).to.equal(usize(0x1000));
+        const target = { [MEMORY]: dv };
+        const src = createView(16);
+        const structure = { byteSize: 16, type: StructureType.Array };
+        env.assignView(target, src, structure);
         expect(syncTo).to.be.true;
       })
     }

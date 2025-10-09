@@ -3,7 +3,7 @@ import { MemberType } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import { AccessorAll } from '../../src/mixins.js';
 import { FALLBACK } from '../../src/symbols.js';
-import { usize } from '../../src/utils.js';
+import { createView } from '../../src/utils.js';
 
 const Env = defineEnvironment();
 
@@ -48,42 +48,38 @@ describe('Accessor: all', function() {
         env.requireBufferFallback = () => true;
         const method1 = env.getAccessor('get', {
           type: MemberType.Uint,
-          bitSize: 8,
-          byteSize: 1,
-          bitOffset: 0,
+          bitSize: 32,
+          byteSize: 4,
         });
+        const le = env.littleEndian;
         expect(method1).to.not.equal(DataView.prototype.getUint8);
-        const buffer = new ArrayBuffer(1);
-        const dv = new DataView(buffer);
-        dv.setUint8(0, 123);
-        expect(method1.call(dv, 0)).to.equal(123);
-        buffer[FALLBACK] = usize(0x1000);
-        env.getNumericValue = function(type, bits, address) {
-          expect(type).to.equal(MemberType.Uint);
-          expect(bits).to.equal(8);
-          expect(address).to.equal(usize(0x1000));
-          return 88;
+        const dv = createView(8);
+        dv.setUint32(4, 123, le);
+        let called1 = false;
+        dv[FALLBACK] = (to, offset, len) => {
+          expect(to).to.be.false;
+          expect(len).to.equal(4);
+          called1 = true;
         };
-        expect(method1.call(dv, 0)).to.equal(88);
-        expect(() => method1.call(dv, -1)).to.throw();
-        expect(() => method1.call(dv, 1)).to.throw();
+        expect(method1.call(dv, 4, le)).to.equal(123);
+        expect(called1).to.be.true;
+        expect(() => method1.call(dv, -1, le)).to.throw();
+        expect(() => method1.call(dv, 9, le)).to.throw();
         const method2 = env.getAccessor('set', {
           type: MemberType.Uint,
-          bitSize: 8,
-          byteSize: 1,
-          bitOffset: 0,
+          bitSize: 32,
+          byteSize: 4,
         });
         expect(method2).to.not.equal(DataView.prototype.setUint8);
-        env.setNumericValue = function(type, bits, address, value) {
-          expect(type).to.equal(MemberType.Uint);
-          expect(bits).to.equal(8);
-          expect(address).to.equal(usize(0x1000));
-          expect(value).to.equal(44);
+        let called2 = false;
+        dv[FALLBACK] = (to, offset, len) => {
+          expect(to).to.be.true;
+          expect(len).to.equal(4);
+          called2 = true;
         };
-        method2.call(dv, 0, 44);
-        buffer[FALLBACK] = undefined;
-        method2.call(dv, 0, 44);
-        expect(dv.getUint8(0)).to.equal(44);
+        method2.call(dv, 0, 44, le);
+        expect(called2).to.be.true;
+        expect(dv.getUint32(0, le)).to.equal(44);
       })
     }
   })
