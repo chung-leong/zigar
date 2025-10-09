@@ -1,0 +1,68 @@
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: white;
+  background-color: black;
+  user-select: none;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+}
+
+#header {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  padding: .5em .5em .5em 1em;
+}
+
+#content {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+#search {
+  flex: 1 1 50%;
+  display: block;
+}
+
+#toolbar {
+  flex: 1 1 50%;
+  display: flex;
+  flex-direction: row;
+  justify-content: end;
+}
+
+#customer-list {
+  flex: 1 1 50%;
+  overflow: auto;
+  height: 100%;
+  margin-left: 0;
+  padding-left: 1em;
+  list-style: none;
+}
+
+#customer-list LI {
+  cursor: pointer;
+  padding-left: 2px;
+}
+
+#customer-list LI.selected {
+  color: #000000;
+  background-color: #FFFFAA;
+}
+
+#order-list {
+  flex: 1 1 50%;
+  overflow: auto;
+  padding-left: 1em;
+  list-style: none;
+}
