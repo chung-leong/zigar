@@ -1,30 +1,30 @@
-import { useCallback, useDeferredValue, useEffect, useState } from 'react';
-import { __zigar, findAlbums, getTracks, openDb } from '../zig/sqlite.zig';
-import './App.css';
-import chinook from './assets/chinook.txt';
+import { useCallback, useDeferredValue, useEffect, useState } from 'react'
+import { __zigar, findAlbums, getTracks, openDb } from '../zig/sqlite.zig'
+import './App.css'
+import chinook from './assets/chinook.txt'
 
-let data;
+let data
 const dataPromise = (async () => {
-  const resp = await fetch(chinook);
-  data = await resp.bytes();
-  openDb('/db.sqlite3');
-})();
+  const resp = await fetch(chinook)
+  data = await resp.bytes()
+  openDb('/db.sqlite3')
+})()
 
 __zigar.on('open', (evt) => {
   if (evt.path.endsWith('.sqlite3')) {
-    return data;
+    return data
   } else {
-    return false;
+    return false
   }
 })
-__zigar.on('mkdir', () => true);
-__zigar.on('rmdir', () => true);
+__zigar.on('mkdir', () => true)
+__zigar.on('rmdir', () => true)
 
 function App() {
   const [ ready, setReady ] = useState(() => {
-    dataPromise.then(() => setReady(true));
-    return false;
-  });
+    dataPromise.then(() => setReady(true))
+    return false
+  })
   const [ albums, setAlbums ] = useState([])
   const [ tracks, setTracks ] = useState([])
   const [ searchString, setSearchString ] = useState('')
@@ -41,14 +41,14 @@ function App() {
   }, [])
   useEffect(() => {
     if (ready) {
-      const albums = findAlbums(deferredSearchString || '%');
-      setAlbums(albums);
+      const albums = findAlbums(deferredSearchString || '%')
+      setAlbums(albums)
     }
   }, [ ready, deferredSearchString ])
   useEffect(() => {
     if (selectedAlbumId !== undefined) {
-      const tracks = getTracks(selectedAlbumId);
-      setTracks(tracks);
+      const tracks = getTracks(selectedAlbumId)
+      setTracks(tracks)
     } else {
       setTracks([])
     }
@@ -99,7 +99,7 @@ function formatTime(ms) {
   const min = Math.floor(ms / 60000).toString()
   let sec = Math.floor((ms % 60000) / 1000).toString()
   if (sec.length == 1) {
-    sec = '0' + sec;
+    sec = '0' + sec
   }
   return `${min}:${sec}`
 }
