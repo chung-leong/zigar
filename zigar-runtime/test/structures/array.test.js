@@ -668,7 +668,7 @@ describe('Structure: array', function() {
       env.finishStructure(structure);
       const Array = structure.constructor;
       const str = 'Hello world';
-      const array = new Array(str);
+      const array = new Array(str);            
       expect(array).to.have.lengthOf(str.length);
       for (let i = 0; i < str.length; i++) {
         expect(array[i]).to.equal(str.charCodeAt(i));

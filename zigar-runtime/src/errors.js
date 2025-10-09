@@ -15,7 +15,7 @@ export class InvalidIntConversion extends SyntaxError {
 }
 
 export class Unsupported extends TypeError {
-  code = PosixError.ENOTSUP;
+  errno = PosixError.ENOTSUP;
 
   constructor() {
     super(`Unsupported`);
@@ -171,7 +171,7 @@ export class InvalidArrayInitializer extends InvalidInitializer {
 }
 
 export class InvalidEnumValue extends TypeError {
-  code = PosixError.EINVAL;
+  errno = PosixError.EINVAL;
 
   constructor(set, arg) {
     const keys = Object.keys(set);
@@ -433,7 +433,7 @@ export class UnexpectedGenerator extends TypeError {
 }
 
 export class InvalidFileDescriptor extends Error {
-  code = PosixError.EBADF;
+  errno = PosixError.EBADF;
 
   constructor() {
     super(`Invalid file descriptor`);
@@ -441,7 +441,7 @@ export class InvalidFileDescriptor extends Error {
 }
 
 export class InvalidPath extends Error {
-  code = PosixError.ENOENT;
+  errno = PosixError.ENOENT;
 
   constructor(path) {
     super(`Invalid relative path '${path}'`);
@@ -449,7 +449,7 @@ export class InvalidPath extends Error {
 }
 
 export class MissingStreamMethod extends Error {
-  code = PosixError.EPERM;
+  errno = PosixError.EPERM;
 
   constructor(name) {
     super(`Missing stream method '${name}'`);
@@ -457,7 +457,7 @@ export class MissingStreamMethod extends Error {
 }
 
 export class InvalidArgument extends Error {
-  code = PosixError.EINVAL;
+  errno = PosixError.EINVAL;
 
   constructor() {
     super(`Invalid argument`);
@@ -465,7 +465,7 @@ export class InvalidArgument extends Error {
 }
 
 export class IllegalSeek extends Error {
-  code = PosixError.ESPIPE;
+  errno = PosixError.ESPIPE;
 
   constructor() {
     super(`Illegal seek`);
@@ -473,7 +473,7 @@ export class IllegalSeek extends Error {
 }
 
 export class WouldBlock extends Error {
-  code = PosixError.EAGAIN;
+  errno = PosixError.EAGAIN;
 
   constructor() {
     super(`Would block`);
@@ -481,7 +481,7 @@ export class WouldBlock extends Error {
 }
 
 export class TooManyFiles extends Error {
-  code = PosixError.EMFILE;
+  errno = PosixError.EMFILE;
 
   constructor() {
     super(`Too many open files`);
@@ -489,7 +489,7 @@ export class TooManyFiles extends Error {
 }
 
 export class Deadlock extends Error {
-  code = PosixError.EDEADLK;
+  errno = PosixError.EDEADLK;
 
   constructor() {
     super(`Unable to await promise`);
@@ -497,9 +497,9 @@ export class Deadlock extends Error {
 }
 
 export class MissingEventListener extends Error {
-  constructor(name, code) {
+  constructor(name, errno) {
     super(`Missing event listener: ${name}`);
-    this.code = code;
+    this.errno = errno;
   }
 }
 
@@ -594,17 +594,17 @@ export function deanimalizeErrorName(name) {
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
 }
 
-export function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
+export function catchPosixError(canWait = false, defErrorNo, run, resolve, reject) {
   const fail = (err) => {
     let result;
     if (reject) {
       result = reject(err);
     } else {
-      if (err.code !== PosixError.EAGAIN && err.code !== PosixError.ENOTSUP) {
+      if (err.errno !== PosixError.EAGAIN && err.errno !== PosixError.ENOTSUP) {
         console.error(err);
       }
     }
-    return result ?? err.code ?? defErrorCode;
+    return result ?? err.errno ?? defErrorNo;
   };
   const done = (value) => {
     const result = resolve?.(value);

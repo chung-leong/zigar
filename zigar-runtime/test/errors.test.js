@@ -397,12 +397,12 @@ describe('Error functions', function() {
     })
   })
   describe('MissingEventListener', function() {
-    it('should have expected message and code', async function() {
+    it('should have expected message and errno', async function() {
       const [ message ] = await capture(() => {
         const err = new MissingEventListener('open', PosixError.EBADF);
         console.log(err.message);
         expect(err.message).to.contain('open');
-        expect(err.code).to.equal(PosixError.EBADF);
+        expect(err.errno).to.equal(PosixError.EBADF);
       });
     })
   })
@@ -673,27 +673,27 @@ describe('Error functions', function() {
     })
   })
   describe('InvalidFileDescriptor', function() {
-    it('should have expected Posix error code', function() {
+    it('should have expected Posix errno', function() {
       const err = new InvalidFileDescriptor();
-      expect(err.code).to.equal(PosixError.EBADF);
+      expect(err.errno).to.equal(PosixError.EBADF);
     })
   })
   describe('InvalidArgument', function() {
-    it('should have expected Posix error code', function() {
+    it('should have expected Posix errno', function() {
       const err = new InvalidArgument();
-      expect(err.code).to.equal(PosixError.EINVAL);
+      expect(err.errno).to.equal(PosixError.EINVAL);
     })
   })
   describe('IllegalSeek', function() {
-    it('should have expected Posix error code', function() {
+    it('should have expected Posix errno', function() {
       const err = new IllegalSeek();
-      expect(err.code).to.equal(PosixError.ESPIPE);
+      expect(err.errno).to.equal(PosixError.ESPIPE);
     })
   })
   describe('Deadlock', function() {
-    it('should have expected Posix error code', function() {
+    it('should have expected Posix errno', function() {
       const err = new Deadlock();
-      expect(err.code).to.equal(PosixError.EDEADLK);
+      expect(err.errno).to.equal(PosixError.EDEADLK);
     })
   })
   describe('adjustArgumentError', function() {
@@ -787,7 +787,7 @@ describe('Error functions', function() {
     }) 
   })
   describe('catchPosixError', function() {
-    it('should return Posix error code of error object', async function() {
+    it('should return Posix errno of error object', async function() {
       let result;
       const [ error ] = await captureError(() => {
         result = catchPosixError(false, PosixError.EACCES, () => {
@@ -797,7 +797,7 @@ describe('Error functions', function() {
       expect(result).to.equal(PosixError.EBADF);
       expect(error).to.contain('file descriptor');
     })
-    it('should return default error code when error does not have one', async function() {
+    it('should return default errno when error does not have one', async function() {
       let result;
       const [ error ] = await captureError(() => {
         result = catchPosixError(false, PosixError.EACCES, () => {
