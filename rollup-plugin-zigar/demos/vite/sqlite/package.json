@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:demo": "vite build --config=demo.config.js --base=/demos/rollup-plugin-zigar/sqlite",
+    "preview:demo": "vite --config=demo.config.js --base=/demos/rollup-plugin-zigar/sqlite preview"
   },
   "dependencies": {
     "react": "^19.1.1",
@@ -22,7 +24,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.22",
     "globals": "^16.4.0",
-    "rollup-plugin-zigar": "^0.14.2-alpha.3",
+    "rollup-plugin-zigar": "^0.14.2-beta.0",
     "vite": "^7.1.7"
   }
 }
