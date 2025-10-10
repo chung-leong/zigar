@@ -30,7 +30,7 @@ const createWindow = () => {
     if (!canceled) {
       const [ path ] = filePaths;
       const data = await readFile(path);
-      const hash = sha1(data).string;
+      const hash = sha1(data);
       mainWindow.webContents.send('show-hash', hash);
     }
   };

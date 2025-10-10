@@ -7,8 +7,7 @@ function App() {
     const [ file ] = evt.target.files;
     if (file) {
       const buffer = await file.arrayBuffer();
-      const { string } = sha1(buffer);
-      setDigest(string); 
+      setDigest(sha1(buffer)); 
     } else {
       setDigest('-'); 
     }

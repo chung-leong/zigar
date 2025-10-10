@@ -29,7 +29,7 @@ nw.Window.open('./src/index.html', { width: 800, height: 600 }, (browser) => {
       const { target: { files: [ file ] } } = evt;
       if (file) {
         const data = await file.arrayBuffer();
-        const hash = sha1(data).string;
+        const hash = sha1(data);
         heading.textContent = hash;
       }
     };

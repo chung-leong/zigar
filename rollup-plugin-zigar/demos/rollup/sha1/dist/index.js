@@ -15,57 +15,59 @@ const StructureType = {
   VariadicStruct: 13,
   Function: 14,
 };
+const StructurePurpose = {
+  Unknown: 0,
+  Promise: 1,
+  Generator: 2,
+  AbortSignal: 3,
+  Allocator: 4,
+  Iterator: 5,
+  Reader: 6,
+  Writer: 7,
+  File: 8,
+  Directory: 9,
+};
 const structureNames = Object.keys(StructureType);
 const StructureFlag = {
-  HasValue:         0x0001,
-  HasObject:        0x0002,
-  HasPointer:       0x0004,
-  HasSlot:          0x0008,
+  HasValue: 1 << 0,
+  HasObject: 1 << 1,
+  HasPointer: 1 << 2,
+  HasSlot: 1 << 3,
+  HasProxy: 1 << 4,
 };
 const PrimitiveFlag = {
-  IsSize:           0x0010,
+  IsSize: 1 << 5,
 };
 const ArrayFlag = {
-  HasSentinel:      0x0010,
-  IsString:         0x0020,
-  IsTypedArray:     0x0040,
-  IsClampedArray:   0x0080,
+  HasSentinel: 1 << 5,
+  IsString: 1 << 6,
+  IsTypedArray: 1 << 7,
+  IsClampedArray: 1 << 8,
 };
 const StructFlag = {
-  IsExtern:         0x0010,
-  IsPacked:         0x0020,
-  IsIterator:       0x0040,
-  IsTuple:          0x0080,
-
-  IsAllocator:      0x0100,
-  IsPromise:        0x0200,
-  IsGenerator:      0x0400,
-  IsAbortSignal:    0x0800,
-
-  IsOptional:       0x1000,
+  IsTuple: 1 << 7};
+const OptionalFlag = {
+  HasSelector: 1 << 5,
 };
 const PointerFlag = {
-  HasLength:        0x0010,
-  IsMultiple:       0x0020,
-  IsSingle:         0x0040,
-  IsConst:          0x0080,
-
-  IsNullable:       0x0100,
+  HasLength: 1 << 5,
+  IsMultiple: 1 << 6,
+  IsSingle: 1 << 7,
+  IsConst: 1 << 8,
+  IsNullable: 1 << 9,
 };
 const SliceFlag = {
-  HasSentinel:      0x0010,
-  IsString:         0x0020,
-  IsTypedArray:     0x0040,
-  IsClampedArray:   0x0080,
-
-  IsOpaque:         0x0100,
+  HasSentinel: 1 << 5,
+  IsString: 1 << 6,
+  IsTypedArray: 1 << 7,
+  IsClampedArray: 1 << 8,
+  IsOpaque: 1 << 9,
 };
 const ArgStructFlag = {
-  HasOptions:       0x0010,
-  IsThrowing:       0x0020,
-  IsAsync:          0x0040,
+  HasOptions: 1 << 5,
+  IsThrowing: 1 << 6,
+  IsAsync: 1 << 7,
 };
-
 const MemberType = {
   Void: 0,
   Bool: 1,
@@ -83,13 +85,18 @@ const memberNames = Object.keys(MemberType);
 const MemberFlag = {
   IsRequired:       0x0001,
   IsReadOnly:       0x0002,
-  IsPartOfSet:      0x0004,
-  IsSelector:       0x0008,
   IsMethod:         0x0010,
-  IsSentinel:       0x0020,
   IsBackingInt:     0x0040,
+  IsString:         0x0080,
+  IsPlain:          0x0100,
+  IsTypedArray:     0x0200,
 };
-
+const ProxyType = {
+  Pointer: 1 << 0,
+  Slice: 1 << 1,
+  Const: 1 << 2,  
+  ReadOnly: 1 << 3,
+};
 const VisitorFlag = {
   IsInactive:       0x0001,
   IsImmutable:      0x0002,
@@ -98,6 +105,54 @@ const VisitorFlag = {
   IgnoreInactive:   0x0008,
   IgnoreArguments:  0x0010,
   IgnoreRetval:     0x0020,
+};
+const PosixError = { // values mirror std.os.wasi.errno_t
+  NONE: 0,  
+  EACCES: 2,
+  EAGAIN: 6,
+  EBADF: 8,
+  EDEADLK: 16,
+  EEXIST: 20,
+  EFAULT: 21,
+  EINVAL: 28,
+  EIO: 29,
+  EMFILE: 34,
+  ENOENT: 44,
+  ENOTSUP: 58,
+  EPERM: 63,
+  ESPIPE: 70,
+  ENOTCAPABLE: 76,
+};
+const PosixDescriptorRight = {
+  fd_datasync: 1 << 0,
+  fd_read: 1 << 1,
+  fd_seek: 1 << 2,
+  fd_fdstat_set_flags: 1 << 3,
+  fd_sync: 1 << 4,
+  fd_tell: 1 << 5,
+  fd_write: 1 << 6,
+  fd_advise: 1 << 7,
+  fd_allocate: 1 << 8,
+  path_create_directory: 1 << 9,
+  path_create_file: 1 << 10,
+  path_open: 1 << 13,
+  fd_readdir: 1 << 14,
+  path_filestat_get: 1 << 18,
+  path_filestat_set_size: 1 << 19,
+  path_filestat_set_times: 1 << 20,
+  fd_filestat_get: 1 << 21,
+  fd_filestat_set_size: 1 << 22,
+  fd_filestat_set_times: 1 << 23,
+  path_remove_directory: 1 << 25,
+  path_unlink_file: 1 << 26};
+const PosixDescriptor = {
+  stdin: 0,
+  stdout: 1,
+  stderr: 2,
+  root: -1,
+
+  min: 0x00f0_0000,
+  max: 0x00ff_ffff, 
 };
 
 const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
@@ -117,9 +172,7 @@ const ZIG = symbol('zig');
 const TYPE = symbol('type');
 const FLAGS = symbol('flags');
 const PROPS = symbol('props');
-const POINTER = symbol('pointer');
 const SENTINEL = symbol('sentinel');
-const ARRAY = symbol('array');
 const TARGET = symbol('target');
 const ENTRIES = symbol('entries');
 const MAX_LENGTH = symbol('max length');
@@ -128,12 +181,10 @@ const ADDRESS = symbol('address');
 const LENGTH = symbol('length');
 const LAST_ADDRESS = symbol('last address');
 const LAST_LENGTH = symbol('last length');
-const PROXY = symbol('proxy');
 const CACHE = symbol('cache');
 const SIZE = symbol('size');
 const BIT_SIZE = symbol('bit size');
 const ALIGN = symbol('align');
-const CONST_TARGET = symbol('const target');
 const ENVIRONMENT = symbol('environment');
 const ATTRIBUTES = symbol('attributes');
 const PRIMITIVE = symbol('primitive');
@@ -144,18 +195,24 @@ const PROMISE = symbol('promise');
 const GENERATOR = symbol('generator');
 const ALLOCATOR = symbol('allocator');
 const SIGNATURE = symbol('signature');
+const CONTROLLER = symbol('controller');
+const PROXY_TYPE = symbol('proxy type');
+const READ_ONLY = symbol('read only');
+const NO_CACHE = symbol('no cache');
 
 const UPDATE = symbol('update');
 const RESTORE = symbol('restore');
 const VIVIFICATE = symbol('vivificate');
 const VISIT = symbol('visit');
-const COPY = symbol('copy');
 const SHAPE = symbol('shape');
 const INITIALIZE = symbol('initialize');
 const RESTRICT = symbol('restrict');
 const FINALIZE = symbol('finalize');
+const PROXY = symbol('proxy');
 const CAST = symbol('cast');
 const RETURN = symbol('return');
+const YIELD = symbol('yield');
+const TRANSFORM = symbol('transform');
 
 function defineProperty(object, name, descriptor) {
   if (descriptor) {
@@ -295,29 +352,36 @@ function findSortedIndex(array, value, cb) {
   return high;
 }
 
-const isMisaligned = function(address, align) {
+function isMisaligned(address, align) {
+  {
     return (align) ? !!(address & (align - 1)) : false;
   }
-;
+}
 
-const alignForward = function(address, align) {
+function alignForward(address, align) {
+  {
     return (address + (align - 1)) & ~(align - 1);
   }
-;
+}
 
 const usizeMin = 0;
 const usizeMax = 0xFFFF_FFFF;
 const usizeInvalid = -1;
 
-const isInvalidAddress = function(address) {
+BigInt(Number.MAX_SAFE_INTEGER);
+BigInt(Number.MIN_SAFE_INTEGER);
+
+function isInvalidAddress(address) {
+  {
     return address === 0xaaaa_aaaa || address === -1431655766;
   }
-;
+}
 
-const adjustAddress = function(address, addend) {
+function adjustAddress(address, addend) {
+  {
     return address + addend;
   }
-;
+}
 
 function transformIterable(arg) {
   if (typeof(arg.length) === 'number') {
@@ -367,17 +431,41 @@ function isCompatibleInstanceOf(object, Type) {
   return (object instanceof Type) || isCompatibleType(object?.constructor, Type);
 }
 
+function isPromise(object) {
+  return typeof(object?.then) === 'function';
+}
+
 function markAsSpecial({ get, set }) {
   get.special = set.special = true;
   return { get, set };
 }
 
-function getSelf() {
-  return this;
+function copyView(dest, src, offset = 0) {
+  const destA = new Uint8Array(dest.buffer, dest.byteOffset, dest.byteLength);
+  const srcA = new Uint8Array(src.buffer, src.byteOffset, src.byteLength);
+  destA.set(srcA, offset);
 }
 
-function getProxy() {
-  return this[PROXY];
+function clearView(dest, offset = 0, len = dest.byteLength - offset) {
+  const destA = new Uint8Array(dest.buffer, dest.byteOffset, dest.byteLength);
+  destA.fill(0, offset, offset + len);
+}
+
+const isDetached = (Object.hasOwn(ArrayBuffer.prototype, 'detached')) 
+? function(buffer) {
+    return buffer.detached;
+  }
+: function(buffer) {
+  return buffer.byteLength === 0;
+};
+function copyObject(dest, src) {
+  const destDV = dest[RESTORE]() ;
+  const srcDV = src[RESTORE]() ;
+  copyView(destDV, srcDV);
+}
+
+function getSelf() {
+  return this;
 }
 
 function empty() {}
@@ -386,35 +474,30 @@ class ObjectCache {
   map = new WeakMap();
 
   find(dv) {
-    return this.map.get(dv);
+    return (!dv[NO_CACHE]) ? this.map.get(dv) : undefined;
   }
 
   save(dv, object) {
-    this.map.set(dv, object);
-    return object;
+    if (!dv[NO_CACHE]) {
+      this.map.set(dv, object);
+    }
   }
 }
 
 const cls = {
   name: '',
   mixins: [],
-  constructor: null,
 };
 
 function mixin(object) {
-  if (!cls.constructor) {
+  if (!cls.mixins.includes(object)) {
     cls.mixins.push(object);
   }
   return object;
 }
 
 function defineEnvironment() {
-  if (!cls.constructor) {
-    cls.constructor = defineClass(cls.name, cls.mixins);
-    cls.name = '';
-    cls.mixins = [];
-  }
-  return cls.constructor;
+  return defineClass(cls.name, cls.mixins);
 }
 
 function defineClass(name, mixins) {
@@ -475,35 +558,57 @@ mixin({
         name = `Jumbo${name}`;
       }
     }
-    names.push(name, `${(type === MemberType.Bool && byteSize) ? byteSize * 8 : bitSize}`);
+    names.push(name, `${(type === MemberType.Bool && byteSize) ? byteSize << 3 : bitSize}`);
     if (unaligned) {
       names.push(`@${bitOffset}`);
     }
     const accessorName = access + names.join('');
+    let accessor = this.accessorCache.get(accessorName);
+    if (accessor) {
+      return accessor;
+    }
     // see if it's a built-in method of DataView
-    let accessor = DataView.prototype[accessorName];
-    if (accessor) {
-      return accessor;
-    }
-    // check cache
-    accessor = this.accessorCache.get(accessorName);
-    if (accessor) {
-      return accessor;
-    }
-    while (names.length > 0) {
-      const handlerName = `getAccessor${names.join('')}`;
-      if (accessor = this[handlerName]?.(access, member)) {
-        break;
-      }
-      names.pop();
-    }
+    accessor = DataView.prototype[accessorName];
     if (!accessor) {
-      throw new Error(`No accessor available: ${accessorName}`);
+      while (names.length > 0) {
+        const handlerName = `getAccessor${names.join('')}`;
+        if (accessor = this[handlerName]?.(access, member)) {
+          break;
+        }
+        names.pop();
+      }
+      if (!accessor) {
+        throw new Error(`No accessor available: ${accessorName}`);
+      }
     }
-    defineProperty(accessor, 'name', defineValue(accessorName));
+    if (!accessor.name) {
+      defineProperty(accessor, 'name', defineValue(accessorName));
+    }
     this.accessorCache.set(accessorName, accessor);
     return accessor;
   },
+});
+
+// handles bools, including implicit ones in optional pointers, where an address
+// of zero would be treated as boolean false
+
+mixin({
+  getAccessorBool(access, member) {
+    const { byteSize } = member;
+    const bitSize = byteSize * 8;
+    const f = this.getAccessor(access, { type: MemberType.Uint, bitSize, byteSize });
+    if (access === 'get') {
+      return function(offset, littleEndian) {
+        return !!f.call(this, offset, littleEndian);
+      }
+    } else {
+      const zero = (bitSize <= 32) ? 0 : 0n;
+      const one = (bitSize <= 32) ? 1 : 1n;
+      return function(offset, value, littleEndian) {
+        f.call(this, offset, value ? one : zero, littleEndian);
+      }
+    }
+  }
 });
 
 class InvalidIntConversion extends SyntaxError {
@@ -513,6 +618,8 @@ class InvalidIntConversion extends SyntaxError {
 }
 
 class Unsupported extends TypeError {
+  code = PosixError.ENOTSUP;
+
   constructor() {
     super(`Unsupported`);
   }
@@ -707,6 +814,23 @@ class TypeMismatch extends TypeError {
   }
 }
 
+class InvalidStream extends TypeError {
+  constructor(rights, arg) {
+    const types = [];
+    if (rights & PosixDescriptorRight.fd_read) {
+      types.push('ReadableStreamDefaultReader', 'ReadableStreamBYOBReader', 'Blob', 'Uint8Array');
+    }
+    if (rights & PosixDescriptorRight.fd_write) {
+      types.push('WritableStreamDefaultWriter', 'array', 'null');
+    }
+    if (rights & PosixDescriptorRight.fd_readdir) {
+      types.push('Map');
+    }
+    const list = types.join(', ');
+    super(`Expected ${list}, or an object with the appropriate stream interface, received ${arg}`);
+  }
+}
+
 class NullPointer extends TypeError {
   constructor() {
     super(`Null pointer`);
@@ -740,13 +864,6 @@ class ZigMemoryTargetRequired extends TypeError {
   }
 }
 
-class OutOfBound extends RangeError {
-  constructor(member, index) {
-    const { name } = member;
-    super(`Index exceeds the size of ${name ?? 'array'}: ${index}`);
-  }
-}
-
 class NotOnByteBoundary extends TypeError {
   constructor(member) {
     const { name, structure: { name: struct } } = member;
@@ -764,6 +881,36 @@ class ReadOnlyTarget extends TypeError {
   constructor(structure) {
     const { name } = structure;
     super(`${name} cannot point to a read-only object`);
+  }
+}
+
+class UnexpectedGenerator extends TypeError {
+  constructor() {
+    super(`Unexpected async generator`);
+  }
+}
+
+class InvalidFileDescriptor extends Error {
+  code = PosixError.EBADF;
+
+  constructor() {
+    super(`Invalid file descriptor`);
+  }
+}
+
+class TooManyFiles extends Error {
+  code = PosixError.EMFILE;
+
+  constructor() {
+    super(`Too many open files`);
+  }
+}
+
+class Deadlock extends Error {
+  code = PosixError.EDEADLK;
+
+  constructor() {
+    super(`Unable to await promise`);
   }
 }
 
@@ -809,15 +956,40 @@ function adjustStack(stack, search) {
   return stack;
 }
 
-function replaceRangeError(member, index, err) {
-  if (err instanceof RangeError && !(err instanceof OutOfBound)) {
-    err = new OutOfBound(member, index);
-  }
-  return err;
+function throwReadOnly() {
+  debugger;
+  throw new ReadOnly();
 }
 
-function throwReadOnly() {
-  throw new ReadOnly();
+function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
+  const fail = (err) => {
+    let result;
+    if (reject) {
+      result = reject(err);
+    } else {
+      if (err.code !== PosixError.EAGAIN && err.code !== PosixError.ENOTSUP) {
+        console.error(err);
+      }
+    }
+    return result ?? err.code ?? defErrorCode;
+  };
+  const done = (value) => {
+    const result = resolve?.(value);
+    return result ?? PosixError.NONE;
+  };
+  try {
+    const result = run();
+    if (isPromise(result)) {
+      if (!canWait) {
+        throw new Deadlock();
+      }
+      return result.then(done).catch(fail);
+    } else {
+      return done(result);
+    }
+  } catch (err) {
+    return fail(err);
+  }
 }
 
 function getDescription(arg) {
@@ -847,6 +1019,349 @@ function formatList(list, conj = 'or') {
     return list.join(sep);
   }
 }
+
+const events = [ 'log', 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink', 'syscall' ];
+
+mixin({
+  init() {
+    this.variables = [];
+    this.listenerMap = new Map([
+      [ 'log', (e) => console.log(e.message) ],
+    ]);
+    this.envVariables = this.envVarArrays = null;
+  },
+  getSpecialExports() {
+    const check = (v) => {
+      if (v === undefined) throw new Error('Not a Zig type');
+      return v;
+    };
+    return {
+      init: () => this.initPromise,
+      abandon: () => this.abandonModule?.(),
+      redirect: (fd, stream) => this.redirectStream(fd, stream),
+      sizeOf: (T) => check(T?.[SIZE]),
+      alignOf: (T) => check(T?.[ALIGN]),
+      typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
+      on: (name, cb) => this.addListener(name, cb),
+      set: (name, value) => this.setObject(name, value),
+    };
+  },
+  addListener(name, cb) {
+    const index = events.indexOf(name);
+    if (index >= 0) {
+      if (!this.ioRedirection) {
+        throw new Error(`Redirection disabled`);
+      }
+      this.listenerMap.set(name, cb);
+    } else {
+      throw new Error(`Unknown event: ${name}`);
+    }
+  },
+  hasListener(name) {
+    return this.listenerMap.get(name);
+  },
+  setObject(name, object) {
+    if (typeof(object) !== 'object') {
+      throw new TypeMismatch('object', object);
+    }
+    if (name === 'wasi' && "wasm" === 'wasm') {
+      this.setCustomWASI(object);
+    } else if (name === 'env') {
+      this.envVariables = object;
+      if (this.libc) {
+        this.initializeLibc();
+      }
+    } else {
+      throw new Error(`Unknown object: ${name}`);
+    }
+  },
+  triggerEvent(name, event) {
+    const listener = this.listenerMap.get(name);
+    return listener?.(event);
+  },
+  recreateStructures(structures, settings) {
+    Object.assign(this, settings);
+    const insertObjects = (dest, placeholders) => {
+      for (const [ slot, placeholder ] of Object.entries(placeholders)) {
+        dest[slot] = createObject(placeholder);
+      }
+      return dest;
+    };
+    const readOnlyObjects = [];
+    // empty arrays aren't replicated
+    const getBuffer = a => (a.length) ? a.buffer : new ArrayBuffer(0);
+    const createObject = (placeholder) => {
+      const { memory, structure, actual, slots } = placeholder;
+      if (memory) {
+        if (actual) {
+          return actual;
+        } else {
+          const { array, offset, length } = memory;
+          const dv = this.obtainView(getBuffer(array), offset, length);
+          const { handle } = placeholder;
+          let object;
+          if (structure) {
+            const { constructor } = structure;
+            object = constructor.call(ENVIRONMENT, dv);
+            if (slots) {
+              insertObjects(object[SLOTS], slots);
+            }
+            if (handle) {
+              // need to replace dataview with one pointing to Zig memory later,
+              // when the VM is up and running
+              this.variables.push({ handle, object });
+            } else if (offset === undefined) {
+              // save the object for later, since it constructor isn't isn't finalized yet
+              // when offset is not undefined, the object is a child of another object and 
+              // will be made read-only thru the parent (which might have a linkage handle)
+              readOnlyObjects.push(object);
+            }
+          } else {
+            // console.log({ dv, placeholder });
+            object = { [MEMORY]: dv };
+          }
+          placeholder.actual = object;
+          return object;
+        }
+      } else {
+        return structure;
+      }
+    };
+    const objectPlaceholders = new Map();
+    for (const structure of structures) {
+      // recreate the actual template using the provided placeholder
+      for (const scope of [ structure.instance, structure.static ]) {
+        if (scope.template) {
+          const { slots, memory, handle } = scope.template;
+          const object = scope.template = {};
+          if (memory) {
+            const { array, offset, length } = memory;
+            object[MEMORY] = this.obtainView(getBuffer(array), offset, length);
+            if (handle) {
+              this.variables.push({ handle, object });
+            }
+          }
+          if (slots) {
+            // defer creation of objects until shapes of structures are finalized
+            const realSlots = object[SLOTS] = {};
+            objectPlaceholders.set(realSlots, slots);
+          }
+        }
+      }
+      this.defineStructure(structure);
+    }
+    // insert objects into template slots
+    for (const [ slots, placeholders ] of objectPlaceholders) {
+      insertObjects(slots, placeholders);
+    }
+    // add static members, methods, etc.
+    for (const structure of structures) {
+      this.finalizeStructure(structure);
+    }
+    // after finalization, constructors of objects will have the properties needed 
+    // for proper detection of what they are
+    for (const object of readOnlyObjects) {
+      this.makeReadOnly(object);
+    }
+  },
+  ...({
+    imports: {
+      initializeLibc: { argType: 'ii' },
+    },
+  } ),
+});
+
+const structureNamesLC = structureNames.map(name => name.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase());
+
+mixin({
+  init() {
+    this.jsFunctionThunkMap = new Map();
+    this.jsFunctionCallerMap = new Map();
+    this.jsFunctionControllerMap = new Map();
+    this.jsFunctionIdMap = new WeakMap();
+    this.jsFunctionNextId = 1;
+  },
+  getFunctionId(fn) {
+    let id = this.jsFunctionIdMap.get(fn);
+    if (id === undefined) {
+      id = this.jsFunctionNextId++;
+      this.jsFunctionIdMap.set(fn, id);
+    }
+    return id;
+  },
+  getFunctionThunk(fn, jsThunkController) {
+    const id = this.getFunctionId(fn);
+    let dv = this.jsFunctionThunkMap.get(id);
+    if (dv === undefined) {
+      const controllerAddress = this.getViewAddress(jsThunkController[MEMORY]);
+      const thunkAddress = this.createJsThunk(controllerAddress, id);
+      if (!thunkAddress) {
+        throw new Error('Unable to create function thunk');
+      }
+      dv = this.obtainZigView(thunkAddress, 0);
+      this.jsFunctionThunkMap.set(id, dv);
+      this.jsFunctionControllerMap.set(id, jsThunkController);
+    }
+    return dv;
+  },
+  createInboundCaller(fn, ArgStruct) {
+    const handler = (dv, canWait) => {
+      try {
+        const argStruct = ArgStruct(dv);
+        if (VISIT in argStruct) {
+          // reset pointers in arg so we don't pick up old pointers
+          // objects in stack memory really shouldn't be cached
+          argStruct[VISIT]('reset', VisitorFlag.IgnoreUncreated);
+          const context = this.startContext();
+          this.updatePointerTargets(context, argStruct, true);
+          this.updateShadowTargets(context);
+          this.endContext();
+        }
+        // obtain argument list so that argStruct[RETURN] gets set when there's a promise
+        const args = [ ...argStruct ];
+        const hasCallback = argStruct.hasOwnProperty(RETURN);
+        // promise is acceptable when we can wait for it or its result is sent to a callback
+        const result = catchPosixError(canWait || hasCallback, PosixError.EFAULT, () => {
+          return fn(...args);
+        }, (retval) => {
+            if (retval?.[Symbol.asyncIterator]) {
+              // send contents through [YIELD]
+              if (!argStruct.hasOwnProperty(YIELD)) {
+                throw new UnexpectedGenerator();
+              }
+              this.pipeContents(retval, argStruct);
+            } else {
+              // [RETURN] defaults to the setter of retval; if the function accepts a promise,
+              // it'd invoke the callback
+              argStruct[RETURN](retval);
+            }
+        }, (err) => {
+            try {
+              // if the error is not part of the error set returned by the function,
+              // the following will throw
+              if (ArgStruct[THROWING] && err instanceof Error) {                
+                argStruct[RETURN](err);
+                return PosixError.NONE;
+              } else {
+                throw err;
+              }
+            } catch (_) {
+              console.error(err);
+            }
+        });
+        // don't return promise when a callback is used
+        return (hasCallback) ? PosixError.NONE : result;
+      } catch (err) {
+        console.error(err);
+        return PosixError.EFAULT;
+      }     
+    };
+    const id = this.getFunctionId(fn);
+    this.jsFunctionCallerMap.set(id, handler);
+    return function(...args) {
+      return fn(...args);
+    };
+  },
+  defineArgIterator(members) {
+    const thisEnv = this;
+    const allocatorTotal = members.filter(({ structure: s }) => {
+      return (s.type === StructureType.Struct) && (s.purpose === StructurePurpose.Allocator);
+    }).length;
+    return {
+      value() {
+        let options;
+        let allocatorCount = 0, callbackCount = 0, signalCount = 0;
+        const args = [];
+        for (const [ srcIndex, { structure, type } ] of members.entries()) {
+          // error unions will throw on access, in which case we pass the error as the argument
+          try {
+            let arg = this[srcIndex];
+            if (type === MemberType.Object && arg?.[MEMORY]?.[ZIG]) {
+              // create copy in JS memory
+              arg = new arg.constructor(arg);
+            }
+            let optName, opt;
+            if (structure.type === StructureType.Struct) {
+              switch (structure.purpose) {
+                case StructurePurpose.Allocator: 
+                  optName = (allocatorTotal === 1) ? `allocator` : `allocator${++allocatorCount}`;
+                  opt = this[ALLOCATOR] = arg;
+                  break;
+                case StructurePurpose.Promise:
+                  optName = 'callback';
+                  if (++callbackCount === 1) {
+                    opt = thisEnv.createPromiseCallback(this, arg);
+                  }
+                  break;
+                case StructurePurpose.Generator:
+                  optName = 'callback';
+                  if (++callbackCount === 1) {
+                    opt = thisEnv.createGeneratorCallback(this, arg);
+                  }
+                  break;
+                case StructurePurpose.AbortSignal:
+                  optName = 'signal';
+                  if (++signalCount === 1) {
+                    opt = thisEnv.createInboundSignal(arg);
+                  }
+                  break;
+              }
+            }
+            if (optName !== undefined) {
+              if (opt !== undefined) {
+                options ||= {};
+                options[optName] = opt;
+              }
+            } else {
+              // just a regular argument
+              args.push(arg);
+            }
+          } catch (err) {
+            args.push(err);
+          }
+        }
+        if (options) {
+          args.push(options);
+        }
+        return args[Symbol.iterator]();
+      }
+    };
+  },
+  handleJscall(id, argAddress, argSize, canWait) {
+    const dv = this.obtainZigView(argAddress, argSize, false);
+    const caller = this.jsFunctionCallerMap.get(id);
+    return (caller) ? caller(dv, canWait) : PosixError.EFAULT;
+  },
+  releaseFunction(id) {
+    const thunk = this.jsFunctionThunkMap.get(id);
+    const controller = this.jsFunctionControllerMap.get(id);
+    if (thunk && controller) {
+      const controllerAddress = this.getViewAddress(controller[MEMORY]);
+      const thunkAddress = this.getViewAddress(thunk);
+      this.destroyJsThunk(controllerAddress, thunkAddress);
+      this.releaseZigView(thunk);
+      if (id) {
+        this.jsFunctionThunkMap.delete(id);
+        this.jsFunctionCallerMap.delete(id);
+        this.jsFunctionControllerMap.delete(id);
+      }
+    }
+  },
+  freeFunction(func) {
+    this.releaseFunction(this.getFunctionId(func));
+  },
+  ...({
+    exports: {
+      handleJscall: { argType: 'iiib', returnType: 'i' },
+      releaseFunction: { argType: 'i' },
+    },
+    imports: {
+      createJsThunk: { argType: 'ii', returnType: 'i' },
+      destroyJsThunk: { argType: 'ii', returnType: 'i' },
+      finalizeAsyncCall: { argType: 'ii' },
+    },
+  } ),
+});
 
 mixin({
   createOutboundCaller(thunk, ArgStruct) {
@@ -883,25 +1398,42 @@ mixin({
     for (const { type, structure } of members) {
       let arg, promise, generator, signal;
       if (structure.type === StructureType.Struct) {
-        if (structure.flags & StructFlag.IsAllocator) {
-          // use programmer-supplied allocator if found in options object, handling rare scenarios
-          // where a function uses multiple allocators
-          const allocator = (++allocatorCount === 1)
-          ? options?.['allocator'] ?? options?.['allocator1']
-          : options?.[`allocator${allocatorCount}`];
-          // otherwise use default allocator which allocates relocatable memory from JS engine
-          arg = allocator ?? this.createDefaultAllocator(argStruct, structure);
-        } else if (structure.flags & StructFlag.IsPromise) {
-          promise ||= this.createPromise(argStruct, options?.['callback']);
-          arg = promise;
-        } else if (structure.flags & StructFlag.IsGenerator) {
-          generator ||= this.createGenerator(argStruct, options?.['callback']);
-          arg = generator;
-        } else if (structure.flags & StructFlag.IsAbortSignal) {
-          // create an Int32Array with one element, hooking it up to the programmer-supplied
-          // AbortSignal object if found
-          signal ||= this.createSignal(structure, options?.['signal']);
-          arg = signal;
+        switch (structure.purpose) {
+          case StructurePurpose.Allocator:
+            // use programmer-supplied allocator if found in options object, handling rare scenarios
+            // where a function uses multiple allocators
+            const allocator = (++allocatorCount === 1)
+            ? options?.['allocator'] ?? options?.['allocator1']
+            : options?.[`allocator${allocatorCount}`];
+            // otherwise use default allocator which allocates relocatable memory from JS engine
+            arg = allocator ?? this.createDefaultAllocator(argStruct, structure);
+            break;
+          case StructurePurpose.Promise:
+            promise ||= this.createPromise(structure, argStruct, options?.['callback']);
+            arg = promise;
+            break;
+          case StructurePurpose.Generator:
+            generator ||= this.createGenerator(structure, argStruct, options?.['callback']);
+            arg = generator;
+            break;
+          case StructurePurpose.AbortSignal:
+            // create an Int32Array with one element, hooking it up to the programmer-supplied
+            // AbortSignal object if found
+            signal ||= this.createSignal(structure, options?.['signal']);
+            arg = signal;
+            break;
+          case StructurePurpose.Reader:
+            arg = this.createReader(argList[srcIndex++]);
+            break;
+          case StructurePurpose.Writer:
+            arg = this.createWriter(argList[srcIndex++]);
+            break;
+          case StructurePurpose.File:
+            arg = this.createFile(argList[srcIndex++]);
+            break;
+          case StructurePurpose.Directory:
+            arg = this.createDirectory(argList[srcIndex++]);
+            break;
         }
       }
       if (arg === undefined) {
@@ -937,17 +1469,16 @@ mixin({
     const attrAddress = (attrs) ? this.getShadowAddress(context, attrs) : 0
     ;
     this.updateShadows(context);
+    let finalized = false;
     const finalize = () => {
       this.updateShadowTargets(context);
       // create objects that pointers point to
       if (hasPointers) {
         this.updatePointerTargets(context, argStruct);
       }
-      if (this.libc) {
-        this.flushStdout?.();
-      }
-      this.flushConsole?.();
+      this.flushStreams?.();
       this.endContext();
+      finalized = true;
     };
     if (isAsync) {
       argStruct[FINALIZE] = finalize;
@@ -956,30 +1487,47 @@ mixin({
     ? this.runVariadicThunk(thunkAddress, fnAddress, argAddress, attrAddress, attrs.length)
     : this.runThunk(thunkAddress, fnAddress, argAddress);
     if (!success) {
-      finalize();
+      if (!finalized) {
+        finalize();
+      }
       throw new ZigError();
     }
     {
-      // copy retval from shadow view
-      argStruct[COPY]?.(this.findShadowView(argStruct[MEMORY]));
+      // finalized can be true here, if a function chooses to immediately invoke a promise's resolve method
+      if (!finalized) {
+        // copy retval from shadow view
+        argStruct[UPDATE]?.(this.findShadowView(argStruct[MEMORY]));
+      }
     }
+    const transform = fn[TRANSFORM];
     if (isAsync) {
       let retval = null;
       // if a function has returned a value or failed synchronmously, the promise is resolved immediately
-      try {
-        retval = argStruct.retval;
-      } catch (err) {
-        retval = new ZigError(err, 1);
+      if (!finalized) {
+        try {
+          retval = argStruct.retval;
+        } catch (err) {
+          retval = new ZigError(err, 1);
+        }
       }
       if (retval != null) {
+        if (transform) {
+          retval = transform(retval);
+        }
         argStruct[RETURN](retval);
+      } else {
+        if (transform) {
+          // so the promise or generator can perform the transform 
+          argStruct[TRANSFORM] = transform;
+        }
       }
       // this would be undefined if a callback function is used instead
       return argStruct[PROMISE] ?? argStruct[GENERATOR];
     } else {
       finalize();
       try {
-        return argStruct.retval;
+        const { retval } = argStruct;
+        return (transform) ? transform(retval) : retval;
       } catch (err) {
         throw new ZigError(err, 1);
       }
@@ -991,145 +1539,6 @@ mixin({
       runVariadicThunk: { argType: 'iiiii', returnType: 'b' },
     },
   } ),
-});
-
-mixin({
-  init() {
-    const int8 = { type: MemberType.Int, bitSize: 8, byteSize: 1 };
-    const int16 = { type: MemberType.Int, bitSize: 16, byteSize: 2 };
-    const int32 = { type: MemberType.Int, bitSize: 32, byteSize: 4 };
-    const getInt8 = this.getAccessor('get', int8);
-    const setInt8 = this.getAccessor('set', int8);
-    const getInt16 = this.getAccessor('get', int16);
-    const setInt16 = this.getAccessor('set', int16);
-    const getInt32 = this.getAccessor('get', int32);
-    const setInt32 = this.getAccessor('set', int32);
-    this.copiers = {
-      0: empty,
-      1: function(dest, src) {
-        setInt8.call(dest, 0, getInt8.call(src, 0));
-      },
-      2: function(dest, src) {
-        setInt16.call(dest, 0, getInt16.call(src, 0, true), true);
-
-      },
-      4: function(dest, src) {
-        setInt32.call(dest, 0, getInt32.call(src, 0, true), true);
-      },
-      8: function(dest, src) {
-        setInt32.call(dest, 0, getInt32.call(src, 0, true), true);
-        setInt32.call(dest, 4, getInt32.call(src, 4, true), true);
-      },
-      16: function(dest, src) {
-        setInt32.call(dest, 0, getInt32.call(src, 0, true), true);
-        setInt32.call(dest, 4, getInt32.call(src, 4, true), true);
-        setInt32.call(dest, 8, getInt32.call(src, 8, true), true);
-        setInt32.call(dest, 12, getInt32.call(src, 12, true), true);
-      },
-      'any': function(dest, src) {
-        let i = 0, len = dest.byteLength;
-        while (i + 4 <= len) {
-          setInt32.call(dest, i, getInt32.call(src, i, true), true);
-          i += 4;
-        }
-        while (i + 1 <= len) {
-          setInt8.call(dest, i, getInt8.call(src, i));
-          i++;
-        }
-      },
-    };
-    this.resetters = {
-      0: empty,
-      1: function(dest, offset) {
-        setInt8.call(dest, offset, 0);
-      },
-      2: function(dest, offset) {
-        setInt16.call(dest, offset, 0, true);
-
-      },
-      4: function(dest, offset) {
-        setInt32.call(dest, offset, 0, true);
-      },
-      8: function(dest, offset) {
-        setInt32.call(dest, offset + 0, 0, true);
-        setInt32.call(dest, offset + 4, 0, true);
-      },
-      16: function(dest, offset) {
-        setInt32.call(dest, offset + 0, 0, true);
-        setInt32.call(dest, offset + 4, 0, true);
-        setInt32.call(dest, offset + 8, 0, true);
-        setInt32.call(dest, offset + 12, 0, true);
-      },
-      any: function(dest, offset, len) {
-        let i = offset;
-        while (i + 4 <= len) {
-          setInt32.call(dest, i, 0, true);
-          i += 4;
-        }
-        while (i + 1 <= len) {
-          setInt8.call(dest, i, 0);
-          i++;
-        }
-      },
-    };
-  },
-  defineCopier(size, multiple) {
-    const copy = this.getCopyFunction(size, multiple);
-    return {
-      value(target) {
-        {
-          this[RESTORE]?.();
-          target[RESTORE]?.();
-        }
-        const src = target[MEMORY];
-        const dest = this[MEMORY];
-        copy(dest, src);
-      },
-    };
-  },
-  defineResetter(offset, size) {
-    const reset = this.getResetFunction(size);
-    return {
-      value() {
-        {
-          this[RESTORE]?.();
-        }
-        const dest = this[MEMORY];
-        reset(dest, offset, size);
-      }
-    };
-  },
-  getCopyFunction(size, multiple = false) {
-    const f = !multiple ? this.copiers[size] : undefined;
-    return f ?? this.copiers.any;
-  },
-  getResetFunction(size) {
-    return this.resetters[size] ?? this.resetters.any;
-  },
-  ...({
-    defineRetvalCopier({ byteSize, bitOffset }) {
-      if (byteSize > 0) {
-        const thisEnv = this;
-        const offset = bitOffset >> 3;
-        const copy = this.getCopyFunction(byteSize);
-        return {
-          value(shadowDV) {
-            const dv = this[MEMORY];
-            const { address } = shadowDV[ZIG];
-            const src = new DataView(thisEnv.memory.buffer, address + offset, byteSize);
-            const dest = new DataView(dv.buffer, dv.byteOffset + offset, byteSize);
-            copy(dest, src);
-          }
-        };
-      }
-    },
-    copyExternBytes(dst, address, len) {
-      const { memory } = this;
-      const src = new DataView(memory.buffer, address, len);
-      const copy = this.getCopyFunction(len);
-      copy(dst, src);
-    },
-  } )
 });
 
 mixin({
@@ -1241,22 +1650,20 @@ mixin({
     }
   },
   updateShadows(context) {
-    const copy = this.getCopyFunction();
     for (let { targetDV, shadowDV } of context.shadowList) {
       {
         shadowDV = this.restoreView(shadowDV);
       }
-      copy(shadowDV, targetDV);
+      copyView(shadowDV, targetDV);
     }
   },
   updateShadowTargets(context) {
-    const copy = this.getCopyFunction();
     for (let { targetDV, shadowDV, writable } of context.shadowList) {
       if (writable) {
         {
           shadowDV = this.restoreView(shadowDV);
         }
-        copy(targetDV, shadowDV);
+        copyView(targetDV, shadowDV);
       }
     }
   },
@@ -1308,8 +1715,7 @@ mixin({
         {
           shadowDV = this.restoreView(shadowDV);
         }
-        const copy = this.getCopyFunction();
-        copy(targetDV, shadowDV);
+        copyView(targetDV, shadowDV);
       }
     }
     return dv;
@@ -1380,7 +1786,7 @@ mixin({
         address = usizeMin;
         len = 0;
       }
-      return (cache) ? this.obtainView(buffer, address, len) : new DataView(buffer, address, len);
+      return this.obtainView(buffer, address, len, cache);
     },
     getTargetAddress(context, target, cluster, writable) {
       const dv = target[MEMORY];
@@ -1404,37 +1810,32 @@ function findMemoryIndex(array, address) {
 }
 
 const MemoryType = {
-  Normal: 0,
   Scratch: 1,
 };
 
 mixin({
   init() {
     this.abandoned = false;
+    this.destructors = [];
     {
       this.nextValueIndex = 1;
       this.valueMap = new Map();
       this.valueIndices = new Map();
       this.options = null;
       this.executable = null;
+      this.instance = null;
       this.memory = null;
       this.table = null;
       this.initialTableLength = 0;
       this.exportedFunctions = null;
-    }
-  },
-  releaseFunctions() {
-    const throwError = () => { throw new Error(`Module was abandoned`) };
-    for (const name of Object.keys(this.imports)) {
-      if (this[name]) {
-        this[name] = throwError;
-      }
+      this.customWASI = null;
     }
   },
   abandonModule() {
     if (!this.abandoned) {
-      this.releaseFunctions();
-      this.unlinkVariables?.();
+      for (const destructor of this.destructors.reverse()) {
+        destructor();
+      }
       this.abandoned = true;
     }
   },
@@ -1446,10 +1847,6 @@ mixin({
       displayPanic: { argType: 'ii' },
     },
 
-    async initialize(wasi) {
-      this.setCustomWASI?.(wasi);
-      await this.initPromise;
-    },
     getObjectIndex(object) {
       if (object != null) {
         let index = this.valueIndices.get(object);
@@ -1511,7 +1908,8 @@ mixin({
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
         const fn = exports[name];
         if (fn) {
-          defineProperty(this, name, { value: this.importFunction(fn, argType, returnType) });
+          defineProperty(this, name, defineValue(this.importFunction(fn, argType, returnType)));
+          this.destructors.push(() => this[name] = throwError$1);
         }
       }
     },
@@ -1552,25 +1950,61 @@ mixin({
         shared: multithreaded,
       });
       this.initialTableLength = tableInitial;
-      return new w.Instance(executable, exports);
+      return w.instantiate(executable, exports);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
-        const instance = await this.instantiateWebAssembly(source, options);
-        const { exports } = instance;
-        this.importFunctions(exports);
-        if (this.customWASI) {
-          // use a proxy to attach the memory object to the list of exports
-          const exportsPlusMemory = { ...exports, memory: this.memory };
-          const instanceProxy = new Proxy(instance, {
-            get(inst, name) {
-              return (name === 'exports') ? exportsPlusMemory : inst[name];
-            }
-          });
-          this.customWASI.initialize?.(instanceProxy);
-        }
+        const instance = this.instance = await this.instantiateWebAssembly(source, options);
+        this.importFunctions(instance.exports);
+        this.initializeCustomWASI();
         this.initialize();
       })();
+    },
+    getWASIHandler(name) {
+      const nameCamelized = name.replace(/_./g, m => m.charAt(1).toUpperCase());
+      const handler = this[nameCamelized]?.bind?.(this);
+      const eventName = this[nameCamelized + 'Event'];
+      return (...args) => {
+        const result = handler?.(...args) ?? PosixError.ENOTSUP;
+        const onResult = (result) => {
+          if (result === PosixError.ENOTSUP || result === PosixError.ENOTCAPABLE) {
+            // the handler has is either missing or has declined to deal with it, 
+            // try with the method from the programmer supplied WASI interface
+            if (result === PosixError.ENOTSUP) {
+              const custom = this.customWASI?.wasiImport?.[name];
+              if (custom) {
+                return custom(...args);
+              }
+            }
+            // if we can't fallback onto a custom handler, explain the failure
+            if (eventName) {
+              console.error(`WASI method '${name}' requires the handling of the '${eventName}' event`);
+            }
+            return PosixError.ENOTSUP;
+          }
+          return result;
+        };
+        return isPromise(result) ? result.then(onResult) : onResult(result);
+      };
+    },
+    setCustomWASI(wasi) {
+      this.customWASI = wasi;
+      if (this.instance) {
+        this.initializeCustomWASI();
+      }
+    },
+    initializeCustomWASI() {
+      const wasi = this.customWASI;
+      if (wasi) {
+        // use a proxy to attach the memory object to the list of exports
+        const exportsPlusMemory = { ...this.instance.exports, memory: this.memory };
+        const instanceProxy = new Proxy(this.instance, {
+          get(inst, name) {
+            return (name === 'exports') ? exportsPlusMemory : inst[name];
+          }
+        });
+        wasi.initialize?.(instanceProxy);
+      }
     },
     displayPanic(address, len) {
       const array = new Uint8Array(this.memory.buffer, address, len);
@@ -1578,6 +2012,400 @@ mixin({
       console.error(`Zig panic: ${msg}`);
     },
   } ),
+});
+
+const throwError$1 = () => { throw new Error(`Module was abandoned`) };
+
+mixin({
+  linkVariables(writeBack) {
+    {
+      // linkage occurs when WASM compilation is complete and functions have been imported
+      if (!this.memory) {
+        this.initPromise = this.initPromise.then(() => this.linkVariables(writeBack));
+        return;
+      }
+    }
+    for (const { object, handle } of this.variables) {
+      const jsDV = object[MEMORY];
+      // objects in WebAssembly have fixed addresses so the handle is the address
+      // for native code module, locations of objects in memory can change depending on
+      // where the shared library is loaded
+      const address = handle ;
+      let zigDV = object[MEMORY] = this.obtainZigView(address, jsDV.byteLength);
+      if (writeBack) {
+        copyView(zigDV, jsDV);
+      }
+      object.constructor[CACHE]?.save?.(zigDV, object);
+      this.destructors.push(() => {
+        {
+          zigDV = this.restoreView(object[MEMORY]);
+        }
+        const jsDV = object[MEMORY] = this.allocateMemory(zigDV.byteLength);
+        copyView(jsDV, zigDV);
+      });
+      const linkChildren = (object) => {
+        const slots = object[SLOTS];
+        if (slots) {
+          const parentOffset = zigDV.byteOffset;
+          for (const child of Object.values(slots)) {
+            if (child) {
+              const childDV = child[MEMORY];
+              if (childDV.buffer === jsDV.buffer) {
+                const offset = parentOffset + childDV.byteOffset - jsDV.byteOffset;
+                child[MEMORY] = this.obtainView(zigDV.buffer, offset, childDV.byteLength);
+                child.constructor[CACHE]?.save?.(zigDV, child);
+                linkChildren(child);
+              }
+            }
+          }
+        }
+      };
+      linkChildren(object);
+      // update pointer targets
+      object[VISIT]?.(function() { this[UPDATE](); }, VisitorFlag.IgnoreInactive);
+    }
+    // create thunks of function objects that were created prior to compilation
+    this.createDeferredThunks?.();
+  },
+  ...({
+    imports: {
+      recreateAddress: { argType: 'i', returnType: 'i' },
+    },
+  } ),
+  });
+
+mixin({
+  updatePointerAddresses(context, object) {
+    // first, collect all the pointers
+    const pointerMap = new Map();
+    const bufferMap = new Map();
+    const potentialClusters = [];
+    const callback = function(flags) {
+      // bypass proxy
+      if (pointerMap.get(this) === undefined) {
+        const target = this[SLOTS][0];
+        if (target) {
+          const writable = !this.constructor.const;
+          const entry = { target, writable };
+          // only targets in JS memory need updating
+          const dv = target[MEMORY];
+          if (!dv[ZIG]) {
+            pointerMap.set(this, target);
+            // see if the buffer is shared with other objects
+            const other = bufferMap.get(dv.buffer);
+            if (other) {
+              const array = Array.isArray(other) ? other : [ other ];
+              const index = findSortedIndex(array, dv.byteOffset, e => e.target[MEMORY].byteOffset);
+              array.splice(index, 0, entry);
+              if (!Array.isArray(other)) {
+                bufferMap.set(dv.buffer, array);
+                potentialClusters.push(array);
+              }
+            } else {
+              bufferMap.set(dv.buffer, entry);
+            }
+            // scan pointers in target
+            target[VISIT]?.(callback, 0);
+          } else {
+            // in Zig memory--no need to update
+            pointerMap.set(this, null);
+          }
+        }
+      }
+    };
+    const flags = VisitorFlag.IgnoreRetval | VisitorFlag.IgnoreInactive;
+    object[VISIT](callback, flags);
+    // find targets that overlap each other
+    const clusters = this.findTargetClusters(potentialClusters);
+    const clusterMap = new Map();
+    for (const cluster of clusters) {
+      for (const target of cluster.targets) {
+        clusterMap.set(target, cluster);
+      }
+    }
+    // process the pointers
+    for (const [ pointer, target ] of pointerMap) {
+      if (target) {
+        const cluster = clusterMap.get(target);
+        const writable = cluster?.writable ?? !pointer.constructor.const;
+        pointer[ADDRESS] = this.getTargetAddress(context, target, cluster, writable);
+        if (LENGTH in pointer) {
+          pointer[LENGTH] = target.length;
+        }
+      }
+    }
+  },
+  updatePointerTargets(context, object, inbound = false) {
+    const pointerMap = new Map();
+    const callback = function(flags) {
+      // bypass proxy
+      if (!pointerMap.get(this)) {
+        pointerMap.set(this, true);
+        const currentTarget = this[SLOTS][0];
+        const newTarget = (!currentTarget || !(flags & VisitorFlag.IsImmutable))
+        ? this[UPDATE](context, true, !(flags & VisitorFlag.IsInactive))
+        : currentTarget;
+        const targetFlags = (this.constructor.const) ? VisitorFlag.IsImmutable : 0;
+        if (!(targetFlags & VisitorFlag.IsImmutable)) {
+          // update targets of pointers in original target if it's in JS memory
+          // pointers in Zig memory are updated on access so we don't need to do it here
+          // (and they should never point to reloctable memory)
+          if (currentTarget && !currentTarget[MEMORY][ZIG]) {
+            currentTarget[VISIT]?.(callback, targetFlags);
+          }
+        }        
+        if (newTarget !== currentTarget) {
+          // acquire targets of pointers in new target if it;s in JS memory
+          if (newTarget && !newTarget[MEMORY][ZIG]) {
+            newTarget?.[VISIT]?.(callback, targetFlags);
+          }
+        }
+      }
+    };
+    const flags = (inbound) ? VisitorFlag.IgnoreRetval : 0;
+    object[VISIT](callback, flags);
+  },
+  findTargetClusters(potentialClusters) {
+    const clusters = [];
+    for (const entries of potentialClusters) {
+      let prevTarget = null, prevStart = 0, prevEnd = 0;
+      let currentCluster = null;
+      for (const { target, writable } of entries) {
+        const dv = target[MEMORY];
+        const { byteOffset: start, byteLength } = dv;
+        const end = start + byteLength;
+        let forward = true;
+        if (prevTarget) {
+          if (prevEnd > start) {
+            // the previous target overlaps this one
+            if (!currentCluster) {
+              currentCluster = {
+                targets: [ prevTarget ],
+                start: prevStart,
+                end: prevEnd,
+                address: undefined,
+                misaligned: undefined,
+                writable,
+              };
+              clusters.push(currentCluster);
+            } else {
+              currentCluster.writable ||= writable;
+            }
+            currentCluster.targets.push(target);
+            if (end > prevEnd) {
+              // set cluster end offset to include this one
+              currentCluster.end = end;
+            } else {
+              // the previous target contains this one
+              forward = false;
+            }
+          } else {
+            currentCluster = null;
+          }
+        }
+        if (forward) {
+          prevTarget = target;
+          prevStart = start;
+          prevEnd = end;
+        }
+      }
+    }
+    return clusters;
+  },
+});
+
+const stdinRights = [ PosixDescriptorRight.fd_read, 0 ];
+const stdoutRights = [ PosixDescriptorRight.fd_write, 0 ];
+
+const defaultDirRights =  PosixDescriptorRight.fd_seek
+                        | PosixDescriptorRight.fd_fdstat_set_flags
+                        | PosixDescriptorRight.fd_tell
+                        | PosixDescriptorRight.path_create_directory
+                        | PosixDescriptorRight.path_create_file
+                        | PosixDescriptorRight.path_open
+                        | PosixDescriptorRight.fd_readdir
+                        | PosixDescriptorRight.path_filestat_get
+                        | PosixDescriptorRight.path_filestat_set_size
+                        | PosixDescriptorRight.path_filestat_set_times
+                        | PosixDescriptorRight.fd_filestat_get
+                        | PosixDescriptorRight.fd_filestat_set_times
+                        | PosixDescriptorRight.path_remove_directory
+                        | PosixDescriptorRight.path_unlink_file;
+const defaultFileRights = PosixDescriptorRight.fd_datasync
+                        | PosixDescriptorRight.fd_read
+                        | PosixDescriptorRight.fd_seek
+                        | PosixDescriptorRight.fd_sync
+                        | PosixDescriptorRight.fd_tell
+                        | PosixDescriptorRight.fd_write
+                        | PosixDescriptorRight.fd_advise
+                        | PosixDescriptorRight.fd_allocate
+                        | PosixDescriptorRight.fd_filestat_get
+                        | PosixDescriptorRight.fd_filestat_set_times
+                        | PosixDescriptorRight.fd_filestat_set_size;
+
+mixin({
+  init() {
+    const root = {
+      cookie: 0n,
+      readdir() {
+        const offset = Number(this.cookie);
+        let dent = null;
+        switch (offset) {
+          case 0:
+          case 1: 
+            dent = { name: '.'.repeat(offset + 1), type: 'directory' };
+        }
+        return dent;
+      },
+      seek(cookie) { 
+        return this.cookie = cookie;
+      },
+      tell() { 
+        return this.cookie;
+      },
+      valueOf() { 
+        return null;
+      },
+    };
+    this.streamMap = new Map([ 
+      [ PosixDescriptor.root, [ root, this.getDefaultRights('dir'), 0 ] ], 
+      [ PosixDescriptor.stdout, [ this.createLogWriter('stdout'), stdoutRights, 0 ] ], 
+      [ PosixDescriptor.stderr, [ this.createLogWriter('stderr'), stdoutRights, 0 ] ], 
+    ]);
+    this.flushRequestMap = new Map();
+    this.nextStreamHandle = PosixDescriptor.min;
+  },
+  getStream(fd) {
+    {
+      if (fd === 3) fd = PosixDescriptor.root;
+    }
+    const entry = this.streamMap.get(fd);
+    if (!entry) {
+      if (2 < fd && fd < PosixDescriptor.min) {
+        throw new Unsupported();
+      }
+      throw new InvalidFileDescriptor();
+    }
+    return entry;
+  },  
+  createStreamHandle(stream, rights, flags = 0) {
+    if (!this.ioRedirection) {
+      throw new Unsupported();
+    }
+    let fd = this.nextStreamHandle++;
+    if (fd > PosixDescriptor.max) {
+      // look for free slot
+      fd = PosixDescriptor.min;
+      while (this.streamMap.get(fd)) {      
+        fd++;
+        if (fd > PosixDescriptor.max) {
+          throw new TooManyFiles();
+        }
+      }
+      this.nextStreamHandle = fd + 1;
+    }
+    this.streamMap.set(fd, [ stream, rights, flags ]);
+    stream.onClose = () => this.destroyStreamHandle(fd);
+    return fd;
+  },
+  destroyStreamHandle(fd) {
+    const entry = this.streamMap.get(fd);
+    if (entry) {
+      const [ stream ] = entry;
+      stream?.destroy?.();
+      this.streamMap.delete(fd);
+    }
+  },
+  redirectStream(fd, arg) {
+    const map = this.streamMap;
+    const previous = map.get(fd);
+    if (arg !== undefined) {
+      let stream, rights;
+      if (fd === PosixDescriptor.stdin) {
+        stream = this.convertReader(arg);
+        rights = stdinRights;
+      } else if (fd === PosixDescriptor.stdout || fd === PosixDescriptor.stderr) {
+        stream = this.convertWriter(arg);
+        rights = stdoutRights;
+      } else if (fd === PosixDescriptor.root) {
+        stream = this.convertDirectory(arg);
+        rights = this.getDefaultRights('dir');
+      } else {
+        throw new Error(`Expecting 0, 1, 2, or -1, received ${fd}`);
+      }
+      if (!stream) {
+        throw new InvalidStream(rights[0], arg);
+      }
+      map.set(fd, [ stream, rights, 0 ]);
+    } else {
+      map.delete(fd);
+    }
+    return previous?.[0];
+  },
+  createLogWriter(source) {
+    const env = this;
+    return {
+      pending: [],
+
+      write(chunk) {
+          // send text up to the last newline character
+          const index = chunk.lastIndexOf(0x0a);
+          if (index === -1) {
+            this.pending.push(chunk);
+          } else {
+            const beginning = chunk.subarray(0, index);
+            const remaining = chunk.subarray(index + 1);
+            this.dispatch([ ...this.pending, beginning ]);
+            this.pending.splice(0);
+            if (remaining.length > 0) {
+              this.pending.push(remaining);
+            }
+          }
+          env.scheduleFlush(this, this.pending.length > 0, 250);
+      },
+      dispatch(array) {
+        const message = decodeText(array);
+        env.triggerEvent('log', { source, message });
+      },
+      flush() {
+        if (this.pending.length > 0) {
+          this.dispatch(this.pending);
+          this.pending.splice(0);
+        }
+      }
+    };
+  },
+  scheduleFlush(stream, active, delay) {
+    const map = this.flushRequestMap;
+    const timeout = map.get(stream);
+    if (timeout) {
+      clearTimeout(timeout);
+      map.delete(stream);
+    }
+    if (active) {
+      map.set(stream, setTimeout(() => {
+        stream.flush();
+        map.delete(stream);
+      }, delay));
+    }
+  },
+  flushStreams() {
+    const map = this.flushRequestMap;
+    if (map.size > 0) {
+      for (const [ stream, timeout ] of map) {
+        stream.flush();
+        clearTimeout(timeout);
+      }
+      map.clear();
+    }
+  },
+  getDefaultRights(type) {
+    if (type === 'dir') {
+      return [ defaultDirRights, defaultDirRights | defaultFileRights ];
+    } else {
+      return [ defaultFileRights, 0 ];
+    }
+  },
 });
 
 mixin({
@@ -1635,12 +2463,13 @@ mixin({
   assignView(target, dv, structure, copy, allocator) {
     const { byteSize, type } = structure;
     const elementSize = byteSize ?? 1;
+    const source = { [MEMORY]: dv, [RESTORE]() { return this[MEMORY] } }
+    ;
     if (!target[MEMORY]) {
       if (byteSize !== undefined) {
         checkDataViewSize(dv, structure);
       }
       const len = dv.byteLength / elementSize;
-      const source = { [MEMORY]: dv };
       target.constructor[SENTINEL]?.validateData?.(source, len);
       if (allocator) {
         // need to copy when target object is in Zig memory
@@ -1648,16 +2477,15 @@ mixin({
       }
       target[SHAPE](copy ? null : dv, len, allocator);
       if (copy) {
-        target[COPY](source);
+        copyObject(target, source);
       }
     } else {
       const byteLength = (type === StructureType.Slice) ? elementSize * target.length : elementSize;
       if (dv.byteLength !== byteLength) {
         throw new BufferSizeMismatch(structure, dv, target);
       }
-      const source = { [MEMORY]: dv };
       target.constructor[SENTINEL]?.validateData?.(source, target.length);
-      target[COPY](source);
+      copyObject(target, source);
     }
   },
   findViewAt(buffer, offset, len) {
@@ -1688,18 +2516,23 @@ mixin({
     }
     return { existing, entry };
   },
-  obtainView(buffer, offset, len) {
-    const { existing, entry } = this.findViewAt(buffer, offset, len);
+  obtainView(buffer, offset, len, cache = true) {
     let dv;
-    if (existing) {
-      return existing;
-    }
-    dv = new DataView(buffer, offset, len);
-    if (entry) {
-      entry.set(`${offset}:${len}`, dv);
+    if (cache) {
+      const { existing, entry } = this.findViewAt(buffer, offset, len);
+      if (existing) {
+        return existing;
+      }
+      dv = new DataView(buffer, offset, len);
+      if (entry) {
+        entry.set(`${offset}:${len}`, dv);
+      } else {
+        // just one view of this buffer for now
+        this.viewMap.set(buffer, dv);
+      }
     } else {
-      // just one view of this buffer for now
-      this.viewMap.set(buffer, dv);
+      dv = new DataView(buffer, offset, len);
+      dv[NO_CACHE] = true;
     }
     {
       if (buffer === this.memory?.buffer || buffer === this.usizeMaxBuffer) {
@@ -1733,7 +2566,7 @@ mixin({
     },
     restoreView(dv) {
       const zig = dv?.[ZIG];
-      if (zig?.len > 0 && dv.buffer.byteLength === 0) {
+      if (zig && isDetached(dv.buffer)) {
         dv = this.obtainZigView(zig.address, zig.len);
         if (zig.align) {
           dv[ZIG].align = zig.align;
@@ -1748,16 +2581,23 @@ mixin({
           const dv = this[MEMORY];
           const newDV = thisEnv.restoreView(dv);
           if (dv !== newDV) {
-            const target = this[CONST_TARGET] ?? this;
-            target[MEMORY] = newDV;
-            // pointers are referenced by their proxies in the cache
-            target.constructor[CACHE]?.save?.(newDV, target[PROXY] ?? target);
-            return true;
-          } else {
-            return false;
+            this[MEMORY] = newDV;
+            this.constructor[CACHE]?.save?.(newDV, this);
           }
+          return newDV;
         },
       }
+    },
+    moveExternBytes(jsDV, address, to) {
+      const { memory } = this;
+      const len = jsDV.byteLength;
+      if (len === 0) return;
+      const zigDV = new DataView(memory.buffer, address, len);
+      if (!(jsDV instanceof DataView)) {
+        // assume it's a typed array
+        jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+      }
+      copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
     },
   } ),
 });
@@ -1780,6 +2620,294 @@ function throwError(structure) {
   throw new BufferExpected(structure);
 }
 
+const proxyMaps = [ 
+  0, 
+  ProxyType.Const, 
+  ProxyType.ReadOnly, 
+  ProxyType.Const | ProxyType.ReadOnly 
+].reduce((hash, type) => {
+  hash[type] = new WeakMap();
+  return hash;
+}, {});
+const proxyTargetMap = new WeakMap();
+
+function getProxy(target, type) {
+  const key = target;
+  const map = proxyMaps[type & (ProxyType.Const | ProxyType.ReadOnly)];
+  let proxy = map.get(key);
+  if (!proxy) {
+    proxy = new Proxy(target, handlersHash[type]);
+    map.set(key, proxy);
+    proxyTargetMap.set(proxy, { target, type });
+  }
+  return proxy;
+}
+
+function getProxyType(structure, readOnly = false) {
+  const { type, flags } = structure;
+  let proxyType = (readOnly) ? ProxyType.ReadOnly : 0;
+  if (flags & StructureFlag.HasProxy) {
+    if (type === StructureType.Pointer) {
+      proxyType |= ProxyType.Pointer;
+      if (flags & PointerFlag.IsConst) {
+        proxyType |= ProxyType.Const;
+      }
+    } else if (type === StructureType.Function) {
+      proxyType = 0;
+    } else {
+      proxyType |= ProxyType.Slice;
+    }
+  }
+  return proxyType;
+}
+
+function getProxyTarget(arg) {
+  if ((typeof(arg) === 'object' || typeof(arg) === 'function') && arg) {
+    return proxyTargetMap.get(arg);
+  }
+}
+
+function removeProxy(arg) {
+  const proxy = getProxyTarget(arg);
+  return (proxy) ? [ proxy.target, proxy.type ] : [ arg, 0 ];
+}
+
+function getReadOnlyProxy(object) {
+  const proxy = getProxyTarget(object);
+  let proxyType;
+  if (proxy) {
+    if (proxy.type & ProxyType.ReadOnly) {
+      // it's already a read-only proxy
+      return object;
+    } else {
+      proxyType = proxy.type | ProxyType.ReadOnly;
+      object = proxy.target;
+    }
+  } else {
+    // the check below will filter out functions, which doesn't need the protection
+    if (!object || typeof(object) !== 'object' || object[READ_ONLY]) {
+      return object;
+    }
+    proxyType = object.constructor[PROXY_TYPE] ?? ProxyType.ReadOnly;
+  }
+  return getProxy(object, proxyType);
+}
+
+const pointerHandlers = {
+  get(pointer, name) {
+    if (name in pointer) {
+      return pointer[name];
+    } else {
+      const target = pointer[TARGET];
+      return target[name];
+    }
+  },
+  set(pointer, name, value) {
+    if (name in pointer) {
+      pointer[name] = value;
+    } else {
+      const target = pointer[TARGET];
+      target[name] = value;
+    }
+    return true;
+  },
+  deleteProperty(pointer, name) {
+    if (name in pointer) {
+      delete pointer[name];
+    } else {
+      const target = pointer[TARGET];
+      delete target[name];
+    }
+    return true;
+  },
+  has(pointer, name) {
+    if (name in pointer) {
+      return true;
+    } else {
+      const target = pointer[TARGET];
+      return name in target;
+    }
+  },
+  apply(pointer, thisArg, args) {
+    const f = pointer['*'];
+    return f.apply(thisArg, args);
+  },
+};
+
+const readOnlyPointerHandlers = {
+  ...pointerHandlers,
+  set(pointer, name, value) {
+    if (name in pointer) {
+      throwReadOnly();
+    } else {
+      const target = pointer[TARGET];
+      target[name] = value;
+    }
+    return true;
+  },
+};
+
+const readOnlyHandlers = {
+  get(target, name) {
+    return getReadOnlyProxy(target[name]);
+  },
+  set(target, name, value) {
+    throwReadOnly();
+  }
+};
+
+const constPointerHandlers = {
+  ...pointerHandlers,
+  get(pointer, name) {
+    if (name in pointer) {
+      return pointer[name];
+    } else {
+      return readOnlyHandlers.get(pointer[TARGET], name);
+    }
+  },
+  set(pointer, name, value) {
+    if (name in pointer) {
+      pointer[name] = value;
+    } else {
+      throwReadOnly();
+    }
+    return true;
+  },
+};
+
+const readOnlyConstPointerHandlers = {
+  ...readOnlyPointerHandlers,
+  set: readOnlyHandlers.set,
+};
+
+const sliceHandlers = {
+  get(slice, name) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      return slice.get(index);
+    } else {
+      return slice[name];
+    }
+  },
+  set(slice, name, value) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      slice.set(index, value);
+    } else {
+      slice[name] = value;
+    }
+    return true;
+  },
+  deleteProperty(slice, name) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      return false;
+    } else {
+      delete slice[name];
+      return true;
+    }
+  },
+  has(slice, name) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      return (index >= 0 && index < slice.length);
+    } else {
+      return slice[name];
+    }
+  },
+  ownKeys(slice) {
+    const keys = [];
+    for (let i = 0, len = slice.length; i < len; i++) {
+      keys.push(`${i}`);
+    }
+    keys.push('length');
+    return keys;
+  },
+  getOwnPropertyDescriptor(slice, name) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      if (index >= 0 && index < slice.length) {
+        return { value: slice.get(index), enumerable: true, writable: true, configurable: true };
+      }
+    } else {
+      return Object.getOwnPropertyDescriptor(slice, name);
+    }
+  },
+};
+
+const readOnlySliceHandlers = {
+  ...sliceHandlers,
+  get (slice, name) {
+    const index = (typeof(name) === 'symbol') ? 0 : name|0;
+    if (index !== 0 || index == name) {
+      return getReadOnlyProxy(slice.get(index));
+    } else if (name === 'set') {
+      return throwReadOnly;
+    } else {
+      return slice[name];
+    }
+  },
+  set: throwReadOnly,
+};
+
+const handlersHash = {
+  [ProxyType.Pointer]: pointerHandlers,
+  [ProxyType.Pointer | ProxyType.Const]: constPointerHandlers,
+  [ProxyType.Pointer | ProxyType.ReadOnly]: readOnlyPointerHandlers,
+  [ProxyType.Pointer | ProxyType.ReadOnly | ProxyType.Const ]: readOnlyConstPointerHandlers,
+  [ProxyType.Slice]: sliceHandlers,
+  [ProxyType.Slice | ProxyType.ReadOnly]: readOnlySliceHandlers,
+  [ProxyType.ReadOnly]: readOnlyHandlers,
+};
+
+mixin({
+  makeReadOnly(object) {
+    protect(object);
+  }
+});
+
+function protect(object) {
+  const [ objectNoProxy ] = removeProxy(object);
+  if (objectNoProxy?.[MEMORY] && !objectNoProxy[READ_ONLY]) {
+    objectNoProxy[READ_ONLY] = true;
+    const type = objectNoProxy.constructor[TYPE];
+    if (type === StructureType.Pointer) {
+      // protect all properties except length
+      protectProperties(objectNoProxy, [ 'length' ]);
+    } else if (type === StructureType.Array || type === StructureType.Slice) {
+      protectProperties(objectNoProxy);
+      protectElements(objectNoProxy);
+    } else {
+      protectProperties(objectNoProxy);
+    }
+  }
+  return object;
+}
+
+function protectProperties(object, exclude = []) {
+  const descriptors = Object.getOwnPropertyDescriptors(object.constructor.prototype);
+  for (const [ name, descriptor ] of Object.entries(descriptors)) {
+    if (!exclude.includes(name)) {
+      const { get, set } = descriptor;
+      descriptor.get = (get) ? function() {
+        return protect(get.call(this));
+      } : undefined;
+      descriptor.set = (set) ? throwReadOnly : undefined;
+      defineProperty(object, name, descriptor);
+    }
+  }
+}
+
+function protectElements(array) {
+  const { get } = array;
+  defineProperties(array, {
+    get: defineValue(function(index) { 
+      return protect(get.call(this, index));
+    }),
+    set: defineValue(throwReadOnly),
+  });
+}
+
 mixin({
   defineArrayEntries() {
     return defineValue(getArrayEntries);
@@ -1789,16 +2917,25 @@ mixin({
   }
 });
 
+function getArray(arg) {
+  const proxy = getProxyTarget(arg);
+  if (proxy) {
+    const { target } = proxy;
+    return (proxy.type & ProxyType.Pointer) ? target['*'] : target;
+  }
+  return arg;
+}
+
 function getArrayIterator() {
-  const self = this[ARRAY] ?? this;
-  const length = this.length;
+  const array = getArray(this);
+  const length = array.length;
   let index = 0;
   return {
     next() {
       let value, done;
       if (index < length) {
         const current = index++;
-        value = self.get(current);
+        value = array.get(current);
         done = false;
       } else {
         done = true;
@@ -1810,15 +2947,15 @@ function getArrayIterator() {
 
 function getArrayEntriesIterator(options) {
   const handleError = getErrorHandler(options);
-  const self = this[ARRAY] ?? this;
-  const length = this.length;
+  const array = getArray(this);
+  const length = array.length;
   let index = 0;
   return {
     next() {
       let value, done;
       if (index < length) {
         const current = index++;
-        value = [ current, handleError(() => self.get(current)) ];
+        value = [ current, handleError(() => array.get(current)) ];
         done = false;
       } else {
         done = true;
@@ -1939,6 +3076,12 @@ mixin({
 });
 
 mixin({
+  defineMemberBool(member) {
+    return this.defineMemberUsing(member, this.getAccessor);
+  },
+});
+
+mixin({
   defineClampedArray(structure) {
     const thisEnv = this;
     const ClampedArray = Uint8ClampedArray;
@@ -1963,10 +3106,7 @@ mixin({
     const thisEnv = this;
     return markAsSpecial({
       get() {
-        {
-          this[RESTORE]?.();
-        }
-        const dv = this[MEMORY];
+        const dv = this[RESTORE]() ;
         return dv;
       },
       set(dv, allocator) {
@@ -1981,25 +3121,49 @@ mixin({
 
 mixin({
   defineMemberObject(member) {
-    return bindSlot(member.slot, {
-      get: (member.structure.flags & StructureFlag.HasValue) ? getValue : getObject,
-      set: (member.flags & MemberFlag.IsReadOnly) ? throwReadOnly : setValue,
-    });
+    let get, set;
+    if (member.flags & MemberFlag.IsString) {
+      get = getString;
+    } else if (member.flags & MemberFlag.IsTypedArray) {
+      get = getTypedArray;
+    } else if (member.flags & MemberFlag.IsPlain) {
+      get = getPlain;
+    } else if (member.structure.flags & (StructureFlag.HasValue | StructureFlag.HasProxy)) {
+      get = getValue;
+    } else {
+      get = getObject;
+    }
+    if (member.flags & MemberFlag.IsReadOnly) {
+      set = throwReadOnly;
+    } else {
+      set = setValue;
+    }
+    return bindSlot(member.slot, { get, set });
   }
 });
 
 function getValue(slot) {
-  const object = this[SLOTS][slot] ?? this[VIVIFICATE](slot);
-  return object.$;
+  return getObject.call(this, slot).$;
+}
+
+function getString(slot) {
+  return getValue.call(this, slot)?.string ?? null;
+}
+
+function getTypedArray(slot) {
+  return getValue.call(this, slot)?.typedArray ?? null;
+}
+
+function getPlain(slot) {
+  return getValue.call(this, slot)?.valueOf?.() ?? null;
 }
 
 function getObject(slot) {
-  const object = this[SLOTS][slot] ?? this[VIVIFICATE](slot);
-  return object;
+  return this[SLOTS][slot] ?? this[VIVIFICATE](slot);
 }
 
 function setValue(slot, value, allocator) {
-  const object = this[SLOTS][slot] ?? this[VIVIFICATE](slot);
+  const object = getObject.call(this, slot);
   object[INITIALIZE](value, allocator);
 }
 
@@ -2014,53 +3178,45 @@ mixin({
         const offset = bitOffset >> 3;
         return {
           get: function getValue() {
-            try {
-              return getter.call(this[MEMORY], offset, littleEndian);
-            } catch (err) {
-              if (err instanceof TypeError && this[RESTORE]?.()) {
-                return getter.call(this[MEMORY], offset, littleEndian);
-              } else {
-                throw err;
-              }
-            }
+            const dv = this[RESTORE]() ;
+            return getter.call(dv, offset, littleEndian);
           },
           set: function setValue(value) {
-            try {
-              return setter.call(this[MEMORY], offset, value, littleEndian);
-            } catch (err) {
-              if (err instanceof TypeError && this[RESTORE]?.()) {
-                return setter.call(this[MEMORY], offset, value, littleEndian);
-              } else {
-                throw err;
-              }
-            }
+            const dv = this[RESTORE]() ;
+            return setter.call(dv, offset, value, littleEndian);
           }
         }
       } else {
         return {
           get: function getElement(index) {
-            try {
-              return getter.call(this[MEMORY], index * byteSize, littleEndian);
-            } catch (err) {
-              if (err instanceof TypeError && this[RESTORE]?.()) {
-                return getter.call(this[MEMORY], index * byteSize, littleEndian);
-              } else {
-                throw replaceRangeError(member, index, err);
-              }
-            }
+            const dv = this[RESTORE]() ;
+            return getter.call(dv, index * byteSize, littleEndian);
           },
           set: function setElement(index, value) {
-            try {
-              return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
-            } catch (err) {
-              if (err instanceof TypeError && this[RESTORE]?.()) {
-                return setter.call(this[MEMORY], index * byteSize, value, littleEndian);
-              } else {
-                throw replaceRangeError(member, index, err);
-              }
-            }
+            const dv = this[RESTORE]() ;
+            return setter.call(dv, index * byteSize, value, littleEndian);
           },
         }
+      }
+    },
+  } ),
+});
+
+mixin({
+  ...({
+    defineRetvalCopier({ byteSize, bitOffset }) {
+      if (byteSize > 0) {
+        const thisEnv = this;
+        const offset = bitOffset >> 3;
+        return {
+          value(shadowDV) {
+            const dv = this[MEMORY];
+            const { address } = shadowDV[ZIG];
+            const src = new DataView(thisEnv.memory.buffer, address + offset, byteSize);
+            const dest = new DataView(dv.buffer, dv.byteOffset + offset, byteSize);
+            copyView(dest, src);
+          }
+        };
       }
     },
   } ),
@@ -2184,6 +3340,20 @@ mixin({
 });
 
 mixin({
+  defineMemberType(member, env) {
+    const { slot } = member;
+    return bindSlot(slot, {
+      get(slot) {
+        // unsupported types will have undefined structure
+        const structure = this[SLOTS][slot];
+        return structure?.constructor;
+      },
+      set: throwReadOnly,
+    });
+  }
+});
+
+mixin({
   defineTypedArray(structure) {
     const thisEnv = this;
     const TypedArray = this.getTypedArray(structure); // (from mixin "structures/all")
@@ -2231,11 +3401,8 @@ mixin({
       base64: this.defineBase64(structure),
       toJSON: this.defineToJSON(),
       valueOf: this.defineValueOf(),
-      [CONST_TARGET]: { value: null },
       [SETTERS]: defineValue(setters),
       [KEYS]: defineValue(keys),
-      // add memory copier (from mixin "memory/copying")
-      [COPY]: this.defineCopier(byteSize),
       ...({
         // add method for recoverng from array detachment
         [RESTORE]: this.defineRestorer(),
@@ -2283,47 +3450,56 @@ mixin({
     const descriptors = {
       [Symbol.toStringTag]: defineValue(name),
     };
-    for (const member of members) {
-      const { name, slot } = member;
-      if (member.structure.type === StructureType.Function) {
-        const fn = template[SLOTS][slot];
-        staticDescriptors[name] = defineValue(fn);
-        // provide a name if one isn't assigned yet
-        if (!fn.name) {
-          defineProperty(fn, 'name', defineValue(name));
-        }
-        // see if it's a getter or setter
-        const [ accessorType, propName ] = /^(get|set)\s+([\s\S]+)/.exec(name)?.slice(1) ?? [];
-        const argRequired = (accessorType === 'get') ? 0 : 1;
-        if (accessorType && fn.length  === argRequired) {
-          staticDescriptors[propName] ||= {};
-          const descriptor = staticDescriptors[propName];
-          descriptor[accessorType] = fn;
-        }
-        // see if it's a method
-        if (member.flags & MemberFlag.IsMethod) {
-          const method = function(...args) {
-            try {
-              return fn(this, ...args);
-            } catch (err) {
-              // adjust argument index/count
-              err[UPDATE]?.(1);
-              throw err;
-            }
-          };
-          defineProperties(method, {
-            name: defineValue(name),
-            length: defineValue(fn.length - 1),
-          });
-          descriptors[name] = defineValue(method);
-          if (accessorType && method.length === argRequired) {
-            const descriptor = descriptors[propName] ||= {};
-            descriptor[accessorType] = method;
+    if (members) {
+      for (const member of members) {
+        const { name, slot, flags } = member;
+        if (member.structure.type === StructureType.Function) {
+          let fn = template[SLOTS][slot];
+          if (flags & MemberFlag.IsString) {
+            fn[TRANSFORM] = (retval) => retval.string;
+          } else if (flags & MemberFlag.IsTypedArray) {
+            fn[TRANSFORM] = (retval) => retval.typedArray;
+          } else if (flags & MemberFlag.IsPlain) {
+            fn[TRANSFORM] = (retval) => retval.valueOf();
           }
+          staticDescriptors[name] = defineValue(fn);
+          // provide a name if one isn't assigned yet
+          if (!fn.name) {
+            defineProperty(fn, 'name', defineValue(name));
+          }
+          // see if it's a getter or setter
+          const [ accessorType, propName ] = /^(get|set)\s+([\s\S]+)/.exec(name)?.slice(1) ?? [];
+          const argRequired = (accessorType === 'get') ? 0 : 1;
+          if (accessorType && fn.length  === argRequired) {
+            staticDescriptors[propName] ||= {};
+            const descriptor = staticDescriptors[propName];
+            descriptor[accessorType] = fn;
+          }
+          // see if it's a method
+          if (member.flags & MemberFlag.IsMethod) {
+            const method = function(...args) {
+              try {
+                return fn(this, ...args);
+              } catch (err) {
+                // adjust argument index/count
+                err[UPDATE]?.(1);
+                throw err;
+              }
+            };
+            defineProperties(method, {
+              name: defineValue(name),
+              length: defineValue(fn.length - 1),
+            });
+            descriptors[name] = defineValue(method);
+            if (accessorType && method.length === argRequired) {
+              const descriptor = descriptors[propName] ||= {};
+              descriptor[accessorType] = method;
+            }
+          }
+        } else {
+          staticDescriptors[name] = this.defineMember(member);
+          props.push(name);
         }
-      } else {
-        staticDescriptors[name] = this.defineMember(member);
-        props.push(name);
       }
     }
     // static variable/constants are stored in slots
@@ -2359,7 +3535,7 @@ mixin({
         allocator,
       } = options;
       const creating = this instanceof constructor;
-      let self, dv;
+      let self, dv, cached = false;
       if (creating) {
         if (arguments.length === 0) {
           throw new NoInitializer(structure);
@@ -2390,34 +3566,43 @@ mixin({
         // look for buffer
         dv = thisEnv.extractView(structure, arg, onCastError);
         if (self = cache.find(dv)) {
-          return self;
-        }
-        self = Object.create(constructor.prototype);
-        if (SHAPE in self) {
-          thisEnv.assignView(self, dv, structure, false, false);
+          cached = true;
         } else {
-          self[MEMORY] = dv;
-        }
-        if (flags & StructureFlag.HasSlot) {
-          self[SLOTS] = {};
-        }
-      }
-      if (comptimeFieldSlots) {
-        for (const slot of comptimeFieldSlots) {
-          self[SLOTS][slot] = template[SLOTS][slot];
-        }
-      }
-      self[RESTRICT]?.();
-      if (creating) {
-        // initialize object unless that's done already
-        if (!(SHAPE in self)) {
-          self[INITIALIZE](arg, allocator);
+          self = Object.create(constructor.prototype);
+          if (SHAPE in self) {
+            thisEnv.assignView(self, dv, structure, false, false);
+          } else {
+            self[MEMORY] = dv;
+          }
+          if (flags & StructureFlag.HasSlot) {
+            self[SLOTS] = {};
+          }
         }
       }
-      if (FINALIZE in self) {
-        self = self[FINALIZE]();
+      if (!cached) {
+        if (comptimeFieldSlots) {
+          for (const slot of comptimeFieldSlots) {
+            self[SLOTS][slot] = template[SLOTS][slot];
+          }
+        }
+        self[RESTRICT]?.();
+        if (creating) {
+          // initialize object unless that's done already
+          if (!(SHAPE in self)) {
+            self[INITIALIZE](arg, allocator);
+          }
+        }
+        if (FINALIZE in self) {
+          self = self[FINALIZE]();
+        }
+        cache.save(dv, self);
       }
-      return cache.save(dv, self);
+      if (flags & StructureFlag.HasProxy) {
+        if (creating || !this) {
+          return self[PROXY]();
+        }
+      }
+      return self;
     };
     defineProperty(constructor, CACHE, defineValue(cache));
     {
@@ -2427,12 +3612,24 @@ mixin({
     }
     return constructor;
   },
+  createInitializer(handler) {
+    return function(arg, allocator) {
+      const [ argNoProxy, argProxyType ] = removeProxy(arg);
+      const [ self ] = removeProxy(this);
+      return handler.call(self, argNoProxy, allocator, argProxyType);
+    }
+  },
   createApplier(structure) {
     const { instance: { template } } = structure;
     return function(arg, allocator) {
-      const argKeys = Object.keys(arg);
-      const keys = this[KEYS];
-      const setters = this[SETTERS];
+      const [ argNoProxy ] = removeProxy(arg);
+      const [ self ] = removeProxy(this);
+      const argKeys = Object.keys(argNoProxy);
+      if (argNoProxy instanceof Error) {
+        throw argNoProxy;
+      }
+      const keys = self[KEYS];
+      const setters = self[SETTERS];
       // don't accept unknown props
       for (const key of argKeys) {
         if (!(key in setters)) {
@@ -2447,12 +3644,12 @@ mixin({
       for (const key of keys) {
         const set = setters[key];
         if (set.special) {
-          if (key in arg) {
+          if (key in argNoProxy) {
             specialFound++;
           }
         } else {
           normalCount++;
-          if (key in arg) {
+          if (key in argNoProxy) {
             normalFound++;
           } else if (set.required) {
             normalMissing++;
@@ -2460,13 +3657,13 @@ mixin({
         }
       }
       if (normalMissing !== 0 && specialFound === 0) {
-        const missing = keys.filter(k => setters[k].required && !(k in arg));
+        const missing = keys.filter(k => setters[k].required && !(k in argNoProxy));
         throw new MissingInitializers(structure, missing);
       }
       if (specialFound + normalFound > argKeys.length) {
         // some props aren't enumerable
         for (const key of keys) {
-          if (key in arg) {
+          if (key in argNoProxy) {
             if (!argKeys.includes(key)) {
               argKeys.push(key);
             }
@@ -2477,13 +3674,13 @@ mixin({
       if (normalFound < normalCount && specialFound === 0) {
         if (template) {
           if (template[MEMORY]) {
-            this[COPY](template);
+            copyObject(self, template);
           }
         }
       }
       for (const key of argKeys) {
         const set = setters[key];
-        set.call(this, arg[key], allocator);
+        set.call(self, argNoProxy[key], allocator);
       }
       return argKeys.length;
     };
@@ -2491,12 +3688,11 @@ mixin({
   getTypedArray(structure) {
     const { type, instance } = structure;
     if (type !== undefined && instance) {
-      const [ member ] = instance.members;
       switch (type) {
         case StructureType.Enum:
         case StructureType.ErrorSet:
         case StructureType.Primitive: {
-          const { byteSize, type } = member;
+          const { byteSize, type } = instance.members[0];
           const intType = (type === MemberType.Float)
                         ? 'Float'
                         : (type === MemberType.Int) ? 'Int' : 'Uint';
@@ -2506,7 +3702,7 @@ mixin({
         }        case StructureType.Array:
         case StructureType.Slice:
         case StructureType.Vector:
-          return this.getTypedArray(member.structure);
+          return this.getTypedArray(instance.members[0].structure);
       }
     }
   },
@@ -2569,7 +3765,7 @@ mixin({
     });
     descriptors[Symbol.iterator] = this.defineArgIterator?.(argMembers);
     {
-      descriptors[COPY] = this.defineRetvalCopier(members[0]);
+      descriptors[UPDATE] = this.defineRetvalCopier(members[0]);
     }
     return constructor;
   },
@@ -2590,9 +3786,9 @@ mixin({
     const descriptor = this.defineMember(member);
     const { set } = descriptor;
     const constructor = this.createConstructor(structure);
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }
@@ -2617,8 +3813,11 @@ mixin({
           throw new InvalidArrayInitializer(structure, arg);
         }
       }
+    });
+    descriptors.$ = { 
+      get: function() { return getProxy(this, ProxyType.Slice) },
+      set: initializer 
     };
-    descriptors.$ = { get: getProxy, set: initializer };
     descriptors.length = defineValue(length);
     descriptors.entries = descriptors[ENTRIES] = this.defineArrayEntries();
     if (flags & ArrayFlag.IsTypedArray) {
@@ -2635,6 +3834,12 @@ mixin({
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
+    descriptors[PROXY] = {
+      value() {
+        return getProxy(this, ProxyType.Slice);
+      }
+    };
+    descriptors[PROXY_TYPE] = defineValue(ProxyType.Slice);
     return constructor;
   },
   finalizeArray(structure, staticDescriptors) {
@@ -2651,13 +3856,11 @@ mixin({
   defineFinalizerArray({ get, set }) {
     return {
       value() {
-        const value = new Proxy(this, proxyHandlers$1);
         defineProperties(this, {
-          [PROXY]: { value },
           get: { value: get.bind(this) },
           set: set && { value: set.bind(this) },
         });
-        return value;
+        return this;
       },
     };
   },
@@ -2667,13 +3870,10 @@ mixin({
     const thisEnv = this;
     const value = function getChild(index) {
       const { constructor } = elementStructure;
-      {
-        this[RESTORE]?.();
-      }
-      const dv = this[MEMORY];
+      const dv = this[RESTORE]() ;
       const parentOffset = dv.byteOffset;
       const offset = parentOffset + byteSize * index;
-      const childDV = thisEnv.obtainView(dv.buffer, offset, byteSize);
+      const childDV = thisEnv.obtainView(dv.buffer, offset, byteSize, !dv[NO_CACHE]);
       const object = this[SLOTS][index] = constructor.call(PARENT, childDV);
       return object;
     };
@@ -2681,70 +3881,11 @@ mixin({
   },
 });
 
-const proxyHandlers$1 = {
-  get(array, name) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      return array.get(index);
-    } else if (name === ARRAY) {
-      return array;
-    } else {
-      return array[name];
-    }
-  },
-  set(array, name, value) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      array.set(index, value);
-    } else {
-      array[name] = value;
-    }
-    return true;
-  },
-  deleteProperty(array, name) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      return false;
-    } else {
-      delete array[name];
-      return true;
-    }
-  },
-  has(array, name) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      return (index >= 0 && index < array.length);
-    } else {
-      return array[name];
-    }
-  },
-  ownKeys(array) {
-    const keys = [];
-    for (let i = 0, len = array.length; i < len; i++) {
-      keys.push(`${i}`);
-    }
-    keys.push('length', PROXY);
-    return keys;
-  },
-  getOwnPropertyDescriptor(array, name) {
-    const index = (typeof(name) === 'symbol') ? 0 : name|0;
-    if (index !== 0 || index == name) {
-      if (index >= 0 && index < array.length) {
-        return { value: array.get(index), enumerable: true, writable: true, configurable: true };
-      }
-    } else {
-      return Object.getOwnPropertyDescriptor(array, name);
-    }
-  },
-};
-
 mixin({
   defineFunction(structure, descriptors) {
     const {
       instance: { members: [ member ], template: thunk },
-      static: { template: jsThunkController },
     } = structure;
-    const cache = new ObjectCache();
     const { structure: { constructor: ArgStruct } } = member;
     const thisEnv = this;
     const constructor = function(arg) {
@@ -2758,11 +3899,13 @@ mixin({
         if (typeof(arg) !== 'function') {
           throw new TypeMismatch('function', arg);
         }
-        if (ArgStruct[TYPE] === StructureType.VariadicStruct || !jsThunkController) {
+        if (ArgStruct[TYPE] === StructureType.VariadicStruct || !constructor[CONTROLLER]) {
           throw new Unsupported();
         }
-        // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
-        dv = thisEnv.getFunctionThunk(arg, jsThunkController);
+        if (thisEnv.instance) {
+          // create an inbound thunk for function (from mixin "features/call-marshaling-inbound")
+          dv = thisEnv.getFunctionThunk(arg, constructor[CONTROLLER]);
+        }
       } else {
         if (this !== ENVIRONMENT) {
           // casting from buffer to function is allowed only if request comes from the runtime
@@ -2770,10 +3913,6 @@ mixin({
         }
         // casting a memory pointing to Zig binary
         dv = arg;
-      }
-      let existing;
-      if (existing = cache.find(dv)) {
-        return existing;
       }
       const argCount = ArgStruct.prototype.length;
       const self = (creating)
@@ -2785,8 +3924,12 @@ mixin({
       });
       // make self an instance of this function type
       Object.setPrototypeOf(self, constructor.prototype);
-      self[MEMORY] = dv;
-      cache.save(dv, self);
+      if (dv) {
+        self[MEMORY] = dv;
+      } else {
+        thisEnv.deferredThunks ??= [];
+        thisEnv.deferredThunks.push({ target: self, fn: arg });
+      }
       return self;
     };
     // make function type a superclass of Function
@@ -2795,14 +3938,93 @@ mixin({
     return constructor;
   },
   finalizeFunction(structure, staticDescriptors, descriptors) {
+    const {
+      static: { template },
+    } = structure;
+    staticDescriptors[CONTROLLER] = defineValue(template);
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
+  },
+  ...({
+    createDeferredThunks() {
+      const list = this.deferredThunks;
+      if (list) {
+        for (const { target, fn } of list) {
+          const { constructor } = target;
+          const dv = this.getFunctionThunk(fn, constructor[CONTROLLER]);
+          target[MEMORY] = dv;
+        }
+      }
+    },
+  } ),
+});
+
+mixin({
+  defineOptional(structure, descriptors) {
+    const {
+      instance: { members: [ valueMember, presentMember ] },
+      flags,
+    } = structure;
+    const { get: getValue, set: setValue } = this.defineMember(valueMember);
+    const { get: getPresent, set: setPresent } = this.defineMember(presentMember);
+    const get = function() {
+      const present = getPresent.call(this);
+      if (present) {
+        return getValue.call(this);
+      } else {
+        this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
+        return null;
+      }
+    };
+    const isValueVoid = valueMember.type === MemberType.Void;
+    const { bitOffset, byteSize } = valueMember;
+    const initializer = this.createInitializer(function(arg, allocator) {
+      if (isCompatibleInstanceOf(arg, constructor)) {
+        copyObject(this, arg);
+        if (flags & StructureFlag.HasPointer) {
+          // don't bother copying pointers when it's empty
+          if (getPresent.call(this)) {
+            this[VISIT]('copy', VisitorFlag.Vivificate, arg);
+          }
+        }
+      } else if (arg === null) {
+        setPresent.call(this, 0);
+        if (flags & OptionalFlag.HasSelector) {
+          clearView(this[MEMORY], bitOffset >> 3, byteSize);
+        }
+        // clear references so objects can be garbage-collected
+        this[VISIT]?.('clear', VisitorFlag.IgnoreUncreated);
+      } else if (arg !== undefined || isValueVoid) {
+        // call setValue() first, in case it throws
+        setValue.call(this, arg, allocator);
+        if (flags & OptionalFlag.HasSelector) {
+          setPresent.call(this, 1);
+        } else if (flags & StructureFlag.HasPointer) {
+          // since setValue() wouldn't write address into memory when the target is in
+          // JS memory, we need to use setPresent() in order to write something
+          // non-zero there so that we know the field is populated
+          if (!getPresent.call(this)) {
+            setPresent.call(this, 13);
+          }
+        }
+      }
+    });
+    const constructor = structure.constructor = this.createConstructor(structure);
+    descriptors.$ = { get, set: initializer };
+    // we need to clear the value portion when there's a separate bool indicating whether a value
+    // is present; for optional pointers, the bool overlaps the usize holding the address; setting
+    // it to false automatically clears the address
+    descriptors[INITIALIZE] = defineValue(initializer);
+    descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorStruct(structure);
+    descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorOptional(valueMember, getPresent);
+    return constructor;
   },
 });
 
 mixin({
   definePointer(structure, descriptors) {
     const {
+      type,
       flags,
       byteSize,
       instance: { members: [ member ] },
@@ -2870,23 +4092,23 @@ mixin({
         this[LAST_LENGTH] = length;
       }
     : null;
-    const getTargetObject = function() {
-      const pointer = this[POINTER] ?? this;
-      const empty = !pointer[SLOTS][0];
-      const target = updateTarget.call(pointer, null, empty);
+    const proxyType = getProxyType(structure);
+    const targetProxyType = getProxyType(targetStructure, flags & PointerFlag.IsConst);
+    const getTargetObject = function(useProxy = true) {
+      const empty = !this[SLOTS][0];
+      const target = updateTarget.call(this, null, empty);
       if (!target) {
         if (flags & PointerFlag.IsNullable) {
           return null;
         }
         throw new NullPointer();
       }
-      return (flags & PointerFlag.IsConst) ? getConstProxy(target) : target;
+      return (targetProxyType && useProxy) ? getProxy(target, targetProxyType) : target;
     };
     const setTargetObject = function(arg) {
       if (arg === undefined) {
         return;
       }
-      const pointer = this[POINTER] ?? this;
       if (arg) {
         const zig = arg[MEMORY][ZIG];
         if (zig) {
@@ -2899,24 +4121,21 @@ mixin({
             arg[MEMORY][ZIG] = undefined;
           }
         } else {
-          if (pointer[MEMORY][ZIG]) {
+          if (this[MEMORY][ZIG]) {
             throw new ZigMemoryTargetRequired();
           }
         }
-      } else if (pointer[MEMORY][ZIG]) {
+      } else if (this[MEMORY][ZIG]) {
         setAddress.call(this, 0);
         setLength?.call?.(this, 0);
       }
-      pointer[SLOTS][0] = arg ?? null;
+      this[SLOTS][0] = arg ?? null;
       if (flags & PointerFlag.HasLength) {
-        pointer[MAX_LENGTH] = null;
+        this[MAX_LENGTH] = null;
       }
     };
     const getTarget = (targetFlags & StructureFlag.HasValue)
-    ? function() {
-        const target = getTargetObject.call(this);
-        return target.$;
-      }
+    ? function() { return getTargetObject.call(this).$ }
     : getTargetObject;
     const setTarget = (flags & PointerFlag.IsConst)
     ? throwReadOnly
@@ -2925,12 +4144,12 @@ mixin({
         return target.$ = value;
       };
     const getTargetLength = function() {
-      const target = getTargetObject.call(this);
+      const target = getTargetObject.call(this, false);
       return (target) ? target.length : 0;
     };
     const setTargetLength = function(len) {
       len = len | 0;
-      const target = getTargetObject.call(this);
+      const target = getTargetObject.call(this, false);
       if (target) {
         if (target.length === len) {
           return;
@@ -2941,10 +4160,7 @@ mixin({
         }
         return;
       }
-      {
-        target[RESTORE]?.();
-      }
-      const dv = target[MEMORY];
+      const dv = target[RESTORE]() ;
       const zig = dv[ZIG];
       // determine the maximum length
       let max;
@@ -2969,17 +4185,17 @@ mixin({
       setLength?.call?.(this, len);
     };
     const thisEnv = this;
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator, proxyType) {
       const Target = targetStructure.constructor;
       if (isPointerOf(arg, Target)) {
-        // initialize with the other pointer'structure target
         if (!(flags & PointerFlag.IsConst) && arg.constructor.const) {
           throw new ConstantConstraint(structure, arg);
         }
+        // initialize with the other pointer's target
         arg = arg[SLOTS][0];
       } else if (flags & PointerFlag.IsMultiple) {
         if (isCompatiblePointer(arg, Target, flags)) {
-          arg = Target(arg[SLOTS][0][MEMORY]);
+          arg = Target.call(ENVIRONMENT, arg[SLOTS][0][MEMORY]);
         }
       } else if (targetType === StructureType.Slice && (targetFlags & SliceFlag.IsOpaque) && arg) {
         if (arg.constructor[TYPE] === StructureType.Pointer) {
@@ -2997,13 +4213,11 @@ mixin({
       }
       if (arg instanceof Target) {
         {
-          arg[RESTORE]?.();
+          arg[RESTORE]();
         }
-        const constTarget = arg[CONST_TARGET];
-        if (constTarget) {
-          if (flags & PointerFlag.IsConst) {
-            arg = constTarget;
-          } else {
+        // if the target is read-only, then only a const pointer can point to it
+        if (proxyType === ProxyType.Const) {
+          if (!(flags & PointerFlag.IsConst)) {
             throw new ReadOnlyTarget(structure);
           }
         }
@@ -3012,11 +4226,11 @@ mixin({
         arg = Target.call(ENVIRONMENT, arg[MEMORY]);
       } else if (flags & PointerFlag.IsSingle && flags & PointerFlag.IsMultiple && arg instanceof Target.child) {
         // C pointer
-        arg = Target(arg[MEMORY]);
+        arg = Target.call(ENVIRONMENT, arg[MEMORY]);
       } else if (isCompatibleBuffer(arg, Target)) {
         // autocast to target type
         const dv = thisEnv.extractView(targetStructure, arg);
-        arg = Target(dv);
+        arg = Target.call(ENVIRONMENT, dv);
       } else if (arg != undefined && !arg[MEMORY]) {
         if (flags & PointerFlag.IsSingle && flags & PointerFlag.IsMultiple) {
           // C pointer
@@ -3040,8 +4254,11 @@ mixin({
           throw new InvalidPointerTarget(structure, arg);
         }
         // autovivificate target object
-        const autoObj = new Target(arg, { allocator });
-        arg = autoObj;
+        const autoObj = arg = new Target(arg, { allocator });
+        if (targetFlags & StructureFlag.HasProxy) {
+          // point to the actual object instead of the proxy
+          arg = getProxyTarget(autoObj).target;
+        }
       } else if (arg !== undefined) {
         if (!(flags & PointerFlag.IsNullable) || arg !== null) {
           throw new InvalidPointerTarget(structure, arg);
@@ -3052,10 +4269,15 @@ mixin({
         throw new PreviouslyFreed(arg);
       }
       this[TARGET] = arg;
-    };
+    });
     const constructor = this.createConstructor(structure);
     descriptors['*'] = { get: getTarget, set: setTarget };
-    descriptors.$ = { get: getProxy, set: initializer };
+    descriptors.$ = { 
+      get: (targetType === StructureType.Pointer) 
+      ? getSelf 
+      : function() { return getProxy(this, proxyType) }, 
+      set: initializer 
+    };
     descriptors.length = { get: getTargetLength, set: setTargetLength };
     descriptors.slice = (targetType === StructureType.Slice) && {
       value(begin, end) {
@@ -3075,25 +4297,24 @@ mixin({
       }
     };
     descriptors[INITIALIZE] = defineValue(initializer);
-    descriptors[FINALIZE] = {
+    descriptors[FINALIZE] = (targetType === StructureType.Function) && {
       value() {
-        const handlers = (targetType !== StructureType.Pointer) ? proxyHandlers : {};
-        let self;
-        if (targetType === StructureType.Function) {
-          // use an empty function as object so the proxy's apply() method is triggered
-          self = function() {};
-          self[MEMORY] = this[MEMORY];
-          self[SLOTS] = this[SLOTS];
-          Object.setPrototypeOf(self, constructor.prototype);
-        } else {
-          self = this;
-        }
-        const proxy = new Proxy(self, handlers);
-        // hide the proxy so console wouldn't display a recursive structure
-        Object.defineProperty(self, PROXY, { value: proxy });
-        return proxy;
+        const self = (...args) => {
+          const f = this['*'];
+          return f.call(this, ...args);
+        };
+        self[MEMORY] = this[MEMORY];
+        self[SLOTS] = this[SLOTS];
+        Object.setPrototypeOf(self, constructor.prototype);
+        return self;
       }
     };
+    descriptors[PROXY] = (targetType !== StructureType.Function && targetType !== StructureType.Pointer) && {
+      value() {
+        return getProxy(this, proxyType);
+      },
+    };
+    descriptors[PROXY_TYPE] = defineValue(proxyType);
     descriptors[TARGET] = { get: getTargetObject, set: setTargetObject };
     descriptors[UPDATE] = defineValue(updateTarget);
     descriptors[ADDRESS] = { set: setAddress };
@@ -3114,7 +4335,7 @@ mixin({
     } = structure;
     const { structure: targetStructure } = member;
     const { type: targetType, constructor: Target } = targetStructure;
-    staticDescriptors.child = (Target) ? defineValue(Target) : {
+    staticDescriptors.child = (Target !== Object) ? defineValue(Target) : {
       // deal with self-referencing pointer
       get() { return targetStructure.constructor }
     };
@@ -3158,96 +4379,6 @@ function isCompatiblePointer(arg, Target, flags) {
   return false;
 }
 
-const constProxies = new WeakMap();
-
-function getConstProxy(target) {
-  let proxy = constProxies.get(target);
-  if (!proxy) {
-    const pointer = target[POINTER];
-    if (pointer) {
-      proxy = new Proxy(pointer, readOnlyProxyHandlers);
-    } else {
-      proxy = new Proxy(target, constTargetProxyHandlers);
-    }
-    constProxies.set(target, proxy);
-  }
-  return proxy;
-}
-
-const proxyHandlers = {
-  get(pointer, name) {
-    if (name === POINTER) {
-      return pointer;
-    } else if (name in pointer) {
-      return pointer[name];
-    } else {
-      const target = pointer[TARGET];
-      return target[name];
-    }
-  },
-  set(pointer, name, value) {
-    if (name in pointer) {
-      pointer[name] = value;
-    } else {
-      const target = pointer[TARGET];
-      target[name] = value;
-    }
-    return true;
-  },
-  deleteProperty(pointer, name) {
-    if (name in pointer) {
-      delete pointer[name];
-    } else {
-      const target = pointer[TARGET];
-      delete target[name];
-    }
-    return true;
-  },
-  has(pointer, name) {
-    if (name in pointer) {
-      return true;
-    } else {
-      const target = pointer[TARGET];
-      return name in target;
-    }
-  },
-  apply(pointer, thisArg, args) {
-    const f = pointer['*'];
-    return f.apply(thisArg, args);
-  },
-};
-
-const readOnlyProxyHandlers = {
-  ...proxyHandlers,
-  set(pointer, name, value) {
-    if (name in pointer) {
-      throwReadOnly();
-    } else {
-      const target = pointer[TARGET];
-      target[name] = value;
-    }
-    return true;
-  },
-};
-
-const constTargetProxyHandlers = {
-  get(target, name) {
-    if (name === CONST_TARGET) {
-      return target;
-    } else {
-      const value = target[name];
-      if (value?.[MEMORY]) {
-        return getConstProxy(value);
-      } else {
-        return value;
-      }
-    }
-  },
-  set(target, name, value) {
-    throwReadOnly();
-  }
-};
-
 function isCompatibleBuffer(arg, constructor) {
   // TODO: merge this with extractView in mixin "view-management"
   const tag = arg?.[Symbol.toStringTag];
@@ -3282,7 +4413,7 @@ mixin({
     const { get, set } = this.defineMember(member);
     const initializer = function(arg) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
       } else {
         if (arg && typeof(arg) === 'object') {
           if (propApplier.call(this, arg) === 0) {
@@ -3314,13 +4445,11 @@ mixin({
     const {
       align,
       flags,
-      byteSize,
-      name,
       instance: {
         members: [ member ],
       },
     } = structure;
-    const { byteSize: elementSize, structure: elementStructure } = member;
+    const { byteSize: elementSize } = member;
     const thisEnv = this;
     const shapeDefiner = function(dv, length, allocator) {
       if (!dv) {
@@ -3339,14 +4468,14 @@ mixin({
     // the initializer behave differently depending on whether it's called by the
     // constructor or by a member setter (i.e. after object's shape has been established)
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
         if (!this[MEMORY]) {
           shapeDefiner.call(this, null, arg.length, allocator);
         } else {
           shapeChecker.call(this, arg, arg.length);
         }
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', VisitorFlag.Vivificate, arg);
         }
@@ -3377,7 +4506,7 @@ mixin({
       } else if (arg !== undefined) {
         throw new InvalidArrayInitializer(structure, arg);
       }
-    };
+    });
     const getSubArrayView = function(begin, end) {
       const length = this[LENGTH];
       const dv = this[MEMORY];
@@ -3388,7 +4517,10 @@ mixin({
       return thisEnv.obtainView(dv.buffer, dv.byteOffset + offset, len);
     };
     const constructor = this.createConstructor(structure);
-    descriptors.$ = { get: getProxy, set: initializer };
+    descriptors.$ = { 
+      get: function() { return getProxy(this, ProxyType.Slice) },
+      set: initializer 
+    };
     descriptors.length = { get: getLength };
     if (flags & SliceFlag.IsTypedArray) {
       descriptors.typedArray = this.defineTypedArray(structure);
@@ -3414,17 +4546,22 @@ mixin({
         const dv1 = getSubArrayView.call(this, begin, end);
         const dv2 = thisEnv.allocateMemory(dv1.byteLength, align, zig);
         const slice = constructor(dv2);
-        slice[COPY]({ [MEMORY]: dv1 });
+        copyView(dv2, dv1);
         return slice;
       },
     };
     descriptors[Symbol.iterator] = this.defineArrayIterator();
     descriptors[SHAPE] = defineValue(shapeDefiner);
-    descriptors[COPY] = this.defineCopier(byteSize, true);
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = this.defineFinalizerArray(descriptor);
     descriptors[VIVIFICATE] = (flags & StructureFlag.HasObject) && this.defineVivificatorArray(structure);
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorArray();
+    descriptors[PROXY] = {
+      value() {
+        return getProxy(this, ProxyType.Slice);
+      }
+    };    
+    descriptors[PROXY_TYPE] = defineValue(ProxyType.Slice);
     return constructor;
   },
   finalizeSlice(structure, staticDescriptors) {
@@ -3459,6 +4596,7 @@ function adjustIndex(index, len) {
 mixin({
   defineStruct(structure, descriptors) {
     const {
+      purpose,
       flags,
       length,
       instance: { members },
@@ -3466,9 +4604,9 @@ mixin({
     const backingIntMember = members.find(m => m.flags & MemberFlag.IsBackingInt);
     const backingInt = backingIntMember && this.defineMember(backingIntMember);
     const propApplier = this.createApplier(structure);
-    const initializer = function(arg, allocator) {
+    const initializer = this.createInitializer(function(arg, allocator) {
       if (isCompatibleInstanceOf(arg, constructor)) {
-        this[COPY](arg);
+        copyObject(this, arg);
         if (flags & StructureFlag.HasPointer) {
           this[VISIT]('copy', 0, arg);
         }
@@ -3479,7 +4617,7 @@ mixin({
       } else if (arg !== undefined) {
         throw new InvalidInitializer(structure, 'object', arg);
       }
-    };
+    });
     const constructor = this.createConstructor(structure);
     // add descriptors of struct field
     const setters = descriptors[SETTERS].value;
@@ -3510,7 +4648,7 @@ mixin({
       }
     };
     // add iterator
-    descriptors[Symbol.iterator] = (flags & StructFlag.IsIterator)
+    descriptors[Symbol.iterator] = (purpose === StructurePurpose.Iterator)
     ? this.defineZigIterator()
     : (flags & StructFlag.IsTuple)
       ? this.defineVectorIterator()
@@ -3522,7 +4660,7 @@ mixin({
     descriptors[VISIT] = (flags & StructureFlag.HasPointer) && this.defineVisitorStruct(members);
     descriptors[ENTRIES] = (flags & StructFlag.IsTuple) ? this.defineVectorEntries() : this.defineStructEntries();
     descriptors[PROPS] = defineValue(props);
-    if (flags & StructFlag.IsAllocator) {
+    if (purpose === StructurePurpose.Allocator) {
       descriptors.alloc = this.defineAlloc();
       descriptors.free = this.defineFree();
       descriptors.dupe = this.defineDupe();
@@ -3543,10 +4681,7 @@ mixin({
       value(slot) {
         const member = objectMembers[slot];
         const { bitOffset, byteSize, structure: { constructor } } = member;
-        {
-          this[RESTORE]?.();
-        }
-        const dv = this[MEMORY];
+        const dv = this[RESTORE]() ;
         const parentOffset = dv.byteOffset;
         const offset = parentOffset + (bitOffset >> 3);
         let len = byteSize;
@@ -3556,7 +4691,7 @@ mixin({
           }
           len = member.bitSize >> 3;
         }
-        const childDV = thisEnv.obtainView(dv.buffer, offset, len);
+        const childDV = thisEnv.obtainView(dv.buffer, offset, len, !dv[NO_CACHE]);
         const object = this[SLOTS][slot] = constructor.call(PARENT, childDV);
         return object;
       }
@@ -3648,334 +4783,15 @@ mixin({
   }
 });
 
-mixin({
-  init() {
-    this.variables = [];
-  },
-  getSpecialExports() {
-    const check = (v) => {
-      if (v === undefined) throw new Error('Not a Zig type');
-      return v;
-    };
-    return {
-      init: (...args) => this.initialize?.(...args),
-      abandon: () => this.abandonModule?.(),
-      connect: (console) => this.consoleObject = console,
-      sizeOf: (T) => check(T?.[SIZE]),
-      alignOf: (T) => check(T?.[ALIGN]),
-      typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
-    };
-  },
-  recreateStructures(structures, settings) {
-    Object.assign(this, settings);
-    const insertObjects = (dest, placeholders) => {
-      for (const [ slot, placeholder ] of Object.entries(placeholders)) {
-        dest[slot] = createObject(placeholder);
-      }
-      return dest;
-    };
-    // empty arrays aren't replicated
-    const getBuffer = a => (a.length) ? a.buffer : new ArrayBuffer(0);
-    const createObject = (placeholder) => {
-      const { memory, structure, actual } = placeholder;
-      if (memory) {
-        if (actual) {
-          return actual;
-        } else {
-          const { array, offset, length } = memory;
-          const dv = this.obtainView(getBuffer(array), offset, length);
-          const { handle, const: isConst } = placeholder;
-          const constructor = structure?.constructor;
-          const object = placeholder.actual = constructor.call(ENVIRONMENT, dv);
-          if (isConst) {
-            this.makeReadOnly(object);
-          }
-          if (placeholder.slots) {
-            insertObjects(object[SLOTS], placeholder.slots);
-          }
-          if (handle) {
-            // need to replace dataview with one pointing to Zig memory later,
-            // when the VM is up and running
-            this.variables.push({ handle, object });
-          }
-          return object;
-        }
-      } else {
-        return structure;
-      }
-    };
-    this.resetGlobalErrorSet?.();
-    const objectPlaceholders = new Map();
-    for (const structure of structures) {
-      // recreate the actual template using the provided placeholder
-      for (const scope of [ structure.instance, structure.static ]) {
-        if (scope.template) {
-          const { slots, memory, handle } = scope.template;
-          const object = scope.template = {};
-          if (memory) {
-            const { array, offset, length } = memory;
-            object[MEMORY] = this.obtainView(getBuffer(array), offset, length);
-            if (handle) {
-              this.variables.push({ handle, object });
-            }
-          }
-          if (slots) {
-            // defer creation of objects until shapes of structures are finalized
-            const realSlots = object[SLOTS] = {};
-            objectPlaceholders.set(realSlots, slots);
-          }
-        }
-      }
-      this.defineStructure(structure);
-    }
-    // insert objects into template slots
-    for (const [ slots, placeholders ] of objectPlaceholders) {
-      insertObjects(slots, placeholders);
-    }
-    // add static members, methods, etc.
-    for (const structure of structures) {
-      this.finalizeStructure(structure);
-    }
-  },
-});
-
-const structureNamesLC = structureNames.map(name => name.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase());
-
-mixin({
-  updatePointerAddresses(context, object) {
-    // first, collect all the pointers
-    const pointerMap = new Map();
-    const bufferMap = new Map();
-    const potentialClusters = [];
-    const callback = function(flags) {
-      // bypass proxy
-      const pointer = this[POINTER];
-      if (pointerMap.get(pointer) === undefined) {
-        const target = pointer[SLOTS][0];
-        if (target) {
-          const writable = !pointer.constructor.const;
-          const entry = { target, writable };
-          // only targets in JS memory need updating
-          const dv = target[MEMORY];
-          if (!dv[ZIG]) {
-            pointerMap.set(pointer, target);
-            // see if the buffer is shared with other objects
-            const other = bufferMap.get(dv.buffer);
-            if (other) {
-              const array = Array.isArray(other) ? other : [ other ];
-              const index = findSortedIndex(array, dv.byteOffset, e => e.target[MEMORY].byteOffset);
-              array.splice(index, 0, entry);
-              if (!Array.isArray(other)) {
-                bufferMap.set(dv.buffer, array);
-                potentialClusters.push(array);
-              }
-            } else {
-              bufferMap.set(dv.buffer, entry);
-            }
-            // scan pointers in target
-            target[VISIT]?.(callback, 0);
-          } else {
-            // in Zig memory--no need to update
-            pointerMap.set(pointer, null);
-          }
-        }
-      }
-    };
-    const flags = VisitorFlag.IgnoreRetval | VisitorFlag.IgnoreInactive;
-    object[VISIT](callback, flags);
-    // find targets that overlap each other
-    const clusters = this.findTargetClusters(potentialClusters);
-    const clusterMap = new Map();
-    for (const cluster of clusters) {
-      for (const target of cluster.targets) {
-        clusterMap.set(target, cluster);
-      }
-    }
-    // process the pointers
-    for (const [ pointer, target ] of pointerMap) {
-      if (target) {
-        const cluster = clusterMap.get(target);
-        const writable = cluster?.writable ?? !pointer.constructor.const;
-        pointer[ADDRESS] = this.getTargetAddress(context, target, cluster, writable);
-        if (LENGTH in pointer) {
-          pointer[LENGTH] = target.length;
-        }
-      }
-    }
-  },
-  updatePointerTargets(context, object, inbound = false) {
-    const pointerMap = new Map();
-    const callback = function(flags) {
-      // bypass proxy
-      const pointer = this[POINTER];
-      if (!pointerMap.get(pointer)) {
-        pointerMap.set(pointer, true);
-        const currentTarget = pointer[SLOTS][0];
-        const newTarget = (!currentTarget || !(flags & VisitorFlag.IsImmutable))
-        ? pointer[UPDATE](context, true, !(flags & VisitorFlag.IsInactive))
-        : currentTarget;
-        const targetFlags = (pointer.constructor.const) ? VisitorFlag.IsImmutable : 0;
-        if (!(targetFlags & VisitorFlag.IsImmutable)) {
-          // update targets of pointers in original target if it's in JS memory
-          // pointers in Zig memory are updated on access so we don't need to do it here
-          // (and they should never point to reloctable memory)
-          if (currentTarget && !currentTarget[MEMORY][ZIG]) {
-            currentTarget[VISIT]?.(callback, targetFlags);
-          }
-        }
-        if (newTarget !== currentTarget) {
-          // acquire targets of pointers in new target if it;s in JS memory
-          if (newTarget && !newTarget[MEMORY][ZIG]) {
-            newTarget?.[VISIT]?.(callback, targetFlags);
-          }
-        }
-      }
-    };
-    const flags = (inbound) ? VisitorFlag.IgnoreRetval : 0;
-    object[VISIT](callback, flags);
-  },
-  findTargetClusters(potentialClusters) {
-    const clusters = [];
-    for (const entries of potentialClusters) {
-      let prevTarget = null, prevStart = 0, prevEnd = 0;
-      let currentCluster = null;
-      for (const { target, writable } of entries) {
-        const dv = target[MEMORY];
-        const { byteOffset: start, byteLength } = dv;
-        const end = start + byteLength;
-        let forward = true;
-        if (prevTarget) {
-          if (prevEnd > start) {
-            // the previous target overlaps this one
-            if (!currentCluster) {
-              currentCluster = {
-                targets: [ prevTarget ],
-                start: prevStart,
-                end: prevEnd,
-                address: undefined,
-                misaligned: undefined,
-                writable,
-              };
-              clusters.push(currentCluster);
-            } else {
-              currentCluster.writable ||= writable;
-            }
-            currentCluster.targets.push(target);
-            if (end > prevEnd) {
-              // set cluster end offset to include this one
-              currentCluster.end = end;
-            } else {
-              // the previous target contains this one
-              forward = false;
-            }
-          } else {
-            currentCluster = null;
-          }
-        }
-        if (forward) {
-          prevTarget = target;
-          prevStart = start;
-          prevEnd = end;
-        }
-      }
-    }
-    return clusters;
-  },
-});
-
-mixin({
-  linkVariables(writeBack) {
-    {
-      // linkage occurs when WASM compilation is complete and functions have been imported
-      if (!this.memory) {
-        this.initPromise = this.initPromise.then(() => this.linkVariables(writeBack));
-        return;
-      }
-    }
-    const copy = this.getCopyFunction();
-    for (const { object, handle } of this.variables) {
-      const jsDV = object[MEMORY];
-      // objects in WebAssembly have fixed addresses so the handle is the address
-      // for native code module, locations of objects in memory can change depending on
-      // where the shared library is loaded
-      const address = handle ;
-      const zigDV = object[MEMORY] = this.obtainZigView(address, jsDV.byteLength);
-      if (writeBack) {
-        copy(zigDV, jsDV);
-      }
-      object.constructor[CACHE]?.save?.(zigDV, object);
-      const linkChildren = (object) => {
-        const slots = object[SLOTS];
-        if (slots) {
-          const parentOffset = zigDV.byteOffset;
-          for (const child of Object.values(slots)) {
-            if (child) {
-              const childDV = child[MEMORY];
-              if (childDV.buffer === jsDV.buffer) {
-                const offset = parentOffset + childDV.byteOffset - jsDV.byteOffset;
-                child[MEMORY] = this.obtainView(zigDV.buffer, offset, childDV.byteLength);
-                child.constructor[CACHE]?.save?.(zigDV, child);
-                linkChildren(child);
-              }
-            }
-          }
-        }
-      };
-      linkChildren(object);
-      // update pointer targets
-      object[VISIT]?.(function() { this[UPDATE](); }, VisitorFlag.IgnoreInactive);
-    }
-  },
-  unlinkVariables() {
-    const copy = this.getCopyFunction();
-    for (const { object } of this.variables) {
-      const zigDV = this.restoreView(object[MEMORY]) ;
-      const zig = zigDV[ZIG];
-      if (zig) {
-        const jsDV = object[MEMORY] = this.allocateMemory(zig.len);
-        copy(jsDV, zigDV);
-      }
-    }
-  },
-  ...({
-    imports: {
-      recreateAddress: { argType: 'i', returnType: 'i' },
-    },
-  } ),
-  });
-
-// handle non-standard ints 32-bit or smaller
-
-mixin({
-  getAccessorInt(access, member) {
-    const { bitSize, byteSize } = member;
-    if (byteSize) {
-      const f = this.getAccessor(access, { type: MemberType.Uint, bitSize: byteSize * 8, byteSize });
-      const signMask = 2 ** (bitSize - 1);
-      const valueMask = signMask - 1;
-      if (access === 'get') {
-        return function(offset, littleEndian) {
-          const n = f.call(this, offset, littleEndian);
-          return (n & valueMask) - (n & signMask);
-        };
-      } else {
-        return function(offset, value, littleEndian) {
-          const n = (value < 0) ? signMask | (value & valueMask) : value & valueMask;
-          f.call(this, offset, n, littleEndian);
-        };
-      }
-    }
-  }
-});
-
 // structure defaults
 const s = {
   constructor: null,
   type: 0,
+  purpose: 0,
   flags: 0,
   signature: undefined,
   name: undefined,
-  byteSize: 0,
+  byteSize: undefined,
   align: 0,
   instance: {
     members: [],
@@ -3994,29 +4810,64 @@ const m = {
 };
 
 // declare structure objects
-const s0 = {}, s1 = {}, s2 = {}, s3 = {}, s4 = {}, s5 = {}, s6 = {};
+const s0 = {}, s1 = {}, s2 = {}, s3 = {}, s4 = {}, s5 = {}, s6 = {}, s7 = {}, s8 = {}, s9 = {};
+const s10 = {};
 
 // declare objects
-const o0 = {}, o1 = {}, o2 = {};
+const o0 = {}, o1 = {}, o2 = {}, o3 = {}, o4 = {}, o5 = {}, o6 = {}, o7 = {}, o8 = {}, o9 = {};
+const o10 = {}, o11 = {}, o12 = {};
 
 // define byte arrays
 const U = i => new Uint8Array(i);
-const a0 = U(0);
+const a0 = U([ 0, 1 ]);
+const a1 = U(0);
+const a2 = U(3);
+const a3 = U(1);
 
 // fill in object properties
 const $ = Object.assign;
-$(o0, {
-  memory: { array: a0 },
-  handle: 3,
-});
+$(o0, {});
 $(o1, {
+  memory: { array: a0 },
+});
+$(o2, {});
+$(o3, {
   slots: {
-    0: o2,
+    0: o4, 1: o6, 2: o7,
   },
 });
-$(o2, {
+$(o4, {
+  structure: s2,
+  memory: { array: a1 },
+  slots: {
+    0: o5,
+  },
+});
+$(o5, {
+  structure: s0,
+});
+$(o6, {
   structure: s5,
-  memory: { array: a0 },
+  memory: { array: a2 },
+});
+$(o7, {
+  structure: s3,
+  memory: { array: a3 },
+});
+$(o8, {});
+$(o9, {});
+$(o10, {
+  memory: { array: a1 },
+  handle: 3,
+});
+$(o11, {
+  slots: {
+    0: o12,
+  },
+});
+$(o12, {
+  structure: s9,
+  memory: { array: a1 },
   handle: 2,
 });
 
@@ -4024,8 +4875,7 @@ $(o2, {
 $(s0, {
   ...s,
   flags: 1,
-  signature: 0x370ee22b85937307n,
-  name: "u8",
+  signature: 0x0000000000000000n,
   byteSize: 1,
   align: 1,
   instance: {
@@ -4033,20 +4883,23 @@ $(s0, {
       {
         ...m,
         type: 3,
-        bitOffset: 0,
         bitSize: 8,
         byteSize: 1,
+        bitOffset: 0,
         structure: s0,
       },
     ],
   },
+  static: {
+    members: [],
+  },
+  name: "u8",
 });
 $(s1, {
   ...s,
   type: 1,
-  flags: 224,
-  signature: 0xb2507358c7aae5f2n,
-  name: "[40]u8",
+  flags: 464,
+  signature: 0x0000000000000000n,
   length: 40,
   byteSize: 40,
   align: 1,
@@ -4061,13 +4914,136 @@ $(s1, {
       },
     ],
   },
+  static: {
+    members: [],
+  },
+  name: "[40]u8",
 });
 $(s2, {
   ...s,
+  flags: 9,
+  signature: 0x0000000000000000n,
+  byteSize: 0,
+  align: 1,
+  instance: {
+    members: [
+      {
+        ...m,
+        type: 6,
+        bitSize: 0,
+        byteSize: 0,
+        bitOffset: 0,
+        slot: 0,
+        structure: s2,
+      },
+    ],
+    template: o0
+  },
+  static: {
+    members: [],
+  },
+  name: "type",
+});
+$(s3, {
+  ...s,
+  flags: 1,
+  signature: 0x0000000000000000n,
+  byteSize: 1,
+  align: 1,
+  instance: {
+    members: [
+      {
+        ...m,
+        type: 1,
+        bitSize: 1,
+        byteSize: 1,
+        bitOffset: 0,
+        structure: s3,
+      },
+    ],
+  },
+  static: {
+    members: [],
+  },
+  name: "bool",
+});
+$(s4, {
+  ...s,
+  type: 2,
+  signature: 0x0000000000000000n,
+  byteSize: 2,
+  align: 1,
+  instance: {
+    members: [
+      {
+        ...m,
+        name: "value",
+        type: 3,
+        flags: 1,
+        bitOffset: 0,
+        bitSize: 8,
+        byteSize: 1,
+        slot: 0,
+        structure: s0,
+      },
+      {
+        ...m,
+        name: "is_required",
+        type: 1,
+        bitOffset: 8,
+        bitSize: 1,
+        byteSize: 1,
+        slot: 1,
+        structure: s3,
+      },
+    ],
+    template: o1
+  },
+  static: {
+    members: [],
+  },
+  name: "S0",
+});
+$(s5, {
+  ...s,
+  type: 7,
+  flags: 43,
+  signature: 0x0000000000000000n,
+  byteSize: 3,
+  align: 1,
+  instance: {
+    members: [
+      {
+        ...m,
+        type: 5,
+        bitSize: 16,
+        byteSize: 2,
+        bitOffset: 0,
+        slot: 0,
+        structure: s4,
+      },
+      {
+        ...m,
+        type: 3,
+        flags: 8,
+        bitOffset: 16,
+        bitSize: 8,
+        byteSize: 1,
+        structure: s0,
+      },
+    ],
+    template: o2
+  },
+  static: {
+    members: [],
+  },
+  name: "?S0",
+});
+$(s6, {
+  ...s,
   type: 9,
-  flags: 224,
-  signature: 0x9b3f78f92307ba61n,
-  name: "[_]u8",
+  flags: 464,
+  signature: 0x0000000000000000n,
   byteSize: 1,
   align: 1,
   instance: {
@@ -4081,13 +5057,17 @@ $(s2, {
       },
     ],
   },
+  static: {
+    members: [],
+    template: o3
+  },
+  name: "[_]u8",
 });
-$(s3, {
+$(s7, {
   ...s,
   type: 8,
-  flags: 188,
-  signature: 0x7e2f0adf211d515en,
-  name: "[]const u8",
+  flags: 380,
+  signature: 0x0000000000000000n,
   byteSize: 8,
   align: 4,
   instance: {
@@ -4098,17 +5078,21 @@ $(s3, {
         bitSize: 64,
         byteSize: 8,
         slot: 0,
-        structure: s2,
+        structure: s6,
       },
     ],
+    template: o8
   },
+  static: {
+    members: [],
+  },
+  name: "[]const u8",
 });
-$(s4, {
+$(s8, {
   ...s,
   type: 12,
   flags: 14,
-  signature: 0x3f613966254660c5n,
-  name: "Arg(fn ([]const u8) [40]u8)",
+  signature: 0x0000000000000000n,
   length: 1,
   byteSize: 48,
   align: 4,
@@ -4116,35 +5100,40 @@ $(s4, {
     members: [
       {
         ...m,
+        name: "retval",
         type: 5,
         flags: 1,
         bitOffset: 64,
         bitSize: 320,
         byteSize: 40,
         slot: 0,
-        name: "retval",
         structure: s1,
       },
       {
         ...m,
+        name: "0",
         type: 5,
         flags: 1,
         bitOffset: 0,
         bitSize: 64,
         byteSize: 8,
         slot: 1,
-        name: "0",
-        structure: s3,
+        structure: s7,
       },
     ],
+    template: o9
   },
+  static: {
+    members: [],
+  },
+  name: "Arg(fn ([]const u8) [40]u8)",
 });
-$(s5, {
+$(s9, {
   ...s,
   type: 14,
-  signature: 0xf4ed605db5cc2d38n,
-  name: "fn ([]const u8) [40]u8",
+  signature: 0x0000000000000000n,
   length: 1,
+  byteSize: 0,
   instance: {
     members: [
       {
@@ -4152,40 +5141,50 @@ $(s5, {
         type: 5,
         bitSize: 384,
         byteSize: 48,
-        structure: s4,
+        structure: s8,
       },
     ],
-    template: o0
+    template: o10
   },
+  static: {
+    members: [],
+  },
+  name: "fn ([]const u8) [40]u8",
 });
-$(s6, {
+$(s10, {
   ...s,
-  type: 2,
-  flags: 4096,
-  signature: 0x239ab4f327f6ac1bn,
   name: "sha1",
+  type: 2,
+  flags: 256,
+  signature: 0x0000000000000000n,
+  byteSize: 0,
   align: 1,
+  instance: {
+    members: [],
+  },
   static: {
     members: [
       {
         ...m,
-        type: 5,
-        flags: 2,
-        slot: 0,
         name: "sha1",
-        structure: s5,
+        type: 5,
+        flags: 130,
+        slot: 0,
+        structure: s9,
       },
     ],
-    template: o1
+    template: o11
   },
 });
 const structures = [
-  s0, s1, s2, s3, s4, s5, s6,
+  s0, s1, s2, s3, s4, s5, s6, s7, s8, s9,
+  s10,
 ];
-const root = s6;
+const root = s10;
 const settings = {
   runtimeSafety: false,
   littleEndian: true,
+  ioRedirection: true,
   libc: false,
 };
 
@@ -4198,7 +5197,7 @@ env.recreateStructures(structures, settings);
 // initiate loading and compilation of WASM bytecodes
 const source = (async () => {
   // sha1.zig
-  const binaryString = atob("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RXNBAXcgAWogCyACcyAOc2ogCUEFd2pB1oOL03xqIgFqNgIMIAAgSSBIIEFzIBJzIBFzQQF3aiACaiAPIAtzIAlzaiABQQV3akHWg4vTfGo2AggLOgEBfyMAQTBrIgIkACACQQhqIAEoAgAgASgCBCAAEQAAIAFBCGogAkEIakEo/AoAACACQTBqJABBAAsLAEEAQQE6ALiCEAtEAgF/AX4jAEEQayICJAAgAkEIahAJIAIpAwgiA6cgACABQQEgAUEBSxtoQQAgA0IgiKcoAgARAQAhASACQRBqJAAgAQueAQMBfwF+AX8jAEEQayIBJAACQEEALQDIghANAEEAKQOIghAiAqdBgIAEQQBBACACQiCIpygCABEBACEDQQBBAToA5IIQQQBBgIAENgLgghBBACADNgLcghBBACACNwPQghBBAEEBOgDIghBBAEGQghA2AsSCEEEAQdCCEDYCwIIQQQBBADYC2IIQCyAAQQApA8CCEDcCACABQRBqJAALMgEBfwJAIABBCGogASACIAAQCyIEDQAgACgCACABIAIgAyAAKAIEKAIAEQEAIQQLIAQLnQEBB38jAEEQayIEJAAgBCACQR9xIgU6AAsgACgCBCEGIAAoAgAhB0EAIQhBACEJAkACQAJAIAVFDQAgBEEBIAJ0IgkgBiAHaiICakF/aiIKIAJJIgU6AAwgBQ0BIApBACAJa3EgAmshCQsgCSAHaiICIAFqIgcgACgCCEsNASAAIAc2AgAgBiACaiEIDAELQQAhCAsgBEEQaiQAIAgLTAEBfwJAIAAoAgwiBiABSw0AIAAoAhAgBmogAU0NACAAQQhqIAEgAiAAIAQgABANDwsgACgCACABIAIgAyAEIAUgACgCBCgCBBECAAtlAQF/AkACQCABIAJqIAAoAgQgACgCACIBakYNACAEIAJNIQIMAQsgBCACayEGAkAgBCACSw0AIAAgBiABajYCAEEBDwtBACECIAEgBmoiBCAAKAIISw0AIAAgBDYCAEEBDwsgAgtMAQF/AkAgACgCDCIGIAFLDQAgACgCECAGaiABTQ0AIABBCGogASACIAAgBCAAEA8PCyAAKAIAIAEgAiADIAQgBSAAKAIEKAIIEQIACxgAIAFBACAAIAEgAiABIAQgARANQQFxGwtYAQF/AkACQCAAKAIMIgUgAUsNACAAKAIQ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");
+  const binaryString = atob("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");
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);
@@ -4206,7 +5205,7 @@ const source = (async () => {
   await new Promise(r => setTimeout(r, 0));
   return bytes.buffer;
 })();
-env.loadModule(source, {"memoryInitial":5,"tableInitial":12,"multithreaded":false});
+env.loadModule(source, {"delay":false,"memoryInitial":5,"tableInitial":12,"multithreaded":false});
 env.linkVariables(false);
 
 // export root namespace and its methods and constants
