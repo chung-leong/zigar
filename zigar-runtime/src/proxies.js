@@ -27,16 +27,14 @@ export function getProxy(target, type) {
 
 export function getProxyType(structure, readOnly = false) {
   const { type, flags } = structure;
-  let proxyType = (readOnly) ? ProxyType.ReadOnly : 0;
+  // functions don't mean to be made read-only
+  let proxyType = (readOnly && type !== StructureType.Function) ? ProxyType.ReadOnly : 0;
   if (flags & StructureFlag.HasProxy) {
     if (type === StructureType.Pointer) {
       proxyType |= ProxyType.Pointer;
       if (flags & PointerFlag.IsConst) {
         proxyType |= ProxyType.Const;
       }
-    } else if (type === StructureType.Function) {
-      // functions don't mean to be made read-only
-      proxyType = 0;
     } else {
       proxyType |= ProxyType.Slice;
     }
@@ -74,11 +72,6 @@ export function getReadOnlyProxy(object) {
     proxyType = object.constructor[PROXY_TYPE] ?? ProxyType.ReadOnly;
   }
   return getProxy(object, proxyType);
-}
-
-export function addConstTarget(object) {
-  // pretend a read-only object is a proxy to itself
-  return proxyTargetMap.set(object, { target: object, type: ProxyType.Const });
 }
 
 const pointerHandlers = {
@@ -149,7 +142,7 @@ const constPointerHandlers = {
   ...pointerHandlers,
   get(pointer, name) {
     if (name in pointer) {
-      return pointer[name];
+      return readOnlyHandlers.get(pointer, name);
     } else {
       return readOnlyHandlers.get(pointer[TARGET], name);
     }

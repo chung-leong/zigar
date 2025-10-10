@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 
 import { MemberType, PosixDescriptor, PosixDescriptorFlag } from '../src/constants.js';
-import { LENGTH, MEMORY, RESTORE } from '../src/symbols.js';
+import { FALLBACK, LENGTH, MEMORY, RESTORE } from '../src/symbols.js';
 import {
   adjustAddress,
   alignForward,
@@ -434,6 +434,18 @@ describe('Utility functions', function() {
       copyView(dst, src);
       expect(dst.getUint32(4, true)).to.equal(1234);
     })
+    if (process.env.TARGET === 'node') {
+      it('should invoke fallback handlers', function() {
+        const dst = createView(32);
+        const src = createView(32);
+        let called1 = false, called2 = false;
+        dst[FALLBACK] = () => called1 = true;
+        src[FALLBACK] = () => called2 = true;
+        copyView(dst, src);
+        expect(called1).to.be.true;
+        expect(called2).to.be.true;
+      })
+    }
   })
   describe('clearView', function() {
     it('should clear bytes of view', function() {
@@ -445,6 +457,14 @@ describe('Utility functions', function() {
       clearView(dv, 8, 8);
       expect(dv.getUint32(4, true)).to.equal(1234);
     })
+    if (process.env.TARGET === 'node') {
+      it('should invoke fallback handlers', function() {
+        const dv = createView(32);
+        let called = false;
+        dv[FALLBACK] = () => called = true;
+        clearView(dv);
+      })
+    }
   })
   describe('copyObject', function() {
     it('should copy content of object to another', function() {

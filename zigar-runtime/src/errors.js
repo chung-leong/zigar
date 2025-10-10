@@ -553,7 +553,6 @@ export function replaceRangeError(member, index, err) {
 }
 
 export function throwReadOnly() {
-  debugger;
   throw new ReadOnly();
 }
 
