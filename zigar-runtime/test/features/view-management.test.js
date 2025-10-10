@@ -235,6 +235,13 @@ describe('Feature: view-management', function() {
       const dv2 = env.obtainView(buffer, 4, 8);
       expect(dv2).to.equal(dv1);
     })
+    it('should obtain the different view objects when cache = false', function() {
+      const env = new Env();
+      const buffer = new ArrayBuffer(48);
+      const dv1 = env.obtainView(buffer, 4, 8, false);
+      const dv2 = env.obtainView(buffer, 4, 8, false);
+      expect(dv2).to.not.equal(dv1);
+    })
     it('should be able to keep track of multiple views', function() {
       const env = new Env();
       const buffer = new ArrayBuffer(48);
@@ -247,6 +254,40 @@ describe('Feature: view-management', function() {
       const dv4 = env.obtainView(buffer, 4, 8);
       expect(dv4).to.equal(dv1);
     })
+    if (process.env.TARGET === 'node') {
+      it('should attach fallback handler when buffer requires it', function() {
+        const env = new Env();
+        let called = false;
+        env.moveExternBytes = function(jsDV, address, to) {
+          expect(to).to.be.false;
+          called = true;
+          for (let i = 0; i < jsDV.byteLength; i++) {
+            jsDV.setUint8(i, 0xAA);
+          }
+        };
+        const address = usize(0x1000);
+        const len = 32;
+        const buffer = new ArrayBuffer(len);
+        buffer[ZIG] = { address, len };
+        buffer[FALLBACK] = address;
+        const dv = env.obtainView(buffer, 0, 16);
+        expect(dv[FALLBACK]).to.be.a('function');
+        for (let i = 0; i < dv.byteLength; i++) {
+            dv.setUint8(i, 0xBB);
+        }
+        dv[FALLBACK](false);
+        expect(called).to.be.true;
+        expect(dv.getUint8(0)).to.equal(0xAA);
+        dv.setUint8(0, 7);
+        dv.setUint8(4, 13);
+        dv.setUint8(5, 17);
+        dv[FALLBACK](false, 1, 4);
+        expect(dv.getUint8(0)).to.equal(7);
+        expect(dv.getUint8(5)).to.equal(17);
+        expect(dv.getUint8(4)).to.equal(0xAA);
+      })     
+    }
+
   })
   describe('registerView', function() {
     it('should register views with their underlying buffer', function() {

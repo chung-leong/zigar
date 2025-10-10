@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { defineEnvironment } from '../../src/environment.js';
 import { MemoryType } from '../../src/features/memory-mapping.js';
 import '../../src/mixins.js';
-import { ALIGN, MEMORY, ZIG } from '../../src/symbols.js';
+import { ALIGN, FALLBACK, MEMORY, ZIG } from '../../src/symbols.js';
 import { adjustAddress, usize } from '../../src/utils.js';
 import { addressSize } from '../test-utils.js';
 
@@ -242,12 +242,25 @@ describe('Feature: memory-mapping', function() {
       const env = new Env();
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = function (address, len) {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+        env.moveExternBytes = function(jsDV, address, to) {
+          const len = jsDV.byteLength;
+          const zigDV = this.obtainZigView(address, len);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        };
       }
-      env.obtainZigView = function(address, len) {
-        const dv = new DataView(new ArrayBuffer(len));
-        dv[ZIG] = { address, len };
-        return dv;
-      };
       const dv = env.obtainZigView(usize(0x1000), 16);
       expect(dv.byteLength).to.equal(16);
       expect(dv[ZIG]).to.be.an('object')
@@ -256,12 +269,25 @@ describe('Feature: memory-mapping', function() {
       const env = new Env();
       if (process.env.TARGET === 'wasm') {
         env.memory = new WebAssembly.Memory({ initial: 1 });
+      } else {
+        const map = new Map();
+        env.obtainExternBuffer = function (address, len) {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+        env.moveExternBytes = function(jsDV, address, to) {
+          const len = jsDV.byteLength;
+          const zigDV = this.obtainZigView(address, len);
+          if (!(jsDV instanceof DataView)) {
+            jsDV = new DataView(jsDV.buffer, jsDV.byteOffset, jsDV.byteLength);
+          }
+          copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
+        };
       }
-      env.obtainZigView = function(address, len) {
-        const dv = new DataView(new ArrayBuffer(len));
-        dv[ZIG] = { address, len };
-        return dv;
-      };
       const dv1 = env.obtainZigView(usize(0x1000), 0);
       const dv2 = env.obtainZigView(usize(0x2000), 0);
       expect(dv1.byteLength).to.equal(0);
@@ -296,6 +322,25 @@ describe('Feature: memory-mapping', function() {
       const dv = env.obtainZigView(address, 5);
       expect(dv).to.be.null;
     })
+    if (process.env.TARGET === 'node') {
+      it('should invoke fallback handler', function() {
+        const env = new Env();
+        env.obtainExternBuffer = function (address, len, FALLBACK) {
+          const buffer = new ArrayBuffer(len);
+          buffer[FALLBACK] = address;
+          expect(FALLBACK).to.be.a('symbol');
+          return buffer;
+        };
+        let called = false;
+        env.moveExternBytes = function(jsDV, address, to) {
+          expect(to).to.be.false;
+          called = true;
+        };
+        const dv = env.obtainZigView(usize(0x1000), 16);
+        expect(dv[FALLBACK]).to.be.a('function');
+        expect(called).to.be.true;
+      })     
+    }
   })
   describe('releaseZigView', function() {
     it('should invoke set address to invalid value', function() {
@@ -503,24 +548,6 @@ describe('Feature: memory-mapping', function() {
           return 0;
         };
         expect(() => env.allocateShadowMemory(16, 4)).to.throw();
-      })
-    })
-    describe('obtainZigView', function() {
-      it('should return a view to WASM memory', function() {
-        const env = new Env();
-        const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-        const dv = env.obtainZigView(128, 16);
-        expect(dv.buffer).to.equal(memory.buffer);
-        expect(dv.byteLength).to.equal(16);
-        expect(dv.byteOffset).to.equal(128);
-      })
-      it('should handle reference to zero-length slice', function() {
-        const env = new Env();
-        const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
-        const dv = env.obtainZigView(0, 0);
-        expect(dv.buffer).to.equal(memory.buffer);
-        expect(dv.byteLength).to.equal(0);
-        expect(dv.byteOffset).to.equal(0);
       })
     })
     describe('getBufferAddress', function() {

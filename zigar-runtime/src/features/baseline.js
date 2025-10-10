@@ -88,26 +88,20 @@ export default mixin({
           const { array, offset, length } = memory;
           const dv = this.obtainView(getBuffer(array), offset, length);
           const { handle } = placeholder;
-          let object;
-          if (structure) {
-            const { constructor } = structure;
-            object = constructor.call(ENVIRONMENT, dv);
-            if (slots) {
-              insertObjects(object[SLOTS], slots);
-            }
-            if (handle) {
-              // need to replace dataview with one pointing to Zig memory later,
-              // when the VM is up and running
-              this.variables.push({ handle, object });
-            } else if (offset === undefined) {
-              // save the object for later, since it constructor isn't isn't finalized yet
-              // when offset is not undefined, the object is a child of another object and 
-              // will be made read-only thru the parent (which might have a linkage handle)
-              readOnlyObjects.push(object);
-            }
-          } else {
-            // console.log({ dv, placeholder });
-            object = { [MEMORY]: dv };
+          const { constructor } = structure;
+          const object = constructor.call(ENVIRONMENT, dv);
+          if (slots) {
+            insertObjects(object[SLOTS], slots);
+          }
+          if (handle) {
+            // need to replace dataview with one pointing to Zig memory later,
+            // when the VM is up and running
+            this.variables.push({ handle, object });
+          } else if (offset === undefined) {
+            // save the object for later, since it constructor isn't isn't finalized yet
+            // when offset is not undefined, the object is a child of another object and 
+            // will be made read-only thru the parent (which might have a linkage handle)
+            readOnlyObjects.push(object);
           }
           placeholder.actual = object;
           return object;

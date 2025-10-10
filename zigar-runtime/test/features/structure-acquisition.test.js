@@ -6,8 +6,8 @@ import {
 } from '../../src/constants.js';
 import { defineEnvironment } from '../../src/environment.js';
 import '../../src/mixins.js';
-import { ENVIRONMENT, MEMORY, SENTINEL, SLOTS, ZIG } from '../../src/symbols.js';
-import { usize } from '../../src/utils.js';
+import { ENVIRONMENT, MEMORY, READ_ONLY, SENTINEL, SLOTS, ZIG } from '../../src/symbols.js';
+import { createView, usize } from '../../src/utils.js';
 import { addressByteSize, addressSize } from '../test-utils.js';
 
 const Env = defineEnvironment();
@@ -415,6 +415,40 @@ describe('Feature: structure-acquisition', function() {
       ];
       env.prepareObjectsForExport();
       expect(object[MEMORY].handle).to.equal(1016);
+    })
+    it('should make constant objects read-only', function() {
+      const env = new Env();
+      env.exportedModules = { env: {}, wasi: {}, wasi_snapshot_preview1: {} };
+      class Object {
+        get hello() { 
+          return this[MEMORY].getUint8(0); 
+        }
+
+        set hello(value) { 
+          this[MEMORY].setUint8(0, value);
+        }
+
+        constructor() {
+          this[MEMORY] = createView(4);
+        }
+      }
+      const object = new Object();
+      const templ = {
+        [MEMORY]: createView(32),
+        [SLOTS]: {
+          0: object,
+        },
+      };
+      env.structures = [
+        {
+          instance: {},
+          static: { template: templ },
+        },
+      ];
+      env.prepareObjectsForExport();
+      expect(object.hello).to.equal(0);
+      expect(object[READ_ONLY]).to.be.true;
+      expect(() => object.hello = 456).to.throw();
     })
   })
   describe('useStructures', function() {
