@@ -231,7 +231,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .pointer => |pt| .{
                     .has_length = pt.size == .slice,
                     .has_proxy = switch (@typeInfo(pt.child)) {
-                        .pointer, .@"fn" => false,
+                        .pointer => pt.size != .one, // .one pointer doesn't need a proxy
+                        .@"fn" => false,
                         else => true,
                     },
                     .is_const = pt.is_const,
