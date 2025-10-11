@@ -47,7 +47,7 @@ var pollOneoff = mixin({
                 onResult(pollResult);
               }
             } catch (err) {
-              if (err.code === PosixError.ENOTSUP) {
+              if (err.errno === PosixError.ENOTSUP) {
                 throw err;
               }
               onError(err);

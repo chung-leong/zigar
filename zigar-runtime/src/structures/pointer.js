@@ -294,10 +294,9 @@ export default mixin({
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = (targetType === StructureType.Function) && {
       value() {
-        // use a function object to represent the pointer so that apply() on the proxy gets called
         const self = (...args) => {
-          const f = this['*'];
-          return f.call(this, ...args);
+          const f = self['*'];
+          return f(...args);
         };
         self[MEMORY] = this[MEMORY];
         self[SLOTS] = this[SLOTS];

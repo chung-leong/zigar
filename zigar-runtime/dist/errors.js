@@ -15,7 +15,7 @@ class InvalidIntConversion extends SyntaxError {
 }
 
 class Unsupported extends TypeError {
-  code = PosixError.ENOTSUP;
+  errno = PosixError.ENOTSUP;
 
   constructor() {
     super(`Unsupported`);
@@ -171,7 +171,7 @@ class InvalidArrayInitializer extends InvalidInitializer {
 }
 
 class InvalidEnumValue extends TypeError {
-  code = PosixError.EINVAL;
+  errno = PosixError.EINVAL;
 
   constructor(set, arg) {
     const keys = Object.keys(set);
@@ -433,7 +433,7 @@ class UnexpectedGenerator extends TypeError {
 }
 
 class InvalidFileDescriptor extends Error {
-  code = PosixError.EBADF;
+  errno = PosixError.EBADF;
 
   constructor() {
     super(`Invalid file descriptor`);
@@ -441,7 +441,7 @@ class InvalidFileDescriptor extends Error {
 }
 
 class InvalidPath extends Error {
-  code = PosixError.ENOENT;
+  errno = PosixError.ENOENT;
 
   constructor(path) {
     super(`Invalid relative path '${path}'`);
@@ -449,7 +449,7 @@ class InvalidPath extends Error {
 }
 
 class MissingStreamMethod extends Error {
-  code = PosixError.EPERM;
+  errno = PosixError.EPERM;
 
   constructor(name) {
     super(`Missing stream method '${name}'`);
@@ -457,7 +457,7 @@ class MissingStreamMethod extends Error {
 }
 
 class InvalidArgument extends Error {
-  code = PosixError.EINVAL;
+  errno = PosixError.EINVAL;
 
   constructor() {
     super(`Invalid argument`);
@@ -465,7 +465,7 @@ class InvalidArgument extends Error {
 }
 
 class IllegalSeek extends Error {
-  code = PosixError.ESPIPE;
+  errno = PosixError.ESPIPE;
 
   constructor() {
     super(`Illegal seek`);
@@ -473,7 +473,7 @@ class IllegalSeek extends Error {
 }
 
 class WouldBlock extends Error {
-  code = PosixError.EAGAIN;
+  errno = PosixError.EAGAIN;
 
   constructor() {
     super(`Would block`);
@@ -481,7 +481,7 @@ class WouldBlock extends Error {
 }
 
 class TooManyFiles extends Error {
-  code = PosixError.EMFILE;
+  errno = PosixError.EMFILE;
 
   constructor() {
     super(`Too many open files`);
@@ -489,7 +489,7 @@ class TooManyFiles extends Error {
 }
 
 class Deadlock extends Error {
-  code = PosixError.EDEADLK;
+  errno = PosixError.EDEADLK;
 
   constructor() {
     super(`Unable to await promise`);
@@ -497,9 +497,9 @@ class Deadlock extends Error {
 }
 
 class MissingEventListener extends Error {
-  constructor(name, code) {
+  constructor(name, errno) {
     super(`Missing event listener: ${name}`);
-    this.code = code;
+    this.errno = errno;
   }
 }
 
@@ -553,7 +553,6 @@ function replaceRangeError(member, index, err) {
 }
 
 function throwReadOnly() {
-  debugger;
   throw new ReadOnly();
 }
 
@@ -592,17 +591,17 @@ function deanimalizeErrorName(name) {
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
 }
 
-function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
+function catchPosixError(canWait = false, defErrorNo, run, resolve, reject) {
   const fail = (err) => {
     let result;
     if (reject) {
       result = reject(err);
     } else {
-      if (err.code !== PosixError.EAGAIN && err.code !== PosixError.ENOTSUP) {
+      if (err.errno !== PosixError.EAGAIN && err.errno !== PosixError.ENOTSUP) {
         console.error(err);
       }
     }
-    return result ?? err.code ?? defErrorCode;
+    return result ?? err.errno ?? defErrorNo;
   };
   const done = (value) => {
     const result = resolve?.(value);

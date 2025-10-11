@@ -2,7 +2,7 @@ import { PointerFlag, StructureType, MemberType, PrimitiveFlag, SliceFlag, Struc
 import { mixin } from '../environment.js';
 import { NoCastingToPointer, throwReadOnly, ConstantConstraint, ReadOnlyTarget, InvalidPointerTarget, PreviouslyFreed, NullPointer, InvalidSliceLength, ZigMemoryTargetRequired } from '../errors.js';
 import { getProxyType, getProxyTarget, getProxy } from '../proxies.js';
-import { CAST, ENVIRONMENT, PARENT, LAST_LENGTH, SLOTS, MEMORY, TYPE, TARGET, RESTORE, SETTERS, TYPED_ARRAY, ZIG, INITIALIZE, FINALIZE, PROXY, PROXY_TYPE, UPDATE, ADDRESS, LENGTH, VISIT, LAST_ADDRESS, MAX_LENGTH, SENTINEL, SIZE } from '../symbols.js';
+import { CAST, ENVIRONMENT, PARENT, LAST_LENGTH, SLOTS, MEMORY, TYPE, TARGET, RESTORE, READ_ONLY, SETTERS, TYPED_ARRAY, ZIG, INITIALIZE, FINALIZE, PROXY, PROXY_TYPE, UPDATE, ADDRESS, LENGTH, VISIT, LAST_ADDRESS, MAX_LENGTH, SENTINEL, SIZE } from '../symbols.js';
 import { defineValue, isCompatibleInstanceOf, usizeInvalid, getSelf, isCompatibleType, findElements } from '../utils.js';
 
 var pointer = mixin({
@@ -169,7 +169,7 @@ var pointer = mixin({
       setLength?.call?.(this, len);
     };
     const thisEnv = this;
-    const initializer = this.createInitializer(function(arg, allocator, proxyType) {
+    const initializer = this.createInitializer(function(arg, allocator, targetProxyType) {
       const Target = targetStructure.constructor;
       if (isPointerOf(arg, Target)) {
         if (!(flags & PointerFlag.IsConst) && arg.constructor.const) {
@@ -200,7 +200,7 @@ var pointer = mixin({
           arg[RESTORE]();
         }
         // if the target is read-only, then only a const pointer can point to it
-        if (proxyType === ProxyType.Const) {
+        if (targetProxyType === ProxyType.ReadOnly || arg[READ_ONLY]) {
           if (!(flags & PointerFlag.IsConst)) {
             throw new ReadOnlyTarget(structure);
           }
@@ -284,8 +284,8 @@ var pointer = mixin({
     descriptors[FINALIZE] = (targetType === StructureType.Function) && {
       value() {
         const self = (...args) => {
-          const f = this['*'];
-          return f.call(this, ...args);
+          const f = self['*'];
+          return f(...args);
         };
         self[MEMORY] = this[MEMORY];
         self[SLOTS] = this[SLOTS];
@@ -293,7 +293,7 @@ var pointer = mixin({
         return self;
       }
     };
-    descriptors[PROXY] = (targetType !== StructureType.Function && targetType !== StructureType.Pointer) && {
+    descriptors[PROXY] = (proxyType) && {
       value() {
         return getProxy(this, proxyType);
       },

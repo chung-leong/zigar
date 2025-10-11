@@ -2700,7 +2700,7 @@ class InvalidIntConversion extends SyntaxError {
 }
 
 class Unsupported extends TypeError {
-  code = PosixError.ENOTSUP;
+  errno = PosixError.ENOTSUP;
 
   constructor() {
     super(`Unsupported`);
@@ -2849,7 +2849,7 @@ class InvalidArrayInitializer extends InvalidInitializer {
 }
 
 class InvalidEnumValue extends TypeError {
-  code = PosixError.EINVAL;
+  errno = PosixError.EINVAL;
 
   constructor(set, arg) {
     const keys = Object.keys(set);
@@ -3104,7 +3104,7 @@ class UnexpectedGenerator extends TypeError {
 }
 
 class InvalidFileDescriptor extends Error {
-  code = PosixError.EBADF;
+  errno = PosixError.EBADF;
 
   constructor() {
     super(`Invalid file descriptor`);
@@ -3112,7 +3112,7 @@ class InvalidFileDescriptor extends Error {
 }
 
 class InvalidPath extends Error {
-  code = PosixError.ENOENT;
+  errno = PosixError.ENOENT;
 
   constructor(path) {
     super(`Invalid relative path '${path}'`);
@@ -3120,7 +3120,7 @@ class InvalidPath extends Error {
 }
 
 class MissingStreamMethod extends Error {
-  code = PosixError.EPERM;
+  errno = PosixError.EPERM;
 
   constructor(name) {
     super(`Missing stream method '${name}'`);
@@ -3128,7 +3128,7 @@ class MissingStreamMethod extends Error {
 }
 
 class InvalidArgument extends Error {
-  code = PosixError.EINVAL;
+  errno = PosixError.EINVAL;
 
   constructor() {
     super(`Invalid argument`);
@@ -3136,7 +3136,7 @@ class InvalidArgument extends Error {
 }
 
 class WouldBlock extends Error {
-  code = PosixError.EAGAIN;
+  errno = PosixError.EAGAIN;
 
   constructor() {
     super(`Would block`);
@@ -3144,7 +3144,7 @@ class WouldBlock extends Error {
 }
 
 class TooManyFiles extends Error {
-  code = PosixError.EMFILE;
+  errno = PosixError.EMFILE;
 
   constructor() {
     super(`Too many open files`);
@@ -3152,7 +3152,7 @@ class TooManyFiles extends Error {
 }
 
 class Deadlock extends Error {
-  code = PosixError.EDEADLK;
+  errno = PosixError.EDEADLK;
 
   constructor() {
     super(`Unable to await promise`);
@@ -3202,7 +3202,6 @@ function adjustStack(stack, search) {
 }
 
 function throwReadOnly() {
-  debugger;
   throw new ReadOnly();
 }
 
@@ -3241,17 +3240,17 @@ function deanimalizeErrorName(name) {
   return s.charAt(0).toLocaleUpperCase() + s.substring(1);
 }
 
-function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
+function catchPosixError(canWait = false, defErrorNo, run, resolve, reject) {
   const fail = (err) => {
     let result;
     if (reject) {
       result = reject(err);
     } else {
-      if (err.code !== PosixError.EAGAIN && err.code !== PosixError.ENOTSUP) {
+      if (err.errno !== PosixError.EAGAIN && err.errno !== PosixError.ENOTSUP) {
         console.error(err);
       }
     }
-    return result ?? err.code ?? defErrorCode;
+    return result ?? err.errno ?? defErrorNo;
   };
   const done = (value) => {
     const result = resolve?.(value);
@@ -3491,26 +3490,20 @@ var baseline = mixin({
           const { array, offset, length } = memory;
           const dv = this.obtainView(getBuffer(array), offset, length);
           const { handle } = placeholder;
-          let object;
-          if (structure) {
-            const { constructor } = structure;
-            object = constructor.call(ENVIRONMENT, dv);
-            if (slots) {
-              insertObjects(object[SLOTS], slots);
-            }
-            if (handle) {
-              // need to replace dataview with one pointing to Zig memory later,
-              // when the VM is up and running
-              this.variables.push({ handle, object });
-            } else if (offset === undefined) {
-              // save the object for later, since it constructor isn't isn't finalized yet
-              // when offset is not undefined, the object is a child of another object and 
-              // will be made read-only thru the parent (which might have a linkage handle)
-              readOnlyObjects.push(object);
-            }
-          } else {
-            // console.log({ dv, placeholder });
-            object = { [MEMORY]: dv };
+          const { constructor } = structure;
+          const object = constructor.call(ENVIRONMENT, dv);
+          if (slots) {
+            insertObjects(object[SLOTS], slots);
+          }
+          if (handle) {
+            // need to replace dataview with one pointing to Zig memory later,
+            // when the VM is up and running
+            this.variables.push({ handle, object });
+          } else if (offset === undefined) {
+            // save the object for later, since it constructor isn't isn't finalized yet
+            // when offset is not undefined, the object is a child of another object and 
+            // will be made read-only thru the parent (which might have a linkage handle)
+            readOnlyObjects.push(object);
           }
           placeholder.actual = object;
           return object;
@@ -6621,7 +6614,7 @@ var pollOneoff = mixin({
                 onResult(pollResult);
               }
             } catch (err) {
-              if (err.code === PosixError.ENOTSUP) {
+              if (err.errno === PosixError.ENOTSUP) {
                 throw err;
               }
               onError(err);
@@ -7525,15 +7518,14 @@ function getProxy(target, type) {
 
 function getProxyType(structure, readOnly = false) {
   const { type, flags } = structure;
-  let proxyType = (readOnly) ? ProxyType.ReadOnly : 0;
+  // functions don't mean to be made read-only
+  let proxyType = (readOnly && type !== StructureType.Function) ? ProxyType.ReadOnly : 0;
   if (flags & StructureFlag.HasProxy) {
     if (type === StructureType.Pointer) {
       proxyType |= ProxyType.Pointer;
       if (flags & PointerFlag.IsConst) {
         proxyType |= ProxyType.Const;
       }
-    } else if (type === StructureType.Function) {
-      proxyType = 0;
     } else {
       proxyType |= ProxyType.Slice;
     }
@@ -7629,7 +7621,8 @@ const readOnlyPointerHandlers = {
 
 const readOnlyHandlers = {
   get(target, name) {
-    return getReadOnlyProxy(target[name]);
+    const value = target[name];
+    return (typeof(name) === 'string') ? getReadOnlyProxy(value) : value;
   },
   set(target, name, value) {
     throwReadOnly();
@@ -7640,7 +7633,7 @@ const constPointerHandlers = {
   ...pointerHandlers,
   get(pointer, name) {
     if (name in pointer) {
-      return pointer[name];
+      return readOnlyHandlers.get(pointer, name);
     } else {
       return readOnlyHandlers.get(pointer[TARGET], name);
     }
@@ -9773,7 +9766,7 @@ var pointer = mixin({
       setLength?.call?.(this, len);
     };
     const thisEnv = this;
-    const initializer = this.createInitializer(function(arg, allocator, proxyType) {
+    const initializer = this.createInitializer(function(arg, allocator, targetProxyType) {
       const Target = targetStructure.constructor;
       if (isPointerOf(arg, Target)) {
         if (!(flags & PointerFlag.IsConst) && arg.constructor.const) {
@@ -9804,7 +9797,7 @@ var pointer = mixin({
           arg[RESTORE]();
         }
         // if the target is read-only, then only a const pointer can point to it
-        if (proxyType === ProxyType.Const) {
+        if (targetProxyType === ProxyType.ReadOnly || arg[READ_ONLY]) {
           if (!(flags & PointerFlag.IsConst)) {
             throw new ReadOnlyTarget(structure);
           }
@@ -9888,8 +9881,8 @@ var pointer = mixin({
     descriptors[FINALIZE] = (targetType === StructureType.Function) && {
       value() {
         const self = (...args) => {
-          const f = this['*'];
-          return f.call(this, ...args);
+          const f = self['*'];
+          return f(...args);
         };
         self[MEMORY] = this[MEMORY];
         self[SLOTS] = this[SLOTS];
@@ -9897,7 +9890,7 @@ var pointer = mixin({
         return self;
       }
     };
-    descriptors[PROXY] = (targetType !== StructureType.Function && targetType !== StructureType.Pointer) && {
+    descriptors[PROXY] = (proxyType) && {
       value() {
         return getProxy(this, proxyType);
       },

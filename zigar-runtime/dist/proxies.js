@@ -1,4 +1,4 @@
-import { ProxyType, StructureFlag, StructureType, PointerFlag } from './constants.js';
+import { ProxyType, StructureType, StructureFlag, PointerFlag } from './constants.js';
 import { throwReadOnly } from './errors.js';
 import { READ_ONLY, PROXY_TYPE, TARGET } from './symbols.js';
 
@@ -27,15 +27,14 @@ function getProxy(target, type) {
 
 function getProxyType(structure, readOnly = false) {
   const { type, flags } = structure;
-  let proxyType = (readOnly) ? ProxyType.ReadOnly : 0;
+  // functions don't mean to be made read-only
+  let proxyType = (readOnly && type !== StructureType.Function) ? ProxyType.ReadOnly : 0;
   if (flags & StructureFlag.HasProxy) {
     if (type === StructureType.Pointer) {
       proxyType |= ProxyType.Pointer;
       if (flags & PointerFlag.IsConst) {
         proxyType |= ProxyType.Const;
       }
-    } else if (type === StructureType.Function) {
-      proxyType = 0;
     } else {
       proxyType |= ProxyType.Slice;
     }
@@ -73,11 +72,6 @@ function getReadOnlyProxy(object) {
     proxyType = object.constructor[PROXY_TYPE] ?? ProxyType.ReadOnly;
   }
   return getProxy(object, proxyType);
-}
-
-function addConstTarget(object) {
-  // pretend a read-only object is a proxy to itself
-  return proxyTargetMap.set(object, { target: object, type: ProxyType.Const });
 }
 
 const pointerHandlers = {
@@ -136,7 +130,8 @@ const readOnlyPointerHandlers = {
 
 const readOnlyHandlers = {
   get(target, name) {
-    return getReadOnlyProxy(target[name]);
+    const value = target[name];
+    return (typeof(name) === 'string') ? getReadOnlyProxy(value) : value;
   },
   set(target, name, value) {
     throwReadOnly();
@@ -147,7 +142,7 @@ const constPointerHandlers = {
   ...pointerHandlers,
   get(pointer, name) {
     if (name in pointer) {
-      return pointer[name];
+      return readOnlyHandlers.get(pointer, name);
     } else {
       return readOnlyHandlers.get(pointer[TARGET], name);
     }
@@ -247,4 +242,4 @@ const handlersHash = {
   [ProxyType.ReadOnly]: readOnlyHandlers,
 };
 
-export { addConstTarget, getProxy, getProxyTarget, getProxyType, getReadOnlyProxy, removeProxy };
+export { getProxy, getProxyTarget, getProxyType, getReadOnlyProxy, removeProxy };
