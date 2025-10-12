@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const zigar = @import("zigar");
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -12,13 +13,20 @@ pub fn startup(n_jobs: u32) !void {
     });
 }
 
+var count: usize = 0;
+
 pub fn spawn(cb: *const fn () void) !void {
     const ns = struct {
         fn run(f: *const fn () void) void {
             f();
+            count += 1;
         }
     };
     try pool.spawn(ns.run, .{cb});
+}
+
+pub fn getCount() usize {
+    return count;
 }
 
 pub fn shutdown() void {

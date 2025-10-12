@@ -43,6 +43,7 @@ export function addTests(importModule, options) {
     })
     it('should create thread pool and invoke callback', async function() {
       const {
+        getCount,
         startup,
         spawn,
         shutdown,
@@ -55,7 +56,10 @@ export function addTests(importModule, options) {
             count++
           });
         }
-        await delay(200);
+        for (let i = 0; i < 20; i++) {
+          if (getCount() == 10) break;
+          await delay(25);
+        }
         expect(count).to.equal(10);
       } finally {
         shutdown();
