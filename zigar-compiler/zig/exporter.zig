@@ -976,6 +976,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         }
                     }
                 } else if (f.return_type) |RT| canBeTypedArray(RT) else false,
+                .int, .float => false,
                 else => getTypedArrayBits(T) != null,
             };
         }
