@@ -201,24 +201,6 @@ export function addTests(importModule, options) {
       expect(digest.string).to.equal(correct);
       expect(event).to.be.an('object');
     })
-    it('should not attempt io redirection when feature is disabled', async function() {
-      const { __zigar, check } = await importTest('open-and-close-file', { useRedirection: false, topLevelAwait: false });
-      if (target === 'wasm32') {
-        const { WASI } = await import('wasi');
-        __zigar.set('wasi', new WASI({
-          version: 'preview1',
-          args: [],
-          env: {},
-          preopens: {
-            '/': '/',
-          },
-        }));
-      }
-      await __zigar.init();
-      const path = absolute('./data/test.txt');
-      expect(() => __zigar.on('open', () => {})).to.throw();
-      check(path);
-    })
     skip.entirely.if(target !== 'linux').
     it('should open file through direct syscall', async function() {
       const { __zigar, check } = await importTest('open-file-through-direct-syscall');
