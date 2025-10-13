@@ -6,24 +6,27 @@ import { bindSlot } from './all.js';
 
 var object = mixin({
   defineMemberObject(member) {
+    const { flags, structure, slot } = member;
     let get, set;
-    if (member.flags & MemberFlag.IsString) {
+    if (flags & MemberFlag.IsString) {
       get = getString;
-    } else if (member.flags & MemberFlag.IsTypedArray) {
+    } else if (flags & MemberFlag.IsTypedArray) {
       get = getTypedArray;
-    } else if (member.flags & MemberFlag.IsPlain) {
+    } else if (flags & MemberFlag.IsClampedArray) {
+      get = getClampedArray;
+    } else if (flags & MemberFlag.IsPlain) {
       get = getPlain;
-    } else if (member.structure.flags & (StructureFlag.HasValue | StructureFlag.HasProxy)) {
+    } else if (structure.flags & (StructureFlag.HasValue | StructureFlag.HasProxy)) {
       get = getValue;
     } else {
       get = getObject;
     }
-    if (member.flags & MemberFlag.IsReadOnly) {
+    if (flags & MemberFlag.IsReadOnly) {
       set = throwReadOnly;
     } else {
       set = setValue;
     }
-    return bindSlot(member.slot, { get, set });
+    return bindSlot(slot, { get, set });
   }
 });
 
@@ -37,6 +40,10 @@ function getString(slot) {
 
 function getTypedArray(slot) {
   return getValue.call(this, slot)?.typedArray ?? null;
+}
+
+function getClampedArray(slot) {
+  return getValue.call(this, slot)?.clampedArray ?? null;
 }
 
 function getPlain(slot) {

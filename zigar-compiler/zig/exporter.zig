@@ -104,7 +104,6 @@ fn Factory(comptime host: type, comptime module: type) type {
             .@"fn" => StructureFlags.Function,
             else => @compileError("Unknown structure: " ++ @typeName(td.type)),
         } {
-            const type_array_bits = getTypedArrayBits(td.type);
             return switch (@typeInfo(td.type)) {
                 .bool,
                 .int,
@@ -151,8 +150,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .has_pointer = td.hasPointer(),
                         .has_sentinel = td.type.sentinel != null,
                         .is_string = td.getElementType() == u8 or td.getElementType() == u16,
-                        .is_typed_array = type_array_bits != null,
-                        .is_clamped_array = type_array_bits == 8,
+                        .is_typed_array = canBeTypedArray(td.type),
+                        .is_clamped_array = canBeClampedArray(td.type),
                         .is_opaque = td.type.is_opaque,
                     } else .{
                         .has_object = has_object,
@@ -215,8 +214,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .has_pointer = child_td.hasPointer(),
                         .has_sentinel = td.getSentinel() != null,
                         .is_string = td.getElementType() == u8 or td.getElementType() == u16,
-                        .is_typed_array = type_array_bits != null,
-                        .is_clamped_array = type_array_bits == 8,
+                        .is_typed_array = canBeTypedArray(td.type),
+                        .is_clamped_array = canBeClampedArray(td.type),
                     };
                 },
                 .vector => |ve| init: {
@@ -225,7 +224,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .has_object = child_td.isObject(),
                         .has_slot = child_td.isObject(),
                         .has_pointer = child_td.hasPointer(),
-                        .is_typed_array = type_array_bits != null,
+                        .is_typed_array = canBeTypedArray(td.type),
                     };
                 },
                 .pointer => |pt| .{
@@ -493,9 +492,11 @@ fn Factory(comptime host: type, comptime module: type) type {
                 const can_be_string = comptime (as_ptr and index > 0) and canBeString(field.type);
                 // first field is retval, hence the subtraction
                 const is_string = comptime can_be_string and meta.call("isArgumentString", .{ FT, index - 1 });
-                const can_be_typed_array = comptime (as_ptr and index > 0) and !is_string and canBeTypedArray(field.type);
+                const can_be_clamped_array = comptime (as_ptr and index > 0) and !is_string and canBeClampedArray(field.type);
+                const is_clamped_array = comptime can_be_clamped_array and meta.call("isArgumentClampedArray", .{ FT, index - 1 });
+                const can_be_typed_array = comptime (as_ptr and index > 0) and !is_string and !is_clamped_array and canBeTypedArray(field.type);
                 const is_typed_array = comptime can_be_typed_array and meta.call("isArgumentTypedArray", .{ FT, index - 1 });
-                const can_be_plain = comptime (as_ptr and index > 0) and !is_string and !is_typed_array and canBePlain(field.type);
+                const can_be_plain = comptime (as_ptr and index > 0) and !is_string and !is_typed_array and !is_clamped_array and canBePlain(field.type);
                 const is_plain = comptime can_be_plain and meta.call("isArgumentPlain", .{ FT, index - 1 });
                 try appendList(list, .{
                     .name = field.name,
@@ -505,6 +506,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .is_string = is_string,
                         .is_plain = is_plain,
                         .is_typed_array = is_typed_array,
+                        .is_clamped_array = is_clamped_array,
                     },
                     .bitOffset = @bitOffsetOf(td.type, field.name),
                     .bitSize = field_td.getBitSize(),
@@ -526,9 +528,11 @@ fn Factory(comptime host: type, comptime module: type) type {
                 // check meta function to see if field should be handled in a special manner
                 const can_be_string = comptime canBeString(field.type);
                 const is_string = comptime can_be_string and meta.call("isFieldString", .{ td.type, field_enum });
-                const can_be_typed_array = comptime !is_string and canBeTypedArray(field.type);
+                const can_be_clamped_array = comptime !is_string and canBeClampedArray(field.type);
+                const is_clamped_array = comptime can_be_clamped_array and meta.call("isFieldClampedArray", .{ td.type, field_enum });
+                const can_be_typed_array = comptime !is_string and !is_clamped_array and canBeTypedArray(field.type);
                 const is_typed_array = comptime can_be_typed_array and meta.call("isFieldTypedArray", .{ td.type, field_enum });
-                const can_be_plain = comptime !is_string and !is_typed_array and canBePlain(field.type);
+                const can_be_plain = comptime !is_string and !is_typed_array and !is_clamped_array and canBePlain(field.type);
                 const is_plain = comptime can_be_plain and meta.call("isFieldPlain", .{ td.type, field_enum });
                 const supported = comptime field_td.isSupported();
                 try appendList(list, .{
@@ -540,6 +544,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .is_string = is_string,
                         .is_plain = is_plain,
                         .is_typed_array = is_typed_array,
+                        .is_clamped_array = is_clamped_array,
                     },
                     .bitOffset = if (is_actual) @bitOffsetOf(td.type, field.name) else null,
                     .bitSize = if (is_actual) field_td.getBitSize() else null,
@@ -568,9 +573,11 @@ fn Factory(comptime host: type, comptime module: type) type {
                 const field_enum = comptime std.meta.stringToEnum(FieldEnum, field.name).?;
                 const can_be_string = comptime canBeString(field.type);
                 const is_string = comptime can_be_string and meta.call("isFieldString", .{ td.type, field_enum });
-                const can_be_typed_array = comptime !is_string and canBeTypedArray(field.type);
+                const can_be_clamped_array = comptime !is_string and canBeClampedArray(field.type);
+                const is_clamped_array = comptime can_be_clamped_array and meta.call("isFieldClampedArray", .{ td.type, field_enum });
+                const can_be_typed_array = comptime !is_string and !is_clamped_array and canBeTypedArray(field.type);
                 const is_typed_array = comptime can_be_typed_array and meta.call("isFieldTypedArray", .{ td.type, field_enum });
-                const can_be_plain = comptime !is_string and !is_typed_array and canBePlain(field.type);
+                const can_be_plain = comptime !is_string and !is_typed_array and !is_clamped_array and canBePlain(field.type);
                 const is_plain = comptime can_be_plain and meta.call("isFieldPlain", .{ td.type, field_enum });
                 const supported = comptime field_td.isSupported();
                 try appendList(list, .{
@@ -581,6 +588,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .is_string = is_string,
                         .is_plain = is_plain,
                         .is_typed_array = is_typed_array,
+                        .is_clamped_array = is_clamped_array,
                     },
                     .bitOffset = td.getContentBitOffset(),
                     .bitSize = field_td.getBitSize(),
@@ -751,9 +759,11 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 const decl_td = tdb.get(DT);
                                 const can_be_string = comptime canBeString(DT);
                                 const is_string = comptime can_be_string and meta.call("isDeclString", .{ td.type, decl_enum });
-                                const can_be_typed_array = comptime !is_string and canBeTypedArray(DT);
+                                const can_be_clamped_array = comptime !is_string and canBeClampedArray(DT);
+                                const is_clamped_array = comptime can_be_clamped_array and meta.call("isDeclClampedArray", .{ td.type, decl_enum });
+                                const can_be_typed_array = comptime !is_string and !is_clamped_array and canBeTypedArray(DT);
                                 const is_typed_array = comptime can_be_typed_array and meta.call("isDeclTypedArray", .{ td.type, decl_enum });
-                                const can_be_plain = comptime !is_string and !is_typed_array and canBePlain(DT);
+                                const can_be_plain = comptime !is_string and !is_typed_array and !is_clamped_array and canBePlain(DT);
                                 const is_plain = comptime can_be_plain and meta.call("isDeclPlain", .{ td.type, decl_enum });
                                 try appendList(list, .{
                                     .name = decl.name,
@@ -764,6 +774,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                                         .is_string = is_string,
                                         .is_plain = is_plain,
                                         .is_typed_array = is_typed_array,
+                                        .is_clamped_array = is_clamped_array,
                                     },
                                     .slot = index,
                                     .structure = try self.getStructure(DT),
@@ -900,18 +911,18 @@ fn Factory(comptime host: type, comptime module: type) type {
             }
         }
 
-        fn getTypedArrayBits(comptime T: type) ?comptime_int {
+        fn getTypedArrayType(comptime T: type) ?std.builtin.Type.Int {
             return switch (@typeInfo(T)) {
                 .int => |int| inline for (.{ 8, 16, 32, 64 }) |bits| {
-                    if (int.bits == bits) break bits;
+                    if (int.bits == bits) break .{ .bits = bits, .signedness = int.signedness };
                 } else null,
                 .float => |float| inline for (.{ 32, 64 }) |bits| {
-                    if (float.bits == bits) break bits;
+                    if (float.bits == bits) break .{ .bits = bits, .signedness = .signed };
                 } else null,
-                .array => |ar| getTypedArrayBits(ar.child),
-                .vector => |ve| getTypedArrayBits(ve.child),
+                .array => |ar| getTypedArrayType(ar.child),
+                .vector => |ve| getTypedArrayType(ve.child),
                 .@"struct" => switch (comptime @hasDecl(T, "ElementType") and tdb.get(T).isSlice()) {
-                    true => getTypedArrayBits(T.ElementType),
+                    true => getTypedArrayType(T.ElementType),
                     false => null,
                 },
                 else => null,
@@ -977,7 +988,24 @@ fn Factory(comptime host: type, comptime module: type) type {
                     }
                 } else if (f.return_type) |RT| canBeTypedArray(RT) else false,
                 .int, .float => false,
-                else => getTypedArrayBits(T) != null,
+                else => getTypedArrayType(T) != null,
+            };
+        }
+
+        fn canBeClampedArray(comptime T: type) bool {
+            return switch (@typeInfo(T)) {
+                .pointer => canBeClampedArray(tdb.get(T).getTargetType()),
+                .@"fn" => |f| inline for (f.params) |param| {
+                    if (param.type) |PT| {
+                        if (comptime types.getInternalType(PT)) |internal_type| {
+                            if (internal_type == .promise or internal_type == .generator) {
+                                if (canBeClampedArray(PT.payload)) break true;
+                            }
+                        }
+                    }
+                } else if (f.return_type) |RT| canBeClampedArray(RT) else false,
+                .int, .float => false,
+                else => if (getTypedArrayType(T)) |i| i.bits == 8 and i.signedness == .unsigned else false,
             };
         }
 
@@ -1542,5 +1570,6 @@ const MemberFlags = packed struct(u32) {
 
     is_plain: bool = false,
     is_typed_array: bool = false,
-    _: u22 = 0,
+    is_clamped_array: bool = false,
+    _: u21 = 0,
 };

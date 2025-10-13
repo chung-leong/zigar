@@ -77,6 +77,8 @@ var all = mixin({
           let fn = template[SLOTS][slot];
           if (flags & MemberFlag.IsString) {
             fn[TRANSFORM] = (retval) => retval.string;
+          } else if (flags & MemberFlag.IsClampedArray) {
+            fn[TRANSFORM] = (retval) => retval.clampedArray;
           } else if (flags & MemberFlag.IsTypedArray) {
             fn[TRANSFORM] = (retval) => retval.typedArray;
           } else if (flags & MemberFlag.IsPlain) {

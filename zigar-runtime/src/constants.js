@@ -114,6 +114,7 @@ export const MemberFlag = {
   IsString:         0x0080,
   IsPlain:          0x0100,
   IsTypedArray:     0x0200,
+  IsClampedArray:   0x0400,
 };
 export const ProxyType = {
   Pointer: 1 << 0,

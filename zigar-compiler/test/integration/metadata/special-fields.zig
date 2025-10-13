@@ -1,6 +1,7 @@
 const std = @import("std");
 
 pub const object: struct {
+    clamped_array: [4]u8 = .{ 1, 2, 3, 4 },
     typed_array: [4]f64 = .{ 1, 2, 3, 4 },
     string: []const u8 = "Hello world",
     object: struct {
@@ -12,7 +13,11 @@ pub const object: struct {
 } = .{};
 
 pub const @"meta(zigar)" = struct {
-    pub fn isFieldString(comptime T: type, comptime _: std.meta.FieldEnum(T)) bool {
+    pub fn isFieldString(comptime T: type, comptime name: std.meta.FieldEnum(T)) bool {
+        return name != .clamped_array;
+    }
+
+    pub fn isFieldClampedArray(comptime T: type, comptime _: std.meta.FieldEnum(T)) bool {
         return true;
     }
 

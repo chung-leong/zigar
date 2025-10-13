@@ -36,6 +36,11 @@ const default = struct {
         return false;
     }
 
+    pub fn isDeclClampedArray(comptime T: type, comptime decl: std.meta.DeclEnum(T)) bool {
+        _ = decl;
+        return false;
+    }
+
     pub fn isFieldString(comptime T: type, comptime field: std.meta.FieldEnum(T)) bool {
         _ = field;
         return false;
@@ -47,6 +52,11 @@ const default = struct {
     }
 
     pub fn isFieldTypedArray(comptime T: type, comptime field: std.meta.FieldEnum(T)) bool {
+        _ = field;
+        return false;
+    }
+
+    pub fn isFieldClampedArray(comptime T: type, comptime field: std.meta.FieldEnum(T)) bool {
         _ = field;
         return false;
     }
@@ -64,6 +74,12 @@ const default = struct {
     }
 
     pub fn isArgumentTypedArray(comptime T: type, comptime arg_index: usize) bool {
+        _ = T;
+        _ = arg_index;
+        return false;
+    }
+
+    pub fn isArgumentClampedArray(comptime T: type, comptime arg_index: usize) bool {
         _ = T;
         _ = arg_index;
         return false;

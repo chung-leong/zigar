@@ -11,6 +11,7 @@ export function addTests(importModule, options) {
     this.timeout(0);
     it('should make fields string, typed array, or object', async function() {
       const { object } = await importTest('special-fields');
+      expect(object.clamped_array).to.eql(new Uint8ClampedArray([ 1, 2, 3, 4 ]));
       expect(object.typed_array).to.eql(new Float64Array([ 1, 2, 3, 4 ]));
       expect(object.string).to.equal('Hello world');
       expect(object.object).to.eql({ number1: 0, number2: 0 });
@@ -18,7 +19,8 @@ export function addTests(importModule, options) {
       expect(object.undefined).to.be.undefined;
     })
     it('should make decls string, typed array, or object', async function() {
-      const { typed_array, string, object, number, undefined } = await importTest('special-decls');
+      const { clamped_array, typed_array, string, object, number, undefined } = await importTest('special-decls');
+      expect(clamped_array).to.eql(new Uint8ClampedArray([ 1, 2, 3, 4 ]));
       expect(typed_array).to.eql(new Float64Array([ 1, 2, 3, 4 ]));
       expect(string).to.equal('Hello world');
       expect(object).to.eql({ number1: 0, number2: 0 });
@@ -26,9 +28,10 @@ export function addTests(importModule, options) {
       expect(undefined).to.be.undefined;
     })
     it('should return string, typed array, or object', async function() {
-      const { returnObject, returnString, returnTypedArray } = await importTest('special-return-values');
+      const { returnObject, returnString, returnClampedArray, returnTypedArray } = await importTest('special-return-values');
       expect(returnObject()).to.eql({ number1: 123, number2: 1234n });
       expect(returnString()).to.equal('Hello world');
+      expect(returnClampedArray()).to.eql(new Uint8ClampedArray([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ]));
       expect(returnTypedArray()).to.eql(new Uint8Array([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ]));
     })
   })
