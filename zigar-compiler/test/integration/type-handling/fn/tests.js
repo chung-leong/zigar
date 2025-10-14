@@ -91,13 +91,17 @@ export function addTests(importModule, options) {
         expect(lines4).to.eql([ 'number = 1234' ]);
         expect(module.call4_result).to.equal(1234 * 3);
         // async function
+        let called = false;
         const jsFn4 = async (number) => {
           console.log(`number = ${number}`);
+          called = true;
           return number * 4;
         };
         const lines5 = await capture(async () => {
           call4(jsFn4);
-          await delay(200);
+          for (let i = 0; i < 20 && !called; i++) {
+            await delay(50);
+          }
         });
         expect(lines5).to.eql([ 'number = 1234' ]);
         expect(module.call4_result).to.equal(1234 * 4);
