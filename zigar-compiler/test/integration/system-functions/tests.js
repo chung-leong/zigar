@@ -65,8 +65,10 @@ export function addTests(importModule, options) {
         expect(lines3).to.not.include('土耳其=火雞');
       }
       __zigar.set('env', {});
-      const lines4 = await capture(() => print());
-      expect(lines4).to.have.lengthOf(0);
+      if (print) {
+        const lines4 = await capture(() => print());
+        expect(lines4).to.have.lengthOf(0);
+      }
     });
     skip.entirely.unless(target === 'win32').
     it('should print environment variables using win32 functions', async function () {
@@ -79,15 +81,15 @@ export function addTests(importModule, options) {
       const lines1 = await capture(() => print());
       expect(lines1).to.include('HELLO=1');
       expect(lines1).to.include('WORLD=123');
-      const lines2 = await capture(() => printW());
-      __zigar.set('env', {
-        '土耳其': '火雞',
-      });
-      expect(lines2).to.include('土耳其=火雞');
       const result = get('WORLD');
       expect(result).to.equal('123');
       const resultW = getW('WORLD');
       expect(resultW).to.equal('123');
+      __zigar.set('env', {
+        '土耳其': '火雞',
+      });
+      const lines2 = await capture(() => printW());
+      expect(lines2).to.include('土耳其=火雞');
     });
     it('should print random numbers', async function () {
       this.timeout(0);
