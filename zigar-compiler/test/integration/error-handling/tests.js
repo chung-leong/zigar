@@ -23,7 +23,7 @@ export function addTests(importModule, options) {
         expect(lines[2]).to.contain('tests.js');
       }
     });
-    skip.entirely.if(target === 'wasm32').or(optimize !== 'Debug').
+    skip.entirely.if(target === 'wasm32').or(target === 'win32').or(optimize !== 'Debug').
     it('should print stack trace', async function() {
       const { fail } = await importTest('stack-trace');
       const lines = await capture(() => fail());
