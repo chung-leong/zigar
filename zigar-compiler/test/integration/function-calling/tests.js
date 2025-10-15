@@ -514,7 +514,7 @@ export function addTests(importModule, options) {
     })
     // VaList is "disabled due to miscompilations" on 64-bits Windows
     // and ARM64 Linux currently
-    skip.if(platform() === 'win32' && arch() === 'x64').
+    skip.if(platform() === 'win32').
     or(platform() === 'linux' && arch() === 'aarch64').
     it('should call variadic functions', async function() {
       const {
@@ -584,7 +584,7 @@ export function addTests(importModule, options) {
       ));
       expect(lines10).to.eql([ 'Agnieszka', 'Basia', 'Czesia' ]);
     })
-    skip.if(platform() === 'win32' && arch() === 'x64').
+    skip.if(platform() === 'win32').
     or(platform() === 'linux' && arch() === 'aarch64').
     it('should correctly pass unsigned int to variadic function', async function() {
       const {
