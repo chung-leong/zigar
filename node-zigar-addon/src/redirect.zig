@@ -25,6 +25,7 @@ const prctl_h = @cImport({
 pub fn Controller(comptime Host: type) type {
     const bits = @bitSizeOf(usize);
     const LibExtent = struct { address: usize = 0, len: usize = 0 };
+    const syscall_user_dispatch = os == .linux and builtin.target.cpu.arch.isX86();
 
     return struct {
         pub fn installHooks(host: *Host, lib: *std.DynLib, path: []const u8) !LibExtent {
@@ -368,7 +369,7 @@ pub fn Controller(comptime Host: type) type {
         var syscall_vtables_mutex: std.Thread.Mutex = .{};
 
         pub fn addSyscallVtable(pos: LibExtent, vtable: *const Host.HandlerVTable) !void {
-            if (os == .linux) {
+            if (syscall_user_dispatch) {
                 // the list is a many pointer that we can update atomically
                 // in order to expand it we need to determine the new length first
                 syscall_vtables_mutex.lock();
@@ -403,7 +404,7 @@ pub fn Controller(comptime Host: type) type {
         }
 
         pub fn removeSyscallVtable(vtable: *const Host.HandlerVTable) !void {
-            if (os == .linux) {
+            if (syscall_user_dispatch) {
                 syscall_vtables_mutex.lock();
                 defer syscall_vtables_mutex.unlock();
                 const list = syscall_vtables;
@@ -457,20 +458,7 @@ pub fn Controller(comptime Host: type) type {
         }
 
         pub fn installSyscallTrap(ptr: *const bool) !void {
-            if (os == .linux) {
-                if (builtin.target.cpu.arch == .aarch64 or builtin.target.cpu.arch == .aarch64_be) {
-                    // on aarch64, the boolean pointer is going to be tagged as user memory
-                    // in order for the kernel to use it, we need to enable Tagged Address API
-                    if (std.c.prctl(
-                        prctl_h.PR_SET_TAGGED_ADDR_CTRL,
-                        prctl_h.PR_TAGGED_ADDR_ENABLE,
-                        @as(usize, 0),
-                        @as(usize, 0),
-                        @as(usize, 0),
-                    ) != 0) {
-                        return error.SyscallTaggedAddressDisabled;
-                    }
-                }
+            if (syscall_user_dispatch) {
                 // enable syscall user dispatch, excluding the memory region where libc sits; the signal
                 // trampoline is also inside this range, allowing us to reenable trapping from within
                 // the signal handler (otherwise sigreturn() would trigger SIGSYS inside a SIGSYS)
@@ -488,7 +476,7 @@ pub fn Controller(comptime Host: type) type {
         }
 
         pub fn uninstallSyscallTrap() void {
-            if (os == .linux) {
+            if (syscall_user_dispatch) {
                 _ = std.c.prctl(
                     prctl_h.PR_SET_SYSCALL_USER_DISPATCH,
                     prctl_h.PR_SYS_DISPATCH_OFF,
@@ -496,15 +484,6 @@ pub fn Controller(comptime Host: type) type {
                     @as(usize, 0),
                     @as(usize, 0),
                 );
-                if (builtin.target.cpu.arch == .aarch64 or builtin.target.cpu.arch == .aarch64_be) {
-                    _ = std.c.prctl(
-                        prctl_h.PR_SET_TAGGED_ADDR_CTRL,
-                        @as(usize, 0),
-                        @as(usize, 0),
-                        @as(usize, 0),
-                        @as(usize, 0),
-                    );
-                }
             }
         }
 
@@ -512,28 +491,30 @@ pub fn Controller(comptime Host: type) type {
         var previous_signal_handler: ?std.c.Sigaction = null;
 
         pub fn installSignalHandler() !void {
-            if (os != .linux) return;
-            // don't do anything if the trap is already set
-            if (sig_handler_count.fetchAdd(1, .monotonic) > 0) return;
-            const act: std.c.Sigaction = .{
-                .handler = .{ .sigaction = handleSigsysSignal },
-                .mask = std.mem.zeroes(std.c.sigset_t),
-                .flags = std.c.SA.SIGINFO,
-            };
-            var prev_act: std.c.Sigaction = undefined;
-            if (std.c.sigaction(std.c.SIG.SYS, &act, &prev_act) != 0) return error.SignalHandlingFailure;
-            errdefer _ = std.c.sigaction(std.c.SIG.SYS, &prev_act, null);
-            if (prev_act.flags != 0) {
-                return error.UnexpectedSignalHandlingStatus;
+            if (syscall_user_dispatch) {
+                // don't do anything if the trap is already set
+                if (sig_handler_count.fetchAdd(1, .monotonic) > 0) return;
+                const act: std.c.Sigaction = .{
+                    .handler = .{ .sigaction = handleSigsysSignal },
+                    .mask = std.mem.zeroes(std.c.sigset_t),
+                    .flags = std.c.SA.SIGINFO,
+                };
+                var prev_act: std.c.Sigaction = undefined;
+                if (std.c.sigaction(std.c.SIG.SYS, &act, &prev_act) != 0) return error.SignalHandlingFailure;
+                errdefer _ = std.c.sigaction(std.c.SIG.SYS, &prev_act, null);
+                if (prev_act.flags != 0) {
+                    return error.UnexpectedSignalHandlingStatus;
+                }
+                previous_signal_handler = prev_act;
             }
-            previous_signal_handler = prev_act;
         }
 
         pub fn uninstallSignalHandler() void {
-            if (os != .linux) return;
-            if (sig_handler_count.fetchSub(1, .monotonic) > 1) return;
-            if (previous_signal_handler) |prev_act| {
-                _ = std.c.sigaction(std.c.SIG.SYS, &prev_act, null);
+            if (syscall_user_dispatch) {
+                if (sig_handler_count.fetchSub(1, .monotonic) > 1) return;
+                if (previous_signal_handler) |prev_act| {
+                    _ = std.c.sigaction(std.c.SIG.SYS, &prev_act, null);
+                }
             }
         }
 
