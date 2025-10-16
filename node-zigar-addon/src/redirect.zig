@@ -458,6 +458,19 @@ pub fn Controller(comptime Host: type) type {
 
         pub fn installSyscallTrap(ptr: *const bool) !void {
             if (os == .linux) {
+                if (builtin.target.cpu.arch == .aarch64 or builtin.target.cpu.arch == .aarch64_be) {
+                    // on aarch64, the boolean pointer is going to be tagged as user memory
+                    // in order for the kernel to use it, we need to enable Tagged Address API
+                    if (std.c.prctl(
+                        prctl_h.PR_SET_TAGGED_ADDR_CTRL,
+                        prctl_h.PR_TAGGED_ADDR_ENABLE,
+                        @as(usize, 0),
+                        @as(usize, 0),
+                        @as(usize, 0),
+                    ) != 0) {
+                        return error.SyscallTaggedAddressDisabled;
+                    }
+                }
                 // enable syscall user dispatch, excluding the memory region where libc sits; the signal
                 // trampoline is also inside this range, allowing us to reenable trapping from within
                 // the signal handler (otherwise sigreturn() would trigger SIGSYS inside a SIGSYS)
@@ -483,6 +496,17 @@ pub fn Controller(comptime Host: type) type {
                     @as(usize, 0),
                     @as(usize, 0),
                 );
+                if (builtin.target.cpu.arch == .aarch64 or builtin.target.cpu.arch == .aarch64_be) {
+                    if (std.c.prctl(
+                        prctl_h.PR_SET_TAGGED_ADDR_CTRL,
+                        prctl_h.PR_TAGGED_ADDR_DISABLE,
+                        @as(usize, 0),
+                        @as(usize, 0),
+                        @as(usize, 0),
+                    ) != 0) {
+                        return error.SyscallTaggedAddressDisabled;
+                    }
+                }
             }
         }
 
