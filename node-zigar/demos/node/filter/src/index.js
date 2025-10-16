@@ -1,8 +1,8 @@
 import Fastify from 'fastify';
-import { availableParallelism } from 'node:os';
-import Sharp from 'sharp';
-import { fileURLToPath } from 'node:url';
 import { Buffer } from 'node:buffer';
+import { availableParallelism } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import Sharp from 'sharp';
 
 const fastify = Fastify();
 
@@ -61,9 +61,8 @@ fastify.get('/img/:name/:filter/:base64', async (req, reply) => {
     }
   };
   const output = await createOutputAsync(info.width, info.height, input, filterParams);
-  const { dst } = output;
   // place raw data into new image and output it as JPEG
-  const outputImage = Sharp(dst.data.typedArray, { raw: info });
+  const outputImage = Sharp(output.dst.data, { raw: info });
   reply.type('image/jpeg');
   return outputImage.jpeg().toBuffer();
 });

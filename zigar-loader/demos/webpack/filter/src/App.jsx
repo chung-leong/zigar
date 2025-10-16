@@ -56,7 +56,7 @@ function App() {
           const input = { src: srcImageData };
           const params = { intensity };
           const output = await atm.call(signal => createOutputAsync(width, height, input, params, { signal }));
-          const dstImageData = new ImageData(output.dst.data.clampedArray, width, height);
+          const dstImageData = new ImageData(output.dst.data, width, height);
           dstCanvas.width = width;
           dstCanvas.height = height;
           const dstCTX = dstCanvas.getContext('2d');
@@ -72,7 +72,7 @@ function App() {
   useEffect(() => {
     atm.call(() => startThreadPool(navigator.hardwareConcurrency));
     return () => atm.call(() => stopThreadPoolAsync());
-  });
+  }, []);
   return (
     <div className="App">
       <div className="nav">
