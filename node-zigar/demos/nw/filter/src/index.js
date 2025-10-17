@@ -92,7 +92,7 @@ nw.Window.open('./src/index.html', { width: 800, height: 600, x: 10, y: 10 }, (b
         const srcImageData = srcCTX.getImageData(0, 0, width, height);
         const input = { src: srcImageData };
         const output = await atm.call(signal => createOutputAsync(width, height, input, params, { signal }));
-        const dstImageData = new ImageData(output.dst.data.clampedArray, width, height);
+        const dstImageData = new ImageData(output.dst.data, width, height);
         dstCanvas.width = width;
         dstCanvas.height = height;
         const dstCTX = dstCanvas.getContext('2d');

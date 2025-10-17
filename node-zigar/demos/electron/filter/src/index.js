@@ -85,15 +85,9 @@ const createWindow = async () => {
 app.whenReady().then(() => {
   ipcMain.handle('write-file', async (_event, path, buf) => writeFile(path, new DataView(buf)));
   ipcMain.handle('filter-image', async (_event, width, height, data, params) => {
-    try {
-      const src = { width, height, data };
-      const { dst } = await atm.call(signal => createOutputAsync(width, height, { src }, params, { signal }));
-      return dst.data.clampedArray;
-    } catch (err) {
-      if (err.message !== 'Aborted') {
-        console.error(err);
-      }
-    }
+    const src = { width, height, data };
+    const { dst } = await atm.call(signal => createOutputAsync(width, height, { src }, params, { signal }));
+    return dst.data;
   });
 
   createWindow();

@@ -15,7 +15,7 @@ export async function createImageDataAsync(src, params) {
   }
   const { width, height } = src;
   const { dst } = await atm.call(signal => createOutputAsync(width, height, { src }, params, { signal }));
-  return new ImageData(dst.data.clampedArray, width, height);
+  return new ImageData(dst.data, width, height);
 }
 
 class AsyncTaskManager {
