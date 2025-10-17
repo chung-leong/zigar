@@ -9,9 +9,7 @@ const firstMasked = 1;
 export default mixin({
   init() {
     this.variables = [];
-    this.listenerMap = new Map([
-      [ 'log', (e) => console.log(e.message) ],
-    ]);
+    this.listenerMap = new Map();
     this.envVariables = this.envVarArrays = null;
   },
   getSpecialExports() {

@@ -8,9 +8,7 @@ const events = [ 'log', 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink',
 var baseline = mixin({
   init() {
     this.variables = [];
-    this.listenerMap = new Map([
-      [ 'log', (e) => console.log(e.message) ],
-    ]);
+    this.listenerMap = new Map();
     this.envVariables = this.envVarArrays = null;
   },
   getSpecialExports() {

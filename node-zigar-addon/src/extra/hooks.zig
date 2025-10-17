@@ -3277,8 +3277,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                     }
                 } else {
                     const mode = 0;
-                    if (dir_op) {
-                        if (create_disposition != std.os.windows.FILE_CREATE) return .ACCESS_DENIED;
+                    if (dir_op and create_disposition == std.os.windows.FILE_CREATE) {
                         var result: c_int = undefined;
                         if (redirector.mkdirat(dirfd, converter.path, mode, &result)) {
                             if (result < 0) return .ACCESS_DENIED;
@@ -3303,6 +3302,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                         } else if (w_access) {
                             oflags.ACCMODE = .WRONLY;
                         }
+                        oflags.DIRECTORY = dir_op;
                         const oflags_int: u32 = @bitCast(oflags);
                         var fd: c_int = undefined;
                         if (redirector.openat(dirfd, converter.path, @intCast(oflags_int), mode, &fd)) {

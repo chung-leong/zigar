@@ -154,7 +154,9 @@ var streamRedirection = mixin({
       },
       dispatch(array) {
         const message = decodeText(array);
-        env.triggerEvent('log', { source, message });
+        if (env.triggerEvent('log', { source, message }) == undefined) {
+          console.log(message);
+        }
       },
       flush() {
         if (this.pending.length > 0) {
