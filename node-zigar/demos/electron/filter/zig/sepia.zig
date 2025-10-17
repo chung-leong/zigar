@@ -393,7 +393,7 @@ pub const @"meta(zigar)" = struct {
 
     pub fn isFieldTypedArray(comptime T: type, comptime name: std.meta.FieldEnum(T)) bool {
         if (@hasDecl(T, "Pixel")) {
-            // make field `data` clamped array if output pixel type is u8
+            // make field `data` typed array (if pixel value is not u8)
             return name == .data;
         }
         return false;

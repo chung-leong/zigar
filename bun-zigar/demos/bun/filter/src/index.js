@@ -60,9 +60,8 @@ fastify.get('/img/:name/:filter/:base64', async (req, reply) => {
     }
   };
   const output = await createOutputAsync(info.width, info.height, input, filterParams);
-  const { dst } = output;
   // place raw data into new image and output it as JPEG
-  const outputImage = Sharp(dst.data.typedArray, { raw: info });
+  const outputImage = Sharp(output.dst.data, { raw: info });
   reply.type('image/jpeg');
   return outputImage.jpeg().toBuffer();
 });
