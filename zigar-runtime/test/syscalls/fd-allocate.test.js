@@ -11,7 +11,7 @@ describe('Syscall: fd-allocate', function() {
     const env = new Env();
     const encoder = new TextEncoder();
     const array = encoder.encode('Hello world');
-    env.redirectStream(0, array);
+    env.redirectStream('stdin', array);
     let result; 
     const [ error ] = await captureError(() => {
       result = env.fdAllocate(0, 123n, 16);
@@ -27,7 +27,7 @@ describe('Syscall: fd-allocate', function() {
         args = a;
       },
     }
-    env.redirectStream(0, stream);
+    env.redirectStream('stdin', stream);
     const result = env.fdAllocate(0, 123n, 16);
     expect(result).to.equal(PosixError.NONE);
     expect(args).to.eql([ 123, 16 ]);
@@ -48,7 +48,7 @@ describe('Syscall: fd-allocate', function() {
           args = a;
         },
       }
-      env.redirectStream(0, stream);
+      env.redirectStream('stdin', stream);
       const result = f(0, 123n, 16);
       expect(result).to.equal(PosixError.NONE);
       expect(args).to.eql([ 123, 16 ]);

@@ -1761,7 +1761,7 @@ export function addTests(importModule, options) {
         }
       });
       const reader = stream.getReader();
-      __zigar.redirect(0, reader);
+      __zigar.redirect('stdin', reader);
       startup();
       try {
         const lines = await capture(() => print());
@@ -1797,7 +1797,7 @@ export function addTests(importModule, options) {
         '123 456',
       ];
       const data = new TextEncoder().encode(input.join('\n'));
-      __zigar.redirect(0, data);
+      __zigar.redirect('stdin', data);
       const lines = await capture(() => scan());
       expect(lines).to.eql([
         '1 2 3 hello',
@@ -1826,7 +1826,7 @@ export function addTests(importModule, options) {
         }
       });
       const reader = stream.getReader();
-      __zigar.redirect(0, reader);
+      __zigar.redirect('stdin', reader);
       startup(1);
       try {
         const [ line1 ] = await capture(() => scan());
@@ -1853,7 +1853,7 @@ export function addTests(importModule, options) {
       const { __zigar, print } = await importTest('read-stdin-with-getchar', { useLibc: true });
       const path = absolute('./data/macbeth.txt');
       const content = await readFile(path);
-      __zigar.redirect(0, content);
+      __zigar.redirect('stdin', content);
       const lines = await capture(() => print());
       const line = lines.find(s => s.includes('Signifying nothing'));
       expect(line).to.be.a('string');
@@ -1861,7 +1861,7 @@ export function addTests(importModule, options) {
     it('should push character into stdin using ungetc', async function() {
       const { __zigar, push, get } = await importTest('push-character-into-stdin-with-ungetc', { useLibc: true });
       const content = new Uint8Array([ 1, 2, 3, 4 ]);
-      __zigar.redirect(0, content);
+      __zigar.redirect('stdin', content);
       push(5);
       const result1 = get();
       expect(result1).to.equal(5);

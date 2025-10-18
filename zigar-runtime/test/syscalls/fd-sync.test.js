@@ -10,7 +10,7 @@ describe('Syscall: fd-sync', function() {
     const env = new Env();
     const encoder = new TextEncoder();
     const array = encoder.encode('Hello world');
-    env.redirectStream(0, array);
+    env.redirectStream('stdin', array);
     const result = env.fdSync(0);
     expect(result).to.equal(PosixError.NONE);
   })
@@ -23,7 +23,7 @@ describe('Syscall: fd-sync', function() {
         called = true;
       },
     }
-    env.redirectStream(0, stream);
+    env.redirectStream('stdin', stream);
     const result = env.fdSync(0);
     expect(result).to.equal(PosixError.NONE);
     expect(called).to.be.true;
@@ -39,7 +39,7 @@ describe('Syscall: fd-sync', function() {
       const encoder = new TextEncoder();
       const array = encoder.encode('Hello world');
       const f = env.getWASIHandler('fd_sync');
-      env.redirectStream(0, array);
+      env.redirectStream('stdin', array);
       const result = f(0);
       expect(result).to.equal(PosixError.NONE);
     })

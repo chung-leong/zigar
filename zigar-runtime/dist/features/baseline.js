@@ -19,7 +19,7 @@ var baseline = mixin({
     return {
       init: () => this.initPromise,
       abandon: () => this.abandonModule?.(),
-      redirect: (fd, stream) => this.redirectStream(fd, stream),
+      redirect: (name, stream) => this.redirectStream(name, stream),
       sizeOf: (T) => check(T?.[SIZE]),
       alignOf: (T) => check(T?.[ALIGN]),
       typeOf: (T) => structureNamesLC[check(T?.[TYPE])],

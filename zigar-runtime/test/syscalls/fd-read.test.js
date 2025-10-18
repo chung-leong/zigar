@@ -131,7 +131,7 @@ describe('Syscall: fd-read', function() {
       }
     });
     const reader = env.convertReader(stream.getReader());
-    env.redirectStream(0, reader);
+    env.redirectStream('stdin', reader);
     const iovsAddress = usize(0x1000);
     const stringAddress = usize(0x2000);
     const stringLen = usize(32);
@@ -154,7 +154,7 @@ describe('Syscall: fd-read', function() {
       env.memory = new WebAssembly.Memory({ initial: 1 });
       const array = new TextEncoder().encode('Hello world');
       const reader = env.convertReader(array);
-      env.redirectStream(0, reader);
+      env.redirectStream('stdin', reader);
       const iovsAddress = 0x1000;
       const stringAddress = 0x2000;
       const stringLen = 32;

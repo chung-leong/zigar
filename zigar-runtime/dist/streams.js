@@ -197,7 +197,7 @@ class BlobReader extends AsyncReader {
   }
 }
 
-class Uint8ArrayReadWriter {
+class Uint8ArrayReader {
   pos = 0;
   onClose = null;
 
@@ -217,21 +217,8 @@ class Uint8ArrayReadWriter {
     return buf;
   }
 
-  writenb(buf) {
-    return this.write(buf);
-  }
-
-  write(buf) {
-    this.pwrite(buf, this.pos);
-    this.pos += buf.length;
-  }
-
   pread(len, offset) {
     return this.array.subarray(offset, offset + len);
-  }
-
-  pwrite(buf, offset) {
-    this.array.set(buf, offset);
   }
 
   tell() {
@@ -248,6 +235,33 @@ class Uint8ArrayReadWriter {
 
   valueOf() {
     return this.array;
+  }
+}
+
+class Uint8ArrayReadWriter extends Uint8ArrayReader {
+  writenb(buf) {
+    return this.write(buf);
+  }
+
+  write(buf) {
+    this.pwrite(buf, this.pos);
+    this.pos += buf.length;
+  }
+
+  pwrite(buf, offset) {
+    this.array.set(buf, offset);
+  }
+}
+
+class StringReader extends Uint8ArrayReader {
+  constructor(string) {
+    super(encodeText(string));
+    this.string = string;
+    attachClose(string, this);
+  }
+
+  valueOf() {
+    return this.string;
   }
 }
 
@@ -356,17 +370,19 @@ function reposition(whence, offset, current, size) {
 }
 
 function attachClose(target, stream) {
-  const previous = target.close;
-  defineProperty(target, 'close', { 
-    value: () => {
-      previous?.();
-      stream.onClose?.();
-      delete target.close;
-    }
-  });
+  if (typeof(target) === 'object') {
+    const previous = target.close;
+    defineProperty(target, 'close', { 
+      value: () => {
+        previous?.();
+        stream.onClose?.();
+        delete target.close;
+      }
+    });
+  }
 }
 
 const size8k = 8192;
 const size16meg = 16777216;
 
-export { ArrayWriter, AsyncReader, AsyncWriter, BlobReader, MapDirectory, NullStream, Uint8ArrayReadWriter, WebStreamReader, WebStreamReaderBYOB, WebStreamWriter };
+export { ArrayWriter, AsyncReader, AsyncWriter, BlobReader, MapDirectory, NullStream, StringReader, Uint8ArrayReadWriter, WebStreamReader, WebStreamReaderBYOB, WebStreamWriter };

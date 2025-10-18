@@ -10,7 +10,7 @@ describe('Syscall: fd-datasync', function() {
     const env = new Env();
     const encoder = new TextEncoder();
     const array = encoder.encode('Hello world');
-    env.redirectStream(0, array);
+    env.redirectStream('stdin', array);
     const result = env.fdDatasync(0);
     expect(result).to.equal(PosixError.NONE);
   })
@@ -23,7 +23,7 @@ describe('Syscall: fd-datasync', function() {
         called = true;
       },
     }
-    env.redirectStream(0, stream);
+    env.redirectStream('stdin', stream);
     const result = env.fdDatasync(0);
     expect(result).to.equal(PosixError.NONE);
     expect(called).to.be.true;
@@ -44,7 +44,7 @@ describe('Syscall: fd-datasync', function() {
           called = true;
         },
       }
-      env.redirectStream(0, stream);
+      env.redirectStream('stdin', stream);
       const result = f(0);
       expect(result).to.equal(PosixError.NONE);
       expect(called).to.be.true;

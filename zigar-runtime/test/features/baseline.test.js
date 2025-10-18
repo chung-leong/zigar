@@ -521,7 +521,7 @@ describe('Feature: baseline', function() {
       set.call(iovsDV, usizeByteSize * 1, stringLen, le);
       const object = env.getSpecialExports();
       const array = [];
-      object.redirect(1, array);
+      object.redirect('stdout', array);
       env.fdWrite(1, iovsAddress, 1, writtenAddress);
       expect(array).to.have.lengthOf(1);
     })

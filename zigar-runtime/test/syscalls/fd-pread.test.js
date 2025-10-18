@@ -33,7 +33,7 @@ describe('Syscall: fd-pread', function() {
     }   
     const array = new TextEncoder().encode('   Hello world');
     const reader = env.convertReader(array);
-    env.redirectStream(0, reader);
+    env.redirectStream('stdin', reader);
     const iovsAddress = usize(0x1000);
     const stringAddress = usize(0x2000);
     const stringLen = usize(32);
@@ -77,7 +77,7 @@ describe('Syscall: fd-pread', function() {
     }   
     const blob = new Blob([]);
     const reader = env.convertReader(blob);
-    env.redirectStream(0, reader);
+    env.redirectStream('stdin', reader);
     const iovsAddress = usize(0x1000);
     const stringAddress = usize(0x2000);
     const stringLen = usize(32);
@@ -100,7 +100,7 @@ describe('Syscall: fd-pread', function() {
       env.memory = new WebAssembly.Memory({ initial: 1 });
       const array = new TextEncoder().encode('Hello world');
       const reader = env.convertReader(array);
-      env.redirectStream(0, reader);
+      env.redirectStream('stdin', reader);
       const iovsAddress = 0x1000;
       const stringAddress = 0x2000;
       const stringLen = 32;
@@ -140,7 +140,7 @@ describe('Syscall: fd-pread', function() {
       };
       const array = new Uint8Array([ 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ]);
       const reader = env.convertReader(array);
-      env.redirectStream(0, reader);
+      env.redirectStream('stdin', reader);
       const bufAddress = usize(0x1000);
       const readAddress = usize(0x2000);
       const len = 4;

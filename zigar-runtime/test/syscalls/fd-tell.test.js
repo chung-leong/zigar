@@ -33,7 +33,7 @@ describe('Syscall: fd-tell', function() {
       };
     }   
     const posAddress = usize(0x1000);
-    env.redirectStream(0, array);
+    env.redirectStream('stdin', array);
     env.fdSeek(0, 1, 1, posAddress);
     env.fdSeek(0, 1, 1, posAddress);
     const result = env.fdTell(0, posAddress);
@@ -78,7 +78,7 @@ describe('Syscall: fd-tell', function() {
       const f = env.getWASIHandler('fd_tell');
       const posAddress = 128;
       const dv = new DataView(memory.buffer);
-      env.redirectStream(0, array);
+      env.redirectStream('stdin', array);
       seek(0, 1n, 1, posAddress)
       seek(0, 1n, 1, posAddress)
       const result = f(0);

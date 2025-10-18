@@ -40,7 +40,7 @@ describe('Feature: stream-redirection', function() {
       const stream = {
         read() {},
       };
-      env.redirectStream(0, stream);
+      env.redirectStream('stdin', stream);
       env.destroyStreamHandle(0);
       expect(() => env.getStream(0)).to.throw();
     })
@@ -56,7 +56,7 @@ describe('Feature: stream-redirection', function() {
           called = true;
         },
       };
-      env.redirectStream(0, stream);
+      env.redirectStream('stdin', stream);
       env.destroyStreamHandle(0);
       expect(called).to.be.true;
     })
@@ -87,7 +87,7 @@ describe('Feature: stream-redirection', function() {
         };
       }
       const stream = env.convertWriter(chunks);
-      const original = env.redirectStream(1, stream);
+      const original = env.redirectStream('stdout', stream);
       const bufferAddress = usize(0x1000);
       const stringAddress = usize(0x2000);
       const writtenAddress = usize(0x3000);
@@ -106,7 +106,7 @@ describe('Feature: stream-redirection', function() {
       env.fdWrite(1, bufferAddress, 1, writtenAddress);
       expect(chunks).to.have.lengthOf(1);
       expect(chunks[0]).to.eql(string);
-      env.redirectStream(1, original);
+      env.redirectStream('stdout', original);
       const [ line ] = await capture(async () => {
         env.fdWrite(1, bufferAddress, 1, writtenAddress);
       });
@@ -135,7 +135,7 @@ describe('Feature: stream-redirection', function() {
           copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
         };
       }
-      env.redirectStream(1, null);
+      env.redirectStream('stdout', null);
       const bufferAddress = usize(0x1000);
       const stringAddress = usize(0x2000);
       const writtenAddress = usize(0x3000);
@@ -170,7 +170,7 @@ describe('Feature: stream-redirection', function() {
         };
       }
       const map = new Map;
-      env.redirectStream(-1, map);
+      env.redirectStream('root', map);
     })
     it('should close a stream when undefined is given', async function() {
       const env = new Env();
@@ -195,10 +195,10 @@ describe('Feature: stream-redirection', function() {
           copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
         };
       }
-      env.redirectStream(1, null);
+      env.redirectStream('stdout', null);
       const bufferAddress = usize(0x1000);
       const writtenAddress = usize(0x3000);
-      env.redirectStream(1, undefined);
+      env.redirectStream('stdout', undefined);
       let result;
       await captureError(() => {
         result = env.fdWrite(1, bufferAddress, 1, writtenAddress);
@@ -211,7 +211,7 @@ describe('Feature: stream-redirection', function() {
     })
     it('should throw when argument cannot be converted to a stream', async function() {
       const env = new Env();
-      expect(() => env.redirectStream(1, 'dingo')).to.throw();
+      expect(() => env.redirectStream('stdout', 'dingo')).to.throw();
     })
   })
   describe('createStreamHandle', function() {

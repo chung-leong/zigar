@@ -105,8 +105,9 @@ var streamRedirection = mixin({
       this.streamMap.delete(fd);
     }
   },
-  redirectStream(fd, arg) {
+  redirectStream(name, arg) {
     const map = this.streamMap;
+    const fd = PosixDescriptor[name];
     const previous = map.get(fd);
     if (arg !== undefined) {
       let stream, rights;
@@ -120,7 +121,7 @@ var streamRedirection = mixin({
         stream = this.convertDirectory(arg);
         rights = this.getDefaultRights('dir');
       } else {
-        throw new Error(`Expecting 0, 1, 2, or -1, received ${fd}`);
+        throw new Error(`Expecting 'stdin', 'stdout', 'stderr', or 'root', received ${name}`);
       }
       if (!stream) {
         throw new InvalidStream(rights[0], arg);

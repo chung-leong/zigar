@@ -10,7 +10,7 @@ describe('Syscall: fd-advise', function() {
     const env = new Env();
     const encoder = new TextEncoder();
     const array = encoder.encode('Hello world');
-    env.redirectStream(0, array);
+    env.redirectStream('stdin', array);
     const result = env.fdAdvise(0, 123n, 16, 2);
     expect(result).to.equal(PosixError.NONE);
   })
@@ -23,7 +23,7 @@ describe('Syscall: fd-advise', function() {
         args = a;
       },
     }
-    env.redirectStream(0, stream);
+    env.redirectStream('stdin', stream);
     const result = env.fdAdvise(0, 123n, 16, 2);
     expect(result).to.equal(PosixError.NONE);
     expect(args).to.eql([ 123, 16, 'random' ]);
@@ -44,7 +44,7 @@ describe('Syscall: fd-advise', function() {
           args = a;
         },
       }
-      env.redirectStream(0, stream);
+      env.redirectStream('stdin', stream);
       const result = f(0, 123n, 16, 2);
       expect(result).to.equal(PosixError.NONE);
       expect(args).to.eql([ 123, 16, 'random' ]);

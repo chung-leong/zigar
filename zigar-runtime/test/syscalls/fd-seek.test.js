@@ -34,7 +34,7 @@ describe('Syscall: fd-seek', function() {
       };
     }   
     const posAddress = usize(128);
-    env.redirectStream(0, array);
+    env.redirectStream('stdin', array);
     const result = env.fdSeek(0, -1n, 2, posAddress)
     expect(result).to.equal(PosixError.NONE);
     const posDV = env.obtainZigView(posAddress, 8);
@@ -66,7 +66,7 @@ describe('Syscall: fd-seek', function() {
         copyView(to ? zigDV : jsDV, to ? jsDV : zigDV);
       };
     }   
-    env.redirectStream(0, array);
+    env.redirectStream('stdin', array);
     let result;
     const posAddress = usize(128);
     const [ error ] = await captureError(() => { 
@@ -83,7 +83,7 @@ describe('Syscall: fd-seek', function() {
       const memory = env.memory = new WebAssembly.Memory({ initial: 1 });
       const f = env.getWASIHandler('fd_seek');
       const posAddress = 128;
-      env.redirectStream(0, array);
+      env.redirectStream('stdin', array);
       const result = f(0, -1n, 2, posAddress)
       expect(result).to.equal(PosixError.NONE);
       const posDV = env.obtainZigView(posAddress, 8);

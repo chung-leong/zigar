@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { WebStreamReader, WebStreamReaderBYOB, BlobReader, Uint8ArrayReadWriter, NullStream } from '../streams.js';
+import { WebStreamReader, WebStreamReaderBYOB, BlobReader, Uint8ArrayReadWriter, StringReader, NullStream } from '../streams.js';
 import { hasMethod } from '../utils.js';
 
 var readerConversion = mixin({
@@ -12,6 +12,8 @@ var readerConversion = mixin({
       return new BlobReader(arg);
     } else if (arg instanceof Uint8Array) {
       return new Uint8ArrayReadWriter(arg);
+    } else if (typeof(arg) === 'string' || arg instanceof String) {
+      return new StringReader(arg);
     } else if (arg === null) {
       return new NullStream();
     } else if (hasMethod(arg, 'read')) {
