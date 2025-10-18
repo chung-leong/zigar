@@ -118,7 +118,7 @@ describe('Member: object', function() {
       returnNull = true;
       expect(get.call(object)).to.equal(null);
     })
-    it('should return descriptor for TypedArray', function() {
+    it('should return descriptor for typed array', function() {
       const env = new Env();
       const member = {
         type: MemberType.Object,
@@ -143,6 +143,34 @@ describe('Member: object', function() {
         }
       };
       expect(get.call(object)).to.eql(new Uint8Array([ 1, 2, 3 ]));
+      returnNull = true;
+      expect(get.call(object)).to.equal(null);
+    })
+    it('should return descriptor for clamped array', function() {
+      const env = new Env();
+      const member = {
+        type: MemberType.Object,
+        flags: MemberFlag.IsClampedArray,
+        slot: 1,
+        structure: {
+          type: StructureType.Array,
+        },
+      };
+      const { get, set } = env.defineMemberObject(member);
+      let returnNull = false;
+      const array = defineProperties({}, {
+        $: {
+          get() {
+            return (returnNull) ? null : { clampedArray: new Uint8ClampedArray([ 1, 2, 3 ]) };
+          },
+        }
+      });
+      const object = {
+        [SLOTS]: {
+          1: array,
+        }
+      };
+      expect(get.call(object)).to.eql(new Uint8ClampedArray([ 1, 2, 3 ]));
       returnNull = true;
       expect(get.call(object)).to.equal(null);
     })

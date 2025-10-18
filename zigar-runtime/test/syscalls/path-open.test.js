@@ -239,7 +239,7 @@ describe('Syscall: path-open', function() {
       };
       env.setRedirectionMask = () => {};
     }   
-    env.addListener('open', (evt) => 'hello');
+    env.addListener('open', (evt) => 1234);
     const path = new TextEncoder().encode('/hello.txt');
     const pathAddress = usize(0x1000);
     const pathLen = path.length;

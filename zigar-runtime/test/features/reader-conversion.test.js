@@ -86,6 +86,23 @@ describe('Feature: reader-conversion', function() {
       expect(res5).to.equal(7);
       blob.close();
     })
+    it('should convert a string to a reader', async function() {
+      const env = new Env();
+      const string = Object('Hello world');
+      const reader = env.convertReader(string);
+      const res1 = await reader.read(4);
+      expect(res1).to.eql(new Uint8Array([ 72, 101, 108, 108 ]));
+      const res2 = await reader.read(4);
+      expect(res2).to.eql(new Uint8Array([ 111, 32, 119, 111 ]));
+      const res3 = await reader.read(4);
+      expect(res3).to.eql(new Uint8Array([ 114, 108, 100 ]));
+      reader.seek(3, 0);
+      const res4 = await reader.read(4);
+      expect(res4).to.eql(new Uint8Array([ 108, 111, 32, 119 ]));
+      const res5 = reader.tell();
+      expect(res5).to.equal(7);
+      string.close();
+    })
     it('should convert null to a reader', async function() {
       const env = new Env();
       const reader = env.convertReader(null);

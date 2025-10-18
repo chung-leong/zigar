@@ -6,6 +6,7 @@ import {
   BlobReader,
   MapDirectory,
   NullStream,
+  StringReader,
   Uint8ArrayReadWriter,
   WebStreamReader,
   WebStreamReaderBYOB,
@@ -464,6 +465,14 @@ describe('Streams', function() {
         const stream = new Uint8ArrayReadWriter(array)
         expect(stream.valueOf()).to.equal(array);
       })
+    })
+  })
+  describe('StringReader', function() {
+    it('should create a reader for a string', function() {
+      const text = 'Hello world';
+      const stream = new StringReader(text);
+      expect(stream.size).to.equal(text.length);
+      expect(stream.valueOf()).to.equal(text);
     })
   })
   describe('ArrayWriter', function() {

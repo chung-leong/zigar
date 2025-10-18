@@ -123,7 +123,7 @@ describe('Syscall: path-filestat-get', function() {
       env.setRedirectionMask = () => {};
     }   
     env.addListener('open', (evt) => {
-      return 'hello';
+      return 1234;
     });
     const path = new TextEncoder().encode('/hello.txt');
     const pathAddress = usize(0x1000);
