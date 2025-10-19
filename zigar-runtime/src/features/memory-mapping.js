@@ -2,11 +2,8 @@ import { mixin } from '../environment.js';
 import { AlignmentConflict } from '../errors.js';
 import { ALIGN, FALLBACK, MEMORY, ZIG } from '../symbols.js';
 import {
-  adjustAddress, alignForward,
-  copyView,
-  findSortedIndex, isInvalidAddress, isMisaligned, usizeInvalid,
-  usizeMax,
-  usizeMin
+  adjustAddress, alignForward, copyView, findSortedIndex, isInvalidAddress, isMisaligned,
+  usizeInvalid, usizeMax, usizeMin
 } from '../utils.js';
 
 export default mixin({

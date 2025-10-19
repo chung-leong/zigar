@@ -116,5 +116,11 @@ export function addTests(importModule, options) {
       expect(log).to.have.lengthOf(1);
       expect(log[0]).to.eql({ source: 'stderr', message: 'error: std.log.err\n' });
     })
+    it('should fix issue 757', async function() {
+      const { default: module } = await importTest('issue-757');
+      module.array_of_nothing[0] = undefined;
+      expect(() => module.array_of_nothing[0] = undefined).to.not.throw();
+      expect(() => module.array_of_nothing[0] = 1).to.throw();
+    })
   })
 }

@@ -95,7 +95,7 @@ export default mixin({
             // need to replace dataview with one pointing to Zig memory later,
             // when the VM is up and running
             this.variables.push({ handle, object });
-          } else if (offset === undefined) {
+          } else if (offset === undefined && length > 0) {
             // save the object for later, since it constructor isn't isn't finalized yet
             // when offset is not undefined, the object is a child of another object and 
             // will be made read-only thru the parent (which might have a linkage handle)

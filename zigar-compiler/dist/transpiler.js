@@ -119,6 +119,7 @@ const MemberFlag = {
   IsString:         0x0080,
   IsPlain:          0x0100,
   IsTypedArray:     0x0200,
+  IsClampedArray:   0x0400,
 };
 const ProxyType = {
   Pointer: 1 << 0,
@@ -3416,9 +3417,7 @@ const events = [ 'log', 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink',
 var baseline = mixin({
   init() {
     this.variables = [];
-    this.listenerMap = new Map([
-      [ 'log', (e) => console.log(e.message) ],
-    ]);
+    this.listenerMap = new Map();
     this.envVariables = this.envVarArrays = null;
   },
   getSpecialExports() {
@@ -3429,7 +3428,7 @@ var baseline = mixin({
     return {
       init: () => this.initPromise,
       abandon: () => this.abandonModule?.(),
-      redirect: (fd, stream) => this.redirectStream(fd, stream),
+      redirect: (name, stream) => this.redirectStream(name, stream),
       sizeOf: (T) => check(T?.[SIZE]),
       alignOf: (T) => check(T?.[ALIGN]),
       typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
@@ -3499,7 +3498,7 @@ var baseline = mixin({
             // need to replace dataview with one pointing to Zig memory later,
             // when the VM is up and running
             this.variables.push({ handle, object });
-          } else if (offset === undefined) {
+          } else if (offset === undefined && length > 0) {
             // save the object for later, since it constructor isn't isn't finalized yet
             // when offset is not undefined, the object is a child of another object and 
             // will be made read-only thru the parent (which might have a linkage handle)
@@ -4124,7 +4123,7 @@ class BlobReader extends AsyncReader {
   }
 }
 
-class Uint8ArrayReadWriter {
+class Uint8ArrayReader {
   pos = 0;
   onClose = null;
 
@@ -4144,21 +4143,8 @@ class Uint8ArrayReadWriter {
     return buf;
   }
 
-  writenb(buf) {
-    return this.write(buf);
-  }
-
-  write(buf) {
-    this.pwrite(buf, this.pos);
-    this.pos += buf.length;
-  }
-
   pread(len, offset) {
     return this.array.subarray(offset, offset + len);
-  }
-
-  pwrite(buf, offset) {
-    this.array.set(buf, offset);
   }
 
   tell() {
@@ -4175,6 +4161,33 @@ class Uint8ArrayReadWriter {
 
   valueOf() {
     return this.array;
+  }
+}
+
+class Uint8ArrayReadWriter extends Uint8ArrayReader {
+  writenb(buf) {
+    return this.write(buf);
+  }
+
+  write(buf) {
+    this.pwrite(buf, this.pos);
+    this.pos += buf.length;
+  }
+
+  pwrite(buf, offset) {
+    this.array.set(buf, offset);
+  }
+}
+
+class StringReader extends Uint8ArrayReader {
+  constructor(string) {
+    super(encodeText(string));
+    this.string = string;
+    attachClose(string, this);
+  }
+
+  valueOf() {
+    return this.string;
   }
 }
 
@@ -4283,14 +4296,16 @@ function reposition(whence, offset, current, size) {
 }
 
 function attachClose(target, stream) {
-  const previous = target.close;
-  defineProperty(target, 'close', { 
-    value: () => {
-      previous?.();
-      stream.onClose?.();
-      delete target.close;
-    }
-  });
+  if (typeof(target) === 'object') {
+    const previous = target.close;
+    defineProperty(target, 'close', { 
+      value: () => {
+        previous?.();
+        stream.onClose?.();
+        delete target.close;
+      }
+    });
+  }
 }
 
 const size8k = 8192;
@@ -4989,6 +5004,8 @@ var readerConversion = mixin({
       return new BlobReader(arg);
     } else if (arg instanceof Uint8Array) {
       return new Uint8ArrayReadWriter(arg);
+    } else if (typeof(arg) === 'string' || arg instanceof String) {
+      return new StringReader(arg);
     } else if (arg === null) {
       return new NullStream();
     } else if (hasMethod(arg, 'read')) {
@@ -5177,8 +5194,9 @@ var streamRedirection = mixin({
       this.streamMap.delete(fd);
     }
   },
-  redirectStream(fd, arg) {
+  redirectStream(name, arg) {
     const map = this.streamMap;
+    const fd = PosixDescriptor[name];
     const previous = map.get(fd);
     if (arg !== undefined) {
       let stream, rights;
@@ -5192,7 +5210,7 @@ var streamRedirection = mixin({
         stream = this.convertDirectory(arg);
         rights = this.getDefaultRights('dir');
       } else {
-        throw new Error(`Expecting 0, 1, 2, or -1, received ${fd}`);
+        throw new Error(`Expecting 'stdin', 'stdout', 'stderr', or 'root', received ${name}`);
       }
       if (!stream) {
         throw new InvalidStream(rights[0], arg);
@@ -5226,7 +5244,9 @@ var streamRedirection = mixin({
       },
       dispatch(array) {
         const message = decodeText(array);
-        env.triggerEvent('log', { source, message });
+        if (env.triggerEvent('log', { source, message }) == undefined) {
+          console.log(message);
+        }
       },
       flush() {
         if (this.pending.length > 0) {
@@ -8150,24 +8170,27 @@ var _null = mixin({
 
 var object = mixin({
   defineMemberObject(member) {
+    const { flags, structure, slot } = member;
     let get, set;
-    if (member.flags & MemberFlag.IsString) {
+    if (flags & MemberFlag.IsString) {
       get = getString;
-    } else if (member.flags & MemberFlag.IsTypedArray) {
+    } else if (flags & MemberFlag.IsTypedArray) {
       get = getTypedArray;
-    } else if (member.flags & MemberFlag.IsPlain) {
+    } else if (flags & MemberFlag.IsClampedArray) {
+      get = getClampedArray;
+    } else if (flags & MemberFlag.IsPlain) {
       get = getPlain;
-    } else if (member.structure.flags & (StructureFlag.HasValue | StructureFlag.HasProxy)) {
+    } else if (structure.flags & (StructureFlag.HasValue | StructureFlag.HasProxy)) {
       get = getValue;
     } else {
       get = getObject;
     }
-    if (member.flags & MemberFlag.IsReadOnly) {
+    if (flags & MemberFlag.IsReadOnly) {
       set = throwReadOnly;
     } else {
       set = setValue;
     }
-    return bindSlot(member.slot, { get, set });
+    return bindSlot(slot, { get, set });
   }
 });
 
@@ -8181,6 +8204,10 @@ function getString(slot) {
 
 function getTypedArray(slot) {
   return getValue.call(this, slot)?.typedArray ?? null;
+}
+
+function getClampedArray(slot) {
+  return getValue.call(this, slot)?.clampedArray ?? null;
 }
 
 function getPlain(slot) {
@@ -8608,6 +8635,8 @@ var all$1 = mixin({
           let fn = template[SLOTS][slot];
           if (flags & MemberFlag.IsString) {
             fn[TRANSFORM] = (retval) => retval.string;
+          } else if (flags & MemberFlag.IsClampedArray) {
+            fn[TRANSFORM] = (retval) => retval.clampedArray;
           } else if (flags & MemberFlag.IsTypedArray) {
             fn[TRANSFORM] = (retval) => retval.typedArray;
           } else if (flags & MemberFlag.IsPlain) {
