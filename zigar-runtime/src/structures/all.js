@@ -1,4 +1,6 @@
-import { MemberFlag, MemberType, StructureFlag, structureNames, StructureType } from '../constants.js';
+import {
+  MemberFlag, MemberType, ProxyType, StructureFlag, structureNames, StructureType,
+} from '../constants.js';
 import { mixin } from '../environment.js';
 import { MissingInitializers, NoInitializer, NoProperty } from '../errors.js';
 import { removeProxy } from '../proxies.js';
@@ -109,10 +111,16 @@ export default mixin({
             descriptor[accessorType] = fn;
           }
           // see if it's a method
-          if (member.flags & MemberFlag.IsMethod) {
+          if (flags & MemberFlag.IsMethod) {
             const method = function(...args) {
               try {
-                return fn(this, ...args);
+                let [ self, proxyType ] = removeProxy(this);
+                if (flags & MemberFlag.IsExpectingInstance) {
+                  if (proxyType === ProxyType.Pointer) {
+                    self = self['*'];
+                  }
+                }
+                return fn(self, ...args);
               } catch (err) {
                 // adjust argument index/count
                 err[UPDATE]?.(1);

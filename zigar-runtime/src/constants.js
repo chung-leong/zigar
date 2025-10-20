@@ -104,17 +104,18 @@ export const MemberType = {
 };
 export const memberNames = Object.keys(MemberType);
 export const MemberFlag = {
-  IsRequired:       0x0001,
-  IsReadOnly:       0x0002,
-  IsPartOfSet:      0x0004,
-  IsSelector:       0x0008,
-  IsMethod:         0x0010,
-  IsSentinel:       0x0020,
-  IsBackingInt:     0x0040,
-  IsString:         0x0080,
-  IsPlain:          0x0100,
-  IsTypedArray:     0x0200,
-  IsClampedArray:   0x0400,
+  IsRequired: 1 << 0,
+  IsReadOnly: 1 << 1,
+  IsPartOfSet: 1 << 2,
+  IsSelector: 1 << 3,
+  IsMethod: 1 << 4,
+  IsExpectingInstance: 1 << 5,
+  IsSentinel: 1 << 6,
+  IsBackingInt: 1 << 7,
+  IsString: 1 << 8,
+  IsPlain: 1 << 9,
+  IsTypedArray: 1 << 10,
+  IsClampedArray: 1 << 11,
 };
 export const ProxyType = {
   Pointer: 1 << 0,
@@ -123,19 +124,18 @@ export const ProxyType = {
   ReadOnly: 1 << 3,
 };
 export const ModuleAttribute = {
-  LittleEndian:     0x0001,
-  RuntimeSafety:    0x0002,
-  LibC:             0x0004,
-  IoRedirection:    0x0008,
+  LittleEndian: 1 << 0,
+  RuntimeSafety: 1 << 1,
+  LibC: 1 << 2,
+  IoRedirection: 1 << 3,
 };
 export const VisitorFlag = {
-  IsInactive:       0x0001,
-  IsImmutable:      0x0002,
-
-  IgnoreUncreated:  0x0004,
-  IgnoreInactive:   0x0008,
-  IgnoreArguments:  0x0010,
-  IgnoreRetval:     0x0020,
+  IsInactive: 1 << 0,
+  IsImmutable: 1 << 1,
+  IgnoreUncreated: 1 << 2,
+  IgnoreInactive: 1 << 3,
+  IgnoreArguments: 1 << 4,
+  IgnoreRetval: 1 << 5,
 };
 export const PosixError = { // values mirror std.os.wasi.errno_t
   NONE: 0,  

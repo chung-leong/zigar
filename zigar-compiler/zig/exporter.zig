@@ -772,6 +772,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                                     .flags = MemberFlags{
                                         .is_read_only = decl_ptr_td.isConst(),
                                         .is_method = decl_td.isMethodOf(td.type),
+                                        .is_expecting_instance = decl_td.isExpectingInstanceOf(td.type),
                                         .is_string = is_string,
                                         .is_plain = is_plain,
                                         .is_typed_array = is_typed_array,
@@ -1563,14 +1564,13 @@ const MemberFlags = packed struct(u32) {
     is_read_only: bool = false,
     is_part_of_set: bool = false,
     is_selector: bool = false,
-
     is_method: bool = false,
+    is_expecting_instance: bool = false,
     is_sentinel: bool = false,
     is_backing_int: bool = false,
     is_string: bool = false,
-
     is_plain: bool = false,
     is_typed_array: bool = false,
     is_clamped_array: bool = false,
-    _: u21 = 0,
+    _: u20 = 0,
 };

@@ -450,6 +450,40 @@ pub const TypeData = struct {
         try expectEqual(false, isMethodOf(.{ .type = u32 }, B));
     }
 
+    pub fn isExpectingInstanceOf(comptime self: @This(), comptime T: type) bool {
+        switch (@typeInfo(self.type)) {
+            .@"fn" => |f| {
+                if (f.params.len > 0) {
+                    if (f.params[0].type) |PT| {
+                        return PT == T;
+                    }
+                }
+            },
+            else => {},
+        }
+        return false;
+    }
+
+    test "isExpectingInstanceOf" {
+        const A = struct {
+            number: i32 = 0,
+
+            fn a() void {}
+            fn b(_: i32) void {}
+            fn c(_: @This()) void {}
+            fn d(_: *@This()) void {}
+            fn e(_: *const @This()) void {}
+        };
+        const B = struct {};
+        try expectEqual(false, isExpectingInstanceOf(.{ .type = @TypeOf(A.a) }, A));
+        try expectEqual(false, isExpectingInstanceOf(.{ .type = @TypeOf(A.b) }, A));
+        try expectEqual(true, isExpectingInstanceOf(.{ .type = @TypeOf(A.c) }, A));
+        try expectEqual(false, isExpectingInstanceOf(.{ .type = @TypeOf(A.d) }, A));
+        try expectEqual(false, isExpectingInstanceOf(.{ .type = @TypeOf(A.e) }, A));
+        try expectEqual(false, isExpectingInstanceOf(.{ .type = @TypeOf(A.e) }, B));
+        try expectEqual(false, isExpectingInstanceOf(.{ .type = u32 }, B));
+    }
+
     pub fn hasPointer(comptime self: @This()) bool {
         return self.attrs.has_pointer;
     }

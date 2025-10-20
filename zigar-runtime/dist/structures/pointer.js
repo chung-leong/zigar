@@ -8,7 +8,6 @@ import { defineValue, isCompatibleInstanceOf, usizeInvalid, getSelf, isCompatibl
 var pointer = mixin({
   definePointer(structure, descriptors) {
     const {
-      type,
       flags,
       byteSize,
       instance: { members: [ member ] },
@@ -283,9 +282,9 @@ var pointer = mixin({
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = (targetType === StructureType.Function) && {
       value() {
-        const self = (...args) => {
+        const self = function(...args) {
           const f = self['*'];
-          return f(...args);
+          return f.call(this, ...args);
         };
         self[MEMORY] = this[MEMORY];
         self[SLOTS] = this[SLOTS];
