@@ -561,6 +561,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .flags = MemberFlags{ .is_backing_int = true },
                     .bitSize = int_td.getBitSize(),
                     .byteSize = int_td.getByteSize(),
+                    .bitOffset = 0,
                     .structure = try self.getStructure(IT),
                 });
             }
