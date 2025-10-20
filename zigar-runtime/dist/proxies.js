@@ -1,6 +1,6 @@
 import { ProxyType, StructureType, StructureFlag, PointerFlag } from './constants.js';
 import { throwReadOnly } from './errors.js';
-import { READ_ONLY, PROXY_TYPE, TARGET } from './symbols.js';
+import { MEMORY, READ_ONLY, PROXY_TYPE, TARGET } from './symbols.js';
 
 const proxyMaps = [ 
   0, 
@@ -66,7 +66,7 @@ function getReadOnlyProxy(object) {
     }
   } else {
     // the check below will filter out functions, which doesn't need the protection
-    if (!object || typeof(object) !== 'object' || object[READ_ONLY]) {
+    if (!object?.[MEMORY] || typeof(object) !== 'object' || object[READ_ONLY]) {
       return object;
     }
     proxyType = object.constructor[PROXY_TYPE] ?? ProxyType.ReadOnly;
