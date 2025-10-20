@@ -492,7 +492,7 @@ class Deadlock extends Error {
   errno = PosixError.EDEADLK;
 
   constructor() {
-    super(`Unable to await promise`);
+    super(`Deadlock`);
   }
 }
 
