@@ -15,7 +15,7 @@ const StructurePurpose = {
 const MemberType = {
   Void: 0};
 const MemberFlag = {
-  IsReadOnly:       0x0002};
+  IsReadOnly: 1 << 1};
 
 const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
 

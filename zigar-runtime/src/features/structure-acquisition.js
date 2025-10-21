@@ -228,11 +228,15 @@ export default mixin({
           case 'thread-spawn': this.use(workerSupport); break;
         }
       }
+      for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
+        switch (name) {
+          case 'environ_get': this.use(environGet); break;
+          case 'environ_sizes_get': this.use(environSizesGet); break;
+        }
+      }
       if (this.ioRedirection) {
         for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
           switch (name) {
-            case 'environ_get': this.use(environGet); break;
-            case 'environ_sizes_get': this.use(environSizesGet); break;
             case 'fd_advise': this.use(fdAdvise); break;
             case 'fd_allocate': this.use(fdAllocate); break;
             case 'fd_close': this.use(fdClose); break;

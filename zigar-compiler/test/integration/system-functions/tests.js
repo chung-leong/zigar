@@ -70,6 +70,16 @@ export function addTests(importModule, options) {
         expect(lines4).to.have.lengthOf(0);
       }
     });
+    it('should use custom environment variables even when useRedirection is false', async function () {
+      this.timeout(0);
+      const { __zigar, get } = await importTest('print-env-with-redirection-disabled', { useLibc: true, useRedirection: false });
+      __zigar.set('env', {
+        HELLO: 1,
+        WORLD: 123,
+      });
+      const result1 = get('WORLD');
+      expect(result1).to.equal('123');
+    });
     skip.entirely.unless(target === 'win32').
     it('should print environment variables using win32 functions', async function () {
       this.timeout(0);

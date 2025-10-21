@@ -111,15 +111,18 @@ const MemberType = {
 };
 const memberNames = Object.keys(MemberType);
 const MemberFlag = {
-  IsRequired:       0x0001,
-  IsReadOnly:       0x0002,
-  IsPartOfSet:      0x0004,
-  IsMethod:         0x0010,
-  IsBackingInt:     0x0040,
-  IsString:         0x0080,
-  IsPlain:          0x0100,
-  IsTypedArray:     0x0200,
-  IsClampedArray:   0x0400,
+  IsRequired: 1 << 0,
+  IsReadOnly: 1 << 1,
+  IsPartOfSet: 1 << 2,
+  IsSelector: 1 << 3,
+  IsMethod: 1 << 4,
+  IsExpectingInstance: 1 << 5,
+  IsSentinel: 1 << 6,
+  IsBackingInt: 1 << 7,
+  IsString: 1 << 8,
+  IsPlain: 1 << 9,
+  IsTypedArray: 1 << 10,
+  IsClampedArray: 1 << 11,
 };
 const ProxyType = {
   Pointer: 1 << 0,
@@ -128,19 +131,18 @@ const ProxyType = {
   ReadOnly: 1 << 3,
 };
 const ModuleAttribute = {
-  LittleEndian:     0x0001,
-  RuntimeSafety:    0x0002,
-  LibC:             0x0004,
-  IoRedirection:    0x0008,
+  LittleEndian: 1 << 0,
+  RuntimeSafety: 1 << 1,
+  LibC: 1 << 2,
+  IoRedirection: 1 << 3,
 };
 const VisitorFlag = {
-  IsInactive:       0x0001,
-  IsImmutable:      0x0002,
-
-  IgnoreUncreated:  0x0004,
-  IgnoreInactive:   0x0008,
-  IgnoreArguments:  0x0010,
-  IgnoreRetval:     0x0020,
+  IsInactive: 1 << 0,
+  IsImmutable: 1 << 1,
+  IgnoreUncreated: 1 << 2,
+  IgnoreInactive: 1 << 3,
+  IgnoreArguments: 1 << 4,
+  IgnoreRetval: 1 << 5,
 };
 const PosixError = { // values mirror std.os.wasi.errno_t
   NONE: 0,  
@@ -3156,7 +3158,7 @@ class Deadlock extends Error {
   errno = PosixError.EDEADLK;
 
   constructor() {
-    super(`Unable to await promise`);
+    super(`Deadlock`);
   }
 }
 
@@ -7007,11 +7009,15 @@ var structureAcquisition = mixin({
           case 'thread-spawn': this.use(workerSupport); break;
         }
       }
+      for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
+        switch (name) {
+          case 'environ_get': this.use(environGet); break;
+          case 'environ_sizes_get': this.use(environSizesGet); break;
+        }
+      }
       if (this.ioRedirection) {
         for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
           switch (name) {
-            case 'environ_get': this.use(environGet); break;
-            case 'environ_sizes_get': this.use(environSizesGet); break;
             case 'fd_advise': this.use(fdAdvise); break;
             case 'fd_allocate': this.use(fdAllocate); break;
             case 'fd_close': this.use(fdClose); break;
@@ -7577,7 +7583,7 @@ function getReadOnlyProxy(object) {
     }
   } else {
     // the check below will filter out functions, which doesn't need the protection
-    if (!object || typeof(object) !== 'object' || object[READ_ONLY]) {
+    if (!object?.[MEMORY] || typeof(object) !== 'object' || object[READ_ONLY]) {
       return object;
     }
     proxyType = object.constructor[PROXY_TYPE] ?? ProxyType.ReadOnly;
@@ -8656,10 +8662,16 @@ var all$1 = mixin({
             descriptor[accessorType] = fn;
           }
           // see if it's a method
-          if (member.flags & MemberFlag.IsMethod) {
+          if (flags & MemberFlag.IsMethod) {
             const method = function(...args) {
               try {
-                return fn(this, ...args);
+                let [ self, proxyType ] = removeProxy(this);
+                if (flags & MemberFlag.IsExpectingInstance) {
+                  if (proxyType === ProxyType.Pointer) {
+                    self = self['*'];
+                  }
+                }
+                return fn(self, ...args);
               } catch (err) {
                 // adjust argument index/count
                 err[UPDATE]?.(1);
@@ -9634,7 +9646,6 @@ var optional = mixin({
 var pointer = mixin({
   definePointer(structure, descriptors) {
     const {
-      type,
       flags,
       byteSize,
       instance: { members: [ member ] },
@@ -9909,9 +9920,9 @@ var pointer = mixin({
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = (targetType === StructureType.Function) && {
       value() {
-        const self = (...args) => {
+        const self = function(...args) {
           const f = self['*'];
-          return f(...args);
+          return f.call(this, ...args);
         };
         self[MEMORY] = this[MEMORY];
         self[SLOTS] = this[SLOTS];
