@@ -148,20 +148,20 @@ export default mixin({
       pending: [],
 
       write(chunk) {
-          // send text up to the last newline character
-          const index = chunk.lastIndexOf(0x0a);
-          if (index === -1) {
-            this.pending.push(chunk);
-          } else {
-            const beginning = chunk.subarray(0, index);
-            const remaining = chunk.subarray(index + 1);
-            this.dispatch([ ...this.pending, beginning ]);
-            this.pending.splice(0);
-            if (remaining.length > 0) {
-              this.pending.push(remaining);
-            }
+        // send text up to the last newline character
+        const index = chunk.lastIndexOf(0x0a);
+        if (index === -1) {
+          this.pending.push(chunk);
+        } else {
+          const beginning = chunk.subarray(0, index);
+          const remaining = chunk.subarray(index + 1);
+          this.dispatch([ ...this.pending, beginning ]);
+          this.pending.splice(0);
+          if (remaining.length > 0) {
+            this.pending.push(remaining);
           }
-          env.scheduleFlush(this, this.pending.length > 0, 250);
+        }
+        env.scheduleFlush(this, this.pending.length > 0, 250);
       },
       dispatch(array) {
         const message = decodeText(array);
