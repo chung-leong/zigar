@@ -40,7 +40,8 @@ const ModuleHost = struct {
     is_bun: bool = false,
     external_buffer_disabled: bool = false,
     multithread_count: std.atomic.Value(usize) = .init(0),
-    redirection_mask: hooks.Mask = .{},
+    redirection_mask: hooks.Syscall.Mask = .{},
+    redirecting_other_libraries: bool = false,
     hooks_installed: bool = false,
     syscall_trap_installed: bool = false,
     syscall_trap_count: usize = 0,
@@ -627,9 +628,9 @@ const ModuleHost = struct {
         _ = try env.getValueStringUtf8(event, event_bytes);
         const event_name = event_bytes[0..event_len];
         const set = try env.getValueBool(listening);
-        const empty_mask = hooks.Mask{};
+        const empty_mask = hooks.Syscall.Mask{};
         const empty_before = self.redirection_mask == empty_mask;
-        return inline for (std.meta.fields(hooks.Mask)) |field| {
+        return inline for (std.meta.fields(hooks.Syscall.Mask)) |field| {
             if (std.mem.eql(u8, field.name, event_name)) {
                 @field(self.redirection_mask, field.name) = set;
                 const empty_after = self.redirection_mask == empty_mask;
@@ -1313,7 +1314,7 @@ const ModuleHost = struct {
         return result;
     }
 
-    fn getSyscallMask(self: *@This(), ptr: *hooks.Mask) !void {
+    fn getSyscallMask(self: *@This(), ptr: *hooks.Syscall.Mask) !void {
         var mask = self.redirection_mask;
         // a stat request can be handled by a 'stat' or an 'open' event handler
         if (mask.open) mask.stat = true;
@@ -1340,6 +1341,10 @@ const ModuleHost = struct {
         if (!self.hooks_installed) return error.RedirectionDisabled;
         const pos = try redirection_controller.installHooksInLibraryOf(self, ptr);
         if (self.syscall_trap_installed) {
+            if (!self.redirecting_other_libraries) {
+                self.enableSyscallTrap();
+                self.redirecting_other_libraries = true;
+            }
             if (self.getSyscallHook("__sc_vtable")) |hook| {
                 const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
                 return redirection_controller.addSyscallVtable(pos, vtable);

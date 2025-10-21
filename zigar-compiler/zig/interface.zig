@@ -39,7 +39,7 @@ pub fn Module(comptime Value: type) type {
             release_function: *const fn (*Host, usize) callconv(.C) E,
             handle_jscall: *const fn (*Host, *Jscall) callconv(.C) E,
             handle_syscall: *const fn (*Host, *Syscall) callconv(.C) E,
-            get_syscall_mask: *const fn (*Host, *hooks.Mask) callconv(.C) E,
+            get_syscall_mask: *const fn (*Host, *hooks.Syscall.Mask) callconv(.C) E,
             initialize_thread: *const fn (*Host) callconv(.C) E,
             deinitialize_thread: *const fn (*Host) callconv(.C) E,
             redirect_syscalls: *const fn (*Host, *const anyopaque) callconv(.C) E,

@@ -2095,10 +2095,9 @@ export function addTests(importModule, options) {
       };
       const cpuArch = cpuArchs[arch()];
       const osTag = osTags[platform()];
-      __zigar.on('syscall', true);
       const libPath = absolute(`./data/print.${ext}`);
       const zigPath = absolute(`./redirect-shared-lib-target.zig`);
-      execSync(`zig build-lib "${zigPath}" -target ${cpuArch}-${osTag} -dynamic -femit-bin="${libPath}"`);
+      execSync(`zig build-lib "${zigPath}" -target ${cpuArch}-${osTag} -dynamic -O ReleaseSmall -femit-bin="${libPath}"`);
       const [ line ] = await capture(() => use(libPath));
       expect(line).to.equal('Hello world');
     })

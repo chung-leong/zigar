@@ -3414,7 +3414,7 @@ function getMemory(arg) {
   return { dv, align, constructor };
 }
 
-const events = [ 'log', 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink', 'syscall' ];
+const events = [ 'log', 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink' ];
 
 var baseline = mixin({
   init() {

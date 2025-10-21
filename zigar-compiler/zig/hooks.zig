@@ -33,15 +33,6 @@ pub const Entry = extern struct {
     handler: *const anyopaque,
     original: **const anyopaque,
 };
-pub const Mask = packed struct {
-    open: bool = false,
-    mkdir: bool = false,
-    rmdir: bool = false,
-    set_times: bool = false,
-    stat: bool = false,
-    unlink: bool = false,
-    syscall: bool = false,
-};
 pub const Syscall = extern struct {
     cmd: Command,
     u: extern union {
@@ -244,14 +235,13 @@ pub const Syscall = extern struct {
         write,
         writev,
     };
-    pub const Mask = packed struct(u8) {
+    pub const Mask = packed struct {
         mkdir: bool = false,
         open: bool = false,
         rmdir: bool = false,
         set_times: bool = false,
         stat: bool = false,
         unlink: bool = false,
-        _: u2 = 0,
     };
     pub const Lock = extern struct {
         type: i16,

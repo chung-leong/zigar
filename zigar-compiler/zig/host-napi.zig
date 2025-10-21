@@ -328,7 +328,7 @@ pub fn redirectSyscall(call: *hooks.Syscall) std.c.E {
 
 pub fn isRedirecting(comptime literal: @TypeOf(.enum_literal)) bool {
     if (!exporter.options.use_redirection) unreachable;
-    var mask: hooks.Mask = undefined;
+    var mask: hooks.Syscall.Mask = undefined;
     if (imports.get_syscall_mask(instance, &mask) != .SUCCESS) return false;
     const name = @tagName(literal);
     return @field(mask, name);
