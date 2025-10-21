@@ -184,7 +184,7 @@ export default mixin({
         // replace Zig memory
         const { address, len, handle } = zig;
         const jsDV = object[MEMORY] = this.createView(address, len, true, 0);
-        if (handle) {
+        if (handle !== undefined) {
           jsDV.handle = handle;
         }
         list.push({ address, len, owner: object, replaced: false, handle });

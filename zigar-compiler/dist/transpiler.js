@@ -1227,7 +1227,7 @@ function addStructureDefinitions(lines, definition) {
         }
         add(`memory: { ${pairs.join(', ')} },`);
         const { handle } = dv;
-        if (handle) {
+        if (handle !== undefined) {
           add(`handle: ${handle},`);
         }
       }
@@ -3496,11 +3496,11 @@ var baseline = mixin({
           if (slots) {
             insertObjects(object[SLOTS], slots);
           }
-          if (handle) {
+          if (handle !== undefined) {
             // need to replace dataview with one pointing to Zig memory later,
             // when the VM is up and running
             this.variables.push({ handle, object });
-          } else if (offset === undefined && length > 0) {
+          } else if (offset === undefined) {
             // save the object for later, since it constructor isn't isn't finalized yet
             // when offset is not undefined, the object is a child of another object and 
             // will be made read-only thru the parent (which might have a linkage handle)
@@ -3523,7 +3523,7 @@ var baseline = mixin({
           if (memory) {
             const { array, offset, length } = memory;
             object[MEMORY] = this.obtainView(getBuffer(array), offset, length);
-            if (handle) {
+            if (handle !== undefined) {
               this.variables.push({ handle, object });
             }
           }
@@ -6966,7 +6966,7 @@ var structureAcquisition = mixin({
         // replace Zig memory
         const { address, len, handle } = zig;
         const jsDV = object[MEMORY] = this.createView(address, len, true, 0);
-        if (handle) {
+        if (handle !== undefined) {
           jsDV.handle = handle;
         }
         list.push({ address, len, owner: object, replaced: false, handle });

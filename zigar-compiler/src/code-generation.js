@@ -284,7 +284,7 @@ function addStructureDefinitions(lines, definition) {
         }
         add(`memory: { ${pairs.join(', ')} },`);
         const { handle } = dv;
-        if (handle) {
+        if (handle !== undefined) {
           add(`handle: ${handle},`);
         }
       }

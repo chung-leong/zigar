@@ -5,6 +5,8 @@ const pollfd = std.c.pollfd;
 const nfds_t = std.c.nfds_t;
 const builtin = @import("builtin");
 
+const fn_transform = @import("./fn-transform.zig");
+
 const dirent_h = @cImport({
     @cInclude("dirent.h");
 });
@@ -19,8 +21,6 @@ const windows_h = @cImport({
     @cInclude("windows.h");
     @cInclude("winternl.h");
 });
-
-const fn_transform = @import("./fn-transform.zig");
 
 const os = switch (builtin.target.os.tag) {
     .linux => .linux,

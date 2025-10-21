@@ -91,11 +91,11 @@ export default mixin({
           if (slots) {
             insertObjects(object[SLOTS], slots);
           }
-          if (handle) {
+          if (handle !== undefined) {
             // need to replace dataview with one pointing to Zig memory later,
             // when the VM is up and running
             this.variables.push({ handle, object });
-          } else if (offset === undefined && length > 0) {
+          } else if (offset === undefined) {
             // save the object for later, since it constructor isn't isn't finalized yet
             // when offset is not undefined, the object is a child of another object and 
             // will be made read-only thru the parent (which might have a linkage handle)
@@ -118,7 +118,7 @@ export default mixin({
           if (memory) {
             const { array, offset, length } = memory;
             object[MEMORY] = this.obtainView(getBuffer(array), offset, length);
-            if (handle) {
+            if (handle !== undefined) {
               this.variables.push({ handle, object });
             }
           }

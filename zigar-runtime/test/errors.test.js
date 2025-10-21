@@ -818,7 +818,7 @@ describe('Error functions', function() {
         result = catchPosixError(false, PosixError.EACCES, async () => {});
       });
       expect(result).to.equal(PosixError.EDEADLK);
-      expect(error).to.contain('promise');
+      expect(error).to.contain('Deadlock');
     })
     it('should return 0 when no error occurred', async function() {
       let result;

@@ -1185,7 +1185,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 break :create @intFromPtr(invalid_ptr);
             };
             if (address == invalid_address) {
-                return host.createView(null, 0, true, export_handle);
+                return host.createView(null, 0, copying, export_handle);
             }
             const len: usize = switch (pt.size) {
                 .one => child_size,
@@ -1212,6 +1212,7 @@ fn Factory(comptime host: type, comptime module: type) type {
         }
 
         fn createInstance(structure: Value, ptr: anytype, copying: bool, export_handle: anytype, slots: ?Value) !Value {
+            // export_handle is  null for WebAssembly, since addresses don't change there
             const dv = try createView(ptr, copying, export_handle);
             return host.createInstance(structure, dv, slots);
         }

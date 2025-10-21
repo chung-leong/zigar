@@ -146,7 +146,7 @@ describe('Syscall: fd-read', function() {
       result = env.fdRead(0, iovsAddress, 1, readAddress);
     });
     expect(result).to.equal(PosixError.EDEADLK);
-    expect(error).to.contains('promise');
+    expect(error).to.contains('Deadlock');
   })
   if (process.env.TARGET === 'wasm') {
     it('should be callable through WASI', async function() {

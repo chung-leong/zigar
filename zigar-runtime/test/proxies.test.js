@@ -4,6 +4,8 @@ import {
 } from '../src/constants.js';
 import { defineEnvironment } from '../src/environment.js';
 import '../src/mixins.js';
+import { MEMORY, TARGET } from '../src/symbols.js';
+import { createView } from '../src/utils.js';
 import { addressByteSize, addressSize } from './test-utils.js';
 
 import {
@@ -12,7 +14,6 @@ import {
   getProxyType,
   getReadOnlyProxy,
 } from '../src/proxies.js';
-import { TARGET } from '../src/symbols.js';
 
 const Env = defineEnvironment();
 
@@ -55,7 +56,10 @@ describe('Proxies', function() {
       expect(target.dog).to.equal(456);
     })
     it('should create proxy for const pointer', function() {
-      const target = { dog: 123 };
+      const target = { 
+        dog: 123,
+        [MEMORY]: createView(4),
+      };
       const pointer = { 
         get ['*']() {
           return this[TARGET];
@@ -182,7 +186,10 @@ describe('Proxies', function() {
   })
   describe('getReadOnlyProxy', function() {
     it('should read a proxy protecting an object from changes', function() {
-      const target = { dog: 123 };
+      const target = { 
+        dog: 123, 
+        [MEMORY]: createView(4),
+      };
       const proxy = getReadOnlyProxy(target);
       expect(proxy).to.not.equal(target);
       expect(proxy.dog).to.equal(123);

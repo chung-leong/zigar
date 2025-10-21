@@ -16,6 +16,8 @@ export function addTests(importModule, options) {
     it('should handle void as static variables', async function() {
       const { default: module } = await importTest('as-static-variables');
       expect(module.empty).to.be.undefined;
+      expect(() => module.empty = undefined).to.throw();
+      expect(() => module.empty_writable = undefined).to.not.throw();
       expect(JSON.stringify(module.empty)).to.equal(undefined);
     })
     it('should print void arguments', async function() {
@@ -28,8 +30,10 @@ export function addTests(importModule, options) {
       expect(getVoid()).to.equal(undefined);
     })
     it('should handle void in array', async function() {
-      const { array, print } = await importTest('array-of');
+      const { default: module, array, print } = await importTest('array-of');
       expect(array.length).to.equal(4);
+      expect(() => module.array[0] = undefined).to.throw();
+      expect(() => module.array_writable[0] = undefined).to.not.throw();
       expect([ ...array ]).to.eql([ undefined, undefined, undefined, undefined ]);
       const [ line ] = await capture(() => print());
       expect(line).to.equal('{ void, void, void, void }');
