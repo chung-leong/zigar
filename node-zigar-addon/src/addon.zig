@@ -304,8 +304,10 @@ const ModuleHost = struct {
         _ = module.exports.set_host_instance(@ptrCast(self));
         try self.exportFunctionsToModule();
         if (env.getValueBool(redirectingIO) catch true) {
+            // hooks are installed even when io redirection is disabled, because they're needed for
+            // correct handling threads and environment variables
+            const pos = try redirection_controller.installHooks(self, &lib, path_s);
             if (module.attributes.io_redirection) {
-                const pos = try redirection_controller.installHooks(self, &lib, path_s);
                 if (self.getSyscallHook("__sc_vtable")) |hook| {
                     const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
                     try redirection_controller.addSyscallVtable(pos, vtable);

@@ -312,7 +312,7 @@ fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
 }
 
 pub fn redirectSyscall(call: *hooks.Syscall) std.c.E {
-    if (!exporter.options.use_redirection) unreachable;
+    // this function is needed even when use_redirection is false because of getenv()
     const result = imports.handle_syscall(instance, call);
     // translate from WASI enum to the current system's
     return inline for (std.meta.fields(E)) |field| {
