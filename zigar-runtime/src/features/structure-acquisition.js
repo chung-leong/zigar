@@ -232,6 +232,8 @@ export default mixin({
         switch (name) {
           case 'environ_get': this.use(environGet); break;
           case 'environ_sizes_get': this.use(environSizesGet); break;
+          case 'proc_exit': this.use(procExit); break;
+          case 'random_get': this.use(randomGet); break;
         }
       }
       if (this.ioRedirection) {
@@ -263,8 +265,6 @@ export default mixin({
             case 'path_open': this.use(pathOpen); break;
             case 'path_unlink_file': this.use(pathUnlinkFile); break;
             case 'poll_oneoff': this.use(pollOneoff); break;
-            case 'proc_exit': this.use(procExit); break;
-            case 'random_get': this.use(randomGet); break;
           }
           const isPathFunc = name.startsWith('path_');
           const isFdFunc = name.startsWith('fd_');

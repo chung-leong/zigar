@@ -35,7 +35,7 @@ export function addTests(importModule, options) {
       __zigar.set('env', {});
       const lines4 = await capture(() => print());
       expect(lines4).to.have.lengthOf(0);
-    });
+    })
     it('should print environment variables using libc functions', async function () {
       this.timeout(0);
       const { __zigar, print, get } = await importTest('print-env-with-libc-functions', { useLibc: true });
@@ -69,7 +69,7 @@ export function addTests(importModule, options) {
         const lines4 = await capture(() => print());
         expect(lines4).to.have.lengthOf(0);
       }
-    });
+    })
     it('should use custom environment variables even when useRedirection is false', async function () {
       this.timeout(0);
       const { __zigar, get } = await importTest('print-env-with-redirection-disabled', { useLibc: true, useRedirection: false });
@@ -79,7 +79,13 @@ export function addTests(importModule, options) {
       });
       const result1 = get('WORLD');
       expect(result1).to.equal('123');
-    });
+    })
+    skip.entirely.unless(target === 'wasm32').
+    it('should be able to exit even when useRedirection is false', async function () {
+      this.timeout(0);
+      const { exit } = await importTest('exit', { useLibc: true, useRedirection: false });
+      expect(() => exit(7)).to.throw(Error).with.property('code', 7);
+    })
     skip.entirely.unless(target === 'win32').
     it('should print environment variables using win32 functions', async function () {
       this.timeout(0);
@@ -100,7 +106,7 @@ export function addTests(importModule, options) {
       });
       const lines2 = await capture(() => printW());
       expect(lines2).to.include('土耳其=火雞');
-    });
+    })
     it('should print random numbers', async function () {
       this.timeout(0);
       const { print } = await importTest('print-random');

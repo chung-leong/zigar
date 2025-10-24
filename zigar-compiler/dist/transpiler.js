@@ -5229,20 +5229,20 @@ var streamRedirection = mixin({
       pending: [],
 
       write(chunk) {
-          // send text up to the last newline character
-          const index = chunk.lastIndexOf(0x0a);
-          if (index === -1) {
-            this.pending.push(chunk);
-          } else {
-            const beginning = chunk.subarray(0, index);
-            const remaining = chunk.subarray(index + 1);
-            this.dispatch([ ...this.pending, beginning ]);
-            this.pending.splice(0);
-            if (remaining.length > 0) {
-              this.pending.push(remaining);
-            }
+        // send text up to the last newline character
+        const index = chunk.lastIndexOf(0x0a);
+        if (index === -1) {
+          this.pending.push(chunk);
+        } else {
+          const beginning = chunk.subarray(0, index);
+          const remaining = chunk.subarray(index + 1);
+          this.dispatch([ ...this.pending, beginning ]);
+          this.pending.splice(0);
+          if (remaining.length > 0) {
+            this.pending.push(remaining);
           }
-          env.scheduleFlush(this, this.pending.length > 0, 250);
+        }
+        env.scheduleFlush(this, this.pending.length > 0, 250);
       },
       dispatch(array) {
         const message = decodeText(array);
@@ -7013,6 +7013,8 @@ var structureAcquisition = mixin({
         switch (name) {
           case 'environ_get': this.use(environGet); break;
           case 'environ_sizes_get': this.use(environSizesGet); break;
+          case 'proc_exit': this.use(procExit); break;
+          case 'random_get': this.use(randomGet); break;
         }
       }
       if (this.ioRedirection) {
@@ -7044,8 +7046,6 @@ var structureAcquisition = mixin({
             case 'path_open': this.use(pathOpen); break;
             case 'path_unlink_file': this.use(pathUnlinkFile); break;
             case 'poll_oneoff': this.use(pollOneoff); break;
-            case 'proc_exit': this.use(procExit); break;
-            case 'random_get': this.use(randomGet); break;
           }
           const isPathFunc = name.startsWith('path_');
           const isFdFunc = name.startsWith('fd_');
