@@ -11152,6 +11152,7 @@ function stripUnused(binary, options = {}) {
   // mark blacklisted functions as unused
   for (const fn of functions) {
     if (fn.name && blacklist.some(re => re.test(fn.name))) {
+      fn.using = false;
       if (fn.name === 'getFactoryThunk' && functionNames.length === 0) {
         // when compiled for ReleaseSmall, we don't get the name section
         // therefore unable to remove the factory function by name

@@ -109,6 +109,7 @@ export function addTests(importModule, options) {
       const log = [];
       __zigar.on('log', (evt) => {
         log.push(evt);
+        return true;
       });
       printInfo();
       expect(log).to.have.lengthOf(0);
