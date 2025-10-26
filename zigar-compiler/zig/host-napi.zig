@@ -286,7 +286,6 @@ fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
         else => .unknown,
     };
     var name_s = name[0..std.mem.len(name)];
-    std.debug.print("{s}\n", .{name_s});
     const entry = hook_table.get(name_s) orelse alt: {
         switch (os) {
             .darwin => {
@@ -313,8 +312,7 @@ fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
         return .NOENT;
     };
     dest.* = entry;
-    return .NOENT;
-    // return .SUCCESS;
+    return .SUCCESS;
 }
 
 pub fn redirectSyscall(call: *hooks.Syscall) std.c.E {
