@@ -897,8 +897,8 @@ const ModuleHost = struct {
 
     fn handleJscall(self: *@This(), call: *Jscall) !E {
         if (in_main_thread) {
-            if (call.futex_handle != 0) {
-                errdefer Futex.wake(call.futex_handle, E.FAULT) catch {};
+            errdefer {
+                if (call.futex_handle != 0) Futex.wake(call.futex_handle, E.FAULT) catch {};
             }
             const env = self.env;
             const status = try env.callFunction(
