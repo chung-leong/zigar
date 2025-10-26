@@ -38,6 +38,7 @@ const allocator = gpa.allocator();
 var imports: Module.Imports = undefined;
 
 threadlocal var instance: *Module.Host = undefined;
+threadlocal var initialized: bool = false;
 
 pub fn createBool(initializer: bool) !AnyValue {
     var value: AnyValue = undefined;
@@ -167,6 +168,7 @@ pub fn finishStructure(structure: AnyValue) !void {
 }
 
 pub fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
+    if (!initialized) @panic("Uninitialized thread");
     var call: Module.Jscall = .{
         .fn_id = fn_id,
         .arg_address = @intFromPtr(arg_ptr),
@@ -201,11 +203,13 @@ pub fn getInstance() *anyopaque {
 
 pub fn setHostInstance(ptr: *Module.Host) callconv(.c) E {
     instance = ptr;
+    initialized = true;
     return E.SUCCESS;
 }
 
 pub fn initializeThread(ptr: *anyopaque) !void {
     instance = @ptrCast(ptr);
+    initialized = true;
     if (imports.initialize_thread(instance) != .SUCCESS) {
         return error.UnableToInitializeThread;
     }
@@ -282,6 +286,7 @@ fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
         else => .unknown,
     };
     var name_s = name[0..std.mem.len(name)];
+    std.debug.print("{s}\n", .{name_s});
     const entry = hook_table.get(name_s) orelse alt: {
         switch (os) {
             .darwin => {
@@ -308,7 +313,8 @@ fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
         return .NOENT;
     };
     dest.* = entry;
-    return .SUCCESS;
+    return .NOENT;
+    // return .SUCCESS;
 }
 
 pub fn redirectSyscall(call: *hooks.Syscall) std.c.E {
