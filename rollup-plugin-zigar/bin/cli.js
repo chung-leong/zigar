@@ -25,7 +25,7 @@ async function patchStandardLibrary() {
     const patchPath = join(modPath, 'wasi-thread.patch');
     const zigPath = resolve(findExecutable('zig'), '..');
     const stdPath = join(zigPath, 'lib/std');
-    const patchExePath = findExecutable('patchsa');
+    const patchExePath = findExecutable('patch');
     const dryRunCmd = `patch -d "${stdPath}" -t -p0 -N --dry-run < "${patchPath}"`;
     const dryRunResult = execSync(dryRunCmd).toString();
     const patchCmd = `patch -d ${JSON.stringify(stdPath)} -t -p0 < ${JSON.stringify(patchPath)}`;
