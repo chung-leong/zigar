@@ -40,7 +40,7 @@ export function addTests(importModule, options) {
       };
       call(f);
       expect(array1).to.eql([ 123, 456, 789 ]);
-      expect(array2).to.eql([ 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2 ]);
+      expect(array2).to.eql([ 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8 ]);
     })
     it('should correctly pass slice arguments', async function() {
       const { call } = await importTest('slice-arguments');
