@@ -37,7 +37,7 @@ Module._load = new Proxy(Module._load, {
     // load the addon and create the runtime environment
     const { createEnvironment } = require(addonPath);
     const env = createEnvironment();
-    env.loadModule(modulePath, false);
+    env.loadModule(modulePath);
     env.acquireStructures({});
     return env.useStructures();
   }
