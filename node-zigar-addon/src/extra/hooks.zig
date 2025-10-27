@@ -1065,11 +1065,11 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         pub const newfstatat = fstatat;
 
-        pub fn open(path: [*:0]const u8, oflags: c_int, mode: c_int, result: *c_int) callconv(.c) bool {
+        pub fn open(path: [*:0]const u8, oflags: c_int, mode: std.c.mode_t, result: *c_int) callconv(.c) bool {
             return openat(fd_cwd, path, oflags, mode, result);
         }
 
-        pub fn openat(dirfd: c_int, path: [*:0]const u8, oflags: c_int, _: c_int, result: *c_int) callconv(.c) bool {
+        pub fn openat(dirfd: c_int, path: [*:0]const u8, oflags: c_int, _: std.c.mode_t, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.open))) {
                 const o: O = @bitCast(@as(i32, @intCast(oflags)));
                 var resolver = PathResolver.init(dirfd, path) catch {
@@ -1702,10 +1702,6 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const mmap = makeStdHook("mmap");
         pub const mmap64 = makeStdHook("mmap64");
         pub const munmap = makeStdHook("munmap");
-        pub const open = makeStdHook("open");
-        pub const openat = makeStdHook("openat");
-        pub const open64 = makeStdHookUsing("open64", "open");
-        pub const openat64 = makeStdHookUsing("openat64", "openat");
         pub const poll = makeStdHook("poll");
         pub const posix_fadvise = makeStdHookUsing("posix_fadvise", "fadvise64");
         pub const pread = makeStdHook("pread");
@@ -1808,7 +1804,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         }
 
         pub fn fcntl(fd: c_int, op: c_int, ...) callconv(.c) c_int {
-            if (os == .windows) return;
+            if (os == .windows) return -1;
             var va_list = @cVaStart();
             defer @cVaEnd(&va_list);
             const arg = @cVaArg(&va_list, usize);
@@ -1820,7 +1816,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         }
 
         pub fn fcntl64(fd: c_int, op: c_int, ...) callconv(.c) c_int {
-            if (os == .windows) return;
+            if (os == .windows) return -1;
             var va_list = @cVaStart();
             defer @cVaEnd(&va_list);
             const arg = @cVaArg(&va_list, usize);
@@ -1854,6 +1850,41 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             }
             return Original.futime64(fd, tb);
         }
+
+        pub fn open(path: [*:0]const u8, oflags: c_int, ...) callconv(.c) c_int {
+            const mode: std.c.mode_t = switch (os) {
+                .windows => 0,
+                else => get: {
+                    var va_list = @cVaStart();
+                    defer @cVaEnd(&va_list);
+                    break :get @cVaArg(&va_list, std.c.mode_t);
+                },
+            };
+            var result: c_int = undefined;
+            if (redirector.open(path, oflags, mode, &result)) {
+                return saveError(result);
+            }
+            return Original.open(path, oflags, mode);
+        }
+
+        pub fn openat(dirfd: c_int, path: [*:0]const u8, oflags: c_int, ...) callconv(.c) c_int {
+            const mode: std.c.mode_t = switch (os) {
+                .windows => 0,
+                else => get: {
+                    var va_list = @cVaStart();
+                    defer @cVaEnd(&va_list);
+                    break :get @cVaArg(&va_list, std.c.mode_t);
+                },
+            };
+            var result: c_int = undefined;
+            if (redirector.openat(dirfd, path, oflags, mode, &result)) {
+                return saveError(result);
+            }
+            return Original.openat(dirfd, path, oflags, mode);
+        }
+
+        pub const open64 = open;
+        pub const openat64 = openat;
 
         pub fn opendir(path: [*:0]const u8) callconv(.c) ?*std.c.DIR {
             var result: c_int = undefined;
@@ -3167,6 +3198,20 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return Original.CreateFileW(path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
         }
 
+        pub fn CreateFileMappingA(
+            handle: HANDLE,
+            security_attributes: *SECURITY_ATTRIBUTES,
+            protect: DWORD,
+            max_size_high: DWORD,
+            max_size_low: DWORD,
+            name: ?[*:0]const u8,
+        ) callconv(WINAPI) ?HANDLE {
+            if (isPrivateHandle(handle)) {
+                return std.os.windows.INVALID_HANDLE_VALUE;
+            }
+            return Original.CreateFileMappingA(handle, security_attributes, protect, max_size_high, max_size_low, name);
+        }
+
         pub fn DeleteFile(path: LPCSTR) callconv(WINAPI) BOOL {
             var result: c_int = undefined;
             if (redirector.unlink(path, &result)) {
@@ -4100,6 +4145,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             pub var CreateDirectoryW: *const @TypeOf(Self.CreateDirectoryW) = undefined;
             pub var CreateFile: *const @TypeOf(Self.CreateFile) = undefined;
             pub var CreateFileW: *const @TypeOf(Self.CreateFileW) = undefined;
+            pub var CreateFileMappingA: *const @TypeOf(Self.CreateFileMappingA) = undefined;
             pub var DeleteFile: *const @TypeOf(Self.DeleteFile) = undefined;
             pub var DeleteFileW: *const @TypeOf(Self.DeleteFileW) = undefined;
             pub var GetFileAttributes: *const @TypeOf(Self.GetFileAttributes) = undefined;
