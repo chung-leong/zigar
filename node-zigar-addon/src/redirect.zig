@@ -331,7 +331,9 @@ pub fn Controller(comptime Host: type) type {
                     .read_only = read_only,
                 };
             } else {
-                hook.original.* = try replacePointer(hook.handler, address, read_only);
+                if (try replacePointer(hook.handler, address, read_only)) |original| {
+                    hook.original.* = original;
+                }
             }
         }
 
@@ -339,19 +341,18 @@ pub fn Controller(comptime Host: type) type {
             _ = try replacePointer(hook.original.*, address, read_only);
         }
 
-        fn replacePointer(target: *const anyopaque, address: usize, read_only: bool) !*const anyopaque {
+        fn replacePointer(target: *const anyopaque, address: usize, read_only: bool) !?*const anyopaque {
             const ptr: **const anyopaque = @ptrFromInt(address);
             const original = ptr.*;
-            if (ptr.* != target) {
-                if (read_only) {
-                    const page = getPageSlice(address);
-                    // std.posix.mprotect() does support Windows
-                    try std.posix.mprotect(page, std.c.PROT.READ | std.c.PROT.WRITE);
-                    defer std.posix.mprotect(page, std.c.PROT.READ) catch {};
-                    ptr.* = target;
-                } else {
-                    ptr.* = target;
-                }
+            if (ptr.* == target) return null;
+            if (read_only) {
+                const page = getPageSlice(address);
+                // std.posix.mprotect() does support Windows
+                try std.posix.mprotect(page, std.c.PROT.READ | std.c.PROT.WRITE);
+                defer std.posix.mprotect(page, std.c.PROT.READ) catch {};
+                ptr.* = target;
+            } else {
+                ptr.* = target;
             }
             return original;
         }

@@ -73,7 +73,7 @@ await plugin({
       const { outputPath } = await compile(srcPath, modPath, compileOptions);
       process.env.ADDON_PATH = addonPath;
       const env = createEnvironment();
-      env.loadModule(outputPath);
+      env.loadModule(outputPath, false);
       env.acquireStructures(options);
       const definition = env.exportStructures();
       // get the absolute path to node-zigar-addon so the transpiled code can find it
