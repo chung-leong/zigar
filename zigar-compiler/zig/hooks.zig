@@ -554,6 +554,22 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
+        pub fn fchmod(fd: c_int, _: std.c.mode_t, result: *c_int) callconv(.c) bool {
+            if (isPrivateDescriptor(fd)) {
+                result.* = 0;
+                return true;
+            }
+            return false;
+        }
+
+        pub fn fchown(fd: c_int, _: std.c.uid_t, _: std.c.gid_t, result: *c_int) callconv(.c) bool {
+            if (isPrivateDescriptor(fd)) {
+                result.* = 0;
+                return true;
+            }
+            return false;
+        }
+
         pub fn fcntl(fd: c_int, op: c_int, arg: usize, result: *c_int) callconv(.c) bool {
             // don't think we're handling cases where there's a difference between 32-bit and 64-bit
             return fcntl64(fd, op, arg, result);
@@ -797,6 +813,22 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
+        pub fn ftruncate(fd: c_int, _: off_t, result: *c_int) callconv(.c) bool {
+            if (isPrivateDescriptor(fd)) {
+                result.* = intFromError(.INVAL);
+                return true;
+            }
+            return false;
+        }
+
+        pub fn ftruncate64(fd: c_int, _: off64_t, result: *c_int) callconv(.c) bool {
+            if (isPrivateDescriptor(fd)) {
+                result.* = intFromError(.INVAL);
+                return true;
+            }
+            return false;
+        }
+
         pub fn futimens(fd: c_int, times: [*]const std.c.timespec, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(fd)) {
                 var call: Syscall = .{ .cmd = .futimes, .u = .{
@@ -1008,6 +1040,26 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     return true;
                 }
             }
+            return false;
+        }
+
+        pub fn mmap(_: *anyopaque, _: usize, _: c_int, _: c_int, fd: c_int, _: off_t, result: *?*anyopaque) callconv(.c) bool {
+            if (isPrivateDescriptor(fd)) {
+                result.* = null;
+                return true;
+            }
+            return false;
+        }
+
+        pub fn mmap64(_: *anyopaque, _: usize, _: c_int, _: c_int, fd: c_int, _: off64_t, result: *?*anyopaque) callconv(.c) bool {
+            if (isPrivateDescriptor(fd)) {
+                result.* = null;
+                return true;
+            }
+            return false;
+        }
+
+        pub fn munmap(_: *anyopaque, _: usize, _: *c_int) callconv(.c) bool {
             return false;
         }
 
@@ -1625,6 +1677,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const close = makeStdHook("close");
         pub const faccessat = makeStdHookUsing("faccessat", "faccessat2");
         pub const fallocate = makeStdHook("fallocate");
+        pub const fchmod = makeStdHook("fchmod");
+        pub const fchown = makeStdHook("fchown");
         pub const fcntl = makeStdHook("fcntl");
         pub const fcntl64 = makeStdHook("fcntl64");
         pub const fdatasync = makeStdHook("fdatasync");
@@ -1636,6 +1690,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const fstatfs = makeStdHook("fstatfs");
         pub const fstatfs64 = makeStdHook("fstatfs64");
         pub const fsync = makeStdHook("fsync");
+        pub const ftruncate = makeStdHook("ftruncate");
         pub const futimens = makeStdHook("futimens");
         pub const futimes = makeStdHook("futimes");
         pub const futimesat = makeStdHook("futimesat");
@@ -1646,6 +1701,9 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const lutimes = makeStdHook("lutimes");
         pub const mkdir = makeStdHook("mkdir");
         pub const mkdirat = makeStdHook("mkdirat");
+        pub const mmap = makeStdHook("mmap");
+        pub const mmap64 = makeStdHook("mmap64");
+        pub const munmap = makeStdHook("munmap");
         pub const open = makeStdHook("open");
         pub const openat = makeStdHook("openat");
         pub const open64 = makeStdHookUsing("open64", "open");
@@ -1946,10 +2004,15 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         }
 
         fn saveError(result: anytype) @TypeOf(result) {
-            if (result < 0) {
-                const value = std.math.cast(c_int, -result) orelse -1;
-                setError(value);
-                return -1;
+            switch (@typeInfo(@TypeOf(result))) {
+                .int => |int| if (int.signedness == .signed) {
+                    if (result < 0) {
+                        const value = std.math.cast(c_int, -result) orelse -1;
+                        setError(value);
+                        return -1;
+                    }
+                },
+                else => {},
             }
             return result;
         }
@@ -1992,7 +2055,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var closedir: *const @TypeOf(Self.closedir) = undefined;
             pub var faccessat: *const @TypeOf(Self.faccessat) = undefined;
             pub var fallocate: *const @TypeOf(Self.fallocate) = undefined;
-            pub var fcntl: *const @TypeOf(Self.fcntl) = undefined;
+            pub var fchmod: *const @TypeOf(Self.fchmod) = undefined;
+            pub var fchown: *const @TypeOf(Self.fchown) = undefined;
             pub var fcntl64: *const @TypeOf(Self.fcntl64) = undefined;
             pub var fdatasync: *const @TypeOf(Self.fdatasync) = undefined;
             pub var flock: *const @TypeOf(Self.flock) = undefined;
@@ -2003,6 +2067,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var fstatfs: *const @TypeOf(Self.fstatfs) = undefined;
             pub var fstatfs64: *const @TypeOf(Self.fstatfs64) = undefined;
             pub var fsync: *const @TypeOf(Self.fsync) = undefined;
+            pub var ftruncate: *const @TypeOf(Self.ftruncate) = undefined;
             pub var futime: *const @TypeOf(Self.futime) = undefined;
             pub var futime64: *const @TypeOf(Self.futime64) = undefined;
             pub var futimes: *const @TypeOf(Self.futimes) = undefined;
@@ -2015,6 +2080,9 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var lutimes: *const @TypeOf(Self.lutimes) = undefined;
             pub var mkdir: *const @TypeOf(Self.mkdir) = undefined;
             pub var mkdirat: *const @TypeOf(Self.mkdirat) = undefined;
+            pub var mmap: *const @TypeOf(Self.mmap) = undefined;
+            pub var mmap64: *const @TypeOf(Self.mmap64) = undefined;
+            pub var munmap: *const @TypeOf(Self.munmap) = undefined;
             pub var open: *const @TypeOf(Self.open) = undefined;
             pub var open64: *const @TypeOf(Self.open64) = undefined;
             pub var openat: *const @TypeOf(Self.openat) = undefined;

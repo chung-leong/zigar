@@ -591,12 +591,19 @@ pub fn Controller(comptime Host: type) type {
                             }
                             if (@call(.auto, handler, handler_args)) {
                                 // call was handled--set the return value
-                                const rv_unsigned: @Type(.{
-                                    .int = .{
-                                        .bits = @typeInfo(RvT).int.bits,
-                                        .signedness = .unsigned,
-                                    },
-                                }) = @bitCast(result);
+                                const rv_unsigned: switch (@typeInfo(RvT)) {
+                                    .int => |int| @Type(.{
+                                        .int = .{
+                                            .bits = int.bits,
+                                            .signedness = .unsigned,
+                                        },
+                                    }),
+                                    else => usize,
+                                } = switch (@typeInfo(RvT)) {
+                                    .pointer => @intFromPtr(result),
+                                    .optional => if (result) |p| @intFromPtr(p) else 0,
+                                    else => @bitCast(result),
+                                };
                                 syscall.setRetval(ucontext, rv_unsigned);
                                 return;
                             }
