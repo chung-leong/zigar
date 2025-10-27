@@ -3198,6 +3198,20 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return Original.CreateFileW(path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
         }
 
+        pub fn CreateFileMappingA(
+            handle: HANDLE,
+            security_attributes: *SECURITY_ATTRIBUTES,
+            protect: DWORD,
+            max_size_high: DWORD,
+            max_size_low: DWORD,
+            name: ?[*:0]const u8,
+        ) callconv(WINAPI) ?HANDLE {
+            if (isPrivateHandle(handle)) {
+                return std.os.windows.INVALID_HANDLE_VALUE;
+            }
+            return Original.CreateFileMappingA(handle, security_attributes, protect, max_size_high, max_size_low, name);
+        }
+
         pub fn DeleteFile(path: LPCSTR) callconv(WINAPI) BOOL {
             var result: c_int = undefined;
             if (redirector.unlink(path, &result)) {
@@ -4131,6 +4145,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             pub var CreateDirectoryW: *const @TypeOf(Self.CreateDirectoryW) = undefined;
             pub var CreateFile: *const @TypeOf(Self.CreateFile) = undefined;
             pub var CreateFileW: *const @TypeOf(Self.CreateFileW) = undefined;
+            pub var CreateFileMappingA: *const @TypeOf(Self.CreateFileMappingA) = undefined;
             pub var DeleteFile: *const @TypeOf(Self.DeleteFile) = undefined;
             pub var DeleteFileW: *const @TypeOf(Self.DeleteFileW) = undefined;
             pub var GetFileAttributes: *const @TypeOf(Self.GetFileAttributes) = undefined;
