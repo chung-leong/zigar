@@ -1679,8 +1679,6 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const fallocate = makeStdHook("fallocate");
         pub const fchmod = makeStdHook("fchmod");
         pub const fchown = makeStdHook("fchown");
-        pub const fcntl = makeStdHook("fcntl");
-        pub const fcntl64 = makeStdHook("fcntl64");
         pub const fdatasync = makeStdHook("fdatasync");
         pub const flock = makeStdHook("flock");
         pub const fstat = makeStdHook("fstat");
@@ -1807,6 +1805,30 @@ pub fn PosixSubstitute(comptime redirector: type) type {
                 return;
             }
             return Original.closedir(d);
+        }
+
+        pub fn fcntl(fd: c_int, op: c_int, ...) callconv(.c) c_int {
+            if (os == .windows) return;
+            var va_list = @cVaStart();
+            defer @cVaEnd(&va_list);
+            const arg = @cVaArg(&va_list, usize);
+            var result: c_int = undefined;
+            if (redirector.fcntl(fd, op, arg, &result)) {
+                return saveError(result);
+            }
+            return Original.fcntl(fd, op, arg);
+        }
+
+        pub fn fcntl64(fd: c_int, op: c_int, ...) callconv(.c) c_int {
+            if (os == .windows) return;
+            var va_list = @cVaStart();
+            defer @cVaEnd(&va_list);
+            const arg = @cVaArg(&va_list, usize);
+            var result: c_int = undefined;
+            if (redirector.fcntl64(fd, op, arg, &result)) {
+                return saveError(result);
+            }
+            return Original.fcntl64(fd, op, arg);
         }
 
         pub fn futime(fd: c_int, tb: *const utimbuf) callconv(.c) c_int {
@@ -2057,6 +2079,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var fallocate: *const @TypeOf(Self.fallocate) = undefined;
             pub var fchmod: *const @TypeOf(Self.fchmod) = undefined;
             pub var fchown: *const @TypeOf(Self.fchown) = undefined;
+            pub var fcntl: *const @TypeOf(Self.fcntl) = undefined;
             pub var fcntl64: *const @TypeOf(Self.fcntl64) = undefined;
             pub var fdatasync: *const @TypeOf(Self.fdatasync) = undefined;
             pub var flock: *const @TypeOf(Self.flock) = undefined;
