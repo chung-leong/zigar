@@ -108,12 +108,32 @@ const ModuleHost = struct {
     threadlocal var main_thread_syscall_trap_count: usize = 0;
     threadlocal var in_main_thread: bool = undefined;
 
+    var host_list: std.ArrayList(*@This()) = .init(c_allocator);
+    var host_list_mutex: std.Thread.Mutex = .{};
+
     var module_count: i32 = 0;
     var buffer_count: i32 = 0;
     var function_count: i32 = 0;
 
     const Module = interface.Module(Value);
     const Jscall = Module.Jscall;
+
+    fn register(self: *@This()) !void {
+        host_list_mutex.lock();
+        defer host_list_mutex.unlock();
+        try host_list.append(self);
+    }
+
+    fn unregister(self: *@This()) void {
+        host_list_mutex.lock();
+        defer host_list_mutex.unlock();
+        for (host_list.items, 0..) |module, index| {
+            if (module == self) {
+                _ = host_list.orderedRemove(index);
+                break;
+            }
+        }
+    }
 
     fn attachExports(env: Env, exports: Value) !void {
         inline for (.{ "createEnvironment", "getGCStatistics" }) |name| {
@@ -145,6 +165,7 @@ const ModuleHost = struct {
             .thread_syscall_trap_switches = .init(c_allocator),
         };
         defer self.release();
+        try self.register();
         // import functions from the environment
         try self.importFunctionsFromJavaScript(js_env);
         // export functions to it; exported functions will keep self alive until they're all
@@ -199,6 +220,7 @@ const ModuleHost = struct {
     fn release(self: *@This()) void {
         self.ref_count -= 1;
         if (self.ref_count == 0) {
+            self.unregister();
             const env = self.env;
             inline for (comptime std.meta.fields(@FieldType(ModuleHost, "js"))) |field| {
                 if (@field(self.js, field.name)) |ref| {
@@ -331,6 +353,16 @@ const ModuleHost = struct {
             try self.thread_syscall_trap_switches.append(&trapping_syscalls);
             if (self.syscall_trap_count > 0) {
                 trapping_syscalls = true;
+            }
+        }
+        host_list_mutex.lock();
+        defer host_list_mutex.unlock();
+        for (host_list.items) |host| {
+            if (host.env == self.env) {
+                // the same JavaScript environment, meaning that the thread can potential call a
+                // function handled by this host; we need to initialize the threadlocal instance
+                // pointer in its module
+                _ = if (host.module) |m| m.exports.set_host_instance(@ptrCast(self));
             }
         }
     }

@@ -208,15 +208,13 @@ pub fn setHostInstance(ptr: *Module.Host) callconv(.c) E {
 }
 
 pub fn initializeThread(ptr: *anyopaque) !void {
-    instance = @ptrCast(ptr);
-    initialized = true;
-    if (imports.initialize_thread(instance) != .SUCCESS) {
+    if (imports.initialize_thread(@ptrCast(ptr)) != .SUCCESS) {
         return error.UnableToInitializeThread;
     }
 }
 
-pub fn deinitializeThread() !void {
-    if (imports.deinitialize_thread(instance) != .SUCCESS) {
+pub fn deinitializeThread(ptr: *anyopaque) !void {
+    if (imports.deinitialize_thread(@ptrCast(ptr)) != .SUCCESS) {
         return error.UnableToDeinitializeThread;
     }
 }
@@ -317,7 +315,10 @@ fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
 
 pub fn redirectSyscall(call: *hooks.Syscall) std.c.E {
     // this function is needed even when use_redirection is false because of getenv()
-    const result = imports.handle_syscall(instance, call);
+    const result = switch (initialized) {
+        true => imports.handle_syscall(instance, call),
+        false => .FAULT,
+    };
     // translate from WASI enum to the current system's
     return inline for (std.meta.fields(E)) |field| {
         const wasi_enum = @field(E, field.name);
@@ -336,6 +337,12 @@ pub fn isRedirecting(comptime literal: @TypeOf(.enum_literal)) bool {
     if (imports.get_syscall_mask(instance, &mask) != .SUCCESS) return false;
     const name = @tagName(literal);
     return @field(mask, name);
+}
+
+threadlocal var suppress_stderr_redirection: bool = false;
+
+pub fn isRedirectingStderr() bool {
+    return !suppress_stderr_redirection;
 }
 
 pub fn createModule(comptime module_ns: type) Module {

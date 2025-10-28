@@ -1475,7 +1475,8 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
 
         fn isPrivateDescriptor(fd: c_int) bool {
             return switch (fd) {
-                0, 1, 2 => true,
+                0, 1 => true,
+                2 => Host.isRedirectingStderr(),
                 else => fd >= fd_min,
             };
         }
@@ -2202,7 +2203,7 @@ pub fn PthreadSubstitute(comptime redirector: type) type {
             const instance = info.instance;
             c_allocator.destroy(info);
             redirector.Host.initializeThread(instance) catch unreachable;
-            defer redirector.Host.deinitializeThread() catch {};
+            defer redirector.Host.deinitializeThread(instance) catch {};
             return proc(arg);
         }
 
@@ -4347,7 +4348,7 @@ pub fn Win32NonIOSubstitute(comptime redirector: type) type {
             const instance = info.instance;
             c_allocator.destroy(info);
             redirector.Host.initializeThread(instance) catch unreachable;
-            defer redirector.Host.deinitializeThread() catch {};
+            defer redirector.Host.deinitializeThread(instance) catch {};
             return proc(arg);
         }
 
