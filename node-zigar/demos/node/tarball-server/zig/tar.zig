@@ -1,13 +1,13 @@
 const std = @import("std");
-const allocator = std.heap.c_allocator;
+const c_allocator = std.heap.c_allocator;
 
 const zigar = @import("zigar");
 
-var work_queue: zigar.thread.WorkQueue(thread_ns) = .{};
+var work_queue: zigar.thread.WorkQueue(worker) = .{};
 
 pub fn startup(thread_count: usize) !void {
     try work_queue.init(.{
-        .allocator = allocator,
+        .allocator = c_allocator,
         .n_jobs = thread_count,
     });
 }
@@ -16,16 +16,9 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
     work_queue.deinitAsync(promise);
 }
 
-pub fn tar(
-    writer: std.io.AnyWriter,
-    root_path: []const u8,
-    src_paths: []const []const u8,
-    promise: zigar.function.PromiseOf(thread_ns.tar),
-) !void {
-    try work_queue.push(thread_ns.tar, .{ writer, root_path, src_paths }, promise);
-}
+pub const tar = work_queue.promisify(worker.tar);
 
-const thread_ns = struct {
+const worker = struct {
     pub fn tar(
         writer: std.io.AnyWriter,
         root_path: []const u8,
@@ -44,7 +37,7 @@ const thread_ns = struct {
                 // add the directory
                 try tar_writer.writeDir(sub_path, .{});
                 // then its content
-                var iter = try dir.walk(allocator);
+                var iter = try dir.walk(c_allocator);
                 defer iter.deinit();
                 while (try iter.next()) |entry| {
                     try tar_writer.writeEntry(entry);
