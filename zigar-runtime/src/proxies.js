@@ -1,8 +1,8 @@
 import { PointerFlag, ProxyType, StructureFlag, StructureType } from './constants.js';
 import { throwReadOnly } from './errors.js';
-import { MEMORY, PROXY_TYPE, READ_ONLY, TARGET } from './symbols.js';
+import { MEMORY, PROXY_TYPE, READ_ONLY, TARGET, zigGobals } from './symbols.js';
 
-const proxyMaps = [ 
+const proxyMaps = zigGobals.proxyMaps ??= [ 
   0, 
   ProxyType.Const, 
   ProxyType.ReadOnly, 
@@ -11,7 +11,7 @@ const proxyMaps = [
   hash[type] = new WeakMap();
   return hash;
 }, {});
-const proxyTargetMap = new WeakMap();
+const proxyTargetMap = zigGobals.proxyTargetMap ??= new WeakMap();
 
 export function getProxy(target, type) {
   const key = target;

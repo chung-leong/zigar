@@ -920,7 +920,7 @@ pub const TypeDataCollector = struct {
     }
 
     fn setSignature(comptime self: *@This(), comptime td: *TypeData) void {
-        if (td.attrs.signature_known or td.attrs.is_supported) {
+        if (td.attrs.signature_known) {
             return;
         }
         td.attrs.signature_known = true;
@@ -1030,9 +1030,6 @@ pub const TypeDataCollector = struct {
             },
             .@"fn" => |f| {
                 md5.update("fn (");
-                if (f.is_var_args) {
-                    md5.update("...");
-                }
                 for (f.params) |param| {
                     if (param.is_noalias) {
                         md5.update("noalias ");
@@ -1043,6 +1040,9 @@ pub const TypeDataCollector = struct {
                         md5.update("anytype");
                     }
                     md5.update(", ");
+                }
+                if (f.is_var_args) {
+                    md5.update("...");
                 }
                 md5.update(") ");
                 if (f.calling_convention != .auto) {
