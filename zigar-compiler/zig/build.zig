@@ -48,8 +48,21 @@ pub fn build(b: *std.Build) !void {
         false => &.{},
     };
     for (extra_c_files) |file| {
-        const path = try std.mem.concat(b.allocator, u8, &.{ cfg.module_dir, file });
+        const path = try std.fs.path.resolve(b.allocator, &.{ cfg.module_dir, file });
         lib.addCSourceFile(.{ .file = .{ .cwd_relative = path } });
+    }
+    const extra_include_paths: []const []const u8 = switch (@hasDecl(extra, "getIncludePaths")) {
+        true => @call(.always_inline, extra.getIncludePaths, .{ b, .{
+            .library = lib,
+            .module = mod,
+            .target = target,
+            .optimize = optimize,
+        } }),
+        false => &.{},
+    };
+    for (extra_include_paths) |inc_path| {
+        const path = try std.fs.path.resolve(b.allocator, &.{ cfg.module_dir, inc_path });
+        lib.addIncludePath(.{ .file = .{ .cwd_relative = path } });
     }
     if (cfg.use_libc) {
         lib.linkLibC();

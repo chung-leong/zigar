@@ -22,3 +22,15 @@ pub fn getCSourceFiles(b: *std.Build, args: anytype) []const []const u8 {
     //     optimize: std.builtin.OptimizeMode,
     return &.{};
 }
+
+pub fn getIncludePaths(b: *std.Build, args: anytype) []const []const u8 {
+    _ = b;
+    _ = args;
+    // args contains the following:
+    //
+    //     library: *std.Build.Step.Compile,
+    //     module: *std.Build.Module,
+    //     target: std.Build.ResolvedTarget,
+    //     optimize: std.builtin.OptimizeMode,
+    return &.{};
+}
