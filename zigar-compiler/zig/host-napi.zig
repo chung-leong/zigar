@@ -331,18 +331,23 @@ pub fn redirectSyscall(call: *hooks.Syscall) std.c.E {
     } else .FAULT;
 }
 
+threadlocal var redirection_suppressed: bool = false;
+
+pub fn suppressRedirection() void {
+    redirection_suppressed = true;
+}
+
+pub fn isRedirectingStderr() bool {
+    return !redirection_suppressed;
+}
+
 pub fn isRedirecting(comptime literal: @TypeOf(.enum_literal)) bool {
     if (!exporter.options.use_redirection) unreachable;
+    if (redirection_suppressed) return false;
     var mask: hooks.Syscall.Mask = undefined;
     if (imports.get_syscall_mask(instance, &mask) != .SUCCESS) return false;
     const name = @tagName(literal);
     return @field(mask, name);
-}
-
-threadlocal var suppress_stderr_redirection: bool = false;
-
-pub fn isRedirectingStderr() bool {
-    return !suppress_stderr_redirection;
 }
 
 pub fn createModule(comptime module_ns: type) Module {
