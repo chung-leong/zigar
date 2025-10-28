@@ -115,3 +115,12 @@ fn main(host: []const u8, port: u16, promise: zigar.function.Promise(anyerror!vo
         }.entry,
     ) catch {};
 }
+
+pub const @"meta(zigar)" = struct {
+    pub fn isArgumentString(T: type, _: usize) bool {
+        return switch (T) {
+            ContentFn => true,
+            else => false,
+        };
+    }
+};

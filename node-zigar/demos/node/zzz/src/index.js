@@ -1,5 +1,5 @@
-import { startServer, setBaseHandler, setCatHandler } from '../lib/server.zigar';
 import { handleCat } from '../lib/cat.zigar';
+import { setBaseHandler, setCatHandler, startServer } from '../lib/server.zigar';
 
 setCatHandler(handleCat);
 setBaseHandler(async (url, { allocator }) => {
@@ -9,7 +9,7 @@ setBaseHandler(async (url, { allocator }) => {
   <title>Hello world</title>
   <body>
       <h1>Hello world!</h1>
-      <p>You have accessed ${url.string}</p>
+      <p>You have accessed ${url}</p>
   </body>
 </html>
   `);
