@@ -1,10 +1,11 @@
 const std = @import("std");
-const zigar = @import("zigar");
+
 const myzql = @import("myzql");
 const Conn = myzql.conn.Conn;
 const PrepareResult = myzql.result.PrepareResult;
 const ResultSet = myzql.result.ResultSet;
 const BinaryResultRow = myzql.result.BinaryResultRow;
+const zigar = @import("zigar");
 
 const DatabaseParams = struct {
     host: []const u8,
@@ -15,7 +16,7 @@ const DatabaseParams = struct {
     threads: usize = 1,
 };
 
-var work_queue: zigar.thread.WorkQueue(thread_ns) = .{};
+var work_queue: zigar.thread.WorkQueue(worker) = .{};
 var gpa = std.heap.DebugAllocator(.{}).init;
 const allocator = gpa.allocator();
 
@@ -41,15 +42,10 @@ pub const Person = struct {
     age: u8,
 };
 
-pub fn findPersons(generator: zigar.function.GeneratorOf(thread_ns.findPersons)) !void {
-    try work_queue.push(thread_ns.findPersons, .{}, generator);
-}
+pub const findPersons = work_queue.asyncify(worker.findPersons);
+pub const insertPerson = work_queue.promisify(worker.insertPerson);
 
-pub fn insertPerson(person: Person, promise: zigar.function.PromiseOf(thread_ns.insertPerson)) !void {
-    try work_queue.push(thread_ns.insertPerson, .{person}, promise);
-}
-
-const thread_ns = struct {
+const worker = struct {
     threadlocal var client: Conn = undefined;
 
     fn Prepare(comptime sql: []const u8) type {
@@ -137,5 +133,15 @@ const thread_ns = struct {
         const exe_res = try client.execute(&stmt, .{ person.name, person.age });
         const ok = try exe_res.expect(.ok);
         return @intCast(ok.last_insert_id);
+    }
+};
+
+pub const @"meta(zigar)" = struct {
+    pub fn isFieldString(comptime T: type, comptime _: std.meta.FieldEnum(T)) bool {
+        return true;
+    }
+
+    pub fn isDeclPlain(comptime T: type, comptime _: std.meta.DeclEnum(T)) bool {
+        return true;
     }
 };

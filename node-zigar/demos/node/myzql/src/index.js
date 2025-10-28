@@ -13,7 +13,7 @@ fastify.get('/', async (req, reply) => {
     stream.write(`<html lang="en"><head><meta charset="UTF-8" /><title>MyZql test</title></head><body>`);
     stream.write(`<form method="POST"><ul>`);
     for await (const person of findPersons()) {
-        stream.write(`<li>${person.name.string} (${person.age})</li>`);
+        stream.write(`<li>${person.name} (${person.age})</li>`);
     }
     stream.write(`<li><input name="name"> (<input name="age" size="2">) <button>Add</button></li>`)
     stream.write(`</ul></form>`);

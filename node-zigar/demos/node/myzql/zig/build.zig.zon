@@ -3,8 +3,8 @@
     .version = "0.0.0",
     .dependencies = .{
         .myzql = .{
-            .url = "https://github.com/speed2exe/myzql/archive/d6c1f3ba3fb2896c5bbfaac96750b414f780492d.zip",
-            .hash = "12205d9e78e4951112a13ea04ef732b4415f4a60f18f5f886eaa38d3527063e4195f",
+            .url = "https://github.com/speed2exe/myzql/archive/refs/tags/0.14.0.zip",
+            .hash = "N-V-__8AAOkFAwCuZ6d0XtibhdRX0TsmIyUyCdIT_GFSzanu",
         },
     },
     .paths = .{
@@ -12,5 +12,5 @@
         "build.zig.zon",
         "src",
     },
-    .fingerprint = 0xc120485323d8f57b,
+    .fingerprint = 0xc12048539870fc44,
 }
