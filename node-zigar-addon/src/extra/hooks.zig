@@ -1113,6 +1113,14 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
+        pub fn open64(path: [*:0]const u8, oflags: c_int, mode: std.c.mode_t, result: *c_int) callconv(.c) bool {
+            return openat(fd_cwd, path, oflags, mode, result);
+        }
+
+        pub fn openat64(dirfd: c_int, path: [*:0]const u8, oflags: c_int, mode: std.c.mode_t, result: *c_int) callconv(.c) bool {
+            return openat(dirfd, path, oflags, mode, result);
+        }
+
         pub fn poll(fds: [*]pollfd, nfds: nfds_t, timeout: c_int, result: *c_int) callconv(.c) bool {
             if (os == .windows) return false;
             const all_private = for (0..nfds) |i| {
@@ -1892,8 +1900,37 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.openat(dirfd, path, oflags, mode);
         }
 
-        pub const open64 = open;
-        pub const openat64 = openat;
+        pub const open64 = switch (os) {
+            .darwin => open64_va,
+            else => makeStdHook("open64"),
+        };
+
+        fn open64_va(path: [*:0]const u8, oflags: c_int, ...) callconv(.c) c_int {
+            var va_list = @cVaStart();
+            defer @cVaEnd(&va_list);
+            const mode = @cVaArg(&va_list, std.c.mode_t);
+            var result: c_int = undefined;
+            if (redirector.open64(path, oflags, mode, &result)) {
+                return saveError(result);
+            }
+            return Original.open64(path, oflags, mode);
+        }
+
+        pub const openat64 = switch (os) {
+            .darwin => openat64_va,
+            else => makeStdHook("openat64"),
+        };
+
+        fn openat64_va(dirfd: c_int, path: [*:0]const u8, oflags: c_int, ...) callconv(.c) c_int {
+            var va_list = @cVaStart();
+            defer @cVaEnd(&va_list);
+            const mode = @cVaArg(&va_list, std.c.mode_t);
+            var result: c_int = undefined;
+            if (redirector.openat64(dirfd, path, oflags, mode, &result)) {
+                return saveError(result);
+            }
+            return Original.openat64(dirfd, path, oflags, mode);
+        }
 
         pub fn opendir(path: [*:0]const u8) callconv(.c) ?*std.c.DIR {
             var result: c_int = undefined;
