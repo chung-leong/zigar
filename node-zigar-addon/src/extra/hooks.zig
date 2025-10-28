@@ -1803,8 +1803,12 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.closedir(d);
         }
 
-        pub fn fcntl(fd: c_int, op: c_int, ...) callconv(.c) c_int {
-            if (os == .windows) return -1;
+        pub const fcntl = switch (os) {
+            .darwin => fcntl_va,
+            else => makeStdHook("fcntl"),
+        };
+
+        fn fcntl_va(fd: c_int, op: c_int, ...) callconv(.c) c_int {
             var va_list = @cVaStart();
             defer @cVaEnd(&va_list);
             const arg = @cVaArg(&va_list, usize);
@@ -1815,8 +1819,12 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.fcntl(fd, op, arg);
         }
 
-        pub fn fcntl64(fd: c_int, op: c_int, ...) callconv(.c) c_int {
-            if (os == .windows) return -1;
+        pub const fcntl64 = switch (os) {
+            .darwin => fcntl64_va,
+            else => makeStdHook("fcntl64"),
+        };
+
+        fn fcntl64_va(fd: c_int, op: c_int, ...) callconv(.c) c_int {
             var va_list = @cVaStart();
             defer @cVaEnd(&va_list);
             const arg = @cVaArg(&va_list, usize);
@@ -1851,15 +1859,15 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.futime64(fd, tb);
         }
 
-        pub fn open(path: [*:0]const u8, oflags: c_int, ...) callconv(.c) c_int {
-            const mode: std.c.mode_t = switch (os) {
-                .windows => 0,
-                else => get: {
-                    var va_list = @cVaStart();
-                    defer @cVaEnd(&va_list);
-                    break :get @cVaArg(&va_list, std.c.mode_t);
-                },
-            };
+        pub const open = switch (os) {
+            .darwin => open_va,
+            else => makeStdHook("open"),
+        };
+
+        fn open_va(path: [*:0]const u8, oflags: c_int, ...) callconv(.c) c_int {
+            var va_list = @cVaStart();
+            defer @cVaEnd(&va_list);
+            const mode = @cVaArg(&va_list, std.c.mode_t);
             var result: c_int = undefined;
             if (redirector.open(path, oflags, mode, &result)) {
                 return saveError(result);
@@ -1867,15 +1875,15 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.open(path, oflags, mode);
         }
 
-        pub fn openat(dirfd: c_int, path: [*:0]const u8, oflags: c_int, ...) callconv(.c) c_int {
-            const mode: std.c.mode_t = switch (os) {
-                .windows => 0,
-                else => get: {
-                    var va_list = @cVaStart();
-                    defer @cVaEnd(&va_list);
-                    break :get @cVaArg(&va_list, std.c.mode_t);
-                },
-            };
+        pub const openat = switch (os) {
+            .darwin => openat_va,
+            else => makeStdHook("openat"),
+        };
+
+        fn openat_va(dirfd: c_int, path: [*:0]const u8, oflags: c_int, ...) callconv(.c) c_int {
+            var va_list = @cVaStart();
+            defer @cVaEnd(&va_list);
+            const mode = @cVaArg(&va_list, std.c.mode_t);
             var result: c_int = undefined;
             if (redirector.openat(dirfd, path, oflags, mode, &result)) {
                 return saveError(result);
