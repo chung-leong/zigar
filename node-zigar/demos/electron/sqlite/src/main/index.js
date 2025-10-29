@@ -59,8 +59,8 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  ipcMain.handle('findAlbums', (_, searchStr) => toArray(findAlbums(db, searchStr)))
-  ipcMain.handle('getTracks', (_, albumId) => toArray(getTracks(db, albumId)))
+  ipcMain.handle('findAlbums', (_, searchStr) => findAlbums(db, searchStr))
+  ipcMain.handle('getTracks', (_, albumId) => getTracks(db, albumId))
   ipcMain.handle('addAlbum', (_, album) => addAlbum(db, album))
 
   createWindow()
@@ -84,6 +84,3 @@ app.on('quit', () => closeDb(db))
 
 // In this file you can include the rest of your app"s specific main process
 // code. You can also put them in separate files and require them here.
-function toArray(iterator) {
-  return [ ...iterator ].map(r => r.valueOf());
-}
