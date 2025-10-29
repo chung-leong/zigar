@@ -4046,13 +4046,14 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         fn createLockStruct(offset: anytype, len: anytype, lock_type: i16) Flock {
-            return .{
-                .type = lock_type,
-                .whence = std.c.SEEK.SET,
-                .start = decodeOffset(offset),
-                .len = decodeOffset(len),
-                .pid = 0,
-            };
+            // Flock may contain unused fields with no default value
+            var flock: Flock = undefined;
+            flock.type = lock_type;
+            flock.whence = std.c.SEEK.SET;
+            flock.start = decodeOffset(offset);
+            flock.len = decodeOffset(len);
+            flock.pid = 0;
+            return flock;
         }
 
         fn decodeOffset(offset: anytype) i64 {
@@ -4380,7 +4381,7 @@ pub fn Win32NonIOSubstitute(comptime redirector: type) type {
 
         fn setThreadContext(ptr: LPVOID) callconv(WINAPI) DWORD {
             const info: *ThreadInfo = @ptrCast(@alignCast(ptr));
-            const proc: *const fn (?LPVOID) callconv(WINAPI) DWORD = @ptrCast(info.proc);
+            const proc: *const fn (?LPVOID) callconv(WINAPI) DWORD = @ptrCast(@alignCast(info.proc));
             const arg = info.arg;
             const instance = info.instance;
             c_allocator.destroy(info);
