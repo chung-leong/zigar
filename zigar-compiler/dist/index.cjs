@@ -20,10 +20,10 @@ const MemberType = {
 const MemberFlag = {
   IsReadOnly: 1 << 1};
 
-const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
+const zigGobals = globalThis[Symbol.for('ZIGAR')] ??= {};
 
 function __symbol(name) {
-  return dict[name] ||= Symbol(name);
+  return zigGobals[name] ??= Symbol(name);
 }
 
 function symbol(name) {

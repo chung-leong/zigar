@@ -234,10 +234,10 @@ const PosixPollEventType = {
   FD_WRITE: 2,
 };
 
-const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
+const zigGobals = globalThis[Symbol.for('ZIGAR')] ??= {};
 
 function __symbol(name) {
-  return dict[name] ||= Symbol(name);
+  return zigGobals[name] ??= Symbol(name);
 }
 
 function symbol(name) {
@@ -7519,7 +7519,7 @@ function throwError(structure) {
   throw new BufferExpected(structure);
 }
 
-const proxyMaps = [ 
+const proxyMaps = zigGobals.proxyMaps ??= [ 
   0, 
   ProxyType.Const, 
   ProxyType.ReadOnly, 
@@ -7528,7 +7528,7 @@ const proxyMaps = [
   hash[type] = new WeakMap();
   return hash;
 }, {});
-const proxyTargetMap = new WeakMap();
+const proxyTargetMap = zigGobals.proxyTargetMap ??= new WeakMap();
 
 function getProxy(target, type) {
   const key = target;
