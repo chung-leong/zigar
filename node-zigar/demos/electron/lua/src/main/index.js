@@ -38,7 +38,12 @@ function createWindow() {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
-  __zigar.connect({ log: line => mainWindow.webContents.send('log', line) })
+  __zigar.on('log', ({ source, message }) => {
+    if (source === 'stdout') {
+      mainWindow.webContents.send('log', message);
+      return true;
+    }
+  })
 }
 
 // This method will be called when Electron has finished

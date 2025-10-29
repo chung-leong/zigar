@@ -15,9 +15,9 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
-        .ziglua = .{
-            .url = "https://github.com/natecraddock/ziglua/archive/00a3c39c587b1b853748c05b5f5c1dc68f5f3683.zip",
-            .hash = "1220ee6d36df8c7847234ff5212eb7fc857d284b0d2eccb47cb9ba04ce089d4d1472",
+        .zlua = .{
+            .url = "https://github.com/natecraddock/ziglua/archive/refs/tags/0.4.0.zip",
+            .hash = "zlua-0.4.0-hGRpC2rgBABehOIUe4yH9GhRxKvGBiHS25_ro61jFbTT",
         },
     },
     .paths = .{
