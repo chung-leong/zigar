@@ -30,7 +30,6 @@ const KeyReporter = *const fn (c_int) void;
 var key_reporter: ?KeyReporter = null;
 
 pub fn getText() []const u8 {
-    std.debug.print("getText()\n", .{});
     return text;
 }
 
