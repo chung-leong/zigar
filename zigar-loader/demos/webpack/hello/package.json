@@ -8,7 +8,7 @@
     "build": "webpack --mode production",
     "preview": "http-server ./dist",
     "build:demo": "webpack --config demo.config.js --mode production",
-    "preview:demo": "http-server ../../../../docs/demos/webpack/hello"
+    "preview:demo": "http-server ../../../../../zigar.website -o /demos/webpack/hello"
   },
   "keywords": [],
   "author": "",
