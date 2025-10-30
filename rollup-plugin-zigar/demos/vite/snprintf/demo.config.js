@@ -9,5 +9,8 @@ export default defineConfig({
     target: 'es2022',
     outDir: '../../../../../zigar.website/demos/rollup-plugin-zigar/snprintf',
     emptyOutDir: true,
-  }
+  },
+  server: {
+    open: true,
+  },
 })

@@ -9,4 +9,7 @@ export default defineConfig({
     outDir: '../../../../../zigar.website/demos/rollup-plugin-zigar/hello',
     emptyOutDir: true,
   },
+  server: {
+    open: true,
+  },
 })

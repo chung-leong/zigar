@@ -9,4 +9,7 @@ export default defineConfig({
     outDir: '../../../../../zigar.website/demos/rollup-plugin-zigar/sha1',
     emptyOutDir: true,
   },
+  server: {
+    open: true,
+  },
 })
