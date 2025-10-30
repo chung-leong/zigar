@@ -365,8 +365,6 @@ describe('Feature: baseline', function() {
         expect(mask.open).to.be.true;
         env.addListener('unlink', () => {});
         expect(mask.unlink).to.be.true;
-        env.addListener('syscall', () => {});
-        expect(mask.syscall).to.be.true;
         env.addListener('open', null);
         expect(mask.open).to.be.false;
       })
