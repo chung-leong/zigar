@@ -65,7 +65,7 @@ function hideStatus() {
 function showResult(message) {
   const fd = 2;
   const tty = isatty(fd);
-  const c = '✓';
+  const c = '\u2713';
   if (tty) {
     write(fd, `\r\x1b[32m${c}\x1b[0m ${message}\n`, () => {});
     /* c8 ignore next 3 */
