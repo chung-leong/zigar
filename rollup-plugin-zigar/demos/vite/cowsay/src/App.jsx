@@ -11,7 +11,12 @@ function App() {
     setText(value);
     const args = (value) ? value.split(/[ \t]+/) : [];
     const lines = [];
-    __zigar.connect({ log: line => lines.push(line) });
+    __zigar.on('log', ({ source, message }) => {
+      if (source === 'stdout') {
+        lines.push(message);
+        return true;
+      }
+    });
     cowsay([ 'cowsay', ...args ]);
     setOutput(lines.join('\n'));
   }, []);
