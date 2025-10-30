@@ -16,6 +16,10 @@ pub const GeneratorOf = types.GeneratorOf;
 pub const GeneratorArgOf = types.GeneratorArgOf;
 pub const AbortSignal = types.AbortSignal;
 
+const stdio_h = @cImport({
+    @cInclude("stdio.h");
+});
+
 pub fn WorkQueue(ns: type) type {
     return types.WorkQueue(ns, struct {});
 }
@@ -122,7 +126,9 @@ export fn runThunk(
     const thunk: thunk_zig.Thunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
     const arg_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(arg_address) else empty_ptr;
-    return if (thunk(fn_ptr, arg_ptr)) true else |_| false;
+    thunk(fn_ptr, arg_ptr) catch return false;
+    if (builtin.link_libc) _ = stdio_h.fflush(stdio_h.stdout);
+    return true;
 }
 
 export fn runVariadicThunk(
@@ -136,7 +142,9 @@ export fn runVariadicThunk(
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
     const arg_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(arg_address) else empty_ptr;
     const attr_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(attr_address) else empty_ptr;
-    return if (thunk(fn_ptr, arg_ptr, attr_ptr, arg_count)) true else |_| false;
+    thunk(fn_ptr, arg_ptr, attr_ptr, arg_count) catch return false;
+    if (builtin.link_libc) _ = stdio_h.fflush(stdio_h.stdout);
+    return true;
 }
 
 export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
@@ -174,12 +182,6 @@ export fn identifyJsThunk(controller_address: usize, thunk_address: usize) usize
 
 export fn initialize() void {
     in_main_thread = true;
-    if (builtin.link_libc) {
-        const stdio_h = @cImport({
-            @cInclude("stdio.h");
-        });
-        stdio_h.setbuf(stdio_h.stdout, null);
-    }
 }
 
 export fn allocateScratchMemory(len: usize, byte_align: u16) ?[*]u8 {
