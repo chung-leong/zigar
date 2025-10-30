@@ -6,6 +6,7 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, '../../../../../zigar.website/demos/webpack/hello'),
     filename: 'bundle.js',
+    clean: true,
   },
   plugins: [
     new htmlWebpackPlugin({
