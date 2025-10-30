@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "build:demo": "vite build --config=demo.config.js --base=/demos/rollup-plugin-zigar/donut",
-    "preview:demo": "vite --config=demo.config.js --base=/demos/rollup-plugin-zigar/donut preview"
+    "preview:demo": "vite preview --config=demo.config.js --base=/demos/rollup-plugin-zigar/donut"
   },
   "dependencies": {
     "react": "^19.1.1",

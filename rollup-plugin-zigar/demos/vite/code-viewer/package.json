@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "build:demo": "vite build --config=demo.config.js --base=/demos/rollup-plugin-zigar/code-viewer"
+    "build:demo": "vite build --config=demo.config.js --base=/demos/rollup-plugin-zigar/code-viewer",
+    "preview:demo": "vite preview --config=demo.config.js --base=/demos/rollup-plugin-zigar/code-viewer"
   },
   "dependencies": {
     "@sinm/react-file-tree": "^1.1.1",
@@ -27,6 +28,6 @@
     "globals": "^16.4.0",
     "node-zigar": "^0.14.2-rc.0",
     "rollup-plugin-zigar": "^0.14.2-rc.0",
-    "vite": "^7.1.7"  
+    "vite": "^7.1.7"
   }
 }

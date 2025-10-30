@@ -9,9 +9,10 @@
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "build:demo": "vite build --config=demo.config.js --base=/demos/rollup-plugin-zigar/cowsay",
-    "preview:demo": "vite --config=demo.config.js --base=/demos/rollup-plugin-zigar/cowsay preview"
+    "preview:demo": "vite preview --config=demo.config.js --base=/demos/rollup-plugin-zigar/cowsay"
   },
   "dependencies": {
+    "22": "^0.0.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
