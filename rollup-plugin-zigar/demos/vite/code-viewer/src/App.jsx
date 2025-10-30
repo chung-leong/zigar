@@ -58,7 +58,7 @@ function App() {
       const response = await fetch('https://corsproxy.io/?url=https://github.com/ziglang/zig/archive/refs/tags/0.1.1.tar.gz');
       const reader = response.body.getReader()
       try {
-        for await (const file of await extract(reader)) {
+        for await (const file of extract(reader)) {
           if (unmounted) break;
           startTransition(() => {
             setTree((tree) => {
