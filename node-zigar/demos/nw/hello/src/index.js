@@ -1,6 +1,9 @@
 require('node-zigar/cjs');
-const { hello } = require('./lib/hello.zigar');
-console.log = (s) => process.stderr.write(`${s}\n`);
+const { __zigar, hello } = require('./lib/hello.zigar');
+__zigar.on('log', ({ source, message }) => {
+    process[source].write(message + '\n');
+    // return true;
+});
 hello();
 
 nw.Window.open('./src/index.html', { width: 800, height: 600 });
