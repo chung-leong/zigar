@@ -12,7 +12,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "node-zigar": "^0.14.2-rc.0"
+    "node-zigar": "^0.14.2-rc.1"
   },
   "dependencies": {
     "fastify": "^5.6.0",
