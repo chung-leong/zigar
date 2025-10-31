@@ -53,340 +53,317 @@ const o30 = {}, o31 = {}, o32 = {}, o33 = {}, o34 = {}, o35 = {}, o36 = {}, o37 
 const o40 = {}, o41 = {}, o42 = {}, o43 = {}, o44 = {}, o45 = {}, o46 = {}, o47 = {}, o48 = {}, o49 = {};
 const o50 = {}, o51 = {}, o52 = {}, o53 = {}, o54 = {}, o55 = {}, o56 = {}, o57 = {}, o58 = {}, o59 = {};
 const o60 = {}, o61 = {}, o62 = {}, o63 = {}, o64 = {}, o65 = {}, o66 = {}, o67 = {}, o68 = {}, o69 = {};
-const o70 = {}, o71 = {}, o72 = {}, o73 = {};
+const o70 = {}, o71 = {}, o72 = {};
 
 // define byte arrays
 const U = i => new Uint8Array(i);
 const a0 = U([ 10, 0 ]);
 const a1 = U([ 11, 0 ]);
-const a2 = U([ 14, 0 ]);
-const a3 = U([ 15, 0 ]);
-const a4 = U([ 16, 0 ]);
-const a5 = U([ 17, 0 ]);
-const a6 = U([ 18, 0 ]);
-const a7 = U([ 19, 0 ]);
-const a8 = U(0);
-const a9 = U([ 0, 1 ]);
-const a10 = U(3);
-const a11 = U([ 1 ]);
-const a12 = U(16);
-const a13 = U(a0);
-const a14 = U(a1);
-const a15 = U(3);
-const a16 = U(1);
-const a17 = U(16);
-const a18 = U([ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 ]);
-const a19 = U(32);
-const a20 = U(1);
-const a21 = U(16);
+const a2 = U([ 13, 0 ]);
+const a3 = U([ 14, 0 ]);
+const a4 = U([ 15, 0 ]);
+const a5 = U([ 16, 0 ]);
+const a6 = U([ 17, 0 ]);
+const a7 = U(0);
+const a8 = U([ 0, 1 ]);
+const a9 = U(3);
+const a10 = U([ 1 ]);
+const a11 = U(16);
+const a12 = U(a0);
+const a13 = U(a1);
+const a14 = U(3);
+const a15 = U(1);
+const a16 = U(16);
+const a17 = U([ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 ]);
+const a18 = U(32);
+const a19 = U(1);
+const a20 = U(16);
 
 // fill in object properties
 const $ = Object.assign;
 $(o0, {
   slots: {
-    0: o1, 1: o2, 2: o3, 3: o4, 4: o5, 5: o6, 6: o7, 7: o8,
+    0: o1, 1: o2, 2: o3, 3: o4, 4: o5, 5: o6, 6: o7,
   },
 });
 $(o1, {
   structure: s1,
   memory: { array: a0 },
-  const: true,
 });
 $(o2, {
   structure: s1,
   memory: { array: a1 },
-  const: true,
 });
 $(o3, {
   structure: s1,
   memory: { array: a2 },
-  const: true,
 });
 $(o4, {
   structure: s1,
   memory: { array: a3 },
-  const: true,
 });
 $(o5, {
   structure: s1,
   memory: { array: a4 },
-  const: true,
 });
 $(o6, {
   structure: s1,
   memory: { array: a5 },
-  const: true,
 });
 $(o7, {
   structure: s1,
   memory: { array: a6 },
-  const: true,
 });
-$(o8, {
-  structure: s1,
+$(o8, {});
+$(o9, {
   memory: { array: a7 },
-  const: true,
+  handle: 181010,
 });
-$(o9, {});
-$(o10, {
+$(o10, {});
+$(o11, {
   memory: { array: a8 },
-  handle: 178424,
 });
-$(o11, {});
-$(o12, {
-  memory: { array: a9 },
-});
-$(o13, {});
-$(o14, {
+$(o12, {});
+$(o13, {
   slots: {
-    0: o15, 1: o17, 2: o18,
+    0: o14, 1: o16, 2: o17,
+  },
+});
+$(o14, {
+  structure: s7,
+  memory: { array: a7 },
+  slots: {
+    0: o15,
   },
 });
 $(o15, {
-  structure: s7,
-  memory: { array: a8 },
-  const: true,
-  slots: {
-    0: o16,
-  },
-});
-$(o16, {
   structure: s6,
 });
-$(o17, {
+$(o16, {
   structure: s10,
-  memory: { array: a10 },
-  const: true,
+  memory: { array: a9 },
 });
-$(o18, {
+$(o17, {
   structure: s8,
-  memory: { array: a11 },
-  const: true,
+  memory: { array: a10 },
 });
+$(o18, {});
 $(o19, {});
 $(o20, {});
-$(o21, {});
+$(o21, {
+  memory: { array: a7 },
+  handle: 230911,
+});
 $(o22, {
-  memory: { array: a8 },
-  handle: 223937,
+  memory: { array: a7 },
+  handle: 235742,
 });
-$(o23, {
-  memory: { array: a8 },
-  handle: 228768,
-});
-$(o24, {});
-$(o25, {
-  memory: { array: a12 },
-  handle: 222011,
+$(o23, {});
+$(o24, {
+  memory: { array: a11 },
+  handle: 228782,
   slots: {
-    0: o26, 1: o28,
+    0: o25, 1: o27,
+  },
+});
+$(o25, {
+  structure: s13,
+  memory: { array: a11, offset: 0, length: 8 },
+  slots: {
+    0: o26,
   },
 });
 $(o26, {
-  structure: s13,
-  memory: { array: a12, offset: 0, length: 8 },
-  slots: {
-    0: o27,
-  },
+  structure: s12,
+  memory: { array: a11, offset: 0, length: 8 },
 });
 $(o27, {
-  structure: s12,
-  memory: { array: a12, offset: 0, length: 8 },
+  structure: s16,
+  memory: { array: a11, offset: 8, length: 8 },
+  slots: {
+    0: o28,
+  },
 });
 $(o28, {
-  structure: s16,
-  memory: { array: a12, offset: 8, length: 8 },
-  slots: {
-    0: o29,
-  },
-});
-$(o29, {
   structure: s15,
-  memory: { array: a8 },
+  memory: { array: a7 },
 });
-$(o30, {});
+$(o29, {});
+$(o30, {
+  memory: { array: a7 },
+  handle: 181712,
+});
 $(o31, {
-  memory: { array: a8 },
-  handle: 179060,
+  slots: {
+    0: o32, 1: o33,
+  },
 });
 $(o32, {
-  slots: {
-    0: o33, 1: o34,
-  },
+  structure: s20,
+  memory: { array: a12 },
 });
 $(o33, {
   structure: s20,
   memory: { array: a13 },
-  const: true,
 });
-$(o34, {
-  structure: s20,
-  memory: { array: a14 },
-  const: true,
-});
-$(o35, {});
-$(o36, {
+$(o34, {});
+$(o35, {
   slots: {
-    0: o37, 1: o38, 2: o39,
+    0: o36, 1: o37, 2: o38,
+  },
+});
+$(o36, {
+  structure: s7,
+  memory: { array: a7 },
+  slots: {
+    0: o15,
   },
 });
 $(o37, {
-  structure: s7,
-  memory: { array: a8 },
-  const: true,
-  slots: {
-    0: o16,
-  },
+  structure: s10,
+  memory: { array: a14 },
 });
 $(o38, {
-  structure: s10,
-  memory: { array: a15 },
-  const: true,
-});
-$(o39, {
   structure: s8,
-  memory: { array: a16 },
-  const: true,
+  memory: { array: a15 },
 });
+$(o39, {});
 $(o40, {});
-$(o41, {});
+$(o41, {
+  memory: { array: a7 },
+  handle: 235755,
+});
 $(o42, {
-  memory: { array: a8 },
-  handle: 228781,
+  memory: { array: a7 },
+  handle: 237259,
 });
-$(o43, {
-  memory: { array: a8 },
-  handle: 230285,
-});
-$(o44, {});
-$(o45, {
-  memory: { array: a17 },
-  handle: 222011,
+$(o43, {});
+$(o44, {
+  memory: { array: a16 },
+  handle: 228782,
   slots: {
-    0: o46, 1: o48,
+    0: o45, 1: o47,
+  },
+});
+$(o45, {
+  structure: s22,
+  memory: { array: a11, offset: 0, length: 8 },
+  slots: {
+    0: o46,
   },
 });
 $(o46, {
-  structure: s22,
-  memory: { array: a12, offset: 0, length: 8 },
-  slots: {
-    0: o47,
-  },
+  structure: s11,
+  memory: { array: a7 },
 });
 $(o47, {
-  structure: s11,
-  memory: { array: a8 },
-});
-$(o48, {
   structure: s29,
-  memory: { array: a12, offset: 8, length: 8 },
+  memory: { array: a11, offset: 8, length: 8 },
   slots: {
-    0: o49,
+    0: o48,
   },
 });
-$(o49, {
+$(o48, {
   structure: s28,
-  memory: { array: a8 },
+  memory: { array: a7 },
+});
+$(o49, {
+  memory: { array: a17 },
+  handle: 241099,
+  slots: {
+    0: o50,
+  },
 });
 $(o50, {
-  memory: { array: a18 },
-  handle: 233851,
+  structure: s26,
+  memory: { array: a17, offset: 0, length: 16 },
   slots: {
     0: o51,
   },
 });
 $(o51, {
-  structure: s26,
-  memory: { array: a18, offset: 0, length: 16 },
+  structure: s25,
+  memory: { array: a7 },
+});
+$(o52, {});
+$(o53, {});
+$(o54, {
   slots: {
-    0: o52,
+    0: o55, 1: o57, 2: o58,
   },
 });
-$(o52, {
-  structure: s25,
-  memory: { array: a8 },
-});
-$(o53, {});
-$(o54, {});
 $(o55, {
+  structure: s7,
+  memory: { array: a7 },
   slots: {
-    0: o56, 1: o58, 2: o59,
+    0: o56,
   },
 });
 $(o56, {
-  structure: s7,
-  memory: { array: a8 },
-  const: true,
-  slots: {
-    0: o57,
-  },
-});
-$(o57, {
   structure: s26,
 });
-$(o58, {
+$(o57, {
   structure: s32,
-  memory: { array: a19 },
-  handle: 222856,
+  memory: { array: a18 },
+  handle: 229627,
 });
-$(o59, {
+$(o58, {
   structure: s8,
-  memory: { array: a20 },
-  const: true,
+  memory: { array: a19 },
 });
+$(o59, {});
 $(o60, {});
-$(o61, {});
+$(o61, {
+  memory: { array: a7 },
+  handle: 238112,
+});
 $(o62, {
-  memory: { array: a8 },
-  handle: 230935,
+  memory: { array: a7 },
+  handle: 239616,
 });
-$(o63, {
-  memory: { array: a8 },
-  handle: 232439,
-});
-$(o64, {});
-$(o65, {
-  memory: { array: a21 },
-  handle: 222011,
+$(o63, {});
+$(o64, {
+  memory: { array: a20 },
+  handle: 228782,
   slots: {
-    0: o26, 1: o66,
+    0: o25, 1: o65,
+  },
+});
+$(o65, {
+  structure: s38,
+  memory: { array: a11, offset: 8, length: 8 },
+  slots: {
+    0: o66,
   },
 });
 $(o66, {
-  structure: s38,
-  memory: { array: a12, offset: 8, length: 8 },
-  slots: {
-    0: o67,
-  },
-});
-$(o67, {
   structure: s37,
-  memory: { array: a8 },
+  memory: { array: a7 },
 });
-$(o68, {});
+$(o67, {});
+$(o68, {
+  memory: { array: a7 },
+  handle: 205656,
+});
 $(o69, {
-  memory: { array: a8 },
-  handle: 200947,
+  slots: {
+    0: o70, 1: o71, 2: o72,
+  },
 });
 $(o70, {
-  slots: {
-    0: o71, 1: o72, 2: o73,
-  },
+  structure: s5,
+  memory: { array: a7 },
+  handle: 171482,
 });
 $(o71, {
-  structure: s5,
-  memory: { array: a8 },
-  handle: 169364,
+  structure: s19,
+  memory: { array: a7 },
+  handle: 171495,
 });
 $(o72, {
-  structure: s19,
-  memory: { array: a8 },
-  handle: 169377,
-});
-$(o73, {
   structure: s41,
-  memory: { array: a8 },
-  handle: 169390,
+  memory: { array: a7 },
+  handle: 171508,
 });
 
 // fill in structure properties
@@ -416,7 +393,7 @@ $(s1, {
   ...s,
   type: 5,
   flags: 1,
-  signature: 0x5c49cd7eda493ef6n,
+  signature: 0x5c8ee1f4224f967dn,
   byteSize: 2,
   align: 2,
   instance: {
@@ -451,7 +428,7 @@ $(s1, {
       },
       {
         ...m,
-        name: "AlreadyInitialized",
+        name: "Deinitializing",
         type: 5,
         flags: 4,
         slot: 2,
@@ -459,7 +436,7 @@ $(s1, {
       },
       {
         ...m,
-        name: "Deinitializing",
+        name: "UnableToUseThread",
         type: 5,
         flags: 4,
         slot: 3,
@@ -467,7 +444,7 @@ $(s1, {
       },
       {
         ...m,
-        name: "UnableToUseThread",
+        name: "ThreadQuotaExceeded",
         type: 5,
         flags: 4,
         slot: 4,
@@ -475,7 +452,7 @@ $(s1, {
       },
       {
         ...m,
-        name: "ThreadQuotaExceeded",
+        name: "SystemResources",
         type: 5,
         flags: 4,
         slot: 5,
@@ -483,18 +460,10 @@ $(s1, {
       },
       {
         ...m,
-        name: "SystemResources",
-        type: 5,
-        flags: 4,
-        slot: 6,
-        structure: s1,
-      },
-      {
-        ...m,
         name: "LockedMemoryLimitExceeded",
         type: 5,
         flags: 4,
-        slot: 7,
+        slot: 6,
         structure: s1,
       },
     ],
@@ -506,7 +475,7 @@ $(s2, {
   ...s,
   type: 4,
   flags: 1,
-  signature: 0x4d22a6cc8c076c22n,
+  signature: 0x62953c5804784650n,
   byteSize: 2,
   align: 2,
   instance: {
@@ -537,7 +506,7 @@ $(s2, {
 });
 $(s3, {
   ...s,
-  flags: 17,
+  flags: 33,
   signature: 0xad790f74c7d61933n,
   byteSize: 8,
   align: 8,
@@ -561,8 +530,8 @@ $(s3, {
 $(s4, {
   ...s,
   type: 12,
-  flags: 42,
-  signature: 0x8e91d7462f89ba65n,
+  flags: 74,
+  signature: 0x9365f8f0f6b6b7e4n,
   length: 1,
   byteSize: 16,
   align: 8,
@@ -591,7 +560,7 @@ $(s4, {
         structure: s3,
       },
     ],
-    template: o9
+    template: o8
   },
   static: {
     members: [],
@@ -601,7 +570,7 @@ $(s4, {
 $(s5, {
   ...s,
   type: 14,
-  signature: 0x5ecba166d36aefeen,
+  signature: 0xc9ebce58ac63edf6n,
   length: 1,
   byteSize: 0,
   instance: {
@@ -614,7 +583,7 @@ $(s5, {
         structure: s4,
       },
     ],
-    template: o10
+    template: o9
   },
   static: {
     members: [],
@@ -662,7 +631,7 @@ $(s7, {
         structure: s7,
       },
     ],
-    template: o11
+    template: o10
   },
   static: {
     members: [],
@@ -722,7 +691,7 @@ $(s9, {
         structure: s8,
       },
     ],
-    template: o12
+    template: o11
   },
   static: {
     members: [],
@@ -732,7 +701,7 @@ $(s9, {
 $(s10, {
   ...s,
   type: 7,
-  flags: 27,
+  flags: 43,
   signature: 0x6cc1b27fb3d21636n,
   byteSize: 3,
   align: 1,
@@ -757,7 +726,7 @@ $(s10, {
         structure: s6,
       },
     ],
-    template: o13
+    template: o12
   },
   static: {
     members: [],
@@ -767,7 +736,7 @@ $(s10, {
 $(s11, {
   ...s,
   type: 9,
-  flags: 480,
+  flags: 976,
   signature: 0x9b3f78f92307ba61n,
   instance: {
     members: [
@@ -782,14 +751,14 @@ $(s11, {
   },
   static: {
     members: [],
-    template: o14
+    template: o13
   },
   name: "anyopaque",
 });
 $(s12, {
   ...s,
   type: 8,
-  flags: 332,
+  flags: 668,
   signature: 0x4057fadddf1d8877n,
   byteSize: 8,
   align: 8,
@@ -804,7 +773,7 @@ $(s12, {
         structure: s11,
       },
     ],
-    template: o19
+    template: o18
   },
   static: {
     members: [],
@@ -839,7 +808,7 @@ $(s13, {
         structure: s3,
       },
     ],
-    template: o20
+    template: o19
   },
   static: {
     members: [],
@@ -888,7 +857,7 @@ $(s14, {
         structure: s0,
       },
     ],
-    template: o21
+    template: o20
   },
   static: {
     members: [],
@@ -911,18 +880,18 @@ $(s15, {
         structure: s14,
       },
     ],
-    template: o22
+    template: o21
   },
   static: {
     members: [],
-    template: o23
+    template: o22
   },
   name: "fn (?*opaque, void) void",
 });
 $(s16, {
   ...s,
   type: 8,
-  flags: 204,
+  flags: 396,
   signature: 0x3383733aa3b32c56n,
   byteSize: 8,
   align: 8,
@@ -937,7 +906,7 @@ $(s16, {
         structure: s15,
       },
     ],
-    template: o24
+    template: o23
   },
   static: {
     members: [],
@@ -976,7 +945,7 @@ $(s17, {
         structure: s16,
       },
     ],
-    template: o25
+    template: o24
   },
   static: {
     members: [],
@@ -986,7 +955,7 @@ $(s17, {
 $(s18, {
   ...s,
   type: 12,
-  flags: 94,
+  flags: 174,
   signature: 0x4df95d08659081dcn,
   length: 0,
   byteSize: 16,
@@ -1015,7 +984,7 @@ $(s18, {
         structure: s17,
       },
     ],
-    template: o30
+    template: o29
   },
   static: {
     members: [],
@@ -1038,7 +1007,7 @@ $(s19, {
         structure: s18,
       },
     ],
-    template: o31
+    template: o30
   },
   static: {
     members: [],
@@ -1083,7 +1052,7 @@ $(s20, {
         structure: s20,
       },
     ],
-    template: o32
+    template: o31
   },
   name: "ES1",
 });
@@ -1123,7 +1092,7 @@ $(s21, {
 $(s22, {
   ...s,
   type: 8,
-  flags: 460,
+  flags: 924,
   signature: 0x98abf42c3c09f315n,
   byteSize: 8,
   align: 8,
@@ -1138,7 +1107,7 @@ $(s22, {
         structure: s11,
       },
     ],
-    template: o35
+    template: o34
   },
   static: {
     members: [],
@@ -1149,7 +1118,7 @@ $(s23, {
   ...s,
   name: "anyerror",
   type: 5,
-  flags: 17,
+  flags: 33,
   signature: 0xd44c72e3a91d7a13n,
   byteSize: 2,
   align: 2,
@@ -1206,7 +1175,7 @@ $(s24, {
 $(s25, {
   ...s,
   type: 9,
-  flags: 224,
+  flags: 464,
   signature: 0x9b3f78f92307ba61n,
   byteSize: 1,
   align: 1,
@@ -1223,14 +1192,14 @@ $(s25, {
   },
   static: {
     members: [],
-    template: o36
+    template: o35
   },
   name: "[_]u8",
 });
 $(s26, {
   ...s,
   type: 8,
-  flags: 188,
+  flags: 380,
   signature: 0x7e2f0adf211d515en,
   byteSize: 16,
   align: 8,
@@ -1245,7 +1214,7 @@ $(s26, {
         structure: s25,
       },
     ],
-    template: o40
+    template: o39
   },
   static: {
     members: [],
@@ -1255,7 +1224,7 @@ $(s26, {
 $(s27, {
   ...s,
   type: 12,
-  flags: 46,
+  flags: 78,
   signature: 0x1d25e6978b851ae8n,
   length: 2,
   byteSize: 40,
@@ -1296,7 +1265,7 @@ $(s27, {
         structure: s26,
       },
     ],
-    template: o41
+    template: o40
   },
   static: {
     members: [],
@@ -1319,18 +1288,18 @@ $(s28, {
         structure: s27,
       },
     ],
-    template: o42
+    template: o41
   },
   static: {
     members: [],
-    template: o43
+    template: o42
   },
   name: "fn (*const opaque, []const u8) anyerror!usize",
 });
 $(s29, {
   ...s,
   type: 8,
-  flags: 204,
+  flags: 396,
   signature: 0x0a0057cd103bd73en,
   byteSize: 8,
   align: 8,
@@ -1345,7 +1314,7 @@ $(s29, {
         structure: s28,
       },
     ],
-    template: o44
+    template: o43
   },
   static: {
     members: [],
@@ -1386,7 +1355,7 @@ $(s30, {
         structure: s29,
       },
     ],
-    template: o45
+    template: o44
   },
   static: {
     members: [],
@@ -1423,7 +1392,7 @@ $(s31, {
         structure: s8,
       },
     ],
-    template: o50
+    template: o49
   },
   static: {
     members: [],
@@ -1433,7 +1402,7 @@ $(s31, {
 $(s32, {
   ...s,
   type: 7,
-  flags: 31,
+  flags: 47,
   signature: 0xfb56cb615b1dc17dn,
   byteSize: 32,
   align: 8,
@@ -1458,7 +1427,7 @@ $(s32, {
         structure: s6,
       },
     ],
-    template: o53
+    template: o52
   },
   static: {
     members: [],
@@ -1468,7 +1437,7 @@ $(s32, {
 $(s33, {
   ...s,
   type: 9,
-  flags: 14,
+  flags: 30,
   signature: 0xc001c2bbe5847336n,
   byteSize: 16,
   align: 8,
@@ -1482,18 +1451,18 @@ $(s33, {
         structure: s26,
       },
     ],
-    template: o54
+    template: o53
   },
   static: {
     members: [],
-    template: o55
+    template: o54
   },
   name: "[_][]const u8",
 });
 $(s34, {
   ...s,
   type: 8,
-  flags: 188,
+  flags: 380,
   signature: 0x5ed240e66e88c600n,
   byteSize: 16,
   align: 8,
@@ -1508,7 +1477,7 @@ $(s34, {
         structure: s33,
       },
     ],
-    template: o60
+    template: o59
   },
   static: {
     members: [],
@@ -1591,7 +1560,7 @@ $(s36, {
         structure: s35,
       },
     ],
-    template: o61
+    template: o60
   },
   static: {
     members: [],
@@ -1614,18 +1583,18 @@ $(s37, {
         structure: s36,
       },
     ],
-    template: o62
+    template: o61
   },
   static: {
     members: [],
-    template: o63
+    template: o62
   },
   name: "fn (?*opaque, anyerror!void) void",
 });
 $(s38, {
   ...s,
   type: 8,
-  flags: 204,
+  flags: 396,
   signature: 0x771b102a8d7a0f5dn,
   byteSize: 8,
   align: 8,
@@ -1640,7 +1609,7 @@ $(s38, {
         structure: s37,
       },
     ],
-    template: o64
+    template: o63
   },
   static: {
     members: [],
@@ -1679,7 +1648,7 @@ $(s39, {
         structure: s38,
       },
     ],
-    template: o65
+    template: o64
   },
   static: {
     members: [],
@@ -1689,7 +1658,7 @@ $(s39, {
 $(s40, {
   ...s,
   type: 12,
-  flags: 126,
+  flags: 238,
   signature: 0x077b85be4b50ed1fn,
   length: 3,
   byteSize: 72,
@@ -1752,7 +1721,7 @@ $(s40, {
         structure: s39,
       },
     ],
-    template: o68
+    template: o67
   },
   static: {
     members: [],
@@ -1775,7 +1744,7 @@ $(s41, {
         structure: s40,
       },
     ],
-    template: o69
+    template: o68
   },
   static: {
     members: [],
@@ -1786,7 +1755,7 @@ $(s42, {
   ...s,
   name: "tar",
   type: 2,
-  flags: 128,
+  flags: 256,
   signature: 0x239ab4f327f6ac1bn,
   byteSize: 0,
   align: 1,
@@ -1820,7 +1789,7 @@ $(s42, {
         structure: s41,
       },
     ],
-    template: o70
+    template: o69
   },
 });
 const structures = [
@@ -1834,6 +1803,7 @@ const root = s42;
 const settings = {
   runtimeSafety: false,
   littleEndian: true,
+  ioRedirection: true,
   libc: true,
 };
 
