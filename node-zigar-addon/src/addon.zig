@@ -335,8 +335,9 @@ const ModuleHost = struct {
                     const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
                     try redirection_controller.addSyscallVtable(pos, vtable);
                     errdefer redirection_controller.removeSyscallVtable(vtable) catch {};
-                    try redirection_controller.installSyscallTrap(&trapping_syscalls);
-                    self.syscall_trap_installed = true;
+                    if (redirection_controller.installSyscallTrap(&trapping_syscalls)) {
+                        self.syscall_trap_installed = true;
+                    } else |_| {}
                 }
                 self.hooks_installed = true;
             }
