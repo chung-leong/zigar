@@ -40,7 +40,29 @@ const worker = struct {
                 var iter = try dir.walk(c_allocator);
                 defer iter.deinit();
                 while (try iter.next()) |entry| {
-                    try tar_writer.writeEntry(entry);
+                    if (std.fs.path.sep == '\\') {
+                        // convert backslash to forward slash
+                        const ptr: []u8 = @constCast(entry.path);
+                        for (ptr) |*p| {
+                            if (p.* == '\\') p.* = '/';
+                        }
+                    }
+                    switch (entry.kind) {
+                        .directory => {
+                            try tar_writer.writeDir(entry.path, .{});
+                        },
+                        .file => {
+                            var file = try entry.dir.openFile(entry.basename, .{});
+                            defer file.close();
+                            try tar_writer.writeFile(entry.path, file);
+                        },
+                        .sym_link => {
+                            var link_name_buffer: [std.fs.max_path_bytes]u8 = undefined;
+                            const link_name = try entry.dir.readLink(entry.basename, &link_name_buffer);
+                            try tar_writer.writeLink(entry.path, link_name, .{});
+                        },
+                        else => {},
+                    }
                 }
             } else |dir_err| {
                 if (dir_err != error.NotDir) return dir_err;
