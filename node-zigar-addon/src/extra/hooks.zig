@@ -2833,12 +2833,20 @@ pub fn LibcSubstitute(comptime redirector: type) type {
 
         fn getRedirectedFile(s: *std.c.FILE) callconv(.c) ?*RedirectedFile {
             const sc: *stdio_h.FILE = @ptrCast(@alignCast(s));
-            return RedirectedFile.cast(s) orelse findStdProxy(stdio_h.fileno(sc));
-        }
-
-        fn findStdProxy(fd: c_int) callconv(.c) ?*RedirectedFile {
-            if (fd < 0 or fd > 2) return null;
-            return getStdProxy(fd);
+            return RedirectedFile.cast(s) orelse find: {
+                if (os == .windows) {
+                    // fileno doesn't always work on Windows
+                    var fd: c_int = 0;
+                    while (fd <= 2) : (fd += 1) {
+                        const std_s: *std.c.FILE = @ptrCast(stdio_h.__acrt_iob_func(@intCast(fd)));
+                        if (s == std_s) break :find getStdProxy(fd);
+                    }
+                } else {
+                    const fd = stdio_h.fileno(sc);
+                    if (fd >= 0 and fd <= 2) break :find getStdProxy(fd);
+                }
+                break :find null;
+            };
         }
 
         fn getStdProxy(fd: c_int) callconv(.c) *RedirectedFile {
