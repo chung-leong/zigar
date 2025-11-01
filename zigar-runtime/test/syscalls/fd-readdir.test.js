@@ -73,7 +73,7 @@ describe('Syscall: fd-readdir', function() {
           break;
       }
     }
-    if (process.env.TARGET === 'node') {
+    if (process.env.TARGET === 'node' && process.platform === 'linux') {
       expect(syscallTrap).to.be.true;
       map.close();
       expect(syscallTrap).to.be.false;

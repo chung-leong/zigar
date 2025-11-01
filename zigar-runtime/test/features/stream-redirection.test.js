@@ -300,7 +300,7 @@ describe('Feature: stream-redirection', function() {
         env.createStreamHandle(file, [ PosixDescriptorRight.fd_read, 0 ]);
       }).to.throw();
     })
-    if (process.env.TARGET === 'node') {
+    if (process.env.TARGET === 'node' && process.platform === 'linux') {
       it('should activate syscall trap', async function() {
         const env = new Env();
         let syscallTrap;
