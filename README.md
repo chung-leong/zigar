@@ -14,7 +14,7 @@ and tutorials.
 * Zig-to-JavaScript, JavaScript-to-Zig call marshalling
 * Async task management
 * Threads in native code and WebAssembly
-* Web stream handling
+* Emulating of file system operations
 * Support for MacOS, Linux, and Windows (both 64-bit and 32-bit)
 * Support for Node.js, Bun.js, Electron, and NW.js (native code execution)
 * Support for Webpack, Rollup, and Vite (WebAssembly)
