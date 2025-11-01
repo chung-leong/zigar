@@ -117,7 +117,7 @@ $(o7, {
 $(o8, {});
 $(o9, {
   memory: { array: a7 },
-  handle: 181010,
+  handle: 181967,
 });
 $(o10, {});
 $(o11, {
@@ -152,16 +152,16 @@ $(o19, {});
 $(o20, {});
 $(o21, {
   memory: { array: a7 },
-  handle: 230911,
+  handle: 231868,
 });
 $(o22, {
   memory: { array: a7 },
-  handle: 235742,
+  handle: 236699,
 });
 $(o23, {});
 $(o24, {
   memory: { array: a11 },
-  handle: 228782,
+  handle: 229739,
   slots: {
     0: o25, 1: o27,
   },
@@ -191,7 +191,7 @@ $(o28, {
 $(o29, {});
 $(o30, {
   memory: { array: a7 },
-  handle: 181712,
+  handle: 182669,
 });
 $(o31, {
   slots: {
@@ -231,16 +231,16 @@ $(o39, {});
 $(o40, {});
 $(o41, {
   memory: { array: a7 },
-  handle: 235755,
+  handle: 236712,
 });
 $(o42, {
   memory: { array: a7 },
-  handle: 237259,
+  handle: 238216,
 });
 $(o43, {});
 $(o44, {
   memory: { array: a16 },
-  handle: 228782,
+  handle: 229739,
   slots: {
     0: o45, 1: o47,
   },
@@ -269,7 +269,7 @@ $(o48, {
 });
 $(o49, {
   memory: { array: a17 },
-  handle: 241099,
+  handle: 242056,
   slots: {
     0: o50,
   },
@@ -305,7 +305,7 @@ $(o56, {
 $(o57, {
   structure: s32,
   memory: { array: a18 },
-  handle: 229627,
+  handle: 230584,
 });
 $(o58, {
   structure: s8,
@@ -315,16 +315,16 @@ $(o59, {});
 $(o60, {});
 $(o61, {
   memory: { array: a7 },
-  handle: 238112,
+  handle: 239069,
 });
 $(o62, {
   memory: { array: a7 },
-  handle: 239616,
+  handle: 240573,
 });
 $(o63, {});
 $(o64, {
   memory: { array: a20 },
-  handle: 228782,
+  handle: 229739,
   slots: {
     0: o25, 1: o65,
   },
@@ -343,7 +343,7 @@ $(o66, {
 $(o67, {});
 $(o68, {
   memory: { array: a7 },
-  handle: 205656,
+  handle: 206613,
 });
 $(o69, {
   slots: {
@@ -353,17 +353,17 @@ $(o69, {
 $(o70, {
   structure: s5,
   memory: { array: a7 },
-  handle: 171482,
+  handle: 172439,
 });
 $(o71, {
   structure: s19,
   memory: { array: a7 },
-  handle: 171495,
+  handle: 172452,
 });
 $(o72, {
   structure: s41,
   memory: { array: a7 },
-  handle: 171508,
+  handle: 172465,
 });
 
 // fill in structure properties
