@@ -4,12 +4,12 @@ import { defineConfig } from 'vite';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [ react(), zigar({ embedWASM: true }) ],
-  build: {
-    outDir: '../../../../../zigar.website/demos/rollup-plugin-zigar/sha1',
-    emptyOutDir: true,
-  },
+  plugins: [ react(), zigar({ multithreaded: true }) ],
   server: {
-    open: true,
+    host: true,
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    }
   },
 })
