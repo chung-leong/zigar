@@ -2843,7 +2843,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
                     }
                 } else {
                     const fd = stdio_h.fileno(sc);
-                    if (fd >= 0 or fd <= 2) break :find getStdProxy(fd);
+                    if (fd >= 0 and fd <= 2) break :find getStdProxy(fd);
                 }
                 break :find null;
             };
