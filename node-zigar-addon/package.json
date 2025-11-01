@@ -1,6 +1,6 @@
 {
   "name": "node-zigar-addon",
-  "version": "0.14.2-rc.1",
+  "version": "0.14.2",
   "description": "NodeJS addon for loading Zig native modules",
   "main": "./dist/index.cjs",
   "type": "module",
