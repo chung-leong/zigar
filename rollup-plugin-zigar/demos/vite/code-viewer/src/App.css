@@ -25,3 +25,18 @@
 #right-pane pre {
   flex: 1 1 100%;
 }
+
+@media screen and (max-width: 600px) {
+  #root {
+    flex-direction: column;
+  }
+
+  #left-pane {
+    flex: 1 1 50%;
+  }
+
+  #right-pane {
+    flex: 1 1 50%;
+    border: 1px dotted #999999;
+  }
+}
