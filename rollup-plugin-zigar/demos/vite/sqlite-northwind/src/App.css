@@ -66,3 +66,24 @@ body {
   padding-left: 1em;
   list-style: none;
 }
+
+@media screen and (max-width: 600px) {
+  #content {
+    flex-direction: column;
+  }
+
+  #customer-list {
+    flex: 1 1 auto;
+    margin-bottom: 0;
+  }
+
+  #order-list {
+    flex: 0 0 auto;
+    max-height: 25vh;
+    color: #000000;
+    background-color: #ffffff;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 0.25em;
+  }
+}
