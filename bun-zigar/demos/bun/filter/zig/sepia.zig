@@ -401,7 +401,7 @@ pub const @"meta(zigar)" = struct {
 
     pub fn isDeclPlain(comptime T: type, comptime _: std.meta.DeclEnum(T)) bool {
         // make return value plain objects
-        return true;
+        return T != kernel;
     }
 };
 
