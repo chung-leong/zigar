@@ -8,7 +8,7 @@ export default mixin({
   convertReader(arg) {
     if (arg instanceof ReadableStreamDefaultReader) {
       return new WebStreamReader(arg);
-    } else if(arg instanceof ReadableStreamBYOBReader) {
+    } else if(typeof(ReadableStreamBYOBReader) === 'function' && arg instanceof ReadableStreamBYOBReader) {
       return new WebStreamReaderBYOB(arg);
     } else if (arg instanceof Blob) {
       return new BlobReader(arg);
