@@ -6,7 +6,7 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   plugins: [
     react(),
-    zigar({ topLevelAwait: false, useLibc: true, multithreaded: true }),
+    zigar({ useLibc: true, multithreaded: true }),
   ],
   server: {
     headers: {

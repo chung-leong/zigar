@@ -3,7 +3,7 @@ import Zigar from '../../dist/index.js';
 export default {
   input: './sha1.zig',
   plugins: [
-    Zigar({ topLevelAwait: false, nodeCompat: true }),
+    Zigar({ nodeCompat: true }),
   ],
   output: {
     file: './sha1.js',

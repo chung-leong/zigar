@@ -1,6 +1,6 @@
-import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import zigar from 'rollup-plugin-zigar'
+import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -9,7 +9,6 @@ export default defineConfig({
     zigar({
       optimize: 'ReleaseSmall',
       embedWASM: true,
-      topLevelAwait: false,
       multithreaded: true,
     })
   ],
