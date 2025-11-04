@@ -1,5 +1,5 @@
 const std = @import("std");
-const expect = std.testing.expect;
+const expectEqual = std.testing.expectEqual;
 
 /// Take a function that accepts a tuple as its only argument and create a new one with the tuple
 /// elements spread across the argument list.
@@ -75,12 +75,12 @@ test "spreadArgs" {
         }
     };
     const f1 = test_ns.getNegateFunc(test_ns.add);
-    try expect(f1(100, 50) == -150);
+    try expectEqual(-150, f1(100, 50));
     const f2 = spreadArgs(test_ns.sum, .C);
-    try expect(f2(1, 2, 3) == 6);
+    try expectEqual(6, f2(1, 2, 3));
     const f3 = test_ns.addLogging(test_ns.add);
-    try expect(f3(100, 50) == 150);
-    try expect(test_ns.logged == true);
+    try expectEqual(150, f3(100, 50));
+    try expectEqual(true, test_ns.logged);
 }
 
 fn getPyramid(func: anytype, comptime conv: ?std.builtin.CallingConvention) type {
@@ -378,4 +378,39 @@ fn getTupleFields(comptime FT: type) []const std.builtin.Type.StructField {
     }
     const Tuple = @typeInfo(FT).@"fn".params[0].type.?;
     return @typeInfo(Tuple).@"struct".fields;
+}
+
+pub fn Uninlined(comptime FT: type) type {
+    return switch (@typeInfo(FT)) {
+        .@"fn" => |f| @Type(.{
+            .@"fn" = .{
+                .calling_convention = switch (f.calling_convention) {
+                    .@"inline" => .auto,
+                    else => |cc| cc,
+                },
+                .is_generic = f.is_generic,
+                .is_var_args = f.is_var_args,
+                .return_type = f.return_type,
+                .params = f.params,
+            },
+        }),
+        else => @compileError("Not a function"),
+    };
+}
+
+test "Uninlined" {
+    try expectEqual(fn () void, Uninlined(fn () callconv(.@"inline") void));
+    try expectEqual(fn () void, Uninlined(fn () void));
+}
+
+pub fn uninline(func: anytype) Uninlined(@TypeOf(func)) {
+    const FT = @TypeOf(func);
+    const f = @typeInfo(FT).@"fn";
+    if (f.calling_convention != .@"inline") return func;
+    const ns = struct {
+        inline fn call(args: std.meta.ArgsTuple(FT)) f.return_type.? {
+            return @call(.auto, func, args);
+        }
+    };
+    return spreadArgs(ns.call, .auto);
 }

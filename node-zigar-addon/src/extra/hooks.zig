@@ -5,7 +5,7 @@ const pollfd = std.c.pollfd;
 const nfds_t = std.c.nfds_t;
 const builtin = @import("builtin");
 
-const fn_transform = @import("./fn-transform.zig");
+const fn_transform = @import("zigft/fn-transform.zig");
 
 const dirent_h = @cImport({
     @cInclude("dirent.h");
@@ -143,6 +143,12 @@ pub const Syscall = extern struct {
             count: u32,
             read: u32 = undefined,
         },
+        rename: extern struct {
+            dirfd: i32,
+            path: [*:0]const u8,
+            new_dirfd: i32,
+            new_path: [*:0]const u8,
+        },
         rmdir: extern struct {
             dirfd: i32,
             path: [*:0]const u8,
@@ -223,6 +229,7 @@ pub const Syscall = extern struct {
         pwritev,
         read,
         readv,
+        rename,
         rmdir,
         seek,
         setfl,
@@ -238,6 +245,7 @@ pub const Syscall = extern struct {
     pub const Mask = packed struct {
         mkdir: bool = false,
         open: bool = false,
+        rename: bool = false,
         rmdir: bool = false,
         set_times: bool = false,
         stat: bool = false,
@@ -1337,6 +1345,43 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
+        pub fn rename(path: [*:0]const u8, new_path: [*:0]const u8, result: *c_int) callconv(.c) bool {
+            return renameat(fd_cwd, path, fd_cwd, new_path, result);
+        }
+
+        pub fn renameat(dirfd: c_int, path: [*:0]const u8, new_dirfd: c_int, new_path: [*:0]const u8, result: *c_int) callconv(.c) bool {
+            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.rename))) {
+                if (!(isPrivateDescriptor(new_dirfd) or new_dirfd == fd_cwd)) {
+                    result.* = intFromError(.INVAL);
+                    return true;
+                }
+                var resolver = PathResolver.init(dirfd, path) catch {
+                    result.* = intFromError(.NOMEM);
+                    return true;
+                };
+                defer resolver.deinit();
+                var new_resolver = PathResolver.init(new_dirfd, new_path) catch {
+                    result.* = intFromError(.NOMEM);
+                    return true;
+                };
+                defer new_resolver.deinit();
+                var call: Syscall = .{ .cmd = .rename, .u = .{
+                    .rename = .{
+                        .dirfd = resolver.dirfd,
+                        .path = resolver.path,
+                        .new_dirfd = new_resolver.dirfd,
+                        .new_path = new_resolver.path,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err != .OPNOTSUPP) {
+                    result.* = intFromError(err);
+                    return true;
+                }
+            }
+            return false;
+        }
+
         pub fn rmdir(path: [*:0]const u8, result: *c_int) callconv(.c) bool {
             return unlinkat(fd_cwd, path, AT.REMOVEDIR, result);
         }
@@ -1721,6 +1766,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const pwritev = makeStdHook("pwritev");
         pub const read = makeStdHook("read");
         pub const readv = makeStdHook("readv");
+        pub const rename = makeStdHook("rename");
+        pub const renameat = makeStdHook("renameat");
         pub const rmdir = makeStdHook("rmdir");
         pub const stat = makeStdHook("stat");
         pub const stat64 = makeStdHook("stat64");
@@ -2202,6 +2249,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var readdir: *const @TypeOf(Self.readdir) = undefined;
             pub var readdir64: *const @TypeOf(Self.readdir64) = undefined;
             pub var rewinddir: *const @TypeOf(Self.rewinddir) = undefined;
+            pub var rename: *const @TypeOf(Self.rename) = undefined;
+            pub var renameat: *const @TypeOf(Self.renameat) = undefined;
             pub var rmdir: *const @TypeOf(Self.rmdir) = undefined;
             pub var seekdir: *const @TypeOf(Self.seekdir) = undefined;
             pub var stat: *const @TypeOf(Self.stat) = undefined;

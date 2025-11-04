@@ -3,7 +3,6 @@ const c_allocator = std.heap.c_allocator;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
-const fn_transform = @import("./extra/fn-transform.zig");
 const hooks = @import("./extra/hooks.zig");
 const interface = @import("./extra/interface.zig");
 const napi = @import("./extra/napi.zig");
@@ -11,6 +10,7 @@ const Env = napi.Env;
 const Value = napi.Value;
 const Ref = napi.Ref;
 const ThreadsafeFunction = napi.ThreadsafeFunction;
+const fn_transform = @import("./extra/zigft/fn-transform.zig");
 const redirect = @import("./redirect.zig");
 
 comptime {
@@ -94,6 +94,7 @@ const ModuleHost = struct {
         path_filestat_set_times: ?Ref = null,
         path_open: ?Ref = null,
         path_remove_directory: ?Ref = null,
+        path_rename: ?Ref = null,
         path_unlink_file: ?Ref = null,
         poll_oneoff: ?Ref = null,
     } = .{},
@@ -991,6 +992,7 @@ const ModuleHost = struct {
                 .mkdir => try self.handleMkdir(futex, &call.u.mkdir),
                 .rmdir => try self.handleRmdir(futex, &call.u.rmdir),
                 .unlink => try self.handleUnlink(futex, &call.u.unlink),
+                .rename => try self.handleRename(futex, &call.u.rename),
                 .poll => try self.handlePoll(futex, &call.u.poll),
                 .environ => try self.handleGetEnvironmentStrings(futex, &call.u.environ),
             };
@@ -1302,6 +1304,21 @@ const ModuleHost = struct {
             try env.createInt32(args.dirfd),
             try env.createUsize(@intFromPtr(args.path)),
             try env.createUint32(path_len),
+            futex,
+        });
+    }
+
+    fn handleRename(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        const path_len: u32 = @truncate(std.mem.len(args.path));
+        const new_path_len: u32 = @truncate(std.mem.len(args.new_path));
+        return try self.callPosixFunction(self.js.path_rename, &.{
+            try env.createInt32(args.dirfd),
+            try env.createUsize(@intFromPtr(args.path)),
+            try env.createUint32(path_len),
+            try env.createInt32(args.new_dirfd),
+            try env.createUsize(@intFromPtr(args.new_path)),
+            try env.createUint32(new_path_len),
             futex,
         });
     }

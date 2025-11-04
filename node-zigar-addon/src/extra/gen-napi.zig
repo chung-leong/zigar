@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const api_translator = @import("api-translator.zig");
+const api_translator = @import("zigft/api-translator.zig");
 const camelize = api_translator.camelize;
 const snakify = api_translator.snakify;
 
