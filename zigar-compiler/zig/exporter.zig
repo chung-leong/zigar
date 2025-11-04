@@ -1,22 +1,24 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const export_options = @import("./export-options.zig");
-pub const options = export_options;
-const fn_transform = @import("./fn-transform.zig");
-const meta = @import("./meta.zig");
-const thunk_js = @import("./thunk-js.zig");
-const thunk_zig = @import("./thunk-zig.zig");
-const types = @import("./types.zig");
-const Value = types.AnyValue;
-const TypeData = types.TypeData;
+const meta = @import("meta.zig");
+pub const options = @import("options.zig");
+const js_fn = @import("thunk/js-fn.zig");
+const zig_fn = @import("thunk/zig-fn.zig");
+const ArgStruct = @import("type/arg-struct.zig").ArgStruct;
+const TypeData = @import("type/db.zig").TypeData;
+const TypeDataCollector = @import("type/db.zig").TypeDataCollector;
+const util = @import("type/util.zig");
+const fn_transform = @import("zigft/fn-transform.zig");
+
+pub const Value = *opaque {};
 
 fn Factory(comptime host: type, comptime module: type) type {
     const tdb = comptime result: {
-        var tdc = types.TypeDataCollector.init(256);
+        var tdc = TypeDataCollector.init(256);
         tdc.add(*const fn (*const anyopaque, *anyopaque) anyerror!void);
         tdc.add(*const fn (*const anyopaque, *anyopaque, *const anyopaque, usize) anyerror!void);
-        tdc.add(*const fn (thunk_js.Action, usize) anyerror!usize);
+        tdc.add(*const fn (js_fn.Action, usize) anyerror!usize);
         tdc.add(*const anyopaque);
         tdc.scan(module);
         break :result tdc.createDatabase();
@@ -66,10 +68,11 @@ fn Factory(comptime host: type, comptime module: type) type {
                 std.fs.Dir => .directory,
                 else => if (td.isIterator())
                     .iterator
-                else if (types.getInternalType(td.type)) |internal_type| switch (internal_type) {
+                else if (util.getInternalType(td.type)) |internal_type| switch (internal_type) {
                     .promise => .promise,
                     .generator => .generator,
                     .abort_signal => .abort_signal,
+                    else => unreachable,
                 } else .unknown,
             };
         }
@@ -160,7 +163,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .is_extern = st.layout == .@"extern",
                         .is_packed = st.layout == .@"packed",
                         .is_tuple = st.is_tuple,
-                        .is_optional = types.hasDefaultFields(td.type),
+                        .is_optional = util.hasDefaultFields(td.type),
                     };
                 },
                 .@"union" => |un| init: {
@@ -267,7 +270,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         false => null,
                     },
                 },
-                .@"fn" => getStructureLength(tdb.get(types.ArgumentStruct(td.type))),
+                .@"fn" => getStructureLength(tdb.get(ArgStruct(td.type))),
                 else => null,
             };
         }
@@ -381,7 +384,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 });
                 // define the shape so that static members can be instances of the structure
                 try host.beginStructure(structure);
-                // add static variables and functions, excluding internal types and problematic namespaces
+                // add static variables and functions, excluding internal util and problematic namespaces
                 if (comptime !td.shouldIgnoreDecls()) {
                     try setProperties(static, .{
                         .members = try self.getStaticMembers(td),
@@ -523,7 +526,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 const field_td = tdb.get(field.type);
                 const field_enum = comptime std.meta.stringToEnum(FieldEnum, field.name).?;
                 // comptime fields are not actually stored in the struct
-                // fields of comptime types in comptime structs are handled in the same manner
+                // fields of comptime util in comptime structs are handled in the same manner
                 const is_actual = comptime !field.is_comptime and !field_td.isComptimeOnly();
                 // check meta function to see if field should be handled in a special manner
                 const can_be_string = comptime canBeString(field.type);
@@ -661,8 +664,8 @@ fn Factory(comptime host: type, comptime module: type) type {
         }
 
         fn addFunctionMember(self: @This(), list: Value, comptime td: TypeData) !void {
-            const FT = types.Uninlined(td.type);
-            const arg_td = tdb.get(types.ArgumentStruct(FT));
+            const FT = fn_transform.Uninlined(td.type);
+            const arg_td = tdb.get(ArgStruct(FT));
             try appendList(list, .{
                 .type = getMemberType(arg_td, false),
                 .bitSize = arg_td.getBitSize(),
@@ -711,8 +714,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                     }
                 },
                 .@"fn" => {
-                    const FT = types.Uninlined(td.type);
-                    const thunk = comptime thunk_zig.createThunk(FT);
+                    const FT = fn_transform.Uninlined(td.type);
+                    const thunk = comptime zig_fn.createThunk(FT);
                     memory = try self.exportPointerTarget(thunk, false);
                 },
                 .array => if (comptime td.getSentinel()) |sentinel| {
@@ -752,8 +755,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 else => true,
                             };
                             const should_export = if (is_value_supported) switch (@typeInfo(DT)) {
-                                .@"fn" => !export_options.omit_functions,
-                                else => !export_options.omit_variables or decl_ptr_td.isConst(),
+                                .@"fn" => !options.omit_functions,
+                                else => !options.omit_variables or decl_ptr_td.isConst(),
                             } else false;
                             if (should_export) {
                                 checkStaticMember(DT);
@@ -836,13 +839,13 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 else => true,
                             };
                             const should_export = if (is_value_supported) switch (@typeInfo(DT)) {
-                                .@"fn" => !export_options.omit_functions,
-                                else => !export_options.omit_variables or decl_ptr_td.isConst(),
+                                .@"fn" => !options.omit_functions,
+                                else => !options.omit_variables or decl_ptr_td.isConst(),
                             } else false;
                             if (should_export) {
                                 const target_ptr = comptime switch (@typeInfo(DT)) {
                                     .@"fn" => |f| switch (f.calling_convention) {
-                                        .@"inline" => &uninline(decl_value),
+                                        .@"inline" => &fn_transform.uninline(decl_value),
                                         else => decl_ptr,
                                     },
                                     else => decl_ptr,
@@ -876,11 +879,11 @@ fn Factory(comptime host: type, comptime module: type) type {
                 },
                 .@"fn" => {
                     // only export thunk controller where function pointer is in use
-                    const FT = types.Uninlined(td.type);
+                    const FT = fn_transform.Uninlined(td.type);
                     const PT = *const FT;
                     if (comptime tdb.has(PT) and tdb.get(PT).isInUse() and !td.isVariadic()) {
                         // store JS thunk controller as static template
-                        const controller = comptime thunk_js.createThunkController(host, FT);
+                        const controller = comptime js_fn.createThunkController(host, FT);
                         memory = try self.exportPointerTarget(controller, false);
                     }
                 },
@@ -943,7 +946,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .error_union => |eu| canBeString(eu.payload),
                 .@"fn" => |f| inline for (f.params) |param| {
                     if (param.type) |PT| {
-                        if (comptime types.getInternalType(PT)) |internal_type| {
+                        if (comptime util.getInternalType(PT)) |internal_type| {
                             if (internal_type == .promise or internal_type == .generator) {
                                 if (canBeString(PT.payload)) break true;
                             }
@@ -966,7 +969,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .error_union => |eu| canBePlain(eu.payload),
                 .@"fn" => |f| inline for (f.params) |param| {
                     if (param.type) |PT| {
-                        if (comptime types.getInternalType(PT)) |internal_type| {
+                        if (comptime util.getInternalType(PT)) |internal_type| {
                             if (internal_type == .promise or internal_type == .generator) {
                                 if (canBePlain(PT.payload)) break true;
                             }
@@ -982,7 +985,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .pointer => canBeTypedArray(tdb.get(T).getTargetType()),
                 .@"fn" => |f| inline for (f.params) |param| {
                     if (param.type) |PT| {
-                        if (comptime types.getInternalType(PT)) |internal_type| {
+                        if (comptime util.getInternalType(PT)) |internal_type| {
                             if (internal_type == .promise or internal_type == .generator) {
                                 if (canBeTypedArray(PT.payload)) break true;
                             }
@@ -999,7 +1002,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .pointer => canBeClampedArray(tdb.get(T).getTargetType()),
                 .@"fn" => |f| inline for (f.params) |param| {
                     if (param.type) |PT| {
-                        if (comptime types.getInternalType(PT)) |internal_type| {
+                        if (comptime util.getInternalType(PT)) |internal_type| {
                             if (internal_type == .promise or internal_type == .generator) {
                                 if (canBeClampedArray(PT.payload)) break true;
                             }
@@ -1016,7 +1019,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             const target_td = tdb.get(pt.child);
             const value_ptr = ptr: {
                 // values that only exist at comptime need to have their comptime part replaced with void
-                // (comptime keyword needed here since expression evaluates to different pointer types)
+                // (comptime keyword needed here since expression evaluates to different pointer util)
                 if (comptime target_td.isComptimeOnly()) {
                     var runtime_value: ComptimeFree(target_td.type) = removeComptimeValues(ptr.*);
                     break :ptr &runtime_value;
@@ -1046,9 +1049,9 @@ fn Factory(comptime host: type, comptime module: type) type {
 
         fn exportComptimeValue(self: @This(), comptime value: anytype) !Value {
             return switch (@typeInfo(@TypeOf(value))) {
-                .comptime_int => self.exportPointerTarget(&@as(types.IntFor(value), value), true),
+                .comptime_int => self.exportPointerTarget(&@as(util.IntFor(value), value), true),
                 .comptime_float => self.exportPointerTarget(&@as(f64, value), true),
-                .enum_literal => self.exportPointerTarget(types.removeSentinel(@tagName(value)), true),
+                .enum_literal => self.exportPointerTarget(util.removeSentinel(@tagName(value)), true),
                 .type => self.getStructure(value),
                 else => return self.exportPointerTarget(&value, true),
             };
@@ -1145,7 +1148,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     64 => try host.createBigInteger(@bitCast(initializer), int.signedness == .unsigned),
                     else => try host.createInteger(@intCast(initializer), int.signedness == .unsigned),
                 },
-                .comptime_int => try createValue(@as(types.IntFor(initializer), initializer)),
+                .comptime_int => try createValue(@as(util.IntFor(initializer), initializer)),
                 .@"enum" => try createValue(@intFromEnum(initializer)),
                 .pointer => switch (T) {
                     Value => initializer,
@@ -1219,10 +1222,10 @@ fn Factory(comptime host: type, comptime module: type) type {
     };
 }
 
-pub fn getFactoryThunk(comptime host: type, comptime module: type) thunk_zig.Thunk {
+pub fn getFactoryThunk(comptime host: type, comptime module: type) zig_fn.Thunk {
     const ns = struct {
         fn exportStructures(_: *const anyopaque, _: *anyopaque) anyerror!void {
-            @setEvalBranchQuota(export_options.eval_branch_quota);
+            @setEvalBranchQuota(options.eval_branch_quota);
             const factory: Factory(host, module) = .{};
             _ = try factory.getStructure(module);
             return;
@@ -1327,17 +1330,6 @@ fn removeComptimeValues(comptime value: anytype) ComptimeFree(@TypeOf(value)) {
         else => result = value,
     }
     return result;
-}
-
-fn uninline(comptime func: anytype) types.Uninlined(@TypeOf(func)) {
-    const FT = @TypeOf(func);
-    const f = @typeInfo(FT).@"fn";
-    const ns = struct {
-        fn call(args: std.meta.ArgsTuple(FT)) f.return_type.? {
-            return @call(.auto, func, args);
-        }
-    };
-    return fn_transform.spreadArgs(ns.call, .auto);
 }
 
 fn readModifier(comptime modifier: ?type, comptime key: []const u8, comptime def: anytype) @TypeOf(def) {

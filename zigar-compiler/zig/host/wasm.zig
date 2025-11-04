@@ -3,11 +3,11 @@ const wasm_allocator = std.heap.wasm_allocator;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
-const exporter = @import("./exporter.zig");
-const thunk_js = @import("./thunk-js.zig");
-const thunk_zig = @import("./thunk-zig.zig");
-const types = @import("./types.zig");
-const AnyValue = types.AnyValue;
+const exporter = @import("../exporter.zig");
+const Value = exporter.Value;
+const js_fn = @import("../thunk/js-fn.zig");
+const zig_fn = @import("../thunk/zig-fn.zig");
+const types = @import("../type/util.zig");
 pub const Promise = types.Promise;
 pub const PromiseOf = types.PromiseOf;
 pub const PromiseArgOf = types.PromiseArgOf;
@@ -15,70 +15,71 @@ pub const Generator = types.Generator;
 pub const GeneratorOf = types.GeneratorOf;
 pub const GeneratorArgOf = types.GeneratorArgOf;
 pub const AbortSignal = types.AbortSignal;
+const work_queue = @import("../type/work-queue.zig");
 
 const stdio_h = @cImport({
     @cInclude("stdio.h");
 });
 
 pub fn WorkQueue(ns: type) type {
-    return types.WorkQueue(ns, struct {});
+    return work_queue.WorkQueue(ns, struct {});
 }
 
 threadlocal var in_main_thread: bool = false;
 
-pub fn createBool(initializer: bool) !AnyValue {
+pub fn createBool(initializer: bool) !Value {
     return _createBool(initializer);
 }
 
-pub fn createInteger(initializer: i32, is_unsigned: bool) !AnyValue {
+pub fn createInteger(initializer: i32, is_unsigned: bool) !Value {
     return _createInteger(initializer, is_unsigned);
 }
 
-pub fn createBigInteger(initializer: i64, is_unsigned: bool) !AnyValue {
+pub fn createBigInteger(initializer: i64, is_unsigned: bool) !Value {
     return _createBigInteger(initializer, is_unsigned);
 }
 
-pub fn createString(initializer: []const u8) !AnyValue {
+pub fn createString(initializer: []const u8) !Value {
     return _createString(initializer.ptr, initializer.len);
 }
 
-pub fn createView(bytes: ?[*]const u8, len: usize, copying: bool, _: @TypeOf(null)) !AnyValue {
+pub fn createView(bytes: ?[*]const u8, len: usize, copying: bool, _: @TypeOf(null)) !Value {
     return _createView(bytes, len, copying);
 }
 
-pub fn createInstance(structure: AnyValue, dv: AnyValue, slots: ?AnyValue) !AnyValue {
+pub fn createInstance(structure: Value, dv: Value, slots: ?Value) !Value {
     return _createInstance(structure, dv, slots);
 }
 
-pub fn createTemplate(dv: ?AnyValue, slots: ?AnyValue) !AnyValue {
+pub fn createTemplate(dv: ?Value, slots: ?Value) !Value {
     return _createTemplate(dv, slots);
 }
 
-pub fn createList() !AnyValue {
+pub fn createList() !Value {
     return _createList();
 }
 
-pub fn createObject() !AnyValue {
+pub fn createObject() !Value {
     return _createObject();
 }
 
-pub fn getProperty(object: AnyValue, key: []const u8) !AnyValue {
+pub fn getProperty(object: Value, key: []const u8) !Value {
     return _getProperty(object, key.ptr, key.len) orelse error.UnableToGetProperty;
 }
 
-pub fn setProperty(object: AnyValue, key: []const u8, value: AnyValue) !void {
+pub fn setProperty(object: Value, key: []const u8, value: Value) !void {
     return _setProperty(object, key.ptr, key.len, value);
 }
 
-pub fn getSlotValue(object: ?AnyValue, slot: usize) !AnyValue {
+pub fn getSlotValue(object: ?Value, slot: usize) !Value {
     return _getSlotValue(object, slot) orelse error.UnableToGetSlotValue;
 }
 
-pub fn setSlotValue(object: ?AnyValue, slot: usize, value: AnyValue) !void {
+pub fn setSlotValue(object: ?Value, slot: usize, value: Value) !void {
     return _setSlotValue(object, slot, value);
 }
 
-pub fn appendList(list: AnyValue, value: AnyValue) !void {
+pub fn appendList(list: Value, value: Value) !void {
     return _appendList(list, value);
 }
 
@@ -87,11 +88,11 @@ pub fn getExportHandle(comptime _: anytype) @TypeOf(null) {
     return null;
 }
 
-pub fn beginStructure(structure: AnyValue) !void {
+pub fn beginStructure(structure: Value) !void {
     return _beginStructure(structure);
 }
 
-pub fn finishStructure(structure: AnyValue) !void {
+pub fn finishStructure(structure: Value) !void {
     return _finishStructure(structure);
 }
 
@@ -102,7 +103,7 @@ pub fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
 pub fn releaseFunction(fn_ptr: anytype) void {
     const FT = types.FnPointerTarget(@TypeOf(fn_ptr));
     const thunk_address = @intFromPtr(fn_ptr);
-    const control = thunk_js.createThunkController(@This(), FT);
+    const control = js_fn.createThunkController(@This(), FT);
     const controller_address = @intFromPtr(control);
     const fn_id = identifyJsThunk(controller_address, thunk_address);
     _releaseFunction(fn_id);
@@ -123,7 +124,7 @@ export fn runThunk(
     fn_address: usize,
     arg_address: usize,
 ) bool {
-    const thunk: thunk_zig.Thunk = @ptrFromInt(thunk_address);
+    const thunk: zig_fn.Thunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
     const arg_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(arg_address) else empty_ptr;
     thunk(fn_ptr, arg_ptr) catch return false;
@@ -138,7 +139,7 @@ export fn runVariadicThunk(
     attr_address: usize,
     arg_count: usize,
 ) bool {
-    const thunk: thunk_zig.VariadicThunk = @ptrFromInt(thunk_address);
+    const thunk: zig_fn.VariadicThunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
     const arg_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(arg_address) else empty_ptr;
     const attr_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(attr_address) else empty_ptr;
@@ -151,7 +152,7 @@ export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
     // try to use preallocated thunks within module first; if they've been used up,
     // ask JavaScript to create a new instance of this module and get a new
     // thunk from that
-    const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
+    const controller: js_fn.ThunkController = @ptrFromInt(controller_address);
     const can_allocate = builtin.single_threaded and in_main_thread;
     const thunk_address = controller(.create, fn_id) catch switch (can_allocate) {
         true => _allocateJsThunk(controller_address, fn_id),
@@ -161,7 +162,7 @@ export fn createJsThunk(controller_address: usize, fn_id: usize) usize {
 }
 
 export fn destroyJsThunk(controller_address: usize, thunk_address: usize) usize {
-    const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
+    const controller: js_fn.ThunkController = @ptrFromInt(controller_address);
     const can_allocate = builtin.single_threaded and in_main_thread;
     const fn_id = controller(.destroy, thunk_address) catch switch (can_allocate) {
         true => _freeJsThunk(controller_address, thunk_address),
@@ -171,7 +172,7 @@ export fn destroyJsThunk(controller_address: usize, thunk_address: usize) usize 
 }
 
 export fn identifyJsThunk(controller_address: usize, thunk_address: usize) usize {
-    const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
+    const controller: js_fn.ThunkController = @ptrFromInt(controller_address);
     const can_allocate = builtin.single_threaded and in_main_thread;
     const fn_id = controller(.identify, thunk_address) catch switch (can_allocate) {
         true => _findJsThunk(controller_address, thunk_address),
@@ -333,22 +334,22 @@ fn initializeLibc() callconv(.c) void {
     env_variable_bytes = bytes;
 }
 
-extern fn _createBool(initializer: bool) AnyValue;
-extern fn _createInteger(initializer: i32, is_unsigned: bool) AnyValue;
-extern fn _createBigInteger(initializer: i64, is_unsigned: bool) AnyValue;
-extern fn _createString(initializer: [*]const u8, len: usize) AnyValue;
-extern fn _createView(bytes: ?[*]const u8, len: usize, copying: bool) AnyValue;
-extern fn _createInstance(structure: AnyValue, dv: AnyValue, slots: ?AnyValue) AnyValue;
-extern fn _createTemplate(dv: ?AnyValue, slots: ?AnyValue) AnyValue;
-extern fn _createList() AnyValue;
-extern fn _createObject() AnyValue;
-extern fn _getProperty(object: AnyValue, key: [*]const u8, key_len: usize) ?AnyValue;
-extern fn _setProperty(object: AnyValue, key: [*]const u8, key_len: usize, value: AnyValue) void;
-extern fn _getSlotValue(object: ?AnyValue, slot: usize) ?AnyValue;
-extern fn _setSlotValue(object: ?AnyValue, slot: usize, value: AnyValue) void;
-extern fn _appendList(list: AnyValue, value: AnyValue) void;
-extern fn _beginStructure(structure: AnyValue) void;
-extern fn _finishStructure(structure: AnyValue) void;
+extern fn _createBool(initializer: bool) Value;
+extern fn _createInteger(initializer: i32, is_unsigned: bool) Value;
+extern fn _createBigInteger(initializer: i64, is_unsigned: bool) Value;
+extern fn _createString(initializer: [*]const u8, len: usize) Value;
+extern fn _createView(bytes: ?[*]const u8, len: usize, copying: bool) Value;
+extern fn _createInstance(structure: Value, dv: Value, slots: ?Value) Value;
+extern fn _createTemplate(dv: ?Value, slots: ?Value) Value;
+extern fn _createList() Value;
+extern fn _createObject() Value;
+extern fn _getProperty(object: Value, key: [*]const u8, key_len: usize) ?Value;
+extern fn _setProperty(object: Value, key: [*]const u8, key_len: usize, value: Value) void;
+extern fn _getSlotValue(object: ?Value, slot: usize) ?Value;
+extern fn _setSlotValue(object: ?Value, slot: usize, value: Value) void;
+extern fn _appendList(list: Value, value: Value) void;
+extern fn _beginStructure(structure: Value) void;
+extern fn _finishStructure(structure: Value) void;
 extern fn _handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E;
 extern fn _releaseFunction(fn_id: usize) void;
 extern fn _allocateJsThunk(controller_address: usize, fn_id: usize) usize;

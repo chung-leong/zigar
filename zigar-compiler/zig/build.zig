@@ -9,12 +9,11 @@ pub fn build(b: *std.Build) !void {
     if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 14) {
         @compileError("Unsupported Zig version");
     }
-    const host_type = if (cfg.is_wasm) "wasm" else "napi";
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const lib = b.addSharedLibrary(.{
         .name = cfg.module_name,
-        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "stub-" ++ host_type ++ ".zig" },
+        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "stub.zig" },
         .target = target,
         .optimize = optimize,
         .single_threaded = !cfg.multithreaded,
@@ -86,7 +85,7 @@ pub fn build(b: *std.Build) !void {
     options.addOption(bool, "omit_functions", cfg.omit_functions);
     options.addOption(bool, "omit_variables", cfg.omit_variables);
     options.addOption(bool, "use_redirection", cfg.use_redirection);
-    lib.root_module.addOptions("./export-options.zig", options);
+    lib.root_module.addOptions("options.zig", options);
     const wf = b.addUpdateSourceFiles();
     wf.addCopyFileToSource(lib.getEmittedBin(), cfg.output_path);
     if (@TypeOf(cfg.pdb_path) != @TypeOf(null) and optimize == .Debug) {

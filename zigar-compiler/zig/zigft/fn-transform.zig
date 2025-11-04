@@ -379,3 +379,38 @@ fn getTupleFields(comptime FT: type) []const std.builtin.Type.StructField {
     const Tuple = @typeInfo(FT).@"fn".params[0].type.?;
     return @typeInfo(Tuple).@"struct".fields;
 }
+
+pub fn Uninlined(comptime FT: type) type {
+    return switch (@typeInfo(FT)) {
+        .@"fn" => |f| @Type(.{
+            .@"fn" = .{
+                .calling_convention = switch (f.calling_convention) {
+                    .@"inline" => .auto,
+                    else => |cc| cc,
+                },
+                .is_generic = f.is_generic,
+                .is_var_args = f.is_var_args,
+                .return_type = f.return_type,
+                .params = f.params,
+            },
+        }),
+        else => @compileError("Not a function"),
+    };
+}
+
+test "Uninlined" {
+    try expectEqual(fn () void, Uninlined(fn () callconv(.@"inline") void));
+    try expectEqual(fn () void, Uninlined(fn () void));
+}
+
+pub fn uninline(func: anytype) Uninlined(@TypeOf(func)) {
+    const FT = @TypeOf(func);
+    const f = @typeInfo(FT).@"fn";
+    if (f.calling_convention != .@"inline") return func;
+    const ns = struct {
+        inline fn call(args: std.meta.ArgsTuple(FT)) f.return_type.? {
+            return @call(.auto, func, args);
+        }
+    };
+    return spreadArgs(ns.call, .auto);
+}

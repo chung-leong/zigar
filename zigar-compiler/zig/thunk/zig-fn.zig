@@ -2,10 +2,9 @@ const std = @import("std");
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 
-const fn_transform = @import("./fn-transform.zig");
-const types = @import("./types.zig");
-const Memory = types.Memory;
-const variadic = @import("./variadic.zig");
+const ArgStruct = @import("../type/arg-struct.zig").ArgStruct;
+const fn_transform = @import("../zigft/fn-transform.zig");
+const variadic = @import("variadic.zig");
 
 pub const Thunk = *const fn (*const anyopaque, *anyopaque) anyerror!void;
 pub const VariadicThunk = *const fn (*const anyopaque, *anyopaque, *const anyopaque, usize) anyerror!void;
@@ -24,20 +23,18 @@ test "ThunkType" {
 
 pub fn createThunk(comptime FT: type) ThunkType(FT) {
     const f = @typeInfo(FT).@"fn";
-    const ArgStruct = types.ArgumentStruct(FT);
     const ns_regular = struct {
         fn invokeFunction(fn_ptr: *const anyopaque, arg_ptr: *anyopaque) anyerror!void {
             // extract arguments from argument struct
-            const arg_struct: *ArgStruct = @ptrCast(@alignCast(arg_ptr));
-            var args: std.meta.ArgsTuple(FT) = undefined;
-            const fields = @typeInfo(@TypeOf(args)).@"struct".fields;
-            inline for (fields) |field| {
-                @field(args, field.name) = @field(arg_struct, field.name);
+            const arg_s: *ArgStruct(FT) = @ptrCast(@alignCast(arg_ptr));
+            var arg_t: std.meta.ArgsTuple(FT) = undefined;
+            inline for (comptime std.meta.fields(@TypeOf(arg_t))) |field| {
+                @field(arg_t, field.name) = @field(arg_s, field.name);
             }
             const function: *const FT = @ptrCast(@alignCast(fn_ptr));
-            const retval = @call(.auto, function, args);
+            const retval = @call(.auto, function, arg_t);
             if (comptime @TypeOf(retval) != noreturn) {
-                arg_struct.retval = retval;
+                arg_s.retval = retval;
             }
         }
     };

@@ -3,26 +3,30 @@ const expectEqual = std.testing.expectEqual;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
-const exporter = @import("./exporter.zig");
-const fn_transform = @import("./fn-transform.zig");
-const hooks = @import("./hooks.zig");
-const interface = @import("./interface.zig");
-const thunk_js = @import("./thunk-js.zig");
-const thunk_zig = @import("./thunk-zig.zig");
-const types = @import("./types.zig");
-const AnyValue = types.AnyValue;
-pub const Promise = types.Promise;
-pub const PromiseOf = types.PromiseOf;
-pub const PromiseArgOf = types.PromiseArgOf;
-pub const Generator = types.Generator;
-pub const GeneratorOf = types.GeneratorOf;
-pub const GeneratorArgOf = types.GeneratorArgOf;
-pub const AbortSignal = types.AbortSignal;
+const exporter = @import("../exporter.zig");
+const Value = exporter.Value;
+const hooks = @import("../hooks.zig");
+const interface = @import("../interface.zig");
+const js_fn = @import("../thunk/js-fn.zig");
+const zig_fn = @import("../thunk/zig-fn.zig");
+const abort_signal = @import("../type/abort-signal.zig");
+pub const AbortSignal = abort_signal.AbortSignal;
+const generator = @import("../type/generator.zig");
+pub const Generator = generator.Generator;
+pub const GeneratorOf = generator.GeneratorOf;
+pub const GeneratorArgOf = generator.GeneratorArgOf;
+const promise = @import("../type/promise.zig");
+pub const Promise = promise.Promise;
+pub const PromiseOf = promise.PromiseOf;
+pub const PromiseArgOf = promise.PromiseArgOf;
+const types = @import("../type/util.zig");
+const work_queue = @import("../type/work-queue.zig");
+const fn_transform = @import("../zigft/fn-transform.zig");
 
-const Module = interface.Module(AnyValue);
+const Module = interface.Module(Value);
 
 pub fn WorkQueue(ns: type) type {
-    return types.WorkQueue(ns, struct {
+    return work_queue.WorkQueue(ns, struct {
         pub fn onQueueInit() !void {
             try startMultithread();
         }
@@ -40,107 +44,107 @@ var imports: Module.Imports = undefined;
 threadlocal var instance: *Module.Host = undefined;
 threadlocal var initialized: bool = false;
 
-pub fn createBool(initializer: bool) !AnyValue {
-    var value: AnyValue = undefined;
+pub fn createBool(initializer: bool) !Value {
+    var value: Value = undefined;
     if (imports.create_bool(instance, initializer, &value) != .SUCCESS) {
         return error.UnableToCreateBoolean;
     }
     return value;
 }
 
-pub fn createInteger(initializer: i32, is_unsigned: bool) !AnyValue {
-    var value: AnyValue = undefined;
+pub fn createInteger(initializer: i32, is_unsigned: bool) !Value {
+    var value: Value = undefined;
     if (imports.create_integer(instance, initializer, is_unsigned, &value) != .SUCCESS) {
         return error.UnableToCreateInteger;
     }
     return value;
 }
 
-pub fn createBigInteger(initializer: i64, is_unsigned: bool) !AnyValue {
-    var value: AnyValue = undefined;
+pub fn createBigInteger(initializer: i64, is_unsigned: bool) !Value {
+    var value: Value = undefined;
     if (imports.create_big_integer(instance, initializer, is_unsigned, &value) != .SUCCESS) {
         return error.UnableToCreateInteger;
     }
     return value;
 }
 
-pub fn createString(initializer: []const u8) !AnyValue {
-    var value: AnyValue = undefined;
+pub fn createString(initializer: []const u8) !Value {
+    var value: Value = undefined;
     if (imports.create_string(instance, initializer.ptr, initializer.len, &value) != .SUCCESS) {
         return error.UnableToCreateString;
     }
     return value;
 }
 
-pub fn createView(bytes: ?[*]const u8, len: usize, copying: bool, export_handle: ?usize) !AnyValue {
-    var value: AnyValue = undefined;
+pub fn createView(bytes: ?[*]const u8, len: usize, copying: bool, export_handle: ?usize) !Value {
+    var value: Value = undefined;
     if (imports.create_view(instance, bytes, len, copying, export_handle orelse 0, &value) != .SUCCESS) {
         return error.UnableToCreateDataView;
     }
     return value;
 }
 
-pub fn createInstance(structure: AnyValue, dv: AnyValue, slots: ?AnyValue) !AnyValue {
-    var value: AnyValue = undefined;
+pub fn createInstance(structure: Value, dv: Value, slots: ?Value) !Value {
+    var value: Value = undefined;
     if (imports.create_instance(instance, structure, dv, slots, &value) != .SUCCESS) {
         return error.UnableToCreateStructureInstance;
     }
     return value;
 }
 
-pub fn createTemplate(dv: ?AnyValue, slots: ?AnyValue) !AnyValue {
-    var value: AnyValue = undefined;
+pub fn createTemplate(dv: ?Value, slots: ?Value) !Value {
+    var value: Value = undefined;
     if (imports.create_template(instance, dv, slots, &value) != .SUCCESS) {
         return error.UnableToCreateTemplate;
     }
     return value;
 }
 
-pub fn createList() !AnyValue {
-    var list: AnyValue = undefined;
+pub fn createList() !Value {
+    var list: Value = undefined;
     if (imports.create_list(instance, &list) != .SUCCESS) {
         return error.UnableToCreateList;
     }
     return list;
 }
 
-pub fn createObject() !AnyValue {
-    var object: AnyValue = undefined;
+pub fn createObject() !Value {
+    var object: Value = undefined;
     if (imports.create_object(instance, &object) != .SUCCESS) {
         return error.UnableToCreateObject;
     }
     return object;
 }
 
-pub fn getProperty(object: AnyValue, key: []const u8) !AnyValue {
-    var value: AnyValue = undefined;
+pub fn getProperty(object: Value, key: []const u8) !Value {
+    var value: Value = undefined;
     if (imports.get_property(instance, object, key.ptr, key.len, &value) != .SUCCESS) {
         return error.UnableToGetProperty;
     }
     return value;
 }
 
-pub fn setProperty(object: AnyValue, key: []const u8, value: AnyValue) !void {
+pub fn setProperty(object: Value, key: []const u8, value: Value) !void {
     if (imports.set_property(instance, object, key.ptr, key.len, value) != .SUCCESS) {
         return error.UnableToSetProperty;
     }
 }
 
-pub fn getSlotValue(object: ?AnyValue, slot: usize) !AnyValue {
-    var value: AnyValue = undefined;
+pub fn getSlotValue(object: ?Value, slot: usize) !Value {
+    var value: Value = undefined;
     if (imports.get_slot_value(instance, object, slot, &value) != .SUCCESS) {
         return error.UnableToGetSlotValue;
     }
     return value;
 }
 
-pub fn setSlotValue(object: ?AnyValue, slot: usize, value: AnyValue) !void {
+pub fn setSlotValue(object: ?Value, slot: usize, value: Value) !void {
     if (imports.set_slot_value(instance, object, slot, value) != .SUCCESS) {
         return error.UnableToSetSlotValue;
     }
 }
 
-pub fn appendList(list: AnyValue, value: AnyValue) !void {
+pub fn appendList(list: Value, value: Value) !void {
     if (imports.append_list(instance, list, value) != .SUCCESS) {
         return error.UnableToAppendList;
     }
@@ -155,13 +159,13 @@ pub fn getExportHandle(comptime ptr: anytype) usize {
     return @intFromPtr(&ns.getAddress);
 }
 
-pub fn beginStructure(structure: AnyValue) !void {
+pub fn beginStructure(structure: Value) !void {
     if (imports.begin_structure(instance, structure) != .SUCCESS) {
         return error.UnableToDefineStructure;
     }
 }
 
-pub fn finishStructure(structure: AnyValue) !void {
+pub fn finishStructure(structure: Value) !void {
     if (imports.finish_structure(instance, structure) != .SUCCESS) {
         return error.UnableToDefineStructure;
     }
@@ -180,7 +184,7 @@ pub fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
 pub fn releaseFunction(fn_ptr: anytype) void {
     const FT = types.FnPointerTarget(@TypeOf(fn_ptr));
     const thunk_address = @intFromPtr(fn_ptr);
-    const control = thunk_js.createThunkController(@This(), FT);
+    const control = js_fn.createThunkController(@This(), FT);
     const fn_id = control(.identify, thunk_address) catch return;
     _ = imports.release_function(instance, fn_id);
 }
@@ -232,7 +236,7 @@ fn runThunk(
     fn_address: usize,
     arg_address: usize,
 ) callconv(.C) E {
-    const thunk: thunk_zig.Thunk = @ptrFromInt(thunk_address);
+    const thunk: zig_fn.Thunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
     const arg_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(arg_address) else empty_ptr;
     return if (thunk(fn_ptr, arg_ptr)) .SUCCESS else |_| .FAULT;
@@ -245,7 +249,7 @@ fn runVariadicThunk(
     attr_address: usize,
     arg_count: usize,
 ) callconv(.C) E {
-    const thunk: thunk_zig.VariadicThunk = @ptrFromInt(thunk_address);
+    const thunk: zig_fn.VariadicThunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
     const arg_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(arg_address) else empty_ptr;
     const attr_ptr: *const anyopaque = @ptrFromInt(attr_address);
@@ -257,7 +261,7 @@ fn createJsThunk(
     fn_id: usize,
     dest: *usize,
 ) callconv(.C) E {
-    const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
+    const controller: js_fn.ThunkController = @ptrFromInt(controller_address);
     const thunk_address = controller(.create, fn_id) catch return .FAULT;
     dest.* = thunk_address;
     return .SUCCESS;
@@ -268,7 +272,7 @@ fn destroyJsThunk(
     fn_address: usize,
     dest: *usize,
 ) callconv(.C) E {
-    const controller: thunk_js.ThunkController = @ptrFromInt(controller_address);
+    const controller: js_fn.ThunkController = @ptrFromInt(controller_address);
     const fn_id = controller(.destroy, fn_address) catch return .FAULT;
     dest.* = fn_id;
     return .SUCCESS;
@@ -399,4 +403,8 @@ test "createModule" {
     const m = createModule(Test);
     try expectEqual(4, m.version);
     try expectEqual((builtin.target.cpu.arch.endian() == .little), m.attributes.little_endian);
+}
+
+pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, ret_addr: ?usize) noreturn {
+    std.debug.defaultPanic(msg, ret_addr);
 }

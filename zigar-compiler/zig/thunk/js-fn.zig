@@ -5,10 +5,9 @@ const expectError = std.testing.expectError;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
-const fn_binding = @import("./fn-binding.zig");
-const fn_transform = @import("./fn-transform.zig");
-const types = @import("./types.zig");
-const Memory = types.Memory;
+const ArgStruct = @import("../type/arg-struct.zig").ArgStruct;
+const fn_binding = @import("../zigft/fn-binding.zig");
+const fn_transform = @import("../zigft/fn-transform.zig");
 
 pub const Action = enum(u32) {
     create,
@@ -124,10 +123,9 @@ pub fn createThunkController(comptime host: type, comptime BFT: type) ThunkContr
 
 test "createThunkController" {
     const BFT = fn (i32, f64) usize;
-    const ArgStruct = types.ArgumentStruct(BFT);
     const host = struct {
         fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
-            if (arg_size == @sizeOf(ArgStruct)) {
+            if (arg_size == @sizeOf(ArgStruct(BFT))) {
                 @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = fn_id;
                 return .SUCCESS;
             } else {
@@ -170,15 +168,14 @@ fn getJscallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
     const ns = struct {
         inline fn call(args: std.meta.ArgsTuple(CHT)) RT {
             // fill the argument struct
-            const ArgStruct = types.ArgumentStruct(BFT);
-            var arg_struct: ArgStruct = undefined;
+            var arg_s: ArgStruct(BFT) = undefined;
             inline for (0..ch.params.len - 2) |arg_index| {
                 const name = std.fmt.comptimePrint("{d}", .{arg_index});
-                @field(arg_struct, name) = args[arg_index];
+                @field(arg_s, name) = args[arg_index];
             }
             // the last two arguments are the context pointer and the function id
             const fn_id = args[ch.params.len - 1];
-            const result = host.handleJscall(fn_id, &arg_struct, @sizeOf(ArgStruct));
+            const result = host.handleJscall(fn_id, &arg_s, @sizeOf(@TypeOf(arg_s)));
             switch (result) {
                 .SUCCESS => {},
                 .DEADLK => {
@@ -197,7 +194,7 @@ fn getJscallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
                     } else @panic("JavaScript function failed");
                 },
             }
-            return arg_struct.retval;
+            return arg_s.retval;
         }
     };
     return fn_transform.spreadArgs(ns.call, ch.calling_convention);
@@ -205,10 +202,9 @@ fn getJscallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
 
 test "getJscallHandler" {
     const BFT = fn (i32, f64) usize;
-    const ArgStruct = types.ArgumentStruct(BFT);
     const host = struct {
         fn handleJscall(_: usize, arg_ptr: *anyopaque, arg_size: usize) E {
-            if (arg_size == @sizeOf(ArgStruct)) {
+            if (arg_size == @sizeOf(ArgStruct(BFT))) {
                 @as(*ArgStruct, @ptrCast(@alignCast(arg_ptr))).retval = 1234;
                 return .SUCCESS;
             } else {

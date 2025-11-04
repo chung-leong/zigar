@@ -4,7 +4,9 @@ const expectEqual = std.testing.expectEqual;
 const expectEqualSlices = std.testing.expectEqualSlices;
 const builtin = @import("builtin");
 
-const types = @import("./types.zig");
+const arg_struct = @import("../type/arg-struct.zig");
+const ArgStruct = arg_struct.ArgStruct;
+const types = @import("../type/util.zig");
 
 pub const Error = error{
     TooManyArguments,
@@ -21,8 +23,7 @@ pub fn call(
 ) !void {
     const function: *const FT = @ptrCast(@alignCast(fn_ptr));
     const f = @typeInfo(FT).@"fn";
-    const Args = types.ArgumentStruct(FT);
-    const arg_struct: *Args = @ptrCast(@alignCast(arg_ptr));
+    const arg_s: *ArgStruct(FT) = @ptrCast(@alignCast(arg_ptr));
     const arg_bytes: [*]u8 = @ptrCast(arg_ptr);
     const arg_attrs = @as([*]const ArgAttributes, @ptrCast(@alignCast(attr_ptr)))[0..arg_count];
     if (comptime builtin.target.cpu.arch.isWasm()) {
@@ -54,13 +55,13 @@ pub fn call(
             // use the offset of the first vararg arg
             true => arg_attrs[f.params.len].offset,
             // just point it to the end of the struct
-            false => @sizeOf(@TypeOf(arg_struct)),
+            false => @sizeOf(@TypeOf(ArgStruct(FT))),
         };
         const vararg_ptr: [*]const u8 = arg_bytes[vararg_offset..];
         inline for (0..f.params.len + 1) |index| {
             if (index < f.params.len) {
                 const name = std.fmt.comptimePrint("{d}", .{index});
-                args[index] = @field(arg_struct.*, name);
+                args[index] = @field(arg_s.*, name);
             } else {
                 args[index] = vararg_ptr;
             }
@@ -69,7 +70,7 @@ pub fn call(
         // despite the cast to a non-vararg one
         var not_vararg_func: *const F = @ptrCast(function);
         std.mem.doNotOptimizeAway(&not_vararg_func);
-        arg_struct.retval = @call(.auto, not_vararg_func, args);
+        arg_s.retval = @call(.auto, not_vararg_func, args);
     } else {
         const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
         const Alloc = ArgAllocation(abi, FT);
@@ -80,7 +81,7 @@ pub fn call(
         const max_variadic_float_count = comptime Alloc.getMaxVariadicFloatCount();
         const max_variadic_int_count = comptime Alloc.getMaxVariadicIntCount();
         const variadic_floats = alloc.getVariadicFloats(max_variadic_float_count);
-        arg_struct.retval = inline for (Alloc.stack_counts) |stack_count| {
+        arg_s.retval = inline for (Alloc.stack_counts) |stack_count| {
             // keep increasing number of stack variables until we've enough
             if (alloc.getVariadicIntCount() <= max_variadic_int_count + stack_count) {
                 const variadic_ints = alloc.getVariadicInts(max_variadic_int_count + stack_count);
@@ -99,7 +100,7 @@ pub fn call(
 }
 
 fn createTest(RT: type, tuple: anytype) type {
-    const Args = types.ArgumentStruct(fn (@TypeOf(tuple[0]), ...) callconv(.C) RT);
+    const Args = ArgStruct(fn (@TypeOf(tuple[0]), ...) callconv(.C) RT);
     comptime var current_offset: u16 = @sizeOf(Args);
     comptime var offsets: [tuple.len]u16 = undefined;
     inline for (tuple, 0..) |value, index| {
@@ -150,8 +151,8 @@ fn createTest(RT: type, tuple: anytype) type {
                 @memcpy(arg_bytes[offset .. offset + bytes.len], &bytes);
             }
             try call(@TypeOf(check), &check, &arg_bytes, @ptrCast(&attrs), attrs.len);
-            const arg_struct = @as(*Args, @ptrCast(@alignCast(&arg_bytes)));
-            if (arg_struct.retval != 777) {
+            const arg_s = @as(*Args, @ptrCast(@alignCast(&arg_bytes)));
+            if (arg_s.retval != 777) {
                 return error.TestUnexpectedResult;
             }
         }
@@ -838,7 +839,7 @@ fn createSprintfTest(fmt: []const u8, tuple: anytype) type {
     });
     const FT = @TypeOf(c.sprintf);
     const f = @typeInfo(FT).@"fn";
-    const Args = types.ArgumentStruct(FT);
+    const Args = ArgStruct(FT);
     comptime var current_offset: u16 = @sizeOf(Args);
     comptime var offsets: [f.params.len + tuple.len]u16 = undefined;
     inline for (f.params, 0..) |param, index| {
@@ -877,8 +878,8 @@ fn createSprintfTest(fmt: []const u8, tuple: anytype) type {
                 @memcpy(arg_bytes[offset .. offset + bytes.len], &bytes);
             }
             try call(@TypeOf(c.sprintf), &c.sprintf, &arg_bytes, @ptrCast(&attrs), attrs.len);
-            const arg_struct = @as(*Args, @ptrCast(@alignCast(&arg_bytes)));
-            if (arg_struct.retval < 0) {
+            const arg_s = @as(*Args, @ptrCast(@alignCast(&arg_bytes)));
+            if (arg_s.retval < 0) {
                 return error.SprintfFailed;
             }
             // call sprintf() directly
@@ -903,7 +904,7 @@ fn createSprintfTest(fmt: []const u8, tuple: anytype) type {
             if (retval2 < 0) {
                 return error.SprintfFailed;
             }
-            const len1: usize = @intCast(arg_struct.retval);
+            const len1: usize = @intCast(arg_s.retval);
             const len2: usize = @intCast(retval2);
             const s1 = buffer1[0..len1];
             const s2 = buffer2[0..len2];
