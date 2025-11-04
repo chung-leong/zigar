@@ -118,6 +118,7 @@ export { default as SyscallPathFilestatGet } from './syscalls/path-filestat-get.
 export { default as SyscallPathFilestatSetTimes } from './syscalls/path-filestat-set-times.js';
 export { default as SyscallPathOpen } from './syscalls/path-open.js';
 export { default as SyscallPathRemoveDirectory } from './syscalls/path-remove-directory.js';
+export { default as SyscallPathRename } from './syscalls/path-rename.js';
 export { default as SyscallPathUnlinkFile } from './syscalls/path-unlink-file.js';
 export { default as SyscallPollOneoff } from './syscalls/poll-oneoff.js';
 export { default as SyscallProcExit } from './syscalls/proc-exit.js';

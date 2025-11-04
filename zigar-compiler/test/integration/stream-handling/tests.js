@@ -1469,6 +1469,85 @@ export function addTests(importModule, options) {
       remove('/hello/world.txt');
       expect(event).to.eql({ parent: null, path: 'hello/world.txt' });
     })
+    it('should rename a file using posix function', async function() {
+      const { __zigar, rename } = await importTest('rename-file-with-posix-function', { useLibc: true });
+      let event;
+      __zigar.on('rename', (evt) => {
+        event = evt;
+        return true;
+      });
+      rename('/hello/world.txt', '/goodbye/earth.txt');
+      expect(event).to.eql({ 
+        parent: null, 
+        path: 'hello/world.txt',  
+        newParent: null,
+        newPath: 'goodbye/earth.txt'
+      });
+    })
+    it('should rename a file in a directory using posix function', async function() {
+      const { __zigar, renameat } = await importTest('rename-file-at-dir-with-posix-function', { useLibc: true });
+      let event;
+      const map1 = new Map();
+      const map2 = new Map();
+      __zigar.on('open', (evt) => {
+        switch (evt.path) {
+          case 'hello': return map1;
+          case 'goodbye': return map2;
+        }
+      });
+      __zigar.on('rename', (evt) => {
+        event = evt;
+        return true;
+      });
+      renameat('/hello', 'world.txt', '/goodbye', 'earth.txt');
+      expect(event).to.eql({ 
+        parent: map1, 
+        path: 'world.txt',  
+        newParent: map2,
+        newPath: 'earth.txt'
+      });
+    })
+    it('should rename a file in file system using posix function', async function() {
+      const { __zigar, rename } = await importTest('rename-file-in-file-system-with-posix-function', { useLibc: true });
+      if (target === 'wasm32') {
+        const { WASI } = await import('wasi');
+        __zigar.set('wasi', new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/': '/',
+          },
+        }));
+      }
+      let path = absolute(`./data/rename_test.txt`);
+      let newPath = absolute(`./data/new_name_test.txt`);
+      if (target === 'win32') {
+        path = path.slice(2).replace(/\\/g, '/');
+        newPath.slice(2).replace(/\\/g, '/');
+      }
+      await writeFile(path, 'hello world');
+      try {
+        let event;
+        __zigar.on('rename', (evt) => {
+          event = evt;
+          return undefined;
+        });
+        rename(path, newPath);
+        const content = await readFile(newPath, 'utf8');
+        expect(content).to.equal('hello world');
+        expect(event).to.eql({ 
+          parent: null, 
+          path: path.slice(1),  
+          newParent: null,
+          newPath: newPath.slice(1)
+        });
+      } finally {
+        try { 
+          await unlink(newPath) 
+        } catch {}
+      }
+    })
     skip.entirely.if(target == 'win32').
     it('should open and read from file using pread', async function() {
       const { __zigar, readAt } = await importTest('open-and-read-file-with-pread', { useLibc: true });
