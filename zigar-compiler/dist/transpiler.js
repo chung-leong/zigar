@@ -3414,7 +3414,7 @@ function getMemory(arg) {
   return { dv, align, constructor };
 }
 
-const events = [ 'log', 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink' ];
+const events = [ 'log', 'mkdir', 'stat', 'set_times', 'open', 'rename', 'rmdir', 'unlink' ];
 
 var baseline = mixin({
   init() {
@@ -5000,7 +5000,7 @@ var readerConversion = mixin({
   convertReader(arg) {
     if (arg instanceof ReadableStreamDefaultReader) {
       return new WebStreamReader(arg);
-    } else if(arg instanceof ReadableStreamBYOBReader) {
+    } else if(typeof(ReadableStreamBYOBReader) === 'function' && arg instanceof ReadableStreamBYOBReader) {
       return new WebStreamReaderBYOB(arg);
     } else if (arg instanceof Blob) {
       return new BlobReader(arg);
@@ -6065,7 +6065,7 @@ var fdAdvise = mixin({
       const [ stream ] = this.getStream(fd);
       if (hasMethod(stream, 'advise')) {
         const adviceKeys = Object.keys(Advice);
-        return stream.advise?.(safeInt(offset), safeInt(len), adviceKeys[advice]);
+        return stream.advise(safeInt(offset), safeInt(len), adviceKeys[advice]);
       }
     });
   },
@@ -6095,7 +6095,7 @@ var fdDatasync = mixin({
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const [ stream ] = this.getStream(fd);
       if (hasMethod(stream, 'datasync')) {
-        return stream.datasync?.();
+        return stream.datasync();
       }
     });
   },
@@ -6583,6 +6583,20 @@ var pathRemoveDirectory = mixin({
   },
 });
 
+var pathRename = mixin({
+  pathRenameEvent: 'rename',
+  pathRename(oldDirFd, oldPathAddress, oldPathLen, newDirFd, newPathAddress, newPathLen, canWait) {
+    return catchPosixError(canWait, PosixError.ENOENT, () => {
+      const loc = this.obtainStreamLocation(oldDirFd, oldPathAddress, oldPathLen);
+      const { 
+        path: newPath, 
+        parent: newParent,
+      } = this.obtainStreamLocation(newDirFd, newPathAddress, newPathLen);
+      return this.triggerEvent('rename', { ...loc, newParent, newPath }, PosixError.ENOENT);
+    }, (result) => (result === undefined) ? PosixError.ENOTSUP : expectBoolean(result, PosixError.ENOENT));
+  },
+});
+
 var pathUnlinkFile = mixin({
   pathUnlinkFileEvent: 'unlink',
   pathUnlinkFile(dirFd, pathAddress, pathLen, canWait) {
@@ -7042,6 +7056,7 @@ var structureAcquisition = mixin({
             case 'path_create_directory': this.use(pathCreateDirectory); break;
             case 'path_filestat_get': this.use(pathFilestatGet); break;
             case 'path_remove_directory': this.use(pathRemoveDirectory); break;
+            case 'path_rename': this.use(pathRename); break;
             case 'path_filestat_set_times': this.use(pathFilestatSetTimes); break;
             case 'path_open': this.use(pathOpen); break;
             case 'path_unlink_file': this.use(pathUnlinkFile); break;
@@ -11026,6 +11041,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   SyscallPathFilestatSetTimes: pathFilestatSetTimes,
   SyscallPathOpen: pathOpen,
   SyscallPathRemoveDirectory: pathRemoveDirectory,
+  SyscallPathRename: pathRename,
   SyscallPathUnlinkFile: pathUnlinkFile,
   SyscallPollOneoff: pollOneoff,
   SyscallProcExit: procExit,

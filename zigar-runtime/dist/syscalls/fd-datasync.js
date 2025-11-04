@@ -8,7 +8,7 @@ var fdDatasync = mixin({
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const [ stream ] = this.getStream(fd);
       if (hasMethod(stream, 'datasync')) {
-        return stream.datasync?.();
+        return stream.datasync();
       }
     });
   },

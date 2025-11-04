@@ -3457,6 +3457,25 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return Original.LockFileEx(handle, flags, reserved, len_low, len_high, overlapped);
         }
 
+        pub fn MoveFile(path: LPCSTR, new_path: LPCSTR) callconv(WINAPI) BOOL {
+            var result: c_int = undefined;
+            if (redirector.rename(path, new_path, &result)) {
+                return saveError(result);
+            }
+            return Original.MoveFile(path);
+        }
+
+        pub fn MoveFileW(path: LPCWSTR, new_path: LPCWSTR) callconv(WINAPI) BOOL {
+            if (redirector.Host.isRedirecting(.rename)) {
+                var converter = Wtf8PathConverter.init(path, false) catch return FALSE;
+                defer converter.deinit();
+                var new_converter = Wtf8PathConverter.init(new_path, false) catch return FALSE;
+                defer new_converter.deinit();
+                return MoveFile(converter.path, new_converter.path);
+            }
+            return Original.MoveFileW(path);
+        }
+
         pub fn NtClose(handle: HANDLE) callconv(WINAPI) NTSTATUS {
             if (handle == temporary_handle) return .SUCCESS;
             const fd = toDescriptor(handle);
@@ -4260,6 +4279,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
             pub var GetHandleInformation: *const @TypeOf(Self.GetHandleInformation) = undefined;
             pub var LockFile: *const @TypeOf(Self.LockFile) = undefined;
             pub var LockFileEx: *const @TypeOf(Self.LockFileEx) = undefined;
+            pub var MoveFile: *const @TypeOf(Self.MoveFile) = undefined;
+            pub var MoveFileW: *const @TypeOf(Self.MoveFileW) = undefined;
             pub var NtClose: *const @TypeOf(Self.NtClose) = undefined;
             pub var NtCreateFile: *const @TypeOf(Self.NtCreateFile) = undefined;
             pub var NtLockFile: *const @TypeOf(Self.NtLockFile) = undefined;

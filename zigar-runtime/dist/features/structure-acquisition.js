@@ -43,6 +43,7 @@ import '../syscalls/path-filestat-get.js';
 import '../syscalls/path-filestat-set-times.js';
 import '../syscalls/path-open.js';
 import '../syscalls/path-remove-directory.js';
+import '../syscalls/path-rename.js';
 import '../syscalls/path-unlink-file.js';
 import '../syscalls/poll-oneoff.js';
 import '../syscalls/proc-exit.js';
