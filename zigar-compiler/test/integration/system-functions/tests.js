@@ -114,5 +114,14 @@ export function addTests(importModule, options) {
       const list = line.slice(1, -1).trim().split(/\s*,\s*/);
       expect(list).to.have.lengthOf(16);
     })
+    it('should yield', async function () {
+      this.timeout(0);
+      const { yield: yieldFn } = await importTest('yield', { useLibc: true });
+      if (target === 'wasm32') {
+        expect(() => yieldFn()).to.throw();
+      } else {
+        expect(() => yieldFn()).to.not.throw();
+      }
+    })
   })
 }
