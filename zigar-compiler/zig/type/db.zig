@@ -429,15 +429,16 @@ pub const TypeData = struct {
                 // retval
                 if (@typeInfo(field.type) == .error_union) break true;
             } else {
-                const internal_type = comptime util.getInternalType(field.type);
-                if (internal_type == .promise or internal_type == .generator) {
-                    switch (@typeInfo(field.type.payload)) {
-                        .error_union => break true,
-                        .optional => |op| switch (@typeInfo(op.child)) {
+                if (util.getInternalType(field.type)) |it| {
+                    if (it == .promise or it == .generator) {
+                        switch (@typeInfo(field.type.payload)) {
                             .error_union => break true,
+                            .optional => |op| switch (@typeInfo(op.child)) {
+                                .error_union => break true,
+                                else => {},
+                            },
                             else => {},
-                        },
-                        else => {},
+                        }
                     }
                 }
             }

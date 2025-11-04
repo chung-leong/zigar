@@ -75,8 +75,7 @@ pub fn Generator(comptime T: type, comptime need_allocator: bool) type {
             callback: *const fn (?*anyopaque, T) bool,
 
             pub const payload = T;
-
-            const internal_type = .generator;
+            pub const internal_type = .generator;
 
             pub fn init(ptr: ?*const anyopaque, cb: anytype) @This() {
                 return .{

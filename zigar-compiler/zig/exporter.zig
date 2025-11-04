@@ -66,14 +66,16 @@ fn Factory(comptime host: type, comptime module: type) type {
                 std.io.AnyWriter => .writer,
                 std.fs.File => .file,
                 std.fs.Dir => .directory,
-                else => if (td.isIterator())
-                    .iterator
-                else if (util.getInternalType(td.type)) |internal_type| switch (internal_type) {
-                    .promise => .promise,
-                    .generator => .generator,
-                    .abort_signal => .abort_signal,
-                    else => unreachable,
-                } else .unknown,
+                else => get: {
+                    if (td.isIterator()) break :get .iterator;
+                    if (util.getInternalType(td.type)) |it| break :get switch (it) {
+                        .promise => .promise,
+                        .generator => .generator,
+                        .abort_signal => .abort_signal,
+                        else => unreachable,
+                    };
+                    break :get .unknown;
+                },
             };
         }
 
