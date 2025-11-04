@@ -267,7 +267,28 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
         pub fn push(self: *@This(), comptime func: anytype, args: ArgsOf(func), dest: ?PromiseOrGenerator(func)) Error!void {
             switch (self.status) {
                 .initialized => {},
-                else => return error.Unexpected,
+                else => {
+                    // see if we can do initialize automatically
+                    const can_auto_init = check: {
+                        if (std.meta.fields(ThreadStartParams).len > 0) break :check false;
+                        if (std.meta.fields(ThreadEndParams).len > 0) break :check false;
+                        if (self.status != .uninitialized) break :check false;
+                        break :check true;
+                    };
+                    if (can_auto_init) {
+                        self.init(.{
+                            .allocator = def_allocator,
+                            .n_jobs = 1,
+                        }) catch |err| {
+                            return switch (err) {
+                                error.OutOfMemory => error.OutOfMemory,
+                                else => error.Unexpected,
+                            };
+                        };
+                    } else {
+                        return error.Unexpected;
+                    }
+                },
             }
             const key = comptime enumOf(func);
             const fieldName = @tagName(key);

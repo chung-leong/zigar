@@ -351,7 +351,6 @@ export function addTests(importModule, options) {
         await shutdown();
       }
     })
-
     it('should call invoke thread start function', async function() {
       const {
         startup,
@@ -361,6 +360,24 @@ export function addTests(importModule, options) {
         returnPoint
       } = await importTest('use-work-queue-with-thread-start-fn', { multithreaded: true });
       startup();
+      try {
+        const str = await returnString();
+        expect(str).to.equal('Hello world!');
+        const int = await returnInt();
+        expect(int).to.equal(1234);
+        const point = await returnPoint();
+        expect(point).to.eql({ x: 0.1234, y: 0.4567 });
+      } finally {
+        await shutdown();
+      }
+    })
+    it('should initialize work queue automatically', async function() {
+      const {
+        shutdown,
+        returnString,
+        returnInt,
+        returnPoint
+      } = await importTest('use-work-queue-auto-init', { multithreaded: true });
       try {
         const str = await returnString();
         expect(str).to.equal('Hello world!');
