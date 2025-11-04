@@ -828,89 +828,89 @@ pub const TypeDataCollector = struct {
             return;
         }
         td.attrs.signature_known = true;
-        var md5 = std.crypto.hash.Md5.init(.{});
+        var xxhash = std.hash.XxHash64.init(0);
         switch (@typeInfo(td.type)) {
             .@"struct" => |st| {
-                md5.update(switch (st.layout) {
+                xxhash.update(switch (st.layout) {
                     .@"extern" => "extern struct",
                     .@"packed" => "packed struct",
                     else => "struct",
                 });
                 if (st.backing_integer) |BIT| {
-                    md5.update("(");
-                    md5.update(std.mem.asBytes(&self.getSignature(BIT)));
-                    md5.update(")");
+                    xxhash.update("(");
+                    xxhash.update(std.mem.asBytes(&self.getSignature(BIT)));
+                    xxhash.update(")");
                 }
-                md5.update(" {");
+                xxhash.update(" {");
                 for (st.fields) |field| {
                     if (!field.is_comptime) {
-                        md5.update(field.name);
-                        md5.update(": ");
-                        md5.update(std.mem.asBytes(&self.getSignature(field.type)));
+                        xxhash.update(field.name);
+                        xxhash.update(": ");
+                        xxhash.update(std.mem.asBytes(&self.getSignature(field.type)));
                         if (field.alignment != @alignOf(field.type)) {
-                            md5.update(std.fmt.comptimePrint(" align({d})\n", .{field.alignment}));
+                            xxhash.update(std.fmt.comptimePrint(" align({d})\n", .{field.alignment}));
                         }
-                        md5.update(", ");
+                        xxhash.update(", ");
                     }
                 }
-                md5.update("}");
+                xxhash.update("}");
             },
             .@"union" => |un| {
-                md5.update(switch (un.layout) {
+                xxhash.update(switch (un.layout) {
                     .@"extern" => "extern union",
                     else => "union",
                 });
                 if (un.tag_type) |TT| {
-                    md5.update("(");
-                    md5.update(std.mem.asBytes(&self.getSignature(TT)));
-                    md5.update(")");
+                    xxhash.update("(");
+                    xxhash.update(std.mem.asBytes(&self.getSignature(TT)));
+                    xxhash.update(")");
                 }
-                md5.update(" {");
+                xxhash.update(" {");
                 for (un.fields) |field| {
-                    md5.update(field.name);
-                    md5.update(": ");
-                    md5.update(std.mem.asBytes(&self.getSignature(field.type)));
+                    xxhash.update(field.name);
+                    xxhash.update(": ");
+                    xxhash.update(std.mem.asBytes(&self.getSignature(field.type)));
                     if (field.alignment != @alignOf(field.type)) {
-                        md5.update(std.fmt.comptimePrint(" align({d})", .{field.alignment}));
+                        xxhash.update(std.fmt.comptimePrint(" align({d})", .{field.alignment}));
                     }
-                    md5.update(", ");
+                    xxhash.update(", ");
                 }
-                md5.update("}");
+                xxhash.update("}");
             },
             .array => |ar| {
-                md5.update(std.fmt.comptimePrint("[{d}]", .{ar.len}));
-                md5.update(std.mem.asBytes(&self.getSignature(ar.child)));
+                xxhash.update(std.fmt.comptimePrint("[{d}]", .{ar.len}));
+                xxhash.update(std.mem.asBytes(&self.getSignature(ar.child)));
             },
             .vector => |ar| {
-                md5.update(std.fmt.comptimePrint("@Vector({d}, ", .{ar.len}));
-                md5.update(std.mem.asBytes(&self.getSignature(ar.child)));
-                md5.update(")");
+                xxhash.update(std.fmt.comptimePrint("@Vector({d}, ", .{ar.len}));
+                xxhash.update(std.mem.asBytes(&self.getSignature(ar.child)));
+                xxhash.update(")");
             },
             .optional => |op| {
-                md5.update("?");
-                md5.update(std.mem.asBytes(&self.getSignature(op.child)));
+                xxhash.update("?");
+                xxhash.update(std.mem.asBytes(&self.getSignature(op.child)));
             },
             .error_union => |eu| {
-                md5.update(std.mem.asBytes(&self.getSignature(eu.error_set)));
-                md5.update("!");
-                md5.update(std.mem.asBytes(&self.getSignature(eu.payload)));
+                xxhash.update(std.mem.asBytes(&self.getSignature(eu.error_set)));
+                xxhash.update("!");
+                xxhash.update(std.mem.asBytes(&self.getSignature(eu.payload)));
             },
             .error_set => |es| {
                 if (td.type == anyerror) {
-                    md5.update("anyerror");
+                    xxhash.update("anyerror");
                 } else {
-                    md5.update("error{");
+                    xxhash.update("error{");
                     if (es) |errors| {
                         inline for (errors) |err| {
-                            md5.update(err.name);
-                            md5.update(",");
+                            xxhash.update(err.name);
+                            xxhash.update(",");
                         }
                     }
-                    md5.update("}");
+                    xxhash.update("}");
                 }
             },
             .pointer => |pt| {
-                md5.update(switch (pt.size) {
+                xxhash.update(switch (pt.size) {
                     .one => "*",
                     .many => "[*",
                     .slice => "[",
@@ -918,51 +918,49 @@ pub const TypeDataCollector = struct {
                 });
                 if (pt.sentinel_ptr) |ptr| {
                     const value = @as(*const pt.child, @ptrCast(@alignCast(ptr))).*;
-                    md5.update(std.fmt.comptimePrint(":{d}", .{value}));
+                    xxhash.update(std.fmt.comptimePrint(":{d}", .{value}));
                 }
-                md5.update(switch (pt.size) {
+                xxhash.update(switch (pt.size) {
                     .one => "",
                     else => "]",
                 });
                 if (pt.is_const) {
-                    md5.update("const ");
+                    xxhash.update("const ");
                 }
                 if (pt.is_allowzero) {
-                    md5.update("allowzero ");
+                    xxhash.update("allowzero ");
                 }
-                md5.update(std.mem.asBytes(&self.getSignature(pt.child)));
+                xxhash.update(std.mem.asBytes(&self.getSignature(pt.child)));
             },
             .@"fn" => |f| {
-                md5.update("fn (");
+                xxhash.update("fn (");
                 for (f.params) |param| {
                     if (param.is_noalias) {
-                        md5.update("noalias ");
+                        xxhash.update("noalias ");
                     }
                     if (param.type) |PT| {
-                        md5.update(std.mem.asBytes(&self.getSignature(PT)));
+                        xxhash.update(std.mem.asBytes(&self.getSignature(PT)));
                     } else {
-                        md5.update("anytype");
+                        xxhash.update("anytype");
                     }
-                    md5.update(", ");
+                    xxhash.update(", ");
                 }
                 if (f.is_var_args) {
-                    md5.update("...");
+                    xxhash.update("...");
                 }
-                md5.update(") ");
+                xxhash.update(") ");
                 if (f.calling_convention != .auto) {
-                    md5.update("callconv(.");
-                    md5.update(@tagName(f.calling_convention));
-                    md5.update(") ");
+                    xxhash.update("callconv(.");
+                    xxhash.update(@tagName(f.calling_convention));
+                    xxhash.update(") ");
                 }
                 if (f.return_type) |RT| {
-                    md5.update(std.mem.asBytes(&self.getSignature(RT)));
+                    xxhash.update(std.mem.asBytes(&self.getSignature(RT)));
                 }
             },
-            else => md5.update(@typeName(td.type)),
+            else => xxhash.update(@typeName(td.type)),
         }
-        var out: [16]u8 = undefined;
-        md5.final(&out);
-        td.signature = std.mem.bytesToValue(u64, out[0..8]);
+        td.signature = xxhash.final();
     }
 
     test "scan" {
