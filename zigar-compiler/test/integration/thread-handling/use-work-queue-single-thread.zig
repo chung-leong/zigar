@@ -4,7 +4,7 @@ const zigar = @import("zigar");
 
 var work_queue: zigar.thread.WorkQueue(ns) = .{};
 
-pub const startup = work_queue.promisify(.startup);
+pub const startup = work_queue.promisify(.startup1);
 pub const shutdown = work_queue.promisify(.shutdown);
 pub const returnString = work_queue.promisify(ns.returnString);
 pub const returnInt = work_queue.promisify(ns.returnInt);

@@ -189,6 +189,8 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                 },
             });
         };
+        pub const InitResult = @typeInfo(@TypeOf(init)).@"fn".return_type.?;
+        pub const InitError = @typeInfo(InitResult).error_union.error_set;
 
         pub fn init(self: *@This(), options: Options) !void {
             switch (self.status) {
@@ -304,12 +306,74 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             return fn_transform.spreadArgs(async_ns.push, cc);
         }
 
-        pub fn promisify(comptime self: *@This(), comptime func: anytype) Asyncified(@TypeOf(func)) {
-            const PorG = PromiseOrGenerator(@TypeOf(func));
-            if (PorG.internal_type == .generator) {
-                @compileError("Generator function encountered");
+        pub fn Promsified(comptime func: anytype) type {
+            const FT = @TypeOf(func);
+            return switch (@typeInfo(FT)) {
+                .@"fn" => Asyncified(FT),
+                .enum_literal => switch (func) {
+                    .startup => fn (usize, Promise(WaitResult)) InitError!void,
+                    .startup1 => fn (Promise(WaitResult)) InitError!void,
+                    .shutdown => fn (Promise(void)) void,
+                    else => @compileError("Expected .startup, startup1, or shutdown, received ." ++ @tagName(func)),
+                },
+                else => @compileError("Expected function or enum literal, received " ++ @typeName(FT)),
+            };
+        }
+
+        pub fn promisify(comptime self: *@This(), comptime func: anytype) Promsified(func) {
+            const FT = @TypeOf(func);
+            switch (@typeInfo(FT)) {
+                .@"fn" => {
+                    const PorG = PromiseOrGenerator(@TypeOf(func));
+                    if (PorG.internal_type == .generator) {
+                        @compileError("Generator function encountered");
+                    }
+                    return self.asyncify(func);
+                },
+                .enum_literal => {
+                    switch (func) {
+                        .startup, .startup1 => {
+                            if (std.meta.fields(ThreadStartParams).len > 0) {
+                                @compileError("Cannot generate function due to onThreadStart() requiring arguments");
+                            }
+                            if (std.meta.fields(ThreadEndParams).len > 0) {
+                                @compileError("Cannot generate function due to onThreadEnd() requiring arguments");
+                            }
+                            const f_ns = switch (func == .startup) {
+                                true => struct {
+                                    fn startup(thread_count: usize, promise: Promise(WaitResult)) !void {
+                                        try self.init(.{
+                                            .allocator = def_allocator,
+                                            .n_jobs = thread_count,
+                                        });
+                                        self.waitAsync(promise);
+                                    }
+                                },
+                                false => struct {
+                                    fn startup(promise: Promise(WaitResult)) !void {
+                                        try self.init(.{
+                                            .allocator = def_allocator,
+                                            .n_jobs = 1,
+                                        });
+                                        self.waitAsync(promise);
+                                    }
+                                },
+                            };
+                            return f_ns.startup;
+                        },
+                        .shutdown => {
+                            const f_ns = struct {
+                                fn shutdown(promise: Promise(void)) void {
+                                    return self.deinitAsync(promise);
+                                }
+                            };
+                            return f_ns.shutdown;
+                        },
+                        else => unreachable,
+                    }
+                },
+                else => @compileError("Expected function or enum literal, received " ++ @typeName(FT)),
             }
-            return self.asyncify(func);
         }
 
         pub fn Asyncified(comptime FT: type) type {
@@ -350,6 +414,10 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             try expectEqual(fn (Generator(error{CowboyHatesCows}!?i32, false)) Error!void, FT3);
         }
 
+        const def_allocator = switch (builtin.target.cpu.arch.isWasm()) {
+            true => std.heap.wasm_allocator,
+            false => std.heap.c_allocator,
+        };
         const Status = enum {
             uninitialized,
             initialized,
