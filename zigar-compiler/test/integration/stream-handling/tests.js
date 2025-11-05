@@ -1548,6 +1548,81 @@ export function addTests(importModule, options) {
         } catch {}
       }
     })
+    it('should create a symlink using posix function', async function() {
+      const { __zigar, symlink } = await importTest('create-symlink-with-posix-function', { useLibc: true });
+      let event;
+      __zigar.on('symlink', (evt) => {
+        event = evt;
+        return true;
+      });
+      symlink('/hello/world.txt', '/goodbye/earth.txt');
+      expect(event).to.eql({ 
+        target: '/hello/world.txt',
+        parent: null,
+        path: 'goodbye/earth.txt'
+      });
+    })
+    it('should create a symlink in a directory using posix function', async function() {
+      const { __zigar, symlinkat } = await importTest('create-symlink-at-dir-with-posix-function', { useLibc: true });
+      let event;
+      const map = new Map();
+      __zigar.on('open', (evt) => {
+        switch (evt.path) {
+          case 'goodbye': return map;
+        }
+      });
+      __zigar.on('symlink', (evt) => {
+        event = evt;
+        return true;
+      });
+      symlinkat('/hello/world.txt', '/goodbye', 'earth.txt');
+      expect(event).to.eql({ 
+        target: '/hello/world.txt',
+        parent: map, 
+        path: 'earth.txt',
+      });
+    })
+    it('should create a symlink in file system using posix function', async function() {
+      const { __zigar, symlink } = await importTest('create-symlink-in-file-system-with-posix-function', { useLibc: true });
+      if (target === 'wasm32') {
+        const { WASI } = await import('wasi');
+        __zigar.set('wasi', new WASI({
+          version: 'preview1',
+          args: [],
+          env: {},
+          preopens: {
+            '/': '/',
+          },
+        }));
+      }
+      let path = absolute(`./data/symlink_test.txt`);
+      let newPath = absolute(`./data/new_name_test.txt`);
+      if (target === 'win32') {
+        path = path.slice(2).replace(/\\/g, '/');
+        newPath.slice(2).replace(/\\/g, '/');
+      }
+      await writeFile(path, 'hello world');
+      try {
+        let event;
+        __zigar.on('symlink', (evt) => {
+          event = evt;
+          return undefined;
+        });
+        symlink(path, newPath);
+        const content = await readFile(newPath, 'utf8');
+        expect(content).to.equal('hello world');
+        expect(event).to.eql({ 
+          parent: null, 
+          target: path,  
+          path: newPath.slice(1)
+        });
+      } finally {
+        try { 
+          await unlink(path) 
+          await unlink(newPath) 
+        } catch {}
+      }
+    })
     skip.entirely.if(target == 'win32').
     it('should open and read from file using pread', async function() {
       const { __zigar, readAt } = await importTest('open-and-read-file-with-pread', { useLibc: true });

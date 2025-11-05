@@ -181,6 +181,11 @@ pub const Syscall = extern struct {
             lookup_flags: std.os.wasi.lookupflags_t,
             stat: Filestat = undefined,
         },
+        symlink: extern struct {
+            dirfd: i32,
+            path: [*:0]const u8,
+            target: [*:0]const u8,
+        },
         sync: extern struct {
             fd: i32,
         },
@@ -243,6 +248,7 @@ pub const Syscall = extern struct {
         setfl,
         setlk,
         stat,
+        symlink,
         sync,
         tell,
         unlink,
@@ -258,6 +264,7 @@ pub const Syscall = extern struct {
         rmdir: bool = false,
         utimes: bool = false,
         stat: bool = false,
+        symlink: bool = false,
         unlink: bool = false,
     };
     pub const Lock = extern struct {
@@ -1455,6 +1462,33 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
+        pub fn symlink(target: [*:0]const u8, path: [*:0]const u8, result: *c_int) callconv(.c) bool {
+            return symlinkat(target, fd_cwd, path, result);
+        }
+
+        pub fn symlinkat(target: [*:0]const u8, dirfd: c_int, path: [*:0]const u8, result: *c_int) callconv(.c) bool {
+            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.symlink))) {
+                var resolver = PathResolver.init(dirfd, path) catch {
+                    result.* = intFromError(.NOMEM);
+                    return true;
+                };
+                defer resolver.deinit();
+                var call: Syscall = .{ .cmd = .symlink, .u = .{
+                    .symlink = .{
+                        .dirfd = resolver.dirfd,
+                        .path = resolver.path,
+                        .target = target,
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err != .OPNOTSUPP) {
+                    result.* = intFromError(err);
+                    return true;
+                }
+            }
+            return false;
+        }
+
         pub fn unlink(path: [*:0]const u8, result: *c_int) callconv(.c) bool {
             return unlinkat(fd_cwd, path, 0, result);
         }
@@ -1803,6 +1837,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const rmdir = makeStdHook("rmdir");
         pub const stat = makeStdHook("stat");
         pub const stat64 = makeStdHook("stat64");
+        pub const symlink = makeStdHook("symlink");
+        pub const symlinkat = makeStdHook("symlinkat");
         pub const unlink = makeStdHook("unlink");
         pub const unlinkat = makeStdHook("unlinkat");
         pub const utimensat = makeStdHook("utimensat");
@@ -2289,6 +2325,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var seekdir: *const @TypeOf(Self.seekdir) = undefined;
             pub var stat: *const @TypeOf(Self.stat) = undefined;
             pub var stat64: *const @TypeOf(Self.stat64) = undefined;
+            pub var symlink: *const @TypeOf(Self.symlink) = undefined;
+            pub var symlinkat: *const @TypeOf(Self.symlinkat) = undefined;
             pub var telldir: *const @TypeOf(Self.telldir) = undefined;
             pub var unlink: *const @TypeOf(Self.unlink) = undefined;
             pub var unlinkat: *const @TypeOf(Self.unlinkat) = undefined;

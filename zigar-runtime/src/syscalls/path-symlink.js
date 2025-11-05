@@ -1,22 +1,22 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { catchPosixError, expectBoolean } from '../errors.js';
+import { decodeText } from '../utils.js';
 
 export default mixin({
-  pathRenameEvent: 'rename',
-  pathRename(dirFd, pathAddress, pathLen, newDirFd, newPathAddress, newPathLen, canWait) {
+  pathSymlinkEvent: 'symlink',
+  pathSymlink(targetAddress, targetLen, dirFd, pathAddress, pathLen, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
+      const targetDV = this.obtainZigView(targetAddress, targetLen, false);
+      const targetArray = new Uint8Array(targetDV.buffer, targetDV.byteOffset, targetDV.byteLength);
+      const target = decodeText(targetArray).trim();
       const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
-      const { 
-        path: newPath, 
-        parent: newParent,
-      } = this.obtainStreamLocation(newDirFd, newPathAddress, newPathLen);
-      return this.triggerEvent('rename', { ...loc, newParent, newPath }, PosixError.ENOENT);
+      return this.triggerEvent('symlink', { ...loc, target }, PosixError.ENOENT);
     }, (result) => (result === undefined) ? PosixError.ENOTSUP : expectBoolean(result, PosixError.ENOENT));
   },
   ...(process.env.TARGET === 'node' ? {
     exports: {
-      pathRename: { async: true },
+      pathSymlink: { async: true },
     },
     /* c8 ignore next */
   } : undefined),
