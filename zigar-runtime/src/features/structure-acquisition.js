@@ -48,6 +48,7 @@ import pathCreateDirectory from '../syscalls/path-create-directory.js';
 import pathFilestatGet from '../syscalls/path-filestat-get.js';
 import pathFilestatSetTimes from '../syscalls/path-filestat-set-times.js';
 import pathOpen from '../syscalls/path-open.js';
+import pathReadlink from '../syscalls/path-readlink.js';
 import pathRemoveDirectory from '../syscalls/path-remove-directory.js';
 import pathRename from '../syscalls/path-rename.js';
 import pathUnlinkFile from '../syscalls/path-unlink-file.js';
@@ -265,6 +266,7 @@ export default mixin({
             case 'fd_write': this.use(fdWrite); break;
             case 'path_create_directory': this.use(pathCreateDirectory); break;
             case 'path_filestat_get': this.use(pathFilestatGet); break;
+            case 'path_readlink': this.use(pathReadlink); break;
             case 'path_remove_directory': this.use(pathRemoveDirectory); break;
             case 'path_rename': this.use(pathRename); break;
             case 'path_filestat_set_times': this.use(pathFilestatSetTimes); break;

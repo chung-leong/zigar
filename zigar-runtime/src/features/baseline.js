@@ -3,7 +3,9 @@ import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
 import { ALIGN, ENVIRONMENT, MEMORY, SIZE, SLOTS, TYPE } from '../symbols.js';
 
-const events = [ 'log', 'mkdir', 'stat', 'set_times', 'open', 'rename', 'rmdir', 'unlink' ];
+const events = [ 
+  'log', 'mkdir', 'stat', 'set_times', 'open', 'rename', 'readlink', 'rmdir', 'unlink'
+];
 const firstMasked = 1;
 
 export default mixin({

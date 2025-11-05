@@ -137,6 +137,13 @@ pub const Syscall = extern struct {
             len: u32,
             read: u32 = undefined,
         },
+        readlink: extern struct {
+            dirfd: i32,
+            path: [*:0]const u8,
+            bytes: [*]const u8,
+            len: u32,
+            read: u32 = undefined,
+        },
         readv: extern struct {
             fd: i32,
             iovs: [*]const std.os.wasi.iovec_t,
@@ -228,6 +235,7 @@ pub const Syscall = extern struct {
         pwrite,
         pwritev,
         read,
+        readlink,
         readv,
         rename,
         rmdir,
@@ -245,6 +253,7 @@ pub const Syscall = extern struct {
     pub const Mask = packed struct {
         mkdir: bool = false,
         open: bool = false,
+        readlink: bool = false,
         rename: bool = false,
         rmdir: bool = false,
         set_times: bool = false,
@@ -1329,6 +1338,27 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
+        pub fn readlink(path: [*:0]u8, buffer: [*]u8, len: usize, result: *c_int) callconv(.c) bool {
+            return readlinkat(fd_cwd, path, buffer, len, result);
+        }
+
+        pub fn readlinkat(dirfd: c_int, path: [*:0]u8, buffer: [*]u8, len: usize, result: *c_int) callconv(.c) bool {
+            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.readlink))) {
+                var call: Syscall = .{ .cmd = .readlink, .u = .{
+                    .readlink = .{
+                        .dirfd = @intCast(dirfd),
+                        .path = path,
+                        .bytes = buffer,
+                        .len = @intCast(len),
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                result.* = if (err == .SUCCESS) @intCast(call.u.readlink.read) else intFromError(err);
+                return true;
+            }
+            return false;
+        }
+
         pub fn readv(fd: c_int, iovs: [*]const std.c.iovec, count: c_int, result: *off_t) callconv(.c) bool {
             if (isPrivateDescriptor(fd)) {
                 var call: Syscall = .{ .cmd = .readv, .u = .{
@@ -1765,6 +1795,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const pwrite64 = makeStdHook("pwrite64");
         pub const pwritev = makeStdHook("pwritev");
         pub const read = makeStdHook("read");
+        pub const readlink = makeStdHook("readlink");
+        pub const readlinkat = makeStdHook("readlinkat");
         pub const readv = makeStdHook("readv");
         pub const rename = makeStdHook("rename");
         pub const renameat = makeStdHook("renameat");
@@ -2245,6 +2277,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var pwritev: *const @TypeOf(Self.pwritev) = undefined;
             pub var pwrite64: *const @TypeOf(Self.pwrite64) = undefined;
             pub var read: *const @TypeOf(Self.read) = undefined;
+            pub var readlink: *const @TypeOf(Self.readlink) = undefined;
+            pub var readlinkat: *const @TypeOf(Self.readlinkat) = undefined;
             pub var readv: *const @TypeOf(Self.readv) = undefined;
             pub var readdir: *const @TypeOf(Self.readdir) = undefined;
             pub var readdir64: *const @TypeOf(Self.readdir64) = undefined;

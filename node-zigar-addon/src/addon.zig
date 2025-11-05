@@ -93,6 +93,7 @@ const ModuleHost = struct {
         path_filestat_get: ?Ref = null,
         path_filestat_set_times: ?Ref = null,
         path_open: ?Ref = null,
+        path_readlink: ?Ref = null,
         path_remove_directory: ?Ref = null,
         path_rename: ?Ref = null,
         path_unlink_file: ?Ref = null,
@@ -992,6 +993,7 @@ const ModuleHost = struct {
                 .mkdir => try self.handleMkdir(futex, &call.u.mkdir),
                 .rmdir => try self.handleRmdir(futex, &call.u.rmdir),
                 .unlink => try self.handleUnlink(futex, &call.u.unlink),
+                .readlink => try self.handleReadlink(futex, &call.u.readlink),
                 .rename => try self.handleRename(futex, &call.u.rename),
                 .poll => try self.handlePoll(futex, &call.u.poll),
                 .environ => try self.handleGetEnvironmentStrings(futex, &call.u.environ),
@@ -1304,6 +1306,20 @@ const ModuleHost = struct {
             try env.createInt32(args.dirfd),
             try env.createUsize(@intFromPtr(args.path)),
             try env.createUint32(path_len),
+            futex,
+        });
+    }
+
+    fn handleReadlink(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        const path_len: u32 = @truncate(std.mem.len(args.path));
+        return try self.callPosixFunction(self.js.path_readlink, &.{
+            try env.createInt32(args.dirfd),
+            try env.createUsize(@intFromPtr(args.path)),
+            try env.createUint32(path_len),
+            try env.createUsize(@intFromPtr(args.bytes)),
+            try env.createUint32(args.len),
+            try env.createUsize(@intFromPtr(&args.read)),
             futex,
         });
     }

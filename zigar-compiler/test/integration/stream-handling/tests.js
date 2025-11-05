@@ -2423,6 +2423,20 @@ export function addTests(importModule, options) {
         } catch {}
       }
     })
+    it('should read a link using posix function', async function() {
+      const { __zigar, readLink } = await importTest('read-link-with-posix-function', { useLibc: true });
+      let event;
+      __zigar.on('readlink', (evt) => {
+        event = evt;
+        return '/goodbye/earth.txt';
+      });
+      const path = readLink('/hello/world.txt');
+      expect(path.string).to.equal('/goodbye/earth.txt');
+      expect(event).to.eql({ 
+        parent: null, 
+        path: 'hello/world.txt',  
+      });
+    })
     it('should throw when attempting to convert to a file when useRedirection is false', async function() {
       const { call } = await importTest('fail-to-convert-file', { useRedirection: false });
       const array = new Uint8Array([ 1, 2, 3, 4 ]);
