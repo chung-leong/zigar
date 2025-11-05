@@ -38,7 +38,7 @@ describe('Syscall: fd-filestat-set-times', function() {
       return array;
     });
     let event;
-    env.addListener('set_times', (evt) => {
+    env.addListener('utimes', (evt) => {
       if (event) return false;
       event = evt;
       return true;
@@ -88,7 +88,7 @@ describe('Syscall: fd-filestat-set-times', function() {
       env.setRedirectionMask = () => {};
     }   
     let event;
-    env.addListener('set_times', (evt) => {
+    env.addListener('utimes', (evt) => {
       if (event) return false;
       event = evt;
       return true;
@@ -133,7 +133,7 @@ describe('Syscall: fd-filestat-set-times', function() {
     env.addListener('open', () => {
       return array;
     });
-    env.addListener('set_times', (evt) => 'hello');
+    env.addListener('utimes', (evt) => 'hello');
     const path = new TextEncoder().encode('/hello.txt');
     const pathAddress = usize(0x1000);
     const pathLen = path.length;
@@ -178,7 +178,7 @@ describe('Syscall: fd-filestat-set-times', function() {
     env.addListener('open', () => {
       return array;
     });
-    env.addListener('set_times', (evt) => undefined);
+    env.addListener('utimes', (evt) => undefined);
     const path = new TextEncoder().encode('/hello.txt');
     const pathAddress = usize(0x1000);
     const pathLen = path.length;

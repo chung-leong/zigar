@@ -4,7 +4,7 @@ import { catchPosixError, expectBoolean } from '../errors.js';
 import { extractTimes } from '../utils.js';
 
 export default mixin({
-  fdFilestatSetTimesEvent: 'set_times',
+  fdFilestatSetTimesEvent: 'utimes',
   fdFilestatSetTimes(fd, atime, mtime, tFlags, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const [ stream ] = this.getStream(fd);
@@ -12,7 +12,7 @@ export default mixin({
       const loc = this.getStreamLocation?.(fd);
       const times = extractTimes(atime, mtime, tFlags);
       const flags = {};
-      return this.triggerEvent('set_times', { ...loc, target, times, flags });
+      return this.triggerEvent('utimes', { ...loc, target, times, flags });
     }, (result) => (result === undefined) ? PosixError.ENOTCAPABLE : expectBoolean(result, PosixError.EBADF));
   },
   ...(process.env.TARGET === 'node' ? {

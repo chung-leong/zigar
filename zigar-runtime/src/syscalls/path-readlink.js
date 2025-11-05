@@ -5,7 +5,7 @@ import { encodeText } from '../utils.js';
 import './copy-int.js';
 
 export default mixin({
-  pathReadlinkEvent: 'unlink',
+  pathReadlinkEvent: 'readlink',
   pathReadlink(dirFd, pathAddress, pathLen, bufAddress, bufLen, writtenAddress, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);

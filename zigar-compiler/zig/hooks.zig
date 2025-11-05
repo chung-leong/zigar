@@ -256,7 +256,7 @@ pub const Syscall = extern struct {
         readlink: bool = false,
         rename: bool = false,
         rmdir: bool = false,
-        set_times: bool = false,
+        utimes: bool = false,
         stat: bool = false,
         unlink: bool = false,
     };
@@ -871,7 +871,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn futimesat(dirfd: c_int, path: [*:0]const u8, tv: [*]const std.c.timeval, result: *c_int) callconv(.c) bool {
-            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.set_times))) {
+            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.utimes))) {
                 const times = convertTimeval(tv);
                 return utimensat(dirfd, path, &times, AT.SYMLINK_FOLLOW, result);
             }
@@ -1498,7 +1498,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn utimensat(dirfd: c_int, path: [*:0]const u8, times: [*]const std.c.timespec, flags: c_int, result: *c_int) callconv(.c) bool {
-            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.set_times))) {
+            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.utimes))) {
                 var resolver = PathResolver.init(dirfd, path) catch {
                     result.* = intFromError(.NOMEM);
                     return true;

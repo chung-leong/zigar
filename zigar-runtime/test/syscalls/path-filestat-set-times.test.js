@@ -34,7 +34,7 @@ describe('Syscall: path-filestat-set-times', function() {
       env.setRedirectionMask = () => {};
     }   
     let event;
-    env.addListener('set_times', (evt) => {
+    env.addListener('utimes', (evt) => {
       if (event) return false;
       event = evt;
       return true;
@@ -80,7 +80,7 @@ describe('Syscall: path-filestat-set-times', function() {
       env.setRedirectionMask = () => {};
     }   
     let event;
-    env.addListener('set_times', (evt) => {
+    env.addListener('utimes', (evt) => {
       if (event) return false;
       event = evt;
       return true;
@@ -120,7 +120,7 @@ describe('Syscall: path-filestat-set-times', function() {
       env.setRedirectionMask = () => {};
     }   
     let event;
-    env.addListener('set_times', (evt) => 'hello');
+    env.addListener('utimes', (evt) => 'hello');
     const path = new TextEncoder().encode('/world');
     const pathAddress = usize(0x1000);
     const pathLen = path.length;
@@ -158,7 +158,7 @@ describe('Syscall: path-filestat-set-times', function() {
       env.setRedirectionMask = () => {};
     }   
     let event;
-    env.addListener('set_times', (evt) => undefined);
+    env.addListener('utimes', (evt) => undefined);
     const path = new TextEncoder().encode('/world');
     const pathAddress = usize(0x1000);
     const pathLen = path.length;
@@ -171,7 +171,7 @@ describe('Syscall: path-filestat-set-times', function() {
       const env = new Env();
       env.memory = new WebAssembly.Memory({ initial: 1 });
       let event;
-      env.addListener('set_times', (evt) => {
+      env.addListener('utimes', (evt) => {
         if (event) return false;
         event = evt;
         return true;

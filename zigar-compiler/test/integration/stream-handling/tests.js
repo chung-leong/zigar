@@ -1057,7 +1057,7 @@ export function addTests(importModule, options) {
         return array;
       });
       let event;
-      __zigar.on('set_times', (evt) => {
+      __zigar.on('utimes', (evt) => {
         event = evt;
         return true;
       })
@@ -1069,7 +1069,7 @@ export function addTests(importModule, options) {
         times: { atime: 123000025000n, mtime: 456000055000n },
         flags: {},
       });
-      __zigar.on('set_times', (evt) => {
+      __zigar.on('utimes', (evt) => {
         return false;
       })
       expect(() => setTimes('/world/hello.txt', 123, 456)).to.throw(Error)
@@ -1083,7 +1083,7 @@ export function addTests(importModule, options) {
         return array;
       });
       let event;
-      __zigar.on('set_times', (evt) => {
+      __zigar.on('utimes', (evt) => {
         event = evt;
         return true;
       })
@@ -1095,7 +1095,7 @@ export function addTests(importModule, options) {
         times: { atime: 123000000000n, mtime: 456000000000n },
         flags: {},
       });
-      __zigar.on('set_times', (evt) => {
+      __zigar.on('utimes', (evt) => {
         return false;
       })
       expect(() => setTimes('/world/hello.txt', 123, 456)).to.throw(Error)
@@ -1109,7 +1109,7 @@ export function addTests(importModule, options) {
         return array;
       });
       let event;
-      __zigar.on('set_times', (evt) => {
+      __zigar.on('utimes', (evt) => {
         event = evt;
         return true;
       })
@@ -1121,7 +1121,7 @@ export function addTests(importModule, options) {
         times: { atime: 123000000025n, mtime: 456000000055n },
         flags: {},
       });
-      __zigar.on('set_times', (evt) => {
+      __zigar.on('utimes', (evt) => {
         return false;
       })
       expect(() => setTimes('/world/hello.txt', 123, 456)).to.throw(Error)
@@ -1131,7 +1131,7 @@ export function addTests(importModule, options) {
     it('should set access and last modified time of a file by using posix function', async function() {
       const { __zigar, setTimes, setLinkTimes } = await importTest('set-times-of-file-by-path-with-posix-function', { useLibc: true });
       let event;
-      __zigar.on('set_times', (evt) => {
+      __zigar.on('utimes', (evt) => {
         event = evt;
         return true;
       });
@@ -1142,12 +1142,12 @@ export function addTests(importModule, options) {
         times: { atime: 123000025000n, mtime: 456000055000n },
         flags: { symlinkFollow: true }
       });
-      __zigar.on('set_times', (evt) => {
+      __zigar.on('utimes', (evt) => {
         return false;
       })
       expect(() => setTimes('/world/hello.txt', 123, 456)).to.throw(Error)
         .with.property('message', 'Unable to set times');
-      __zigar.on('set_times', (evt) => {
+      __zigar.on('utimes', (evt) => {
         event = evt;
         return true;
       });
@@ -1164,7 +1164,7 @@ export function addTests(importModule, options) {
     it('should set access and last modified time of a file by using utime', async function() {
       const { __zigar, setTimes } = await importTest('set-times-of-file-by-path-with-utime', { useLibc: true });
       let event;
-      __zigar.on('set_times', (evt) => {
+      __zigar.on('utimes', (evt) => {
         event = evt;
         return true;
       });
@@ -1175,7 +1175,7 @@ export function addTests(importModule, options) {
         times: { atime: 123000000000n, mtime: 456000000000n },
         flags: { symlinkFollow: true }
       });
-      __zigar.on('set_times', (evt) => {
+      __zigar.on('utimes', (evt) => {
         return false;
       })
       expect(() => setTimes('/world/hello.txt', 123, 456)).to.throw(Error)
@@ -1189,7 +1189,7 @@ export function addTests(importModule, options) {
       __zigar.on('open', (evt) => {
         return map;
       });
-      __zigar.on('set_times', (evt) => {
+      __zigar.on('utimes', (evt) => {
         event = evt;
         return true;
       });
@@ -1200,7 +1200,7 @@ export function addTests(importModule, options) {
         times: { atime: 123000000025n, mtime: 456000000055n },
         flags: {}
       });
-      __zigar.on('set_times', (evt) => {
+      __zigar.on('utimes', (evt) => {
         return false;
       })
       expect(() => setTimes(map, 'hello.txt', 123, 456)).to.throw(Error)
@@ -2334,7 +2334,7 @@ export function addTests(importModule, options) {
       await writeFile(path, 'Hello world');
       try {
         let event;
-        __zigar.on('set_times', (evt) => {
+        __zigar.on('utimes', (evt) => {
           event = evt;
           return undefined;
         });
