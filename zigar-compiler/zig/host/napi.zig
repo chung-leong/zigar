@@ -337,10 +337,6 @@ pub fn redirectSyscall(call: *hooks.Syscall) std.c.E {
 
 threadlocal var redirection_suppressed: bool = false;
 
-pub fn suppressRedirection() void {
-    redirection_suppressed = true;
-}
-
 pub fn isRedirectingStderr() bool {
     return !redirection_suppressed;
 }
@@ -406,5 +402,6 @@ test "createModule" {
 }
 
 pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, ret_addr: ?usize) noreturn {
+    redirection_suppressed = true;
     std.debug.defaultPanic(msg, ret_addr);
 }
