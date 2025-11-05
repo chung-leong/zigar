@@ -21,6 +21,8 @@ import generator from '../structures/generator.js';
 import promise from '../structures/promise.js';
 import reader from '../structures/reader.js';
 import writer from '../structures/writer.js';
+import clockResGet from '../syscalls/clock-res-get.js';
+import clocktimeGet from '../syscalls/clocktime-get.js';
 import environGet from '../syscalls/environ-get.js';
 import environSizesGet from '../syscalls/environ-sizes-get.js';
 import fdAdvise from '../syscalls/fd-advise.js';
@@ -231,6 +233,8 @@ export default mixin({
       }
       for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
         switch (name) {
+          case 'clock_res_get': this.use(clockResGet); break;
+          case 'clock_time_get': this.use(clocktimeGet); break;
           case 'environ_get': this.use(environGet); break;
           case 'environ_sizes_get': this.use(environSizesGet); break;
           case 'proc_exit': this.use(procExit); break;
