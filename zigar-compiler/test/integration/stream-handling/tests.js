@@ -504,6 +504,17 @@ export function addTests(importModule, options) {
         flags: { create: true, truncate: true, symlinkFollow: true },
       });
     })
+    skip.entirely.unless(target === 'win32').
+    it('should open file with extended characters in name using win32 function', async function() {
+      const { __zigar, open } = await importTest('open-file-with-extended-char-in-name-with-win32-function');
+      let event;
+      __zigar.on('open', (evt) => {
+        event = evt;
+        return '';
+      });
+      open();
+      expect(event.path).to.equal('ÀÁÂÃÄÅ');
+    })
     it('should obtain error code using libc function', async function() {
       const { __zigar, triggerError } = await importTest('return-last-error-with-libc-function', { useLibc: true });
       __zigar.on('open', () => {
@@ -1469,6 +1480,21 @@ export function addTests(importModule, options) {
       remove('/hello/world.txt');
       expect(event).to.eql({ parent: null, path: 'hello/world.txt' });
     })
+    it('should rename a file', async function() {
+      const { __zigar, rename } = await importTest('rename-file', { useLibc: true });
+      let event;
+      __zigar.on('rename', (evt) => {
+        event = evt;
+        return true;
+      });
+      rename('/hello/world.txt', '/goodbye/earth.txt');
+      expect(event).to.eql({ 
+        parent: null, 
+        path: 'hello/world.txt',  
+        newParent: null,
+        newPath: 'goodbye/earth.txt'
+      });
+    })
     it('should rename a file using posix function', async function() {
       const { __zigar, rename } = await importTest('rename-file-with-posix-function', { useLibc: true });
       let event;
@@ -1484,6 +1510,7 @@ export function addTests(importModule, options) {
         newPath: 'goodbye/earth.txt'
       });
     })
+    skip.entirely.if(target == 'win32').
     it('should rename a file in a directory using posix function', async function() {
       const { __zigar, renameat } = await importTest('rename-file-at-dir-with-posix-function', { useLibc: true });
       let event;
@@ -1524,7 +1551,7 @@ export function addTests(importModule, options) {
       let newPath = absolute(`./data/new_name_test.txt`);
       if (target === 'win32') {
         path = path.slice(2).replace(/\\/g, '/');
-        newPath.slice(2).replace(/\\/g, '/');
+        newPath = newPath.slice(2).replace(/\\/g, '/');
       }
       await writeFile(path, 'hello world');
       try {
@@ -1548,6 +1575,7 @@ export function addTests(importModule, options) {
         } catch {}
       }
     })
+    skip.entirely.if(target == 'win32').
     it('should create a symlink using posix function', async function() {
       const { __zigar, symlink } = await importTest('create-symlink-with-posix-function', { useLibc: true });
       let event;
@@ -1562,6 +1590,7 @@ export function addTests(importModule, options) {
         path: 'goodbye/earth.txt'
       });
     })
+    skip.entirely.if(target == 'win32').
     it('should create a symlink in a directory using posix function', async function() {
       const { __zigar, symlinkat } = await importTest('create-symlink-at-dir-with-posix-function', { useLibc: true });
       let event;
@@ -1582,6 +1611,7 @@ export function addTests(importModule, options) {
         path: 'earth.txt',
       });
     })
+    skip.entirely.if(target == 'win32').
     it('should create a symlink in file system using posix function', async function() {
       const { __zigar, symlink } = await importTest('create-symlink-in-file-system-with-posix-function', { useLibc: true });
       if (target === 'wasm32') {
@@ -1599,7 +1629,7 @@ export function addTests(importModule, options) {
       let newPath = absolute(`./data/new_name_test.txt`);
       if (target === 'win32') {
         path = path.slice(2).replace(/\\/g, '/');
-        newPath.slice(2).replace(/\\/g, '/');
+        newPath = newPath.slice(2).replace(/\\/g, '/');
       }
       await writeFile(path, 'hello world');
       try {

@@ -3296,12 +3296,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             path: LPCSTR,
             security_attributes: *SECURITY_ATTRIBUTES,
         ) callconv(WINAPI) BOOL {
-            if (redirector.Host.isRedirecting(.mkdir)) {
-                var result: c_int = undefined;
-                if (redirector.mkdir(path, 0, &result)) {
-                    return saveError(result);
-                }
-            }
+            if (CreateDirectoryX(path, security_attributes)) |rv| return rv;
             return Original.CreateDirectory(path, security_attributes);
         }
 
@@ -3309,12 +3304,23 @@ pub fn Win32Substitute(comptime redirector: type) type {
             path: LPCWSTR,
             security_attributes: *SECURITY_ATTRIBUTES,
         ) callconv(WINAPI) BOOL {
+            if (CreateDirectoryX(path, security_attributes)) |rv| return rv;
+            return Original.CreateDirectoryW(path, security_attributes);
+        }
+
+        fn CreateDirectoryX(
+            path: anytype,
+            _: *SECURITY_ATTRIBUTES,
+        ) ?BOOL {
             if (redirector.Host.isRedirecting(.mkdir)) {
                 var converter = Wtf8PathConverter.init(path, true) catch return FALSE;
                 defer converter.deinit();
-                return CreateDirectory(converter.path, security_attributes);
+                var result: c_int = undefined;
+                if (redirector.mkdir(converter.path, 0, &result)) {
+                    return saveError(result);
+                }
             }
-            return Original.CreateDirectoryW(path, security_attributes);
+            return null;
         }
 
         pub fn CreateFile(
@@ -3326,33 +3332,15 @@ pub fn Win32Substitute(comptime redirector: type) type {
             flags_and_attributes: DWORD,
             template_file: HANDLE,
         ) callconv(WINAPI) ?HANDLE {
-            if (redirector.Host.isRedirecting(.open)) {
-                var oflags: O = switch (create_disposition) {
-                    std.os.windows.CREATE_ALWAYS => .{ .CREAT = true, .TRUNC = true },
-                    std.os.windows.CREATE_NEW => .{ .CREAT = true, .EXCL = true },
-                    std.os.windows.OPEN_ALWAYS => .{ .CREAT = true },
-                    std.os.windows.OPEN_EXISTING => .{},
-                    std.os.windows.TRUNCATE_EXISTING => .{ .TRUNC = true },
-                    else => .{},
-                };
-                const r_access = (desired_access & std.os.windows.GENERIC_READ) != 0;
-                const w_access = (desired_access & std.os.windows.GENERIC_WRITE) != 0;
-                if (r_access) {
-                    oflags.ACCMODE = if (w_access) .RDWR else .RDONLY;
-                } else if (w_access) {
-                    oflags.ACCMODE = .WRONLY;
-                }
-                const oflags_int: u32 = @bitCast(oflags);
-                const mode = 0;
-                var fd: c_int = undefined;
-                if (redirector.open(path, @intCast(oflags_int), mode, &fd)) {
-                    if (fd < 0) {
-                        _ = saveError(fd);
-                        return null;
-                    }
-                    return fromDescriptor(fd);
-                }
-            }
+            if (CreateFileX(
+                path,
+                desired_access,
+                share_mode,
+                security_attributes,
+                create_disposition,
+                flags_and_attributes,
+                temporary_handle,
+            )) |rv| return rv;
             return Original.CreateFile(path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
         }
 
@@ -3365,15 +3353,63 @@ pub fn Win32Substitute(comptime redirector: type) type {
             flags_and_attributes: DWORD,
             template_file: HANDLE,
         ) callconv(WINAPI) ?HANDLE {
-            if (redirector.Host.isRedirecting(.mkdir)) {
-                var converter = Wtf8PathConverter.init(path, true) catch return std.os.windows.INVALID_HANDLE_VALUE;
-                defer converter.deinit();
-                return CreateFile(converter.path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
-            }
+            if (CreateFileX(
+                path,
+                desired_access,
+                share_mode,
+                security_attributes,
+                create_disposition,
+                flags_and_attributes,
+                temporary_handle,
+            )) |rv| return rv;
             return Original.CreateFileW(path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
         }
 
-        pub fn CreateFileMappingA(
+        fn CreateFileX(
+            path: anytype,
+            desired_access: DWORD,
+            _: DWORD,
+            _: *SECURITY_ATTRIBUTES,
+            create_disposition: DWORD,
+            _: DWORD,
+            _: HANDLE,
+        ) ??HANDLE {
+            if (redirector.Host.isRedirecting(.open)) {
+                var converter = Wtf8PathConverter.init(path, true) catch return std.os.windows.INVALID_HANDLE_VALUE;
+                defer converter.deinit();
+                const flags = translate: {
+                    var oflags: O = switch (create_disposition) {
+                        std.os.windows.CREATE_ALWAYS => .{ .CREAT = true, .TRUNC = true },
+                        std.os.windows.CREATE_NEW => .{ .CREAT = true, .EXCL = true },
+                        std.os.windows.OPEN_ALWAYS => .{ .CREAT = true },
+                        std.os.windows.OPEN_EXISTING => .{},
+                        std.os.windows.TRUNCATE_EXISTING => .{ .TRUNC = true },
+                        else => .{},
+                    };
+                    const r_access = (desired_access & std.os.windows.GENERIC_READ) != 0;
+                    const w_access = (desired_access & std.os.windows.GENERIC_WRITE) != 0;
+                    if (r_access) {
+                        oflags.ACCMODE = if (w_access) .RDWR else .RDONLY;
+                    } else if (w_access) {
+                        oflags.ACCMODE = .WRONLY;
+                    }
+                    const oflags_int: i32 = @bitCast(oflags);
+                    break :translate oflags_int;
+                };
+                const mode = 0;
+                var fd: c_int = undefined;
+                if (redirector.open(converter.path, flags, mode, &fd)) {
+                    if (fd < 0) {
+                        _ = saveError(fd);
+                        return @as(?HANDLE, null);
+                    }
+                    return fromDescriptor(fd);
+                }
+            }
+            return null;
+        }
+
+        pub fn CreateFileMapping(
             handle: HANDLE,
             security_attributes: *SECURITY_ATTRIBUTES,
             protect: DWORD,
@@ -3384,46 +3420,56 @@ pub fn Win32Substitute(comptime redirector: type) type {
             if (isPrivateHandle(handle)) {
                 return std.os.windows.INVALID_HANDLE_VALUE;
             }
-            return Original.CreateFileMappingA(handle, security_attributes, protect, max_size_high, max_size_low, name);
+            return Original.CreateFileMapping(handle, security_attributes, protect, max_size_high, max_size_low, name);
         }
 
         pub fn DeleteFile(path: LPCSTR) callconv(WINAPI) BOOL {
-            var result: c_int = undefined;
-            if (redirector.unlink(path, &result)) {
-                return saveError(result);
-            }
+            if (DeleteFileX(path)) |rv| return rv;
             return Original.DeleteFile(path);
         }
 
         pub fn DeleteFileW(path: LPCWSTR) callconv(WINAPI) BOOL {
-            if (redirector.Host.isRedirecting(.unlink)) {
-                var converter = Wtf8PathConverter.init(path, true) catch return FALSE;
-                defer converter.deinit();
-                return DeleteFile(converter.path);
-            }
+            if (DeleteFileX(path)) |rv| return rv;
             return Original.DeleteFileW(path);
         }
 
-        pub fn GetFileAttributes(path: LPCSTR) callconv(WINAPI) DWORD {
-            var result: c_int = undefined;
-            var stat: Stat = undefined;
-            if (redirector.stat(path, &stat, &result)) {
-                if (result == 0) {
-                    return inferAttributes(stat);
-                } else {
-                    return std.os.windows.INVALID_FILE_ATTRIBUTES;
+        fn DeleteFileX(path: anytype) ?BOOL {
+            if (redirector.Host.isRedirecting(.unlink)) {
+                var converter = Wtf8PathConverter.init(path, true) catch return FALSE;
+                defer converter.deinit();
+                var result: c_int = undefined;
+                if (redirector.unlink(converter.path, &result)) {
+                    return saveError(result);
                 }
             }
+            return null;
+        }
+
+        pub fn GetFileAttributes(path: LPCSTR) callconv(WINAPI) DWORD {
+            if (GetFileAttributesX(path)) |rv| return rv;
             return Original.GetFileAttributes(path);
         }
 
         pub fn GetFileAttributesW(path: LPCWSTR) callconv(WINAPI) DWORD {
+            if (GetFileAttributesX(path)) |rv| return rv;
+            return Original.GetFileAttributesW(path);
+        }
+
+        fn GetFileAttributesX(path: anytype) ?DWORD {
             if (redirector.Host.isRedirecting(.stat)) {
                 var converter = Wtf8PathConverter.init(path, true) catch return std.os.windows.INVALID_FILE_ATTRIBUTES;
                 defer converter.deinit();
-                return GetFileAttributes(converter.path);
+                var result: c_int = undefined;
+                var stat: Stat = undefined;
+                if (redirector.stat(converter.path, &stat, &result)) {
+                    if (result == 0) {
+                        return inferAttributes(stat);
+                    } else {
+                        return std.os.windows.INVALID_FILE_ATTRIBUTES;
+                    }
+                }
             }
-            return Original.GetFileAttributesW(path);
+            return null;
         }
 
         pub fn GetFileInformationByHandle(
@@ -3530,22 +3576,37 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         pub fn MoveFile(path: LPCSTR, new_path: LPCSTR) callconv(WINAPI) BOOL {
-            var result: c_int = undefined;
-            if (redirector.rename(path, new_path, &result)) {
-                return saveError(result);
-            }
-            return Original.MoveFile(path);
+            if (MoveFileExX(path, new_path, 0)) |rv| return rv;
+            return Original.MoveFile(path, new_path);
         }
 
         pub fn MoveFileW(path: LPCWSTR, new_path: LPCWSTR) callconv(WINAPI) BOOL {
+            if (MoveFileExX(path, new_path, 0)) |rv| return rv;
+            return Original.MoveFileW(path, new_path);
+        }
+
+        pub fn MoveFileEx(path: LPCSTR, new_path: LPCSTR, flags: DWORD) callconv(WINAPI) BOOL {
+            if (MoveFileExX(path, new_path, flags)) |rv| return rv;
+            return Original.MoveFileEx(path, new_path, flags);
+        }
+
+        pub fn MoveFileExW(path: LPCWSTR, new_path: LPCWSTR, flags: DWORD) callconv(WINAPI) BOOL {
+            if (MoveFileExX(path, new_path, flags)) |rv| return rv;
+            return Original.MoveFileExW(path, new_path, flags);
+        }
+
+        pub fn MoveFileExX(path: anytype, new_path: anytype, _: DWORD) ?BOOL {
             if (redirector.Host.isRedirecting(.rename)) {
                 var converter = Wtf8PathConverter.init(path, false) catch return FALSE;
                 defer converter.deinit();
                 var new_converter = Wtf8PathConverter.init(new_path, false) catch return FALSE;
                 defer new_converter.deinit();
-                return MoveFile(converter.path, new_converter.path);
+                var result: c_int = undefined;
+                if (redirector.rename(converter.path, new_converter.path, &result)) {
+                    return saveError(result);
+                }
             }
-            return Original.MoveFileW(path);
+            return null;
         }
 
         pub fn NtClose(handle: HANDLE) callconv(WINAPI) NTSTATUS {
@@ -3584,7 +3645,6 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 const path = object_name.Buffer.?[0..name_len];
                 var converter = Wtf8PathConverter.init(path, false) catch return .NO_MEMORY;
                 defer converter.deinit();
-                converter.removeNtPrefix();
                 if (delete_op) {
                     // an unlink or rmdir operation actually
                     var result: c_int = undefined;
@@ -3973,20 +4033,25 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         pub fn RemoveDirectory(path: LPCSTR) callconv(WINAPI) BOOL {
-            var result: c_int = undefined;
-            if (redirector.rmdir(path, &result)) {
-                return saveError(result);
-            }
+            if (RemoveDirectoryX(path)) |rv| return rv;
             return Original.RemoveDirectory(path);
         }
 
         pub fn RemoveDirectoryW(path: LPCWSTR) callconv(WINAPI) BOOL {
+            if (RemoveDirectoryX(path)) |rv| return rv;
+            return Original.RemoveDirectoryW(path);
+        }
+
+        fn RemoveDirectoryX(path: anytype) ?BOOL {
             if (redirector.Host.isRedirecting(.rmdir)) {
                 var converter = Wtf8PathConverter.init(path, false) catch return FALSE;
                 defer converter.deinit();
-                return RemoveDirectory(converter.path);
+                var result: c_int = undefined;
+                if (redirector.rmdir(converter.path, &result)) {
+                    return saveError(result);
+                }
             }
-            return Original.RemoveDirectoryW(path);
+            return null;
         }
 
         pub fn SetFilePointer(
@@ -4295,32 +4360,38 @@ pub fn Win32Substitute(comptime redirector: type) type {
 
             pub inline fn init(path: anytype, save_err: bool) !@This() {
                 const T = @TypeOf(path);
-                const path_s: []const u16 = switch (T) {
-                    []const u16, []u16 => path,
-                    [*:0]const u16, [*:0]u16 => path[0..std.mem.len(path)],
-                    else => @compileError("Unexpected type: " ++ @typeName(T)),
-                };
                 var self: @This() = undefined;
                 self.sfa = std.heap.stackFallback(max_buffer_size, c_allocator);
-                try self._init(path_s, save_err);
+                self.allocator = self.sfa.get();
+                switch (T) {
+                    []const u8, []u8 => try self.initPathA(path, save_err),
+                    [*:0]const u8, [*:0]u8 => try self.initPathA(path[0..std.mem.len(path)], save_err),
+                    []const u16, []u16 => try self.initPathW(path, save_err),
+                    [*:0]const u16, [*:0]u16 => try self.initPathW(path[0..std.mem.len(path)], save_err),
+                    else => @compileError("Unexpected type: " ++ @typeName(T)),
+                }
                 return self;
             }
 
-            fn _init(self: *@This(), path: []const u16, save_err: bool) !void {
-                self.allocator = self.sfa.get();
+            fn initPathA(self: *@This(), path: []const u8, save_err: bool) !void {
+                const flags = windows_h.MB_PRECOMPOSED;
+                const cp = windows_h.CP_ACP;
+                const len: c_int = @intCast(path.len);
+                const wide_len = windows_h.MultiByteToWideChar(cp, flags, path.ptr, len, null, 0);
+                if (wide_len == 0) return error.UnableToConvert;
+                const wide_buf = try self.allocator.alloc(u16, @intCast(wide_len));
+                defer self.allocator.free(wide_buf);
+                _ = windows_h.MultiByteToWideChar(cp, flags, path.ptr, len, wide_buf.ptr, wide_len);
+                return self.initPathW(wide_buf, save_err);
+            }
+
+            fn initPathW(self: *@This(), path: []const u16, save_err: bool) !void {
                 const buf = std.unicode.wtf16LeToWtf8AllocZ(self.allocator, path) catch |err| {
                     if (save_err) _ = windows_h.SetLastError(windows_h.ERROR_NOT_ENOUGH_MEMORY);
                     return err;
                 };
                 self.buffer = buf;
                 self.path = buf.ptr;
-            }
-
-            pub fn deinit(self: *@This()) void {
-                self.allocator.free(self.buffer);
-            }
-
-            pub fn removeNtPrefix(self: *@This()) void {
                 if (std.mem.startsWith(u8, self.buffer, "\\??\\")) {
                     const s = self.buffer[4..];
                     if (std.mem.startsWith(u8, s, "UNC\\")) {
@@ -4331,6 +4402,10 @@ pub fn Win32Substitute(comptime redirector: type) type {
                     }
                 }
             }
+
+            pub fn deinit(self: *@This()) void {
+                self.allocator.free(self.buffer);
+            }
         };
 
         const Self = @This();
@@ -4340,7 +4415,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             pub var CreateDirectoryW: *const @TypeOf(Self.CreateDirectoryW) = undefined;
             pub var CreateFile: *const @TypeOf(Self.CreateFile) = undefined;
             pub var CreateFileW: *const @TypeOf(Self.CreateFileW) = undefined;
-            pub var CreateFileMappingA: *const @TypeOf(Self.CreateFileMappingA) = undefined;
+            pub var CreateFileMapping: *const @TypeOf(Self.CreateFileMapping) = undefined;
             pub var DeleteFile: *const @TypeOf(Self.DeleteFile) = undefined;
             pub var DeleteFileW: *const @TypeOf(Self.DeleteFileW) = undefined;
             pub var GetFileAttributes: *const @TypeOf(Self.GetFileAttributes) = undefined;
@@ -4352,7 +4427,9 @@ pub fn Win32Substitute(comptime redirector: type) type {
             pub var LockFile: *const @TypeOf(Self.LockFile) = undefined;
             pub var LockFileEx: *const @TypeOf(Self.LockFileEx) = undefined;
             pub var MoveFile: *const @TypeOf(Self.MoveFile) = undefined;
+            pub var MoveFileEx: *const @TypeOf(Self.MoveFileEx) = undefined;
             pub var MoveFileW: *const @TypeOf(Self.MoveFileW) = undefined;
+            pub var MoveFileExW: *const @TypeOf(Self.MoveFileExW) = undefined;
             pub var NtClose: *const @TypeOf(Self.NtClose) = undefined;
             pub var NtCreateFile: *const @TypeOf(Self.NtCreateFile) = undefined;
             pub var NtLockFile: *const @TypeOf(Self.NtLockFile) = undefined;
