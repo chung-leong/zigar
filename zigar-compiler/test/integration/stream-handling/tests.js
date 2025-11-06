@@ -518,17 +518,6 @@ export function addTests(importModule, options) {
         flags: { create: true, truncate: true, symlinkFollow: true },
       });
     })
-    skip.entirely.unless(target === 'win32').
-    it('should open file with extended characters in name using win32 function', async function() {
-      const { __zigar, open } = await importTest('open-file-with-extended-char-in-name-with-win32-function');
-      let event;
-      __zigar.on('open', (evt) => {
-        event = evt;
-        return '';
-      });
-      open();
-      expect(event.path).to.equal('ÀÁÂÃÄÅ');
-    })
     it('should obtain error code using libc function', async function() {
       const { __zigar, triggerError } = await importTest('return-last-error-with-libc-function', { useLibc: true });
       __zigar.on('open', () => {

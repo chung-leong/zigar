@@ -346,8 +346,14 @@ pub fn isRedirecting(comptime literal: @TypeOf(.enum_literal)) bool {
     if (redirection_suppressed) return false;
     var mask: hooks.Syscall.Mask = undefined;
     if (imports.get_syscall_mask(instance, &mask) != .SUCCESS) return false;
-    const name = @tagName(literal);
-    return @field(mask, name);
+    if (literal == .any) {
+        return inline for (std.meta.fields(hooks.Syscall.Mask)) |field| {
+            if (@field(mask, field.name)) break true;
+        } else false;
+    } else {
+        const name = @tagName(literal);
+        return @field(mask, name);
+    }
 }
 
 pub fn createModule(comptime module_ns: type) Module {

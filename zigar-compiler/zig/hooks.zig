@@ -3327,10 +3327,11 @@ pub fn Win32Substitute(comptime redirector: type) type {
             _: *SECURITY_ATTRIBUTES,
         ) ?BOOL {
             if (redirector.Host.isRedirecting(.mkdir)) {
-                var converter = Wtf8PathConverter.init(path, true) catch return FALSE;
+                var converter = Wtf8Converter.init(.{});
                 defer converter.deinit();
+                const path_wtf8 = converter.convertTo(path) catch return FALSE;
                 var result: c_int = undefined;
-                if (redirector.mkdir(converter.path, 0, &result)) {
+                if (redirector.mkdir(path_wtf8, 0, &result)) {
                     return saveError(result);
                 }
             }
@@ -3389,8 +3390,9 @@ pub fn Win32Substitute(comptime redirector: type) type {
             _: HANDLE,
         ) ??HANDLE {
             if (redirector.Host.isRedirecting(.open)) {
-                var converter = Wtf8PathConverter.init(path, true) catch return std.os.windows.INVALID_HANDLE_VALUE;
+                var converter = Wtf8Converter.init(.{});
                 defer converter.deinit();
+                const path_wtf8 = converter.convertTo(path) catch return std.os.windows.INVALID_HANDLE_VALUE;
                 const flags = translate: {
                     var oflags: O = switch (create_disposition) {
                         std.os.windows.CREATE_ALWAYS => .{ .CREAT = true, .TRUNC = true },
@@ -3412,7 +3414,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 };
                 const mode = 0;
                 var fd: c_int = undefined;
-                if (redirector.open(converter.path, flags, mode, &fd)) {
+                if (redirector.open(path_wtf8, flags, mode, &fd)) {
                     if (fd < 0) {
                         _ = saveError(fd);
                         return @as(?HANDLE, null);
@@ -3449,12 +3451,12 @@ pub fn Win32Substitute(comptime redirector: type) type {
 
         fn CreateSymbolicLinkX(path: anytype, target: anytype, _: DWORD) ?BOOL {
             if (redirector.Host.isRedirecting(.symlink)) {
-                var converter = Wtf8PathConverter.init(path, true) catch return FALSE;
+                var converter = Wtf8Converter.init(.{});
                 defer converter.deinit();
-                var target_converter = Wtf8PathConverter.init(target, true) catch return FALSE;
-                defer target_converter.deinit();
+                const path_wtf8 = converter.convertTo(path) catch return FALSE;
+                const target_wtf8 = converter.convertTo(target) catch return FALSE;
                 var result: c_int = undefined;
-                if (redirector.symlink(target_converter.path, converter.path, &result)) {
+                if (redirector.symlink(target_wtf8, path_wtf8, &result)) {
                     return saveError(result);
                 }
             }
@@ -3473,10 +3475,11 @@ pub fn Win32Substitute(comptime redirector: type) type {
 
         fn DeleteFileX(path: anytype) ?BOOL {
             if (redirector.Host.isRedirecting(.unlink)) {
-                var converter = Wtf8PathConverter.init(path, true) catch return FALSE;
+                var converter = Wtf8Converter.init(.{});
                 defer converter.deinit();
+                const path_wtf8 = converter.convertTo(path) catch return FALSE;
                 var result: c_int = undefined;
-                if (redirector.unlink(converter.path, &result)) {
+                if (redirector.unlink(path_wtf8, &result)) {
                     return saveError(result);
                 }
             }
@@ -3495,11 +3498,12 @@ pub fn Win32Substitute(comptime redirector: type) type {
 
         fn GetFileAttributesX(path: anytype) ?DWORD {
             if (redirector.Host.isRedirecting(.stat)) {
-                var converter = Wtf8PathConverter.init(path, true) catch return std.os.windows.INVALID_FILE_ATTRIBUTES;
+                var converter = Wtf8Converter.init(.{});
                 defer converter.deinit();
+                const path_wtf8 = converter.convertTo(path) catch return std.os.windows.INVALID_FILE_ATTRIBUTES;
                 var result: c_int = undefined;
                 var stat: Stat = undefined;
-                if (redirector.stat(converter.path, &stat, &result)) {
+                if (redirector.stat(path_wtf8, &stat, &result)) {
                     if (result == 0) {
                         return inferAttributes(stat);
                     } else {
@@ -3635,12 +3639,12 @@ pub fn Win32Substitute(comptime redirector: type) type {
 
         pub fn MoveFileExX(path: anytype, new_path: anytype, _: DWORD) ?BOOL {
             if (redirector.Host.isRedirecting(.rename)) {
-                var converter = Wtf8PathConverter.init(path, false) catch return FALSE;
+                var converter = Wtf8Converter.init(.{});
                 defer converter.deinit();
-                var new_converter = Wtf8PathConverter.init(new_path, false) catch return FALSE;
-                defer new_converter.deinit();
+                const path_wtf8 = converter.convertTo(path) catch return FALSE;
+                const new_path_wtf8 = converter.convertTo(new_path) catch return FALSE;
                 var result: c_int = undefined;
-                if (redirector.rename(converter.path, new_converter.path, &result)) {
+                if (redirector.rename(path_wtf8, new_path_wtf8, &result)) {
                     return saveError(result);
                 }
             }
@@ -3675,53 +3679,41 @@ pub fn Win32Substitute(comptime redirector: type) type {
         ) callconv(WINAPI) NTSTATUS {
             const dirfd: c_int = if (object_attributes.RootDirectory) |dh| toDescriptor(dh) else fd_cwd;
             const dir_op = (create_options & std.os.windows.FILE_DIRECTORY_FILE) != 0;
-            const link_op = create_options == std.os.windows.FILE_OPEN_REPARSE_POINT | std.os.windows.FILE_SYNCHRONOUS_IO_NONALERT;
             const object_name = object_attributes.ObjectName;
             const name_len = @divExact(object_name.Length, 2);
             const path = object_name.Buffer.?[0..name_len];
-            if ((desired_access & std.os.windows.DELETE) != 0) {
-                // a delete or rename operation--remember the path for NtSetInformationFile()
-                if (isPrivateDescriptor(dirfd)) {
-                    var converter = Wtf8PathConverter.init(path, false) catch return .NO_MEMORY;
-                    defer converter.deinit();
-                    handle.* = createTemporaryHandle(converter.path, dirfd, dir_op) catch return .NO_MEMORY;
-                    io_status_block.Information = windows_h.FILE_CREATED;
-                    return .SUCCESS;
-                }
-            } else if (dir_op and create_disposition == std.os.windows.FILE_CREATE) {
-                // creating a directory
-                if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and redirector.Host.isRedirecting(.mkdir))) {
-                    var converter = Wtf8PathConverter.init(path, false) catch return .NO_MEMORY;
-                    defer converter.deinit();
-                    var result: c_int = undefined;
-                    if (redirector.mkdirat(dirfd, converter.path, 0, &result)) {
-                        if (result < 0) return .ACCESS_DENIED;
-                        handle.* = createTemporaryHandle(converter.path, dirfd, dir_op) catch return .NO_MEMORY;
+            var result: c_int = undefined;
+            if (isPrivateDescriptor(dirfd) or redirector.Host.isRedirecting(.any)) {
+                var converter = Wtf8Converter.init(.{ .save_error = false });
+                defer converter.deinit();
+                const path_wtf8 = converter.convertTo(path) catch return .NO_MEMORY;
+                if ((desired_access & std.os.windows.DELETE) != 0) {
+                    // a delete or rename operation--remember the path for NtSetInformationFile()
+                    if (isPrivateDescriptor(dirfd)) {
+                        handle.* = createTemporaryHandle(path_wtf8, dirfd, dir_op) catch return .NO_MEMORY;
                         io_status_block.Information = windows_h.FILE_CREATED;
                         return .SUCCESS;
                     }
-                }
-            } else if (link_op) {
-                // reading a link
-                if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and redirector.Host.isRedirecting(.readlink))) {
-                    var converter = Wtf8PathConverter.init(path, false) catch return .NO_MEMORY;
-                    defer converter.deinit();
-                    var result: c_int = undefined;
+                } else if (dir_op and create_disposition == std.os.windows.FILE_CREATE) {
+                    // creating a directory
+                    if (redirector.mkdirat(dirfd, path_wtf8, 0, &result)) {
+                        if (result < 0) return .ACCESS_DENIED;
+                        handle.* = createTemporaryHandle(path_wtf8, dirfd, dir_op) catch return .NO_MEMORY;
+                        io_status_block.Information = windows_h.FILE_CREATED;
+                        return .SUCCESS;
+                    }
+                } else if (create_options == std.os.windows.FILE_OPEN_REPARSE_POINT | std.os.windows.FILE_SYNCHRONOUS_IO_NONALERT) {
+                    // reading a link
                     const buf = c_allocator.alloc(u8, 4096) catch return .NO_MEMORY;
-                    if (redirector.readlinkat(dirfd, converter.path, buf.ptr, @intCast(buf.len - 1), &result)) {
+                    if (redirector.readlinkat(dirfd, path_wtf8, buf.ptr, @intCast(buf.len - 1), &result)) {
                         if (result < 0) return .ACCESS_DENIED;
                         const len: usize = @intCast(result);
                         buf[len] = 0;
-                        handle.* = createTemporaryHandle(converter.path, dirfd, buf) catch return .NO_MEMORY;
+                        handle.* = createTemporaryHandle(path_wtf8, dirfd, buf) catch return .NO_MEMORY;
                         io_status_block.Information = windows_h.FILE_CREATED;
                     }
                     return .SUCCESS;
-                }
-            } else {
-                // regular file opening
-                if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and redirector.Host.isRedirecting(.open))) {
-                    var converter = Wtf8PathConverter.init(path, false) catch return .NO_MEMORY;
-                    defer converter.deinit();
+                } else {
                     var oflags: O = switch (create_disposition) {
                         std.os.windows.FILE_SUPERSEDE => .{ .CREAT = true, .TRUNC = true },
                         std.os.windows.FILE_CREATE => .{ .CREAT = true },
@@ -3741,20 +3733,21 @@ pub fn Win32Substitute(comptime redirector: type) type {
                     oflags.DIRECTORY = dir_op;
                     const oflags_int: u32 = @bitCast(oflags);
                     var fd: c_int = undefined;
-                    const handled = redirector.openat(dirfd, converter.path, @intCast(oflags_int), 0, &fd);
-                    if (!handled or fd < 0) return .OBJECT_PATH_NOT_FOUND;
-                    handle.* = fromDescriptor(fd);
-                    io_status_block.Information = switch (create_disposition) {
-                        std.os.windows.FILE_SUPERSEDE => windows_h.FILE_SUPERSEDED,
-                        std.os.windows.FILE_CREATE => windows_h.FILE_CREATED,
-                        std.os.windows.FILE_OPEN, std.os.windows.FILE_OPEN_IF => windows_h.FILE_OPENED,
-                        std.os.windows.FILE_OVERWRITE, std.os.windows.FILE_OVERWRITE_IF => windows_h.FILE_OVERWRITTEN,
-                        else => windows_h.FILE_OPENED,
-                    };
-                    return .SUCCESS;
+                    if (redirector.openat(dirfd, path_wtf8, @intCast(oflags_int), 0, &fd)) {
+                        if (fd < 0) return .OBJECT_PATH_NOT_FOUND;
+                        handle.* = fromDescriptor(fd);
+                        io_status_block.Information = switch (create_disposition) {
+                            std.os.windows.FILE_SUPERSEDE => windows_h.FILE_SUPERSEDED,
+                            std.os.windows.FILE_CREATE => windows_h.FILE_CREATED,
+                            std.os.windows.FILE_OPEN, std.os.windows.FILE_OPEN_IF => windows_h.FILE_OPENED,
+                            std.os.windows.FILE_OVERWRITE, std.os.windows.FILE_OVERWRITE_IF => windows_h.FILE_OVERWRITTEN,
+                            else => windows_h.FILE_OPENED,
+                        };
+                        return .SUCCESS;
+                    }
                 }
-                if (isPrivateDescriptor(dirfd)) return .ACCESS_DENIED;
             }
+            if (isPrivateDescriptor(dirfd)) return .ACCESS_DENIED;
             return Original.NtCreateFile(handle, desired_access, object_attributes, io_status_block, allocation_size, file_attributes, share_access, create_disposition, create_options, ea_buffer, ea_length);
         }
 
@@ -3772,6 +3765,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
         ) callconv(WINAPI) NTSTATUS {
             const w = std.os.windows;
             if (isPrivateHandle(handle)) {
+                var converter = Wtf8Converter.init(.{ .save_error = false });
+                defer converter.deinit();
                 switch (fs_control_code) {
                     w.FSCTL_GET_REPARSE_POINT => {
                         const info = getTemporaryHandleInfo(handle) orelse return .ACCESS_DENIED;
@@ -3814,13 +3809,12 @@ pub fn Win32Substitute(comptime redirector: type) type {
                                     const ws: [*]const WCHAR = @ptrCast(&buf.PathBuffer[0]);
                                     break :init ws[offset .. offset + len];
                                 };
-                                var converter = Wtf8PathConverter.init(path, false) catch return .NO_MEMORY;
-                                defer converter.deinit();
+                                const path_wtf8 = converter.convertTo(path) catch return .NO_MEMORY;
                                 const fd = toDescriptor(handle);
                                 var fd_path_buf: [128]u8 = undefined;
                                 const fd_path = std.fmt.bufPrintZ(&fd_path_buf, fd_format_string, .{fd}) catch unreachable;
                                 var result: c_int = undefined;
-                                if (redirector.symlink(converter.path, fd_path, &result) and result >= 0) {
+                                if (redirector.symlink(path_wtf8, fd_path, &result) and result >= 0) {
                                     return .SUCCESS;
                                 }
                             },
@@ -4113,34 +4107,31 @@ pub fn Win32Substitute(comptime redirector: type) type {
             file_information_class: FILE_INFORMATION_CLASS,
         ) callconv(WINAPI) NTSTATUS {
             if (isPrivateHandle(handle)) {
-                if (isTemporaryHandle(handle)) {
-                    if (getTemporaryHandleInfo(handle)) |info| {
-                        switch (file_information_class) {
-                            .FileDispositionInformationEx, .FileDispositionInformation => {
-                                // an unlink or rmdir operation
-                                const flags: c_int = if (info.is_dir) AT.REMOVEDIR else 0;
-                                var result: c_int = undefined;
-                                const handled = redirector.unlinkat(info.dirfd, info.path, flags, &result);
-                                if (!handled or result < 0) return .CANNOT_DELETE;
-                            },
-                            inline .FileRenameInformation, .FileRenameInformationEx => |i| {
-                                const INFO = switch (i) {
-                                    .FileRenameInformation => std.os.windows.FILE_RENAME_INFORMATION,
-                                    .FileRenameInformationEx => std.os.windows.FILE_RENAME_INFORMATION_EX,
-                                    else => unreachable,
-                                };
-                                const rename: *INFO = @ptrCast(@alignCast(file_information));
-                                const new_dirfd: c_int = if (rename.RootDirectory) |dh| toDescriptor(dh) else fd_cwd;
-                                const new_path = @as(LPCWSTR, @ptrCast(&rename.FileName))[0..(rename.FileNameLength / 2)];
-                                var converter = Wtf8PathConverter.init(new_path, false) catch return .NO_MEMORY;
-                                defer converter.deinit();
-                                var result: c_int = undefined;
-                                const handled = redirector.renameat(info.dirfd, info.path, new_dirfd, converter.path, &result);
-                                if (!handled or result < 0) return .OBJECT_PATH_NOT_FOUND;
-                            },
-                            else => {},
-                        }
-                    }
+                const info = getTemporaryHandleInfo(handle) orelse return .ACCESS_DENIED;
+                var converter = Wtf8Converter.init(.{ .save_error = false });
+                defer converter.deinit();
+                var result: c_int = undefined;
+                switch (file_information_class) {
+                    .FileDispositionInformationEx, .FileDispositionInformation => {
+                        // an unlink or rmdir operation
+                        const flags: c_int = if (info.is_dir) AT.REMOVEDIR else 0;
+                        const handled = redirector.unlinkat(info.dirfd, info.path, flags, &result);
+                        if (!handled or result < 0) return .CANNOT_DELETE;
+                    },
+                    inline .FileRenameInformation, .FileRenameInformationEx => |i| {
+                        const INFO = switch (i) {
+                            .FileRenameInformation => std.os.windows.FILE_RENAME_INFORMATION,
+                            .FileRenameInformationEx => std.os.windows.FILE_RENAME_INFORMATION_EX,
+                            else => unreachable,
+                        };
+                        const rename: *INFO = @ptrCast(@alignCast(file_information));
+                        const new_dirfd: c_int = if (rename.RootDirectory) |dh| toDescriptor(dh) else fd_cwd;
+                        const new_path = @as(LPCWSTR, @ptrCast(&rename.FileName))[0..(rename.FileNameLength / 2)];
+                        const new_path_wtf8 = converter.convertTo(new_path) catch return .NO_MEMORY;
+                        const handled = redirector.renameat(info.dirfd, info.path, new_dirfd, new_path_wtf8, &result);
+                        if (!handled or result < 0) return .OBJECT_PATH_NOT_FOUND;
+                    },
+                    else => {},
                 }
                 return .SUCCESS;
             }
@@ -4204,10 +4195,11 @@ pub fn Win32Substitute(comptime redirector: type) type {
 
         fn RemoveDirectoryX(path: anytype) ?BOOL {
             if (redirector.Host.isRedirecting(.rmdir)) {
-                var converter = Wtf8PathConverter.init(path, false) catch return FALSE;
+                var converter = Wtf8Converter.init(.{});
                 defer converter.deinit();
+                const path_wtf8 = converter.convertTo(path) catch return FALSE;
                 var result: c_int = undefined;
-                if (redirector.rmdir(converter.path, &result)) {
+                if (redirector.rmdir(path_wtf8, &result)) {
                     return saveError(result);
                 }
             }
@@ -4571,64 +4563,6 @@ pub fn Win32Substitute(comptime redirector: type) type {
         const TRUE = std.os.windows.TRUE;
         const WINAPI: std.builtin.CallingConvention = if (builtin.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c;
 
-        const Wtf8PathConverter = struct {
-            sfa: std.heap.StackFallbackAllocator(max_buffer_size),
-            allocator: std.mem.Allocator,
-            buffer: []u8,
-            path: [*:0]const u8,
-
-            const max_buffer_size = 1024;
-
-            pub inline fn init(path: anytype, save_err: bool) !@This() {
-                const T = @TypeOf(path);
-                var self: @This() = undefined;
-                self.sfa = std.heap.stackFallback(max_buffer_size, c_allocator);
-                self.allocator = self.sfa.get();
-                switch (T) {
-                    []const u8, []u8 => try self.initPathA(path, save_err),
-                    [*:0]const u8, [*:0]u8 => try self.initPathA(path[0..std.mem.len(path)], save_err),
-                    []const u16, []u16 => try self.initPathW(path, save_err),
-                    [*:0]const u16, [*:0]u16 => try self.initPathW(path[0..std.mem.len(path)], save_err),
-                    else => @compileError("Unexpected type: " ++ @typeName(T)),
-                }
-                return self;
-            }
-
-            fn initPathA(self: *@This(), path: []const u8, save_err: bool) !void {
-                const flags = windows_h.MB_PRECOMPOSED;
-                const cp = windows_h.CP_ACP;
-                const len: c_int = @intCast(path.len);
-                const wide_len = windows_h.MultiByteToWideChar(cp, flags, path.ptr, len, null, 0);
-                if (wide_len == 0) return error.UnableToConvert;
-                const wide_buf = try self.allocator.alloc(u16, @intCast(wide_len));
-                defer self.allocator.free(wide_buf);
-                _ = windows_h.MultiByteToWideChar(cp, flags, path.ptr, len, wide_buf.ptr, wide_len);
-                return self.initPathW(wide_buf, save_err);
-            }
-
-            fn initPathW(self: *@This(), path: []const u16, save_err: bool) !void {
-                const buf = std.unicode.wtf16LeToWtf8AllocZ(self.allocator, path) catch |err| {
-                    if (save_err) _ = windows_h.SetLastError(windows_h.ERROR_NOT_ENOUGH_MEMORY);
-                    return err;
-                };
-                self.buffer = buf;
-                self.path = buf.ptr;
-                if (std.mem.startsWith(u8, self.buffer, "\\??\\")) {
-                    const s = self.buffer[4..];
-                    if (std.mem.startsWith(u8, s, "UNC\\")) {
-                        s[2] = '\\';
-                        self.path = @ptrCast(s[2..]);
-                    } else {
-                        self.path = @ptrCast(s);
-                    }
-                }
-            }
-
-            pub fn deinit(self: *@This()) void {
-                self.allocator.free(self.buffer);
-            }
-        };
-
         const Self = @This();
         pub const Original = struct {
             pub var CloseHandle: *const @TypeOf(Self.CloseHandle) = undefined;
@@ -4869,6 +4803,64 @@ pub fn Win32NonIOSubstitute(comptime redirector: type) type {
         pub const calling_convention = WINAPI;
     };
 }
+
+const Wtf8Converter = struct {
+    sfa: std.heap.StackFallbackAllocator(buffer_size),
+    arena: std.heap.ArenaAllocator,
+    allocator: std.mem.Allocator,
+    save_error: bool,
+    adjust_path: bool,
+
+    pub const Options = struct {
+        save_error: bool = true,
+        adjust_path: bool = true,
+    };
+
+    const buffer_size = 1024;
+
+    pub inline fn init(options: Options) @This() {
+        var self: @This() = undefined;
+        self.sfa = std.heap.stackFallback(buffer_size, c_allocator);
+        self.arena = .init(self.sfa.get());
+        self.allocator = self.arena.allocator();
+        self.save_error = options.save_error;
+        self.adjust_path = options.adjust_path;
+        return self;
+    }
+
+    pub inline fn deinit(self: *@This()) void {
+        self.arena.deinit();
+    }
+
+    pub fn convertTo(self: *@This(), s: anytype) ![*:0]const u8 {
+        const T = @TypeOf(s);
+        const original_slice = switch (@typeInfo(T).pointer.size) {
+            .slice => s,
+            .many, .c => s[0..std.mem.len(s)],
+            else => unreachable,
+        };
+        const CT = @TypeOf(s[0]);
+        var slice: [:0]u8 = switch (CT) {
+            u8 => @ptrCast(@constCast(original_slice)),
+            u16 => std.unicode.wtf16LeToWtf8AllocZ(self.allocator, original_slice) catch |err| {
+                if (self.save_error) _ = windows_h.SetLastError(windows_h.ERROR_NOT_ENOUGH_MEMORY);
+                return err;
+            },
+            else => @compileError("Unsupported type: " ++ @typeName(T)),
+        };
+        if (self.adjust_path) {
+            if (std.mem.startsWith(u8, slice, "\\??\\")) {
+                slice = slice[4..];
+                if (std.mem.startsWith(u8, slice, "UNC\\")) {
+                    slice = slice[2..];
+                    if (T == u8) slice = try self.allocator.dupeZ(u8, slice[2..]);
+                    slice[0] = '\\';
+                }
+            }
+        }
+        return slice.ptr;
+    }
+};
 
 pub const HandlerVTable = init: {
     const redirector = SyscallRedirector(void);
