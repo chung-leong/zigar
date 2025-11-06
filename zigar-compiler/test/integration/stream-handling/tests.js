@@ -1617,6 +1617,41 @@ export function addTests(importModule, options) {
         } catch {}
       }
     })
+    it('should create a symlink', async function() {
+      const { __zigar, symlink } = await importTest('create-symlink', { useLibc: true });      
+      let event;
+      __zigar.on('open', (evt) => {
+        return null;
+      });
+      __zigar.on('symlink', (evt) => {
+        event = evt;
+        return true;
+      });
+      symlink('/hello/world.txt', '/goodbye/earth.txt');
+      expect(event).to.eql({ 
+        target: '/hello/world.txt',
+        parent: null,
+        path: 'goodbye/earth.txt'
+      });
+    })
+    it('should create a symlink in a directory', async function() {
+      const { __zigar, symlink } = await importTest('create-symlink-at-dir', { useLibc: true });      
+      __zigar.on('open', (evt) => {
+        return null;
+      });
+      let event;
+      __zigar.on('symlink', (evt) => {
+        event = evt;
+        return true;
+      });
+      const map = new Map();
+      symlink(map, '/hello/world.txt', 'earth.txt');
+      expect(event).to.eql({ 
+        target: '/hello/world.txt',
+        parent: map,
+        path: 'earth.txt'
+      });
+    })
     skip.entirely.if(target == 'win32').
     it('should create a symlink using posix function', async function() {
       const { __zigar, symlink } = await importTest('create-symlink-with-posix-function', { useLibc: true });
@@ -1694,6 +1729,20 @@ export function addTests(importModule, options) {
           await unlink(newPath) 
         } catch {}
       }
+    })
+    it('should create a symlink using win32 function', async function() {
+      const { __zigar, symlink } = await importTest('create-symlink-with-win32-function', { useLibc: true });      
+      let event;
+      __zigar.on('symlink', (evt) => {
+        event = evt;
+        return true;
+      });
+      symlink('/hello/world.txt', '/goodbye/earth.txt');
+      expect(event).to.eql({ 
+        target: '/hello/world.txt',
+        parent: null,
+        path: 'goodbye/earth.txt'
+      });
     })
     skip.entirely.if(target == 'win32').
     it('should open and read from file using pread', async function() {
@@ -2577,9 +2626,6 @@ export function addTests(importModule, options) {
         event = evt;
         return '/goodbye/earth.txt';
       });
-      __zigar.on('open', (evt) => {
-        console.log(evt);
-      })
       const path = readLink('/hello/world.txt');
       expect(path.string).to.equal('/goodbye/earth.txt');
       expect(event).to.eql({ 

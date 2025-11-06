@@ -11,6 +11,15 @@ export default mixin({
     const pathDV = this.obtainZigView(pathAddress, pathLen, false);
     const pathArray = new Uint8Array(pathDV.buffer, pathDV.byteOffset, pathDV.byteLength);
     let path = decodeText(pathArray).trim();
+    if (process.env.TARGET === 'node') {
+      // used during symlink creation by Windows 
+      if (path.startsWith('/dev/fd/')) {
+        const fd = parseInt(path.slice(8));
+        const loc = this.getStreamLocation(fd)
+        if (!loc) throw new InvalidPath(path);
+        return loc;
+      }
+    }
     if (path.endsWith('/')) {
       path = path.slice(0, -1);
     }

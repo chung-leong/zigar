@@ -1479,11 +1479,16 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     return true;
                 };
                 defer resolver.deinit();
+                var target_resolver = PathResolver.init(dirfd, target) catch {
+                    result.* = intFromError(.NOMEM);
+                    return true;
+                };
+                defer target_resolver.deinit();
                 var call: Syscall = .{ .cmd = .symlink, .u = .{
                     .symlink = .{
                         .dirfd = resolver.dirfd,
                         .path = resolver.path,
-                        .target = target,
+                        .target = target_resolver.path,
                     },
                 } };
                 const err = Host.redirectSyscall(&call);
@@ -3432,6 +3437,30 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return Original.CreateFileMapping(handle, security_attributes, protect, max_size_high, max_size_low, name);
         }
 
+        pub fn CreateSymbolicLink(path: LPCSTR, target: LPCSTR, flags: DWORD) callconv(WINAPI) BOOL {
+            if (CreateSymbolicLinkX(path, target, flags)) |rv| return rv;
+            return Original.CreateSymbolicLink(path, target, flags);
+        }
+
+        pub fn CreateSymbolicLinkW(path: LPCWSTR, target: LPCWSTR, flags: DWORD) callconv(WINAPI) BOOL {
+            if (CreateSymbolicLinkX(path, target, flags)) |rv| return rv;
+            return Original.CreateSymbolicLinkW(path, target, flags);
+        }
+
+        fn CreateSymbolicLinkX(path: anytype, target: anytype, _: DWORD) ?BOOL {
+            if (redirector.Host.isRedirecting(.symlink)) {
+                var converter = Wtf8PathConverter.init(path, true) catch return FALSE;
+                defer converter.deinit();
+                var target_converter = Wtf8PathConverter.init(target, true) catch return FALSE;
+                defer target_converter.deinit();
+                var result: c_int = undefined;
+                if (redirector.symlink(target_converter.path, converter.path, &result)) {
+                    return saveError(result);
+                }
+            }
+            return null;
+        }
+
         pub fn DeleteFile(path: LPCSTR) callconv(WINAPI) BOOL {
             if (DeleteFileX(path)) |rv| return rv;
             return Original.DeleteFile(path);
@@ -3741,41 +3770,64 @@ pub fn Win32Substitute(comptime redirector: type) type {
             output_buffer: ?*anyopaque,
             output_buffer_length: ULONG,
         ) callconv(WINAPI) NTSTATUS {
+            const w = std.os.windows;
             if (isPrivateHandle(handle)) {
-                if (getTemporaryHandleInfo(handle)) |info| {
-                    const w = std.os.windows;
-                    switch (fs_control_code) {
-                        w.FSCTL_GET_REPARSE_POINT => {
-                            // convert path to WTF16LE
-                            var sfa = std.heap.stackFallback(1024, c_allocator);
-                            const allocator = sfa.get();
-                            const src_path_wtf8 = init: {
-                                const s: [*:0]const u8 = @ptrCast(info.buffer.?);
-                                break :init s[0..std.mem.len(s)];
-                            };
-                            const src_path = std.unicode.wtf8ToWtf16LeAlloc(allocator, src_path_wtf8) catch return .NO_MEMORY;
-                            defer allocator.free(src_path);
-                            // copy path into reparse buffer
-                            const reparse_struct: *w.REPARSE_DATA_BUFFER = @ptrCast(@alignCast(output_buffer.?));
-                            const buf: *w.SYMBOLIC_LINK_REPARSE_BUFFER = @ptrCast(@alignCast(&reparse_struct.DataBuffer[0]));
-                            const dest_path: [*]WCHAR = @ptrCast(&buf.PathBuffer[0]);
-                            const bytes_avail: usize = output_buffer_length - (@intFromPtr(dest_path) - @intFromPtr(output_buffer.?));
-                            const len = @min(src_path.len, (bytes_avail >> 1) - 1);
-                            @memcpy(dest_path[0..len], src_path[0..len]);
-                            dest_path[len] = 0;
-                            buf.SubstituteNameOffset = 0;
-                            buf.SubstituteNameLength = @intCast(len << 1);
-                            buf.PrintNameOffset = 0;
-                            buf.PrintNameLength = 0;
-                            buf.Flags = 0;
-                            const buf_len = @intFromPtr(&dest_path[len + 1]) - @intFromPtr(buf);
-                            reparse_struct.ReparseTag = w.IO_REPARSE_TAG_SYMLINK;
-                            reparse_struct.ReparseDataLength = @intCast(buf_len);
-                            reparse_struct.Reserved = 0;
-                            return .SUCCESS;
-                        },
-                        else => {},
-                    }
+                switch (fs_control_code) {
+                    w.FSCTL_GET_REPARSE_POINT => {
+                        const info = getTemporaryHandleInfo(handle) orelse return .ACCESS_DENIED;
+                        // convert path to WTF16LE
+                        var sfa = std.heap.stackFallback(1024, c_allocator);
+                        const allocator = sfa.get();
+                        const src_path_wtf8 = init: {
+                            const s: [*:0]const u8 = @ptrCast(info.buffer.?);
+                            break :init s[0..std.mem.len(s)];
+                        };
+                        const src_path = std.unicode.wtf8ToWtf16LeAlloc(allocator, src_path_wtf8) catch return .NO_MEMORY;
+                        defer allocator.free(src_path);
+                        // copy path into reparse buffer
+                        const reparse_struct: *w.REPARSE_DATA_BUFFER = @ptrCast(@alignCast(output_buffer.?));
+                        const buf: *w.SYMBOLIC_LINK_REPARSE_BUFFER = @ptrCast(@alignCast(&reparse_struct.DataBuffer[0]));
+                        const dest_path: [*]WCHAR = @ptrCast(&buf.PathBuffer[0]);
+                        const bytes_avail: usize = output_buffer_length - (@intFromPtr(dest_path) - @intFromPtr(output_buffer.?));
+                        const len = @min(src_path.len, (bytes_avail >> 1) - 1);
+                        @memcpy(dest_path[0..len], src_path[0..len]);
+                        dest_path[len] = 0;
+                        buf.SubstituteNameOffset = 0;
+                        buf.SubstituteNameLength = @intCast(len << 1);
+                        buf.PrintNameOffset = 0;
+                        buf.PrintNameLength = 0;
+                        buf.Flags = 0;
+                        const buf_len = @intFromPtr(&dest_path[len + 1]) - @intFromPtr(buf);
+                        reparse_struct.ReparseTag = w.IO_REPARSE_TAG_SYMLINK;
+                        reparse_struct.ReparseDataLength = @intCast(buf_len);
+                        reparse_struct.Reserved = 0;
+                        return .SUCCESS;
+                    },
+                    w.FSCTL_SET_REPARSE_POINT => {
+                        const reparse_struct: *const w.REPARSE_DATA_BUFFER = @ptrCast(@alignCast(input_buffer.?));
+                        switch (reparse_struct.ReparseTag) {
+                            w.IO_REPARSE_TAG_SYMLINK => {
+                                const buf: *const w.SYMBOLIC_LINK_REPARSE_BUFFER = @ptrCast(@alignCast(&reparse_struct.DataBuffer[0]));
+                                const offset: usize = buf.SubstituteNameOffset >> 1;
+                                const len: usize = buf.SubstituteNameLength >> 1;
+                                const path = init: {
+                                    const ws: [*]const WCHAR = @ptrCast(&buf.PathBuffer[0]);
+                                    break :init ws[offset .. offset + len];
+                                };
+                                var converter = Wtf8PathConverter.init(path, false) catch return .NO_MEMORY;
+                                defer converter.deinit();
+                                const fd = toDescriptor(handle);
+                                var fd_path_buf: [128]u8 = undefined;
+                                const fd_path = std.fmt.bufPrintZ(&fd_path_buf, fd_format_string, .{fd}) catch unreachable;
+                                var result: c_int = undefined;
+                                if (redirector.symlink(converter.path, fd_path, &result) and result >= 0) {
+                                    return .SUCCESS;
+                                }
+                            },
+                            else => {},
+                        }
+                    },
+                    else => {},
                 }
                 return .ACCESS_DENIED;
             }
@@ -4475,7 +4527,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
         var temp_handle_mutex: std.Thread.Mutex = .{};
         var temp_handle_list: std.ArrayListUnmanaged(TemporaryHandleInfo) = .empty;
 
-        const fd_format_string = "\\\\??\\UNC\\@zigar\\fd\\{x}";
+        const fd_format_string = "\\\\??\\UNC\\dev\\fd\\{d}";
         const fd_path_prefix = fd_format_string[0 .. fd_format_string.len - 3];
 
         const std_stream = struct {
@@ -4585,6 +4637,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
             pub var CreateFile: *const @TypeOf(Self.CreateFile) = undefined;
             pub var CreateFileW: *const @TypeOf(Self.CreateFileW) = undefined;
             pub var CreateFileMapping: *const @TypeOf(Self.CreateFileMapping) = undefined;
+            pub var CreateSymbolicLink: *const @TypeOf(Self.CreateSymbolicLink) = undefined;
+            pub var CreateSymbolicLinkW: *const @TypeOf(Self.CreateSymbolicLinkW) = undefined;
             pub var DeleteFile: *const @TypeOf(Self.DeleteFile) = undefined;
             pub var DeleteFileW: *const @TypeOf(Self.DeleteFileW) = undefined;
             pub var GetFileAttributes: *const @TypeOf(Self.GetFileAttributes) = undefined;
