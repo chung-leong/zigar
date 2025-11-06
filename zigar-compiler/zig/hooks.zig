@@ -899,7 +899,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 if (T == std.os.wasi.dirent_t) {
                     var call: Syscall = .{ .cmd = .getdents, .u = .{
                         .getdents = .{
-                            .dirfd = @intCast(if (dirfd == fd_cwd) fd_root else dirfd),
+                            .dirfd = @intCast(dirfd),
                             .buffer = buffer,
                             .len = @intCast(len),
                         },
@@ -924,7 +924,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     defer allocator.free(src_buffer);
                     var call: Syscall = .{ .cmd = .getdents, .u = .{
                         .getdents = .{
-                            .dirfd = @intCast(if (dirfd == fd_cwd) fd_root else dirfd),
+                            .dirfd = @intCast(dirfd),
                             .buffer = src_buffer.ptr,
                             .len = @intCast(src_buffer.len),
                         },
@@ -3242,7 +3242,8 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
                 info.size = 0;
                 const name: [*:0]const u8 = @ptrCast(&dirent.name[0]);
                 const len = @min(std.mem.len(name), @sizeOf(@FieldType(T, "name")) - 1);
-                @memcpy(info.name[0 .. len + 1], name[0 .. len + 1]);
+                @memcpy(info.name[0..len], name[0..len]);
+                info.name[len] = 0;
                 return 0;
             } else {
                 return -1;
@@ -3770,15 +3771,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 switch (fs_control_code) {
                     w.FSCTL_GET_REPARSE_POINT => {
                         const info = getTemporaryHandleInfo(handle) orelse return .ACCESS_DENIED;
-                        // convert path to WTF16LE
-                        var sfa = std.heap.stackFallback(1024, c_allocator);
-                        const allocator = sfa.get();
-                        const src_path_wtf8 = init: {
-                            const s: [*:0]const u8 = @ptrCast(info.buffer.?);
-                            break :init s[0..std.mem.len(s)];
-                        };
-                        const src_path = std.unicode.wtf8ToWtf16LeAlloc(allocator, src_path_wtf8) catch return .NO_MEMORY;
-                        defer allocator.free(src_path);
+                        const src_path_wtf8: [*:0]const u8 = @ptrCast(info.buffer.?);
+                        const src_path = converter.convertFrom(src_path_wtf8) catch return .NO_MEMORY;
                         // copy path into reparse buffer
                         const reparse_struct: *w.REPARSE_DATA_BUFFER = @ptrCast(@alignCast(output_buffer.?));
                         const buf: *w.SYMBOLIC_LINK_REPARSE_BUFFER = @ptrCast(@alignCast(&reparse_struct.DataBuffer[0]));
@@ -4696,19 +4690,7 @@ pub fn Win32NonIOSubstitute(comptime redirector: type) type {
             buffer: ?LPSTR,
             size: DWORD,
         ) callconv(WINAPI) DWORD {
-            const result = getEnvVariable(name[0..std.mem.len(name)]) catch {
-                windows_h.SetLastError(windows_h.ERROR_ENVVAR_NOT_FOUND);
-                return 0;
-            };
-            if (result) |value| {
-                if (size >= value.len + 1) {
-                    if (buffer) |buf| {
-                        @memcpy(buf[0..value.len], value);
-                        buf[value.len] = 0;
-                    }
-                }
-                return @intCast(value.len + 1);
-            }
+            if (GetEnvironmentVariableX(name, buffer, size)) |rv| return rv;
             return Original.GetEnvironmentVariable(name, buffer, size);
         }
 
@@ -4717,49 +4699,48 @@ pub fn Win32NonIOSubstitute(comptime redirector: type) type {
             buffer: ?LPWSTR,
             size: DWORD,
         ) callconv(WINAPI) DWORD {
-            var sfa = std.heap.stackFallback(4096, c_allocator);
-            const allocator = sfa.get();
-            const name_a = std.unicode.wtf16LeToWtf8Alloc(allocator, name[0..std.mem.len(name)]) catch {
-                windows_h.SetLastError(windows_h.ERROR_NOT_ENOUGH_MEMORY);
-                return 0;
-            };
-            defer allocator.free(name_a);
-            const result = getEnvVariable(name_a) catch {
-                windows_h.SetLastError(windows_h.ERROR_ENVVAR_NOT_FOUND);
-                return 0;
-            };
-            if (result) |value| {
-                const value_w = std.unicode.wtf8ToWtf16LeAlloc(allocator, value) catch {
-                    windows_h.SetLastError(windows_h.ERROR_NOT_ENOUGH_MEMORY);
-                    return 0;
-                };
-                defer allocator.free(value_w);
-                if (size >= value_w.len + 1) {
-                    if (buffer) |buf| {
-                        @memcpy(buf[0..value_w.len], value_w);
-                        buf[value_w.len] = 0;
-                    }
-                }
-                return @intCast(value_w.len + 1);
-            }
+            if (GetEnvironmentVariableX(name, buffer, size)) |rv| return rv;
             return Original.GetEnvironmentVariableW(name, buffer, size);
         }
 
-        fn getEnvVariable(name: []const u8) !?[]const u8 {
+        fn GetEnvironmentVariableX(
+            name: anytype,
+            buffer: anytype,
+            size: DWORD,
+        ) ?DWORD {
+            var converter = Wtf8Converter.init(.{ .adjust_path = false });
+            defer converter.deinit();
+            const name_wtf8 = converter.convertTo(name) catch return 0;
+            const name_s = name_wtf8[0..std.mem.len(name_wtf8)];
             var list: [*:null]?[*:0]const u8 = undefined;
             var bytes: [*:0]const u8 = undefined;
             var count: usize = undefined;
             var len: usize = undefined;
             if (redirector.environ(&list, &bytes, &count, &len)) {
-                if (count == 0) return error.UnableToGetEnvironmentVariable;
-                for (0..count - 1) |i| {
-                    const line = list[i].?;
-                    const line_s = line[0..std.mem.len(line)];
-                    if (std.mem.startsWith(u8, line_s, name) and line_s[name.len] == '=') {
-                        return line_s[name.len + 1 ..];
+                if (count > 0) {
+                    for (0..count - 1) |i| {
+                        const line = list[i].?;
+                        const line_s: [:0]const u8 = @ptrCast(line[0..std.mem.len(line)]);
+                        if (std.mem.startsWith(u8, line_s, name_s) and line_s[name_s.len] == '=') {
+                            const value_wtf8 = line_s[name_s.len + 1 ..];
+                            const CT = @TypeOf(name[0]);
+                            const value = switch (CT) {
+                                u8 => value_wtf8,
+                                u16 => converter.convertFrom(value_wtf8) catch return 0,
+                                else => unreachable,
+                            };
+                            if (size >= value.len + 1) {
+                                if (buffer) |buf| {
+                                    @memcpy(buf[0..value.len], value);
+                                    buf[value.len] = 0;
+                                }
+                            }
+                            return @intCast(value.len + 1);
+                        }
                     }
                 }
-                return error.NotFound;
+                windows_h.SetLastError(windows_h.ERROR_ENVVAR_NOT_FOUND);
+                return 0;
             }
             return null;
         }
@@ -4859,6 +4840,16 @@ const Wtf8Converter = struct {
             }
         }
         return slice.ptr;
+    }
+
+    pub fn convertFrom(self: *@This(), s: anytype) ![:0]const u16 {
+        const T = @TypeOf(s);
+        const original_slice = switch (@typeInfo(T).pointer.size) {
+            .slice => s,
+            .many, .c => s[0..std.mem.len(s)],
+            else => unreachable,
+        };
+        return try std.unicode.wtf8ToWtf16LeAllocZ(self.allocator, original_slice);
     }
 };
 
