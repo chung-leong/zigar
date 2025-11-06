@@ -461,7 +461,8 @@ const S = switch (os) {
 };
 const fd_cwd = AT.FDCWD;
 const fd_root = -1;
-const fd_min = 0xfffff;
+const fd_min = 0xf_ffff;
+const fd_temp_min = 0x1fff_ffff;
 
 pub fn SyscallRedirector(comptime ModuleHost: type) type {
     return struct {
@@ -3283,7 +3284,10 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
 pub fn Win32Substitute(comptime redirector: type) type {
     return struct {
         pub fn CloseHandle(handle: HANDLE) callconv(WINAPI) BOOL {
-            if (handle == temporary_handle) return TRUE;
+            if (isTemporaryHandle(handle)) {
+                destroyTemporaryHandle(handle);
+                return TRUE;
+            }
             const fd = toDescriptor(handle);
             var result: c_int = undefined;
             if (redirector.close(fd, &result)) {
@@ -3339,7 +3343,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 security_attributes,
                 create_disposition,
                 flags_and_attributes,
-                temporary_handle,
+                template_file,
             )) |rv| return rv;
             return Original.CreateFile(path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
         }
@@ -3360,7 +3364,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 security_attributes,
                 create_disposition,
                 flags_and_attributes,
-                temporary_handle,
+                template_file,
             )) |rv| return rv;
             return Original.CreateFileW(path, desired_access, share_mode, security_attributes, create_disposition, flags_and_attributes, template_file);
         }
@@ -3610,7 +3614,10 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         pub fn NtClose(handle: HANDLE) callconv(WINAPI) NTSTATUS {
-            if (handle == temporary_handle) return .SUCCESS;
+            if (isTemporaryHandle(handle)) {
+                destroyTemporaryHandle(handle);
+                return .SUCCESS;
+            }
             const fd = toDescriptor(handle);
             var result: c_int = undefined;
             if (redirector.close(fd, &result)) {
@@ -3633,35 +3640,25 @@ pub fn Win32Substitute(comptime redirector: type) type {
             ea_length: ULONG,
         ) callconv(WINAPI) NTSTATUS {
             const dirfd: c_int = if (object_attributes.RootDirectory) |dh| toDescriptor(dh) else fd_cwd;
-            const delete_op = (desired_access & std.os.windows.DELETE) != 0;
             const dir_op = (create_options & std.os.windows.FILE_DIRECTORY_FILE) != 0;
-            const redirecting = if (delete_op)
-                if (dir_op) redirector.Host.isRedirecting(.rmdir) else redirector.Host.isRedirecting(.unlink)
-            else
-                redirector.Host.isRedirecting(.open);
-            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and redirecting)) {
+            if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and redirector.Host.isRedirecting(.open))) {
                 const object_name = object_attributes.ObjectName;
                 const name_len = @divExact(object_name.Length, 2);
                 const path = object_name.Buffer.?[0..name_len];
                 var converter = Wtf8PathConverter.init(path, false) catch return .NO_MEMORY;
                 defer converter.deinit();
-                if (delete_op) {
-                    // an unlink or rmdir operation actually
-                    var result: c_int = undefined;
-                    const flags: c_int = if (dir_op) AT.REMOVEDIR else 0;
-                    if (redirector.unlinkat(dirfd, converter.path, flags, &result)) {
-                        if (result < 0) return .OBJECT_PATH_NOT_FOUND;
-                        handle.* = temporary_handle;
-                        io_status_block.Information = windows_h.FILE_CREATED;
-                        return .SUCCESS;
-                    }
+                if ((desired_access & std.os.windows.DELETE) != 0) {
+                    // need to remember the path since the file might get renamed/deleted later
+                    handle.* = createTemporaryHandle(converter.path, dirfd, dir_op) catch return .NO_MEMORY;
+                    io_status_block.Information = windows_h.FILE_CREATED;
+                    return .SUCCESS;
                 } else {
                     const mode = 0;
                     if (dir_op and create_disposition == std.os.windows.FILE_CREATE) {
                         var result: c_int = undefined;
                         if (redirector.mkdirat(dirfd, converter.path, mode, &result)) {
                             if (result < 0) return .ACCESS_DENIED;
-                            handle.* = temporary_handle;
+                            handle.* = createTemporaryHandle(converter.path, dirfd, dir_op) catch return .NO_MEMORY;
                             io_status_block.Information = windows_h.FILE_CREATED;
                             return .SUCCESS;
                         }
@@ -3699,6 +3696,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                         }
                     }
                 }
+                if (isPrivateDescriptor(dirfd)) return .UNSUCCESSFUL;
             }
             return Original.NtCreateFile(handle, desired_access, object_attributes, io_status_block, allocation_size, file_attributes, share_access, create_disposition, create_options, ea_buffer, ea_length);
         }
@@ -3981,7 +3979,36 @@ pub fn Win32Substitute(comptime redirector: type) type {
             length: ULONG,
             file_information_class: FILE_INFORMATION_CLASS,
         ) callconv(WINAPI) NTSTATUS {
-            if (handle == temporary_handle or isPrivateHandle(handle)) {
+            if (isPrivateHandle(handle)) {
+                if (isTemporaryHandle(handle)) {
+                    if (getTemporaryHandleInfo(handle)) |info| {
+                        switch (file_information_class) {
+                            .FileDispositionInformationEx, .FileDispositionInformation => {
+                                // an unlink or rmdir operation
+                                const flags: c_int = if (info.is_dir) AT.REMOVEDIR else 0;
+                                var result: c_int = undefined;
+                                const handled = redirector.unlinkat(info.dirfd, info.path, flags, &result);
+                                if (!handled or result < 0) return .CANNOT_DELETE;
+                            },
+                            inline .FileRenameInformation, .FileRenameInformationEx => |i| {
+                                const INFO = switch (i) {
+                                    .FileRenameInformation => std.os.windows.FILE_RENAME_INFORMATION,
+                                    .FileRenameInformationEx => std.os.windows.FILE_RENAME_INFORMATION_EX,
+                                    else => unreachable,
+                                };
+                                const rename: *INFO = @ptrCast(@alignCast(file_information));
+                                const new_dirfd: c_int = if (rename.RootDirectory) |dh| toDescriptor(dh) else fd_cwd;
+                                const new_path = @as(LPCWSTR, @ptrCast(&rename.FileName))[0..(rename.FileNameLength / 2)];
+                                var converter = Wtf8PathConverter.init(new_path, false) catch return .NO_MEMORY;
+                                defer converter.deinit();
+                                var result: c_int = undefined;
+                                const handled = redirector.renameat(info.dirfd, info.path, new_dirfd, converter.path, &result);
+                                if (!handled or result < 0) return .OBJECT_PATH_NOT_FOUND;
+                            },
+                            else => {},
+                        }
+                    }
+                }
                 return .SUCCESS;
             }
             return Original.NtSetInformationFile(handle, io_status_block, file_information, length, file_information_class);
@@ -4095,7 +4122,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         pub fn SetHandleInformation(handle: HANDLE, mask: DWORD, flags: DWORD) callconv(WINAPI) BOOL {
-            if (handle == temporary_handle or isPrivateHandle(handle)) {
+            if (isPrivateHandle(handle)) {
                 return FALSE;
             }
             return Original.SetHandleInformation(handle, mask, flags);
@@ -4305,7 +4332,58 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return attributes;
         }
 
-        const temporary_handle: HANDLE = @ptrFromInt(0x1fff_ffff);
+        fn createTemporaryHandle(path: [*:0]const u8, dirfd: c_int, is_dir: bool) !HANDLE {
+            temp_handle_mutex.lock();
+            defer temp_handle_mutex.unlock();
+            var fd: c_int = fd_temp_min;
+            for (temp_handle_list.items) |item| {
+                if (item.fd >= fd) fd = item.fd + 1;
+            }
+            try temp_handle_list.append(c_allocator, .{
+                .fd = fd,
+                .dirfd = dirfd,
+                .is_dir = is_dir,
+                .path = try c_allocator.dupeZ(u8, path[0..std.mem.len(path)]),
+            });
+            return fromDescriptor(fd);
+        }
+
+        fn destroyTemporaryHandle(handle: HANDLE) void {
+            temp_handle_mutex.lock();
+            defer temp_handle_mutex.unlock();
+            const fd = toDescriptor(handle);
+            for (temp_handle_list.items, 0..) |item, i| {
+                if (item.fd == fd) {
+                    c_allocator.free(item.path);
+                    _ = temp_handle_list.swapRemove(i);
+                    break;
+                }
+            }
+        }
+
+        fn getTemporaryHandleInfo(handle: HANDLE) ?TemporaryHandleInfo {
+            temp_handle_mutex.lock();
+            defer temp_handle_mutex.unlock();
+            const fd = toDescriptor(handle);
+            return for (temp_handle_list.items) |item| {
+                if (item.fd == fd) break item;
+            } else null;
+        }
+
+        fn isTemporaryHandle(handle: HANDLE) bool {
+            const fd = toDescriptor(handle);
+            return fd >= fd_temp_min;
+        }
+
+        const TemporaryHandleInfo = struct {
+            fd: c_int,
+            dirfd: c_int,
+            is_dir: bool,
+            path: [:0]const u8,
+        };
+        var temp_handle_mutex: std.Thread.Mutex = .{};
+        var temp_handle_list: std.ArrayListUnmanaged(TemporaryHandleInfo) = .empty;
+
         const fd_format_string = "\\\\??\\UNC\\@zigar\\fd\\{x}";
         const fd_path_prefix = fd_format_string[0 .. fd_format_string.len - 3];
 

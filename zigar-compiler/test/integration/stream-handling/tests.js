@@ -1494,6 +1494,34 @@ export function addTests(importModule, options) {
         newParent: null,
         newPath: 'goodbye/earth.txt'
       });
+      __zigar.on('rename', (evt) => {
+        return false;
+      });
+      expect(() => rename('/hello/world.txt', '/goodbye/earth.txt')).to.throw();
+    })
+    it('should rename a file in a directory', async function() {
+      const { __zigar, rename } = await importTest('rename-file-at-dir', { useLibc: true });
+      let event;
+      __zigar.on('open', (evt) => {
+        console.log(evt);
+        return '';
+      });
+      __zigar.on('rename', (evt) => {
+        event = evt;
+        return true;
+      });
+      const map = new Map();
+      rename(map, 'world.txt', 'earth.txt');
+      expect(event).to.eql({ 
+        parent: map, 
+        path: 'world.txt',  
+        newParent: map,
+        newPath: 'earth.txt'
+      });
+      __zigar.on('rename', (evt) => {
+        return false;
+      });
+      expect(() => rename(map, '/hello/world.txt', '/goodbye/earth.txt')).to.throw();
     })
     it('should rename a file using posix function', async function() {
       const { __zigar, rename } = await importTest('rename-file-with-posix-function', { useLibc: true });
@@ -2096,7 +2124,7 @@ export function addTests(importModule, options) {
         path: 'cześć/świecie.txt' 
       });
     })
-    it('should delete file in directory', async function() {
+    it('should delete file in a directory', async function() {
       const { __zigar, remove } = await importTest('delete-file-at-dir');
       let event;
       __zigar.on('unlink', (evt) => {
