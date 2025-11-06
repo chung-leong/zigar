@@ -309,6 +309,20 @@ export function addTests(importModule, options) {
       expect(chunk).to.have.lengthOf(16);
       expect(chunk.string).to.equal('ur fathers broug');
     })
+    skip.entirely.unless(target === 'win32').
+    it('should open a file in file system using win32 function', async function() {
+      const { __zigar, read } = await importTest('seek-file-in-file-system-with-win32-function');
+      const path = absolute('./data/test.txt');
+      let event;
+      __zigar.on('open', (evt) => {
+        event = evt;
+        return undefined;
+      });
+      const chunk = read(path, 32, 16);
+      expect(chunk).to.have.lengthOf(16);
+      expect(chunk.string).to.equal('ur fathers broug');
+      expect(event).to.be.an('object');
+    })
     it('should obtain the expected position after a seek operation using posix function', async function() {
       const { __zigar, seek } = await importTest('return-file-position-with-posix-functions', { useLibc: true });
       const content = new TextEncoder().encode('Hello world!');
@@ -2563,6 +2577,9 @@ export function addTests(importModule, options) {
         event = evt;
         return '/goodbye/earth.txt';
       });
+      __zigar.on('open', (evt) => {
+        console.log(evt);
+      })
       const path = readLink('/hello/world.txt');
       expect(path.string).to.equal('/goodbye/earth.txt');
       expect(event).to.eql({ 
