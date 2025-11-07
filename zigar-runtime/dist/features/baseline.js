@@ -3,7 +3,9 @@ import { mixin } from '../environment.js';
 import { TypeMismatch } from '../errors.js';
 import { MEMORY, SLOTS, TYPE, ALIGN, SIZE, ENVIRONMENT } from '../symbols.js';
 
-const events = [ 'log', 'mkdir', 'stat', 'set_times', 'open', 'rename', 'rmdir', 'unlink' ];
+const events = [ 
+  'log', 'mkdir', 'stat', 'utimes', 'open', 'rename', 'readlink', 'rmdir', 'symlink', 'unlink'
+];
 
 var baseline = mixin({
   init() {

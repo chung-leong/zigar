@@ -4,9 +4,9 @@ import { catchPosixError, expectBoolean } from '../errors.js';
 
 var pathRename = mixin({
   pathRenameEvent: 'rename',
-  pathRename(oldDirFd, oldPathAddress, oldPathLen, newDirFd, newPathAddress, newPathLen, canWait) {
+  pathRename(dirFd, pathAddress, pathLen, newDirFd, newPathAddress, newPathLen, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const loc = this.obtainStreamLocation(oldDirFd, oldPathAddress, oldPathLen);
+      const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
       const { 
         path: newPath, 
         parent: newParent,

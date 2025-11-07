@@ -3414,7 +3414,9 @@ function getMemory(arg) {
   return { dv, align, constructor };
 }
 
-const events = [ 'log', 'mkdir', 'stat', 'set_times', 'open', 'rename', 'rmdir', 'unlink' ];
+const events = [ 
+  'log', 'mkdir', 'stat', 'utimes', 'open', 'rename', 'readlink', 'rmdir', 'symlink', 'unlink'
+];
 
 var baseline = mixin({
   init() {
@@ -5985,6 +5987,34 @@ var writer = mixin({
   },
 });
 
+var copyInt = mixin({
+  copyUint64(bufAddress, value) {
+    const buf = createView(8);
+    buf.setBigUint64(0, BigInt(value), this.littleEndian);
+    this.moveExternBytes(buf, bufAddress, true);
+  },
+  copyUint32(bufAddress, value) {
+    const buf = createView(4);    
+    buf.setUint32(0, value, this.littleEndian);
+    this.moveExternBytes(buf, bufAddress, true);
+  },
+});
+
+var clockResGet = mixin({
+  clockResGet(clockId, resAddress) {
+    this.copyUint64(resAddress, 1000n);
+    return PosixError.NONE;
+  },
+});
+
+var clocktimeGet = mixin({
+  clockTimeGet(clockId, precision, timeAddress) {
+    const t = (clockId === 0) ? Date.now() : performance.now();
+    this.copyUint64(timeAddress, BigInt(t * 1000000));
+    return PosixError.NONE;
+  },
+});
+
 var environGet = mixin({
   environGet(environAddress, environBufAddress) {
     const arrays = this.envVarArrays;
@@ -6007,19 +6037,6 @@ var environGet = mixin({
     this.moveExternBytes(ptrDV, environAddress, true);
     this.moveExternBytes(bytes, environBufAddress, true);
     return 0;
-  },
-});
-
-var copyInt = mixin({
-  copyUint64(bufAddress, value) {
-    const buf = createView(8);
-    buf.setBigUint64(0, BigInt(value), this.littleEndian);
-    this.moveExternBytes(buf, bufAddress, true);
-  },
-  copyUint32(bufAddress, value) {
-    const buf = createView(4);    
-    buf.setUint32(0, value, this.littleEndian);
-    this.moveExternBytes(buf, bufAddress, true);
   },
 });
 
@@ -6212,7 +6229,7 @@ var fdFilestatGet = mixin({
 });
 
 var fdFileStatSetTimes = mixin({
-  fdFilestatSetTimesEvent: 'set_times',
+  fdFilestatSetTimesEvent: 'utimes',
   fdFilestatSetTimes(fd, atime, mtime, tFlags, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const [ stream ] = this.getStream(fd);
@@ -6220,7 +6237,7 @@ var fdFileStatSetTimes = mixin({
       const loc = this.getStreamLocation?.(fd);
       const times = extractTimes(atime, mtime, tFlags);
       const flags = {};
-      return this.triggerEvent('set_times', { ...loc, target, times, flags });
+      return this.triggerEvent('utimes', { ...loc, target, times, flags });
     }, (result) => (result === undefined) ? PosixError.ENOTCAPABLE : expectBoolean(result, PosixError.EBADF));
   },
 });
@@ -6522,13 +6539,13 @@ var pathFilestatGet = mixin({
 });
 
 var pathFilestatSetTimes = mixin({
-  pathFilestatSetTimesEvent: 'set_times',
+  pathFilestatSetTimesEvent: 'utimes',
   pathFilestatSetTimes(dirFd, lFlags, pathAddress, pathLen, atime, mtime, tFlags, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
       const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
       const times = extractTimes(atime, mtime, tFlags);
       const flags = decodeFlags(lFlags, PosixLookupFlag) ;
-      return this.triggerEvent('set_times', { ...loc, times, flags });
+      return this.triggerEvent('utimes', { ...loc, times, flags });
     }, (result) => (result === undefined) ? PosixError.ENOTSUP : expectBoolean(result, PosixError.ENOENT));
   },
 });
@@ -6573,6 +6590,22 @@ var pathOpen = mixin({
   },
 });
 
+var pathReadlink = mixin({
+  pathReadlinkEvent: 'readlink',
+  pathReadlink(dirFd, pathAddress, pathLen, bufAddress, bufLen, writtenAddress, canWait) {
+    return catchPosixError(canWait, PosixError.ENOENT, () => {
+      const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
+      return this.triggerEvent('readlink', loc, PosixError.ENOENT);
+    }, (result) => {
+      if (result === undefined) return PosixError.ENOTSUP;
+      if (typeof(result) !== 'string') throw new TypeMismatch('string', result);
+      const ta = encodeText(result).slice(0, bufLen);
+      this.moveExternBytes(ta, bufAddress, this.littleEndian);
+      this.copyUint32(writtenAddress, ta.length);
+    });
+  },
+});
+
 var pathRemoveDirectory = mixin({
   pathRemoveDirectory: 'rmdir',
   pathRemoveDirectory(dirFd, pathAddress, pathLen, canWait) {
@@ -6585,14 +6618,27 @@ var pathRemoveDirectory = mixin({
 
 var pathRename = mixin({
   pathRenameEvent: 'rename',
-  pathRename(oldDirFd, oldPathAddress, oldPathLen, newDirFd, newPathAddress, newPathLen, canWait) {
+  pathRename(dirFd, pathAddress, pathLen, newDirFd, newPathAddress, newPathLen, canWait) {
     return catchPosixError(canWait, PosixError.ENOENT, () => {
-      const loc = this.obtainStreamLocation(oldDirFd, oldPathAddress, oldPathLen);
+      const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
       const { 
         path: newPath, 
         parent: newParent,
       } = this.obtainStreamLocation(newDirFd, newPathAddress, newPathLen);
       return this.triggerEvent('rename', { ...loc, newParent, newPath }, PosixError.ENOENT);
+    }, (result) => (result === undefined) ? PosixError.ENOTSUP : expectBoolean(result, PosixError.ENOENT));
+  },
+});
+
+var pathSymlink = mixin({
+  pathSymlinkEvent: 'symlink',
+  pathSymlink(targetAddress, targetLen, dirFd, pathAddress, pathLen, canWait) {
+    return catchPosixError(canWait, PosixError.ENOENT, () => {
+      const targetDV = this.obtainZigView(targetAddress, targetLen, false);
+      const targetArray = new Uint8Array(targetDV.buffer, targetDV.byteOffset, targetDV.byteLength);
+      const target = decodeText(targetArray).trim();
+      const loc = this.obtainStreamLocation(dirFd, pathAddress, pathLen);
+      return this.triggerEvent('symlink', { ...loc, target }, PosixError.ENOENT);
     }, (result) => (result === undefined) ? PosixError.ENOTSUP : expectBoolean(result, PosixError.ENOENT));
   },
 });
@@ -7025,6 +7071,8 @@ var structureAcquisition = mixin({
       }
       for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
         switch (name) {
+          case 'clock_res_get': this.use(clockResGet); break;
+          case 'clock_time_get': this.use(clocktimeGet); break;
           case 'environ_get': this.use(environGet); break;
           case 'environ_sizes_get': this.use(environSizesGet); break;
           case 'proc_exit': this.use(procExit); break;
@@ -7055,8 +7103,10 @@ var structureAcquisition = mixin({
             case 'fd_write': this.use(fdWrite); break;
             case 'path_create_directory': this.use(pathCreateDirectory); break;
             case 'path_filestat_get': this.use(pathFilestatGet); break;
+            case 'path_readlink': this.use(pathReadlink); break;
             case 'path_remove_directory': this.use(pathRemoveDirectory); break;
             case 'path_rename': this.use(pathRename); break;
+            case 'path_symlink': this.use(pathSymlink); break;
             case 'path_filestat_set_times': this.use(pathFilestatSetTimes); break;
             case 'path_open': this.use(pathOpen); break;
             case 'path_unlink_file': this.use(pathUnlinkFile); break;
@@ -11011,6 +11061,8 @@ var mixins = /*#__PURE__*/Object.freeze({
   StructureVariadicStruct: variadicStruct,
   StructureVector: vector,
   StructureWriter: writer,
+  SyscallClockResGet: clockResGet,
+  SyscallClocktimeGet: clocktimeGet,
   SyscallCopyInt: copyInt,
   SyscallCopyStat: copyStat,
   SyscallEnvironGet: environGet,
@@ -11040,8 +11092,10 @@ var mixins = /*#__PURE__*/Object.freeze({
   SyscallPathFilestatGet: pathFilestatGet,
   SyscallPathFilestatSetTimes: pathFilestatSetTimes,
   SyscallPathOpen: pathOpen,
+  SyscallPathReadlink: pathReadlink,
   SyscallPathRemoveDirectory: pathRemoveDirectory,
   SyscallPathRename: pathRename,
+  SyscallPathSymlink: pathSymlink,
   SyscallPathUnlinkFile: pathUnlinkFile,
   SyscallPollOneoff: pollOneoff,
   SyscallProcExit: procExit,
