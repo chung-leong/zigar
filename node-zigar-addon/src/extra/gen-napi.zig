@@ -10,7 +10,7 @@ pub fn main() !void {
     var generator: *api_translator.CodeGenerator(.{
         .include_paths = &.{"../../node_modules/node-api-headers/include"},
         .header_paths = &.{"node_api.h"},
-        .zigft_path = "./",
+        .zigft_path = "zigft/",
         .c_error_type = "napi_status",
         .c_root_struct = "napi_env",
         .late_bind_expr = "late_binder",

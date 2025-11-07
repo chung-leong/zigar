@@ -620,7 +620,7 @@ pub const createReference: fn (
 
 /// https://nodejs.org/api/n-api.html#napi_delete_reference
 pub const deleteReference: fn (
-    env: *@This(),
+    env: BasicEnv,
     ref: Ref,
 ) Error!void = c_to_zig.translate("napi_delete_reference", true, false, .{});
 
@@ -1269,7 +1269,7 @@ const c_to_zig = api_translator.Translator(.{
         .{ .old = c.napi_threadsafe_function_call_js, .new = ?ThreadsafeFunctionCallJs },
         .{ .old = c.napi_value, .new = Value },
     },
-    .error_scheme = api_translator.BasicErrorScheme(Status, Error, Error.Unexpected),
+    .error_scheme = api_translator.BasicErrorScheme(Status, Error, Error.Unexpected, .{}),
     .late_bind_fn = late_binder,
 });
 

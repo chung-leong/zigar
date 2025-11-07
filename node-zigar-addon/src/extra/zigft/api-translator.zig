@@ -3,29 +3,40 @@ const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectEqualSlices = std.testing.expectEqualSlices;
 
-const fn_transform = @import("fn-transform.zig");
+const fn_transform = @import("./fn-transform.zig");
 
+pub const EnumInfo = struct {
+    name: []const u8,
+    tag_type: []const u8,
+    is_packed_struct: bool = false,
+};
+pub const InvalidValue = struct {
+    err_value: []const u8,
+    err_name: []const u8,
+};
 pub const CodeGeneratorOptions = struct {
-    pub const ErrorValue = struct {
-        type: []const u8,
-        name: []const u8,
-    };
-
     defines: []const []const u8 = &.{},
     include_paths: []const []const u8,
     header_paths: []const []const u8,
     zigft_path: []const u8 = "",
     translater: []const u8 = "c_to_zig",
     error_set: []const u8 = "Error",
+    error_enum: ?[]const u8 = null,
     c_error_type: ?[]const u8 = null,
-    c_error_values: ?[]const ErrorValue = null,
     c_import: []const u8 = "c",
     c_root_struct: ?[]const u8 = null,
     add_simple_test: bool = true,
     late_bind_expr: ?[]const u8 = null,
+    ignore_omission: bool = false,
 
     // callback determining which declarations to include
     filter_fn: fn (name: []const u8) bool,
+
+    param_override_fn: fn (fn_name: []const u8, param_name: ?[]const u8, param_index: usize, param_type: []const u8) ?[]const u8 = noParamOverride,
+    retval_override_fn: fn (fn_name: []const u8, param_type: []const u8) ?[]const u8 = noRetvalOverride,
+    field_override_fn: fn (container_name: []const u8, field_name: []const u8, param_type: []const u8) ?[]const u8 = noFieldOverride,
+
+    invalid_value_fn: fn (type_name: []const u8) ?InvalidValue = ifOptionalPointer,
 
     // callback determining to const pointer to struct should become by-value
     type_is_by_value_fn: fn (type_name: []const u8) bool = neverByValue,
@@ -47,6 +58,9 @@ pub const CodeGeneratorOptions = struct {
     param_is_input_fn: fn (fn_name: []const u8, param_name: ?[]const u8, param_index: usize, param_type: []const u8) bool = neverInput,
     // callback returning the index of the corresponding pointer argument if it should be treated as the length of a slice pointer
     param_is_slice_len_fn: fn (fn_name: []const u8, param_name: ?[]const u8, param_index: usize, param_type: []const u8) ?usize = neverSliceLength,
+
+    // callback for converting constants into enum and packed struct
+    const_is_enum_item_fn: fn (const_name: []const u8) ?EnumInfo = notEnumItem,
 
     // calling determining whether positive status is needed
     status_is_returned_fn: fn (fn_name: []const u8) bool = neverReturned,
@@ -98,6 +112,7 @@ pub fn BasicErrorScheme(
     old_enum_type: type,
     new_error_set: type,
     default_error: new_error_set,
+    invalid_values: anytype,
 ) type {
     @setEvalBranchQuota(2000000);
     const es_info = @typeInfo(new_error_set);
@@ -105,8 +120,8 @@ pub fn BasicErrorScheme(
     const en_info = @typeInfo(old_enum_type);
     const en_count = switch (en_info) {
         .@"enum" => |en| en.fields.len,
-        .int, .bool => 1,
-        else => @compileError("Enum, int, or bool expected, found '" ++ @typeName(old_enum_type) ++ "'"),
+        .int, .bool, .void => 1,
+        else => @compileError("Enum, int, bool, or void expected, found '" ++ @typeName(old_enum_type) ++ "'"),
     };
     const error_set = es_info.error_set orelse &.{};
     var error_enum_buffer: [error_set.len]struct {
@@ -144,6 +159,10 @@ pub fn BasicErrorScheme(
             non_error_status_buffer[0] = true;
             non_error_status_count += 1;
         },
+        .void => {
+            non_error_status_buffer[0] = {};
+            non_error_status_count += 1;
+        },
         else => unreachable,
     }
     const non_error_statuses = init: {
@@ -156,20 +175,50 @@ pub fn BasicErrorScheme(
         pub const Status = old_enum_type;
         pub const ErrorSet = new_error_set;
 
-        pub fn RetvalSubstitute(comptime T: type) type {
+        pub fn IntermediateReturnType(comptime T: type) type {
+            return inline for (invalid_values) |iv| {
+                if (iv.type == T) {
+                    break if (@typeInfo(iv.type) == .pointer) ?iv.type else iv.type;
+                }
+            } else if (!isStatus(T)) T else Status;
+        }
+
+        fn isStatus(comptime T: type) bool {
+            if (T == Status) return true;
             return switch (@typeInfo(Status)) {
-                .@"enum" => |en| if (en.tag_type == T) Status else T,
-                else => T,
+                .@"enum" => |en| en.tag_type == T,
+                else => false,
             };
         }
 
         pub fn OutputType(comptime T: type) type {
-            return if (T == Status and non_error_statuses.len <= 1) void else T;
+            return inline for (invalid_values) |iv| {
+                if (@typeInfo(iv.type) == .pointer) {
+                    if (T == ?iv.type) break iv.type;
+                } else {
+                    if (T == iv.type) break iv.type;
+                }
+            } else if (!isStatus(T)) T else switch (non_error_statuses.len) {
+                0, 1 => void,
+                else => Status,
+            };
         }
 
         pub fn check(retval: anytype) ErrorSet!OutputType(@TypeOf(retval)) {
             const T = @TypeOf(retval);
-            return switch (T) {
+            return inline for (invalid_values) |iv| {
+                // check invalid value table first
+                if (@typeInfo(iv.type) == .pointer) {
+                    if (T == ?iv.type) {
+                        break if (retval == iv.err_value) iv.err else retval.?;
+                    }
+                } else {
+                    if (T == iv.type) {
+                        break if (retval == iv.err_value) iv.err else retval;
+                    }
+                }
+            } else switch (T) {
+                // then see if retval is an error code
                 Status => if (std.mem.indexOfScalar(Status, &non_error_statuses, retval)) |_|
                     if (OutputType(T) == void) {} else retval
                 else for (error_enum_table) |entry| {
@@ -180,52 +229,8 @@ pub fn BasicErrorScheme(
         }
     };
 }
-pub fn InvalidReturnValueScheme(
-    error_set: type,
-    default_error: error_set,
-    invalid_values: anytype,
-) type {
-    return struct {
-        pub const ErrorSet = error_set;
-
-        pub fn RetvalSubstitute(comptime T: type) type {
-            return switch (@typeInfo(T)) {
-                .pointer => ?T,
-                else => T,
-            };
-        }
-
-        pub fn OutputType(comptime T: type) type {
-            return switch (@typeInfo(T)) {
-                .optional => |op| op.child,
-                else => T,
-            };
-        }
-
-        pub fn check(retval: anytype) ErrorSet!OutputType(@TypeOf(retval)) {
-            const T = @TypeOf(retval);
-            return switch (@typeInfo(T)) {
-                .optional => if (retval) |v| v else default_error,
-                else => inline for (invalid_values) |invalid_value| {
-                    const IV = @TypeOf(invalid_value);
-                    switch (@typeInfo(IV)) {
-                        .@"fn" => |f| {
-                            if (f.params.len != 1) @compileError("Function accepting one argument expected");
-                            if (f.return_type != bool) @compileError("Function returning bool expected");
-                            if (f.params[0].type == T)
-                                break if (invalid_value(retval)) default_error else retval;
-                        },
-                        else => if (T == IV) {
-                            break if (retval == invalid_value) default_error else retval;
-                        },
-                    }
-                } else @compileError("Unable to determine validity of '" ++ @typeName(T) ++ "'"),
-            };
-        }
-    };
-}
 pub const NullErrorScheme = struct {
-    pub fn OutputType(comptime T: type) type {
+    pub fn IntermediateReturnType(comptime T: type) type {
         return T;
     }
 };
@@ -248,7 +253,9 @@ pub fn Translator(comptime options: TranslatorOptions) type {
             @setEvalBranchQuota(2000000);
             const old_fn = @typeInfo(OldFn).@"fn";
             const OldRT = old_fn.return_type.?;
-            const NewRT = RetvalSubstitute(OldRT, local_subs);
+            // Note: NewRT is not the new function's return type; it's just the old function's
+            // return type translated
+            const NewRT = Substitute(OldRT, local_subs, null, 0);
             const extra = switch (ignore_non_error_return_value) {
                 true => 0,
                 false => switch (return_error_union) {
@@ -330,7 +337,7 @@ pub fn Translator(comptime options: TranslatorOptions) type {
             );
             const OldRT = @typeInfo(OldFn).@"fn".return_type.?;
             // NewRT is OldRT in the new namespace (usually an enum)
-            const NewRT = RetvalSubstitute(OldRT, local_subs);
+            const NewRT = Substitute(OldRT, local_subs, null, 0);
             // ReturnType is what the new function actually returns
             const ReturnType = @typeInfo(NewFn).@"fn".return_type.?;
             const Payload = switch (@typeInfo(ReturnType)) {
@@ -375,7 +382,11 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                     } else @field(options.c_import_ns, fn_name);
                     // call original function
                     const old_rv = @call(.auto, func, old_args);
-                    const new_rv = convert(NewRT, old_rv);
+                    const IRT = switch (return_error_union) {
+                        true => options.error_scheme.IntermediateReturnType(NewRT),
+                        false => NewRT,
+                    };
+                    const new_rv = convert(IRT, old_rv);
                     // check outcome (if returning error union)
                     const output = switch (return_error_union) {
                         true => try options.error_scheme.check(new_rv),
@@ -526,7 +537,11 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                 },
                 .pointer => switch (@typeInfo(AT)) {
                     .pointer => @ptrCast(arg),
-                    .optional => if (arg) |a| convert(T, a) else null,
+                    .optional => if (arg) |a| convert(T, a) else switch (@typeInfo(T)) {
+                        .optional => null,
+                        .pointer => |pt| if (pt.is_allowzero) null else @panic("Unexpected null pointer"),
+                        else => @panic("Unexpected null pointer"),
+                    },
                     // converting "pass-by-value" to "pass-by-pointer"
                     else => convert(T, &arg),
                 },
@@ -578,14 +593,6 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                 SwapType(T, .old_to_new);
         }
 
-        fn RetvalSubstitute(comptime T: type, tuple: anytype) type {
-            const NewRT = Substitute(T, tuple, null, 0);
-            return if (@hasDecl(options.error_scheme, "RetvalSubstitute"))
-                options.error_scheme.RetvalSubstitute(NewRT)
-            else
-                NewRT;
-        }
-
         fn WritableTarget(comptime T: type) ?type {
             const info = @typeInfo(T);
             if (info == .pointer and !info.pointer.is_const) {
@@ -599,12 +606,14 @@ pub fn Translator(comptime options: TranslatorOptions) type {
 
 pub const Expression = union(enum) {
     identifier: []const u8,
+    empty: void,
     any: []const u8,
     type: Type,
     array_init: ArrayInit,
     struct_init: StructInit,
     function_call: FunctionCall,
     function_body: []const u8,
+    reference_to: *const Expression,
 
     pub const Type = union(enum) {
         container: Container,
@@ -633,7 +642,7 @@ pub const Expression = union(enum) {
         };
         pub const Enumeration = struct {
             items: []EnumItem = &.{},
-            is_signed: bool,
+            tag_type: []const u8,
             is_exhaustive: bool = false,
         };
         pub const Function = struct {
@@ -686,6 +695,7 @@ pub const Declaration = struct {
     name: []const u8,
     type: ?*const Expression = null,
     alignment: ?[]const u8 = null,
+    extern_export: ?[]const u8 = null,
     mutable: bool = false,
     expr: *const Expression,
     doc_comment: ?[]const u8 = null,
@@ -779,6 +789,9 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
         output_writer: std.io.AnyWriter,
         need_inout_import: bool,
         add_child_type: bool,
+        new_root_original_type: ?*const Expression,
+        invalid_value_map: std.AutoHashMap(*const Expression, InvalidValue),
+        return_error_map: std.AutoHashMap(*const Expression, bool),
 
         pub fn init(allocator: std.mem.Allocator) !*@This() {
             var arena: std.heap.ArenaAllocator = .init(allocator);
@@ -805,6 +818,9 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             self.byte_array = .init(self.allocator);
             self.need_inout_import = false;
             self.add_child_type = false;
+            self.new_root_original_type = null;
+            self.invalid_value_map = .init(self.allocator);
+            self.return_error_map = .init(self.allocator);
             return self;
         }
 
@@ -867,6 +883,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             const expr = try self.obtainExpressionEx(tree, decl.ast.init_node, true);
             try self.append(&self.old_root.type.container.decls, .{
                 .mutable = std.mem.eql(u8, "var", tree.tokenSlice(decl.ast.mut_token)),
+                .extern_export = if (decl.extern_export_token) |t| tree.tokenSlice(t) else null,
                 .name = var_name,
                 .type = var_type,
                 .alignment = nodeSlice(tree, decl.ast.align_node),
@@ -882,7 +899,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
         fn obtainExpressionEx(self: *@This(), tree: Ast, node: Ast.Node.Index, is_rhs: bool) !*const Expression {
             var buffer1: [1]Ast.Node.Index = undefined;
             var buffer2: [2]Ast.Node.Index = undefined;
-            if (node == 0) return &.{ .any = "" };
+            if (node == 0) return self.createExpression(.{ .empty = {} });
             const type_maybe = if (tree.fullFnProto(&buffer1, node)) |fn_proto|
                 try self.obtainFunctionType(tree, fn_proto)
             else if (tree.fullContainerDecl(&buffer2, node)) |decl|
@@ -982,7 +999,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             return .{
                 .enumeration = .{
                     .items = items,
-                    .is_signed = is_signed,
+                    .tag_type = if (is_signed) "c_int" else "c_uint",
                 },
             };
         }
@@ -1035,7 +1052,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                 const code = try self.allocPrint(fmt, args);
                 return self.createExpression(.{ .any = code });
             } else {
-                return @constCast(&Expression{ .code = fmt });
+                return @constCast(&Expression{ .any = fmt });
             }
         }
 
@@ -1066,38 +1083,106 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
         }
 
         fn translateDeclarations(self: *@This()) !void {
-            if (options.c_error_type != null or options.c_error_values != null) {
-                // add error set first
-                const error_set, const non_error_count = try self.deriveErrorSet();
-                try self.append(&self.new_root.type.container.decls, .{
-                    .name = options.error_set,
-                    .expr = error_set,
-                });
-                self.new_error_set = error_set;
-                self.non_error_enum_count = non_error_count;
-                try self.new_namespace.addExpression(options.error_set, error_set);
+            // convert constants to enum
+            var constant_map: std.StringHashMap(?*Expression) = .init(self.allocator);
+            var packed_structs: std.ArrayList(*Expression) = .init(self.allocator);
+            for (self.old_root.type.container.decls) |decl| {
+                if (self.isTypeOf(decl.type, .function) or self.isType(decl.expr)) continue;
+                const value = self.extractInteger(decl.expr) orelse continue;
+                if (options.const_is_enum_item_fn(decl.name)) |enum_info| {
+                    const enum_expr, const is_new_enum = get: {
+                        if (self.new_namespace.getExpression(enum_info.name)) |expr| {
+                            if (!self.isTypeOf(expr, .enumeration)) {
+                                std.debug.print("'{s}' is not an enumeration type\n", .{enum_info.name});
+                                return error.Unexpected;
+                            }
+                            break :get .{ @constCast(expr), false };
+                        } else {
+                            const expr = try self.createType(.{
+                                .enumeration = .{
+                                    .items = &.{},
+                                    .tag_type = enum_info.tag_type,
+                                },
+                            });
+                            try self.new_namespace.addExpression(enum_info.name, expr);
+                            break :get .{ expr, true };
+                        }
+                    };
+                    const item_name = try self.transformName(decl.name, .@"enum");
+                    try self.append(&enum_expr.type.enumeration.items, .{
+                        .name = item_name,
+                        .value = value,
+                    });
+                    try constant_map.put(decl.name, if (is_new_enum) enum_expr else null);
+                    if (is_new_enum and enum_info.is_packed_struct) {
+                        // remember that the enum is actually a packed struct
+                        try packed_structs.append(enum_expr);
+                    }
+                }
             }
+            // convert enums to packed structs now that we have the complete sets of values
+            for (packed_structs.items) |expr| {
+                expr.type = .{ .container = try self.convertEnumToPackedStruct(expr.type.enumeration) };
+            }
+            // add error set first if functions return one
+            const error_set, const non_error_count = try self.deriveErrorSet();
+            try self.append(&self.new_root.type.container.decls, .{
+                .name = options.error_set,
+                .expr = error_set,
+            });
+            self.new_error_set = error_set;
+            self.non_error_enum_count = non_error_count;
+            try self.new_namespace.addExpression(options.error_set, error_set);
+
             // translate all declarations
             var new_name_map: std.StringHashMap(bool) = .init(self.allocator);
             for (self.old_root.type.container.decls) |decl| {
-                if (options.filter_fn(decl.name)) {
+                if (constant_map.get(decl.name)) |outcome| {
+                    // insert new enum type if decl is the first item
+                    const enum_type = outcome orelse continue;
+                    const new_name = self.new_namespace.getName(enum_type).?;
+                    try new_name_map.put(new_name, true);
+                    const doc_comment = try options.doc_comment_fn(self.allocator, decl.name, new_name);
+                    try self.append(&self.new_root.type.container.decls, .{
+                        .name = new_name,
+                        .expr = enum_type,
+                        .doc_comment = doc_comment,
+                    });
+                } else if (options.filter_fn(decl.name)) {
+                    // skip if decl results in @compileError
+                    if (decl.expr.* == .any) {
+                        const code = decl.expr.any;
+                        if (std.mem.containsAtLeast(u8, code, 1, "@compileError")) {
+                            if (!options.ignore_omission) {
+                                std.debug.print("Omitting '{s}' since it's defined as {s}\n", .{ decl.name, code });
+                            }
+                            continue;
+                        }
+                    }
                     // get name in target namespace
                     const transform: NameContext = if (self.isTypeOf(decl.type, .function))
                         .@"fn"
-                    else switch (decl.expr.*) {
-                        .type, .identifier => .type,
-                        else => .@"const",
-                    };
+                    else if (self.isType(decl.expr))
+                        .type
+                    else
+                        .@"const";
                     const new_name = try self.transformName(decl.name, transform);
-                    if (std.mem.eql(u8, decl.name, "php_stream")) {
-                        std.debug.print("{s} => {s}\n", .{ decl.name, new_name });
-                    }
                     if (new_name_map.get(new_name)) |_| continue;
                     try new_name_map.put(new_name, true);
+                    const doc_comment = try options.doc_comment_fn(self.allocator, decl.name, new_name);
+                    if (decl.extern_export) |e| {
+                        if (std.mem.eql(u8, e, "extern")) {
+                            try self.append(&self.new_root.type.container.decls, .{
+                                .name = new_name,
+                                .expr = try self.createExpression(.{ .reference_to = decl.expr }),
+                                .doc_comment = doc_comment,
+                            });
+                        }
+                        continue;
+                    }
                     const new_type = if (decl.type) |t| try self.translateExpression(t) else null;
                     const expr = try self.translateDefinition(decl.expr);
                     try self.new_namespace.addExpression(new_name, expr);
-                    const doc_comment = try options.doc_comment_fn(self.allocator, decl.name, new_name);
                     try self.append(&self.new_root.type.container.decls, .{
                         .name = new_name,
                         .type = new_type,
@@ -1114,14 +1199,14 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                     return error.Unexpected;
                 };
                 const new_container = self.old_to_new_map.get(old_container) orelse return error.Unexpected;
-                var new_root: *Expression = if (self.isTypeOf(new_container, .container))
-                    @constCast(new_container)
-                else if (self.getPointerInfo(new_container)) |p|
-                    @constCast(p.child_type)
-                else {
-                    std.debug.print("'{s}' is not a container type\n", .{name});
-                    return error.Unexpected;
-                };
+                var new_root: *Expression = @constCast(new_container);
+                if (self.getPointerInfo(new_root)) |p| {
+                    new_root = @constCast(p.child_type);
+                }
+                if (!self.isTypeOf(new_root, .container)) {
+                    try self.redefineAsContainer(new_root, name);
+                }
+
                 // transfer decls into specified type
                 new_root.type.container.decls = self.new_root.type.container.decls;
                 self.new_root = new_root;
@@ -1150,8 +1235,8 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                             }
                         }
                     } else unreachable;
-                    const return_error_union = self.shouldReturnErrorUnion(fn_name, t);
-                    const ignore_non_error_return_value = self.shouldIgnoreNonErrorRetval(fn_name, t);
+                    const return_error_union = try self.shouldReturnErrorUnion(fn_name, t);
+                    const ignore_non_error_return_value = try self.shouldIgnoreNonErrorRetval(fn_name, t);
                     const local_subs = try self.findLocalSubstitutions(t, new_type, global_subs);
                     const split_slices = try self.findSplitSlices(t, new_type);
                     // get translate() or translateMerge() call
@@ -1180,6 +1265,10 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                 .name = options.translater,
                 .expr = try self.obtainTranslatorSetup(global_subs),
             });
+            // remove error set if it's not in use
+            if (!self.isUsingErrorSet()) {
+                self.remove(&self.new_root.type.container.decls, 0);
+            }
         }
 
         fn translateDefinition(self: *@This(), expr: *const Expression) !*const Expression {
@@ -1203,21 +1292,23 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             return self.translateExpression(expr);
         }
 
-        fn translateExpression(self: *@This(), expr: *const Expression) std.mem.Allocator.Error!*const Expression {
+        fn translateExpression(self: *@This(), expr: *const Expression) !*const Expression {
             return self.translateExpressionEx(expr, false);
         }
+
+        const TranslateError = std.mem.Allocator.Error || error{Unexpected};
 
         fn translateExpressionEx(
             self: *@This(),
             expr: *const Expression,
             is_pointer_target: bool,
-        ) std.mem.Allocator.Error!*const Expression {
+        ) TranslateError!*const Expression {
             if (self.old_to_new_map.get(expr)) |new_expr| {
                 return new_expr;
             } else {
                 switch (expr.*) {
                     .type => |t| {
-                        const new_expr = try self.createExpression(.{ .any = "" });
+                        const new_expr = try self.createExpression(.{ .empty = {} });
                         try self.old_to_new_map.put(expr, new_expr);
                         const new_type = switch (t) {
                             .container => try self.translateContainer(expr),
@@ -1249,47 +1340,83 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             return expr;
         }
 
-        fn translateField(self: *@This(), field: Field) !Field {
+        fn translateField(self: *@This(), field: Field, type_override: ?*const Expression) !Field {
             const new_name = try self.transformName(field.name, .field);
             return .{
                 .name = new_name,
-                .type = try self.translateExpression(field.type),
+                .type = type_override orelse try self.translateExpression(field.type),
                 .alignment = field.alignment,
             };
         }
 
-        fn translateParameter(
-            self: *@This(),
-            param: Parameter,
+        const ParameterOptions = struct {
             is_pointer_target: bool,
             is_inout: bool,
             optionality: ?bool,
+            type_override: ?*const Expression,
+        };
+
+        fn translateParameter(
+            self: *@This(),
+            param: Parameter,
+            param_opt: ParameterOptions,
         ) !Parameter {
             const new_name = if (param.name) |n| try self.transformName(n, .param) else null;
-            const param_type = swap: {
+            const new_type = param_opt.type_override orelse swap: {
+                var param_type: *const Expression = param.type;
                 if (self.getPointerInfo(param.type)) |p| {
                     // const pointer to struct and union can become by-value argument
                     if (p.is_const and self.isTypeOf(p.child_type, .container)) {
                         if (!self.isOpaque(p.child_type)) {
                             const type_name = try self.obtainTypeName(p.child_type, .old);
-                            if (!is_pointer_target and options.type_is_by_value_fn(type_name)) {
-                                break :swap p.child_type;
+                            if (!param_opt.is_pointer_target and options.type_is_by_value_fn(type_name)) {
+                                param_type = p.child_type;
                             }
                         }
                     }
                 }
-                break :swap param.type;
+                var new_param_type = try self.translateExpression(param_type);
+                if (param_opt.optionality) |is_optional| {
+                    new_param_type = try self.changeOptionality(new_param_type, is_optional);
+                }
+                break :swap new_param_type;
             };
-
-            var new_type = try self.translateExpression(param_type);
-            if (optionality) |is_optional| {
-                new_type = try self.changeOptionality(new_type, is_optional);
-            }
             return .{
                 .name = new_name,
                 .type = new_type,
-                .is_inout = is_inout,
+                .is_inout = param_opt.is_inout,
             };
+        }
+
+        fn redefineAsContainer(self: *@This(), expr: *Expression, name: []const u8) !void {
+            if (expr.* != .identifier) {
+                std.debug.print("Cannot convert '{s}' to container type\n", .{name});
+                return error.Unexpected;
+            }
+            const original_type = try self.createExpression(expr.*);
+            self.new_root_original_type = original_type;
+            if (std.mem.eql(u8, expr.identifier, "anyopaque")) {
+                expr.* = .{
+                    .type = .{
+                        .container = .{ .kind = "opaque" },
+                    },
+                };
+            } else {
+                var fields: []Field = &.{};
+                try self.append(&fields, .{
+                    .name = "_",
+                    .type = original_type,
+                });
+                expr.* = .{
+                    .type = .{
+                        .container = .{
+                            .layout = "packed",
+                            .kind = "struct",
+                            .fields = fields,
+                        },
+                    },
+                };
+            }
         }
 
         fn changeOptionality(self: *@This(), expr: *const Expression, is_optional: bool) !*const Expression {
@@ -1316,8 +1443,21 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
         fn translateContainer(self: *@This(), expr: *const Expression) !Expression.Type {
             const c = expr.type.container;
             var new_fields: []Field = &.{};
+            const container_name = try self.obtainTypeName(expr, .old);
             for (c.fields) |field| {
-                const new_field = try self.translateField(field);
+                const type_name = try self.obtainTypeName(field.type, .old);
+                const type_override = find: {
+                    if (options.field_override_fn(container_name, field.name, type_name)) |new_type_name| {
+                        if (self.new_namespace.getExpression(new_type_name)) |new_field_type| {
+                            break :find new_field_type;
+                        } else {
+                            std.debug.print("Unable to find new field type '{s}'", .{new_type_name});
+                            return error.Unexpected;
+                        }
+                    }
+                    break :find null;
+                };
+                const new_field = try self.translateField(field, type_override);
                 try self.append(&new_fields, new_field);
             }
             return .{
@@ -1360,83 +1500,84 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
 
         fn translateEnumeration(self: *@This(), expr: *const Expression) !Expression.Type {
             const e = expr.type.enumeration;
+            var new_items: []EnumItem = &.{};
+            for (e.items) |item| {
+                const new_field = try self.translateEnumItem(item);
+                try self.append(&new_items, new_field);
+            }
+            const new_enum: Expression.Type.Enumeration = .{
+                .items = new_items,
+                .tag_type = e.tag_type,
+            };
             const enum_name = try self.obtainTypeName(expr, .old);
             if (options.enum_is_packed_struct_fn(enum_name)) {
-                var pow2_items: []EnumItem = &.{};
-                for (e.items) |item| {
-                    if (item.value != 0 and std.math.isPowerOfTwo(item.value)) {
-                        try self.append(&pow2_items, item);
-                    }
-                }
-                std.mem.sort(EnumItem, pow2_items, {}, struct {
-                    fn compare(_: void, lhs: EnumItem, rhs: EnumItem) bool {
-                        return lhs.value < rhs.value;
-                    }
-                }.compare);
-                var blank_field_name: []const u8 = "_";
-                var bits_used: isize = 0;
-                var bit_fields: []Field = &.{};
-                var new_fields: []Field = &.{};
-                for (pow2_items) |item| {
-                    const pos = @ctz(item.value);
-                    if (bits_used != pos) {
-                        // insert filler
-                        const blank_field = try self.createBlankField(blank_field_name, pos - bits_used);
-                        try self.append(&new_fields, blank_field);
-                        blank_field_name = try self.allocPrint("{s}{s}", .{ blank_field_name, "_" });
-                        bits_used = pos;
-                    }
-                    const new_field = try self.translateBitField(item);
-                    try self.append(&new_fields, new_field);
-                    try self.append(&bit_fields, new_field);
-                    bits_used += 1;
-                }
-                // insert final filler
-                const blank_field = try self.createBlankField(blank_field_name, -bits_used);
-                try self.append(&new_fields, blank_field);
-                var new_decls: []Declaration = &.{};
-                for (e.items) |item| {
-                    if (item.value == 0 or !std.math.isPowerOfTwo(item.value)) {
-                        var remaining = item.value;
-                        for (pow2_items) |other_item| remaining &= ~other_item.value;
-                        if (remaining == 0) {
-                            // it can be represented as a combination of field items
-                            var set_fields: []Field = &.{};
-                            for (pow2_items, 0..) |pow2_item, i| {
-                                if (item.value & pow2_item.value != 0) {
-                                    try self.append(&set_fields, bit_fields[i]);
-                                }
-                            }
-                            const decl = try self.createBitFieldDeclaration(item.name, set_fields);
-                            try self.append(&new_decls, decl);
-                        } else {
-                            const decl = try self.createIntDeclaration(item.name, item.value);
-                            try self.append(&new_decls, decl);
-                        }
-                    }
-                }
-                return .{
-                    .container = .{
-                        .layout = "packed",
-                        .kind = "struct",
-                        .backing_type = "c_uint",
-                        .fields = new_fields,
-                        .decls = new_decls,
-                    },
-                };
+                return .{ .container = try self.convertEnumToPackedStruct(new_enum) };
             } else {
-                var new_items: []EnumItem = &.{};
-                for (e.items) |item| {
-                    const new_field = try self.translateEnumItem(item);
-                    try self.append(&new_items, new_field);
-                }
-                return .{
-                    .enumeration = .{
-                        .items = new_items,
-                        .is_signed = e.is_signed,
-                    },
-                };
+                return .{ .enumeration = new_enum };
             }
+        }
+
+        fn convertEnumToPackedStruct(self: *@This(), e: Expression.Type.Enumeration) !Expression.Type.Container {
+            var pow2_items: []EnumItem = &.{};
+            for (e.items) |item| {
+                if (item.value != 0 and std.math.isPowerOfTwo(item.value)) {
+                    try self.append(&pow2_items, item);
+                }
+            }
+            std.mem.sort(EnumItem, pow2_items, {}, struct {
+                fn compare(_: void, lhs: EnumItem, rhs: EnumItem) bool {
+                    return lhs.value < rhs.value;
+                }
+            }.compare);
+            var blank_field_name: []const u8 = "_";
+            var bits_used: isize = 0;
+            var bit_fields: []Field = &.{};
+            var new_fields: []Field = &.{};
+            for (pow2_items) |item| {
+                const pos = @ctz(item.value);
+                if (bits_used != pos) {
+                    // insert filler
+                    const blank_field = try self.createBlankField(blank_field_name, pos - bits_used, null);
+                    try self.append(&new_fields, blank_field);
+                    blank_field_name = try self.allocPrint("{s}{s}", .{ blank_field_name, "_" });
+                    bits_used = pos;
+                }
+                const new_field = try self.translateBitField(item);
+                try self.append(&new_fields, new_field);
+                try self.append(&bit_fields, new_field);
+                bits_used += 1;
+            }
+            // insert final filler
+            const blank_field = try self.createBlankField(blank_field_name, -bits_used, e.tag_type);
+            try self.append(&new_fields, blank_field);
+            var new_decls: []Declaration = &.{};
+            for (e.items) |item| {
+                if (item.value == 0 or !std.math.isPowerOfTwo(item.value)) {
+                    var remaining = item.value;
+                    for (pow2_items) |other_item| remaining &= ~other_item.value;
+                    if (remaining == 0) {
+                        // it can be represented as a combination of field items
+                        var set_fields: []Field = &.{};
+                        for (pow2_items, 0..) |pow2_item, i| {
+                            if (item.value & pow2_item.value != 0) {
+                                try self.append(&set_fields, bit_fields[i]);
+                            }
+                        }
+                        const decl = try self.createBitFieldDeclaration(item.name, set_fields);
+                        try self.append(&new_decls, decl);
+                    } else {
+                        const decl = try self.createIntDeclaration(item.name, item.value);
+                        try self.append(&new_decls, decl);
+                    }
+                }
+            }
+            return .{
+                .layout = "packed",
+                .kind = "struct",
+                .backing_type = e.tag_type,
+                .fields = new_fields,
+                .decls = new_decls,
+            };
         }
 
         fn translateFunction(
@@ -1483,12 +1624,11 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                 try self.append(&output_types, output_type);
             }
             // see if the translated function should return an error union
-            const return_error_union = !is_pointer_target and self.shouldReturnErrorUnion(fn_name, expr);
-            const status_type = try self.translateExpression(f.return_type);
+            const return_error_union = !is_pointer_target and try self.shouldReturnErrorUnion(fn_name, expr);
             const extra: usize = switch (return_error_union) {
-                true => switch (self.shouldIgnoreNonErrorRetval(fn_name, expr)) {
+                true => switch (try self.shouldIgnoreNonErrorRetval(fn_name, expr)) {
                     true => 0,
-                    false => switch (self.isReturningStatus(expr)) {
+                    false => switch (try self.isReturningStatus(expr)) {
                         true => if (self.non_error_enum_count > 1) 1 else 0,
                         false => 1,
                     },
@@ -1496,17 +1636,45 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                 false => if (self.isPrimitive(f.return_type, "void")) 0 else 1,
             };
             if (extra == 1) {
-                try self.append(&output_types, status_type);
+                const extra_output_type = find: {
+                    const type_name = try self.obtainTypeName(f.return_type, .old);
+                    if (options.retval_override_fn(fn_name, type_name)) |new_type_name| {
+                        if (self.new_namespace.getExpression(new_type_name)) |ref_type| {
+                            break :find ref_type;
+                        } else {
+                            std.debug.print("Unable to find new return type '{s}'", .{new_type_name});
+                            return error.Unexpected;
+                        }
+                    }
+                    break :find try self.translateExpression(f.return_type);
+                };
+                try self.append(&output_types, extra_output_type);
             }
             const arg_count = f.parameters.len + extra - output_types.len;
             for (f.parameters[0..arg_count], 0..) |param, index| {
                 // only pointer type can be optional
-                const is_optional: ?bool = if (self.getPointerInfo(param.type)) |p| check: {
-                    const type_name = try self.obtainTypeName(p.child_type, .old);
-                    break :check options.param_is_optional_fn(fn_name, param.name, index, type_name);
-                } else false;
-                const is_inout = inout_index == index;
-                const new_param = try self.translateParameter(param, is_pointer_target, is_inout, is_optional);
+                const type_name = try self.obtainTypeName(param.type, .old);
+                const new_param = try self.translateParameter(param, .{
+                    .is_pointer_target = is_pointer_target,
+                    .is_inout = inout_index == index,
+                    .optionality = check: {
+                        if (self.isPointer(param.type)) {
+                            break :check options.param_is_optional_fn(fn_name, param.name, index, type_name);
+                        }
+                        break :check false;
+                    },
+                    .type_override = find: {
+                        if (options.param_override_fn(fn_name, param.name, index, type_name)) |new_type_name| {
+                            if (self.new_namespace.getExpression(new_type_name)) |ref_type| {
+                                break :find ref_type;
+                            } else {
+                                std.debug.print("Unable to find new parameter type '{s}'", .{new_type_name});
+                                return error.Unexpected;
+                            }
+                        }
+                        break :find null;
+                    },
+                });
                 try self.append(&new_params, new_param);
             }
             const payload_type: *const Expression = switch (output_types.len) {
@@ -1568,8 +1736,10 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                         // call to std.meta.Tuple()
                         const arg = eu.payload_type.function_call.arguments[0];
                         break :get arg.array_init.initializers;
-                    } else {
+                    } else if (!self.isPrimitive(eu.payload_type, "void")) {
                         break :get &.{eu.payload_type};
+                    } else {
+                        break :get &.{};
                     }
                 } else if (return_type.* == .function_call) {
                     const arg = return_type.function_call.arguments[0];
@@ -1612,8 +1782,8 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                         const old_type = self.resolveType(sub.old_type, .old);
                         const new_type = self.resolveType(sub.new_type, .new);
                         for (global_substitution_counts) |*e| {
-                            if (isTypeEql(e.sub.old_type, old_type)) {
-                                if (isTypeEql(e.sub.new_type, new_type)) {
+                            if (self.isTypeEql(e.sub.old_type, old_type)) {
+                                if (self.isTypeEql(e.sub.new_type, new_type)) {
                                     e.score += 1;
                                     break;
                                 }
@@ -1643,7 +1813,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             var global_subs: []Substitution = &.{};
             for (global_substitution_counts) |*e| {
                 for (global_subs) |sub| {
-                    if (isTypeEql(sub.old_type, e.sub.old_type)) break;
+                    if (self.isTypeEql(sub.old_type, e.sub.old_type)) break;
                 } else {
                     try self.append(&global_subs, e.sub);
                 }
@@ -1677,10 +1847,10 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                     const old_type = self.resolveType(sub.old_type, .old);
                     const new_type = self.resolveType(sub.new_type, .new);
                     const need_sub = for (global_subs) |g| {
-                        if (isTypeEql(g.old_type, old_type)) {
-                            break !isTypeEql(g.new_type, new_type);
+                        if (self.isTypeEql(g.old_type, old_type)) {
+                            break !self.isTypeEql(g.new_type, new_type);
                         }
-                    } else if (index != null) !isTypeEql(old_type, new_type) else false;
+                    } else !self.isTypeEql(old_type, new_type);
                     if (need_sub) {
                         try self.append(&local_subs, .{ .index = index, .type = sub.new_type });
                     }
@@ -1717,9 +1887,8 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
         }
 
         fn translateBitField(self: *@This(), item: EnumItem) !Field {
-            const new_name = try self.transformName(item.name, .@"enum");
             return .{
-                .name = new_name,
+                .name = item.name,
                 .type = try self.createIdentifier("bool", .{}),
                 .default_value = "false",
             };
@@ -1739,10 +1908,13 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             } else return error.Unexpected;
         }
 
-        fn createBlankField(self: *@This(), name: []const u8, width: isize) !Field {
+        fn createBlankField(self: *@This(), name: []const u8, width: isize, backing_type: ?[]const u8) !Field {
             const field_type = switch (width > 0) {
                 true => try self.createIdentifier("u{d}", .{width}),
-                false => try self.createCode("std.meta.Int(.unsigned, @bitSizeOf(c_uint) - {d})", .{-width}),
+                false => try self.createCode("std.meta.Int(.unsigned, @bitSizeOf({s}) - {d})", .{
+                    backing_type.?,
+                    -width,
+                }),
             };
             return .{
                 .name = name,
@@ -1893,23 +2065,48 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             try self.new_namespace.addExpression(name, base_type);
         }
 
-        fn isReturningStatus(self: *@This(), fn_expr: *const Expression) bool {
+        fn isReturningStatus(self: *@This(), fn_expr: *const Expression) !bool {
             const err_type = options.c_error_type orelse return false;
             const err_type_zig = translateCType(err_type);
             const ret_type = fn_expr.type.function.return_type;
-            const name = self.obtainTypeName(ret_type, .old) catch return false;
+            const name = try self.obtainTypeName(ret_type, .old);
             return std.mem.eql(u8, err_type_zig, name);
         }
 
-        fn isReturningInvalidValue(self: *@This(), fn_expr: *const Expression) bool {
-            const values = options.c_error_values orelse return false;
+        fn isReturningInvalidValue(self: *@This(), fn_expr: *const Expression) !bool {
             const ret_type = fn_expr.type.function.return_type;
-            // C pointers can be null, so they are considered potentially invalid values
-            if (self.isPointer(ret_type)) return true;
-            const name = self.obtainTypeName(ret_type, .old) catch return false;
-            return for (values) |value| {
-                if (std.mem.eql(u8, value.type, name)) break true;
-            } else false;
+            const new_type = try self.translateExpression(ret_type);
+            // if pointers kept optional then it's never invalid
+            if (self.isTypeOf(new_type, .optional)) return false;
+            const iv = self.invalid_value_map.get(new_type) orelse check: {
+                const type_name = try self.obtainTypeName(ret_type, .old);
+                if (options.invalid_value_fn(type_name)) |iv| {
+                    try self.invalid_value_map.put(new_type, iv);
+                    // add error to error set
+                    const es = @constCast(&self.new_error_set.type.error_set);
+                    const has_name = for (es.names) |n| {
+                        if (std.mem.eql(u8, n, iv.err_name)) break true;
+                    } else false;
+                    if (!has_name) {
+                        try self.append(&es.names, iv.err_name);
+                    }
+                    break :check iv;
+                }
+                break :check null;
+            };
+            return iv != null;
+        }
+
+        fn isType(self: *@This(), expr: *const Expression) bool {
+            if (expr.* == .type) return true;
+            if (expr.* == .identifier) {
+                if (self.old_namespace.getExpression(expr.identifier)) |ref_expr| {
+                    return self.isType(ref_expr);
+                } else if (std.zig.primitives.isPrimitive(expr.identifier)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         fn resolveType(self: *@This(), expr: *const Expression, ns: NamespaceType) *const Expression {
@@ -1921,13 +2118,13 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             return expr;
         }
 
-        fn isTypeEql(expr1: *const Expression, expr2: *const Expression) bool {
+        fn isTypeEql(self: *@This(), expr1: *const Expression, expr2: *const Expression) bool {
             if (expr1 == expr2) return true;
             if (expr1.* == .type and expr2.* == .type) {
                 switch (expr1.type) {
                     .pointer => |p1| switch (expr2.type) {
                         .pointer => |p2| {
-                            if (!isTypeEql(p1.child_type, p2.child_type)) return false;
+                            if (!self.isTypeEql(p1.child_type, p2.child_type)) return false;
                             if (!std.meta.eql(p1.alignment, p2.alignment)) return false;
                             if (!std.meta.eql(p1.sentinel, p2.sentinel)) return false;
                             if (p1.size != p2.size) return false;
@@ -1940,7 +2137,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                     },
                     .optional => |o1| switch (expr2.type) {
                         .optional => |o2| {
-                            if (!isTypeEql(o1.child_type, o2.child_type)) return false;
+                            if (!self.isTypeEql(o1.child_type, o2.child_type)) return false;
                             return true;
                         },
                         else => return false,
@@ -1948,32 +2145,79 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                     else => return false,
                 }
             } else if (expr1.* == .identifier and expr2.* == .identifier) {
-                return std.mem.eql(u8, expr1.identifier, expr2.identifier);
+                var id1 = expr1.identifier;
+                var id2 = expr2.identifier;
+                // pointer to void become pointer to anyopaque
+                if (std.mem.eql(u8, id1, "void")) id1 = "anyopaque";
+                if (std.mem.eql(u8, id2, "void")) id2 = "anyopaque";
+                if (std.mem.eql(u8, id1, id2)) {
+                    return true;
+                } else {
+                    var ref_expr1 = self.resolveType(expr1, .old);
+                    var ref_expr2 = self.resolveType(expr2, .old);
+                    if (self.new_root_original_type) |original_type| {
+                        // use original type of when target is the new root type
+                        if (ref_expr1 == self.new_root) ref_expr1 = original_type;
+                        if (ref_expr2 == self.new_root) ref_expr2 = original_type;
+                    }
+                    if (ref_expr1 != expr1 or ref_expr2 != expr2) {
+                        return self.isTypeEql(ref_expr1, ref_expr2);
+                    } else {
+                        return false;
+                    }
+                }
             } else {
                 return false;
             }
+        }
+
+        fn extractInteger(self: *@This(), expr: *const Expression) ?i128 {
+            switch (expr.*) {
+                .any => |code| {
+                    var s: []const u8 = code;
+                    inline for (.{
+                        .{ "@as(c_int, ", ")" },
+                        .{ "@as(c_uint, ", ")" },
+                        .{ "@import(\"std\").zig.c_translation.promoteIntLiteral(c_int, ", ", .hex)" },
+                        .{ "@import(\"std\").zig.c_translation.promoteIntLiteral(c_uint, ", ", .hex)" },
+                        .{ "__UINT64_C(", ")" },
+                        .{ "__INT64_C(", ")" },
+                    }) |pair| {
+                        const start, const end = pair;
+                        if (std.mem.startsWith(u8, s, start) and std.mem.endsWith(u8, s, end)) {
+                            s = s[start.len .. s.len - end.len];
+                        }
+                    }
+                    return std.fmt.parseInt(i128, s, 0) catch null;
+                },
+                .identifier => |i| if (self.old_namespace.getExpression(i)) |ref_expr| {
+                    return self.extractInteger(ref_expr);
+                },
+                else => {},
+            }
+            return null;
         }
 
         fn shouldReturnErrorUnion(
             self: *@This(),
             fn_name: []const u8,
             fn_expr: *const Expression,
-        ) bool {
-            return if (self.isReturningStatus(fn_expr) or self.isReturningInvalidValue(fn_expr))
-                options.error_union_is_returned_fn(fn_name)
-            else
-                false;
+        ) !bool {
+            return self.return_error_map.get(fn_expr) orelse check: {
+                const can_return = (try self.isReturningStatus(fn_expr)) or (try self.isReturningInvalidValue(fn_expr));
+                const does_return = can_return and options.error_union_is_returned_fn(fn_name);
+                try self.return_error_map.put(fn_expr, does_return);
+                break :check does_return;
+            };
         }
 
         fn shouldIgnoreNonErrorRetval(
             self: *@This(),
             fn_name: []const u8,
             fn_expr: *const Expression,
-        ) bool {
-            return if (self.non_error_enum_count > 1 and self.isReturningStatus(fn_expr))
-                !options.status_is_returned_fn(fn_name)
-            else
-                false;
+        ) !bool {
+            const can_return = self.non_error_enum_count > 1 and (try self.isReturningStatus(fn_expr));
+            return can_return and !options.status_is_returned_fn(fn_name);
         }
 
         fn deriveErrorSet(self: *@This()) !std.meta.Tuple(&.{ *const Expression, usize }) {
@@ -1981,6 +2225,18 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             var non_error_enum_count: usize = 0;
             if (options.c_error_type) |enum_name| {
                 if (self.old_namespace.getExpression(enum_name)) |expr| {
+                    if (expr.* == .type and expr.type == .enumeration) {
+                        for (expr.type.enumeration.items) |item| {
+                            if (options.enum_is_error_fn(item.name, item.value)) {
+                                const err_name = try self.transformName(item.name, .@"error");
+                                try self.append(&names, err_name);
+                            } else non_error_enum_count += 1;
+                        }
+                    }
+                }
+            }
+            if (options.error_enum) |enum_name| {
+                if (self.new_namespace.getExpression(enum_name)) |expr| {
                     if (expr.* == .type and expr.type == .enumeration) {
                         for (expr.type.enumeration.items) |item| {
                             if (options.enum_is_error_fn(item.name, item.value)) {
@@ -2100,7 +2356,6 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                 new_name: []const u8,
                 new_type: *const Expression,
             };
-            if (global_subs.len == 0) return null;
             var subs: []Sub = &.{};
             for (global_subs) |sub| {
                 const old_name = try self.obtainTypeName(sub.old_type, .new);
@@ -2135,6 +2390,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                     .struct_init = .{ .initializers = struct_initializers },
                 }));
             }
+            if (subs.len == 0) return null;
             return self.createExpression(.{
                 .array_init = .{
                     .initializers = slice_initializers,
@@ -2152,72 +2408,74 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             return name;
         }
 
+        fn isUsingErrorSet(self: *@This()) bool {
+            if (options.c_error_type != null or options.error_enum != null) return true;
+            if (self.invalid_value_map.count() != 0) return true;
+            return false;
+        }
+
         fn obtainErrorScheme(self: *@This()) !?*const Expression {
-            if (options.c_error_type) |enum_name| {
-                const fn_ref = try self.createIdentifier("api_translator.BasicErrorScheme", .{});
-                var arguments: []*const Expression = &.{};
-                const enum_type_zig = translateCType(enum_name);
-                if (self.old_namespace.getExpression(enum_type_zig)) |old_enum| {
-                    const new_enum = try self.translateExpression(old_enum);
-                    try self.append(&arguments, new_enum);
-                } else {
-                    try self.append(&arguments, try self.createIdentifier("{s}", .{enum_type_zig}));
-                }
-                const error_set = self.new_namespace.getExpression(options.error_set) orelse
-                    return error.Unexpected;
-                try self.append(&arguments, error_set);
-                try self.append(&arguments, try self.createIdentifier("{s}.Unexpected", .{options.error_set}));
-                return try self.createExpression(.{
-                    .function_call = .{ .fn_ref = fn_ref, .arguments = arguments },
-                });
-            } else if (options.c_error_values) |values| {
-                const fn_ref = try self.createIdentifier("api_translator.InvalidReturnValueScheme", .{});
-                const error_set = self.new_namespace.getExpression(options.error_set) orelse
-                    return error.Unexpected;
-                var arguments: []*const Expression = &.{};
-                try self.append(&arguments, error_set);
-                try self.append(&arguments, try self.createIdentifier("{s}.Unexpected", .{options.error_set}));
-                var array_initializers: []*const Expression = &.{};
-                for (values) |value| {
-                    const value_type_zig = translateCType(value.type);
-                    const old_type = self.old_namespace.getExpression(value_type_zig) orelse
-                        try self.createIdentifier("{s}", .{value_type_zig});
-                    const new_type = try self.translateExpression(old_type);
-                    var value_ref = self.old_namespace.getExpression(value.name) orelse
-                        try self.createCode("{s}", .{value.name});
-                    if (self.isTypeOf(new_type, .enumeration) or self.isTypeOf(new_type, .container)) {
-                        // need @bitCast()
-                        var bc_arguments: []*const Expression = &.{};
-                        try self.append(&bc_arguments, value_ref);
-                        value_ref = try self.createExpression(.{
-                            .function_call = .{
-                                .fn_ref = try self.createIdentifier("@bitCast", .{}),
-                                .arguments = bc_arguments,
-                            },
-                        });
+            if (!self.isUsingErrorSet()) return null;
+            const error_set = self.new_namespace.getExpression(options.error_set) orelse return error.Unexpected;
+            const error_enum = find: {
+                if (options.error_enum) |enum_name| {
+                    break :find self.new_namespace.getExpression(enum_name) orelse {
+                        std.debug.print("Unable to find error enum type '{s}'", .{enum_name});
+                        return error.Unexpected;
+                    };
+                } else if (options.c_error_type) |enum_name| {
+                    const enum_type_zig = translateCType(enum_name);
+                    if (self.old_namespace.getExpression(enum_type_zig)) |old_enum| {
+                        break :find try self.translateExpression(old_enum);
+                    } else {
+                        break :find try self.createIdentifier("{s}", .{enum_type_zig});
                     }
-                    var as_arguments: []*const Expression = &.{};
-                    try self.append(&as_arguments, new_type);
-                    try self.append(&as_arguments, value_ref);
-                    try self.append(&array_initializers, try self.createExpression(.{
-                        .function_call = .{
-                            .fn_ref = try self.createIdentifier("@as", .{}),
-                            .arguments = as_arguments,
-                        },
-                    }));
                 }
-                try self.append(&arguments, try self.createExpression(.{
-                    .array_init = .{
-                        .initializers = array_initializers,
-                        .is_multiline = array_initializers.len > 0,
-                    },
-                }));
-                return try self.createExpression(.{
-                    .function_call = .{ .fn_ref = fn_ref, .arguments = arguments },
+                break :find try self.createCode("void", .{});
+            };
+            // initializers for list of invalid values
+            var array_initializers: []*const Expression = &.{};
+            var iterator = self.invalid_value_map.iterator();
+            var added: std.StringHashMap(bool) = .init(self.allocator);
+            while (iterator.next()) |entry| {
+                const new_type = entry.key_ptr.*;
+                const new_type_name = try self.obtainTypeName(new_type, .new);
+                if (added.get(new_type_name) != null) continue;
+                try added.put(new_type_name, true);
+                const iv = entry.value_ptr.*;
+                var struct_initializers: []Expression.StructInit.Initializer = &.{};
+                try self.append(&struct_initializers, .{
+                    .name = "type",
+                    .value = new_type,
                 });
-            } else {
-                return null;
+                try self.append(&struct_initializers, .{
+                    .name = "err_value",
+                    .value = try self.createIdentifier("{s}", .{iv.err_value}),
+                });
+                try self.append(&struct_initializers, .{
+                    .name = "err",
+                    .value = try self.createIdentifier("error.{s}", .{iv.err_name}),
+                });
+                try self.append(&array_initializers, try self.createExpression(.{
+                    .struct_init = .{ .initializers = struct_initializers },
+                }));
             }
+            const invalid_values = try self.createExpression(.{
+                .array_init = .{
+                    .initializers = array_initializers,
+                    .is_multiline = true,
+                },
+            });
+            const def_error = try self.createIdentifier("{s}.Unexpected", .{options.error_set});
+            const fn_ref = try self.createIdentifier("api_translator.BasicErrorScheme", .{});
+            var arguments: []*const Expression = &.{};
+            try self.append(&arguments, error_enum);
+            try self.append(&arguments, error_set);
+            try self.append(&arguments, def_error);
+            try self.append(&arguments, invalid_values);
+            return try self.createExpression(.{
+                .function_call = .{ .fn_ref = fn_ref, .arguments = arguments },
+            });
         }
 
         fn obtainTypeName(self: *@This(), expr: *const Expression, ns: NamespaceType) ![]const u8 {
@@ -2294,6 +2552,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                 .array_init => |a| try self.printArrayInit(a, ns),
                 .struct_init => |s| try self.printStructInit(s, ns),
                 .function_call => |f| try self.printFunctionCall(f, ns),
+                .reference_to => |r| try self.printReferenceTo(r, ns),
                 .type => |t| switch (t) {
                     .container => |c| {
                         const current_root_before = self.current_root;
@@ -2308,6 +2567,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                     .error_union => |e| try self.printErrorUnionDef(e, ns),
                     .function => |f| try self.printFunctionDef(f, ns),
                 },
+                .empty => {},
             }
         }
 
@@ -2427,7 +2687,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
         }
 
         fn printEnumerationDef(self: *@This(), e: Expression.Type.Enumeration, _: NamespaceType) anyerror!void {
-            try self.printFmt("enum({s}) {{\n", .{if (e.is_signed) "c_int" else "c_uint"});
+            try self.printFmt("enum({s}) {{\n", .{e.tag_type});
             const is_sequential = for (e.items, 0..) |item, index| {
                 if (index > 0 and item.value != e.items[index - 1].value + 1) break false;
             } else true;
@@ -2493,6 +2753,11 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             try self.printRef(f.return_type, ns);
         }
 
+        fn printReferenceTo(self: *@This(), r: *const Expression, ns: NamespaceType) anyerror!void {
+            try self.printTxt("&");
+            try self.printRef(r, ns);
+        }
+
         fn printOptionalDef(self: *@This(), o: Expression.Type.Optional, ns: NamespaceType) anyerror!void {
             try self.printTxt("?");
             try self.printRef(o.child_type, ns);
@@ -2516,6 +2781,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
         fn printDeclaration(self: *@This(), decl: Declaration, ns: NamespaceType) anyerror!void {
             if (decl.doc_comment) |c| try self.printDocComment(c);
             if (decl.public) try self.printTxt("pub ");
+            if (decl.extern_export) |e| try self.printFmt("{s}", .{e});
             const mut = if (decl.mutable) "var" else "const";
             try self.printFmt("{s} {s}", .{ mut, decl.name });
             if (decl.type) |t| {
@@ -2685,6 +2951,9 @@ pub fn camelize(allocator: std.mem.Allocator, name: []const u8, start_index: usi
     const underscore_count = std.mem.count(u8, name[start_index..], "_");
     const len = name.len - start_index - underscore_count;
     const buffer = try allocator.alloc(u8, len);
+    const need_lower = for (name) |c| {
+        if (std.ascii.isLower(c)) break false;
+    } else true;
     var need_upper = capitalize;
     var i: usize = start_index;
     var j: usize = 0;
@@ -2696,7 +2965,10 @@ pub fn camelize(allocator: std.mem.Allocator, name: []const u8, start_index: usi
                 buffer[j] = std.ascii.toUpper(name[i]);
                 need_upper = false;
             } else {
-                buffer[j] = std.ascii.toLower(name[i]);
+                buffer[j] = if (need_lower or (j == 0 and !capitalize))
+                    std.ascii.toLower(name[i])
+                else
+                    name[i];
             }
             j += 1;
         }
@@ -2715,6 +2987,8 @@ test "camelize" {
     try expectEqualSlices(u8, "GreenDragon", name2);
     const name3 = try camelize(allocator, "ANIMAL_GREEN_DRAGON", 0, true);
     try expectEqualSlices(u8, "AnimalGreenDragon", name3);
+    const name4 = try camelize(allocator, "AnimalGreenDragon", 6, false);
+    try expectEqualSlices(u8, "greenDragon", name4);
 }
 
 pub fn snakify(allocator: std.mem.Allocator, name: []const u8, start_index: usize) ![]const u8 {
@@ -2759,6 +3033,32 @@ test "snakify" {
     try expectEqualSlices(u8, "green_dragon", name2);
 }
 
+pub fn ifOptionalPointer(type_name: []const u8) ?InvalidValue {
+    if (isOptionalPointer(type_name)) return .{
+        .err_name = "NullPointer",
+        .err_value = "null",
+    };
+    return null;
+}
+
+pub fn isOptionalPointer(type_name: []const u8) bool {
+    return inline for (.{ "[*c]", "?*", "?[" }) |prefix| {
+        if (std.mem.startsWith(u8, type_name, prefix)) break true;
+    } else false;
+}
+
+pub fn noParamOverride(_: []const u8, _: ?[]const u8, _: usize, _: []const u8) ?[]const u8 {
+    return null;
+}
+
+pub fn noRetvalOverride(_: []const u8, _: []const u8) ?[]const u8 {
+    return null;
+}
+
+pub fn noFieldOverride(_: []const u8, _: []const u8, _: []const u8) ?[]const u8 {
+    return null;
+}
+
 pub fn makeNoChange(_: std.mem.Allocator, arg: []const u8) std.mem.Allocator.Error![]const u8 {
     return arg;
 }
@@ -2801,6 +3101,14 @@ pub fn notFunctionSpecific(_: []const u8, _: ?[]const u8, _: usize, _: []const u
 
 pub fn neverInput(_: []const u8, _: ?[]const u8, _: usize, _: []const u8) bool {
     return false;
+}
+
+pub fn notErrorValue(_: []const u8) bool {
+    return false;
+}
+
+pub fn notEnumItem(_: []const u8) ?EnumInfo {
+    return null;
 }
 
 pub fn neverSliceLength(_: []const u8, _: ?[]const u8, _: usize, _: []const u8) ?usize {
@@ -2859,7 +3167,7 @@ test "Translator.SwapType" {
             .{ .old = *OldStruct, .new = *NewStruct },
             .{ .old = [*]OldStruct, .new = [*]NewStruct },
         },
-        .error_scheme = BasicErrorScheme(c_uint, error{Unexpected}, error.Unexpected),
+        .error_scheme = BasicErrorScheme(c_uint, error{Unexpected}, error.Unexpected, .{}),
     });
     const SwapType = c_to_zig.SwapType;
     const T1 = SwapType(OldStruct, .old_to_new);
@@ -2890,7 +3198,7 @@ test "Translator.Substitute" {
             .{ .old = *OldStruct, .new = *NewStruct },
             .{ .old = [*]OldStruct, .new = [*]NewStruct },
         },
-        .error_scheme = BasicErrorScheme(c_uint, error{Unexpected}, error.Unexpected),
+        .error_scheme = BasicErrorScheme(c_uint, error{Unexpected}, error.Unexpected, .{}),
     });
     const Substitute = c_to_zig.Substitute;
     const T1 = Substitute(OldStruct, .{}, 0, 1);
@@ -2911,7 +3219,7 @@ test "Translator.WritableTarget" {
     const c = struct {};
     const c_to_zig = Translator(.{
         .c_import_ns = c,
-        .error_scheme = BasicErrorScheme(c_uint, error{Unexpected}, error.Unexpected),
+        .error_scheme = BasicErrorScheme(c_uint, error{Unexpected}, error.Unexpected, .{}),
     });
     const WritableTarget = c_to_zig.WritableTarget;
     const Null = @TypeOf(null);
@@ -2933,7 +3241,7 @@ test "Translator.convert (basic)" {
     const c = struct {};
     const c_to_zig = Translator(.{
         .c_import_ns = c,
-        .error_scheme = BasicErrorScheme(c_uint, error{Unexpected}, error.Unexpected),
+        .error_scheme = BasicErrorScheme(c_uint, error{Unexpected}, error.Unexpected, .{}),
     });
     const convert = c_to_zig.convert;
     const OldStruct1 = extern struct {
@@ -3000,7 +3308,7 @@ test "Translator.convert (function pointer)" {
         .substitutions = &.{
             .{ .old = *const OldStruct1, .new = *const NewStruct1 },
         },
-        .error_scheme = BasicErrorScheme(StatusEnum, ErrorSet, error.Unexpected),
+        .error_scheme = BasicErrorScheme(StatusEnum, ErrorSet, error.Unexpected, .{}),
     });
     const convert = c_to_zig.convert;
     const ns = struct {
@@ -3055,7 +3363,7 @@ test "Translator.Translated" {
             .{ .old = []const OldStruct, .new = []const NewStruct },
             .{ .old = ?*const OldStruct, .new = *const NewStruct },
         },
-        .error_scheme = BasicErrorScheme(StatusEnum, ErrorSet, error.Unexpected),
+        .error_scheme = BasicErrorScheme(StatusEnum, ErrorSet, error.Unexpected, .{}),
     });
     const Fn1 = c_to_zig.Translated(fn (i32, OldStruct) StatusEnum, true, false, .{});
     try expectEqual(fn (i32, NewStruct) ErrorSet!void, Fn1);
@@ -3113,7 +3421,7 @@ test "Translator.translate" {
         .substitutions = &.{
             .{ .old = OldStruct, .new = NewStruct },
         },
-        .error_scheme = BasicErrorScheme(StatusEnum, ErrorSet, error.Unexpected),
+        .error_scheme = BasicErrorScheme(StatusEnum, ErrorSet, error.Unexpected, .{}),
     });
     _ = ActionEnum;
     const func1 = c_to_zig.translate("hello", true, false, .{});

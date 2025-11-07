@@ -6,6 +6,7 @@ const assert = std.debug.assert;
 const maxInt = std.math.maxInt;
 const mem = std.mem;
 const windows = std.os.windows;
+const posix = std.posix;
 const page_size_min = std.heap.page_size_min;
 const builtin = @import("builtin");
 const native_os = builtin.os.tag;
@@ -2482,17 +2483,17 @@ pub const ExecutablePageAllocator = struct {
         else
             mem.alignForward(usize, aligned_len + max_drop_len, page_size);
         const hint = @atomicLoad(@TypeOf(std.heap.next_mmap_addr_hint), &std.heap.next_mmap_addr_hint, .unordered);
-        var map_flags: std.c.MAP = .{ .TYPE = .PRIVATE, .ANONYMOUS = true };
+        var map_flags: std.posix.MAP = .{ .TYPE = .PRIVATE, .ANONYMOUS = true };
         if (builtin.target.os.tag.isDarwin()) {
             // set MAP_JIT
             var map_flags_u32: u32 = @bitCast(map_flags);
             map_flags_u32 |= 0x0800;
             map_flags = @bitCast(map_flags_u32);
         }
-        const slice = std.posix.mmap(
+        const slice = posix.mmap(
             hint,
             overalloc_len,
-            std.c.PROT.READ | std.c.PROT.WRITE | std.c.PROT.EXEC,
+            posix.PROT.READ | posix.PROT.WRITE | std.posix.PROT.EXEC,
             map_flags,
             -1,
             0,
@@ -2502,9 +2503,9 @@ pub const ExecutablePageAllocator = struct {
         // that the range of memory we were provided had a proper alignment in it
         // somewhere. The extra bytes could be at the beginning, or end, or both.
         const drop_len = result_ptr - slice.ptr;
-        if (drop_len != 0) std.posix.munmap(slice[0..drop_len]);
+        if (drop_len != 0) posix.munmap(slice[0..drop_len]);
         const remaining_len = overalloc_len - drop_len;
-        if (remaining_len > aligned_len) std.posix.munmap(@alignCast(result_ptr[aligned_len..remaining_len]));
+        if (remaining_len > aligned_len) posix.munmap(@alignCast(result_ptr[aligned_len..remaining_len]));
         const new_hint: [*]align(page_size_min) u8 = @alignCast(result_ptr + aligned_len);
         _ = @cmpxchgStrong(@TypeOf(std.heap.next_mmap_addr_hint), &std.heap.next_mmap_addr_hint, hint, new_hint, .monotonic, .monotonic);
         return result_ptr;
