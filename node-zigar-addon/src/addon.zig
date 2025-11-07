@@ -631,8 +631,8 @@ const ModuleHost = struct {
                 if (deferred.installed) {
                     try redirection_controller.uninstallHook(hook, deferred.address, deferred.read_only);
                     deferred.installed = false;
-                    return;
                 }
+                return;
             } else {
                 return error.UnableToGetEnvSize;
             }
