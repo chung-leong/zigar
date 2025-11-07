@@ -38,6 +38,7 @@ export function addTests(importModule, options) {
     })
     it('should print environment variables using libc functions', async function () {
       const { __zigar, print, get } = await importTest('print-env-with-libc-functions', { useLibc: true });
+      const path = get('PATH');
       __zigar.set('env', {
         HELLO: 1,
         WORLD: 123,
@@ -63,11 +64,17 @@ export function addTests(importModule, options) {
         const lines3 = await capture(() => print());
         expect(lines3).to.not.include('土耳其=火雞');
       }
+      expect(() => get('土耳其')).to.throw();
+      expect(() => get('WORLD')).to.throw();
+      const pathAgain = get('PATH');
+      expect(pathAgain).to.equal(path);
       __zigar.set('env', {});
       if (print) {
         const lines4 = await capture(() => print());
         expect(lines4).to.have.lengthOf(0);
       }
+      expect(() => get('土耳其')).to.throw();
+      expect(() => get('WORLD')).to.throw();
     })
     it('should use custom environment variables even when useRedirection is false', async function () {
       const { __zigar, get } = await importTest('print-env-with-redirection-disabled', { useLibc: true, useRedirection: false });
