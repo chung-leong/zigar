@@ -52,9 +52,9 @@ fn deleteTree(a: Allocator, node: *TreeNode) void {
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub fn binaryTree(n: usize) !void {
-    var buffered_stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
-    defer buffered_stdout.flush() catch unreachable;
-    const stdout = buffered_stdout.writer();
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
     const allocator = gpa.allocator();
 
     const min_depth: usize = 4;
@@ -83,4 +83,5 @@ pub fn binaryTree(n: usize) !void {
 
     _ = try stdout.print("long lived tree of depth {}\t check: {}\n", .{ max_depth, itemCheck(long_lived_tree) });
     deleteTree(allocator, long_lived_tree);
+    try stdout.flush();
 }

@@ -7,9 +7,10 @@ var fixed_allocator = std.heap.FixedBufferAllocator.init(buffer[0..]);
 var allocator = fixed_allocator.allocator();
 
 pub fn mandelbrot(w: usize) !void {
-    var buffered_stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
-    defer buffered_stdout.flush() catch unreachable;
-    const stdout = buffered_stdout.writer();
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
+    defer stdout.flush() catch {};
     const h = w;
 
     const iterations = 50;
