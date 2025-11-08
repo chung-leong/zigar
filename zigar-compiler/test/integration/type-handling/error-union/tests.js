@@ -85,10 +85,10 @@ export function addTests(importModule, options) {
       expect(b.number1).to.equal(123);
       expect(() => b.number2).to.throw(Error.NoMoney);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-struct.StructA{ .number1 = error.GoldfishDied, .number2 = -444 }');
+      expect(before).to.equal('.{ .number1 = error.GoldfishDied, .number2 = -444 }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-struct.StructA{ .number1 = 123, .number2 = error.NoMoney }');
+      expect(after).to.equal('.{ .number1 = 123, .number2 = error.NoMoney }');
     })
     it('should not compile code with error union in packed struct', async function() {
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
@@ -101,7 +101,7 @@ export function addTests(importModule, options) {
       expect(b.number1).to.equal(5000);
       expect(() => b.number2).to.throw(Error.GoldfishDied);
       const [ line ] = await capture(() => print(b));
-      expect(line).to.equal('as-comptime-field.StructA{ .state = true, .number1 = 5000, .number2 = error.GoldfishDied }');
+      expect(line).to.equal('.{ .state = true, .number1 = 5000, .number2 = error.GoldfishDied }');
     })
     it('should handle error union in bare union', async function() {
       const { default: module, Error, UnionA } = await importTest('in-bare-union');

@@ -134,10 +134,10 @@ export function addTests(importModule, options) {
       expect(b.text1.string).to.equal('apple');
       expect(b.text2.string).to.equal('orange');
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-struct.StructA{ .text1 = { 100, 111, 103 }, .text2 = { 99, 97, 116 } }');
+      expect(before).to.equal('.{ .text1 = { 100, 111, 103 }, .text2 = { 99, 97, 116 } }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-struct.StructA{ .text1 = { 97, 112, 112, 108, 101 }, .text2 = { 111, 114, 97, 110, 103, 101 } }');
+      expect(after).to.equal('.{ .text1 = { 97, 112, 112, 108, 101 }, .text2 = { 111, 114, 97, 110, 103, 101 } }');
       expect(JSON.stringify(struct_b)).to.equal('{"text1":"apple","text2":"orange"}');
       expect(StructC.valueOf()).to.eql({ text1: 'apple', text2: 'orange' });
     })
@@ -151,7 +151,7 @@ export function addTests(importModule, options) {
       expect(b.text['*'] === module.struct_a.text['*']).to.be.true;
       expect(b.text.string).to.equal('Hello');
       const [ line ] = await capture(() => print(b));
-      expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .text = { 72, 101, 108, 108, 111 } }');
+      expect(line).to.equal('.{ .number = 500, .text = { 72, 101, 108, 108, 111 } }');
     })
     it('should handle pointer in bare union', async function() {
       const { default: module, UnionA } = await importTest('in-bare-union');

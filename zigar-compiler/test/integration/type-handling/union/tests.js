@@ -72,15 +72,15 @@ export function addTests(importModule, options) {
       });
       if (compilerVersion === '0.11.0') {
         expect(lines).to.eql([
-          'as-function-parameters.Variant{ .integer = 200 }',
-          'as-function-parameters.Variant{ .float = 3.14e+00 }',
-          'as-function-parameters.Variant{ .string = { 72, 101, 108, 108, 111 } }',
+          '.{ .integer = 200 }',
+          '.{ .float = 3.14 }',
+          '.{ .string = { 72, 101, 108, 108, 111 } }',
         ]);
       } else {
         expect(lines).to.eql([
-          'as-function-parameters.Variant{ .integer = 200 }',
-          'as-function-parameters.Variant{ .float = 3.14e0 }',
-          'as-function-parameters.Variant{ .string = { 72, 101, 108, 108, 111 } }',
+          '.{ .integer = 200 }',
+          '.{ .float = 3.14 }',
+          '.{ .string = { 72, 101, 108, 108, 111 } }',
         ]);
       }
     })
@@ -101,11 +101,7 @@ export function addTests(importModule, options) {
         { integer: 777 }
       ]);
       const [ before ] = await capture(() => print());
-      if (compilerVersion === '0.11.0') {
-        expect(before).to.equal('{ array-of.Variant{ .integer = 123 }, array-of.Variant{ .float = 1.23e+00 }, array-of.Variant{ .string = { 119, 111, 114, 108, 100 } }, array-of.Variant{ .integer = 777 } }');
-      } else {
-        expect(before).to.equal('{ array-of.Variant{ .integer = 123 }, array-of.Variant{ .float = 1.23e0 }, array-of.Variant{ .string = { 119, 111, 114, 108, 100 } }, array-of.Variant{ .integer = 777 } }');
-      }
+      expect(before).to.equal('{ .{ .integer = 123 }, .{ .float = 1.23 }, .{ .string = { 119, 111, 114, 108, 100 } }, .{ .integer = 777 } }');
     })
     it('should handle union in struct', async function() {
       const { default: module, StructA, print } = await importTest('in-struct');
@@ -119,18 +115,10 @@ export function addTests(importModule, options) {
         variant2: { float: 3.14 }
       });
       const [ before ] = await capture(() => print());
-      if (compilerVersion === '0.11.0') {
-        expect(before).to.equal('in-struct.StructA{ .variant1 = in-struct.Variant{ .float = 7.777e+00 }, .variant2 = in-struct.Variant{ .string = { 72, 101, 108, 108, 111 } } }');
-      } else {
-        expect(before).to.equal('in-struct.StructA{ .variant1 = in-struct.Variant{ .float = 7.777e0 }, .variant2 = in-struct.Variant{ .string = { 72, 101, 108, 108, 111 } } }');
-      }
+      expect(before).to.equal('.{ .variant1 = .{ .float = 7.777 }, .variant2 = .{ .string = { 72, 101, 108, 108, 111 } } }');
       module.variant_a = b;
       const [ after ] = await capture(() => print());
-      if (compilerVersion === '0.11.0') {
-        expect(after).to.equal('in-struct.StructA{ .variant1 = in-struct.Variant{ .string = { 119, 111, 114, 108, 100 } }, .variant2 = in-struct.Variant{ .float = 3.14e+00 } }');
-      } else {
-        expect(after).to.equal('in-struct.StructA{ .variant1 = in-struct.Variant{ .string = { 119, 111, 114, 108, 100 } }, .variant2 = in-struct.Variant{ .float = 3.14e0 } }');
-      }
+      expect(after).to.equal('.{ .variant1 = .{ .string = { 119, 111, 114, 108, 100 } }, .variant2 = .{ .float = 3.14 } }');
     })
     it('should not compile code with union in packed struct', async function() {
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
@@ -141,7 +129,7 @@ export function addTests(importModule, options) {
       const b = new StructA({ number: 500 });
       expect(b.variant.valueOf()).to.eql({ string: [ 119, 111, 114, 108, 100 ] });
       const [ line ] = await capture(() => print(b));
-      expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .variant = as-comptime-field.Variant{ .string = { 119, 111, 114, 108, 100 } } }');
+      expect(line).to.equal('.{ .number = 500, .variant = .{ .string = { 119, 111, 114, 108, 100 } } }');
     })
     it('should handle union in bare union', async function() {
       const { default: module, UnionA } = await importTest('in-bare-union');
@@ -183,7 +171,7 @@ export function addTests(importModule, options) {
       const { default: module, print } = await importTest('in-optional');
       expect(module.optional.integer).to.equal(100);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-optional.Variant{ .integer = 100 }');
+      expect(before).to.equal('.{ .integer = 100 }');
       module.optional = null;
       expect(module.optional).to.be.null;
       const [ after ] = await capture(() => print());
@@ -196,7 +184,7 @@ export function addTests(importModule, options) {
       const { default: module, Error, print } = await importTest('in-error-union');
       expect(module.error_union.integer).to.equal(100);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-error-union.Variant{ .integer = 100 }');
+      expect(before).to.equal('.{ .integer = 100 }');
       module.error_union = Error.GoldfishDied;
       expect(() => module.error_union).to.throw(Error.GoldfishDied);
       const [ after ] = await capture(() => print());

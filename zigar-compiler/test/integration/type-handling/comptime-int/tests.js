@@ -41,7 +41,7 @@ export function addTests(importModule, options) {
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ number1: 100, number2: 200 });
       const [ line ] = await capture(() => print());
-      expect(line).to.equal('in-struct.StructA{ .number1 = 1, .number2 = 2 }');
+      expect(line).to.equal('.{ .number1 = 1, .number2 = 2 }');
     })
     it('should handle comptime int in packed struct', async function() {
       await expect(importTest('in-packed-struct')).to.be.eventually.rejected;

@@ -67,10 +67,10 @@ export function addTests(importModule, options) {
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ number1: 123, number2: null });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-struct.StructA{ .number1 = null, .number2 = -444 }');
+      expect(before).to.equal('.{ .number1 = null, .number2 = -444 }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-struct.StructA{ .number1 = 123, .number2 = null }');
+      expect(after).to.equal('.{ .number1 = 123, .number2 = null }');
     })
     it('should handle optional in packed struct', async function() {
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
@@ -83,7 +83,7 @@ export function addTests(importModule, options) {
       expect(b.number1).to.equal(5000);
       expect(b.number2).to.equal(null);
       const [ line ] = await capture(() => print(b));
-      expect(line).to.equal('as-comptime-field.StructA{ .state = true, .number1 = 5000, .number2 = null }');
+      expect(line).to.equal('.{ .state = true, .number1 = 5000, .number2 = null }');
     })
     it('should handle optional in bare union', async function() {
       const { default: module, UnionA } = await importTest('in-bare-union');

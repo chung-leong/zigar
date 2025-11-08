@@ -59,11 +59,7 @@ export function addTests(importModule, options) {
     it('should print array arguments', async function() {
       const { print } = await importTest('as-function-parameters');
       const lines = await capture(() => print([ 1.1, 2.2, 3.3, 4.4 ]));
-      if (compilerVersion === '0.11.0') {
-        expect(lines).to.eql([ '{ 1.1e+00, 2.2e+00, 3.3e+00, 4.4e+00 }' ]);
-      } else {
-        expect(lines).to.eql([ '{ 1.1e0, 2.2e0, 3.3e0, 4.4e0 }' ]);
-      }
+      expect(lines).to.eql([ '{ 1.1, 2.2, 3.3, 4.4 }' ]);
     })
     it('should return array', async function() {
       const { getArray, getString } = await importTest('as-return-value');
@@ -95,10 +91,10 @@ export function addTests(importModule, options) {
         array2: [ 5, 6, 7, 8 ],
       });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-struct.StructA{ .array1 = { 10, 20, 30, 40 }, .array2 = { 11, 21, 31, 41 } }');
+      expect(before).to.equal('.{ .array1 = { 10, 20, 30, 40 }, .array2 = { 11, 21, 31, 41 } }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-struct.StructA{ .array1 = { 1, 2, 3, 4 }, .array2 = { 5, 6, 7, 8 } }');
+      expect(after).to.equal('.{ .array1 = { 1, 2, 3, 4 }, .array2 = { 5, 6, 7, 8 } }');
       expect(module.struct_b.foo).to.equal('Hello');
       expect(module.struct_b.bar.string).to.equal('Hello');
       expect(StructC.foo).to.equal('Hello');
@@ -116,7 +112,7 @@ export function addTests(importModule, options) {
       expect(b.number).to.to.equal(500);
       expect([ ...b.array ]).to.to.eql([ 1, 2, 3, 4 ]);
       const [ line ] = await capture(() => print(b));
-      expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .array = { 1, 2, 3, 4 } }');
+      expect(line).to.equal('.{ .number = 500, .array = { 1, 2, 3, 4 } }');
     })
     it('should handle array in bare union', async function() {
       const { default: module, UnionA } = await importTest('in-bare-union');

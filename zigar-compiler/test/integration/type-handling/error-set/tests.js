@@ -73,10 +73,10 @@ export function addTests(importModule, options) {
       expect(b.err1).to.equal(StrangeError.SystemIsOnFire);
       expect(b.err2).to.equal(StrangeError.DogAteAllMemory);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-struct.StructA{ .err1 = error.AlienInvasion, .err2 = error.SystemIsOnFire }');
+      expect(before).to.equal('.{ .err1 = error.AlienInvasion, .err2 = error.SystemIsOnFire }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-struct.StructA{ .err1 = error.SystemIsOnFire, .err2 = error.DogAteAllMemory }');
+      expect(after).to.equal('.{ .err1 = error.SystemIsOnFire, .err2 = error.DogAteAllMemory }');
     })
     it('should not compile code with error in packed struct', async function() {
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
@@ -87,7 +87,7 @@ export function addTests(importModule, options) {
       const b = new StructA({ number: 500 });
       expect(b.err).to.equal(StrangeError.SystemIsOnFire);
       const [ line ] = await capture(() => print(b));
-      expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .err = error.SystemIsOnFire }');
+      expect(line).to.equal('.{ .number = 500, .err = error.SystemIsOnFire }');
     })
     it('should handle error in bare union', async function() {
       const { default: module, StrangeError, UnionA } = await importTest('in-bare-union');

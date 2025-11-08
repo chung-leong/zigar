@@ -15,13 +15,13 @@ export function addTests(importModule, options) {
       expect(constant.valueOf()).to.eql({ number1: 123, number2: 456 });
       expect(() => constant.number1 = 1).to.throw(TypeError);
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('as-static-variables.Struct{ .number1 = 1, .number2 = 2 }');
+      expect(before).to.equal('.{ .number1 = 1, .number2 = 2 }');
       module.variable.number1 = 777;
       const [ after1 ] = await capture(() => print());
-      expect(after1).to.equal('as-static-variables.Struct{ .number1 = 777, .number2 = 2 }');
+      expect(after1).to.equal('.{ .number1 = 777, .number2 = 2 }');
       module.variable = { number1: 888, number2: 999 };
       const [ after2 ] = await capture(() => print());
-      expect(after2).to.equal('as-static-variables.Struct{ .number1 = 888, .number2 = 999 }');
+      expect(after2).to.equal('.{ .number1 = 888, .number2 = 999 }');
       expect(comptime_struct.valueOf()).to.eql({
         input: {
           src: {
@@ -42,7 +42,7 @@ export function addTests(importModule, options) {
     it('should print struct arguments', async function() {
       const { print } = await importTest('as-function-parameters');
       const lines = await capture(() => print({ number1: 11, number2: 44 }));
-      expect(lines).to.eql([ 'as-function-parameters.Struct{ .number1 = 11, .number2 = 44 }' ]);
+      expect(lines).to.eql([ '.{ .number1 = 11, .number2 = 44 }' ]);
       expect(() => print(undefined)).to.throw();
     })
     it('should return struct', async function() {
@@ -70,11 +70,11 @@ export function addTests(importModule, options) {
         { good: false, numbers: [ 2, 2, 7, 7 ] },
       ])
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('{ array-of.StructA{ .number1 = 1, .number2 = 2 }, array-of.StructA{ .number1 = 3, .number2 = 4 } }');
+      expect(before).to.equal('{ .{ .number1 = 1, .number2 = 2 }, .{ .number1 = 3, .number2 = 4 } }');
       module.array_c[1].number1 = 123;
       module.array_c[1].number2 = 456;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('{ array-of.StructA{ .number1 = 1, .number2 = 2 }, array-of.StructA{ .number1 = 123, .number2 = 456 } }');
+      expect(after).to.equal('{ .{ .number1 = 1, .number2 = 2 }, .{ .number1 = 123, .number2 = 456 } }');
     })
     it('should handle struct in struct', async function() {
       const { default: module, StructA, print } = await importTest('in-struct');
@@ -82,10 +82,10 @@ export function addTests(importModule, options) {
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ struct1: { number1: 10, number2: 20 }, struct2: { number1: 11, number2: 21 } });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-struct.StructA{ .struct1 = in-struct.Struct{ .number1 = 1, .number2 = 2 }, .struct2 = in-struct.Struct{ .number1 = 3, .number2 = 4 } }');
+      expect(before).to.equal('.{ .struct1 = .{ .number1 = 1, .number2 = 2 }, .struct2 = .{ .number1 = 3, .number2 = 4 } }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-struct.StructA{ .struct1 = in-struct.Struct{ .number1 = 10, .number2 = 20 }, .struct2 = in-struct.Struct{ .number1 = 11, .number2 = 21 } }');
+      expect(after).to.equal('.{ .struct1 = .{ .number1 = 10, .number2 = 20 }, .struct2 = .{ .number1 = 11, .number2 = 21 } }');
     })
     it('should fail when there is a struct in packed struct', async function() {
       const { default: module } = await importTest('in-packed-struct');
@@ -97,7 +97,7 @@ export function addTests(importModule, options) {
       const b = new StructA({ number: 500 });
       expect(b.structure.valueOf()).to.eql({ number1: 100, number2: 200 });
       const [ line ] = await capture(() => print(b));
-      expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .structure = as-comptime-field.Struct{ .number1 = 100, .number2 = 200 } }');
+      expect(line).to.equal('.{ .number = 500, .structure = .{ .number1 = 100, .number2 = 200 } }');
     })
     it('should handle struct in bare union', async function() {
       const { default: module, UnionA } = await importTest('in-bare-union');
@@ -138,7 +138,7 @@ export function addTests(importModule, options) {
       const { default: module, print } = await importTest('in-optional');
       expect(module.optional.valueOf()).to.eql({ number1: 100, number2: 200 });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-optional.Struct{ .number1 = 100, .number2 = 200 }');
+      expect(before).to.equal('.{ .number1 = 100, .number2 = 200 }');
       module.optional = null;
       expect(module.optional).to.be.null;
       const [ after ] = await capture(() => print());
@@ -150,7 +150,7 @@ export function addTests(importModule, options) {
       const { default: module, Error, print } = await importTest('in-error-union');
       expect(module.error_union.valueOf()).to.eql({ number1: 100, number2: 200 });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-error-union.Struct{ .number1 = 100, .number2 = 200 }');
+      expect(before).to.equal('.{ .number1 = 100, .number2 = 200 }');
       module.error_union = Error.GoldfishDied;
       expect(() => module.error_union).to.throw(Error.GoldfishDied);
       const [ after ] = await capture(() => print());
