@@ -14,7 +14,7 @@ pub fn call(f: Callback) !void {
     zigar.function.release(f);
     const ns = struct {
         fn run(ptr: *i32) void {
-            std.time.sleep(10 * 1000000);
+            std.Thread.sleep(10 * 1000000);
             ptr.* = 1;
         }
     };

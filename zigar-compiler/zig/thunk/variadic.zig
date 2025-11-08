@@ -1467,6 +1467,7 @@ fn callWithArgs(
     });
     const total_arg_count = fixed_arg_count + variadic_floats.len + variadic_ints.len;
     const fields = define: {
+        @setEvalBranchQuota(1000000);
         comptime var fields: [total_arg_count]std.builtin.Type.StructField = undefined;
         inline for (&fields, 0..) |*f, index| {
             const T = switch (index < fixed_arg_count) {

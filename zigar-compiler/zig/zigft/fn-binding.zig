@@ -48,7 +48,7 @@ pub fn destroy(allocator: std.mem.Allocator, fn_ptr: *const anyopaque) void {
             defer protect(true);
             header_ptr.signature = 0;
             const binding_ptr: [*]u8 = @ptrCast(header_ptr);
-            const alignment: std.mem.Alignment = @enumFromInt(@ctz(header_ptr.alignment));
+            const alignment: std.mem.Alignment = @enumFromInt(header_ptr.alignment);
             allocator.rawFree(binding_ptr[0..header_ptr.len], alignment, 0);
         }
     }
@@ -248,7 +248,15 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
                 .pointer => fn_address_index + @sizeOf(usize),
                 else => unreachable,
             };
-            const max_align = @max(@alignOf(Header), @alignOf(CT));
+            const max_align: std.mem.Alignment = switch (@max(@alignOf(Header), @alignOf(CT))) {
+                1 => .@"1",
+                2 => .@"2",
+                4 => .@"4",
+                8 => .@"8",
+                16 => .@"16",
+                32 => .@"32",
+                else => .@"64",
+            };
             const new_bytes = try allocator.alignedAlloc(u8, max_align, binding_len);
             const header_ptr: *Header = @ptrCast(@alignCast(new_bytes.ptr));
             const instr_slice: []u8 = new_bytes[instr_index .. instr_index + instr_len];
@@ -257,7 +265,7 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
             header_ptr.* = .{
                 .ctx_offset = @intCast(ctx_index - instr_index),
                 .len = @intCast(binding_len),
-                .alignment = @intCast(max_align),
+                .alignment = @intFromEnum(max_align),
             };
             const actual_instr_len = try encodeInstructions(instr_slice, @intFromPtr(ctx_ptr), func);
             assert(instr_len == actual_instr_len);
@@ -362,12 +370,6 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
             var encoder: InstructionEncoder = .{ .output = output };
             switch (builtin.target.cpu.arch) {
                 .x86_64 => {
-                    // mov rax, address
-                    encoder.encode(.{
-                        .rex = .{},
-                        .opcode = .@"mov ax imm32/64",
-                        .imm64 = address,
-                    });
                     if (pos.stack_align_mask) |mask| {
                         // mov r11, rsp
                         encoder.encode(.{
@@ -390,6 +392,21 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
                             .imm8 = @bitCast(@as(i8, @truncate(mask))),
                         });
                     }
+                    if (builtin.zig_backend == .stage2_x86_64) {
+                        // Zig's own backend uses RAX for some reason
+                        // mov r10, rax
+                        encoder.encode(.{
+                            .rex = .{ .b = 1 },
+                            .opcode = .@"mov r/m r",
+                            .mod_rm = .{ .rm = 2, .mod = 3, .reg = 0 },
+                        });
+                    }
+                    // mov rax, address
+                    encoder.encode(.{
+                        .rex = .{},
+                        .opcode = .@"mov ax imm32/64",
+                        .imm64 = address,
+                    });
                     // mov [rsp + po.offset], rax
                     if (pos.offset >= std.math.minInt(i8) and pos.offset <= std.math.maxInt(i8)) {
                         encoder.encode(.{
@@ -422,12 +439,33 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
                         .opcode = .@"mov ax imm32/64",
                         .imm64 = trampoline_address,
                     });
-                    // jmp [rax]
-                    encoder.encode(.{
-                        .rex = .{},
-                        .opcode = .@"jmp/call/etc r/m",
-                        .mod_rm = .{ .reg = 4, .mod = 3, .rm = 0 },
-                    });
+                    if (builtin.zig_backend == .stage2_x86_64) {
+                        // mov r11, rax
+                        encoder.encode(.{
+                            .rex = .{ .b = 1 },
+                            .opcode = .@"mov r/m r",
+                            .mod_rm = .{ .rm = 3, .mod = 3, .reg = 0 },
+                        });
+                        // mov rax, r10
+                        encoder.encode(.{
+                            .rex = .{ .r = 1 },
+                            .opcode = .@"mov r/m r",
+                            .mod_rm = .{ .rm = 0, .mod = 3, .reg = 2 },
+                        });
+                        // jmp [r11]
+                        encoder.encode(.{
+                            .rex = .{ .b = 1 },
+                            .opcode = .@"jmp/call/etc r/m",
+                            .mod_rm = .{ .rm = 3, .mod = 3, .reg = 4 },
+                        });
+                    } else {
+                        // jmp [rax]
+                        encoder.encode(.{
+                            .rex = .{},
+                            .opcode = .@"jmp/call/etc r/m",
+                            .mod_rm = .{ .rm = 0, .mod = 3, .reg = 4 },
+                        });
+                    }
                 },
                 .aarch64 => {
                     if (pos.stack_align_mask) |mask| {
@@ -1039,6 +1077,7 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
 
 /// Return type of bindWithCallConv(), createWithCallConv(), etc.
 pub fn BoundFnWithCallConv(comptime T: type, comptime CT: type, cc: ?std.builtin.CallingConvention) type {
+    @setEvalBranchQuota(1000000);
     const FT = FnType(T);
     const f = @typeInfo(FT).@"fn";
     const params = @typeInfo(FT).@"fn".params;

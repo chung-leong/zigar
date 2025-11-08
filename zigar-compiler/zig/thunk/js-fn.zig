@@ -167,6 +167,7 @@ fn getJscallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
     const RT = ch.return_type.?;
     const ns = struct {
         inline fn call(args: std.meta.ArgsTuple(CHT)) RT {
+            @setEvalBranchQuota(1000000);
             // fill the argument struct
             var arg_s: ArgStruct(BFT) = undefined;
             inline for (0..ch.params.len - 2) |arg_index| {

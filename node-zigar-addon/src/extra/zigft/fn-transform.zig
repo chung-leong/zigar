@@ -77,7 +77,7 @@ test "spreadArgs" {
     };
     const f1 = test_ns.getNegateFunc(test_ns.add);
     try expectEqual(-150, f1(100, 50));
-    const f2 = spreadArgs(test_ns.sum, .C);
+    const f2 = spreadArgs(test_ns.sum, .c);
     try expectEqual(6, f2(1, 2, 3));
     const f3 = test_ns.addLogging(test_ns.add);
     try expectEqual(150, f3(100, 50));
