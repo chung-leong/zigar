@@ -558,7 +558,7 @@ pub fn Controller(comptime Host: type) type {
         fn handleSigsysSignal(_: i32, info: *const std.c.siginfo_t, ucontext: ?*anyopaque) callconv(.c) void {
             if (os != .linux) @compileError("Unsupported");
             if (@TypeOf(syscall.table) == void) return;
-            @setEvalBranchQuota(100000);
+            @setEvalBranchQuota(2000000);
             Host.trapping_syscalls = false;
             defer Host.trapping_syscalls = true;
             inline for (syscall.table) |sc| {

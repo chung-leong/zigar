@@ -2417,7 +2417,7 @@ const RedirectedFile = struct {
 
     pub const signature = 0x4C49_4652_4147_495A;
     pub const BufferMode = enum { read, write };
-    pub var list = std.ArrayList(*@This()).init(c_allocator);
+    pub var list: std.ArrayList(*@This()) = .{};
 
     pub fn cast(s: *std.c.FILE) ?*@This() {
         if (!std.mem.isAligned(@intFromPtr(s), @alignOf(u64))) return null;
@@ -2946,7 +2946,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
                 .fd = fd,
                 .flags = oflags,
             };
-            try RedirectedFile.list.append(file);
+            try RedirectedFile.list.append(c_allocator, file);
             return @ptrCast(file);
         }
 
@@ -4511,7 +4511,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             buffer: ?[]u8,
         };
         var temp_handle_mutex: std.Thread.Mutex = .{};
-        var temp_handle_list: std.ArrayListUnmanaged(TemporaryHandleInfo) = .empty;
+        var temp_handle_list: std.ArrayList(TemporaryHandleInfo) = .{};
 
         const fd_format_string = "\\\\??\\UNC\\dev\\fd\\{d}";
         const fd_path_prefix = fd_format_string[0 .. fd_format_string.len - 3];

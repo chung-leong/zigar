@@ -6,17 +6,20 @@ const cfg = @import("build.cfg.zig");
 const extra = @import("build.extra.zig");
 
 pub fn build(b: *std.Build) !void {
-    if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 14) {
+    if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 15) {
         @compileError("Unsupported Zig version");
     }
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const lib = b.addSharedLibrary(.{
+    const lib = b.addLibrary(.{
+        .linkage = .dynamic,
         .name = cfg.module_name,
-        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "stub.zig" },
-        .target = target,
-        .optimize = optimize,
-        .single_threaded = !cfg.multithreaded,
+        .root_module = b.addModule("root", .{
+            .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "stub.zig" },
+            .target = target,
+            .optimize = optimize,
+            .single_threaded = !cfg.multithreaded,
+        }),
     });
     const zigar = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "zigar.zig" },

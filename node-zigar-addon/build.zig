@@ -8,11 +8,14 @@ pub fn build(b: *std.Build) !void {
         return;
     };
     const os = if (@hasDecl(@TypeOf(target), "getOsTag")) target.getOsTag() else target.result.os.tag;
-    const lib = b.addSharedLibrary(.{
+    const lib = b.addLibrary(.{
+        .linkage = .dynamic,
         .name = "node-zigar-addon",
-        .root_source_file = b.path("src/addon.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.addModule("root", .{
+            .root_source_file = b.path("src/addon.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     lib.addIncludePath(b.path("./src"));
     lib.addIncludePath(b.path("../node-api-headers/include"));

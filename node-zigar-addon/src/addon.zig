@@ -45,8 +45,8 @@ const ModuleHost = struct {
     hooks_installed: bool = false,
     syscall_trap_installed: bool = false,
     syscall_trap_count: usize = 0,
-    thread_syscall_trap_mutex: std.Thread.Mutex = undefined,
-    thread_syscall_trap_switches: std.ArrayList(*bool) = undefined,
+    thread_syscall_trap_list: std.ArrayList(*bool) = .{},
+    thread_syscall_trap_list_mutex: std.Thread.Mutex = .{},
     env_variable_deferred: Deferred = .{},
     env_variable_list: ?[]?[*:0]const u8 = null,
     env_variable_bytes: ?[]const u8 = null,
@@ -111,7 +111,7 @@ const ModuleHost = struct {
     threadlocal var main_thread_syscall_trap_count: usize = 0;
     threadlocal var in_main_thread: bool = undefined;
 
-    var host_list: std.ArrayList(*@This()) = .init(c_allocator);
+    var host_list: std.ArrayList(*@This()) = .{};
     var host_list_mutex: std.Thread.Mutex = .{};
 
     var module_count: i32 = 0;
@@ -124,7 +124,7 @@ const ModuleHost = struct {
     fn register(self: *@This()) !void {
         host_list_mutex.lock();
         defer host_list_mutex.unlock();
-        try host_list.append(self);
+        try host_list.append(c_allocator, self);
     }
 
     fn unregister(self: *@This()) void {
@@ -162,11 +162,7 @@ const ModuleHost = struct {
         // create the environment
         const js_env = try env.callFunction(try env.getNull(), create_env, &.{});
         const self = try c_allocator.create(@This());
-        self.* = .{
-            .env = env,
-            .thread_syscall_trap_mutex = .{},
-            .thread_syscall_trap_switches = .init(c_allocator),
-        };
+        self.* = .{ .env = env };
         defer self.release();
         try self.register();
         // import functions from the environment
@@ -200,18 +196,12 @@ const ModuleHost = struct {
             else => unreachable,
         };
         // decompress JS
-        var input: std.io.FixedBufferStream([]const u8) = .{
-            .buffer = @embedFile(js_file_name),
-            .pos = 0,
-        };
+        var input: std.Io.Reader = .fixed(@embedFile(js_file_name));
+        var decompression_buffer: [std.compress.flate.max_window_len]u8 = undefined;
+        var decompressor: std.compress.flate.Decompress = .init(&input, .gzip, &decompression_buffer);
         var buffer: [512 * 1024]u8 = undefined;
-        var output: std.io.FixedBufferStream([]u8) = .{
-            .buffer = &buffer,
-            .pos = 0,
-        };
-        try std.compress.gzip.decompress(input.reader(), output.writer());
-        const end_index: usize = @truncate(try output.getPos());
-        const js_bytes = buffer[0..end_index];
+        const len = try decompressor.reader.readSliceShort(&buffer);
+        const js_bytes = buffer[0..len];
         const js_str = try env.createStringUtf8(js_bytes);
         return try env.runScript(js_str);
     }
@@ -352,9 +342,9 @@ const ModuleHost = struct {
         in_main_thread = false;
         if (self.syscall_trap_installed) {
             try redirection_controller.installSyscallTrap(&trapping_syscalls);
-            self.thread_syscall_trap_mutex.lock();
-            defer self.thread_syscall_trap_mutex.unlock();
-            try self.thread_syscall_trap_switches.append(&trapping_syscalls);
+            self.thread_syscall_trap_list_mutex.lock();
+            defer self.thread_syscall_trap_list_mutex.unlock();
+            try self.thread_syscall_trap_list.append(c_allocator, &trapping_syscalls);
             if (self.syscall_trap_count > 0) {
                 trapping_syscalls = true;
             }
@@ -373,12 +363,12 @@ const ModuleHost = struct {
 
     pub fn deinitializeThread(self: *@This()) !void {
         if (self.syscall_trap_installed) {
-            self.thread_syscall_trap_mutex.lock();
-            defer self.thread_syscall_trap_mutex.unlock();
-            const index = for (self.thread_syscall_trap_switches.items, 0..) |ptr, i| {
+            self.thread_syscall_trap_list_mutex.lock();
+            defer self.thread_syscall_trap_list_mutex.unlock();
+            const index = for (self.thread_syscall_trap_list.items, 0..) |ptr, i| {
                 if (ptr == &trapping_syscalls) break i;
             } else return;
-            _ = self.thread_syscall_trap_switches.swapRemove(index);
+            _ = self.thread_syscall_trap_list.swapRemove(index);
         }
     }
 
@@ -698,9 +688,9 @@ const ModuleHost = struct {
             main_thread_syscall_trap_count += 1;
             if (main_thread_syscall_trap_count == 1) trapping_syscalls = true;
             // turn on all syscall traps in threads belonging to this module
-            self.thread_syscall_trap_mutex.lock();
-            defer self.thread_syscall_trap_mutex.unlock();
-            for (self.thread_syscall_trap_switches.items) |ptr| ptr.* = true;
+            self.thread_syscall_trap_list_mutex.lock();
+            defer self.thread_syscall_trap_list_mutex.unlock();
+            for (self.thread_syscall_trap_list.items) |ptr| ptr.* = true;
         }
     }
 
@@ -710,13 +700,14 @@ const ModuleHost = struct {
         if (self.syscall_trap_count == 0) {
             main_thread_syscall_trap_count -= 1;
             if (main_thread_syscall_trap_count == 0) trapping_syscalls = false;
-            self.thread_syscall_trap_mutex.lock();
-            defer self.thread_syscall_trap_mutex.unlock();
-            for (self.thread_syscall_trap_switches.items) |ptr| ptr.* = false;
+            self.thread_syscall_trap_list_mutex.lock();
+            defer self.thread_syscall_trap_list_mutex.unlock();
+            for (self.thread_syscall_trap_list.items) |ptr| ptr.* = false;
         }
     }
 
     fn exportFunctionsToModule(self: *@This()) !void {
+        @setEvalBranchQuota(2000000);
         const module = self.module orelse return error.NoLoadedModule;
         inline for (std.meta.fields(Module.Imports)) |field| {
             const name_c = comptime camelize(field.name);
@@ -1481,7 +1472,7 @@ const ModuleHost = struct {
     }
 
     const threadsafe_callback = struct {
-        fn handle_jscall(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
+        fn handle_jscall(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.c) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
             const call: *Jscall = @ptrCast(@alignCast(data));
             _ = handleJscall(self, call) catch {
@@ -1490,7 +1481,7 @@ const ModuleHost = struct {
             };
         }
 
-        fn handle_syscall(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
+        fn handle_syscall(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.c) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
             const call: *Syscall = @ptrCast(@alignCast(data));
             _ = handleSyscall(self, call) catch {
@@ -1498,13 +1489,13 @@ const ModuleHost = struct {
             };
         }
 
-        fn release_function(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
+        fn release_function(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.c) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
             const fn_id = @intFromPtr(data);
             releaseFunction(self, fn_id) catch {};
         }
 
-        fn disable_multithread(_: *Env, _: Value, context: *anyopaque, _: *anyopaque) callconv(.C) void {
+        fn disable_multithread(_: *Env, _: Value, context: *anyopaque, _: *anyopaque) callconv(.c) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
             disableMultithread(self) catch {};
         }

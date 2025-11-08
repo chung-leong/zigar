@@ -223,7 +223,7 @@ pub fn deinitializeThread(ptr: *anyopaque) !void {
     }
 }
 
-pub fn getExportAddress(handle: usize, dest: *usize) callconv(.C) E {
+pub fn getExportAddress(handle: usize, dest: *usize) callconv(.c) E {
     const f: *const fn () usize = @ptrFromInt(handle);
     dest.* = f();
     return .SUCCESS;
@@ -235,7 +235,7 @@ fn runThunk(
     thunk_address: usize,
     fn_address: usize,
     arg_address: usize,
-) callconv(.C) E {
+) callconv(.c) E {
     const thunk: zig_fn.Thunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
     const arg_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(arg_address) else empty_ptr;
@@ -248,7 +248,7 @@ fn runVariadicThunk(
     arg_address: usize,
     attr_address: usize,
     arg_count: usize,
-) callconv(.C) E {
+) callconv(.c) E {
     const thunk: zig_fn.VariadicThunk = @ptrFromInt(thunk_address);
     const fn_ptr: *anyopaque = @ptrFromInt(fn_address);
     const arg_ptr: *anyopaque = if (arg_address != 0) @ptrFromInt(arg_address) else empty_ptr;
@@ -260,7 +260,7 @@ fn createJsThunk(
     controller_address: usize,
     fn_id: usize,
     dest: *usize,
-) callconv(.C) E {
+) callconv(.c) E {
     const controller: js_fn.ThunkController = @ptrFromInt(controller_address);
     const thunk_address = controller(.create, fn_id) catch return .FAULT;
     dest.* = thunk_address;
@@ -271,7 +271,7 @@ fn destroyJsThunk(
     controller_address: usize,
     fn_address: usize,
     dest: *usize,
-) callconv(.C) E {
+) callconv(.c) E {
     const controller: js_fn.ThunkController = @ptrFromInt(controller_address);
     const fn_id = controller(.destroy, fn_address) catch return .FAULT;
     dest.* = fn_id;
@@ -280,7 +280,7 @@ fn destroyJsThunk(
 
 const hook_table = hooks.getHookTable(@This(), exporter.options.use_redirection);
 
-fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.C) E {
+fn getSyscallHook(name: [*:0]const u8, dest: *hooks.Entry) callconv(.c) E {
     const os = switch (builtin.target.os.tag) {
         .linux => .linux,
         .driverkit, .ios, .macos, .tvos, .visionos, .watchos => .darwin,
@@ -359,7 +359,7 @@ pub fn isRedirecting(comptime literal: @TypeOf(.enum_literal)) bool {
 pub fn createModule(comptime module_ns: type) Module {
     const host = @This();
     const ns = struct {
-        fn getFactoryThunk(dest: *usize) callconv(.C) E {
+        fn getFactoryThunk(dest: *usize) callconv(.c) E {
             dest.* = @intFromPtr(exporter.getFactoryThunk(host, module_ns));
             return .SUCCESS;
         }
