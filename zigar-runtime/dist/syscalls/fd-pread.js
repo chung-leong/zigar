@@ -1,6 +1,6 @@
 import { PosixError, PosixDescriptorRight } from '../constants.js';
 import { mixin } from '../environment.js';
-import { catchPosixError, checkAccessRight } from '../errors.js';
+import { catchPosixError, checkAccessRight, checkStreamMethod } from '../errors.js';
 import { createView, readUsize, readUsizeSafe, usizeByteSize, safeInt } from '../utils.js';
 import './copy-int.js';
 
@@ -13,6 +13,7 @@ var fdPread = mixin({
     return catchPosixError(canWait, PosixError.EIO, () => {        
       const[ reader, rights ] = this.getStream(fd);
       checkAccessRight(rights, PosixDescriptorRight.fd_read);
+      checkStreamMethod(reader, 'pread');
       const iovs = createView(iovsSize * iovsCount);
       this.moveExternBytes(iovs, iovsAddress, false);
       for (let i = 0; i < iovsCount; i++) {
