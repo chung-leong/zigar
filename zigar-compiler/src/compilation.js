@@ -288,6 +288,8 @@ export function createConfig(srcPath, modPath, options = {}) {
     if (multithreaded) {
       // we need support for atomic operations, among other things
       zigArgs.push(`-Dcpu=generic+atomics+bulk_memory`);
+    } else {
+      zigArgs.push(`-Dcpu=generic`);
     }
   }
   const zigarSrcPath = fileURLToPath(new URL('../zig/', import.meta.url));

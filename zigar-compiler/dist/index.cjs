@@ -1064,6 +1064,8 @@ function createConfig(srcPath, modPath, options = {}) {
     if (multithreaded) {
       // we need support for atomic operations, among other things
       zigArgs.push(`-Dcpu=generic+atomics+bulk_memory`);
+    } else {
+      zigArgs.push(`-Dcpu=generic`);
     }
   }
   const zigarSrcPath = node_url.fileURLToPath(new node_url.URL('../zig/', (typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (_documentCurrentScript && _documentCurrentScript.tagName.toUpperCase() === 'SCRIPT' && _documentCurrentScript.src || new URL('index.cjs', document.baseURI).href))));

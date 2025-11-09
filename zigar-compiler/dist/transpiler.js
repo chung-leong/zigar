@@ -1668,6 +1668,8 @@ function createConfig(srcPath, modPath, options = {}) {
     if (multithreaded) {
       // we need support for atomic operations, among other things
       zigArgs.push(`-Dcpu=generic+atomics+bulk_memory`);
+    } else {
+      zigArgs.push(`-Dcpu=generic`);
     }
   }
   const zigarSrcPath = fileURLToPath(new URL$1('../zig/', import.meta.url));
@@ -2704,6 +2706,7 @@ class InvalidIntConversion extends SyntaxError {
 
 class Unsupported extends TypeError {
   errno = PosixError.ENOTSUP;
+  hide = true;
 
   constructor() {
     super(`Unsupported`);
@@ -3123,10 +3126,10 @@ class InvalidPath extends Error {
 }
 
 class MissingStreamMethod extends Error {
-  errno = PosixError.EPERM;
-
-  constructor(name) {
+  constructor(name, errno = PosixError.ESPIPE) {
     super(`Missing stream method '${name}'`);
+    this.errno = errno;
+    this.hide = errno === PosixError.ESPIPE;
   }
 }
 
@@ -3140,6 +3143,7 @@ class InvalidArgument extends Error {
 
 class WouldBlock extends Error {
   errno = PosixError.EAGAIN;
+  hide = true;
 
   constructor() {
     super(`Would block`);
@@ -3249,7 +3253,7 @@ function catchPosixError(canWait = false, defErrorNo, run, resolve, reject) {
     if (reject) {
       result = reject(err);
     } else {
-      if (err.errno !== PosixError.EAGAIN && err.errno !== PosixError.ENOTSUP) {
+      if (!err.hide) {
         console.error(err);
       }
     }
@@ -3280,9 +3284,9 @@ function checkAccessRight(rights, required) {
   }
 }
 
-function checkStreamMethod(stream, name) {
+function checkStreamMethod(stream, name, errno) {
   if (!hasMethod(stream, name)) {
-    throw new MissingStreamMethod(name);
+    throw new MissingStreamMethod(name, errno);
   }
 }
 
@@ -6261,6 +6265,7 @@ var fdPread = mixin({
     return catchPosixError(canWait, PosixError.EIO, () => {        
       const[ reader, rights ] = this.getStream(fd);
       checkAccessRight(rights, PosixDescriptorRight.fd_read);
+      checkStreamMethod(reader, 'pread');
       const iovs = createView(iovsSize * iovsCount);
       this.moveExternBytes(iovs, iovsAddress, false);
       for (let i = 0; i < iovsCount; i++) {
@@ -6324,9 +6329,10 @@ var fdPwrite = mixin({
     const le = this.littleEndian;
     const iovsSize = usizeByteSize * 2;
     let total = 0;
-    return catchPosixError(canWait, PosixError.EIO, () => {        
+    return catchPosixError(canWait, PosixError.EIO, () => {
       const[ writer, rights ] = this.getStream(fd);
       checkAccessRight(rights, PosixDescriptorRight.fd_write);
+      checkStreamMethod(writer, 'pwrite');
       const iovs = createView(iovsSize * iovsCount);
       this.moveExternBytes(iovs, iovsAddress, false);
       const ops = [];
