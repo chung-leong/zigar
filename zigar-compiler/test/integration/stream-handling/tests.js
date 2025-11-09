@@ -2328,7 +2328,8 @@ export function addTests(importModule, options) {
     })
     skip.entirely.if(target === 'wasm32').
     it('should redirect io from dynamically linked library', async function() {
-      const { __zigar, use } = await importTest('redirect-shared-lib');
+      // TODO: use llvm flag when it's introduced
+      const { __zigar, use } = await importTest('redirect-shared-lib', { multithreaded: true });
       let ext;
       switch (target) {
         case 'win32': ext = 'dll'; break;
