@@ -94,6 +94,9 @@ export default mixin({
       return imports;
     },
     importFunctions(exports) {
+      if (!this.memory) {
+        this.memory = exports.memory;
+      }
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
         const fn = exports[name];
         if (fn) {
@@ -128,17 +131,21 @@ export default mixin({
           }
         }
       }
-      this.memory = env.memory = new w.Memory({
-        initial: memoryInitial,
-        maximum: memoryMax,
-        shared: multithreaded,
-      });
-      this.table = env.__indirect_function_table = new w.Table({
-        initial: tableInitial,
-        element: 'anyfunc',
-        shared: multithreaded,
-      });
-      this.initialTableLength = tableInitial;
+      if (memoryInitial) {
+        this.memory = env.memory = new w.Memory({
+          initial: memoryInitial,
+          maximum: memoryMax,
+          shared: multithreaded,
+        });
+      }
+      if (tableInitial) {
+        this.table = env.__indirect_function_table = new w.Table({
+          initial: tableInitial,
+          element: 'anyfunc',
+          shared: multithreaded,
+        });
+        this.initialTableLength = tableInitial;
+      }
       return w.instantiate(executable, exports);
     },
     loadModule(source, options) {

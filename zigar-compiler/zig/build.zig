@@ -77,8 +77,8 @@ pub fn build(b: *std.Build) !void {
         lib.entry = .disabled;
         lib.rdynamic = true;
         lib.wasi_exec_model = .reactor;
-        lib.import_memory = true;
-        lib.import_table = true;
+        lib.import_memory = cfg.multithreaded;
+        lib.import_table = !cfg.multithreaded;
         lib.stack_size = cfg.stack_size;
         lib.max_memory = cfg.max_memory;
     } else if (cfg.use_redirection) {

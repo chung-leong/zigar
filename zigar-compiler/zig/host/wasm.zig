@@ -117,7 +117,7 @@ pub fn redirectIO(_: *const anyopaque) !void {
     return error.NoSupport;
 }
 
-const empty_ptr: *anyopaque = @constCast(@ptrCast(&.{}));
+const empty_ptr: *anyopaque = @ptrCast(@constCast(&.{}));
 
 export fn runThunk(
     thunk_address: usize,
@@ -334,25 +334,25 @@ fn initializeLibc() callconv(.c) void {
     env_variable_bytes = bytes;
 }
 
-extern fn _createBool(initializer: bool) Value;
-extern fn _createInteger(initializer: i32, is_unsigned: bool) Value;
-extern fn _createBigInteger(initializer: i64, is_unsigned: bool) Value;
-extern fn _createString(initializer: [*]const u8, len: usize) Value;
-extern fn _createView(bytes: ?[*]const u8, len: usize, copying: bool) Value;
-extern fn _createInstance(structure: Value, dv: Value, slots: ?Value) Value;
-extern fn _createTemplate(dv: ?Value, slots: ?Value) Value;
-extern fn _createList() Value;
-extern fn _createObject() Value;
-extern fn _getProperty(object: Value, key: [*]const u8, key_len: usize) ?Value;
-extern fn _setProperty(object: Value, key: [*]const u8, key_len: usize, value: Value) void;
-extern fn _getSlotValue(object: ?Value, slot: usize) ?Value;
-extern fn _setSlotValue(object: ?Value, slot: usize, value: Value) void;
-extern fn _appendList(list: Value, value: Value) void;
-extern fn _beginStructure(structure: Value) void;
-extern fn _finishStructure(structure: Value) void;
-extern fn _handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E;
-extern fn _releaseFunction(fn_id: usize) void;
-extern fn _allocateJsThunk(controller_address: usize, fn_id: usize) usize;
-extern fn _freeJsThunk(controller_address: usize, thunk_address: usize) usize;
-extern fn _findJsThunk(controller_address: usize, thunk_address: usize) usize;
-extern fn _displayPanic(bytes: [*]const u8, len: usize) void;
+extern "env" fn _createBool(initializer: bool) Value;
+extern "env" fn _createInteger(initializer: i32, is_unsigned: bool) Value;
+extern "env" fn _createBigInteger(initializer: i64, is_unsigned: bool) Value;
+extern "env" fn _createString(initializer: [*]const u8, len: usize) Value;
+extern "env" fn _createView(bytes: ?[*]const u8, len: usize, copying: bool) Value;
+extern "env" fn _createInstance(structure: Value, dv: Value, slots: ?Value) Value;
+extern "env" fn _createTemplate(dv: ?Value, slots: ?Value) Value;
+extern "env" fn _createList() Value;
+extern "env" fn _createObject() Value;
+extern "env" fn _getProperty(object: Value, key: [*]const u8, key_len: usize) ?Value;
+extern "env" fn _setProperty(object: Value, key: [*]const u8, key_len: usize, value: Value) void;
+extern "env" fn _getSlotValue(object: ?Value, slot: usize) ?Value;
+extern "env" fn _setSlotValue(object: ?Value, slot: usize, value: Value) void;
+extern "env" fn _appendList(list: Value, value: Value) void;
+extern "env" fn _beginStructure(structure: Value) void;
+extern "env" fn _finishStructure(structure: Value) void;
+extern "env" fn _handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E;
+extern "env" fn _releaseFunction(fn_id: usize) void;
+extern "env" fn _allocateJsThunk(controller_address: usize, fn_id: usize) usize;
+extern "env" fn _freeJsThunk(controller_address: usize, thunk_address: usize) usize;
+extern "env" fn _findJsThunk(controller_address: usize, thunk_address: usize) usize;
+extern "env" fn _displayPanic(bytes: [*]const u8, len: usize) void;

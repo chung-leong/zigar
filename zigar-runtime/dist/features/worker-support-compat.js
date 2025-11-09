@@ -126,10 +126,12 @@ function workerMain() {
       }
     }
     const { tableInitial } = options;
-    env.__indirect_function_table = new w.Table({
-      initial: tableInitial,
-      element: 'anyfunc',
-    });
+    if (tableInitial) {
+      env.__indirect_function_table = new w.Table({
+        initial: tableInitial,
+        element: 'anyfunc',
+      });
+    }
     const { exports } = new w.Instance(executable, imports);
     const { wasi_thread_start } = exports;
     wasi_thread_start(tid, arg);

@@ -4692,6 +4692,9 @@ var moduleLoading = mixin({
       return imports;
     },
     importFunctions(exports) {
+      if (!this.memory) {
+        this.memory = exports.memory;
+      }
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
         const fn = exports[name];
         if (fn) {
@@ -4726,17 +4729,21 @@ var moduleLoading = mixin({
           }
         }
       }
-      this.memory = env.memory = new w.Memory({
-        initial: memoryInitial,
-        maximum: memoryMax,
-        shared: multithreaded,
-      });
-      this.table = env.__indirect_function_table = new w.Table({
-        initial: tableInitial,
-        element: 'anyfunc',
-        shared: multithreaded,
-      });
-      this.initialTableLength = tableInitial;
+      if (memoryInitial) {
+        this.memory = env.memory = new w.Memory({
+          initial: memoryInitial,
+          maximum: memoryMax,
+          shared: multithreaded,
+        });
+      }
+      if (tableInitial) {
+        this.table = env.__indirect_function_table = new w.Table({
+          initial: tableInitial,
+          element: 'anyfunc',
+          shared: multithreaded,
+        });
+        this.initialTableLength = tableInitial;
+      }
       return w.instantiate(executable, exports);
     },
     loadModule(source, options) {
@@ -6884,10 +6891,12 @@ function workerMain() {
       }
     }
     const { tableInitial } = options;
-    env.__indirect_function_table = new w.Table({
-      initial: tableInitial,
-      element: 'anyfunc',
-    });
+    if (tableInitial) {
+      env.__indirect_function_table = new w.Table({
+        initial: tableInitial,
+        element: 'anyfunc',
+      });
+    }
     const { exports } = new w.Instance(executable, imports);
     const { wasi_thread_start } = exports;
     wasi_thread_start(tid, arg);
