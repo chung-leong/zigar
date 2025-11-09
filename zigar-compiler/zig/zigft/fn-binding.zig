@@ -392,35 +392,26 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
                             .imm8 = @bitCast(@as(i8, @truncate(mask))),
                         });
                     }
-                    if (builtin.zig_backend == .stage2_x86_64) {
-                        // Zig's own backend uses RAX for some reason
-                        // mov r10, rax
-                        encoder.encode(.{
-                            .rex = .{ .b = 1 },
-                            .opcode = .@"mov r/m r",
-                            .mod_rm = .{ .rm = 2, .mod = 3, .reg = 0 },
-                        });
-                    }
-                    // mov rax, address
+                    // mov r10, address
                     encoder.encode(.{
-                        .rex = .{},
-                        .opcode = .@"mov ax imm32/64",
+                        .rex = .{ .b = 1 },
+                        .opcode = .@"mov dx imm32/64",
                         .imm64 = address,
                     });
-                    // mov [rsp + po.offset], rax
+                    // mov [rsp + po.offset], r10
                     if (pos.offset >= std.math.minInt(i8) and pos.offset <= std.math.maxInt(i8)) {
                         encoder.encode(.{
-                            .rex = .{},
+                            .rex = .{ .r = 1 },
                             .opcode = .@"mov r/m r",
-                            .mod_rm = .{ .rm = 4, .mod = 1, .reg = 0 },
+                            .mod_rm = .{ .rm = 4, .mod = 1, .reg = 2 },
                             .sib = .{ .base = 4, .index = 4, .scale = 0 },
                             .disp8 = @truncate(pos.offset),
                         });
                     } else {
                         encoder.encode(.{
-                            .rex = .{},
+                            .rex = .{ .r = 1 },
                             .opcode = .@"mov r/m r",
-                            .mod_rm = .{ .rm = 4, .mod = 2, .reg = 0 },
+                            .mod_rm = .{ .rm = 4, .mod = 2, .reg = 2 },
                             .sib = .{ .base = 4, .index = 4, .scale = 0 },
                             .disp32 = @truncate(pos.offset),
                         });
@@ -433,39 +424,18 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
                             .mod_rm = .{ .rm = 4, .mod = 3, .reg = 3 },
                         });
                     }
-                    // mov rax, trampoline_address
+                    // mov r10, trampoline_address
                     encoder.encode(.{
-                        .rex = .{},
-                        .opcode = .@"mov ax imm32/64",
+                        .rex = .{ .b = 1 },
+                        .opcode = .@"mov dx imm32/64",
                         .imm64 = trampoline_address,
                     });
-                    if (builtin.zig_backend == .stage2_x86_64) {
-                        // mov r11, rax
-                        encoder.encode(.{
-                            .rex = .{ .b = 1 },
-                            .opcode = .@"mov r/m r",
-                            .mod_rm = .{ .rm = 3, .mod = 3, .reg = 0 },
-                        });
-                        // mov rax, r10
-                        encoder.encode(.{
-                            .rex = .{ .r = 1 },
-                            .opcode = .@"mov r/m r",
-                            .mod_rm = .{ .rm = 0, .mod = 3, .reg = 2 },
-                        });
-                        // jmp [r11]
-                        encoder.encode(.{
-                            .rex = .{ .b = 1 },
-                            .opcode = .@"jmp/call/etc r/m",
-                            .mod_rm = .{ .rm = 3, .mod = 3, .reg = 4 },
-                        });
-                    } else {
-                        // jmp [rax]
-                        encoder.encode(.{
-                            .rex = .{},
-                            .opcode = .@"jmp/call/etc r/m",
-                            .mod_rm = .{ .rm = 0, .mod = 3, .reg = 4 },
-                        });
-                    }
+                    // jmp [r10]
+                    encoder.encode(.{
+                        .rex = .{ .b = 1 },
+                        .opcode = .@"jmp/call/etc r/m",
+                        .mod_rm = .{ .rm = 2, .mod = 3, .reg = 4 },
+                    });
                 },
                 .aarch64 => {
                     if (pos.stack_align_mask) |mask| {
