@@ -16,6 +16,7 @@ class InvalidIntConversion extends SyntaxError {
 
 class Unsupported extends TypeError {
   errno = PosixError.ENOTSUP;
+  hide = true;
 
   constructor() {
     super(`Unsupported`);
@@ -449,10 +450,10 @@ class InvalidPath extends Error {
 }
 
 class MissingStreamMethod extends Error {
-  errno = PosixError.EPERM;
-
-  constructor(name) {
+  constructor(name, errno = PosixError.ESPIPE) {
     super(`Missing stream method '${name}'`);
+    this.errno = errno;
+    this.hide = errno === PosixError.ESPIPE;
   }
 }
 
@@ -474,6 +475,7 @@ class IllegalSeek extends Error {
 
 class WouldBlock extends Error {
   errno = PosixError.EAGAIN;
+  hide = true;
 
   constructor() {
     super(`Would block`);
@@ -597,7 +599,7 @@ function catchPosixError(canWait = false, defErrorNo, run, resolve, reject) {
     if (reject) {
       result = reject(err);
     } else {
-      if (err.errno !== PosixError.EAGAIN && err.errno !== PosixError.ENOTSUP) {
+      if (!err.hide) {
         console.error(err);
       }
     }
@@ -628,9 +630,9 @@ function checkAccessRight(rights, required) {
   }
 }
 
-function checkStreamMethod(stream, name) {
+function checkStreamMethod(stream, name, errno) {
   if (!hasMethod(stream, name)) {
-    throw new MissingStreamMethod(name);
+    throw new MissingStreamMethod(name, errno);
   }
 }
 
