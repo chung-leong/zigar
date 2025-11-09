@@ -1719,6 +1719,7 @@ export function addTests(importModule, options) {
         } catch {}
       }
     })
+    skip.entirely.unless(target == 'win32').
     it('should create a symlink using win32 function', async function() {
       const { __zigar, symlink } = await importTest('create-symlink-with-win32-function', { useLibc: true });      
       let event;
