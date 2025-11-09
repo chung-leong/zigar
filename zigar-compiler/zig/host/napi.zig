@@ -9,24 +9,20 @@ const hooks = @import("../hooks.zig");
 const interface = @import("../interface.zig");
 const js_fn = @import("../thunk/js-fn.zig");
 const zig_fn = @import("../thunk/zig-fn.zig");
-const abort_signal = @import("../type/abort-signal.zig");
-pub const AbortSignal = abort_signal.AbortSignal;
-const generator = @import("../type/generator.zig");
-pub const Generator = generator.Generator;
-pub const GeneratorOf = generator.GeneratorOf;
-pub const GeneratorArgOf = generator.GeneratorArgOf;
-const promise = @import("../type/promise.zig");
-pub const Promise = promise.Promise;
-pub const PromiseOf = promise.PromiseOf;
-pub const PromiseArgOf = promise.PromiseArgOf;
-const types = @import("../type/util.zig");
-const work_queue = @import("../type/work-queue.zig");
+pub const AbortSignal = @import("../type/abort-signal.zig").AbortSignal;
+pub const Generator = @import("../type/generator.zig").Generator;
+pub const GeneratorOf = @import("../type/generator.zig").GeneratorOf;
+pub const GeneratorArgOf = @import("../type/generator.zig").GeneratorArgOf;
+pub const Promise = @import("../type/promise.zig").Promise;
+pub const PromiseOf = @import("../type/promise.zig").PromiseOf;
+pub const PromiseArgOf = @import("../type/promise.zig").PromiseArgOf;
+const util = @import("../type/util.zig");
 const fn_transform = @import("../zigft/fn-transform.zig");
 
 const Module = interface.Module(Value);
 
 pub fn WorkQueue(ns: type) type {
-    return work_queue.WorkQueue(ns, struct {
+    return @import("../type/work-queue.zig").WorkQueue(ns, struct {
         pub fn onQueueInit() !void {
             try startMultithread();
         }
@@ -182,7 +178,7 @@ pub fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
 }
 
 pub fn releaseFunction(fn_ptr: anytype) void {
-    const FT = types.FnPointerTarget(@TypeOf(fn_ptr));
+    const FT = util.FnPointerTarget(@TypeOf(fn_ptr));
     const thunk_address = @intFromPtr(fn_ptr);
     const control = js_fn.createThunkController(@This(), FT);
     const fn_id = control(.identify, thunk_address) catch return;
@@ -229,7 +225,7 @@ pub fn getExportAddress(handle: usize, dest: *usize) callconv(.c) E {
     return .SUCCESS;
 }
 
-const empty_ptr: *anyopaque = @constCast(@ptrCast(&.{}));
+const empty_ptr: *anyopaque = @ptrCast(@constCast(&.{}));
 
 fn runThunk(
     thunk_address: usize,

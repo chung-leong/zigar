@@ -7,22 +7,21 @@ const exporter = @import("../exporter.zig");
 const Value = exporter.Value;
 const js_fn = @import("../thunk/js-fn.zig");
 const zig_fn = @import("../thunk/zig-fn.zig");
-const types = @import("../type/util.zig");
-pub const Promise = types.Promise;
-pub const PromiseOf = types.PromiseOf;
-pub const PromiseArgOf = types.PromiseArgOf;
-pub const Generator = types.Generator;
-pub const GeneratorOf = types.GeneratorOf;
-pub const GeneratorArgOf = types.GeneratorArgOf;
-pub const AbortSignal = types.AbortSignal;
-const work_queue = @import("../type/work-queue.zig");
+pub const AbortSignal = @import("../type/abort-signal.zig").AbortSignal;
+pub const Generator = @import("../type/generator.zig").Generator;
+pub const GeneratorOf = @import("../type/generator.zig").GeneratorOf;
+pub const GeneratorArgOf = @import("../type/generator.zig").GeneratorArgOf;
+pub const Promise = @import("../type/promise.zig").Promise;
+pub const PromiseOf = @import("../type/promise.zig").PromiseOf;
+pub const PromiseArgOf = @import("../type/promise.zig").PromiseArgOf;
+const util = @import("../type/util.zig");
 
 const stdio_h = @cImport({
     @cInclude("stdio.h");
 });
 
 pub fn WorkQueue(ns: type) type {
-    return work_queue.WorkQueue(ns, struct {});
+    return @import("../type/work-queue.zig").WorkQueue(ns, struct {});
 }
 
 threadlocal var in_main_thread: bool = false;
@@ -101,7 +100,7 @@ pub fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
 }
 
 pub fn releaseFunction(fn_ptr: anytype) void {
-    const FT = types.FnPointerTarget(@TypeOf(fn_ptr));
+    const FT = util.FnPointerTarget(@TypeOf(fn_ptr));
     const thunk_address = @intFromPtr(fn_ptr);
     const control = js_fn.createThunkController(@This(), FT);
     const controller_address = @intFromPtr(control);
