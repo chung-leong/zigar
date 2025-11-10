@@ -156,6 +156,7 @@ const PosixError = { // values mirror std.os.wasi.errno_t
   EIO: 29,
   EMFILE: 34,
   ENOENT: 44,
+  ENOSPC: 51,
   ENOTSUP: 58,
   EPERM: 63,
   ESPIPE: 70,
@@ -6027,7 +6028,7 @@ var clockResGet = mixin({
   },
 });
 
-var clocktimeGet = mixin({
+var clockTimeGet = mixin({
   clockTimeGet(clockId, precision, timeAddress) {
     const t = (clockId === 0) ? Date.now() : performance.now();
     this.copyUint64(timeAddress, BigInt(t * 1000000));
@@ -6112,7 +6113,7 @@ var fdAllocate = mixin({
   fdAllocate(fd, offset, len, canWait) {
     return catchPosixError(canWait, PosixError.EBADF, () => {
       const [ stream ] = this.getStream(fd);
-      checkStreamMethod(stream, 'allocate');
+      checkStreamMethod(stream, 'allocate', PosixError.ENOSPC);
       return stream.allocate(safeInt(offset), safeInt(len));
     });
   },
@@ -6174,10 +6175,10 @@ var fdFdstatSetFlags = mixin({
       const [ stream, rights, flags ] = entry;
       if (newFlags & PosixDescriptorFlag.nonblock) {
         if (rights[0] & PosixDescriptorRight.fd_read) {
-          checkStreamMethod(stream, 'readnb');
+          checkStreamMethod(stream, 'readnb', PosixError.EPERM);
         }
         if (rights[0] & PosixDescriptorRight.fd_write) {
-          checkStreamMethod(stream, 'writenb');
+          checkStreamMethod(stream, 'writenb', PosixError.EPERM);
         }
       }
       entry[2] = (flags & ~mask) | (newFlags & mask);
@@ -6620,6 +6621,7 @@ var pathReadlink = mixin({
       return this.triggerEvent('readlink', loc, PosixError.ENOENT);
     }, (result) => {
       if (result === undefined) return PosixError.ENOTSUP;
+      if (result === false) return PosixError.ENOENT;
       if (typeof(result) !== 'string') throw new TypeMismatch('string', result);
       const ta = encodeText(result).slice(0, bufLen);
       this.moveExternBytes(ta, bufAddress, this.littleEndian);
@@ -7096,7 +7098,7 @@ var structureAcquisition = mixin({
       for (const name of Object.keys(this.exportedModules.wasi_snapshot_preview1)) {
         switch (name) {
           case 'clock_res_get': this.use(clockResGet); break;
-          case 'clock_time_get': this.use(clocktimeGet); break;
+          case 'clock_time_get': this.use(clockTimeGet); break;
           case 'environ_get': this.use(environGet); break;
           case 'environ_sizes_get': this.use(environSizesGet); break;
           case 'proc_exit': this.use(procExit); break;
@@ -11086,7 +11088,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   StructureVector: vector,
   StructureWriter: writer,
   SyscallClockResGet: clockResGet,
-  SyscallClocktimeGet: clocktimeGet,
+  SyscallClockTimeGet: clockTimeGet,
   SyscallCopyInt: copyInt,
   SyscallCopyStat: copyStat,
   SyscallEnvironGet: environGet,

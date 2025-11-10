@@ -86,7 +86,7 @@ export { default as StructureUnion } from './structures/union.js';
 export { default as StructureVariadicStruct } from './structures/variadic-struct.js';
 export { default as StructureVector } from './structures/vector.js';
 export { default as SyscallClockResGet } from './syscalls/clock-res-get.js';
-export { default as SyscallClocktimeGet } from './syscalls/clocktime-get.js';
+export { default as SyscallClockTimeGet } from './syscalls/clock-time-get.js';
 export { default as SyscallCopyInt } from './syscalls/copy-int.js';
 export { default as SyscallCopyStat } from './syscalls/copy-stat.js';
 export { default as SyscallEnvironGet } from './syscalls/environ-get.js';

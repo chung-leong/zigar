@@ -171,6 +171,40 @@ describe('Syscalls: stream-location', function() {
         path: 'world', 
       });
     })
+    if (process.env.TARGET == 'node') {
+      it('should handle a file descriptor path', async function() {
+        const env = new Env();
+        const map = new Map();
+        env.obtainExternBuffer = function(address, len) {
+          let buffer = map.get(address);
+          if (!buffer) {
+            buffer = new ArrayBuffer(len);
+            map.set(address, buffer);
+          }
+          return buffer;
+        };
+        env.setSyscallTrap = () => {};
+        env.setRedirectionMask = () => {};
+        const fd = 12345;
+        const parent = new Map();
+        env.setStreamLocation(fd, { parent, path: '/world.txt' });
+        const path = `/dev/fd/${fd}`;
+        const pathAddress = usize(0x1000);
+        const encoder = new TextEncoder();
+        const pathSrc = encoder.encode(path);
+        const pathLen = pathSrc.length;
+        const pathDV = env.obtainZigView(pathAddress, pathLen, false);
+        const pathArray = new Uint8Array(pathDV.buffer, pathDV.byteOffset, pathDV.byteLength);
+        for (let i = 0; i < pathLen; i++) pathArray[i] = pathSrc[i];
+        const result = env.obtainStreamLocation(fd, pathAddress, pathLen);
+        expect(result).to.eql({
+          parent, 
+          path: '/world.txt', 
+        });
+        env.setStreamLocation(fd, null);
+        expect(() => env.obtainStreamLocation(fd, pathAddress, pathLen)).to.throw();
+      })
+    }
   })
   describe('getStreamLocation', function() {
     it('should get the path of a stream', async function() {
