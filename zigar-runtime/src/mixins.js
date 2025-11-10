@@ -89,7 +89,7 @@ export { default as StructureVariadicStruct } from './structures/variadic-struct
 export { default as StructureVector } from './structures/vector.js';
 export { default as StructureWriter } from './structures/writer.js';
 export { default as SyscallClockResGet } from './syscalls/clock-res-get.js';
-export { default as SyscallClocktimeGet } from './syscalls/clocktime-get.js';
+export { default as SyscallClocktimeGet } from './syscalls/clock-time-get.js';
 export { default as SyscallCopyInt } from './syscalls/copy-int.js';
 export { default as SyscallCopyStat } from './syscalls/copy-stat.js';
 export { default as SyscallEnvironGet } from './syscalls/environ-get.js';
@@ -135,3 +135,4 @@ export { default as VisitorInOptional } from './visitors/in-optional.js';
 export { default as VisitorInStruct } from './visitors/in-struct.js';
 export { default as VisitorInUnion } from './visitors/in-union.js';
 export { default as VisitorInVariadicStruct } from './visitors/in-variadic-struct.js';
+
