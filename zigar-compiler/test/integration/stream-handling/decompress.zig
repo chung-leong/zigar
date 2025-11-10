@@ -21,13 +21,12 @@ pub fn shutdown(promise: zigar.function.Promise(void)) void {
 pub const decompress = work_queue.promisify(ns.decompress);
 
 const ns = struct {
-    pub fn decompress(reader: std.io.AnyReader, writer: std.io.AnyWriter) !void {
-        var buffer: std.io.BufferedReader(4096, std.io.AnyReader) = .{
-            .unbuffered_reader = reader,
-        };
-        var dc = try std.compress.xz.decompress(gpa.allocator(), buffer.reader());
-        defer dc.deinit();
-        var fifo: std.fifo.LinearFifo(u8, .{ .Static = 128 }) = .init();
-        try fifo.pump(dc.reader(), writer);
+    pub fn decompress(in_file: std.fs.File, out_file: std.fs.File) !usize {
+        var read_buffer: [4096]u8 = undefined;
+        var reader = in_file.reader(&read_buffer);
+        var deflate: std.compress.flate.Decompress = .init(&reader.interface, .gzip, &.{});
+        var write_buffer: [4096]u8 = undefined;
+        var writer = out_file.writer(&write_buffer);
+        return try deflate.reader.stream(&writer.interface, .unlimited);
     }
 };

@@ -19,8 +19,6 @@ import dir from '../structures/dir.js';
 import file from '../structures/file.js';
 import generator from '../structures/generator.js';
 import promise from '../structures/promise.js';
-import reader from '../structures/reader.js';
-import writer from '../structures/writer.js';
 import clockResGet from '../syscalls/clock-res-get.js';
 import clocktimeGet from '../syscalls/clocktime-get.js';
 import environGet from '../syscalls/environ-get.js';
@@ -306,14 +304,6 @@ export default mixin({
                 break;
               case StructurePurpose.AbortSignal:
                 this.use(abortSignal);
-                break;
-              case StructurePurpose.Reader:
-                this.use(reader);
-                this.use(readerConversion);
-                break;
-              case StructurePurpose.Writer:
-                this.use(writer);
-                this.use(writerConversion);
                 break;
               case StructurePurpose.File:
                 this.use(file);

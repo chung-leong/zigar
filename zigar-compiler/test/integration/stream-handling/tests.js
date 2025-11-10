@@ -19,44 +19,6 @@ export function addTests(importModule, options) {
   };
   describe('Stream handling', function() {
     this.timeout(0);
-    it('should read from reader', async function() {
-      const {
-        startup,
-        shutdown,
-        hash,
-      } = await importTest('read-from-reader', { multithreaded: true });
-      startup(1);
-      try {
-        const correct = (platform() === 'win32') 
-        ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
-        : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
-        const path = absolute('./data/test.txt');
-        const fd = await open(path);
-        const stream = fd.readableWebStream();
-        const digest1 = await hash(stream.getReader());
-        expect(digest1.string).to.equal(correct);
-        // Uint8Array as input
-        const content = await readFile(path);
-        const digest2 = await hash(content);
-        expect(digest2.string).to.equal(correct);
-        // Blob as input
-        const blob = new Blob([ content ]);
-        const digest3 = await hash(content);
-        expect(digest3.string).to.equal(correct);
-      } finally {
-        await shutdown();
-      }
-    })
-    it('should read from reader in main thread', async function() {
-      const { hash } = await importTest('read-from-reader-in-main-thread');
-      const correct = (platform() === 'win32') 
-      ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
-      : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
-      const path = absolute('./data/test.txt');
-      const content = await readFile(path);
-      const digest = hash(content);
-      expect(digest.string).to.equal(correct);
-    })
     it('should read from file', async function() {
       const {
         startup,
@@ -349,44 +311,6 @@ export function addTests(importModule, options) {
         'ur fathers broug',
         'ur fathers broug',
       ]);
-    })
-    it('should write to writer', async function() {
-      const {
-        startup,
-        shutdown,
-        save,
-      } = await importTest('write-to-writer', { multithreaded: true });
-      startup(1);
-      try {
-        const fd = await open(absolute('./data/output.txt'), 'w');
-        const stream = new WritableStream({
-          write(chunk) {
-            fd.write(chunk);
-          },
-        });
-        const len1 = await save('This is a test', stream.getWriter());
-        fd.close();
-        expect(len1).to.equal(14);
-        const chunks = [];
-        const len2 = await save('This is a test', chunks);
-        expect(len2).to.equal(14);
-        expect(chunks).to.have.lengthOf(1);
-        const blob = new Blob(chunks);
-        const string = await blob.text();
-        expect(string).to.equal('This is a test');
-      } finally {
-        await shutdown();
-      }
-    })
-    it('should write to writer in main thread', async function() {
-      const { save } = await importTest('write-to-writer-in-main-thread');
-      const chunks = [];
-      const len = save('This is a test', chunks);
-      expect(len).to.equal(14);
-      expect(chunks).to.have.lengthOf(1);
-      const blob = new Blob(chunks);
-      const string = await blob.text();
-      expect(string).to.equal('This is a test');
     })
     it('should write to file', async function() {
       const {
@@ -809,7 +733,7 @@ export function addTests(importModule, options) {
         } catch {}
       }
     })
-    it('should decompress xz file', async function() {
+    it('should decompress gzip file', async function() {
       const {
         startup,
         shutdown,
@@ -817,7 +741,7 @@ export function addTests(importModule, options) {
       } = await importTest('decompress', { multithreaded: true });
       startup(1);
       try {
-        const inputPath = absolute('./data/test.txt.xz');
+        const inputPath = absolute('./data/test.txt.gz');
         const input = await open(inputPath);
         const inStream = input.readableWebStream();
         const reader = inStream.getReader();

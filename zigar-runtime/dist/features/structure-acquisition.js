@@ -15,8 +15,6 @@ import '../structures/dir.js';
 import '../structures/file.js';
 import '../structures/generator.js';
 import '../structures/promise.js';
-import '../structures/reader.js';
-import '../structures/writer.js';
 import '../syscalls/clock-res-get.js';
 import '../syscalls/clocktime-get.js';
 import '../syscalls/environ-get.js';

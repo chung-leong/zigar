@@ -22,10 +22,8 @@ export const StructurePurpose = {
   AbortSignal: 3,
   Allocator: 4,
   Iterator: 5,
-  Reader: 6,
-  Writer: 7,
-  File: 8,
-  Directory: 9,
+  File: 6,
+  Directory: 7,
 };
 export const structureNames = Object.keys(StructureType);
 export const StructureFlag = {
@@ -149,6 +147,7 @@ export const PosixError = { // values mirror std.os.wasi.errno_t
   EIO: 29,
   EMFILE: 34,
   ENOENT: 44,
+  ENOSPC: 51,
   ENOTSUP: 58,
   EPERM: 63,
   ESPIPE: 70,

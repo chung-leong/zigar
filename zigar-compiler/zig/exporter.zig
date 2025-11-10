@@ -62,8 +62,6 @@ fn Factory(comptime host: type, comptime module: type) type {
         pub fn getStructurePurpose(comptime td: TypeData) StructurePurpose {
             return switch (td.type) {
                 std.mem.Allocator => .allocator,
-                std.io.AnyReader => .reader,
-                std.io.AnyWriter => .writer,
                 std.fs.File => .file,
                 std.fs.Dir => .directory,
                 else => get: {
@@ -1369,8 +1367,6 @@ const StructurePurpose = enum(u32) {
     abort_signal,
     allocator,
     iterator,
-    reader,
-    writer,
     file,
     directory,
 

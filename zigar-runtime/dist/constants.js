@@ -22,10 +22,8 @@ const StructurePurpose = {
   AbortSignal: 3,
   Allocator: 4,
   Iterator: 5,
-  Reader: 6,
-  Writer: 7,
-  File: 8,
-  Directory: 9,
+  File: 6,
+  Directory: 7,
 };
 const structureNames = Object.keys(StructureType);
 const StructureFlag = {
