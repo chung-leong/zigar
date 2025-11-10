@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
             .single_threaded = !cfg.multithreaded,
         }),
-        .use_llvm = cfg.multithreaded,
+        .use_llvm = cfg.is_wasm or cfg.multithreaded,
     });
     const zigar = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "zigar.zig" },
