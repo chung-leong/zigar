@@ -12,6 +12,7 @@ var pathReadlink = mixin({
       return this.triggerEvent('readlink', loc, PosixError.ENOENT);
     }, (result) => {
       if (result === undefined) return PosixError.ENOTSUP;
+      if (result === false) return PosixError.ENOENT;
       if (typeof(result) !== 'string') throw new TypeMismatch('string', result);
       const ta = encodeText(result).slice(0, bufLen);
       this.moveExternBytes(ta, bufAddress, this.littleEndian);

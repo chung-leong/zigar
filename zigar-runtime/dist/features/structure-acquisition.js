@@ -18,7 +18,7 @@ import '../structures/promise.js';
 import '../structures/reader.js';
 import '../structures/writer.js';
 import '../syscalls/clock-res-get.js';
-import '../syscalls/clocktime-get.js';
+import '../syscalls/clock-time-get.js';
 import '../syscalls/environ-get.js';
 import '../syscalls/environ-sizes-get.js';
 import '../syscalls/fd-advise.js';
