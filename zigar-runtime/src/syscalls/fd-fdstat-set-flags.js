@@ -11,10 +11,10 @@ export default mixin({
       const [ stream, rights, flags ] = entry;
       if (newFlags & PosixDescriptorFlag.nonblock) {
         if (rights[0] & PosixDescriptorRight.fd_read) {
-          checkStreamMethod(stream, 'readnb');
+          checkStreamMethod(stream, 'readnb', PosixError.EPERM);
         }
         if (rights[0] & PosixDescriptorRight.fd_write) {
-          checkStreamMethod(stream, 'writenb');
+          checkStreamMethod(stream, 'writenb', PosixError.EPERM);
         }
       }
       entry[2] = (flags & ~mask) | (newFlags & mask);
