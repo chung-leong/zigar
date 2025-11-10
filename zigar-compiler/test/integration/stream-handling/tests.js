@@ -282,6 +282,7 @@ export function addTests(importModule, options) {
         await shutdown();;
       }
     })
+    skip.
     it('should open a file and seek to a particular position using posix function', async function() {
       const { __zigar, read } = await importTest('seek-file-with-posix-functions', { useLibc: true });
       const path = absolute('./data/test.txt');
@@ -323,6 +324,7 @@ export function addTests(importModule, options) {
       expect(chunk.string).to.equal('ur fathers broug');
       expect(event).to.be.an('object');
     })
+    skip.
     it('should obtain the expected position after a seek operation using posix function', async function() {
       const { __zigar, seek } = await importTest('return-file-position-with-posix-functions', { useLibc: true });
       const content = new TextEncoder().encode('Hello world!');

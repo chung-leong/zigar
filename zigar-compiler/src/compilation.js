@@ -156,8 +156,8 @@ export function formatProjectConfig(config) {
   const lines = [];
   const fields = [
     'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath', 'useLibc', 
-    'useRedirection', 'isWASM', 'multithreaded', 'stackSize', 'maxMemory', 'evalBranchQuota', 
-    'omitFunctions', 'omitVariables',
+    'useLLVM', 'useRedirection', 'isWASM', 'multithreaded', 'stackSize', 'maxMemory', 
+    'evalBranchQuota', 'omitFunctions', 'omitVariables',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -213,6 +213,7 @@ export function createConfig(srcPath, modPath, options = {}) {
     optimize = 'Debug',
     isWASM = false,
     useLibc = isWASM ? false : true,
+    useLLVM = null,
     useRedirection = true,
     clean = false,
     buildDir = join(os.tmpdir(), 'zigar-build'),
@@ -313,6 +314,7 @@ export function createConfig(srcPath, modPath, options = {}) {
     zigPath,
     zigArgs,
     useLibc,
+    useLLVM,
     useRedirection,
     isWASM,
     multithreaded,

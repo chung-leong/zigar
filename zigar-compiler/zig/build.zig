@@ -5,6 +5,14 @@ const builtin = @import("builtin");
 const cfg = @import("build.cfg.zig");
 const extra = @import("build.extra.zig");
 
+const use_llvm = @as(?bool, cfg.use_llvm) orelse switch (cfg.is_wasm) {
+    true => null,
+    false => switch (builtin.target.cpu.arch) {
+        .x86_64 => cfg.multithreaded,
+        else => null,
+    },
+};
+
 pub fn build(b: *std.Build) !void {
     if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 15) {
         @compileError("Unsupported Zig version");
@@ -20,13 +28,7 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
             .single_threaded = !cfg.multithreaded,
         }),
-        .use_llvm = switch (cfg.is_wasm) {
-            true => null,
-            false => switch (builtin.target.cpu.arch) {
-                .x86_64 => cfg.multithreaded,
-                else => null,
-            },
-        },
+        .use_llvm = use_llvm,
     });
     const zigar = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "zigar.zig" },
