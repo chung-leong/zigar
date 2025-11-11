@@ -29,7 +29,7 @@ export function addTests(importModule, options) {
     })
     it('should link in zig-sqlite', async function() {
       this.timeout(0);
-      const { __zigar, search } = await importTest('use-zig-sqlite/zig-sqlite', { useLibc: true });
+      const { __zigar, search } = await importTest('use-zig-sqlite/zig-sqlite', { useLLVM: true, useLibc: true });
       const path = fileURLToPath(new URL('./use-zig-sqlite/chinook.db', import.meta.url));
       const content = await readFile(path);
       __zigar.on('open', ({ path }) => {
