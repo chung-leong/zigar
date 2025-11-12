@@ -21,10 +21,11 @@ pub fn LinkedList(comptime T: type) type {
             return .{ .allocator = allocator };
         }
 
-        pub fn push(self: *@This(), value: T) !void {
+        pub fn push(self: *@This(), value: T) !*T {
             const new_node = try self.alloc();
             new_node.* = .{ .next = tail, .ref_count = 1, .payload = value };
             self.insert(new_node);
+            return &new_node.payload;
         }
 
         fn alloc(self: *@This()) !*Node {
@@ -79,6 +80,11 @@ pub fn LinkedList(comptime T: type) type {
                 current_node = next_node;
             }
             return null;
+        }
+
+        pub fn addRef(_: *@This(), payload_ptr: *T) void {
+            const node: *Node = @fieldParentPtr("payload", payload_ptr);
+            _ = @atomicRmw(usize, &node.ref_count, .Add, 1, .monotonic);
         }
 
         pub fn release(_: *@This(), payload_ptr: *T) void {

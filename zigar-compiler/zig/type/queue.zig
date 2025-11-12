@@ -14,7 +14,7 @@ pub fn Queue(comptime T: type) type {
         }
 
         pub fn push(self: *@This(), value: T) !void {
-            try self.list.push(value);
+            _ = try self.list.push(value);
             self.item_futex.store(1, .release);
             std.Thread.Futex.wake(&self.item_futex, 1);
         }
