@@ -13,7 +13,7 @@ const util = @import("util.zig");
 pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
     const decls = std.meta.declarations(ns);
     return struct {
-        queue: Queue(WorkItem, 64) = undefined,
+        queue: Queue(WorkItem) = undefined,
         thread_count: usize = 0,
         status: Status = .uninitialized,
         init_remaining: usize = undefined,

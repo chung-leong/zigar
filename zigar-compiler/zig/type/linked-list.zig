@@ -1,14 +1,18 @@
 const std = @import("std");
 const expectEqual = std.testing.expectEqual;
 
-pub fn LinkedList(comptime T: type, comptime retain: usize) type {
+pub fn LinkedList(comptime T: type) type {
     return struct {
         const Node = struct {
-            next: *Node,
+            next: *@This(),
+            ref_count: usize,
             payload: T,
+
+            pub inline fn replace(self: *@This(), new: *@This(), dest: **@This()) bool {
+                return @cmpxchgWeak(*@This(), dest, self, new, .seq_cst, .monotonic) == null;
+            }
         };
         const tail: *Node = @ptrFromInt(std.mem.alignBackward(usize, std.math.maxInt(usize), @alignOf(Node)));
-        const cache_count = retain;
 
         head: *Node = tail,
         allocator: std.mem.Allocator,
@@ -19,7 +23,7 @@ pub fn LinkedList(comptime T: type, comptime retain: usize) type {
 
         pub fn push(self: *@This(), value: T) !void {
             const new_node = try self.alloc();
-            new_node.* = .{ .next = tail, .payload = value };
+            new_node.* = .{ .next = tail, .ref_count = 1, .payload = value };
             self.insert(new_node);
         }
 
@@ -27,8 +31,11 @@ pub fn LinkedList(comptime T: type, comptime retain: usize) type {
             while (true) {
                 const current_head = self.head;
                 if (current_head != tail and isMarkedReference(current_head.next)) {
-                    const next_node = getUnmarkedReference(current_head.next);
-                    if (cas(&self.head, current_head, next_node)) return current_head;
+                    // make sure the detached Node is not being used
+                    if (@cmpxchgWeak(usize, &current_head.ref_count, 0, 1, .monotonic, .monotonic) == null) {
+                        const next_node = getUnmarkedReference(current_head.next);
+                        if (current_head.replace(next_node, &self.head)) return current_head;
+                    }
                 } else break;
             }
             return try self.allocator.create(Node);
@@ -37,7 +44,7 @@ pub fn LinkedList(comptime T: type, comptime retain: usize) type {
         fn insert(self: *@This(), node: *Node) void {
             while (true) {
                 if (self.head == tail) {
-                    if (cas(&self.head, tail, node)) return;
+                    if (tail.replace(node, &self.head)) return;
                 } else {
                     var current_node = self.head;
                     while (true) {
@@ -47,7 +54,7 @@ pub fn LinkedList(comptime T: type, comptime retain: usize) type {
                                 false => node,
                                 true => getMarkedReference(node),
                             };
-                            if (cas(&current_node.next, current_node.next, next)) return;
+                            if (current_node.next.replace(next, &current_node.next)) return;
                             break;
                         }
                         current_node = next_node;
@@ -56,12 +63,37 @@ pub fn LinkedList(comptime T: type, comptime retain: usize) type {
             }
         }
 
+        pub fn find(self: *@This(), match: anytype, args: anytype) ?*T {
+            var current_node = self.head;
+            while (current_node != tail) {
+                const next_node = getUnmarkedReference(current_node.next);
+                if (!isMarkedReference(current_node.next)) {
+                    // see if we have a match
+                    if (@call(.always_inline, match, .{ @as(*const T, &current_node), args })) {
+                        const prev_ref_count = @atomicRmw(usize, &current_node.ref_count, .Add, 1, .monotonic);
+                        // make sure the item hasn't been removed while we're checking it
+                        if (prev_ref_count > 0) return &current_node.payload;
+                        _ = @atomicRmw(usize, &current_node.ref_count, .Sub, 1, .monotonic);
+                    }
+                }
+                current_node = next_node;
+            }
+            return null;
+        }
+
+        pub fn release(_: *@This(), payload_ptr: *T) void {
+            const node: *Node = @fieldParentPtr("payload", payload_ptr);
+            _ = @atomicRmw(usize, &node.ref_count, .Sub, 1, .monotonic);
+        }
+
         pub fn shift(self: *@This()) ?T {
             var current_node = self.head;
             while (current_node != tail) {
                 const next_node = getUnmarkedReference(current_node.next);
                 if (!isMarkedReference(current_node.next)) {
-                    if (cas(&current_node.next, next_node, getMarkedReference(next_node))) {
+                    if (next_node.replace(getMarkedReference(next_node), &current_node.next)) {
+                        // release node after copying is completed
+                        defer _ = @atomicRmw(usize, &current_node.ref_count, .Sub, 1, .monotonic);
                         return current_node.payload;
                     }
                 }
@@ -91,33 +123,12 @@ pub fn LinkedList(comptime T: type, comptime retain: usize) type {
             @setRuntimeSafety(false);
             return @ptrFromInt(@intFromPtr(ptr) | @as(usize, 1));
         }
-
-        inline fn cas(ptr: **Node, old: *Node, new: *Node) bool {
-            return @cmpxchgWeak(*Node, ptr, old, new, .seq_cst, .monotonic) == null;
-        }
     };
 }
 
-test "ListedList (cache = 1)" {
+test "ListedList.push()" {
     var gpa = std.heap.DebugAllocator(.{}).init;
-    var list: LinkedList(i32, 1) = .init(gpa.allocator());
-    defer list.deinit();
-    try list.push(123);
-    try list.push(456);
-    const value1 = list.shift();
-    try expectEqual(123, value1);
-    const value2 = list.shift();
-    try expectEqual(456, value2);
-    const value3 = list.shift();
-    try expectEqual(null, value3);
-    try list.push(888);
-    const value4 = list.shift();
-    try expectEqual(888, value4);
-}
-
-test "ListedList (cache = 0)" {
-    var gpa = std.heap.DebugAllocator(.{}).init;
-    var list: LinkedList(i32, 0) = .init(gpa.allocator());
+    var list: LinkedList(i32) = .init(gpa.allocator());
     defer list.deinit();
     try list.push(123);
     try list.push(456);

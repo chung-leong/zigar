@@ -3,9 +3,9 @@ const expectEqual = std.testing.expectEqual;
 
 const LinkedList = @import("linked-list.zig").LinkedList;
 
-pub fn Queue(comptime T: type, comptime retain: usize) type {
+pub fn Queue(comptime T: type) type {
     return struct {
-        list: LinkedList(T, retain),
+        list: LinkedList(T),
         stopped: bool = false,
         item_futex: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
 
@@ -44,9 +44,9 @@ pub fn Queue(comptime T: type, comptime retain: usize) type {
     };
 }
 
-test "Queue" {
+test "Queue.push()" {
     var gpa = std.heap.DebugAllocator(.{}).init;
-    var queue: Queue(i32, 0) = .init(gpa.allocator());
+    var queue: Queue(i32) = .init(gpa.allocator());
     defer queue.deinit();
     try queue.push(123);
     try queue.push(456);
