@@ -1,6 +1,10 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub fn build(b: *std.Build) !void {
+    if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 14) {
+        @compileError("Unsupported Zig version");
+    }
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const output_path = b.option([]const u8, "output", "Path to which library is written") orelse {
