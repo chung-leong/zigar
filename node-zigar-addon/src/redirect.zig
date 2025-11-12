@@ -2,7 +2,7 @@ const std = @import("std");
 const c_allocator = std.heap.c_allocator;
 const builtin = @import("builtin");
 
-const syscall = @import("./syscall.zig");
+const syscall = @import("syscall.zig");
 
 const os = switch (builtin.target.os.tag) {
     .linux => .linux,

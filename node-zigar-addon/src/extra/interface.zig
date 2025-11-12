@@ -1,7 +1,7 @@
 const std = @import("std");
 const E = std.os.wasi.errno_t;
 
-const hooks = @import("./hooks.zig");
+const hooks = @import("hooks.zig");
 
 pub fn Module(comptime Value: type) type {
     return extern struct {
