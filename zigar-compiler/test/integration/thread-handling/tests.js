@@ -476,6 +476,26 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    it('should print ids of threads created using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('print-ids-of-threads-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn(5);
+          await delay(500);
+        });
+        expect(lines).to.have.lengthOf(5);
+        for (const line of lines) {
+          expect(line).to.match(/^thread_id =/);
+        }
+      } finally {
+        shutdown();
+      }
+    })
   })
 }
 
