@@ -111,6 +111,10 @@ export const optionsForTranspile = {
     type: 'boolean',
     title: 'Keep names of function in WASM binary when stripping',
   },
+  usePthreadEmulation: {
+    type: 'boolean',
+    title: 'Provide emulated pthread functions',
+  },
 };
 
 const allOptions = {
