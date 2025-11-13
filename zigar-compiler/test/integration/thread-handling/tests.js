@@ -394,6 +394,23 @@ export function addTests(importModule, options) {
       expect(promise).to.be.eventually.be.rejectedWith(Error)
         .with.property('message').that.contains('AbortSignal');
     })
+    it('should create a detached thread using pthread', async function() {
+      const {
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('create-detached-thread-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+        });
+        expect(lines).to.eql([ 'Hello world!' ]);
+      } finally {
+        shutdown();
+      }
+    })
   })
 }
 

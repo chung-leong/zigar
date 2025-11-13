@@ -44,7 +44,7 @@ pub fn Queue(comptime T: type) type {
     };
 }
 
-test "Queue.push()" {
+test "Queue.pull()" {
     var gpa = std.heap.DebugAllocator(.{}).init;
     var queue: Queue(i32) = .init(gpa.allocator());
     defer queue.deinit();

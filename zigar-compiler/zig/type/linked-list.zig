@@ -1,4 +1,5 @@
 const std = @import("std");
+const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 
 pub fn LinkedList(comptime T: type) type {
@@ -70,7 +71,7 @@ pub fn LinkedList(comptime T: type) type {
                 const next_node = getUnmarkedReference(current_node.next);
                 if (!isMarkedReference(current_node.next)) {
                     // see if we have a match
-                    if (@call(.always_inline, match, .{ @as(*const T, &current_node), args })) {
+                    if (@call(.always_inline, match, .{ &current_node.payload, args })) {
                         const prev_ref_count = @atomicRmw(usize, &current_node.ref_count, .Add, 1, .monotonic);
                         // make sure the item hasn't been removed while we're checking it
                         if (prev_ref_count > 0) return &current_node.payload;
@@ -136,15 +137,41 @@ test "ListedList.push()" {
     var gpa = std.heap.DebugAllocator(.{}).init;
     var list: LinkedList(i32) = .init(gpa.allocator());
     defer list.deinit();
-    try list.push(123);
-    try list.push(456);
+    const ptr1 = try list.push(123);
+    try expectEqual(123, ptr1.*);
+    const ptr2 = try list.push(456);
+    try expectEqual(456, ptr2.*);
+}
+
+test "ListedList.shift()" {
+    var gpa = std.heap.DebugAllocator(.{}).init;
+    var list: LinkedList(i32) = .init(gpa.allocator());
+    defer list.deinit();
+    _ = try list.push(123);
+    _ = try list.push(456);
     const value1 = list.shift();
     try expectEqual(123, value1);
     const value2 = list.shift();
     try expectEqual(456, value2);
     const value3 = list.shift();
     try expectEqual(null, value3);
-    try list.push(888);
+    _ = try list.push(888);
     const value4 = list.shift();
     try expectEqual(888, value4);
+}
+
+test "ListedList.find()" {
+    var gpa = std.heap.DebugAllocator(.{}).init;
+    var list: LinkedList(i32) = .init(gpa.allocator());
+    defer list.deinit();
+    _ = try list.push(123);
+    _ = try list.push(456);
+    const ns = struct {
+        fn match(self: *i32, other: i32) bool {
+            return self.* == other;
+        }
+    };
+    const ptr = list.find(ns.match, 456);
+    try expect(ptr != null);
+    try expectEqual(456, ptr.?.*);
 }

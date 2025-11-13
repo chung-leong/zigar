@@ -6,7 +6,7 @@ const LinkedList = @import("type/linked-list.zig").LinkedList;
 const Pthread = struct {
     id: pthread_t = undefined,
     thread: std.Thread = undefined,
-    start_routine: ?*const fn (?*anyopaque) callconv(.c) ?*anyopaque = undefined,
+    start_routine: *const fn (?*anyopaque) callconv(.c) ?*anyopaque = undefined,
     arg: ?*anyopaque = undefined,
     return_value: ?*anyopaque = null,
     state: PthreadState = .joinable,
@@ -76,25 +76,25 @@ pub fn pthread_create(
         break :get pt;
     } else Pthread.alloc() catch return errno(.NOMEM);
     errdefer pthread.release();
-    const detach = if (pthread_attrs) |pa| pa.detached == PTHREAD_CREATE_DETACHED) else false;
+    const detach = if (pthread_attrs) |pa| pa.detached == PTHREAD_CREATE_DETACHED else false;
     pthread.id = Pthread.allocId();
-    pthread.start_routine = start_routine;
+    pthread.start_routine = start_routine.?;
     pthread.arg = arg;
     pthread.state = if (detach) .detached else .joinable;
     // create the actual thread through Zig std
-    pthread.thread = .spawn(.{
+    pthread.thread = std.Thread.spawn(.{
         .allocator = wasm_allocator,
         .stack_size = if (pthread_attrs) |pa| pa.stack_size else Pthread.def_stack_size,
-    }, run_pthread, pthread) catch return errno(.INVAL);
+    }, run_pthread, .{pthread}) catch return errno(.INVAL);
     if (detach) pthread.thread.detach();
-    newthread.* = pthread.id;    
+    newthread.* = pthread.id;
     return 0;
 }
 
 fn run_pthread(thread: *Pthread) void {
     // set threadlocal variable so pthread_self() can get itself
     Pthread.current = thread;
-    thread.retval = thread.start_routine(thread.arg);
+    thread.return_value = thread.start_routine(thread.arg);
     Pthread.current = null;
 }
 
@@ -143,21 +143,23 @@ pub fn pthread_attr_init(
 ) callconv(.c) c_int {
     const pthread = Pthread.alloc() catch return errno(.NOMEM);
     attr.* = &pthread.attributes;
+    return 0;
 }
 
 pub fn pthread_attr_destroy(
     attr: [*c]pthread_attr_t,
 ) callconv(.c) c_int {
-    const pthread_attrs: *PthreadAttributes = @ptrCast(attr.*);
+    const pthread_attrs: *PthreadAttributes = attr.*;
     const pthread: *Pthread = @fieldParentPtr("attributes", pthread_attrs);
     pthread.release();
+    return 0;
 }
 
 pub fn pthread_attr_getdetachstate(
     attr: [*c]const pthread_attr_t,
     detachstate: [*c]c_int,
 ) callconv(.c) c_int {
-    const pthread_attrs: *PthreadAttributes = @ptrCast(attr.*);
+    const pthread_attrs: *PthreadAttributes = attr.*;
     detachstate.* = pthread_attrs.detached;
     return 0;
 }
@@ -166,7 +168,7 @@ pub fn pthread_attr_setdetachstate(
     attr: [*c]pthread_attr_t,
     detachstate: c_int,
 ) callconv(.c) c_int {
-    const pthread_attrs: *PthreadAttributes = @ptrCast(attr.*);
+    const pthread_attrs: *PthreadAttributes = attr.*;
     pthread_attrs.detached = detachstate;
     return 0;
 }
@@ -175,7 +177,7 @@ pub fn pthread_attr_getguardsize(
     attr: [*c]const pthread_attr_t,
     guardsize: [*c]usize,
 ) callconv(.c) c_int {
-    const pthread_attrs: *PthreadAttributes = @ptrCast(attr.*);
+    const pthread_attrs: *PthreadAttributes = attr.*;
     guardsize.* = pthread_attrs.guard_size;
     return 0;
 }
@@ -184,7 +186,7 @@ pub fn pthread_attr_setguardsize(
     attr: [*c]pthread_attr_t,
     guardsize: usize,
 ) callconv(.c) c_int {
-    const pthread_attrs: *PthreadAttributes = @ptrCast(attr.*);
+    const pthread_attrs: *PthreadAttributes = attr.*;
     pthread_attrs.guard_size = guardsize;
     return 0;
 }
@@ -193,7 +195,7 @@ pub fn pthread_attr_getschedparam(
     noalias attr: [*c]const pthread_attr_t,
     noalias param: [*c]sched_param,
 ) callconv(.c) c_int {
-    const pthread_attrs: *PthreadAttributes = @ptrCast(attr.*);
+    const pthread_attrs: *PthreadAttributes = attr.*;
     param.* = pthread_attrs.schedule_parameters;
     return 0;
 }
@@ -202,8 +204,8 @@ pub fn pthread_attr_setschedparam(
     noalias attr: [*c]pthread_attr_t,
     noalias param: [*c]const sched_param,
 ) callconv(.c) c_int {
-    const pthread_attrs: *PthreadAttributes = @ptrCast(attr.*);
-    pthread_attrs.schedule_parameters = param;
+    const pthread_attrs: *PthreadAttributes = attr.*;
+    pthread_attrs.schedule_parameters = param.*;
     return 0;
 }
 
@@ -211,7 +213,7 @@ pub fn pthread_attr_getschedpolicy(
     noalias attr: [*c]const pthread_attr_t,
     noalias policy: [*c]c_int,
 ) callconv(.c) c_int {
-    const pthread_attrs: *PthreadAttributes = @ptrCast(attr.*);
+    const pthread_attrs: *PthreadAttributes = attr.*;
     policy.* = pthread_attrs.schedule_policy;
     return 0;
 }
@@ -220,7 +222,7 @@ pub fn pthread_attr_setschedpolicy(
     attr: [*c]pthread_attr_t,
     policy: c_int,
 ) callconv(.c) c_int {
-    const pthread_attrs: *PthreadAttributes = @ptrCast(attr.*);
+    const pthread_attrs: *PthreadAttributes = attr.*;
     pthread_attrs.schedule_policy = policy;
     return 0;
 }
@@ -229,7 +231,7 @@ pub fn pthread_attr_getinheritsched(
     noalias attr: [*c]const pthread_attr_t,
     noalias inherit: [*c]c_int,
 ) callconv(.c) c_int {
-    const pthread_attrs: *PthreadAttributes = @ptrCast(attr.*);
+    const pthread_attrs: *PthreadAttributes = attr.*;
     inherit.* = pthread_attrs.schedule_inheritance;
     return 0;
 }
@@ -238,7 +240,7 @@ pub fn pthread_attr_setinheritsched(
     attr: [*c]pthread_attr_t,
     inherit: c_int,
 ) callconv(.c) c_int {
-    const pthread_attrs: *PthreadAttributes = @ptrCast(attr.*);
+    const pthread_attrs: *PthreadAttributes = attr.*;
     pthread_attrs.schedule_inheritance = inherit;
     return 0;
 }
@@ -247,7 +249,7 @@ pub fn pthread_attr_getscope(
     noalias attr: [*c]const pthread_attr_t,
     noalias scope: [*c]c_int,
 ) callconv(.c) c_int {
-    const pthread_attrs: *PthreadAttributes = @ptrCast(attr.*);
+    const pthread_attrs: *PthreadAttributes = attr.*;
     scope.* = pthread_attrs.schedule_scope;
     return 0;
 }
@@ -256,7 +258,7 @@ pub fn pthread_attr_setscope(
     attr: [*c]pthread_attr_t,
     scope: c_int,
 ) callconv(.c) c_int {
-    const pthread_attrs: *PthreadAttributes = @ptrCast(attr.*);
+    const pthread_attrs: *PthreadAttributes = attr.*;
     pthread_attrs.schedule_scope = scope;
     return 0;
 }
@@ -283,7 +285,7 @@ pub fn pthread_attr_getstacksize(
     noalias attr: [*c]const pthread_attr_t,
     noalias stacksize: [*c]usize,
 ) callconv(.c) c_int {
-    const pthread_attrs: *PthreadAttributes = @ptrCast(attr.*);
+    const pthread_attrs: *PthreadAttributes = attr.*;
     stacksize.* = pthread_attrs.stack_size;
     return 0;
 }
@@ -292,7 +294,7 @@ pub fn pthread_attr_setstacksize(
     attr: [*c]pthread_attr_t,
     stacksize: usize,
 ) callconv(.c) c_int {
-    const pthread_attrs: *PthreadAttributes = @ptrCast(attr.*);
+    const pthread_attrs: *PthreadAttributes = attr.*;
     pthread_attrs.stack_size = stacksize;
     return 0;
 }
@@ -326,7 +328,7 @@ pub fn pthread_setschedparam(
 ) callconv(.c) c_int {
     const pthread = Pthread.find(target_thread) orelse return errno(.INVAL);
     pthread.attributes.schedule_policy = policy;
-    pthread.attributes.schedule_parameters = param;
+    pthread.attributes.schedule_parameters = param.*;
     return 0;
 }
 
@@ -394,8 +396,15 @@ const PthreadMutex = struct {
     ref_count: std.atomic.Value(usize) = .init(1),
     thread_id: std.atomic.Value(pthread_t) = .init(0),
     attributes: PthreadMutexAttributes = .{},
-};
 
+    fn addRef(self: *@This()) void {
+        _ = self.ref_count.fetchAdd(1, .acq_rel);
+    }
+
+    fn release(self: *@This()) void {
+        if (self.ref_count.fetchSub(1, .acq_rel) == 1) wasm_allocator.destroy(self);
+    }
+};
 const PthreadMutexAttributes = struct {
     protocol: c_int = PTHREAD_PRIO_NONE,
     kind: c_int = PTHREAD_MUTEX_NORMAL,
@@ -408,16 +417,16 @@ pub fn pthread_mutex_init(
     mutex: [*c]pthread_mutex_t,
     mutexattr: [*c]const pthread_mutexattr_t,
 ) callconv(.c) c_int {
-    const pthread_mutex_attrs: *PthreadMutexAttributes = if (mutexattr) |ptr| @ptrCast(ptr) null;
+    const pthread_mutex_attrs: ?*const PthreadMutexAttributes = if (mutexattr) |ptr| @ptrCast(ptr) else null;
     const pthread_mutex: *PthreadMutex = if (pthread_mutex_attrs) |pma| get: {
-        const pm: PthreadMutex = @fieldParentPtr("attributes", pma);
+        const pm: *PthreadMutex = @fieldParentPtr("attributes", @constCast(pma));
         pm.addRef();
         break :get pm;
     } else alloc: {
-        const pm = wasm_allocator.alloc(PthreadMutex);
+        const pm = wasm_allocator.create(PthreadMutex) catch return errno(.NOMEM);
         pm.* = .{};
-        break :get pm;
-    }
+        break :alloc pm;
+    };
     mutex.* = pthread_mutex;
     return 0;
 }
@@ -425,7 +434,7 @@ pub fn pthread_mutex_init(
 pub fn pthread_mutex_destroy(
     mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
-    const pthread_mutex: *PthreadMutex = @ptrCast(mutex);
+    const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
     pthread_mutex.release();
     return 0;
 }
@@ -433,38 +442,42 @@ pub fn pthread_mutex_destroy(
 pub fn pthread_mutex_trylock(
     mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
-    const pthread_mutex: PthreadMutex = @ptrCast(mutex.*);
-    return  0;
+    const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
+    _ = pthread_mutex;
+    return 0;
 }
 
 pub fn pthread_mutex_lock(
     mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
-    const pthread_mutex: PthreadMutex = @ptrCast(mutex.*);
-    @panic("not implemented");
+    const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
+    _ = pthread_mutex;
+    return 0;
 }
 
 pub fn pthread_mutex_timedlock(
     noalias mutex: [*c]pthread_mutex_t,
     noalias abstime: [*c]const std.posix.timespec,
 ) callconv(.c) c_int {
-    const pthread_mutex: PthreadMutex = @ptrCast(mutex.*);
+    const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
     _ = abstime;
-    @panic("not implemented");
+    _ = pthread_mutex;
+    return 0;
 }
 
 pub fn pthread_mutex_unlock(
     mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
-    const pthread_mutex: PthreadMutex = @ptrCast(mutex.*);
-    @panic("not implemented");
+    const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
+    _ = pthread_mutex;
+    return 0;
 }
 
 pub fn pthread_mutex_getprioceiling(
     noalias mutex: [*c]const pthread_mutex_t,
     noalias prioceiling: [*c]c_int,
 ) callconv(.c) c_int {
-    const pthread_mutex: PthreadMutex = @ptrCast(mutex.*);
+    const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
     prioceiling.* = pthread_mutex.attributes.priority_ceiling;
     return 0;
 }
@@ -474,7 +487,7 @@ pub fn pthread_mutex_setprioceiling(
     prioceiling: c_int,
     noalias old_ceiling: [*c]c_int,
 ) callconv(.c) c_int {
-    const pthread_mutex: PthreadMutex = @ptrCast(mutex.*);
+    const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
     old_ceiling.* = pthread_mutex.attributes.priority_ceiling;
     pthread_mutex.attributes.priority_ceiling = prioceiling;
     return 0;
@@ -490,16 +503,17 @@ pub fn pthread_mutex_consistent(
 pub fn pthread_mutexattr_init(
     attr: [*c]pthread_mutexattr_t,
 ) callconv(.c) c_int {
-    const pthread_mutex = wasm_allocator.alloc(PthreadMutex);
-    pthread_mutex = .{};
-    attr.* = &pthread_mutex.attributes; 
+    const pthread_mutex = wasm_allocator.create(PthreadMutex) catch return errno(.NOMEM);
+    pthread_mutex.* = .{};
+    attr.* = &pthread_mutex.attributes;
     return 0;
 }
 
 pub fn pthread_mutexattr_destroy(
     attr: [*c]pthread_mutexattr_t,
 ) callconv(.c) c_int {
-    const pthread_mutex: *PthreadMutex = @ptrCast(attr.*);
+    const pthread_mutex_attrs: *PthreadMutexAttributes = attr.*;
+    const pthread_mutex: *PthreadMutex = @fieldParentPtr("attributes", pthread_mutex_attrs);
     pthread_mutex.release();
     return 0;
 }
@@ -508,7 +522,7 @@ pub fn pthread_mutexattr_getpshared(
     noalias attr: [*c]const pthread_mutexattr_t,
     noalias pshared: [*c]c_int,
 ) callconv(.c) c_int {
-    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    const pthread_mutex_attrs: *PthreadMutexAttributes = attr.*;
     pshared.* = pthread_mutex_attrs.shared;
     return 0;
 }
@@ -517,7 +531,7 @@ pub fn pthread_mutexattr_setpshared(
     attr: [*c]pthread_mutexattr_t,
     pshared: c_int,
 ) callconv(.c) c_int {
-    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    const pthread_mutex_attrs: *PthreadMutexAttributes = attr.*;
     pthread_mutex_attrs.shared = pshared;
     return 0;
 }
@@ -526,7 +540,7 @@ pub fn pthread_mutexattr_gettype(
     noalias attr: [*c]const pthread_mutexattr_t,
     noalias kind: [*c]c_int,
 ) callconv(.c) c_int {
-    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    const pthread_mutex_attrs: *PthreadMutexAttributes = attr.*;
     kind.* = pthread_mutex_attrs.kind;
     return 0;
 }
@@ -535,7 +549,7 @@ pub fn pthread_mutexattr_settype(
     attr: [*c]pthread_mutexattr_t,
     kind: c_int,
 ) callconv(.c) c_int {
-    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    const pthread_mutex_attrs: *PthreadMutexAttributes = attr.*;
     pthread_mutex_attrs.kind = kind;
     return 0;
 }
@@ -544,8 +558,8 @@ pub fn pthread_mutexattr_getprotocol(
     noalias attr: [*c]const pthread_mutexattr_t,
     noalias protocol: [*c]c_int,
 ) callconv(.c) c_int {
-    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
-    protocol = pthread_mutex_attrs.protocol;
+    const pthread_mutex_attrs: *PthreadMutexAttributes = attr.*;
+    protocol.* = pthread_mutex_attrs.protocol;
     return 0;
 }
 
@@ -553,7 +567,7 @@ pub fn pthread_mutexattr_setprotocol(
     attr: [*c]pthread_mutexattr_t,
     protocol: c_int,
 ) callconv(.c) c_int {
-    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    const pthread_mutex_attrs: *PthreadMutexAttributes = attr.*;
     pthread_mutex_attrs.protocol = protocol;
     return 0;
 }
@@ -562,7 +576,7 @@ pub fn pthread_mutexattr_getprioceiling(
     noalias attr: [*c]const pthread_mutexattr_t,
     noalias prioceiling: [*c]c_int,
 ) callconv(.c) c_int {
-    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    const pthread_mutex_attrs: *PthreadMutexAttributes = attr.*;
     prioceiling.* = pthread_mutex_attrs.priority_ceiling;
     return 0;
 }
@@ -571,7 +585,7 @@ pub fn pthread_mutexattr_setprioceiling(
     attr: [*c]pthread_mutexattr_t,
     prioceiling: c_int,
 ) callconv(.c) c_int {
-    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    const pthread_mutex_attrs: *PthreadMutexAttributes = attr.*;
     pthread_mutex_attrs.priority_ceiling = prioceiling;
     return 0;
 }
@@ -580,7 +594,7 @@ pub fn pthread_mutexattr_getrobust(
     attr: [*c]const pthread_mutexattr_t,
     robustness: [*c]c_int,
 ) callconv(.c) c_int {
-    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    const pthread_mutex_attrs: *PthreadMutexAttributes = attr.*;
     robustness.* = pthread_mutex_attrs.robustness;
     return 0;
 }
@@ -589,25 +603,55 @@ pub fn pthread_mutexattr_setrobust(
     attr: [*c]pthread_mutexattr_t,
     robustness: c_int,
 ) callconv(.c) c_int {
-    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    const pthread_mutex_attrs: *PthreadMutexAttributes = attr.*;
     pthread_mutex_attrs.robustness = robustness;
     return 0;
 }
+
+const PthreadRwLock = struct {
+    lock: std.Thread.RwLock = .{},
+    lock_count: usize = 0,
+    ref_count: std.atomic.Value(usize) = .init(1),
+    thread_id: std.atomic.Value(pthread_t) = .init(0),
+    attributes: PthreadRwLockAttributes = .{},
+
+    fn addRef(self: *@This()) void {
+        _ = self.ref_count.fetchAdd(1, .acq_rel);
+    }
+
+    fn release(self: *@This()) void {
+        if (self.ref_count.fetchSub(1, .acq_rel) == 1) wasm_allocator.destroy(self);
+    }
+};
+const PthreadRwLockAttributes = struct {
+    kind: c_int = PTHREAD_MUTEX_NORMAL,
+    shared: c_int = PTHREAD_PROCESS_PRIVATE,
+};
 
 pub fn pthread_rwlock_init(
     noalias rwlock: [*c]pthread_rwlock_t,
     noalias attr: [*c]const pthread_rwlockattr_t,
 ) callconv(.c) c_int {
-    _ = rwlock;
-    _ = attr;
-    @panic("not implemented");
+    const pthread_rwlock_attrs: ?*const PthreadRwLockAttributes = if (attr) |ptr| @ptrCast(ptr) else null;
+    const pthread_rwlock: *PthreadRwLock = if (pthread_rwlock_attrs) |pra| get: {
+        const pr: *PthreadRwLock = @fieldParentPtr("attributes", @constCast(pra));
+        pr.addRef();
+        break :get pr;
+    } else alloc: {
+        const pr = wasm_allocator.create(PthreadRwLock) catch return errno(.NOMEM);
+        pr.* = .{};
+        break :alloc pr;
+    };
+    rwlock.* = pthread_rwlock;
+    return 0;
 }
 
 pub fn pthread_rwlock_destroy(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
-    _ = rwlock;
-    @panic("not implemented");
+    const pthread_rwlock: *PthreadRwLock = @ptrCast(rwlock.*);
+    pthread_rwlock.release();
+    return 0;
 }
 
 pub fn pthread_rwlock_rdlock(
@@ -666,51 +710,55 @@ pub fn pthread_rwlock_unlock(
 pub fn pthread_rwlockattr_init(
     attr: [*c]pthread_rwlockattr_t,
 ) callconv(.c) c_int {
-    _ = attr;
-    @panic("not implemented");
+    const pthread_rwlock = wasm_allocator.create(PthreadRwLock) catch return errno(.NOMEM);
+    pthread_rwlock.* = .{};
+    attr.* = &pthread_rwlock.attributes;
+    return 0;
 }
 
 pub fn pthread_rwlockattr_destroy(
     attr: [*c]pthread_rwlockattr_t,
 ) callconv(.c) c_int {
-    _ = attr;
-    @panic("not implemented");
+    const pthread_rwlock_attrs: *PthreadRwLockAttributes = attr.*;
+    const pthread_rwlock: *PthreadRwLock = @fieldParentPtr("attributes", pthread_rwlock_attrs);
+    pthread_rwlock.release();
+    return 0;
 }
 
 pub fn pthread_rwlockattr_getpshared(
     noalias attr: [*c]const pthread_rwlockattr_t,
     noalias pshared: [*c]c_int,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = pshared;
-    @panic("not implemented");
+    const pthread_rwlock_attrs: *PthreadRwLockAttributes = attr.*;
+    pshared.* = pthread_rwlock_attrs.shared;
+    return 0;
 }
 
 pub fn pthread_rwlockattr_setpshared(
     attr: [*c]pthread_rwlockattr_t,
     pshared: c_int,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = pshared;
-    @panic("not implemented");
+    const pthread_rwlock_attrs: *PthreadRwLockAttributes = attr.*;
+    pthread_rwlock_attrs.shared = pshared;
+    return 0;
 }
 
 pub fn pthread_rwlockattr_getkind_np(
     noalias attr: [*c]const pthread_rwlockattr_t,
     noalias pref: [*c]c_int,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = pref;
-    @panic("not implemented");
+    const pthread_rwlock_attrs: *PthreadRwLockAttributes = attr.*;
+    pref.* = pthread_rwlock_attrs.kind;
+    return 0;
 }
 
 pub fn pthread_rwlockattr_setkind_np(
     attr: [*c]pthread_rwlockattr_t,
     pref: c_int,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = pref;
-    @panic("not implemented");
+    const pthread_rwlock_attrs: *PthreadRwLockAttributes = attr.*;
+    pthread_rwlock_attrs.kind = pref;
+    return 0;
 }
 
 pub fn pthread_cond_init(
@@ -850,63 +898,6 @@ pub fn pthread_spin_unlock(
     @panic("not implemented");
 }
 
-pub fn pthread_barrier_init(
-    noalias barrier: [*c]pthread_barrier_t,
-    noalias attr: [*c]const pthread_barrierattr_t,
-    count: c_uint,
-) callconv(.c) c_int {
-    _ = barrier;
-    _ = attr;
-    _ = count;
-    @panic("not implemented");
-}
-
-pub fn pthread_barrier_destroy(
-    barrier: [*c]pthread_barrier_t,
-) callconv(.c) c_int {
-    _ = barrier;
-    @panic("not implemented");
-}
-
-pub fn pthread_barrier_wait(
-    barrier: [*c]pthread_barrier_t,
-) callconv(.c) c_int {
-    _ = barrier;
-    @panic("not implemented");
-}
-
-pub fn pthread_barrierattr_init(
-    attr: [*c]pthread_barrierattr_t,
-) callconv(.c) c_int {
-    _ = attr;
-    @panic("not implemented");
-}
-
-pub fn pthread_barrierattr_destroy(
-    attr: [*c]pthread_barrierattr_t,
-) callconv(.c) c_int {
-    _ = attr;
-    @panic("not implemented");
-}
-
-pub fn pthread_barrierattr_getpshared(
-    noalias attr: [*c]const pthread_barrierattr_t,
-    noalias pshared: [*c]c_int,
-) callconv(.c) c_int {
-    _ = attr;
-    _ = pshared;
-    @panic("not implemented");
-}
-
-pub fn pthread_barrierattr_setpshared(
-    attr: [*c]pthread_barrierattr_t,
-    pshared: c_int,
-) callconv(.c) c_int {
-    _ = attr;
-    _ = pshared;
-    @panic("not implemented");
-}
-
 pub fn pthread_key_create(
     key: [*c]pthread_key_t,
     destr_function: ?*const fn (?*anyopaque) callconv(.c) void,
@@ -959,22 +950,102 @@ pub fn pthread_atfork(
     @panic("not implemented");
 }
 
+pub fn sem_init(
+    sem: [*c]sem_t,
+    pshared: c_int,
+    value: c_uint,
+) callconv(.c) c_int {
+    _ = sem;
+    _ = pshared;
+    _ = value;
+    return 0;
+}
+
+pub fn sem_destroy(
+    sem: [*c]sem_t,
+) callconv(.c) c_int {
+    _ = sem;
+    return 0;
+}
+
+pub fn sem_open(
+    name: [*c]const u8,
+    oflag: c_int,
+    ...,
+) callconv(.c) [*c]sem_t {
+    _ = name;
+    _ = oflag;
+    return 0;
+}
+
+pub fn sem_close(
+    sem: [*c]sem_t,
+) callconv(.c) c_int {
+    _ = sem;
+    return 0;
+}
+
+pub fn sem_unlink(
+    name: [*c]const u8,
+) callconv(.c) c_int {
+    _ = name;
+    return 0;
+}
+
+pub fn sem_wait(
+    sem: [*c]sem_t,
+) callconv(.c) c_int {
+    _ = sem;
+    return 0;
+}
+
+pub fn sem_timedwait(
+    noalias sem: [*c]sem_t,
+    noalias abstime: [*c]const std.posix.timespec,
+) callconv(.c) c_int {
+    _ = sem;
+    _ = abstime;
+    return 0;
+}
+
+pub fn sem_trywait(
+    sem: [*c]sem_t,
+) callconv(.c) c_int {
+    _ = sem;
+    return 0;
+}
+
+pub fn sem_post(
+    sem: [*c]sem_t,
+) callconv(.c) c_int {
+    _ = sem;
+    return 0;
+}
+
+pub fn sem_getvalue(
+    noalias sem: [*c]sem_t,
+    noalias sval: [*c]c_int,
+) callconv(.c) c_int {
+    _ = sem;
+    _ = sval;
+    return 0;
+}
+
 const sched_param = extern struct {
     sched_priority: c_int,
 };
 const pthread_t = c_ulong;
-const pthread_attr_t = *anyopaque;
-const pthread_mutex_t = *anyopaque;
-const pthread_mutexattr_t = *anyopaque;
+const pthread_attr_t = *PthreadAttributes;
+const pthread_mutex_t = *PthreadMutex;
+const pthread_mutexattr_t = *PthreadMutexAttributes;
 const pthread_condattr_t = *anyopaque;
 const pthread_cond_t = *anyopaque;
-const pthread_rwlock_t = *anyopaque;
-const pthread_rwlockattr_t = *anyopaque;
-const pthread_barrier_t = *anyopaque;
-const pthread_barrierattr_t = *anyopaque;
+const pthread_rwlock_t = *PthreadRwLock;
+const pthread_rwlockattr_t = *PthreadRwLockAttributes;
 const pthread_key_t = c_uint;
 const pthread_once_t = c_int;
 const pthread_spinlock_t = c_int;
+const sem_t = *anyopaque;
 
 const SCHED_RR = 2;
 const PTHREAD_INHERIT_SCHED = 0;
@@ -991,7 +1062,3 @@ const PTHREAD_PRIO_NONE = 0;
 fn errno(e: std.posix.E) u16 {
     return @intFromEnum(e);
 }
-
-const c = @cImport({
-    @cInclude("pthread.h");
-});

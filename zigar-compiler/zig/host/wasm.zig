@@ -355,3 +355,12 @@ extern fn _allocateJsThunk(controller_address: usize, fn_id: usize) usize;
 extern fn _freeJsThunk(controller_address: usize, thunk_address: usize) usize;
 extern fn _findJsThunk(controller_address: usize, thunk_address: usize) usize;
 extern fn _displayPanic(bytes: [*]const u8, len: usize) void;
+
+comptime {
+    if (!builtin.single_threaded) {
+        const pthread = @import("../pthread.zig");
+        for (std.meta.declarations(pthread)) |decl| {
+            @export(&@field(pthread, decl.name), .{ .name = decl.name, .visibility = .hidden });
+        }
+    }
+}
