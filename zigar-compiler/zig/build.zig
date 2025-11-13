@@ -5,20 +5,19 @@ const builtin = @import("builtin");
 const cfg = @import("build.cfg.zig");
 const extra = @import("build.extra.zig");
 
-const use_llvm = @as(?bool, cfg.use_llvm) orelse switch (cfg.is_wasm) {
-    true => null,
-    false => switch (builtin.target.cpu.arch) {
-        .x86_64 => cfg.multithreaded,
-        else => null,
-    },
-};
-
 pub fn build(b: *std.Build) !void {
     if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 15) {
         @compileError("Unsupported Zig version");
     }
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const use_llvm = @as(?bool, cfg.use_llvm) orelse switch (cfg.is_wasm) {
+        true => null,
+        false => switch (builtin.target.cpu.arch) {
+            .x86_64 => cfg.multithreaded,
+            else => null,
+        },
+    };
     const lib = b.addLibrary(.{
         .linkage = .dynamic,
         .name = cfg.module_name,
