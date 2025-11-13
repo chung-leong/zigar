@@ -6883,8 +6883,10 @@ function workerMain() {
     const env = { memory }, wasi = {}, wasiPreview = {};
     const imports = { env, wasi, wasi_snapshot_preview1: wasiPreview };
     for (const { module, name, kind } of w.Module.imports(executable)) {
-      if (kind === 'function') {
-        const f = createRouter(module, name);
+      if (kind === 'function') {        
+        const f = (name === 'procExit') ? () => {
+          throw new Error('thread exit');
+        } : createRouter(module, name);
         if (module === 'env') {
           env[name] = f;
         } else if (module === 'wasi_snapshot_preview1') {
@@ -6901,7 +6903,11 @@ function workerMain() {
     });
     const { exports } = new w.Instance(executable, imports);
     const { wasi_thread_start } = exports;
-    wasi_thread_start(tid, arg);
+    try {
+      wasi_thread_start(tid, arg);
+    } catch (err) {
+      console.log(err);
+    }
     postMessage({ type: 'exit' });
     exit();
   }

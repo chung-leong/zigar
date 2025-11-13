@@ -395,7 +395,7 @@ export function addTests(importModule, options) {
         .with.property('message').that.contains('AbortSignal');
     })
     it('should create a detached thread using pthread', async function() {
-      const {
+      const { 
         spawn,
         startup,
         shutdown,
@@ -407,6 +407,71 @@ export function addTests(importModule, options) {
           await delay(250);
         });
         expect(lines).to.eql([ 'Hello world!' ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should create a thread in a thread using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('create-thread-in-thread-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+        });
+        expect(lines).to.eql([ 
+          'Hello world!',
+          'retval = 1234',
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should exit a thread created using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('exit-thread-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+        });
+        expect(lines).to.eql([ 
+          'Hello world! 0',
+          'Hello world! 1',
+          'Hello world! 2',
+          'Hello world! 3',
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should exit a thread created in a thread using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('exit-thread-created-in-thread-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+        });
+        expect(lines).to.eql([ 
+          'Hello world! 0',
+          'Hello world! 1',
+          'Hello world! 2',
+          'Hello world! 3',
+          'retval = 1234',
+        ]);
       } finally {
         shutdown();
       }

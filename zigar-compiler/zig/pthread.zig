@@ -24,8 +24,8 @@ const Pthread = struct {
     }
 
     fn allocId() pthread_t {
-        var id = next_id.fetchAdd(1, .monotonic);
-        if (id == 0) id = next_id.fetchAdd(1, .monotonic);
+        var id = next_id.fetchAdd(1, .acq_rel);
+        if (id == 0) id = next_id.fetchAdd(2, .acq_rel);
         return id;
     }
 
@@ -46,7 +46,7 @@ const Pthread = struct {
     }
 
     fn setState(self: *@This(), expected: PthreadState, new: PthreadState) !void {
-        if (@cmpxchgStrong(PthreadState, &self.state, expected, new, .monotonic, .monotonic) != null) {
+        if (@cmpxchgStrong(PthreadState, &self.state, expected, new, .acq_rel, .monotonic) != null) {
             return error.IncorrectState;
         }
     }
@@ -101,7 +101,41 @@ fn run_pthread(thread: *Pthread) void {
 pub fn pthread_exit(
     retval: ?*anyopaque,
 ) callconv(.c) noreturn {
-    if (Pthread.current) |t| t.return_value = retval;
+    if (Pthread.current) |pthread| {
+        pthread.return_value = retval;
+        // termination code copied from WasiThreadImpl
+        const wasi_thread = pthread.thread.impl.thread;
+        switch (wasi_thread.state.swap(.completed, .seq_cst)) {
+            .running => {
+                // reset the Thread ID
+                asm volatile (
+                    \\ local.get %[ptr]
+                    \\ i32.const 0
+                    \\ i32.atomic.store 0
+                    :
+                    : [ptr] "r" (&wasi_thread.tid.raw),
+                );
+
+                // Wake the main thread listening to this thread
+                asm volatile (
+                    \\ local.get %[ptr]
+                    \\ i32.const 1 # waiters
+                    \\ memory.atomic.notify 0
+                    \\ drop # no need to know the waiters
+                    :
+                    : [ptr] "r" (&wasi_thread.tid.raw),
+                );
+            },
+            .completed => unreachable,
+            .detached => {
+                // use free in the vtable so the stack doesn't get set to undefined when optimize = Debug
+                const free = wasi_thread.allocator.vtable.free;
+                const ptr = wasi_thread.allocator.ptr;
+                free(ptr, wasi_thread.memory, std.mem.Alignment.@"1", 0);
+            },
+        }
+    }
+    // trigger a JavaScript error
     std.os.wasi.proc_exit(0);
 }
 
@@ -128,7 +162,7 @@ pub fn pthread_detach(
 }
 
 pub fn pthread_self() callconv(.c) pthread_t {
-    return if (Pthread.current) |pthread| pthread.id else 0;
+    return if (Pthread.current) |pthread| pthread.id else 1;
 }
 
 pub fn pthread_equal(
@@ -398,11 +432,11 @@ const PthreadMutex = struct {
     attributes: PthreadMutexAttributes = .{},
 
     fn addRef(self: *@This()) void {
-        _ = self.ref_count.fetchAdd(1, .acq_rel);
+        _ = self.ref_count.fetchAdd(1, .monotonic);
     }
 
     fn release(self: *@This()) void {
-        if (self.ref_count.fetchSub(1, .acq_rel) == 1) wasm_allocator.destroy(self);
+        if (self.ref_count.fetchSub(1, .monotonic) == 1) wasm_allocator.destroy(self);
     }
 };
 const PthreadMutexAttributes = struct {
