@@ -388,33 +388,59 @@ pub fn pthread_testcancel() callconv(.c) void {
     @panic("not implemented");
 }
 
+const PthreadMutex = struct {
+    mutex: std.Thread.Mutex = .{},
+    lock_count: usize = 0,
+    ref_count: std.atomic.Value(usize) = .init(1),
+    thread_id: std.atomic.Value(pthread_t) = .init(0),
+    attributes: PthreadMutexAttributes = .{},
+};
+
+const PthreadMutexAttributes = struct {
+    protocol: c_int = PTHREAD_PRIO_NONE,
+    kind: c_int = PTHREAD_MUTEX_NORMAL,
+    shared: c_int = PTHREAD_PROCESS_PRIVATE,
+    priority_ceiling: c_int = 99,
+    robustness: c_int = PTHREAD_MUTEX_STALLED,
+};
+
 pub fn pthread_mutex_init(
     mutex: [*c]pthread_mutex_t,
     mutexattr: [*c]const pthread_mutexattr_t,
 ) callconv(.c) c_int {
-    _ = mutex;
-    _ = mutexattr;
-    @panic("not implemented");
+    const pthread_mutex_attrs: *PthreadMutexAttributes = if (mutexattr) |ptr| @ptrCast(ptr) null;
+    const pthread_mutex: *PthreadMutex = if (pthread_mutex_attrs) |pma| get: {
+        const pm: PthreadMutex = @fieldParentPtr("attributes", pma);
+        pm.addRef();
+        break :get pm;
+    } else alloc: {
+        const pm = wasm_allocator.alloc(PthreadMutex);
+        pm.* = .{};
+        break :get pm;
+    }
+    mutex.* = pthread_mutex;
+    return 0;
 }
 
 pub fn pthread_mutex_destroy(
     mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
-    _ = mutex;
-    @panic("not implemented");
+    const pthread_mutex: *PthreadMutex = @ptrCast(mutex);
+    pthread_mutex.release();
+    return 0;
 }
 
 pub fn pthread_mutex_trylock(
     mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
-    _ = mutex;
-    @panic("not implemented");
+    const pthread_mutex: PthreadMutex = @ptrCast(mutex.*);
+    return  0;
 }
 
 pub fn pthread_mutex_lock(
     mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
-    _ = mutex;
+    const pthread_mutex: PthreadMutex = @ptrCast(mutex.*);
     @panic("not implemented");
 }
 
@@ -422,7 +448,7 @@ pub fn pthread_mutex_timedlock(
     noalias mutex: [*c]pthread_mutex_t,
     noalias abstime: [*c]const std.posix.timespec,
 ) callconv(.c) c_int {
-    _ = mutex;
+    const pthread_mutex: PthreadMutex = @ptrCast(mutex.*);
     _ = abstime;
     @panic("not implemented");
 }
@@ -430,7 +456,7 @@ pub fn pthread_mutex_timedlock(
 pub fn pthread_mutex_unlock(
     mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
-    _ = mutex;
+    const pthread_mutex: PthreadMutex = @ptrCast(mutex.*);
     @panic("not implemented");
 }
 
@@ -438,9 +464,9 @@ pub fn pthread_mutex_getprioceiling(
     noalias mutex: [*c]const pthread_mutex_t,
     noalias prioceiling: [*c]c_int,
 ) callconv(.c) c_int {
-    _ = mutex;
-    _ = prioceiling;
-    @panic("not implemented");
+    const pthread_mutex: PthreadMutex = @ptrCast(mutex.*);
+    prioceiling.* = pthread_mutex.attributes.priority_ceiling;
+    return 0;
 }
 
 pub fn pthread_mutex_setprioceiling(
@@ -448,10 +474,10 @@ pub fn pthread_mutex_setprioceiling(
     prioceiling: c_int,
     noalias old_ceiling: [*c]c_int,
 ) callconv(.c) c_int {
-    _ = mutex;
-    _ = prioceiling;
-    _ = old_ceiling;
-    @panic("not implemented");
+    const pthread_mutex: PthreadMutex = @ptrCast(mutex.*);
+    old_ceiling.* = pthread_mutex.attributes.priority_ceiling;
+    pthread_mutex.attributes.priority_ceiling = prioceiling;
+    return 0;
 }
 
 pub fn pthread_mutex_consistent(
@@ -464,105 +490,108 @@ pub fn pthread_mutex_consistent(
 pub fn pthread_mutexattr_init(
     attr: [*c]pthread_mutexattr_t,
 ) callconv(.c) c_int {
-    _ = attr;
-    @panic("not implemented");
+    const pthread_mutex = wasm_allocator.alloc(PthreadMutex);
+    pthread_mutex = .{};
+    attr.* = &pthread_mutex.attributes; 
+    return 0;
 }
 
 pub fn pthread_mutexattr_destroy(
     attr: [*c]pthread_mutexattr_t,
 ) callconv(.c) c_int {
-    _ = attr;
-    @panic("not implemented");
+    const pthread_mutex: *PthreadMutex = @ptrCast(attr.*);
+    pthread_mutex.release();
+    return 0;
 }
 
 pub fn pthread_mutexattr_getpshared(
     noalias attr: [*c]const pthread_mutexattr_t,
     noalias pshared: [*c]c_int,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = pshared;
-    @panic("not implemented");
+    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    pshared.* = pthread_mutex_attrs.shared;
+    return 0;
 }
 
 pub fn pthread_mutexattr_setpshared(
     attr: [*c]pthread_mutexattr_t,
     pshared: c_int,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = pshared;
-    @panic("not implemented");
+    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    pthread_mutex_attrs.shared = pshared;
+    return 0;
 }
 
 pub fn pthread_mutexattr_gettype(
     noalias attr: [*c]const pthread_mutexattr_t,
     noalias kind: [*c]c_int,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = kind;
-    @panic("not implemented");
+    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    kind.* = pthread_mutex_attrs.kind;
+    return 0;
 }
 
 pub fn pthread_mutexattr_settype(
     attr: [*c]pthread_mutexattr_t,
     kind: c_int,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = kind;
-    @panic("not implemented");
+    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    pthread_mutex_attrs.kind = kind;
+    return 0;
 }
 
 pub fn pthread_mutexattr_getprotocol(
     noalias attr: [*c]const pthread_mutexattr_t,
     noalias protocol: [*c]c_int,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = protocol;
-    @panic("not implemented");
+    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    protocol = pthread_mutex_attrs.protocol;
+    return 0;
 }
 
 pub fn pthread_mutexattr_setprotocol(
     attr: [*c]pthread_mutexattr_t,
     protocol: c_int,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = protocol;
-    @panic("not implemented");
+    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    pthread_mutex_attrs.protocol = protocol;
+    return 0;
 }
 
 pub fn pthread_mutexattr_getprioceiling(
     noalias attr: [*c]const pthread_mutexattr_t,
     noalias prioceiling: [*c]c_int,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = prioceiling;
-    @panic("not implemented");
+    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    prioceiling.* = pthread_mutex_attrs.priority_ceiling;
+    return 0;
 }
 
 pub fn pthread_mutexattr_setprioceiling(
     attr: [*c]pthread_mutexattr_t,
     prioceiling: c_int,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = prioceiling;
-    @panic("not implemented");
+    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    pthread_mutex_attrs.priority_ceiling = prioceiling;
+    return 0;
 }
 
 pub fn pthread_mutexattr_getrobust(
     attr: [*c]const pthread_mutexattr_t,
     robustness: [*c]c_int,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = robustness;
-    @panic("not implemented");
+    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    robustness.* = pthread_mutex_attrs.robustness;
+    return 0;
 }
 
 pub fn pthread_mutexattr_setrobust(
     attr: [*c]pthread_mutexattr_t,
     robustness: c_int,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = robustness;
-    @panic("not implemented");
+    const pthread_mutex_attrs: PthreadMutexAttributes = @ptrCast(attr.*);
+    pthread_mutex_attrs.robustness = robustness;
+    return 0;
 }
 
 pub fn pthread_rwlock_init(
@@ -952,7 +981,17 @@ const PTHREAD_INHERIT_SCHED = 0;
 const PTHREAD_SCOPE_SYSTEM = 0;
 const PTHREAD_CREATE_JOINABLE = 0;
 const PTHREAD_CREATE_DETACHED = 1;
+const PTHREAD_MUTEX_NORMAL = 0;
+const PTHREAD_MUTEX_RECURSIVE = 1;
+const PTHREAD_MUTEX_ERRORCHECK = 2;
+const PTHREAD_PROCESS_PRIVATE = 0;
+const PTHREAD_MUTEX_STALLED = 0;
+const PTHREAD_PRIO_NONE = 0;
 
 fn errno(e: std.posix.E) u16 {
     return @intFromEnum(e);
 }
+
+const c = @cImport({
+    @cInclude("pthread.h");
+});
