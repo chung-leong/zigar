@@ -599,7 +599,47 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
-
+    it('should create read/write lock using pthread', async function() {
+      const { 
+        spawn,
+        unlock,
+        cleanup,
+        startup,
+        shutdown,
+      } = await importTest('create-rwlock-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        for (const write of [ false, true ]) {
+          const lines = await capture(async () => {
+            spawn(write);
+            await delay(250);
+            unlock();
+            await delay(250);
+            cleanup();
+          });
+          const type = (write) ? 'write' : 'read'
+          expect(lines[0]).to.equal(`Main thread acquired ${type} lock`);
+          const mtReleased = lines.indexOf(`Main thread released ${type} lock`);
+          const t1Acquired = lines.indexOf(`Thread 1 acquired read lock`);
+          const t2Acquired = lines.indexOf(`Thread 2 acquired write lock`);
+          if (write) {
+            expect(mtReleased < t1Acquired).to.be.true;
+            expect(mtReleased < t2Acquired).to.be.true;
+          } else {
+            // Zig's implementation of the read/lock lock prevents an acquisition of a read lock
+            // if another thread has made an earlier request for a write lock
+            if (t1Acquired < t2Acquired) {
+              expect(mtReleased > t1Acquired).to.be.true; 
+            } else {
+              expect(mtReleased < t1Acquired).to.be.true; 
+            }
+          }
+          expect(mtReleased < t2Acquired).to.be.true;
+        }
+      } finally {
+        shutdown();
+      }
+    })
   })
 }
 

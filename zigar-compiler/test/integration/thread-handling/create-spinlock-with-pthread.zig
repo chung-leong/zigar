@@ -22,7 +22,7 @@ pub fn spawn() !void {
 }
 
 pub fn unlock() !void {
-    if (c.pthread_spin_unlock(&spinlock) != 0) return error.CannotObtainSpinlock;
+    if (c.pthread_spin_unlock(&spinlock) != 0) return error.CannotReleaseSpinlock;
     std.debug.print("Main thread released spinlock\n", .{});
 }
 

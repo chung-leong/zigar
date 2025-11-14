@@ -722,9 +722,10 @@ pub fn pthread_mutexattr_setrobust(
 
 const PthreadRwLock = struct {
     lock: std.Thread.RwLock = .{},
-    lock_count: usize = 0,
     ref_count: std.atomic.Value(usize) = .init(1),
-    thread_id: std.atomic.Value(pthread_t) = .init(0),
+    reader_thread_spinlock: pthread_spinlock_t = 0,
+    reader_thread_ids: std.ArrayListUnmanaged(pthread_t) = .{},
+    writer_thread_id: pthread_t = 0,
     attributes: PthreadRwLockAttributes = .{},
 
     fn addRef(self: *@This()) void {
@@ -732,7 +733,10 @@ const PthreadRwLock = struct {
     }
 
     fn release(self: *@This()) void {
-        if (self.ref_count.fetchSub(1, .acq_rel) == 1) wasm_allocator.destroy(self);
+        if (self.ref_count.fetchSub(1, .acq_rel) == 1) {
+            self.reader_thread_ids.deinit(wasm_allocator);
+            wasm_allocator.destroy(self);
+        }
     }
 };
 const PthreadRwLockAttributes = struct {
@@ -745,14 +749,14 @@ pub fn pthread_rwlock_init(
     noalias attr: [*c]const pthread_rwlockattr_t,
 ) callconv(.c) c_int {
     const pthread_rwlock_attrs: ?*const PthreadRwLockAttributes = if (attr) |ptr| @ptrCast(ptr.*) else null;
-    const pthread_rwlock: *PthreadRwLock = if (pthread_rwlock_attrs) |pra| get: {
-        const pr: *PthreadRwLock = @fieldParentPtr("attributes", @constCast(pra));
-        pr.addRef();
-        break :get pr;
+    const pthread_rwlock: *PthreadRwLock = if (pthread_rwlock_attrs) |prwa| get: {
+        const prw: *PthreadRwLock = @fieldParentPtr("attributes", @constCast(prwa));
+        prw.addRef();
+        break :get prw;
     } else alloc: {
-        const pr = wasm_allocator.create(PthreadRwLock) catch return errno(.NOMEM);
-        pr.* = .{};
-        break :alloc pr;
+        const prw = wasm_allocator.create(PthreadRwLock) catch return errno(.NOMEM);
+        prw.* = .{};
+        break :alloc prw;
     };
     rwlock.* = pthread_rwlock;
     return 0;
@@ -769,15 +773,31 @@ pub fn pthread_rwlock_destroy(
 pub fn pthread_rwlock_rdlock(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
-    _ = rwlock;
-    @panic("not implemented");
+    const pthread_rwlock: *PthreadRwLock = @ptrCast(rwlock.*);
+    pthread_rwlock.lock.lockShared();
+    const thread_id = pthread_self();
+    _ = pthread_spin_lock(&pthread_rwlock.reader_thread_spinlock);
+    defer _ = pthread_spin_unlock(&pthread_rwlock.reader_thread_spinlock);
+    pthread_rwlock.reader_thread_ids.append(wasm_allocator, thread_id) catch {
+        pthread_rwlock.lock.unlockShared();
+        return errno(.NOMEM);
+    };
+    return 0;
 }
 
 pub fn pthread_rwlock_tryrdlock(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
-    _ = rwlock;
-    @panic("not implemented");
+    const pthread_rwlock: *PthreadRwLock = @ptrCast(rwlock.*);
+    if (!pthread_rwlock.lock.tryLockShared()) return errno(.BUSY);
+    const thread_id = pthread_self();
+    _ = pthread_spin_lock(&pthread_rwlock.reader_thread_spinlock);
+    defer _ = pthread_spin_unlock(&pthread_rwlock.reader_thread_spinlock);
+    pthread_rwlock.reader_thread_ids.append(wasm_allocator, thread_id) catch {
+        pthread_rwlock.lock.unlockShared();
+        return errno(.NOMEM);
+    };
+    return 0;
 }
 
 pub fn pthread_rwlock_timedrdlock(
@@ -792,15 +812,19 @@ pub fn pthread_rwlock_timedrdlock(
 pub fn pthread_rwlock_wrlock(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
-    _ = rwlock;
-    @panic("not implemented");
+    const pthread_rwlock: *PthreadRwLock = @ptrCast(rwlock.*);
+    pthread_rwlock.lock.lock();
+    pthread_rwlock.writer_thread_id = pthread_self();
+    return 0;
 }
 
 pub fn pthread_rwlock_trywrlock(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
-    _ = rwlock;
-    @panic("not implemented");
+    const pthread_rwlock: *PthreadRwLock = @ptrCast(rwlock.*);
+    if (!pthread_rwlock.lock.tryLock()) return errno(.BUSY);
+    pthread_rwlock.writer_thread_id = pthread_self();
+    return 0;
 }
 
 pub fn pthread_rwlock_timedwrlock(
@@ -815,8 +839,26 @@ pub fn pthread_rwlock_timedwrlock(
 pub fn pthread_rwlock_unlock(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
-    _ = rwlock;
-    @panic("not implemented");
+    const pthread_rwlock: *PthreadRwLock = @ptrCast(rwlock.*);
+    const thread_id = pthread_self();
+    if (pthread_rwlock.writer_thread_id != 0) {
+        if (thread_id != pthread_rwlock.writer_thread_id) return errno(.PERM);
+        pthread_rwlock.writer_thread_id = 0;
+        pthread_rwlock.lock.unlock();
+    } else {
+        var reader_index: usize = undefined;
+        for (pthread_rwlock.reader_thread_ids.items, 0..) |id, index| {
+            if (thread_id == id) {
+                reader_index = index;
+                break;
+            }
+        } else return errno(.PERM);
+        pthread_rwlock.lock.unlockShared();
+        _ = pthread_spin_lock(&pthread_rwlock.reader_thread_spinlock);
+        defer _ = pthread_spin_unlock(&pthread_rwlock.reader_thread_spinlock);
+        _ = pthread_rwlock.reader_thread_ids.swapRemove(reader_index);
+    }
+    return 0;
 }
 
 pub fn pthread_rwlockattr_init(
