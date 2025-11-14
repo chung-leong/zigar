@@ -434,6 +434,16 @@ const PthreadMutex = struct {
     wait_futex: std.atomic.Value(u32) = .init(0),
     attributes: PthreadMutexAttributes = .{},
 
+    fn extract(mutex: [*c]const pthread_mutex_t) *@This() {
+        return if (mutex.*) |pm| pm else init_static: {
+            const pm = wasm_allocator.create(@This()) catch @panic("Out of memory");
+            pm.* = .{};
+            const mutable = @constCast(mutex);
+            mutable.* = pm;
+            break :init_static pm;
+        };
+    }
+
     fn addRef(self: *@This()) void {
         _ = self.ref_count.fetchAdd(1, .monotonic);
     }
@@ -482,7 +492,7 @@ pub fn pthread_mutex_init(
 pub fn pthread_mutex_destroy(
     mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
-    const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
+    const pthread_mutex = PthreadMutex.extract(mutex);
     pthread_mutex.release();
     return 0;
 }
@@ -490,7 +500,7 @@ pub fn pthread_mutex_destroy(
 pub fn pthread_mutex_trylock(
     mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
-    const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
+    const pthread_mutex = PthreadMutex.extract(mutex);
     const current_id = pthread_self();
     switch (pthread_mutex.attributes.kind) {
         PTHREAD_MUTEX_RECURSIVE, PTHREAD_MUTEX_ERRORCHECK => |kind| {
@@ -515,7 +525,7 @@ pub fn pthread_mutex_trylock(
 pub fn pthread_mutex_lock(
     mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
-    const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
+    const pthread_mutex = PthreadMutex.extract(mutex);
     const current_id = pthread_self();
     switch (pthread_mutex.attributes.kind) {
         PTHREAD_MUTEX_RECURSIVE, PTHREAD_MUTEX_ERRORCHECK => |kind| {
@@ -541,7 +551,7 @@ pub fn pthread_mutex_timedlock(
     noalias mutex: [*c]pthread_mutex_t,
     noalias abstime: [*c]const std.posix.timespec,
 ) callconv(.c) c_int {
-    const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
+    const pthread_mutex = PthreadMutex.extract(mutex);
     if (pthread_mutex_trylock(mutex) == 0) return 0;
     const end = abstime.*;
     const end_ns = end.toTimestamp();
@@ -560,7 +570,7 @@ pub fn pthread_mutex_timedlock(
 pub fn pthread_mutex_unlock(
     mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
-    const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
+    const pthread_mutex = PthreadMutex.extract(mutex);
     const current_id = pthread_self();
     switch (pthread_mutex.attributes.kind) {
         PTHREAD_MUTEX_RECURSIVE, PTHREAD_MUTEX_ERRORCHECK => |kind| {
@@ -589,7 +599,7 @@ pub fn pthread_mutex_getprioceiling(
     noalias mutex: [*c]const pthread_mutex_t,
     noalias prioceiling: [*c]c_int,
 ) callconv(.c) c_int {
-    const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
+    const pthread_mutex = PthreadMutex.extract(mutex);
     prioceiling.* = pthread_mutex.attributes.priority_ceiling;
     return 0;
 }
@@ -599,7 +609,7 @@ pub fn pthread_mutex_setprioceiling(
     prioceiling: c_int,
     noalias old_ceiling: [*c]c_int,
 ) callconv(.c) c_int {
-    const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
+    const pthread_mutex = PthreadMutex.extract(mutex);
     old_ceiling.* = pthread_mutex.attributes.priority_ceiling;
     pthread_mutex.attributes.priority_ceiling = prioceiling;
     return 0;
@@ -728,6 +738,16 @@ const PthreadRwLock = struct {
     writer_thread_id: pthread_t = 0,
     attributes: PthreadRwLockAttributes = .{},
 
+    fn extract(rwlock: [*c]const pthread_rwlock_t) *@This() {
+        return if (rwlock.*) |prw| prw else init_static: {
+            const prw = wasm_allocator.create(@This()) catch @panic("Out of memory");
+            prw.* = .{};
+            const mutable = @constCast(rwlock);
+            mutable.* = prw;
+            break :init_static prw;
+        };
+    }
+
     fn addRef(self: *@This()) void {
         _ = self.ref_count.fetchAdd(1, .acq_rel);
     }
@@ -765,7 +785,7 @@ pub fn pthread_rwlock_init(
 pub fn pthread_rwlock_destroy(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
-    const pthread_rwlock: *PthreadRwLock = @ptrCast(rwlock.*);
+    const pthread_rwlock = PthreadRwLock.extract(rwlock);
     pthread_rwlock.release();
     return 0;
 }
@@ -773,7 +793,7 @@ pub fn pthread_rwlock_destroy(
 pub fn pthread_rwlock_rdlock(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
-    const pthread_rwlock: *PthreadRwLock = @ptrCast(rwlock.*);
+    const pthread_rwlock = PthreadRwLock.extract(rwlock);
     pthread_rwlock.lock.lockShared();
     const thread_id = pthread_self();
     _ = pthread_spin_lock(&pthread_rwlock.reader_thread_spinlock);
@@ -788,7 +808,7 @@ pub fn pthread_rwlock_rdlock(
 pub fn pthread_rwlock_tryrdlock(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
-    const pthread_rwlock: *PthreadRwLock = @ptrCast(rwlock.*);
+    const pthread_rwlock = PthreadRwLock.extract(rwlock);
     if (!pthread_rwlock.lock.tryLockShared()) return errno(.BUSY);
     const thread_id = pthread_self();
     _ = pthread_spin_lock(&pthread_rwlock.reader_thread_spinlock);
@@ -812,7 +832,7 @@ pub fn pthread_rwlock_timedrdlock(
 pub fn pthread_rwlock_wrlock(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
-    const pthread_rwlock: *PthreadRwLock = @ptrCast(rwlock.*);
+    const pthread_rwlock = PthreadRwLock.extract(rwlock);
     pthread_rwlock.lock.lock();
     pthread_rwlock.writer_thread_id = pthread_self();
     return 0;
@@ -821,7 +841,7 @@ pub fn pthread_rwlock_wrlock(
 pub fn pthread_rwlock_trywrlock(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
-    const pthread_rwlock: *PthreadRwLock = @ptrCast(rwlock.*);
+    const pthread_rwlock = PthreadRwLock.extract(rwlock);
     if (!pthread_rwlock.lock.tryLock()) return errno(.BUSY);
     pthread_rwlock.writer_thread_id = pthread_self();
     return 0;
@@ -839,7 +859,7 @@ pub fn pthread_rwlock_timedwrlock(
 pub fn pthread_rwlock_unlock(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
-    const pthread_rwlock: *PthreadRwLock = @ptrCast(rwlock.*);
+    const pthread_rwlock = PthreadRwLock.extract(rwlock);
     const thread_id = pthread_self();
     if (pthread_rwlock.writer_thread_id != 0) {
         if (thread_id != pthread_rwlock.writer_thread_id) return errno(.PERM);
@@ -920,6 +940,16 @@ const PthreadCondition = struct {
     ref_count: std.atomic.Value(usize) = .init(1),
     attributes: PthreadConditionAttributes = .{},
 
+    fn extract(cond: [*c]const pthread_cond_t) *@This() {
+        return if (cond.*) |pc| pc else init_static: {
+            const pc = wasm_allocator.create(@This()) catch @panic("Out of memory");
+            pc.* = .{};
+            const mutable = @constCast(cond);
+            mutable.* = pc;
+            break :init_static pc;
+        };
+    }
+
     fn addRef(self: *@This()) void {
         _ = self.ref_count.fetchAdd(1, .acq_rel);
     }
@@ -954,7 +984,7 @@ pub fn pthread_cond_init(
 pub fn pthread_cond_destroy(
     cond: [*c]pthread_cond_t,
 ) callconv(.c) c_int {
-    const pthread_condition: *PthreadCondition = @ptrCast(cond.*);
+    const pthread_condition = PthreadCondition.extract(cond);
     pthread_condition.release();
     return 0;
 }
@@ -962,7 +992,7 @@ pub fn pthread_cond_destroy(
 pub fn pthread_cond_signal(
     cond: [*c]pthread_cond_t,
 ) callconv(.c) c_int {
-    const pthread_condition: *PthreadCondition = @ptrCast(cond.*);
+    const pthread_condition = PthreadCondition.extract(cond);
     pthread_condition.condition.signal();
     return 0;
 }
@@ -970,7 +1000,7 @@ pub fn pthread_cond_signal(
 pub fn pthread_cond_broadcast(
     cond: [*c]pthread_cond_t,
 ) callconv(.c) c_int {
-    const pthread_condition: *PthreadCondition = @ptrCast(cond.*);
+    const pthread_condition = PthreadCondition.extract(cond);
     pthread_condition.condition.broadcast();
     return 0;
 }
@@ -979,7 +1009,7 @@ pub fn pthread_cond_wait(
     noalias cond: [*c]pthread_cond_t,
     noalias mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
-    const pthread_condition: *PthreadCondition = @ptrCast(cond.*);
+    const pthread_condition = PthreadCondition.extract(cond);
     const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
     pthread_condition.condition.wait(&pthread_mutex.mutex);
     return 0;
@@ -990,7 +1020,7 @@ pub fn pthread_cond_timedwait(
     noalias mutex: [*c]pthread_mutex_t,
     noalias abstime: [*c]const std.posix.timespec,
 ) callconv(.c) c_int {
-    const pthread_condition: *PthreadCondition = @ptrCast(cond.*);
+    const pthread_condition = PthreadCondition.extract(cond);
     const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
     const end = abstime.*;
     const end_ns = end.toTimestamp();
@@ -1262,12 +1292,12 @@ const sched_param = extern struct {
 };
 const pthread_t = c_ulong;
 const pthread_attr_t = *PthreadAttributes;
-const pthread_mutex_t = *PthreadMutex;
 const pthread_mutexattr_t = *PthreadMutexAttributes;
+const pthread_mutex_t = ?*PthreadMutex;
 const pthread_condattr_t = *PthreadConditionAttributes;
-const pthread_cond_t = *PthreadCondition;
-const pthread_rwlock_t = *PthreadRwLock;
+const pthread_cond_t = ?*PthreadCondition;
 const pthread_rwlockattr_t = *PthreadRwLockAttributes;
+const pthread_rwlock_t = ?*PthreadRwLock;
 const pthread_key_t = c_uint;
 const pthread_once_t = c_int;
 const pthread_spinlock_t = c_int;

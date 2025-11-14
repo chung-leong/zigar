@@ -4,7 +4,6 @@ pub fn getImports(b: *std.Build, args: anytype) []const std.Build.Module.Import 
     const sqlite = b.dependency("sqlite", .{
         .target = args.target,
         .optimize = args.optimize,
-        .single_threaded = false,
     });
     return &.{
         .{ .name = "sqlite", .module = sqlite.module("sqlite") },
