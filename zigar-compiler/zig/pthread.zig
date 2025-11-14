@@ -12,10 +12,11 @@ const Pthread = struct {
     state: PthreadState = .joinable,
     attributes: PthreadAttributes = .{},
 
+    const first_id = 1;
     const def_stack_size = 2 * 1024 * 1024;
 
     var list: LinkedList(@This()) = .init(wasm_allocator);
-    var next_id: std.atomic.Value(pthread_t) = .init(1);
+    var next_id: std.atomic.Value(pthread_t) = .init(first_id + 1);
 
     threadlocal var current: ?*@This() = null;
 
@@ -24,9 +25,10 @@ const Pthread = struct {
     }
 
     fn allocId() pthread_t {
-        var id = next_id.fetchAdd(1, .acq_rel);
-        if (id == 0) id = next_id.fetchAdd(2, .acq_rel);
-        return id;
+        while (true) {
+            const id = next_id.fetchAdd(1, .acq_rel);
+            if (id > first_id) return id;
+        }
     }
 
     fn find(id: pthread_t) ?*@This() {
@@ -162,7 +164,7 @@ pub fn pthread_detach(
 }
 
 pub fn pthread_self() callconv(.c) pthread_t {
-    return if (Pthread.current) |pthread| pthread.id else 1;
+    return if (Pthread.current) |pthread| pthread.id else Pthread.first_id;
 }
 
 pub fn pthread_equal(
@@ -566,7 +568,7 @@ pub fn pthread_mutex_unlock(
             if (current_id == owner_id) {
                 if (kind == PTHREAD_MUTEX_RECURSIVE) {
                     pthread_mutex.lock_count -= 1;
-                    if (pthread_mutex.lock_count >= 0) return 0;
+                    if (pthread_mutex.lock_count > 0) return 0;
                 }
             } else {
                 if (kind == PTHREAD_MUTEX_ERRORCHECK) {
@@ -1016,37 +1018,45 @@ pub fn pthread_spin_init(
     lock: [*c]volatile pthread_spinlock_t,
     pshared: c_int,
 ) callconv(.c) c_int {
-    _ = lock;
     _ = pshared;
-    @panic("not implemented");
+    lock.* = 0;
+    return 0;
 }
 
 pub fn pthread_spin_destroy(
     lock: [*c]volatile pthread_spinlock_t,
 ) callconv(.c) c_int {
     _ = lock;
-    @panic("not implemented");
+    return 0;
 }
 
 pub fn pthread_spin_lock(
     lock: [*c]volatile pthread_spinlock_t,
 ) callconv(.c) c_int {
-    _ = lock;
-    @panic("not implemented");
+    const thread_id = pthread_self();
+    const lock_value: pthread_spinlock_t = @bitCast(thread_id);
+    while (true) {
+        if (@cmpxchgWeak(pthread_spinlock_t, lock, 0, lock_value, .acq_rel, .monotonic) == null) break;
+    }
+    return 0;
 }
 
 pub fn pthread_spin_trylock(
     lock: [*c]volatile pthread_spinlock_t,
 ) callconv(.c) c_int {
-    _ = lock;
-    @panic("not implemented");
+    const thread_id = pthread_self();
+    const lock_value: pthread_spinlock_t = @bitCast(thread_id);
+    if (@cmpxchgWeak(pthread_spinlock_t, lock, 0, lock_value, .acq_rel, .monotonic) != null) return errno(.BUSY);
+    return 0;
 }
 
 pub fn pthread_spin_unlock(
     lock: [*c]volatile pthread_spinlock_t,
 ) callconv(.c) c_int {
-    _ = lock;
-    @panic("not implemented");
+    const thread_id = pthread_self();
+    const lock_value: pthread_spinlock_t = @bitCast(thread_id);
+    if (@cmpxchgWeak(pthread_spinlock_t, lock, lock_value, 0, .acq_rel, .monotonic) != null) return errno(.PERM);
+    return 0;
 }
 
 pub fn pthread_key_create(

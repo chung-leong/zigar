@@ -574,6 +574,31 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    it('should create spinlock using pthread', async function() {
+      const { 
+        spawn,
+        unlock,
+        startup,
+        shutdown,
+      } = await importTest('create-spinlock-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+          unlock();
+          await delay(250);
+        });
+        expect(lines).to.eql([
+          'Main thread acquired spinlock',
+          'Thread 2 found busy lock: true',
+          'Main thread released spinlock',
+          'Thread 1 acquired spinlock'
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
 
   })
 }
