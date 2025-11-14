@@ -496,6 +496,85 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    it('should create mutex using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('create-mutex-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        expect(lines).to.eql([
+          'Thread 1 acquired mutex',
+          'Thread 2 acquired mutex',
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should create error-checking mutex using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('create-error-checking-mutex-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        expect(lines).to.eql([ 'retval == EDEADLK: true' ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should create recursive mutex using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('create-recursive-mutex-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        expect(lines).to.eql([
+          'Thread 1 acquired mutex',
+          'Thread 2 acquired mutex',
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should wait momentarily for mutex created using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('wait-momentarily-for-mutex-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        expect(lines).to.eql([
+          'Thread 1 acquired mutex',
+          'Thread 3 timed out: true',
+          'Thread 2 acquired mutex',
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
+
   })
 }
 

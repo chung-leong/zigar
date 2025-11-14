@@ -429,6 +429,7 @@ const PthreadMutex = struct {
     lock_count: usize = 0,
     ref_count: std.atomic.Value(usize) = .init(1),
     thread_id: std.atomic.Value(pthread_t) = .init(0),
+    wait_futex: std.atomic.Value(u32) = .init(0),
     attributes: PthreadMutexAttributes = .{},
 
     fn addRef(self: *@This()) void {
@@ -437,6 +438,17 @@ const PthreadMutex = struct {
 
     fn release(self: *@This()) void {
         if (self.ref_count.fetchSub(1, .monotonic) == 1) wasm_allocator.destroy(self);
+    }
+
+    fn wait(self: *@This(), duration: u64) bool {
+        self.wait_futex.store(0, .unordered);
+        std.Thread.Futex.timedWait(&self.wait_futex, 0, duration) catch return false;
+        return true;
+    }
+
+    fn wake(self: *@This()) void {
+        self.wait_futex.store(1, .unordered);
+        std.Thread.Futex.wake(&self.wait_futex, 1);
     }
 };
 const PthreadMutexAttributes = struct {
@@ -451,7 +463,7 @@ pub fn pthread_mutex_init(
     mutex: [*c]pthread_mutex_t,
     mutexattr: [*c]const pthread_mutexattr_t,
 ) callconv(.c) c_int {
-    const pthread_mutex_attrs: ?*const PthreadMutexAttributes = if (mutexattr) |ptr| @ptrCast(ptr) else null;
+    const pthread_mutex_attrs: ?*const PthreadMutexAttributes = if (mutexattr) |ptr| @ptrCast(ptr.*) else null;
     const pthread_mutex: *PthreadMutex = if (pthread_mutex_attrs) |pma| get: {
         const pm: *PthreadMutex = @fieldParentPtr("attributes", @constCast(pma));
         pm.addRef();
@@ -477,7 +489,24 @@ pub fn pthread_mutex_trylock(
     mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
     const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
-    _ = pthread_mutex;
+    const current_id = pthread_self();
+    switch (pthread_mutex.attributes.kind) {
+        PTHREAD_MUTEX_RECURSIVE, PTHREAD_MUTEX_ERRORCHECK => |kind| {
+            const owner_id = pthread_mutex.thread_id.load(.unordered);
+            if (current_id == owner_id) {
+                if (kind == PTHREAD_MUTEX_RECURSIVE) {
+                    pthread_mutex.lock_count += 1;
+                    return 0;
+                } else {
+                    return errno(.DEADLK);
+                }
+            }
+        },
+        else => {},
+    }
+    if (!pthread_mutex.mutex.tryLock()) return errno(.BUSY);
+    pthread_mutex.thread_id.store(current_id, .unordered);
+    pthread_mutex.lock_count = 1;
     return 0;
 }
 
@@ -485,7 +514,24 @@ pub fn pthread_mutex_lock(
     mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
     const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
-    _ = pthread_mutex;
+    const current_id = pthread_self();
+    switch (pthread_mutex.attributes.kind) {
+        PTHREAD_MUTEX_RECURSIVE, PTHREAD_MUTEX_ERRORCHECK => |kind| {
+            const owner_id = pthread_mutex.thread_id.load(.unordered);
+            if (current_id == owner_id) {
+                if (kind == PTHREAD_MUTEX_RECURSIVE) {
+                    pthread_mutex.lock_count += 1;
+                    return 0;
+                } else {
+                    return errno(.DEADLK);
+                }
+            }
+        },
+        else => {},
+    }
+    pthread_mutex.mutex.lock();
+    pthread_mutex.thread_id.store(current_id, .unordered);
+    pthread_mutex.lock_count = 1;
     return 0;
 }
 
@@ -494,16 +540,46 @@ pub fn pthread_mutex_timedlock(
     noalias abstime: [*c]const std.posix.timespec,
 ) callconv(.c) c_int {
     const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
-    _ = abstime;
-    _ = pthread_mutex;
-    return 0;
+    if (pthread_mutex_trylock(mutex) == 0) return 0;
+    const end = abstime.*;
+    const end_ns = end.toTimestamp();
+    while (true) {
+        // get the current time and see if it's large than abstime
+        const now = std.posix.clock_gettime(.REALTIME) catch break;
+        const now_ns = now.toTimestamp();
+        if (now_ns > end_ns) break;
+        if (pthread_mutex.wait(end_ns - now_ns)) {
+            if (pthread_mutex_trylock(mutex) == 0) return 0;
+        }
+    }
+    return errno(.TIMEDOUT);
 }
 
 pub fn pthread_mutex_unlock(
     mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
     const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
-    _ = pthread_mutex;
+    const current_id = pthread_self();
+    switch (pthread_mutex.attributes.kind) {
+        PTHREAD_MUTEX_RECURSIVE, PTHREAD_MUTEX_ERRORCHECK => |kind| {
+            const owner_id = pthread_mutex.thread_id.load(.unordered);
+            if (current_id == owner_id) {
+                if (kind == PTHREAD_MUTEX_RECURSIVE) {
+                    pthread_mutex.lock_count -= 1;
+                    if (pthread_mutex.lock_count >= 0) return 0;
+                }
+            } else {
+                if (kind == PTHREAD_MUTEX_ERRORCHECK) {
+                    return errno(.INVAL); // not the owner
+                }
+            }
+        },
+        else => {},
+    }
+    pthread_mutex.mutex.unlock();
+    pthread_mutex.lock_count = 0;
+    pthread_mutex.thread_id.store(0, .unordered);
+    pthread_mutex.wake();
     return 0;
 }
 
@@ -666,7 +742,7 @@ pub fn pthread_rwlock_init(
     noalias rwlock: [*c]pthread_rwlock_t,
     noalias attr: [*c]const pthread_rwlockattr_t,
 ) callconv(.c) c_int {
-    const pthread_rwlock_attrs: ?*const PthreadRwLockAttributes = if (attr) |ptr| @ptrCast(ptr) else null;
+    const pthread_rwlock_attrs: ?*const PthreadRwLockAttributes = if (attr) |ptr| @ptrCast(ptr.*) else null;
     const pthread_rwlock: *PthreadRwLock = if (pthread_rwlock_attrs) |pra| get: {
         const pr: *PthreadRwLock = @fieldParentPtr("attributes", @constCast(pra));
         pr.addRef();
@@ -795,43 +871,74 @@ pub fn pthread_rwlockattr_setkind_np(
     return 0;
 }
 
+const PthreadCondition = struct {
+    condition: std.Thread.Condition = .{},
+    ref_count: std.atomic.Value(usize) = .init(1),
+    attributes: PthreadConditionAttributes = .{},
+
+    fn addRef(self: *@This()) void {
+        _ = self.ref_count.fetchAdd(1, .acq_rel);
+    }
+
+    fn release(self: *@This()) void {
+        if (self.ref_count.fetchSub(1, .acq_rel) == 1) wasm_allocator.destroy(self);
+    }
+};
+const PthreadConditionAttributes = struct {
+    shared: c_int = PTHREAD_PROCESS_PRIVATE,
+    clock_id: std.posix.clockid_t = .REALTIME,
+};
+
 pub fn pthread_cond_init(
     noalias cond: [*c]pthread_cond_t,
-    noalias cond_attr: [*c]const pthread_condattr_t,
+    noalias attr: [*c]const pthread_condattr_t,
 ) callconv(.c) c_int {
-    _ = cond;
-    _ = cond_attr;
-    @panic("not implemented");
+    const pthread_condition_attrs: ?*const PthreadConditionAttributes = if (attr) |ptr| @ptrCast(ptr.*) else null;
+    const pthread_condition: *PthreadCondition = if (pthread_condition_attrs) |pca| get: {
+        const pc: *PthreadCondition = @fieldParentPtr("attributes", @constCast(pca));
+        pc.addRef();
+        break :get pc;
+    } else alloc: {
+        const pc = wasm_allocator.create(PthreadCondition) catch return errno(.NOMEM);
+        pc.* = .{};
+        break :alloc pc;
+    };
+    cond.* = pthread_condition;
+    return 0;
 }
 
 pub fn pthread_cond_destroy(
     cond: [*c]pthread_cond_t,
 ) callconv(.c) c_int {
-    _ = cond;
-    @panic("not implemented");
+    const pthread_condition: *PthreadCondition = @ptrCast(cond.*);
+    pthread_condition.release();
+    return 0;
 }
 
 pub fn pthread_cond_signal(
     cond: [*c]pthread_cond_t,
 ) callconv(.c) c_int {
-    _ = cond;
-    @panic("not implemented");
+    const pthread_condition: *PthreadCondition = @ptrCast(cond.*);
+    pthread_condition.condition.signal();
+    return 0;
 }
 
 pub fn pthread_cond_broadcast(
     cond: [*c]pthread_cond_t,
 ) callconv(.c) c_int {
-    _ = cond;
-    @panic("not implemented");
+    const pthread_condition: *PthreadCondition = @ptrCast(cond.*);
+    pthread_condition.condition.broadcast();
+    return 0;
 }
 
 pub fn pthread_cond_wait(
     noalias cond: [*c]pthread_cond_t,
     noalias mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
-    _ = cond;
-    _ = mutex;
-    @panic("not implemented");
+    const pthread_condition: *PthreadCondition = @ptrCast(cond.*);
+    const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
+    pthread_condition.condition.wait(&pthread_mutex.mutex);
+    return 0;
 }
 
 pub fn pthread_cond_timedwait(
@@ -839,60 +946,70 @@ pub fn pthread_cond_timedwait(
     noalias mutex: [*c]pthread_mutex_t,
     noalias abstime: [*c]const std.posix.timespec,
 ) callconv(.c) c_int {
-    _ = cond;
-    _ = mutex;
-    _ = abstime;
-    @panic("not implemented");
+    const pthread_condition: *PthreadCondition = @ptrCast(cond.*);
+    const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
+    const end = abstime.*;
+    const end_ns = end.toTimestamp();
+    const now = std.posix.clock_gettime(.REALTIME) catch return errno(.TIMEDOUT);
+    const now_ns = now.toTimestamp();
+    if (now_ns >= end_ns) return errno(.TIMEDOUT);
+    const duration = end_ns - now_ns;
+    pthread_condition.condition.timedWait(&pthread_mutex.mutex, duration) catch return errno(.TIMEDOUT);
+    return 0;
 }
 
 pub fn pthread_condattr_init(
     attr: [*c]pthread_condattr_t,
 ) callconv(.c) c_int {
-    _ = attr;
-    @panic("not implemented");
+    const pthread_condition = wasm_allocator.create(PthreadCondition) catch return errno(.NOMEM);
+    pthread_condition.* = .{};
+    attr.* = &pthread_condition.attributes;
+    return 0;
 }
 
 pub fn pthread_condattr_destroy(
     attr: [*c]pthread_condattr_t,
 ) callconv(.c) c_int {
-    _ = attr;
-    @panic("not implemented");
+    const pthread_condition_attrs: *PthreadConditionAttributes = attr.*;
+    const pthread_condition: *PthreadCondition = @fieldParentPtr("attributes", pthread_condition_attrs);
+    pthread_condition.release();
+    return 0;
 }
 
 pub fn pthread_condattr_getpshared(
     noalias attr: [*c]const pthread_condattr_t,
     noalias pshared: [*c]c_int,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = pshared;
-    @panic("not implemented");
+    const pthread_condition_attrs: *PthreadConditionAttributes = attr.*;
+    pshared.* = pthread_condition_attrs.shared;
+    return 0;
 }
 
 pub fn pthread_condattr_setpshared(
     attr: [*c]pthread_condattr_t,
     pshared: c_int,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = pshared;
-    @panic("not implemented");
+    const pthread_condition_attrs: *PthreadConditionAttributes = attr.*;
+    pthread_condition_attrs.shared = pshared;
+    return 0;
 }
 
 pub fn pthread_condattr_getclock(
     noalias attr: [*c]const pthread_condattr_t,
     noalias clock_id: [*c]std.posix.clockid_t,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = clock_id;
-    @panic("not implemented");
+    const pthread_condition_attrs: *PthreadConditionAttributes = attr.*;
+    clock_id.* = pthread_condition_attrs.clock_id;
+    return 0;
 }
 
 pub fn pthread_condattr_setclock(
     attr: [*c]pthread_condattr_t,
     clock_id: std.posix.clockid_t,
 ) callconv(.c) c_int {
-    _ = attr;
-    _ = clock_id;
-    @panic("not implemented");
+    const pthread_condition_attrs: *PthreadConditionAttributes = attr.*;
+    pthread_condition_attrs.clock_id = clock_id;
+    return 0;
 }
 
 pub fn pthread_spin_init(
@@ -984,21 +1101,44 @@ pub fn pthread_atfork(
     @panic("not implemented");
 }
 
+const PthreadSemaphore = struct {
+    semaphore: std.Thread.Semaphore = .{},
+    ref_count: std.atomic.Value(usize) = .init(1),
+    attributes: PthreadSemaphoreAttributes = .{},
+
+    fn addRef(self: *@This()) void {
+        _ = self.ref_count.fetchAdd(1, .monotonic);
+    }
+
+    fn release(self: *@This()) void {
+        if (self.ref_count.fetchSub(1, .monotonic) == 1) wasm_allocator.destroy(self);
+    }
+};
+const PthreadSemaphoreAttributes = struct {
+    shared: c_int = PTHREAD_PROCESS_PRIVATE,
+};
+
 pub fn sem_init(
     sem: [*c]sem_t,
     pshared: c_int,
     value: c_uint,
 ) callconv(.c) c_int {
-    _ = sem;
-    _ = pshared;
-    _ = value;
+    const pthread_semaphore: *PthreadSemaphore = wasm_allocator.create(PthreadSemaphore) catch return errno(.NOMEM);
+    pthread_semaphore.* = .{
+        .semaphore = .{
+            .permits = @intCast(value),
+        },
+        .attributes = .{ .shared = pshared },
+    };
+    sem.* = pthread_semaphore;
     return 0;
 }
 
 pub fn sem_destroy(
     sem: [*c]sem_t,
 ) callconv(.c) c_int {
-    _ = sem;
+    const pthread_semaphore: *PthreadSemaphore = @ptrCast(sem.*);
+    pthread_semaphore.release();
     return 0;
 }
 
@@ -1060,8 +1200,8 @@ pub fn sem_getvalue(
     noalias sem: [*c]sem_t,
     noalias sval: [*c]c_int,
 ) callconv(.c) c_int {
-    _ = sem;
-    _ = sval;
+    const pthread_semaphore: *PthreadSemaphore = @ptrCast(sem.*);
+    sval.* = @intCast(pthread_semaphore.semaphore.permits);
     return 0;
 }
 
@@ -1072,14 +1212,14 @@ const pthread_t = c_ulong;
 const pthread_attr_t = *PthreadAttributes;
 const pthread_mutex_t = *PthreadMutex;
 const pthread_mutexattr_t = *PthreadMutexAttributes;
-const pthread_condattr_t = *anyopaque;
-const pthread_cond_t = *anyopaque;
+const pthread_condattr_t = *PthreadConditionAttributes;
+const pthread_cond_t = *PthreadCondition;
 const pthread_rwlock_t = *PthreadRwLock;
 const pthread_rwlockattr_t = *PthreadRwLockAttributes;
 const pthread_key_t = c_uint;
 const pthread_once_t = c_int;
 const pthread_spinlock_t = c_int;
-const sem_t = *anyopaque;
+const sem_t = *PthreadSemaphore;
 
 const SCHED_RR = 2;
 const PTHREAD_INHERIT_SCHED = 0;

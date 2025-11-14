@@ -12,6 +12,7 @@ pub fn spawn() !void {
     var attr: pthread_attr_t = undefined;
     if (c.pthread_attr_init(&attr) != 0) return error.CannotCreateThreadAttributes;
     if (c.pthread_attr_setdetachstate(&attr, c.PTHREAD_CREATE_DETACHED) != 0) return error.CannotSetThreadAttributes;
+    defer if (c.pthread_attr_destroy(&attr) != 0) @panic("Unable to destroy attributes");
     var thread_id: pthread_t = undefined;
     if (c.pthread_create(&thread_id, &attr, run, null) != 0) return error.CannotCreateThread;
     var retval: ?*anyopaque = undefined;
