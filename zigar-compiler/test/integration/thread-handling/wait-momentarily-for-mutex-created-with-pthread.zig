@@ -26,7 +26,7 @@ fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     _ = c.pthread_mutex_lock(&mutex);
     defer _ = c.pthread_mutex_unlock(&mutex);
     std.debug.print("Thread 1 acquired mutex\n", .{});
-    std.Thread.sleep(100 * 1000000);
+    std.Thread.sleep(70 * 1000000);
     return null;
 }
 
@@ -49,7 +49,7 @@ fn run3(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.Thread.sleep(10 * 1000000);
     var time: c.struct_timespec = undefined;
     _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
-    time.tv_nsec += 30 * 1000000;
+    time.tv_nsec += 20 * 1000000;
     const retval = c.pthread_mutex_timedlock(&mutex, &time);
     if (retval == 0) {
         defer _ = c.pthread_mutex_unlock(&mutex);

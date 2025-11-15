@@ -640,6 +640,60 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    it('should wait momentarily for read lock created using pthread', async function() {
+      const { 
+        spawn,
+        unlock,
+        startup,
+        shutdown,
+      } = await importTest('wait-momentarily-for-read-lock-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+          unlock();
+          await delay(550);
+        });
+        expect(lines).to.eql([
+          'Main thread acquired write lock',
+          'Thread 1 acquiring read lock',
+          'Thread 2 acquiring read lock',
+          'Thread 1 timed out: true',
+          'Main thread releasing write lock',
+          'Thread 2 acquired read lock'
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should wait momentarily for write lock created using pthread', async function() {
+      const { 
+        spawn,
+        unlock,
+        startup,
+        shutdown,
+      } = await importTest('wait-momentarily-for-write-lock-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+          unlock();
+          await delay(550);
+        });
+        expect(lines).to.eql([
+          'Main thread acquired write lock',
+          'Thread 1 acquiring write lock',
+          'Thread 2 acquiring write lock',
+          'Thread 1 timed out: true',
+          'Main thread releasing write lock',
+          'Thread 2 acquired write lock'
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
   })
 }
 

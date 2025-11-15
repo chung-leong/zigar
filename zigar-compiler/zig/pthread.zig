@@ -343,7 +343,7 @@ pub fn pthread_attr_getstack(
     _ = attr;
     _ = stackaddr;
     _ = stacksize;
-    return @intFromEnum(std.os.wasi.errno_t.OPNOTSUPP);
+    return errno(.OPNOTSUPP);
 }
 
 pub fn pthread_attr_setstack(
@@ -354,7 +354,7 @@ pub fn pthread_attr_setstack(
     _ = attr;
     _ = stackaddr;
     _ = stacksize;
-    return @intFromEnum(std.os.wasi.errno_t.OPNOTSUPP);
+    return errno(.OPNOTSUPP);
 }
 
 pub fn pthread_setschedparam(
@@ -452,10 +452,9 @@ const PthreadMutex = struct {
         if (self.ref_count.fetchSub(1, .monotonic) == 1) wasm_allocator.destroy(self);
     }
 
-    fn wait(self: *@This(), duration: u64) bool {
+    fn wait(self: *@This(), duration: u64) void {
         self.wait_futex.store(0, .unordered);
-        std.Thread.Futex.timedWait(&self.wait_futex, 0, duration) catch return false;
-        return true;
+        std.Thread.Futex.timedWait(&self.wait_futex, 0, duration) catch {};
     }
 
     fn wake(self: *@This()) void {
@@ -551,18 +550,18 @@ pub fn pthread_mutex_timedlock(
     noalias mutex: [*c]pthread_mutex_t,
     noalias abstime: [*c]const std.posix.timespec,
 ) callconv(.c) c_int {
-    const pthread_mutex = PthreadMutex.extract(mutex);
-    if (pthread_mutex_trylock(mutex) == 0) return 0;
-    const end = abstime.*;
-    const end_ns = end.toTimestamp();
     while (true) {
-        // get the current time and see if it's large than abstime
-        const now = std.posix.clock_gettime(.REALTIME) catch break;
-        const now_ns = now.toTimestamp();
-        if (now_ns > end_ns) break;
-        if (pthread_mutex.wait(end_ns - now_ns)) {
-            if (pthread_mutex_trylock(mutex) == 0) return 0;
-        }
+        const result = pthread_mutex_trylock(mutex);
+        if (result == errno(.BUSY)) {
+            const end = abstime.*;
+            const end_ns = end.toTimestamp();
+            // get the current time and see if it's large than abstime
+            const now = std.posix.clock_gettime(.REALTIME) catch break;
+            const now_ns = now.toTimestamp();
+            if (now_ns > end_ns) break;
+            const pthread_mutex = PthreadMutex.extract(mutex);
+            pthread_mutex.wait(end_ns - now_ns);
+        } else return result;
     }
     return errno(.TIMEDOUT);
 }
@@ -736,6 +735,7 @@ const PthreadRwLock = struct {
     reader_thread_spinlock: pthread_spinlock_t = 0,
     reader_thread_ids: std.ArrayListUnmanaged(pthread_t) = .{},
     writer_thread_id: pthread_t = 0,
+    wait_futex: std.atomic.Value(u32) = .init(0),
     attributes: PthreadRwLockAttributes = .{},
 
     fn extract(rwlock: [*c]const pthread_rwlock_t) *@This() {
@@ -757,6 +757,16 @@ const PthreadRwLock = struct {
             self.reader_thread_ids.deinit(wasm_allocator);
             wasm_allocator.destroy(self);
         }
+    }
+
+    fn wait(self: *@This(), duration: u64) void {
+        self.wait_futex.store(0, .unordered);
+        std.Thread.Futex.timedWait(&self.wait_futex, 0, duration) catch {};
+    }
+
+    fn wake(self: *@This()) void {
+        self.wait_futex.store(1, .unordered);
+        std.Thread.Futex.wake(&self.wait_futex, 1);
     }
 };
 const PthreadRwLockAttributes = struct {
@@ -824,9 +834,20 @@ pub fn pthread_rwlock_timedrdlock(
     noalias rwlock: [*c]pthread_rwlock_t,
     noalias abstime: [*c]const std.posix.timespec,
 ) callconv(.c) c_int {
-    _ = rwlock;
-    _ = abstime;
-    @panic("not implemented");
+    while (true) {
+        const result = pthread_rwlock_tryrdlock(rwlock);
+        if (result == errno(.BUSY)) {
+            const pthread_rwlock = PthreadRwLock.extract(rwlock);
+            const end = abstime.*;
+            const end_ns = end.toTimestamp();
+            const now = std.posix.clock_gettime(.REALTIME) catch break;
+            const now_ns = now.toTimestamp();
+            if (now_ns >= end_ns) break;
+            const duration = end_ns - now_ns;
+            pthread_rwlock.wait(duration);
+        } else return result;
+    }
+    return errno(.TIMEDOUT);
 }
 
 pub fn pthread_rwlock_wrlock(
@@ -851,9 +872,20 @@ pub fn pthread_rwlock_timedwrlock(
     noalias rwlock: [*c]pthread_rwlock_t,
     noalias abstime: [*c]const std.posix.timespec,
 ) callconv(.c) c_int {
-    _ = rwlock;
-    _ = abstime;
-    @panic("not implemented");
+    while (true) {
+        const result = pthread_rwlock_trywrlock(rwlock);
+        if (result == errno(.BUSY)) {
+            const pthread_rwlock = PthreadRwLock.extract(rwlock);
+            const end = abstime.*;
+            const end_ns = end.toTimestamp();
+            const now = std.posix.clock_gettime(.REALTIME) catch break;
+            const now_ns = now.toTimestamp();
+            if (now_ns >= end_ns) break;
+            const duration = end_ns - now_ns;
+            pthread_rwlock.wait(duration);
+        } else return result;
+    }
+    return errno(.TIMEDOUT);
 }
 
 pub fn pthread_rwlock_unlock(
@@ -878,6 +910,7 @@ pub fn pthread_rwlock_unlock(
         defer _ = pthread_spin_unlock(&pthread_rwlock.reader_thread_spinlock);
         _ = pthread_rwlock.reader_thread_ids.swapRemove(reader_index);
     }
+    pthread_rwlock.wake();
     return 0;
 }
 
