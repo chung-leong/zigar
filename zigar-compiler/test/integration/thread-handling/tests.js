@@ -1,5 +1,6 @@
 import { expect, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
+import { unlink } from 'fs/promises';
 import 'mocha-skip-if';
 import { capture, delay } from '../test-utils.js';
 
@@ -690,6 +691,95 @@ export function addTests(importModule, options) {
           'Main thread releasing write lock',
           'Thread 2 acquired write lock'
         ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should create semaphore using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('create-semaphore-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        const list0 = lines.filter(l => l.includes('acquired semaphore: 0'));
+        const list1 = lines.filter(l => l.includes('acquired semaphore: 1'));
+        expect(list0).to.have.lengthOf(2);
+        expect(list1).to.have.lengthOf(1);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should create named semaphore using pthread', async function() {
+      const { 
+        spawn,
+        cleanup,
+        startup,
+        shutdown,
+      } = await importTest('create-named-semaphore-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });            
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        cleanup();
+        const list0 = lines.filter(l => l.includes('acquired semaphore: 0'));
+        const list1 = lines.filter(l => l.includes('acquired semaphore: 1'));
+        expect(list0).to.have.lengthOf(2);
+        expect(list1).to.have.lengthOf(1);
+      } finally {
+        shutdown();
+        try {
+          await unlink('/dev/shm/sem.hello');
+        } catch {}
+      }
+    })
+    it('should wait momentarily for semaphore created using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('wait-momentarily-for-semaphore-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        const list0 = lines.filter(l => l.includes('acquired semaphore: 0'));
+        const list1 = lines.filter(l => l.includes('acquired semaphore: 1'));
+        const listTO = lines.filter(l => l.includes('timed out'));
+        expect(list0).to.have.lengthOf(1);
+        expect(list1).to.have.lengthOf(1);
+        expect(listTO).to.have.lengthOf(1);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should try to get semaphore created using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('get-semaphore-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        const list0 = lines.filter(l => l.includes('acquired semaphore: 0'));
+        const list1 = lines.filter(l => l.includes('acquired semaphore: 1'));
+        const listTO = lines.filter(l => l.includes('failed'));
+        expect(list0).to.have.lengthOf(1);
+        expect(list1).to.have.lengthOf(1);
+        expect(listTO).to.have.lengthOf(1);
       } finally {
         shutdown();
       }

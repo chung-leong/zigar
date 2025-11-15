@@ -458,8 +458,10 @@ const PthreadMutex = struct {
     }
 
     fn wake(self: *@This()) void {
-        self.wait_futex.store(1, .unordered);
-        std.Thread.Futex.wake(&self.wait_futex, 1);
+        if (self.wait_futex.load(.unordered) != 0) {
+            self.wait_futex.store(1, .unordered);
+            std.Thread.Futex.wake(&self.wait_futex, 1);
+        }
     }
 };
 const PthreadMutexAttributes = struct {
@@ -765,8 +767,10 @@ const PthreadRwLock = struct {
     }
 
     fn wake(self: *@This()) void {
-        self.wait_futex.store(1, .unordered);
-        std.Thread.Futex.wake(&self.wait_futex, 1);
+        if (self.wait_futex.load(.unordered) != 0) {
+            self.wait_futex.store(1, .unordered);
+            std.Thread.Futex.wake(&self.wait_futex, 1);
+        }
     }
 };
 const PthreadRwLockAttributes = struct {
@@ -1141,7 +1145,9 @@ pub fn pthread_spin_lock(
     const thread_id = pthread_self();
     const lock_value: pthread_spinlock_t = @bitCast(thread_id);
     while (true) {
-        if (@cmpxchgWeak(pthread_spinlock_t, lock, 0, lock_value, .acq_rel, .monotonic) == null) break;
+        if (@cmpxchgWeak(pthread_spinlock_t, lock, 0, lock_value, .acq_rel, .monotonic) == null) {
+            break;
+        }
     }
     return 0;
 }
@@ -1151,7 +1157,9 @@ pub fn pthread_spin_trylock(
 ) callconv(.c) c_int {
     const thread_id = pthread_self();
     const lock_value: pthread_spinlock_t = @bitCast(thread_id);
-    if (@cmpxchgWeak(pthread_spinlock_t, lock, 0, lock_value, .acq_rel, .monotonic) != null) return errno(.BUSY);
+    if (@cmpxchgWeak(pthread_spinlock_t, lock, 0, lock_value, .acq_rel, .monotonic) != null) {
+        return errno(.BUSY);
+    }
     return 0;
 }
 
@@ -1160,7 +1168,9 @@ pub fn pthread_spin_unlock(
 ) callconv(.c) c_int {
     const thread_id = pthread_self();
     const lock_value: pthread_spinlock_t = @bitCast(thread_id);
-    if (@cmpxchgWeak(pthread_spinlock_t, lock, lock_value, 0, .acq_rel, .monotonic) != null) return errno(.PERM);
+    if (@cmpxchgWeak(pthread_spinlock_t, lock, lock_value, 0, .acq_rel, .monotonic) != null) {
+        return errno(.PERM);
+    }
     return 0;
 }
 
@@ -1220,13 +1230,27 @@ const PthreadSemaphore = struct {
     semaphore: std.Thread.Semaphore = .{},
     ref_count: std.atomic.Value(usize) = .init(1),
     attributes: PthreadSemaphoreAttributes = .{},
+    name: ?[]u8 = null,
+
+    var list: LinkedList(*@This()) = .init(wasm_allocator);
+
+    fn extract(sem: [*c]const sem_t) *@This() {
+        return if (sem.*) |prw| @constCast(prw) else unreachable;
+    }
 
     fn addRef(self: *@This()) void {
         _ = self.ref_count.fetchAdd(1, .monotonic);
     }
 
     fn release(self: *@This()) void {
-        if (self.ref_count.fetchSub(1, .monotonic) == 1) wasm_allocator.destroy(self);
+        if (self.ref_count.fetchSub(1, .monotonic) == 1) {
+            if (self.name) |slice| wasm_allocator.free(slice);
+            wasm_allocator.destroy(self);
+        }
+    }
+
+    fn match(ptr: **@This(), name: []const u8) bool {
+        return std.mem.eql(u8, ptr.*.name.?, name);
     }
 };
 const PthreadSemaphoreAttributes = struct {
@@ -1238,7 +1262,9 @@ pub fn sem_init(
     pshared: c_int,
     value: c_uint,
 ) callconv(.c) c_int {
-    const pthread_semaphore: *PthreadSemaphore = wasm_allocator.create(PthreadSemaphore) catch return errno(.NOMEM);
+    const pthread_semaphore = wasm_allocator.create(PthreadSemaphore) catch {
+        return semErrno(.NOMEM, -1);
+    };
     pthread_semaphore.* = .{
         .semaphore = .{
             .permits = @intCast(value),
@@ -1252,7 +1278,7 @@ pub fn sem_init(
 pub fn sem_destroy(
     sem: [*c]sem_t,
 ) callconv(.c) c_int {
-    const pthread_semaphore: *PthreadSemaphore = @ptrCast(sem.*);
+    const pthread_semaphore = PthreadSemaphore.extract(sem);
     pthread_semaphore.release();
     return 0;
 }
@@ -1262,29 +1288,72 @@ pub fn sem_open(
     oflag: c_int,
     ...,
 ) callconv(.c) [*c]sem_t {
-    _ = name;
-    _ = oflag;
-    return 0;
+    const flags: std.c.O = @bitCast(oflag);
+    const name_s = name[0..std.mem.len(name)];
+    const ptr = if (PthreadSemaphore.list.find(PthreadSemaphore.match, name_s)) |ptr| use: {
+        if (flags.CREAT and flags.EXCL) return semErrno(.EXIST, SEM_FAILED);
+        break :use ptr;
+    } else create: {
+        if (!flags.CREAT) return semErrno(.NOENT, SEM_FAILED);
+        var va_list = @cVaStart();
+        defer @cVaEnd(&va_list);
+        _ = @cVaArg(&va_list, std.c.mode_t);
+        const value = @cVaArg(&va_list, c_uint);
+        const pthread_semaphore: *PthreadSemaphore = wasm_allocator.create(PthreadSemaphore) catch {
+            return semErrno(.NOMEM, SEM_FAILED);
+        };
+        const name_dupe = wasm_allocator.dupe(u8, name_s) catch {
+            wasm_allocator.destroy(pthread_semaphore);
+            return semErrno(.NOMEM, SEM_FAILED);
+        };
+        pthread_semaphore.* = .{
+            .semaphore = .{
+                .permits = @intCast(value),
+            },
+            .attributes = .{ .shared = PTHREAD_PROCESS_SHARED },
+            .name = name_dupe,
+        };
+        break :create PthreadSemaphore.list.push(pthread_semaphore) catch {
+            pthread_semaphore.release();
+            return semErrno(.NOMEM, SEM_FAILED);
+        };
+    };
+    const pthread_semaphore = ptr.*;
+    // newly created semaphore will have ref_count = 2, such that a call to sem_close()
+    // wouldn't cause its deallocation
+    pthread_semaphore.addRef();
+    return @ptrCast(ptr);
 }
 
 pub fn sem_close(
     sem: [*c]sem_t,
 ) callconv(.c) c_int {
-    _ = sem;
+    const pthread_semaphore = PthreadSemaphore.extract(sem);
+    if (pthread_semaphore.name == null) return semErrno(.INVAL, -1);
+    pthread_semaphore.release();
     return 0;
 }
 
 pub fn sem_unlink(
     name: [*c]const u8,
 ) callconv(.c) c_int {
-    _ = name;
+    const name_s = name[0..std.mem.len(name)];
+    const ptr = PthreadSemaphore.list.find(PthreadSemaphore.match, name_s) orelse {
+        return semErrno(.NOENT, -1);
+    };
+    defer PthreadSemaphore.list.release(ptr); // undo increment made by find()
+    PthreadSemaphore.list.release(ptr); // remove from list
+    const pthread_semaphore = ptr.*;
+    pthread_semaphore.release();
+    pthread_semaphore.release(); // extra release to deallocate it
     return 0;
 }
 
 pub fn sem_wait(
     sem: [*c]sem_t,
 ) callconv(.c) c_int {
-    _ = sem;
+    const pthread_semaphore = PthreadSemaphore.extract(sem);
+    pthread_semaphore.semaphore.wait();
     return 0;
 }
 
@@ -1292,22 +1361,30 @@ pub fn sem_timedwait(
     noalias sem: [*c]sem_t,
     noalias abstime: [*c]const std.posix.timespec,
 ) callconv(.c) c_int {
-    _ = sem;
-    _ = abstime;
+    const pthread_semaphore = PthreadSemaphore.extract(sem);
+    const end = abstime.*;
+    const end_ns = end.toTimestamp();
+    const now = std.posix.clock_gettime(.REALTIME) catch return semErrno(.TIMEDOUT, -1);
+    const now_ns = now.toTimestamp();
+    if (now_ns >= end_ns) return semErrno(.TIMEDOUT, -1);
+    const duration = end_ns - now_ns;
+    pthread_semaphore.semaphore.timedWait(duration) catch return semErrno(.TIMEDOUT, -1);
     return 0;
 }
 
 pub fn sem_trywait(
     sem: [*c]sem_t,
 ) callconv(.c) c_int {
-    _ = sem;
+    const pthread_semaphore = PthreadSemaphore.extract(sem);
+    pthread_semaphore.semaphore.timedWait(0) catch return semErrno(.AGAIN, -1);
     return 0;
 }
 
 pub fn sem_post(
     sem: [*c]sem_t,
 ) callconv(.c) c_int {
-    _ = sem;
+    const pthread_semaphore = PthreadSemaphore.extract(sem);
+    pthread_semaphore.semaphore.post();
     return 0;
 }
 
@@ -1315,7 +1392,7 @@ pub fn sem_getvalue(
     noalias sem: [*c]sem_t,
     noalias sval: [*c]c_int,
 ) callconv(.c) c_int {
-    const pthread_semaphore: *PthreadSemaphore = @ptrCast(sem.*);
+    const pthread_semaphore = PthreadSemaphore.extract(sem);
     sval.* = @intCast(pthread_semaphore.semaphore.permits);
     return 0;
 }
@@ -1334,7 +1411,7 @@ const pthread_rwlock_t = ?*PthreadRwLock;
 const pthread_key_t = c_uint;
 const pthread_once_t = c_int;
 const pthread_spinlock_t = c_int;
-const sem_t = *PthreadSemaphore;
+const sem_t = ?*PthreadSemaphore;
 
 const SCHED_RR = 2;
 const PTHREAD_INHERIT_SCHED = 0;
@@ -1345,9 +1422,19 @@ const PTHREAD_MUTEX_NORMAL = 0;
 const PTHREAD_MUTEX_RECURSIVE = 1;
 const PTHREAD_MUTEX_ERRORCHECK = 2;
 const PTHREAD_PROCESS_PRIVATE = 0;
+const PTHREAD_PROCESS_SHARED = 1;
 const PTHREAD_MUTEX_STALLED = 0;
 const PTHREAD_PRIO_NONE = 0;
+const SEM_FAILED: [*c]sem_t = @ptrFromInt(0);
 
 fn errno(e: std.posix.E) u16 {
     return @intFromEnum(e);
+}
+
+fn semErrno(e: std.posix.E, retval: anytype) rv_type: {
+    const T = @TypeOf(retval);
+    break :rv_type if (T == comptime_int) c_int else T;
+} {
+    std.c._errno().* = @intFromEnum(e);
+    return retval;
 }

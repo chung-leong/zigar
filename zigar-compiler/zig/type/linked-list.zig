@@ -71,12 +71,14 @@ pub fn LinkedList(comptime T: type) type {
                 const next_node = getUnmarkedReference(current_node.next);
                 if (!isMarkedReference(current_node.next)) {
                     // see if we have a match
-                    if (@call(.always_inline, match, .{ &current_node.payload, args })) {
-                        const prev_ref_count = @atomicRmw(usize, &current_node.ref_count, .Add, 1, .monotonic);
-                        // make sure the item hasn't been removed while we're checking it
-                        if (prev_ref_count > 0) return &current_node.payload;
-                        _ = @atomicRmw(usize, &current_node.ref_count, .Sub, 1, .monotonic);
+                    const prev_ref_count = @atomicRmw(usize, &current_node.ref_count, .Add, 1, .monotonic);
+                    if (prev_ref_count > 0) {
+                        if (@call(.always_inline, match, .{ &current_node.payload, args })) {
+                            // make sure the item hasn't been removed while we're checking it
+                            return &current_node.payload;
+                        }
                     }
+                    _ = @atomicRmw(usize, &current_node.ref_count, .Sub, 1, .monotonic);
                 }
                 current_node = next_node;
             }
