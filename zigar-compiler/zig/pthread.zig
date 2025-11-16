@@ -1096,7 +1096,8 @@ pub fn pthread_cond_timedwait(
     const pthread_mutex: *PthreadMutex = @ptrCast(mutex.*);
     const end = abstime.*;
     const end_ns = end.toTimestamp();
-    const now = std.posix.clock_gettime(.REALTIME) catch return errno(.TIMEDOUT);
+    const clock_id = pthread_condition.attributes.clock_id;
+    const now = std.posix.clock_gettime(clock_id) catch return errno(.TIMEDOUT);
     const now_ns = now.toTimestamp();
     if (now_ns >= end_ns) return errno(.TIMEDOUT);
     const duration = end_ns - now_ns;

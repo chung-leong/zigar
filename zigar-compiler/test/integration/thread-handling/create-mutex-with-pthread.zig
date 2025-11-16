@@ -11,8 +11,8 @@ const pthread_mutex_t = c.pthread_mutex_t;
 var mutex: pthread_mutex_t = undefined;
 
 pub fn spawn() !void {
-    var thread_id: pthread_t = undefined;
     if (c.pthread_mutex_init(&mutex, null) != 0) return error.CannotCreateMutex;
+    var thread_id: pthread_t = undefined;
     if (c.pthread_create(&thread_id, null, run1, null) != 0) return error.CannotCreateThread;
     if (c.pthread_detach(thread_id) != 0) return error.CannotDetachThread;
     if (c.pthread_create(&thread_id, null, run2, null) != 0) return error.CannotCreateThread;

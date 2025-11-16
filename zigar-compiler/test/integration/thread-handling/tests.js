@@ -432,7 +432,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
-    it('should exit a thread created using pthread', async function() {
+    it('should exit thread created using pthread', async function() {
       const { 
         spawn,
         startup,
@@ -454,7 +454,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
-    it('should exit a thread created in a thread using pthread', async function() {
+    it('should exit thread created in a thread using pthread', async function() {
       const { 
         spawn,
         startup,
@@ -810,7 +810,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
-    it('should exit a thread not created using pthread', async function() {
+    it('should exit thread not created using pthread', async function() {
       const { 
         spawn,
         startup,
@@ -827,7 +827,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
-    it('should call a function once using pthread', async function() {
+    it('should call function once using pthread', async function() {
       const { 
         spawn,
         startup,
@@ -841,6 +841,64 @@ export function addTests(importModule, options) {
         });
         expect(lines).to.eql([ 'Once upon a time...' ]);
       } finally {
+        shutdown();
+      }
+    })
+    it('should create condition using pthread', async function() {
+      const { 
+        spawn,
+        signal,
+        broadcast,
+        startup,
+        shutdown,
+      } = await importTest('create-condition-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines1 = await capture(async () => {
+          spawn();
+          await delay(300);
+          signal();
+          await delay(200);
+        });
+        expect(lines1).to.eql([
+          'Thread waiting for condition',
+          'Thread waiting for condition',
+          'Thread waiting for condition',
+          'Thread saw condition',
+        ]);
+        const lines2 = await capture(async () => {
+          broadcast();
+          await delay(200);
+        });
+        expect(lines2).to.eql([
+          'Thread saw condition',
+          'Thread saw condition',
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should wait momentarily for condition created using pthread', async function() {
+      const { 
+        spawn,
+        signal,
+        broadcast,
+        startup,
+        shutdown,
+      } = await importTest('wait-momentarily-for-condition-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+          signal();
+          await delay(400);
+        });
+        const listS = lines.filter(l => l.includes('saw'));
+        const listTO = lines.filter(l => l.includes('timed out'));
+        expect(listS).to.have.lengthOf(1);
+        expect(listTO).to.have.lengthOf(2);
+     } finally {
         shutdown();
       }
     })
