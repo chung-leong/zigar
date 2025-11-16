@@ -784,6 +784,33 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    it('should create key for thread specific values using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('create-key-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        const expected = [
+          'Thread 1 found anyopaque@12345 and anyopaque@67',
+          'Thread 2 found anyopaque@22222 and null',
+          'Destructor 1 called: anyopaque@12345',
+          'Destructor 2 called: anyopaque@67',
+          'Destructor 1 called: anyopaque@22222'
+        ];
+        for (const line of expected) {
+          expect(lines).to.contain(line);
+        }
+      } finally {
+        shutdown();
+      }
+    })
+
   })
 }
 

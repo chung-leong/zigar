@@ -31,6 +31,15 @@ const Pthread = struct {
         }
     }
 
+    fn getCurrent() *@This() {
+        return current orelse create: {
+            const self = alloc() catch @panic("Out of memory");
+            self.id = if (std.Thread.getCurrentId() == 0) first_id else allocId();
+            self.state = .detached;
+            break :create self;
+        };
+    }
+
     fn find(id: pthread_t) ?*@This() {
         return list.find(match, id);
     }
@@ -97,48 +106,62 @@ fn run_pthread(thread: *Pthread) void {
     // set threadlocal variable so pthread_self() can get itself
     Pthread.current = thread;
     thread.return_value = thread.start_routine(thread.arg);
-    Pthread.current = null;
 }
 
 pub fn pthread_exit(
     retval: ?*anyopaque,
 ) callconv(.c) noreturn {
-    if (Pthread.current) |pthread| {
-        pthread.return_value = retval;
-        // termination code copied from WasiThreadImpl
-        const wasi_thread = pthread.thread.impl.thread;
-        switch (wasi_thread.state.swap(.completed, .seq_cst)) {
-            .running => {
-                // reset the Thread ID
-                asm volatile (
-                    \\ local.get %[ptr]
-                    \\ i32.const 0
-                    \\ i32.atomic.store 0
-                    :
-                    : [ptr] "r" (&wasi_thread.tid.raw),
-                );
-
-                // Wake the main thread listening to this thread
-                asm volatile (
-                    \\ local.get %[ptr]
-                    \\ i32.const 1 # waiters
-                    \\ memory.atomic.notify 0
-                    \\ drop # no need to know the waiters
-                    :
-                    : [ptr] "r" (&wasi_thread.tid.raw),
-                );
-            },
-            .completed => unreachable,
-            .detached => {
-                // use free in the vtable so the stack doesn't get set to undefined when optimize = Debug
-                const free = wasi_thread.allocator.vtable.free;
-                const ptr = wasi_thread.allocator.ptr;
-                free(ptr, wasi_thread.memory, std.mem.Alignment.@"1", 0);
-            },
-        }
-    }
+    onTermination(retval);
     // trigger a JavaScript error
     std.os.wasi.proc_exit(0);
+}
+
+fn onTermination(retval: ?*anyopaque) void {
+    const pthread = Pthread.getCurrent();
+    pthread.return_value = retval;
+    _ = pthread_spin_lock(&key_list_spinlock);
+    defer _ = pthread_spin_unlock(&key_list_spinlock);
+    for (key_list.items, 0..) |item, index| {
+        if (!item.deleted) {
+            if (item.destructor) |destroy| {
+                const key: pthread_key_t = @intCast(index + 1);
+                if (pthread_getspecific(key)) |ptr| {
+                    destroy(ptr);
+                }
+            }
+        }
+    }
+    // termination code copied from WasiThreadImpl
+    const wasi_thread = pthread.thread.impl.thread;
+    switch (wasi_thread.state.swap(.completed, .seq_cst)) {
+        .running => {
+            // reset the Thread ID
+            asm volatile (
+                \\ local.get %[ptr]
+                \\ i32.const 0
+                \\ i32.atomic.store 0
+                :
+                : [ptr] "r" (&wasi_thread.tid.raw),
+            );
+
+            // Wake the main thread listening to this thread
+            asm volatile (
+                \\ local.get %[ptr]
+                \\ i32.const 1 # waiters
+                \\ memory.atomic.notify 0
+                \\ drop # no need to know the waiters
+                :
+                : [ptr] "r" (&wasi_thread.tid.raw),
+            );
+        },
+        .completed => unreachable,
+        .detached => {
+            // use free in the vtable so the stack doesn't get set to undefined when optimize = Debug
+            const free = wasi_thread.allocator.vtable.free;
+            const ptr = wasi_thread.allocator.ptr;
+            free(ptr, wasi_thread.memory, std.mem.Alignment.@"1", 0);
+        },
+    }
 }
 
 pub fn pthread_join(
@@ -164,7 +187,8 @@ pub fn pthread_detach(
 }
 
 pub fn pthread_self() callconv(.c) pthread_t {
-    return if (Pthread.current) |pthread| pthread.id else Pthread.first_id;
+    const pthread = Pthread.getCurrent();
+    return pthread.id;
 }
 
 pub fn pthread_equal(
@@ -1174,36 +1198,60 @@ pub fn pthread_spin_unlock(
     return 0;
 }
 
+var key_list: std.ArrayListUnmanaged(struct {
+    destructor: ?*const fn (?*anyopaque) callconv(.c) void = null,
+    deleted: bool = false,
+}) = .{};
+var key_list_spinlock: pthread_spinlock_t = 0;
+threadlocal var key_value_list: std.ArrayListUnmanaged(?*anyopaque) = .{};
+
 pub fn pthread_key_create(
     key: [*c]pthread_key_t,
     destr_function: ?*const fn (?*anyopaque) callconv(.c) void,
 ) callconv(.c) c_int {
-    _ = key;
-    _ = destr_function;
-    @panic("not implemented");
+    _ = pthread_spin_lock(&key_list_spinlock);
+    defer _ = pthread_spin_unlock(&key_list_spinlock);
+    key_list.append(wasm_allocator, .{ .destructor = destr_function }) catch return errno(.NOMEM);
+    key.* = @intCast(key_list.items.len);
+    return 0;
 }
 
 pub fn pthread_key_delete(
     key: pthread_key_t,
 ) callconv(.c) c_int {
-    _ = key;
-    @panic("not implemented");
+    _ = pthread_spin_lock(&key_list_spinlock);
+    defer _ = pthread_spin_unlock(&key_list_spinlock);
+    const index: usize = @intCast(key);
+    if (index >= key_list.items.len) return errno(.INVAL);
+    const item = &key_list.items[index];
+    if (item.deleted) return errno(.INVAL);
+    item.deleted = true;
+    return 0;
 }
 
 pub fn pthread_getspecific(
     key: pthread_key_t,
 ) callconv(.c) ?*anyopaque {
-    _ = key;
-    @panic("not implemented");
+    if (key == 0) return null;
+    const index: usize = @intCast(key - 1);
+    if (index >= key_value_list.items.len) return null;
+    return key_value_list.items[index];
 }
 
 pub fn pthread_setspecific(
     key: pthread_key_t,
-    pointer: ?*const anyopaque,
+    pointer: ?*anyopaque,
 ) callconv(.c) c_int {
-    _ = key;
-    _ = pointer;
-    @panic("not implemented");
+    if (key == 0) return errno(.INVAL);
+    const index: usize = @intCast(key - 1);
+    if (index >= key_list.items.len) return errno(.INVAL);
+    if (index >= key_value_list.items.len) {
+        const start = key_value_list.items.len;
+        key_value_list.resize(wasm_allocator, index + 1) catch return errno(.NOMEM);
+        for (key_value_list.items[start .. index + 1]) |*ptr| ptr.* = null;
+    }
+    key_value_list.items[index] = pointer;
+    return 0;
 }
 
 pub fn pthread_getcpuclockid(
@@ -1212,18 +1260,7 @@ pub fn pthread_getcpuclockid(
 ) callconv(.c) c_int {
     _ = thread_id;
     _ = clock_id;
-    @panic("not implemented");
-}
-
-pub fn pthread_atfork(
-    prepare: ?*const fn () callconv(.c) void,
-    parent: ?*const fn () callconv(.c) void,
-    child: ?*const fn () callconv(.c) void,
-) callconv(.c) c_int {
-    _ = prepare;
-    _ = parent;
-    _ = child;
-    @panic("not implemented");
+    return errno(.NOENT);
 }
 
 const PthreadSemaphore = struct {

@@ -11,10 +11,10 @@ const pthread_spinlock_t = c.pthread_spinlock_t;
 var spinlock: pthread_spinlock_t = undefined;
 
 pub fn spawn() !void {
-    var thread_id: pthread_t = undefined;
     if (c.pthread_spin_init(&spinlock, c.PTHREAD_PROCESS_PRIVATE) != 0) return error.CannotCreateSpinlock;
     if (c.pthread_spin_lock(&spinlock) != 0) return error.CannotObtainSpinlock;
     std.debug.print("Main thread acquired spinlock\n", .{});
+    var thread_id: pthread_t = undefined;
     if (c.pthread_create(&thread_id, null, run1, null) != 0) return error.CannotCreateThread;
     if (c.pthread_detach(thread_id) != 0) return error.CannotDetachThread;
     if (c.pthread_create(&thread_id, null, run2, null) != 0) return error.CannotCreateThread;
