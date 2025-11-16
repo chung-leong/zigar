@@ -106,6 +106,7 @@ fn run_pthread(thread: *Pthread) void {
     // set threadlocal variable so pthread_self() can get itself
     Pthread.current = thread;
     thread.return_value = thread.start_routine(thread.arg);
+    key_value_list.deinit(wasm_allocator);
 }
 
 pub fn pthread_exit(
@@ -124,13 +125,15 @@ fn onTermination(retval: ?*anyopaque) void {
     for (key_list.items, 0..) |item, index| {
         if (!item.deleted) {
             if (item.destructor) |destroy| {
-                const key: pthread_key_t = @intCast(index + 1);
-                if (pthread_getspecific(key)) |ptr| {
-                    destroy(ptr);
+                if (index < key_value_list.items.len) {
+                    if (key_value_list.items[index]) |ptr| {
+                        destroy(ptr);
+                    }
                 }
             }
         }
     }
+    key_value_list.deinit(wasm_allocator);
     // termination code copied from WasiThreadImpl
     const wasi_thread = pthread.thread.impl.thread;
     switch (wasi_thread.state.swap(.completed, .seq_cst)) {
