@@ -810,7 +810,40 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
-
+    it('should exit a thread not created using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('exit-thread-not-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        expect(lines).to.eql([ 'Destructor called: anyopaque@12345' ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should call a function once using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('call-function-once-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        expect(lines).to.eql([ 'Once upon a time...' ]);
+      } finally {
+        shutdown();
+      }
+    })
   })
 }
 
