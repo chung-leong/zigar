@@ -18,37 +18,69 @@ export default mixin({
         }
         /* c8 ignore end */
         return this.spawnThread.bind(this);
+      case 'thread-cancel':
+        return this.cancelThread.bind(this);
     }
   },
-  spawnThread(arg) {
-    const tid = this.nextThreadId;
-    this.nextThreadId++;
-    const { executable, memory, options } = this;
-    const workerData = { executable, memory, options, tid, arg };
+  spawnThread(taddr) {
+    const tid = this.nextThreadId++;
+    this.spawnWorker().then(worker => worker.run(tid, taddr));
+    return tid;
+  },
+  cancelThread(tid, type) {
+    const worker = this.workers.find(w => w.tid === tid);
+    if (worker) {
+      if (type === 0) {   // cancelation will 
+        worker.canceled = true;
+      }
+    }
+  },
+  async spawnWorker() {
+    // look for an idling worker
+    let worker = this.workers.find(w => w.tid === 0);
+    if (worker) {
+      return worker;
+    }
     const handler = (worker, msg) => {
-      if (msg.type === 'call') {
-        const { module, name, args, array } = msg;        
+      const { type } = msg;
+      if (type === 'call') {
+        if (worker.canceled) {
+          // a deferred cancellation has occurred--jump back into Zig to execute 
+          // cleanup routines and TLS destructors then die
+          const { exports: { wasi_thread_clean } } = this.instance;
+          wasi_thread_clean();
+          throw new Error('Cancel');
+        }
+        const { module, name, args, futex } = msg;        
         const fn = this.exportedModules[module]?.[name];
         // add a true argument to indicate that waiting is possible
         const result = fn?.(...args, true);
         const finish = (value) => {
           if (array) {
-            array[1] = value|0;
-            array[0] = 1;
-            Atomics.notify(array, 0, 1);
+            futex[1] = value|0;
+            futex[0] = 1;
+            Atomics.notify(futex, 0, 1);
           }
-        };
+        };        
         if (isPromise(result)) {
           result.then(finish);
+          worker.futex = futex;
         } else {
           finish(result);
         }
-      } else if (msg.type === 'exit') {
-        const index = this.workers.indexOf(worker);
-        if (index !== -1) {
-          worker.detach();
-          this.workers.splice(index, 1);
-        }
+      } else if (type === 'done') {
+        worker.tid = 0;
+        // remove the idle worker after a while
+        setTimeout(() => {
+          const index = this.workers.indexOf(worker);
+          if (index !== -1) {
+            this.workers.splice(index, 1);
+          }
+          // empty message causes worker to exit
+          worker.postMessage({});
+        }, 500);
+      } else if (type === 'ready' && process.env.COMPAT === 'node') {
+        resolve(worker);
       }
     };
     const evtName = 'message';
@@ -56,26 +88,27 @@ export default mixin({
     if (typeof(Worker) === 'function' || process.env.COMPAT !== 'node') {
       // web worker
       const url = getWorkerURL();
-      const worker = new Worker(url, { name: 'zig' });
-      const listener = evt => handler(worker, evt.data);
-      worker.addEventListener(evtName, listener);
-      worker.detach = () => worker.removeEventListener(evtName, listener);
-      worker.postMessage(workerData);
-      this.workers.push(worker);
+      worker = new Worker(url, { name: 'zig' });
+      worker.addEventListener(evtName, evt => handler(worker, evt.data));
     }
     /* c8 ignore end */
     else if (process.env.COMPAT === 'node') {
       // Node.js worker-thread
-      import('worker_threads').then(({ Worker }) => {
-        const code = getWorkerCode();
-        const worker = new Worker(code, { workerData, eval: true });
-        const listener = msg => handler(worker, msg);
-        worker.on(evtName, listener);
-        worker.detach = () => worker.off(evtName, listener);
-        this.workers.push(worker);
-      });
+      const { Worker } = await import('worker_threads');
+      const code = getWorkerCode();
+      worker = new Worker(code, { eval: true });
+      // wait for ping from worker
+      await new Promise(resolve => worker.once(evtName, resolve));
+      worker.on(evtName, msg => handler(worker, msg));
     }
-    return tid;
+    const { executable, memory, options } = this;
+    worker.run = function(tid, taddr) {
+      this.tid = tid;
+      this.taddr = taddr;
+      this.canceled = false;
+      this.postMessage({ executable, memory, options, tid, taddr });
+    };
+    this.workers.push(worker);
   },
   /* c8 ignore start */
   ...(process.env.DEV ? {
@@ -112,26 +145,31 @@ function workerMain() {
 
   if (typeof(self) === 'object' || process.env.COMPAT !== 'node') {
     // web worker
-    self.onmessage = evt => run(evt.data);
+    self.onmessage = (evt) => process(evt.data);
     postMessage = msg => self.postMessage(msg);
     exit = () => self.close();
   } else if (process.env.COMPAT === 'node') {
     // Node.js worker-thread
-    import(/* webpackIgnore: true */ 'worker_threads').then(({ parentPort, workerData }) => {
+    import(/* webpackIgnore: true */ 'worker_threads').then(({ parentPort }) => {
+      parentPort.on('message', process);
       postMessage = msg => parentPort.postMessage(msg);
       exit = () => process.exit();
-      run(workerData);
+      // tell main thread that worker is ready
+      postMessage('ping');
     });
   }
 
-  function run({ executable, memory, options, tid, arg }) {
+  function process({ executable, memory, options, tid, taadr }) {
+    if (!executable) {
+      return exit();
+    }
     const w = WebAssembly;
     const env = { memory }, wasi = {}, wasiPreview = {};
     const imports = { env, wasi, wasi_snapshot_preview1: wasiPreview };
     for (const { module, name, kind } of w.Module.imports(executable)) {
       if (kind === 'function') {        
         const f = (name === 'proc_exit') ? () => {
-          throw new Error('termination');
+          throw new Error('Exit');
         } : createRouter(module, name);
         if (module === 'env') {
           env[name] = f;
@@ -147,25 +185,24 @@ function workerMain() {
       initial: tableInitial,
       element: 'anyfunc',
     });
-    const { exports } = new w.Instance(executable, imports);
-    const { wasi_thread_start } = exports;
+    const { exports: { wasi_thread_start } } = new w.Instance(executable, imports);
     // catch thread termination exception
     try {
-      wasi_thread_start(tid, arg);
+      wasi_thread_start(tid, taadr);
     } catch {
     }
-    postMessage({ type: 'exit' });
-    exit();
+    postMessage({ type: 'done' });
   }
 
   function createRouter(module, name) {
-    const array = new Int32Array(new SharedArrayBuffer(8));
+    const arrafutexy = new Int32Array(new SharedArrayBuffer(8));
     return function(...args) {
-      array[0] = 0;
-      postMessage({ type: 'call', module, name, args, array });
-      Atomics.wait(array, 0, 0);
-      return array[1];
+      futex[0] = 0;
+      postMessage({ type: 'call', module, name, args, futex });
+      Atomics.wait(futex, 0, 0);
+      return futex[1];
     };
   }
 }
 /* c8 ignore end */
+

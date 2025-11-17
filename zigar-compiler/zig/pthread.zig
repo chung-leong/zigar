@@ -5,23 +5,26 @@ const LinkedList = @import("type/linked-list.zig").LinkedList;
 
 const Pthread = struct {
     id: pthread_t = undefined,
+    wasi_thread_id: u32 = undefined,
     thread: std.Thread = undefined,
     start_routine: *const fn (?*anyopaque) callconv(.c) ?*anyopaque = undefined,
     arg: ?*anyopaque = undefined,
     return_value: ?*anyopaque = null,
-    state: State = .joinable,
+    state: std.atomic.Value(State) = .init(.joinable),
+    cancel_state: u8 = PTHREAD_CANCEL_ENABLE,
+    cancel_type: u8 = PTHREAD_CANCEL_DEFERRED,
     attributes: Attributes = .{},
 
     const Attributes = struct {
-        detached: c_int = PTHREAD_CREATE_JOINABLE,
         guard_size: usize = 0,
         stack_size: usize = Pthread.def_stack_size,
-        schedule_parameters: sched_param = .{ .sched_priority = 50 },
-        schedule_policy: c_int = SCHED_RR,
-        schedule_inheritance: c_int = PTHREAD_INHERIT_SCHED,
-        schedule_scope: c_int = PTHREAD_SCOPE_SYSTEM,
+        detached: u8 = PTHREAD_CREATE_JOINABLE,
+        schedule_policy: u8 = SCHED_RR,
+        schedule_inheritance: u8 = PTHREAD_INHERIT_SCHED,
+        schedule_scope: u8 = PTHREAD_SCOPE_SYSTEM,
+        schedule_parameters: struct { priority: u8 = 50 } = .{},
     };
-    const State = enum { joinable, joined, detached, unknown };
+    const State = enum(u8) { joinable, joined, detached, unknown, canceled };
 
     const first_id = 1;
     const def_stack_size = 2 * 1024 * 1024;
@@ -47,7 +50,8 @@ const Pthread = struct {
             // current thread is not created through pthread
             const self = alloc() catch @panic("Out of memory");
             self.id = if (std.Thread.getCurrentId() == 0) first_id else allocId();
-            self.state = .unknown;
+            self.wasi_thread_id = std.Thread.getCurrentId();
+            self.state.store(.unknown, .unordered);
             break :create self;
         };
     }
@@ -64,15 +68,117 @@ const Pthread = struct {
         list.release(self);
     }
 
+    fn cancel(self: *@This()) void {
+        if (self.state.load(.unordered) != .canceled) {
+            self.state.store(.canceled, .unordered);
+            if (self.cancel_state == PTHREAD_CANCEL_ENABLE) {
+                if (self.cancel_type == PTHREAD_CANCEL_ASYNCHRONOUS) {
+                    // immediate termination is desired; the web worker handling this thread is
+                    // going to be killed and another one will take its place during clean-up;
+                    // we need to make call_back in WasiThreadImpl.Instance point to the clean-up
+                    // function and adjust stack_offset so that stuff stored on the stack doesn't
+                    // get overwritten
+                    const current_stack_address = asm (
+                        \\ global.get __stack_pointer
+                        \\ local.set %[stack_ptr]
+                        : [stack_ptr] "=r" (-> usize),
+                    );
+                    _ = current_stack_address;
+                    // const instance = self.thread.impl.thread;
+                    // instance.stack_offset = current_stack_address - @intFromPtr(instance.memory.ptr);
+                    // instance.call_back = @ptrCast(&performCancelationCleanUp);
+                }
+                // cancelation is handled on the JavaScript side; depending on the value of cancel_type,
+                // the JS runtime can either immediately axe the worker handling the thread specified
+                // by id or wait until it makes a syscall or calls pthread_testcancel()
+                @"thread-cancel"(self.wasi_thread_id, self.cancel_type);
+            }
+        }
+    }
+
     fn match(self: *const @This(), id: c_ulong) bool {
         return self.id == id;
     }
 
     fn setState(self: *@This(), expected: State, new: State) !void {
-        if (@cmpxchgStrong(State, &self.state, expected, new, .acq_rel, .monotonic) != null) {
+        if (self.state.cmpxchgStrong(expected, new, .acq_rel, .monotonic) != null) {
             return error.IncorrectState;
         }
     }
+
+    fn performCancelationCleanUp() void {
+        // this function runs in a new worker after the one handling the thread was killed
+        // since the thread id is reused, we'd have the same TLS variable as before; getCurrent()
+        // would still give us the right struct
+        var top = PthreadCleanUpCallback.getTop();
+        while (top) |ptcb| {
+            ptcb.routine(ptcb.arg);
+            top = ptcb.next;
+        }
+        const self = getCurrent();
+        self.performExitCleanup();
+    }
+
+    fn performExitCleanup(self: *@This()) void {
+        // remove thread from list
+        defer self.release();
+        // call destructors inserted by pthread_key_create()
+        _ = pthread_spin_lock(&key_list_spinlock);
+        defer _ = pthread_spin_unlock(&key_list_spinlock);
+        for (key_list.items, 0..) |item, index| {
+            if (!item.deleted) {
+                if (item.destructor) |destroy| {
+                    if (index < key_value_list.items.len) {
+                        if (key_value_list.items[index]) |ptr| {
+                            destroy(ptr);
+                        }
+                    }
+                }
+            }
+        }
+        key_value_list.deinit(wasm_allocator);
+        // just exit when .thread isn't actually populated
+        if (self.state.load(.unordered) == .unknown) return;
+        // termination code copied from WasiThreadImpl
+        const wasi_thread = self.thread.impl.thread;
+        switch (wasi_thread.state.swap(.completed, .seq_cst)) {
+            .running => {
+                // reset the Thread ID
+                asm volatile (
+                    \\ local.get %[ptr]
+                    \\ i32.const 0
+                    \\ i32.atomic.store 0
+                    :
+                    : [ptr] "r" (&wasi_thread.tid.raw),
+                );
+
+                // Wake the main thread listening to this thread
+                asm volatile (
+                    \\ local.get %[ptr]
+                    \\ i32.const 1 # waiters
+                    \\ memory.atomic.notify 0
+                    \\ drop # no need to know the waiters
+                    :
+                    : [ptr] "r" (&wasi_thread.tid.raw),
+                );
+            },
+            .completed => unreachable,
+            .detached => {
+                // use free in the vtable so the stack doesn't get set to undefined when optimize = Debug
+                const free = wasi_thread.allocator.vtable.free;
+                const ptr = wasi_thread.allocator.ptr;
+                free(ptr, wasi_thread.memory, std.mem.Alignment.@"1", 0);
+            },
+        }
+    }
+
+    export fn wasi_thread_clean() callconv(.c) void {
+        // this function is called directly from JavaScript when cancel_type is PTHREAD_CANCEL_DEFERRED
+        // and a cancellation point has just been reached (i.e. a syscall happened)
+        performCancelationCleanUp();
+    }
+
+    extern "wasi" fn @"thread-cancel"(id: u32, cancel_type: i32) void;
 };
 
 pub fn pthread_create(
@@ -83,7 +189,7 @@ pub fn pthread_create(
 ) callconv(.c) c_int {
     const pthread_attrs: ?*Pthread.Attributes = if (attr) |ptr| @ptrCast(ptr.*) else null;
     const pthread = if (pthread_attrs) |pa| get: {
-        const pt: *Pthread = @fieldParentPtr("attributes", pa);
+        const pt: *Pthread = @alignCast(@fieldParentPtr("attributes", pa));
         // increase ref count since we're now using the Pthread struct itself
         pt.addRef();
         break :get pt;
@@ -93,7 +199,7 @@ pub fn pthread_create(
     pthread.id = Pthread.allocId();
     pthread.start_routine = start_routine.?;
     pthread.arg = arg;
-    pthread.state = if (detach) .detached else .joinable;
+    pthread.state = .init(if (detach) .detached else .joinable);
     // create the actual thread through Zig std.Thread
     pthread.thread = std.Thread.spawn(.{
         .allocator = wasm_allocator,
@@ -107,6 +213,8 @@ pub fn pthread_create(
 fn run_pthread(thread: *Pthread) void {
     // set threadlocal variable so pthread_self() can get itself
     Pthread.current = thread;
+    // obtain system thread id (i.e. WASI) for the purpose of cancellation
+    thread.wasi_thread_id = std.Thread.getCurrentId();
     thread.return_value = thread.start_routine(thread.arg);
     key_value_list.deinit(wasm_allocator);
 }
@@ -114,61 +222,10 @@ fn run_pthread(thread: *Pthread) void {
 pub fn pthread_exit(
     retval: ?*anyopaque,
 ) callconv(.c) noreturn {
-    onTermination(retval);
-    std.os.wasi.proc_exit(0); // trigger a JavaScript error
-}
-
-fn onTermination(retval: ?*anyopaque) void {
     const pthread = Pthread.getCurrent();
-    defer pthread.release();
     pthread.return_value = retval;
-    // call destructors inserted by pthread_key_create()
-    _ = pthread_spin_lock(&key_list_spinlock);
-    defer _ = pthread_spin_unlock(&key_list_spinlock);
-    for (key_list.items, 0..) |item, index| {
-        if (!item.deleted) {
-            if (item.destructor) |destroy| {
-                if (index < key_value_list.items.len) {
-                    if (key_value_list.items[index]) |ptr| {
-                        destroy(ptr);
-                    }
-                }
-            }
-        }
-    }
-    key_value_list.deinit(wasm_allocator);
-    if (pthread.state == .unknown) return;
-    // termination code copied from WasiThreadImpl
-    const wasi_thread = pthread.thread.impl.thread;
-    switch (wasi_thread.state.swap(.completed, .seq_cst)) {
-        .running => {
-            // reset the Thread ID
-            asm volatile (
-                \\ local.get %[ptr]
-                \\ i32.const 0
-                \\ i32.atomic.store 0
-                :
-                : [ptr] "r" (&wasi_thread.tid.raw),
-            );
-
-            // Wake the main thread listening to this thread
-            asm volatile (
-                \\ local.get %[ptr]
-                \\ i32.const 1 # waiters
-                \\ memory.atomic.notify 0
-                \\ drop # no need to know the waiters
-                :
-                : [ptr] "r" (&wasi_thread.tid.raw),
-            );
-        },
-        .completed => unreachable,
-        .detached => {
-            // use free in the vtable so the stack doesn't get set to undefined when optimize = Debug
-            const free = wasi_thread.allocator.vtable.free;
-            const ptr = wasi_thread.allocator.ptr;
-            free(ptr, wasi_thread.memory, std.mem.Alignment.@"1", 0);
-        },
-    }
+    pthread.performExitCleanup();
+    std.os.wasi.proc_exit(0); // trigger a JavaScript error
 }
 
 pub fn pthread_join(
@@ -217,7 +274,7 @@ pub fn pthread_attr_destroy(
     attr: [*c]pthread_attr_t,
 ) callconv(.c) c_int {
     const pthread_attrs: *Pthread.Attributes = attr.*;
-    const pthread: *Pthread = @fieldParentPtr("attributes", pthread_attrs);
+    const pthread: *Pthread = @alignCast(@fieldParentPtr("attributes", pthread_attrs));
     pthread.release();
     return 0;
 }
@@ -236,7 +293,7 @@ pub fn pthread_attr_setdetachstate(
     detachstate: c_int,
 ) callconv(.c) c_int {
     const pthread_attrs: *Pthread.Attributes = attr.*;
-    pthread_attrs.detached = detachstate;
+    pthread_attrs.detached = @intCast(detachstate);
     return 0;
 }
 
@@ -263,7 +320,9 @@ pub fn pthread_attr_getschedparam(
     noalias param: [*c]sched_param,
 ) callconv(.c) c_int {
     const pthread_attrs: *Pthread.Attributes = attr.*;
-    param.* = pthread_attrs.schedule_parameters;
+    param.* = .{
+        .sched_priority = pthread_attrs.schedule_parameters.priority,
+    };
     return 0;
 }
 
@@ -272,7 +331,9 @@ pub fn pthread_attr_setschedparam(
     noalias param: [*c]const sched_param,
 ) callconv(.c) c_int {
     const pthread_attrs: *Pthread.Attributes = attr.*;
-    pthread_attrs.schedule_parameters = param.*;
+    pthread_attrs.schedule_parameters = .{
+        .priority = @intCast(param.*.sched_priority),
+    };
     return 0;
 }
 
@@ -290,7 +351,7 @@ pub fn pthread_attr_setschedpolicy(
     policy: c_int,
 ) callconv(.c) c_int {
     const pthread_attrs: *Pthread.Attributes = attr.*;
-    pthread_attrs.schedule_policy = policy;
+    pthread_attrs.schedule_policy = @intCast(policy);
     return 0;
 }
 
@@ -308,7 +369,7 @@ pub fn pthread_attr_setinheritsched(
     inherit: c_int,
 ) callconv(.c) c_int {
     const pthread_attrs: *Pthread.Attributes = attr.*;
-    pthread_attrs.schedule_inheritance = inherit;
+    pthread_attrs.schedule_inheritance = @intCast(inherit);
     return 0;
 }
 
@@ -326,7 +387,7 @@ pub fn pthread_attr_setscope(
     scope: c_int,
 ) callconv(.c) c_int {
     const pthread_attrs: *Pthread.Attributes = attr.*;
-    pthread_attrs.schedule_scope = scope;
+    pthread_attrs.schedule_scope = @intCast(scope);
     return 0;
 }
 
@@ -394,8 +455,10 @@ pub fn pthread_setschedparam(
     param: [*c]const sched_param,
 ) callconv(.c) c_int {
     const pthread = Pthread.find(target_thread) orelse return errno(.INVAL);
-    pthread.attributes.schedule_policy = policy;
-    pthread.attributes.schedule_parameters = param.*;
+    pthread.attributes.schedule_policy = @intCast(policy);
+    pthread.attributes.schedule_parameters = .{
+        .priority = @intCast(param.*.sched_priority),
+    };
     return 0;
 }
 
@@ -406,7 +469,9 @@ pub fn pthread_getschedparam(
 ) callconv(.c) c_int {
     const pthread = Pthread.find(target_thread) orelse return errno(.INVAL);
     policy.* = pthread.attributes.schedule_policy;
-    param.* = pthread.attributes.schedule_parameters;
+    param.* = .{
+        .sched_priority = pthread.attributes.schedule_parameters.priority,
+    };
     return 0;
 }
 
@@ -415,7 +480,7 @@ pub fn pthread_setschedprio(
     prio: c_int,
 ) callconv(.c) c_int {
     const pthread = Pthread.find(target_thread) orelse return errno(.INVAL);
-    pthread.attributes.schedule_parameters.sched_priority = prio;
+    pthread.attributes.schedule_parameters.priority = @intCast(prio);
     return 0;
 }
 
@@ -433,29 +498,75 @@ pub fn pthread_setcancelstate(
     state: c_int,
     oldstate: [*c]c_int,
 ) callconv(.c) c_int {
-    _ = state;
-    _ = oldstate;
-    @panic("not implemented");
+    const pthread = Pthread.getCurrent();
+    oldstate.* = pthread.cancel_state;
+    pthread.cancel_state = @intCast(state);
+    if (state == PTHREAD_CANCEL_ENABLE) {
+        pthread_testcancel();
+    }
+    return 0;
 }
 
 pub fn pthread_setcanceltype(
     cantype: c_int,
     oldtype: [*c]c_int,
 ) callconv(.c) c_int {
-    _ = cantype;
-    _ = oldtype;
-    @panic("not implemented");
+    const pthread = Pthread.getCurrent();
+    oldtype.* = pthread.cancel_type;
+    pthread.cancel_state = @intCast(cantype);
+    return 0;
 }
 
 pub fn pthread_cancel(
     th: pthread_t,
 ) callconv(.c) c_int {
-    _ = th;
-    @panic("not implemented");
+    const pthread = Pthread.find(th) orelse return errno(.SRCH);
+    pthread.cancel();
+    return 0;
 }
 
 pub fn pthread_testcancel() callconv(.c) void {
-    @panic("not implemented");
+    const pthread = Pthread.getCurrent();
+    if (pthread.state.load(.unordered) == .canceled) {
+        // sched_yield() is treated as a cancellation point
+        std.Thread.yield() catch {};
+    }
+}
+
+const PthreadCleanUpCallback = extern struct {
+    routine: *const fn (?*anyopaque) callconv(.c) void,
+    arg: ?*anyopaque,
+    next: ?*@This(),
+
+    threadlocal var top: std.atomic.Value(?*@This()) = .init(null);
+
+    fn getTop() ?*@This() {
+        return top.load(.acquire);
+    }
+
+    fn setTop(ptcb: ?*@This()) void {
+        top.store(ptcb, .release);
+    }
+};
+
+pub fn _pthread_cleanup_pop(
+    ptcb: [*c]PthreadCleanUpCallback,
+    execute: c_int,
+) callconv(.c) void {
+    PthreadCleanUpCallback.setTop(ptcb.*.next);
+    if (execute != 0) {
+        ptcb.*.routine(ptcb.*.arg);
+    }
+}
+
+pub fn _pthread_cleanup_push(
+    ptcb: [*c]PthreadCleanUpCallback,
+    routine: ?*const fn (?*anyopaque) callconv(.c) void,
+    arg: ?*anyopaque,
+) callconv(.c) void {
+    ptcb.*.routine = @ptrCast(routine);
+    ptcb.*.arg = arg;
+    PthreadCleanUpCallback.setTop(ptcb.*.next);
 }
 
 const PthreadMutex = struct {
@@ -511,7 +622,7 @@ pub fn pthread_mutex_init(
 ) callconv(.c) c_int {
     const pthread_mutex_attrs: ?*const PthreadMutex.Attributes = if (mutexattr) |ptr| @ptrCast(ptr.*) else null;
     const pthread_mutex: *PthreadMutex = if (pthread_mutex_attrs) |pma| get: {
-        const pm: *PthreadMutex = @fieldParentPtr("attributes", @constCast(pma));
+        const pm: *PthreadMutex = @alignCast(@fieldParentPtr("attributes", @constCast(pma)));
         pm.addRef();
         break :get pm;
     } else alloc: {
@@ -669,7 +780,7 @@ pub fn pthread_mutexattr_destroy(
     attr: [*c]pthread_mutexattr_t,
 ) callconv(.c) c_int {
     const pthread_mutex_attrs: *PthreadMutex.Attributes = attr.*;
-    const pthread_mutex: *PthreadMutex = @fieldParentPtr("attributes", pthread_mutex_attrs);
+    const pthread_mutex: *PthreadMutex = @alignCast(@fieldParentPtr("attributes", pthread_mutex_attrs));
     pthread_mutex.release();
     return 0;
 }
@@ -767,15 +878,15 @@ pub fn pthread_mutexattr_setrobust(
 const PthreadRwLock = struct {
     lock: std.Thread.RwLock = .{},
     ref_count: std.atomic.Value(usize) = .init(1),
-    reader_thread_spinlock: pthread_spinlock_t = 0,
-    reader_thread_ids: std.ArrayListUnmanaged(pthread_t) = .{},
     writer_thread_id: pthread_t = 0,
+    reader_thread_list: std.ArrayListUnmanaged(pthread_t) = .{},
+    reader_thread_list_spinlock: pthread_spinlock_t = 0,
     wait_futex: std.atomic.Value(u32) = .init(0),
     attributes: Attributes = .{},
 
     const Attributes = struct {
-        kind: c_int = PTHREAD_MUTEX_NORMAL,
-        shared: c_int = PTHREAD_PROCESS_PRIVATE,
+        kind: u8 = PTHREAD_MUTEX_NORMAL,
+        shared: u8 = PTHREAD_PROCESS_PRIVATE,
     };
 
     fn extract(rwlock: [*c]const pthread_rwlock_t) *@This() {
@@ -794,7 +905,7 @@ const PthreadRwLock = struct {
 
     fn release(self: *@This()) void {
         if (self.ref_count.fetchSub(1, .acq_rel) == 1) {
-            self.reader_thread_ids.deinit(wasm_allocator);
+            self.reader_thread_list.deinit(wasm_allocator);
             wasm_allocator.destroy(self);
         }
     }
@@ -818,7 +929,7 @@ pub fn pthread_rwlock_init(
 ) callconv(.c) c_int {
     const pthread_rwlock_attrs: ?*const PthreadRwLock.Attributes = if (attr) |ptr| @ptrCast(ptr.*) else null;
     const pthread_rwlock: *PthreadRwLock = if (pthread_rwlock_attrs) |prwa| get: {
-        const prw: *PthreadRwLock = @fieldParentPtr("attributes", @constCast(prwa));
+        const prw: *PthreadRwLock = @alignCast(@fieldParentPtr("attributes", @constCast(prwa)));
         prw.addRef();
         break :get prw;
     } else alloc: {
@@ -844,9 +955,9 @@ pub fn pthread_rwlock_rdlock(
     const pthread_rwlock = PthreadRwLock.extract(rwlock);
     pthread_rwlock.lock.lockShared();
     const thread_id = pthread_self();
-    _ = pthread_spin_lock(&pthread_rwlock.reader_thread_spinlock);
-    defer _ = pthread_spin_unlock(&pthread_rwlock.reader_thread_spinlock);
-    pthread_rwlock.reader_thread_ids.append(wasm_allocator, thread_id) catch {
+    _ = pthread_spin_lock(&pthread_rwlock.reader_thread_list_spinlock);
+    defer _ = pthread_spin_unlock(&pthread_rwlock.reader_thread_list_spinlock);
+    pthread_rwlock.reader_thread_list.append(wasm_allocator, thread_id) catch {
         pthread_rwlock.lock.unlockShared();
         return errno(.NOMEM);
     };
@@ -859,9 +970,9 @@ pub fn pthread_rwlock_tryrdlock(
     const pthread_rwlock = PthreadRwLock.extract(rwlock);
     if (!pthread_rwlock.lock.tryLockShared()) return errno(.BUSY);
     const thread_id = pthread_self();
-    _ = pthread_spin_lock(&pthread_rwlock.reader_thread_spinlock);
-    defer _ = pthread_spin_unlock(&pthread_rwlock.reader_thread_spinlock);
-    pthread_rwlock.reader_thread_ids.append(wasm_allocator, thread_id) catch {
+    _ = pthread_spin_lock(&pthread_rwlock.reader_thread_list_spinlock);
+    defer _ = pthread_spin_unlock(&pthread_rwlock.reader_thread_list_spinlock);
+    pthread_rwlock.reader_thread_list.append(wasm_allocator, thread_id) catch {
         pthread_rwlock.lock.unlockShared();
         return errno(.NOMEM);
     };
@@ -937,16 +1048,16 @@ pub fn pthread_rwlock_unlock(
         pthread_rwlock.lock.unlock();
     } else {
         var reader_index: usize = undefined;
-        for (pthread_rwlock.reader_thread_ids.items, 0..) |id, index| {
+        for (pthread_rwlock.reader_thread_list.items, 0..) |id, index| {
             if (thread_id == id) {
                 reader_index = index;
                 break;
             }
         } else return errno(.PERM);
         pthread_rwlock.lock.unlockShared();
-        _ = pthread_spin_lock(&pthread_rwlock.reader_thread_spinlock);
-        defer _ = pthread_spin_unlock(&pthread_rwlock.reader_thread_spinlock);
-        _ = pthread_rwlock.reader_thread_ids.swapRemove(reader_index);
+        _ = pthread_spin_lock(&pthread_rwlock.reader_thread_list_spinlock);
+        defer _ = pthread_spin_unlock(&pthread_rwlock.reader_thread_list_spinlock);
+        _ = pthread_rwlock.reader_thread_list.swapRemove(reader_index);
     }
     pthread_rwlock.wake();
     return 0;
@@ -965,7 +1076,7 @@ pub fn pthread_rwlockattr_destroy(
     attr: [*c]pthread_rwlockattr_t,
 ) callconv(.c) c_int {
     const pthread_rwlock_attrs: *PthreadRwLock.Attributes = attr.*;
-    const pthread_rwlock: *PthreadRwLock = @fieldParentPtr("attributes", pthread_rwlock_attrs);
+    const pthread_rwlock: *PthreadRwLock = @alignCast(@fieldParentPtr("attributes", pthread_rwlock_attrs));
     pthread_rwlock.release();
     return 0;
 }
@@ -984,7 +1095,7 @@ pub fn pthread_rwlockattr_setpshared(
     pshared: c_int,
 ) callconv(.c) c_int {
     const pthread_rwlock_attrs: *PthreadRwLock.Attributes = attr.*;
-    pthread_rwlock_attrs.shared = pshared;
+    pthread_rwlock_attrs.shared = @intCast(pshared);
     return 0;
 }
 
@@ -1002,7 +1113,7 @@ pub fn pthread_rwlockattr_setkind_np(
     pref: c_int,
 ) callconv(.c) c_int {
     const pthread_rwlock_attrs: *PthreadRwLock.Attributes = attr.*;
-    pthread_rwlock_attrs.kind = pref;
+    pthread_rwlock_attrs.kind = @intCast(pref);
     return 0;
 }
 
@@ -1041,7 +1152,7 @@ pub fn pthread_cond_init(
 ) callconv(.c) c_int {
     const pthread_condition_attrs: ?*const PthreadCondition.Attributes = if (attr) |ptr| @ptrCast(ptr.*) else null;
     const pthread_condition: *PthreadCondition = if (pthread_condition_attrs) |pca| get: {
-        const pc: *PthreadCondition = @fieldParentPtr("attributes", @constCast(pca));
+        const pc: *PthreadCondition = @alignCast(@fieldParentPtr("attributes", @constCast(pca)));
         pc.addRef();
         break :get pc;
     } else alloc: {
@@ -1118,7 +1229,7 @@ pub fn pthread_condattr_destroy(
     attr: [*c]pthread_condattr_t,
 ) callconv(.c) c_int {
     const pthread_condition_attrs: *PthreadCondition.Attributes = attr.*;
-    const pthread_condition: *PthreadCondition = @fieldParentPtr("attributes", pthread_condition_attrs);
+    const pthread_condition: *PthreadCondition = @alignCast(@fieldParentPtr("attributes", pthread_condition_attrs));
     pthread_condition.release();
     return 0;
 }
@@ -1476,6 +1587,11 @@ const PTHREAD_PROCESS_SHARED = 1;
 const PTHREAD_MUTEX_STALLED = 0;
 const PTHREAD_PRIO_NONE = 0;
 const PTHREAD_ONCE_INIT = 0;
+const PTHREAD_CANCEL_ENABLE = 0;
+const PTHREAD_CANCEL_DISABLE = 1;
+const PTHREAD_CANCEL_MASKED = 2;
+const PTHREAD_CANCEL_DEFERRED = 0;
+const PTHREAD_CANCEL_ASYNCHRONOUS = 1;
 const SEM_FAILED: [*c]sem_t = @ptrFromInt(0);
 
 fn errno(e: std.posix.E) u16 {
