@@ -74,19 +74,23 @@ const Pthread = struct {
             if (self.cancel_state == PTHREAD_CANCEL_ENABLE) {
                 if (self.cancel_type == PTHREAD_CANCEL_ASYNCHRONOUS) {
                     // immediate termination is desired; the web worker handling this thread is
-                    // going to be killed and another one will take its place during clean-up;
-                    // we need to make call_back in WasiThreadImpl.Instance point to the clean-up
-                    // function and adjust stack_offset so that stuff stored on the stack doesn't
-                    // get overwritten
-                    const current_stack_address = asm (
-                        \\ global.get __stack_pointer
-                        \\ local.set %[stack_ptr]
-                        : [stack_ptr] "=r" (-> usize),
-                    );
-                    _ = current_stack_address;
-                    // const instance = self.thread.impl.thread;
-                    // instance.stack_offset = current_stack_address - @intFromPtr(instance.memory.ptr);
-                    // instance.call_back = @ptrCast(&performCancelationCleanUp);
+                    // going to be killed and another one will take its place during thread clean-up
+                    const WasiThread = @TypeOf(self.thread.impl.thread.*);
+                    const memory = self.thread.impl.thread.memory;
+                    const Instance = struct {
+                        // copied from lib/std/Thread.zig
+                        thread: WasiThread,
+                        tls_offset: usize,
+                        stack_offset: usize,
+                        raw_ptr: usize,
+                        call_back: *const fn (usize) void,
+                    };
+                    const instance: *Instance = @ptrCast(@alignCast(memory.ptr));
+                    // make call_back in WasiThreadImpl.Instance point to the clean-up function
+                    instance.call_back = @ptrCast(&performCancelationCleanUp);
+                    // adjust stack_offset so that stuff stored on the stack doesn't get overwritten
+                    // 4K from the end should be enough
+                    instance.stack_offset = memory.len - 4096;
                 }
                 // cancelation is handled on the JavaScript side; depending on the value of cancel_type,
                 // the JS runtime can either immediately axe the worker handling the thread specified

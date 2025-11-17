@@ -132,6 +132,13 @@ export function decodeBase64(str) {
 const decoders = {};
 const encoders = {};
 
+export function remove(array, item) {
+  const index = array.indexOf(item);
+  if (index !== -1) {
+    array.splice(index, 1);
+  }
+}
+
 export function findSortedIndex(array, value, cb) {
   let low = 0;
   let high = array.length;

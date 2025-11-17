@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { isPromise } from '../utils.js';
+import { remove, isPromise } from '../utils.js';
 
 var workerSupport = mixin({
   init() {
@@ -16,51 +16,97 @@ var workerSupport = mixin({
           );
         }
         return this.spawnThread.bind(this);
+      case 'thread-cancel':
+        return this.cancelThread.bind(this);
     }
   },
-  spawnThread(arg) {
-    const tid = this.nextThreadId;
-    this.nextThreadId++;
-    const { executable, memory, options } = this;
-    const workerData = { executable, memory, options, tid, arg };
-    const handler = (worker, msg) => {
-      if (msg.type === 'call') {
-        const { module, name, args, array } = msg;        
-        const fn = this.exportedModules[module]?.[name];
-        // add a true argument to indicate that waiting is possible
-        const result = fn?.(...args, true);
-        const finish = (value) => {
-          if (array) {
-            array[1] = value|0;
-            array[0] = 1;
-            Atomics.notify(array, 0, 1);
-          }
-        };
-        if (isPromise(result)) {
-          result.then(finish);
-        } else {
-          finish(result);
-        }
-      } else if (msg.type === 'exit') {
-        const index = this.workers.indexOf(worker);
-        if (index !== -1) {
-          worker.detach();
-          this.workers.splice(index, 1);
-        }
+  spawnThread(taddr) {
+    const tid = this.nextThreadId++;
+    const worker = this.obtainWorker();
+    worker.run(tid, taddr);
+    return tid;
+  },
+  cancelThread(tid, type) {
+    const worker = this.workers.find(w => w.tid === tid);
+    if (worker) {
+      if (type === CancelType.Deferred) {
+        // defer termination until thread reaches a cancelation point
+        worker.canceled = true;
+      } else if (type === CancelType.Asynchronous) {
+        const { tid, taddr } = worker;
+        worker.end(true);
+        // create a replacement worker that'll perform the thread clean-up
+        const cleaner = this.obtainWorker();
+        cleaner.run(tid, taddr);
       }
-    };
-    const evtName = 'message';
-    {
-      // web worker
-      const url = getWorkerURL();
-      const worker = new Worker(url, { name: 'zig' });
-      const listener = evt => handler(worker, evt.data);
-      worker.addEventListener(evtName, listener);
-      worker.detach = () => worker.removeEventListener(evtName, listener);
-      worker.postMessage(workerData);
+    }
+  },  
+  obtainWorker() {
+    // look for an idling worker
+    let worker = this.workers.find(w => w.tid === 0);
+    if (!worker) {
+      // create one
+      const handler = (msg) => {
+        switch (msg.type) {
+          case 'call': {
+            if (!worker.canceled) {
+              const { module, name, args } = msg;        
+              const fn = this.exportedModules[module]?.[name];
+              // add a true argument to indicate that waiting is possible
+              const result = fn?.(...args, true);
+              const finish = (value) => worker.signal(1, value);
+              if (isPromise(result)) {
+                result.then(finish);
+              } else {
+                finish(result);
+              }
+            } else {
+              // a deferred cancellation has occurred
+              worker.signal(2);
+            }
+          } break;
+          case 'done': {
+            worker.tid = 0;
+            worker.taddr = 0;
+            // remove the idle worker after a while
+            setTimeout(() => worker.end(), 250);
+          } break;
+        }
+      };
+      if (typeof(Worker) === 'function') {
+        // web worker
+        const url = getWorkerURL();
+        worker = new Worker(url, { name: 'zig' });
+        worker.addEventListener('message', evt => handler(evt.data));
+      }
+      // send WebAssembly start-up data
+      const { executable, memory, options } = this;
+      const futex = new Int32Array(new SharedArrayBuffer(8));      
+      worker.postMessage({ type: 'start', executable, memory, options, futex });
+      worker.signal = (respose, result) => {
+        if (futex[0] === 0) {
+          futex[1] = result|0;
+          futex[0] = respose;
+          Atomics.notify(futex, 0, 1);
+        }
+      };
+      worker.run = (tid, taddr) => {
+        worker.tid = tid;
+        worker.taddr = taddr;
+        worker.canceled = false;
+        worker.postMessage({ type: 'run', tid, taddr });
+      };
+      worker.end = (force = false) => {
+        if (force) {
+          worker.terminate();
+        } else {
+          worker.postMessage({ type: 'end' });
+        }
+        remove(this.workers, worker);
+      };
       this.workers.push(worker);
     }
-    return tid;
+    return worker;
   },
 });
 
@@ -82,58 +128,68 @@ function getWorkerURL() {
 }
 
 function workerMain() {
-  let postMessage, exit;
+  const WA = WebAssembly;
+  let port, instance;
 
   {
     // web worker
-    self.onmessage = evt => run(evt.data);
-    postMessage = msg => self.postMessage(msg);
-    exit = () => self.close();
+    self.onmessage = (evt) => process(evt.data);
+    port = self;
   }
 
-  function run({ executable, memory, options, tid, arg }) {
-    const w = WebAssembly;
-    const env = { memory }, wasi = {}, wasiPreview = {};
-    const imports = { env, wasi, wasi_snapshot_preview1: wasiPreview };
-    for (const { module, name, kind } of w.Module.imports(executable)) {
-      if (kind === 'function') {        
-        const f = (name === 'proc_exit') ? () => {
-          throw new Error('termination');
-        } : createRouter(module, name);
-        if (module === 'env') {
-          env[name] = f;
-        } else if (module === 'wasi_snapshot_preview1') {
-          wasiPreview[name] = f;
-        } else if (module === 'wasi') {
-          wasi[name] = f;
+  function process(msg) {
+    switch (msg.type) {
+      case 'start': {
+        const { executable, memory, futex, options } = msg;
+        const imports = { 
+          env: { memory },
+          wasi: {},
+          wasi_snapshot_preview1: {},
+        };
+        const exit = () => { throw new Error('Exit') };
+        for (const { module, name, kind } of WA.Module.imports(executable)) {
+          const ns = imports[module];
+          if (kind === 'function' && ns) {
+            ns[name] = (name === 'proc_exit') ? exit : function(...args) {
+              futex[0] = 0;
+              port.postMessage({ type: 'call', module, name, args });
+              Atomics.wait(futex, 0, 0);
+              if (futex[0] === 2) {
+                // was canceled in the middle of a call; jump back jump back into Zig to execute 
+                // cleanup routines and TLS destructors then exit
+                instance.exports.wasi_thread_clean?.();
+                exit();
+              }
+              return futex[1];
+            };             
+          }
         }
-      }
+        if (options.tableInitial) {
+          imports.env.__indirect_function_table = new WA.Table({
+            initial: options.tableInitial,
+            element: 'anyfunc',
+          });
+        }
+        instance = new WA.Instance(executable, imports);
+      } break;
+      case 'run': {
+        const { tid, taddr } = msg;
+        // catch thread termination exception
+        try {
+          instance.exports.wasi_thread_start(tid, taddr);
+        } catch {
+        }
+        port.postMessage({ type: 'done' });
+      } break;
+      case 'end': {
+        port.close();
+      } break;
     }
-    const { tableInitial } = options;
-    env.__indirect_function_table = new w.Table({
-      initial: tableInitial,
-      element: 'anyfunc',
-    });
-    const { exports } = new w.Instance(executable, imports);
-    const { wasi_thread_start } = exports;
-    // catch thread termination exception
-    try {
-      wasi_thread_start(tid, arg);
-    } catch {
-    }
-    postMessage({ type: 'exit' });
-    exit();
-  }
-
-  function createRouter(module, name) {
-    const array = new Int32Array(new SharedArrayBuffer(8));
-    return function(...args) {
-      array[0] = 0;
-      postMessage({ type: 'call', module, name, args, array });
-      Atomics.wait(array, 0, 0);
-      return array[1];
-    };
   }
 }
+const CancelType = {
+  Deferred: 0,
+  Asynchronous: 1,
+};
 
 export { workerSupport as default };

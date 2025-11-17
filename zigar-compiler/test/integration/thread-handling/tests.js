@@ -882,7 +882,6 @@ export function addTests(importModule, options) {
       const { 
         spawn,
         signal,
-        broadcast,
         startup,
         shutdown,
       } = await importTest('wait-momentarily-for-condition-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
