@@ -96,6 +96,7 @@ pub fn build(b: *std.Build) !void {
     options.addOption(bool, "omit_functions", cfg.omit_functions);
     options.addOption(bool, "omit_variables", cfg.omit_variables);
     options.addOption(bool, "use_redirection", cfg.use_redirection);
+    options.addOption(bool, "use_pthread_emulation", cfg.use_pthread_emulation);
     lib.root_module.addOptions("options.zig", options);
     const wf = b.addUpdateSourceFiles();
     wf.addCopyFileToSource(lib.getEmittedBin(), cfg.output_path);

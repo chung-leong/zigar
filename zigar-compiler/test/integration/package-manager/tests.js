@@ -49,7 +49,7 @@ export function addTests(importModule, options) {
     })
     it('should use zig-sqlite in multithread mode', async function() {
       this.timeout(0);
-      const { __zigar, startup, shutdown, open, close, search } = await importTest('use-zig-sqlite/zig-sqlite-threaded', { useLibc: true, multithreaded: true });
+      const { __zigar, startup, shutdown, open, close, search } = await importTest('use-zig-sqlite/zig-sqlite-threaded', { useLibc: true, multithreaded: true, usePthreadEmulation: true });
       const path = fileURLToPath(new URL('./use-zig-sqlite/chinook.db', import.meta.url));
       const content = await readFile(path);
       const blob = new Blob([ content ]);

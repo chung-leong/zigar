@@ -121,6 +121,13 @@ function decodeBase64(str) {
 const decoders = {};
 const encoders = {};
 
+function remove(array, item) {
+  const index = array.indexOf(item);
+  if (index !== -1) {
+    array.splice(index, 1);
+  }
+}
+
 function findSortedIndex(array, value, cb) {
   let low = 0;
   let high = array.length;
@@ -393,4 +400,4 @@ function extractTimes(st_atim, st_mtim, fst_flags) {
   return times;
 }
 
-export { ObjectCache, adjustAddress, alignForward, always, clearView, copyObject, copyView, createView, decodeBase64, decodeEnum, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, extractTimes, findElements, findObjects, findSortedIndex, getEnumNumber, getErrorHandler, getLength, getPrimitiveName, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isDetached, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, maxSafeInteger, minSafeInteger, never, readUsize, readUsizeSafe, safeInt, toString, transformIterable, usize, usizeByteSize, usizeInvalid, usizeMax, usizeMin };
+export { ObjectCache, adjustAddress, alignForward, always, clearView, copyObject, copyView, createView, decodeBase64, decodeEnum, decodeFlags, decodeText, defineProperties, defineProperty, defineValue, empty, encodeBase64, encodeText, extractTimes, findElements, findObjects, findSortedIndex, getEnumNumber, getErrorHandler, getLength, getPrimitiveName, getSelf, hasMethod, isCompatibleInstanceOf, isCompatibleType, isDetached, isInvalidAddress, isMisaligned, isPromise, markAsSpecial, maxSafeInteger, minSafeInteger, never, readUsize, readUsizeSafe, remove, safeInt, toString, transformIterable, usize, usizeByteSize, usizeInvalid, usizeMax, usizeMin };

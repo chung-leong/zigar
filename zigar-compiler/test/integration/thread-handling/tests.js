@@ -1,5 +1,6 @@
 import { expect, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
+import { unlink } from 'fs/promises';
 import 'mocha-skip-if';
 import { capture, delay } from '../test-utils.js';
 
@@ -394,6 +395,568 @@ export function addTests(importModule, options) {
       expect(promise).to.be.eventually.be.rejectedWith(Error)
         .with.property('message').that.contains('AbortSignal');
     })
+    it('should create a detached thread using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('create-detached-thread-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+        });
+        expect(lines).to.eql([ 'Hello world!' ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should create a thread in a thread using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('create-thread-in-thread-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+        });
+        expect(lines).to.eql([ 
+          'Hello world!',
+          'retval = 1234',
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should exit thread created using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('exit-thread-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+        });
+        expect(lines).to.eql([ 
+          'Hello world! 0',
+          'Hello world! 1',
+          'Hello world! 2',
+          'Hello world! 3',
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should exit thread created in a thread using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('exit-thread-created-in-thread-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+        });
+        expect(lines).to.eql([ 
+          'Hello world! 0',
+          'Hello world! 1',
+          'Hello world! 2',
+          'Hello world! 3',
+          'retval = 1234',
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should print ids of threads created using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('print-ids-of-threads-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn(5);
+          await delay(500);
+        });
+        expect(lines).to.have.lengthOf(5);
+        for (const line of lines) {
+          expect(line).to.match(/^thread_id =/);
+        }
+      } finally {
+        shutdown();
+      }
+    })
+    it('should create mutex using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('create-mutex-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        expect(lines).to.eql([
+          'Thread 1 acquired mutex',
+          'Thread 2 acquired mutex',
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should create error-checking mutex using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('create-error-checking-mutex-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        expect(lines).to.eql([ 'retval == EDEADLK: true' ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should create recursive mutex using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('create-recursive-mutex-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        expect(lines).to.eql([
+          'Thread 1 acquired mutex',
+          'Thread 2 acquired mutex',
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should wait momentarily for mutex created using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('wait-momentarily-for-mutex-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        expect(lines).to.eql([
+          'Thread 1 acquired mutex',
+          'Thread 3 timed out: true',
+          'Thread 2 acquired mutex',
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should create spinlock using pthread', async function() {
+      const { 
+        spawn,
+        unlock,
+        startup,
+        shutdown,
+      } = await importTest('create-spinlock-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+          unlock();
+          await delay(250);
+        });
+        expect(lines).to.eql([
+          'Main thread acquired spinlock',
+          'Thread 2 found busy lock: true',
+          'Main thread released spinlock',
+          'Thread 1 acquired spinlock'
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should create read/write lock using pthread', async function() {
+      const { 
+        spawn,
+        unlock,
+        cleanup,
+        startup,
+        shutdown,
+      } = await importTest('create-rwlock-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        for (const write of [ false, true ]) {
+          const lines = await capture(async () => {
+            spawn(write);
+            await delay(250);
+            unlock();
+            await delay(250);
+            cleanup();
+          });
+          const type = (write) ? 'write' : 'read';
+          expect(lines[0]).to.equal(`Main thread acquired ${type} lock`);
+          const mtReleased = lines.indexOf(`Main thread released ${type} lock`);
+          const t1Acquired = lines.indexOf(`Thread 1 acquired read lock`);
+          const t2Acquired = lines.indexOf(`Thread 2 acquired write lock`);
+          if (write) {
+            expect(mtReleased < t1Acquired).to.be.true;
+            expect(mtReleased < t2Acquired).to.be.true;
+          } else {
+            // Zig's implementation of the read/lock lock prevents an acquisition of a read lock
+            // if another thread has made an earlier request for a write lock
+            if (t1Acquired < t2Acquired) {
+              expect(mtReleased > t1Acquired).to.be.true; 
+            } else {
+              expect(mtReleased < t1Acquired).to.be.true; 
+            }
+          }
+          expect(mtReleased < t2Acquired).to.be.true;
+        }
+      } finally {
+        shutdown();
+      }
+    })
+    it('should wait momentarily for read lock created using pthread', async function() {
+      const { 
+        spawn,
+        unlock,
+        startup,
+        shutdown,
+      } = await importTest('wait-momentarily-for-read-lock-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+          unlock();
+          await delay(550);
+        });
+        expect(lines).to.eql([
+          'Main thread acquired write lock',
+          'Thread 1 acquiring read lock',
+          'Thread 2 acquiring read lock',
+          'Thread 1 timed out: true',
+          'Main thread releasing write lock',
+          'Thread 2 acquired read lock'
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should wait momentarily for write lock created using pthread', async function() {
+      const { 
+        spawn,
+        unlock,
+        startup,
+        shutdown,
+      } = await importTest('wait-momentarily-for-write-lock-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+          unlock();
+          await delay(550);
+        });
+        expect(lines).to.eql([
+          'Main thread acquired write lock',
+          'Thread 1 acquiring write lock',
+          'Thread 2 acquiring write lock',
+          'Thread 1 timed out: true',
+          'Main thread releasing write lock',
+          'Thread 2 acquired write lock'
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should create semaphore using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('create-semaphore-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        const list0 = lines.filter(l => l.includes('acquired semaphore: 0'));
+        const list1 = lines.filter(l => l.includes('acquired semaphore: 1'));
+        expect(list0).to.have.lengthOf(2);
+        expect(list1).to.have.lengthOf(1);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should create named semaphore using pthread', async function() {
+      const { 
+        spawn,
+        cleanup,
+        startup,
+        shutdown,
+      } = await importTest('create-named-semaphore-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });            
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        cleanup();
+        const list0 = lines.filter(l => l.includes('acquired semaphore: 0'));
+        const list1 = lines.filter(l => l.includes('acquired semaphore: 1'));
+        expect(list0).to.have.lengthOf(2);
+        expect(list1).to.have.lengthOf(1);
+      } finally {
+        shutdown();
+        try {
+          await unlink('/dev/shm/sem.hello');
+        } catch {}
+      }
+    })
+    it('should wait momentarily for semaphore created using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('wait-momentarily-for-semaphore-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        const list0 = lines.filter(l => l.includes('acquired semaphore: 0'));
+        const list1 = lines.filter(l => l.includes('acquired semaphore: 1'));
+        const listTO = lines.filter(l => l.includes('timed out'));
+        expect(list0).to.have.lengthOf(1);
+        expect(list1).to.have.lengthOf(1);
+        expect(listTO).to.have.lengthOf(1);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should try to get semaphore created using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('get-semaphore-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        const list0 = lines.filter(l => l.includes('acquired semaphore: 0'));
+        const list1 = lines.filter(l => l.includes('acquired semaphore: 1'));
+        const listTO = lines.filter(l => l.includes('failed'));
+        expect(list0).to.have.lengthOf(1);
+        expect(list1).to.have.lengthOf(1);
+        expect(listTO).to.have.lengthOf(1);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should create key for thread specific values using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('create-key-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        const expected = [
+          'Thread 1 found anyopaque@12345 and anyopaque@67',
+          'Thread 2 found anyopaque@22222 and null',
+          'Destructor 1 called: anyopaque@12345',
+          'Destructor 2 called: anyopaque@67',
+          'Destructor 1 called: anyopaque@22222'
+        ];
+        for (const line of expected) {
+          expect(lines).to.contain(line);
+        }
+      } finally {
+        shutdown();
+      }
+    })
+    it('should exit thread not created using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('exit-thread-not-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        expect(lines).to.eql([ 'Destructor called: anyopaque@12345' ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should call function once using pthread', async function() {
+      const { 
+        spawn,
+        startup,
+        shutdown,
+      } = await importTest('call-function-once-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(500);
+        });
+        expect(lines).to.eql([ 'Once upon a time...' ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should create condition using pthread', async function() {
+      const { 
+        spawn,
+        signal,
+        broadcast,
+        startup,
+        shutdown,
+      } = await importTest('create-condition-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines1 = await capture(async () => {
+          spawn();
+          await delay(300);
+          signal();
+          await delay(200);
+        });
+        expect(lines1).to.eql([
+          'Thread waiting for condition',
+          'Thread waiting for condition',
+          'Thread waiting for condition',
+          'Thread saw condition',
+        ]);
+        const lines2 = await capture(async () => {
+          broadcast();
+          await delay(200);
+        });
+        expect(lines2).to.eql([
+          'Thread saw condition',
+          'Thread saw condition',
+        ]);
+      } finally {
+        shutdown();
+      }
+    })
+    it('should wait momentarily for condition created using pthread', async function() {
+      const { 
+        spawn,
+        signal,
+        startup,
+        shutdown,
+      } = await importTest('wait-momentarily-for-condition-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+          signal();
+          await delay(400);
+        });
+        const listS = lines.filter(l => l.includes('saw'));
+        const listTO = lines.filter(l => l.includes('timed out'));
+        expect(listS).to.have.lengthOf(1);
+        expect(listTO).to.have.lengthOf(2);
+     } finally {
+        shutdown();
+      }
+    })
+    skip.unless(target === 'wasm32').
+    it('should perform deferred cancellation on thread mechanism thread using pthread', async function() {
+      const { 
+        spawn,
+        cancel,
+        startup,
+        shutdown,
+      } = await importTest('perform-deferred-cancellation-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+          cancel();
+          await delay(400);
+        });
+        expect(lines).to.eql([ 
+          'Clean-up function called: 12345', 
+          'Destructor called: Hello world' 
+        ]);
+     } finally {
+        shutdown();
+      }
+    })
+    skip.unless(target === 'wasm32').
+    it('should perform asynchronous cancellation on thread using pthread', async function() {
+      const { 
+        spawn,
+        cancel,
+        getCount,
+        startup,
+        shutdown,
+      } = await importTest('perform-async-cancellation-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+          cancel();
+          await delay(500);
+        });
+        expect(lines).to.eql([
+          'Original cancellation type: 0',
+          'Clean-up function called: 12345', 
+          'Destructor called: Hello world' 
+        ]);
+        // double-check that the thread has stopped
+        const count1 = getCount();
+        await delay(50);
+        const count2 = getCount();
+        expect(count1).to.equal(count2);
+     } finally {
+        shutdown();
+      }
+    })
+
   })
 }
 

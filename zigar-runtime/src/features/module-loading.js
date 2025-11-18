@@ -2,6 +2,8 @@ import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
 import { decodeText, defineProperty, defineValue, empty, isPromise } from '../utils.js';
 
+const WA = WebAssembly;
+
 export default mixin({
   init() {
     this.abandoned = false;
@@ -114,13 +116,12 @@ export default mixin({
       } = this.options = options;
       const res = await source;
       const suffix = (res[Symbol.toStringTag] === 'Response') ? /* c8 ignore next */ 'Streaming' : '';
-      const w = WebAssembly;
-      const f = w['compile' + suffix];
+      const f = WA['compile' + suffix];
       const executable = this.executable = await f(res);
       const functions = this.exportFunctions();
       const env = {}, wasi = {}, wasiPreview = {};
       const exports = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
-      for (const { module, name, kind } of w.Module.imports(executable)) {
+      for (const { module, name, kind } of WA.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {
             env[name] = functions[name] ?? /* c8 ignore next */ empty;
@@ -131,22 +132,18 @@ export default mixin({
           }
         }
       }
-      if (memoryInitial) {
-        this.memory = env.memory = new w.Memory({
-          initial: memoryInitial,
-          maximum: memoryMax,
-          shared: multithreaded,
-        });
-      }
-      if (tableInitial) {
-        this.table = env.__indirect_function_table = new w.Table({
-          initial: tableInitial,
-          element: 'anyfunc',
-          shared: multithreaded,
-        });
-        this.initialTableLength = tableInitial;
-      }
-      return w.instantiate(executable, exports);
+      this.memory = env.memory = new WA.Memory({
+        initial: memoryInitial,
+        maximum: memoryMax,
+        shared: multithreaded,
+      });
+      this.table = env.__indirect_function_table = new WA.Table({
+        initial: tableInitial,
+        element: 'anyfunc',
+        shared: multithreaded,
+      });
+      this.initialTableLength = tableInitial;
+      return WA.instantiate(executable, exports);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {

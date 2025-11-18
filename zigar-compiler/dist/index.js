@@ -1,12 +1,12 @@
 import childProcess from 'node:child_process';
 import { createHash } from 'node:crypto';
-import fs, { open, readdir, lstat, rmdir, unlink, readFile, stat, mkdir, writeFile, chmod, realpath } from 'node:fs/promises';
+import { writeFileSync } from 'node:fs';
+import fs, { chmod, lstat, mkdir, open, readdir, readFile, realpath, rmdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import os from 'node:os';
-import { sep, dirname, join, resolve, relative, parse, basename, isAbsolute } from 'node:path';
+import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { promisify } from 'node:util';
-import { writeFileSync } from 'node:fs';
 
 const StructureType = {
   Primitive: 0};
@@ -988,6 +988,7 @@ function createConfig(srcPath, modPath, options = {}) {
     useLibc = isWASM ? false : true,
     useLLVM = null,
     useRedirection = true,
+    usePthreadEmulation = false,
     clean = false,
     buildDir = join(os.tmpdir(), 'zigar-build'),
     buildDirSize = 4294967296,
@@ -1089,6 +1090,7 @@ function createConfig(srcPath, modPath, options = {}) {
     useLibc,
     useLLVM,
     useRedirection,
+    usePthreadEmulation,
     isWASM,
     multithreaded,
     stackSize,
@@ -1308,6 +1310,10 @@ const optionsForTranspile = {
   keepNames: {
     type: 'boolean',
     title: 'Keep names of function in WASM binary when stripping',
+  },
+  usePthreadEmulation: {
+    type: 'boolean',
+    title: 'Provide emulated pthread functions',
   },
 };
 

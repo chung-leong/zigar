@@ -1,6 +1,8 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
-import { decodeText, isPromise, empty, defineProperty, defineValue } from '../utils.js';
+import { decodeText, defineProperty, defineValue, empty, isPromise } from '../utils.js';
+
+const WA = WebAssembly;
 
 var moduleLoading = mixin({
   init() {
@@ -114,13 +116,12 @@ var moduleLoading = mixin({
       } = this.options = options;
       const res = await source;
       const suffix = (res[Symbol.toStringTag] === 'Response') ? 'Streaming' : '';
-      const w = WebAssembly;
-      const f = w['compile' + suffix];
+      const f = WA['compile' + suffix];
       const executable = this.executable = await f(res);
       const functions = this.exportFunctions();
       const env = {}, wasi = {}, wasiPreview = {};
       const exports = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
-      for (const { module, name, kind } of w.Module.imports(executable)) {
+      for (const { module, name, kind } of WA.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {
             env[name] = functions[name] ?? empty;

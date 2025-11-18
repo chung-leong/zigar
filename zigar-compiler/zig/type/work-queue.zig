@@ -7,134 +7,8 @@ const Generator = @import("generator.zig").Generator;
 const GeneratorOf = @import("generator.zig").GeneratorOf;
 const Promise = @import("promise.zig").Promise;
 const PromiseOf = @import("promise.zig").PromiseOf;
+const Queue = @import("queue.zig").Queue;
 const util = @import("util.zig");
-
-pub fn Queue(comptime T: type) type {
-    return struct {
-        const Node = struct {
-            next: *Node,
-            payload: T,
-        };
-        const tail: *Node = @ptrFromInt(std.mem.alignBackward(usize, std.math.maxInt(usize), @alignOf(Node)));
-
-        head: *Node = tail,
-        allocator: std.mem.Allocator,
-        stopped: bool = false,
-        item_futex: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
-
-        pub fn push(self: *@This(), value: T) !void {
-            const new_node = try self.alloc();
-            new_node.* = .{ .next = tail, .payload = value };
-            self.insert(new_node);
-            self.item_futex.store(1, .release);
-            std.Thread.Futex.wake(&self.item_futex, 1);
-        }
-
-        fn alloc(self: *@This()) !*Node {
-            while (true) {
-                const current_head = self.head;
-                if (current_head != tail and isMarkedReference(current_head.next)) {
-                    const next_node = getUnmarkedReference(current_head.next);
-                    if (cas(&self.head, current_head, next_node)) return current_head;
-                } else break;
-            }
-            return try self.allocator.create(Node);
-        }
-
-        fn insert(self: *@This(), node: *Node) void {
-            while (true) {
-                if (self.head == tail) {
-                    if (cas(&self.head, tail, node)) return;
-                } else {
-                    var current_node = self.head;
-                    while (true) {
-                        const next_node = getUnmarkedReference(current_node.next);
-                        if (next_node == tail) {
-                            const next = switch (isMarkedReference(current_node.next)) {
-                                false => node,
-                                true => getMarkedReference(node),
-                            };
-                            if (cas(&current_node.next, current_node.next, next)) return;
-                            break;
-                        }
-                        current_node = next_node;
-                    }
-                }
-            }
-        }
-
-        pub fn pull(self: *@This()) ?T {
-            var current_node = self.head;
-            while (current_node != tail) {
-                const next_node = getUnmarkedReference(current_node.next);
-                if (!isMarkedReference(current_node.next)) {
-                    if (cas(&current_node.next, next_node, getMarkedReference(next_node))) {
-                        return current_node.payload;
-                    }
-                }
-                current_node = next_node;
-            }
-            self.item_futex.store(0, .release);
-            return null;
-        }
-
-        pub fn wait(self: *@This()) void {
-            std.Thread.Futex.wait(&self.item_futex, 0);
-        }
-
-        pub fn stop(self: *@This()) void {
-            if (self.stopped) return;
-            self.stopped = true;
-            while (self.pull()) |_| {}
-            // wake up awaking threads and prevent them from sleep again
-            self.item_futex.store(1, .release);
-            std.Thread.Futex.wake(&self.item_futex, std.math.maxInt(u32));
-        }
-
-        pub fn deinit(self: *@This()) void {
-            var current_node = self.head;
-            return while (current_node != tail) {
-                const next_node = getUnmarkedReference(current_node.next);
-                self.allocator.destroy(current_node);
-                current_node = next_node;
-            };
-        }
-
-        inline fn isMarkedReference(ptr: *Node) bool {
-            return @intFromPtr(ptr) & 1 != 0;
-        }
-
-        inline fn getUnmarkedReference(ptr: *Node) *Node {
-            return @ptrFromInt(@intFromPtr(ptr) & ~@as(usize, 1));
-        }
-
-        inline fn getMarkedReference(ptr: *Node) *Node {
-            @setRuntimeSafety(false);
-            return @ptrFromInt(@intFromPtr(ptr) | @as(usize, 1));
-        }
-
-        inline fn cas(ptr: **Node, old: *Node, new: *Node) bool {
-            return @cmpxchgWeak(*Node, ptr, old, new, .seq_cst, .monotonic) == null;
-        }
-    };
-}
-
-test "Queue" {
-    var gpa = std.heap.DebugAllocator(.{}).init;
-    var queue: Queue(i32) = .{ .allocator = gpa.allocator() };
-    try queue.push(123);
-    try queue.push(456);
-    const value1 = queue.pull();
-    try expectEqual(123, value1);
-    const value2 = queue.pull();
-    try expectEqual(456, value2);
-    const value3 = queue.pull();
-    try expectEqual(null, value3);
-    try queue.push(888);
-    const value4 = queue.pull();
-    try expectEqual(888, value4);
-    queue.deinit();
-}
 
 pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
     const decls = std.meta.declarations(ns);
@@ -199,7 +73,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                 .deinitializing => return error.Deinitializing,
             }
             const allocator = options.allocator;
-            self.queue = .{ .allocator = allocator };
+            self.queue = .init(allocator);
             self.init_remaining = options.n_jobs;
             self.init_futex = std.atomic.Value(u32).init(0);
             self.init_result = {};

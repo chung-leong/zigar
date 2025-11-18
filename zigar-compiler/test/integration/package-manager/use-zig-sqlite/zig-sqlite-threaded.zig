@@ -11,7 +11,6 @@ var db: sqlite.Db = undefined;
 pub fn startup() !void {
     try work_queue.init(.{
         .allocator = gpa.allocator(),
-        .stack_size = 65536,
         .n_jobs = 1,
     });
 }
@@ -37,7 +36,7 @@ const ns = struct {
         db = try sqlite.Db.init(.{
             .mode = .{ .File = path },
             .open_flags = .{},
-            .threading_mode = .SingleThread,
+            .threading_mode = .MultiThread,
         });
     }
 

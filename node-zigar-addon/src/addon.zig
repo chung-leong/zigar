@@ -3,15 +3,15 @@ const c_allocator = std.heap.c_allocator;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
-const hooks = @import("./extra/hooks.zig");
-const interface = @import("./extra/interface.zig");
-const napi = @import("./extra/napi.zig");
+const hooks = @import("extra/hooks.zig");
+const interface = @import("extra/interface.zig");
+const napi = @import("extra/napi.zig");
 const Env = napi.Env;
 const Value = napi.Value;
 const Ref = napi.Ref;
 const ThreadsafeFunction = napi.ThreadsafeFunction;
-const fn_transform = @import("./extra/zigft/fn-transform.zig");
-const redirect = @import("./redirect.zig");
+const fn_transform = @import("extra/zigft/fn-transform.zig");
+const redirect = @import("redirect.zig");
 
 comptime {
     napi.createAddon(ModuleHost.attachExports);

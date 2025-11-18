@@ -1,10 +1,17 @@
 import { mixin } from '../environment.js';
-import { isPromise } from '../utils.js';
+import { isPromise, remove } from '../utils.js';
+
+let NodeWorker;
 
 var workerSupport = mixin({
   init() {
     this.nextThreadId = 1;
     this.workers = [];
+    {
+      if (typeof(Worker) !== 'function') {
+        import('node:worker_threads').then((m) => NodeWorker = m.Worker);
+      }
+    }
   },
   getThreadHandler(name) {
     switch (name) {
@@ -16,62 +23,109 @@ var workerSupport = mixin({
           );
         }
         return this.spawnThread.bind(this);
+      case 'thread-cancel':
+        return this.cancelThread.bind(this);
+      case 'thread-address':
+        return this.getThreadAddress.bind(this);
     }
   },
-  spawnThread(arg) {
-    const tid = this.nextThreadId;
-    this.nextThreadId++;
-    const { executable, memory, options } = this;
-    const workerData = { executable, memory, options, tid, arg };
-    const handler = (worker, msg) => {
-      if (msg.type === 'call') {
-        const { module, name, args, array } = msg;        
-        const fn = this.exportedModules[module]?.[name];
-        // add a true argument to indicate that waiting is possible
-        const result = fn?.(...args, true);
-        const finish = (value) => {
-          if (array) {
-            array[1] = value|0;
-            array[0] = 1;
-            Atomics.notify(array, 0, 1);
+  spawnThread(taddr) {
+    const tid = this.nextThreadId++;
+    if (this.nextThreadId === 0x4000_0000) {
+      this.nextThreadId = 1;
+    }
+    const worker = this.createWorker();
+    worker.run(tid, taddr);
+    return tid;
+  },
+  cancelThread(tid, raddr) {
+    const worker = this.workers.find(w => w.tid === tid);
+    if (worker) {
+      if (!raddr) {
+        // defer termination until thread reaches a cancellation point
+        worker.canceled = true;
+      } else {
+        worker.end(true);
+        // create a replacement worker that'll perform the thread clean-up
+        const scab = this.createWorker();
+        scab.clean(raddr);
+      }
+    }
+  }, 
+  getThreadAddress(tid) {
+    const worker = this.workers.find(w => w.tid === tid);
+    return worker.taddr;
+  },
+  createWorker() {
+    const handler = (msg) => {
+      switch (msg.type) {
+        case 'call': {
+          if (!worker.canceled) {
+            const { module, name, args } = msg;        
+            const fn = this.exportedModules[module]?.[name];
+            // add a true argument to indicate that waiting is possible
+            const result = fn?.(...args, true);
+            const finish = (value) => worker.signal(1, value);
+            if (isPromise(result)) {
+              result.then(finish);
+            } else {
+              finish(result);
+            }
+          } else {
+            // a deferred cancellation has occurred; set canceled to false so that debug print 
+            // works during the clean-up process
+            worker.canceled = false;
+            worker.signal(2);
           }
-        };
-        if (isPromise(result)) {
-          result.then(finish);
-        } else {
-          finish(result);
-        }
-      } else if (msg.type === 'exit') {
-        const index = this.workers.indexOf(worker);
-        if (index !== -1) {
-          worker.detach();
-          this.workers.splice(index, 1);
-        }
+        } break;
+        case 'done': {
+          worker.end();
+        } break;
       }
     };
-    const evtName = 'message';
-    if (typeof(Worker) === 'function' || "node" !== 'node') {
+    let worker;
+    if (typeof(Worker) === 'function') {
       // web worker
       const url = getWorkerURL();
-      const worker = new Worker(url, { name: 'zig' });
-      const listener = evt => handler(worker, evt.data);
-      worker.addEventListener(evtName, listener);
-      worker.detach = () => worker.removeEventListener(evtName, listener);
-      worker.postMessage(workerData);
-      this.workers.push(worker);
+      worker = new Worker(url, { name: 'zig' });
+      worker.addEventListener('message', evt => handler(evt.data));
     }
     else {
       // Node.js worker-thread
-      import('worker_threads').then(({ Worker }) => {
-        const code = getWorkerCode();
-        const worker = new Worker(code, { workerData, eval: true });
-        const listener = msg => handler(worker, msg);
-        worker.on(evtName, listener);
-        worker.detach = () => worker.off(evtName, listener);
-        this.workers.push(worker);
-      });
+      const code = getWorkerCode();
+      worker = new NodeWorker(code, { eval: true });
+      worker.on('message', handler);
     }
-    return tid;
+    // send WebAssembly start-up data
+    const { executable, memory, options } = this;
+    const futex = new Int32Array(new SharedArrayBuffer(8));      
+    worker.postMessage({ type: 'start', executable, memory, options, futex });
+    worker.signal = (response, result) => {
+      if (Atomics.load(futex, 0) === 0) {
+        Atomics.store(futex, 0, response);
+        Atomics.store(futex, 1, result|0);
+        Atomics.notify(futex, 0, 1);
+      }
+    };
+    worker.run = (tid, taddr) => {
+      worker.tid = tid;
+      worker.taddr = taddr;
+      worker.canceled = false;
+      worker.postMessage({ type: 'run', tid, taddr });
+    };
+    worker.clean = (raddr) => {
+      worker.postMessage({ type: 'clean', raddr });
+    };
+    worker.end = (force = false) => {
+      if (force) {
+        worker.terminate();
+      } else {
+        worker.postMessage({ type: 'end' });
+      }
+      remove(this.workers, worker);
+    };
+    this.workers.push(worker);
+    return worker;
   },
 });
 
@@ -93,13 +147,13 @@ function getWorkerURL() {
 }
 
 function workerMain() {
-  let postMessage, exit;
+  const WA = WebAssembly;
+  let port, instance;
 
   if (typeof(self) === 'object' || "node" !== 'node') {
     // web worker
-    self.onmessage = evt => run(evt.data);
-    postMessage = msg => self.postMessage(msg);
-    exit = () => self.close();
+    self.onmessage = (evt) => process(evt.data);
+    port = self;
   } else {
     // Node.js worker-thread
     import(/* webpackIgnore: true */ 'worker_threads').then(({ parentPort, workerData }) => {

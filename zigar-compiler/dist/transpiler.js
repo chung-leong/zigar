@@ -1,12 +1,12 @@
 import childProcess from 'node:child_process';
 import { createHash } from 'node:crypto';
-import fs, { open, readdir, lstat, rmdir, unlink, readFile, stat, mkdir, writeFile, chmod, realpath } from 'node:fs/promises';
+import { writeFileSync } from 'node:fs';
+import fs, { chmod, lstat, mkdir, open, readdir, readFile, realpath, rmdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import os from 'node:os';
-import { sep, dirname, join, resolve, relative, parse, basename, isAbsolute } from 'node:path';
+import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, URL as URL$1 } from 'node:url';
 import { promisify } from 'node:util';
-import { writeFileSync } from 'node:fs';
 
 const StructureType = {
   Primitive: 0,
@@ -418,6 +418,13 @@ function decodeBase64(str) {
 
 const decoders = {};
 const encoders = {};
+
+function remove(array, item) {
+  const index = array.indexOf(item);
+  if (index !== -1) {
+    array.splice(index, 1);
+  }
+}
 
 function findSortedIndex(array, value, cb) {
   let low = 0;
@@ -1596,6 +1603,7 @@ function createConfig(srcPath, modPath, options = {}) {
     useLibc = isWASM ? false : true,
     useLLVM = null,
     useRedirection = true,
+    usePthreadEmulation = false,
     clean = false,
     buildDir = join(os.tmpdir(), 'zigar-build'),
     buildDirSize = 4294967296,
@@ -1697,6 +1705,7 @@ function createConfig(srcPath, modPath, options = {}) {
     useLibc,
     useLLVM,
     useRedirection,
+    usePthreadEmulation,
     isWASM,
     multithreaded,
     stackSize,
@@ -1915,6 +1924,10 @@ const optionsForTranspile = {
   keepNames: {
     type: 'boolean',
     title: 'Keep names of function in WASM binary when stripping',
+  },
+  usePthreadEmulation: {
+    type: 'boolean',
+    title: 'Provide emulated pthread functions',
   },
 };
 
@@ -4611,6 +4624,8 @@ const MemoryType = {
   Scratch: 1,
 };
 
+const WA = WebAssembly;
+
 var moduleLoading = mixin({
   init() {
     this.abandoned = false;
@@ -4723,13 +4738,12 @@ var moduleLoading = mixin({
       } = this.options = options;
       const res = await source;
       const suffix = (res[Symbol.toStringTag] === 'Response') ? 'Streaming' : '';
-      const w = WebAssembly;
-      const f = w['compile' + suffix];
+      const f = WA['compile' + suffix];
       const executable = this.executable = await f(res);
       const functions = this.exportFunctions();
       const env = {}, wasi = {}, wasiPreview = {};
       const exports = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
-      for (const { module, name, kind } of w.Module.imports(executable)) {
+      for (const { module, name, kind } of WA.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {
             env[name] = functions[name] ?? empty;
@@ -6813,51 +6827,103 @@ var workerSupport = mixin({
           );
         }
         return this.spawnThread.bind(this);
+      case 'thread-cancel':
+        return this.cancelThread.bind(this);
+      case 'thread-address':
+        return this.getThreadAddress.bind(this);
     }
   },
-  spawnThread(arg) {
-    const tid = this.nextThreadId;
-    this.nextThreadId++;
-    const { executable, memory, options } = this;
-    const workerData = { executable, memory, options, tid, arg };
-    const handler = (worker, msg) => {
-      if (msg.type === 'call') {
-        const { module, name, args, array } = msg;        
-        const fn = this.exportedModules[module]?.[name];
-        // add a true argument to indicate that waiting is possible
-        const result = fn?.(...args, true);
-        const finish = (value) => {
-          if (array) {
-            array[1] = value|0;
-            array[0] = 1;
-            Atomics.notify(array, 0, 1);
+  spawnThread(taddr) {
+    const tid = this.nextThreadId++;
+    if (this.nextThreadId === 0x4000_0000) {
+      this.nextThreadId = 1;
+    }
+    const worker = this.createWorker();
+    worker.run(tid, taddr);
+    return tid;
+  },
+  cancelThread(tid, raddr) {
+    const worker = this.workers.find(w => w.tid === tid);
+    if (worker) {
+      if (!raddr) {
+        // defer termination until thread reaches a cancellation point
+        worker.canceled = true;
+      } else {
+        worker.end(true);
+        // create a replacement worker that'll perform the thread clean-up
+        const scab = this.createWorker();
+        scab.clean(raddr);
+      }
+    }
+  }, 
+  getThreadAddress(tid) {
+    const worker = this.workers.find(w => w.tid === tid);
+    return worker.taddr;
+  },
+  createWorker() {
+    const handler = (msg) => {
+      switch (msg.type) {
+        case 'call': {
+          if (!worker.canceled) {
+            const { module, name, args } = msg;        
+            const fn = this.exportedModules[module]?.[name];
+            // add a true argument to indicate that waiting is possible
+            const result = fn?.(...args, true);
+            const finish = (value) => worker.signal(1, value);
+            if (isPromise(result)) {
+              result.then(finish);
+            } else {
+              finish(result);
+            }
+          } else {
+            // a deferred cancellation has occurred; set canceled to false so that debug print 
+            // works during the clean-up process
+            worker.canceled = false;
+            worker.signal(2);
           }
-        };
-        if (isPromise(result)) {
-          result.then(finish);
-        } else {
-          finish(result);
-        }
-      } else if (msg.type === 'exit') {
-        const index = this.workers.indexOf(worker);
-        if (index !== -1) {
-          worker.detach();
-          this.workers.splice(index, 1);
-        }
+        } break;
+        case 'done': {
+          worker.end();
+        } break;
       }
     };
-    const evtName = 'message';
-    {
+    let worker;
+    if (typeof(Worker) === 'function') {
       // web worker
       const url = getWorkerURL();
-      const worker = new Worker(url, { name: 'zig' });
-      const listener = evt => handler(worker, evt.data);
-      worker.addEventListener(evtName, listener);
-      worker.detach = () => worker.removeEventListener(evtName, listener);
-      worker.postMessage(workerData);
-      this.workers.push(worker);
+      worker = new Worker(url, { name: 'zig' });
+      worker.addEventListener('message', evt => handler(evt.data));
     }
-    return tid;
+    // send WebAssembly start-up data
+    const { executable, memory, options } = this;
+    const futex = new Int32Array(new SharedArrayBuffer(8));      
+    worker.postMessage({ type: 'start', executable, memory, options, futex });
+    worker.signal = (response, result) => {
+      if (Atomics.load(futex, 0) === 0) {
+        Atomics.store(futex, 0, response);
+        Atomics.store(futex, 1, result|0);
+        Atomics.notify(futex, 0, 1);
+      }
+    };
+    worker.run = (tid, taddr) => {
+      worker.tid = tid;
+      worker.taddr = taddr;
+      worker.canceled = false;
+      worker.postMessage({ type: 'run', tid, taddr });
+    };
+    worker.clean = (raddr) => {
+      worker.postMessage({ type: 'clean', raddr });
+    };
+    worker.end = (force = false) => {
+      if (force) {
+        worker.terminate();
+      } else {
+        worker.postMessage({ type: 'end' });
+      }
+      remove(this.workers, worker);
+    };
+    this.workers.push(worker);
+    return worker;
   },
 });
 
@@ -6879,7 +6945,8 @@ function getWorkerURL() {
 }
 
 function workerMain() {
-  let postMessage, exit;
+  const WA = WebAssembly;
+  let port, instance;
 
   {
     // web worker

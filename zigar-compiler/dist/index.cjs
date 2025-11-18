@@ -991,6 +991,7 @@ function createConfig(srcPath, modPath, options = {}) {
     useLibc = isWASM ? false : true,
     useLLVM = null,
     useRedirection = true,
+    usePthreadEmulation = false,
     clean = false,
     buildDir = node_path.join(os.tmpdir(), 'zigar-build'),
     buildDirSize = 4294967296,
@@ -1092,6 +1093,7 @@ function createConfig(srcPath, modPath, options = {}) {
     useLibc,
     useLLVM,
     useRedirection,
+    usePthreadEmulation,
     isWASM,
     multithreaded,
     stackSize,
@@ -1311,6 +1313,10 @@ const optionsForTranspile = {
   keepNames: {
     type: 'boolean',
     title: 'Keep names of function in WASM binary when stripping',
+  },
+  usePthreadEmulation: {
+    type: 'boolean',
+    title: 'Provide emulated pthread functions',
   },
 };
 
