@@ -45,6 +45,9 @@ fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 1 acquiring read lock\n", .{});
     if (c.pthread_rwlock_rdlock(&rwlock) == 0) {
         defer _ = c.pthread_rwlock_unlock(&rwlock);
+        // without the sleep deadlock would occur due to the main thread waiting for
+        // a mutex to write while the thread waits for its write to be processed
+        std.Thread.sleep(2000000);
         std.debug.print("Thread 1 acquired read lock\n", .{});
     }
     return null;
@@ -54,6 +57,7 @@ fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 2 acquiring write lock\n", .{});
     if (c.pthread_rwlock_wrlock(&rwlock) == 0) {
         defer _ = c.pthread_rwlock_unlock(&rwlock);
+        std.Thread.sleep(2000000);
         std.debug.print("Thread 2 acquired write lock\n", .{});
     }
     return null;

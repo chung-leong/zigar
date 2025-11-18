@@ -618,7 +618,7 @@ export function addTests(importModule, options) {
             await delay(250);
             cleanup();
           });
-          const type = (write) ? 'write' : 'read'
+          const type = (write) ? 'write' : 'read';
           expect(lines[0]).to.equal(`Main thread acquired ${type} lock`);
           const mtReleased = lines.indexOf(`Main thread released ${type} lock`);
           const t1Acquired = lines.indexOf(`Thread 1 acquired read lock`);

@@ -24,7 +24,10 @@ var workerSupport = mixin({
   },
   spawnThread(taddr) {
     const tid = this.nextThreadId++;
-    const worker = this.obtainWorker();
+    if (this.nextThreadId === 0x4000_0000) {
+      this.nextThreadId = 1;
+    }
+    const worker = this.createWorker();
     worker.run(tid, taddr);
     return tid;
   },
@@ -37,8 +40,8 @@ var workerSupport = mixin({
       } else {
         worker.end(true);
         // create a replacement worker that'll perform the thread clean-up
-        const replacement = this.obtainWorker();
-        replacement.clean(raddr);
+        const scab = this.createWorker();
+        scab.clean(raddr);
       }
     }
   }, 
@@ -46,77 +49,69 @@ var workerSupport = mixin({
     const worker = this.workers.find(w => w.tid === tid);
     return worker.taddr;
   },
-  obtainWorker() {
-    // look for an idling worker
-    let worker = this.workers.find(w => w.tid === 0);
-    if (!worker) {
-      // create one
-      const handler = (msg) => {
-        switch (msg.type) {
-          case 'call': {
-            if (!worker.canceled) {
-              const { module, name, args } = msg;        
-              const fn = this.exportedModules[module]?.[name];
-              // add a true argument to indicate that waiting is possible
-              const result = fn?.(...args, true);
-              const finish = (value) => worker.signal(1, value);
-              if (isPromise(result)) {
-                result.then(finish);
-              } else {
-                finish(result);
-              }
+  createWorker() {
+    const handler = (msg) => {
+      switch (msg.type) {
+        case 'call': {
+          if (!worker.canceled) {
+            const { module, name, args } = msg;        
+            const fn = this.exportedModules[module]?.[name];
+            // add a true argument to indicate that waiting is possible
+            const result = fn?.(...args, true);
+            const finish = (value) => worker.signal(1, value);
+            if (isPromise(result)) {
+              result.then(finish);
             } else {
-              // a deferred cancellation has occurred; set canceled to false so that debug print 
-              // works during the clean-up process
-              worker.canceled = false;
-              worker.signal(2);
+              finish(result);
             }
-          } break;
-          case 'done': {
-            worker.tid = 0;
-            worker.taddr = 0;
-            // remove the idle worker after a while
-            setTimeout(() => worker.end(), 250);
-          } break;
-        }
-      };
-      if (typeof(Worker) === 'function') {
-        // web worker
-        const url = getWorkerURL();
-        worker = new Worker(url, { name: 'zig' });
-        worker.addEventListener('message', evt => handler(evt.data));
+          } else {
+            // a deferred cancellation has occurred; set canceled to false so that debug print 
+            // works during the clean-up process
+            worker.canceled = false;
+            worker.signal(2);
+          }
+        } break;
+        case 'done': {
+          worker.end();
+        } break;
       }
-      // send WebAssembly start-up data
-      const { executable, memory, options } = this;
-      const futex = new Int32Array(new SharedArrayBuffer(8));      
-      worker.postMessage({ type: 'start', executable, memory, options, futex });
-      worker.signal = (response, result) => {
-        if (futex[0] === 0) {
-          futex[1] = result|0;
-          futex[0] = response;
-          Atomics.notify(futex, 0, 1);
-        }
-      };
-      worker.run = (tid, taddr) => {
-        worker.tid = tid;
-        worker.taddr = taddr;
-        worker.canceled = false;
-        worker.postMessage({ type: 'run', tid, taddr });
-      };
-      worker.clean = (raddr) => {
-        worker.tid = -1;
-        worker.postMessage({ type: 'clean', raddr });
-      };
-      worker.end = (force = false) => {
-        if (force) {
-          worker.terminate();
-        } else {
-          worker.postMessage({ type: 'end' });
-        }
-        remove(this.workers, worker);
-      };
-      this.workers.push(worker);
+    };
+    let worker;
+    if (typeof(Worker) === 'function') {
+      // web worker
+      const url = getWorkerURL();
+      worker = new Worker(url, { name: 'zig' });
+      worker.addEventListener('message', evt => handler(evt.data));
     }
+    // send WebAssembly start-up data
+    const { executable, memory, options } = this;
+    const futex = new Int32Array(new SharedArrayBuffer(8));      
+    worker.postMessage({ type: 'start', executable, memory, options, futex });
+    worker.signal = (response, result) => {
+      if (Atomics.load(futex, 0) === 0) {
+        Atomics.store(futex, 0, response);
+        Atomics.store(futex, 1, result|0);
+        Atomics.notify(futex, 0, 1);
+      }
+    };
+    worker.run = (tid, taddr) => {
+      worker.tid = tid;
+      worker.taddr = taddr;
+      worker.canceled = false;
+      worker.postMessage({ type: 'run', tid, taddr });
+    };
+    worker.clean = (raddr) => {
+      worker.postMessage({ type: 'clean', raddr });
+    };
+    worker.end = (force = false) => {
+      if (force) {
+        worker.terminate();
+      } else {
+        worker.postMessage({ type: 'end' });
+      }
+      remove(this.workers, worker);
+    };
+    this.workers.push(worker);
     return worker;
   },
 });
@@ -162,16 +157,16 @@ function workerMain() {
           const ns = imports[module];
           if (kind === 'function' && ns) {
             ns[name] = (name === 'proc_exit') ? exit : function(...args) {
-              futex[0] = 0;
+              Atomics.store(futex, 0, 0);
               port.postMessage({ type: 'call', module, name, args });
               Atomics.wait(futex, 0, 0);
-              if (futex[0] === 2) {
+              if (Atomics.load(futex, 0) === 2) {
                 // was canceled in the middle of a call; jump back jump back into Zig to execute 
                 // cleanup routines and TLS destructors then exit
                 instance.exports.wasi_thread_clean_deferred?.();
                 exit();
               }
-              return futex[1];
+              return Atomics.load(futex, 1);
             };             
           }
         }
@@ -184,17 +179,18 @@ function workerMain() {
         instance = new WA.Instance(executable, imports);
       } break;
       case 'run': {
-        const { tid, taddr } = msg;
         // catch thread termination exception
         try {
-          instance.exports.wasi_thread_start(tid, taddr);
+          instance.exports.wasi_thread_start(msg.tid, msg.taddr);
         } catch {
         }
         port.postMessage({ type: 'done' });
       } break;
       case 'clean': {
-        const { raddr } = msg;
-        instance.exports.wasi_thread_clean_async(raddr);
+        try {
+          instance.exports.wasi_thread_clean_async(msg.raddr);
+        } catch {
+        }
         port.postMessage({ type: 'done' });
       } break;
       case 'end': {

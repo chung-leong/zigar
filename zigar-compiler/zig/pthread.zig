@@ -547,7 +547,7 @@ pub fn pthread_once(
     once_control: [*c]pthread_once_t,
     init_routine: ?*const fn () callconv(.c) void,
 ) callconv(.c) c_int {
-    if (@cmpxchgStrong(pthread_once_t, once_control, PTHREAD_ONCE_INIT, PTHREAD_ONCE_INIT + 1, .acq_rel, .monotonic) != null) {
+    if (@cmpxchgStrong(pthread_once_t, once_control, PTHREAD_ONCE_INIT, PTHREAD_ONCE_INIT + 1, .acq_rel, .monotonic) == null) {
         init_routine.?();
     }
     return 0;
