@@ -28,7 +28,7 @@ pub const panic = switch (@hasDecl(module, "panic") and @TypeOf(module.panic) ==
 comptime {
     if (builtin.target.cpu.arch.isWasm()) {
         const ns = struct {
-            fn get() callconv(.C) usize {
+            fn get() callconv(.c) usize {
                 return host.getFactoryThunk(module);
             }
         };

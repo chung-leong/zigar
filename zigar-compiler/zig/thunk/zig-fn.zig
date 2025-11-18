@@ -18,7 +18,7 @@ pub fn ThunkType(comptime FT: type) type {
 
 test "ThunkType" {
     try expectEqual(Thunk, ThunkType(fn (usize) void));
-    try expectEqual(VariadicThunk, ThunkType(fn (usize, ...) callconv(.C) void));
+    try expectEqual(VariadicThunk, ThunkType(fn (usize, ...) callconv(.c) void));
 }
 
 pub fn createThunk(comptime FT: type) ThunkType(FT) {
@@ -66,7 +66,7 @@ test "createThunk" {
             try expect(false);
         },
     }
-    const thunk2 = createThunk(fn (i32, bool, ...) callconv(.C) bool);
+    const thunk2 = createThunk(fn (i32, bool, ...) callconv(.c) bool);
     switch (@typeInfo(@TypeOf(thunk2))) {
         .pointer => |pt| {
             switch (@typeInfo(pt.child)) {

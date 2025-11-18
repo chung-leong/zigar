@@ -12,7 +12,7 @@ pub const Float80 = f80;
 pub const Float128 = f128;
 pub const StrPtr = [*:0]const u8;
 
-pub fn printIntegers(bits: u8, count: usize, ...) callconv(.C) void {
+pub fn printIntegers(bits: u8, count: usize, ...) callconv(.c) void {
     var va_list = @cVaStart();
     defer @cVaEnd(&va_list);
     for (0..count) |_| {
@@ -25,7 +25,7 @@ pub fn printIntegers(bits: u8, count: usize, ...) callconv(.C) void {
     }
 }
 
-pub fn printFloats(bits: u8, count: usize, ...) callconv(.C) void {
+pub fn printFloats(bits: u8, count: usize, ...) callconv(.c) void {
     var va_list = @cVaStart();
     defer @cVaEnd(&va_list);
     for (0..count) |_| {
@@ -42,7 +42,7 @@ pub fn printFloats(bits: u8, count: usize, ...) callconv(.C) void {
     }
 }
 
-pub fn printStrings(count: usize, ...) callconv(.C) void {
+pub fn printStrings(count: usize, ...) callconv(.c) void {
     var va_list = @cVaStart();
     defer @cVaEnd(&va_list);
     for (0..count) |_| {

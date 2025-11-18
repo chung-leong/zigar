@@ -100,7 +100,7 @@ pub fn call(
 }
 
 fn createTest(RT: type, tuple: anytype) type {
-    const Args = ArgStruct(fn (@TypeOf(tuple[0]), ...) callconv(.C) RT);
+    const Args = ArgStruct(fn (@TypeOf(tuple[0]), ...) callconv(.c) RT);
     comptime var current_offset: u16 = @sizeOf(Args);
     comptime var offsets: [tuple.len]u16 = undefined;
     inline for (tuple, 0..) |value, index| {
@@ -112,7 +112,7 @@ fn createTest(RT: type, tuple: anytype) type {
     }
     const arg_size = current_offset;
     return struct {
-        fn check(arg0: @TypeOf(tuple[0]), ...) callconv(.C) RT {
+        fn check(arg0: @TypeOf(tuple[0]), ...) callconv(.c) RT {
             var va_list = @cVaStart();
             defer @cVaEnd(&va_list);
             var failed = false;
@@ -1542,7 +1542,7 @@ test "callWithArgs (i64...i64, f64)" {
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
-        fn function(arg0: i64, ...) callconv(.C) f64 {
+        fn function(arg0: i64, ...) callconv(.c) f64 {
             var va_list = @cVaStart();
             defer @cVaEnd(&va_list);
             const arg1 = @cVaArg(&va_list, i64);
@@ -1597,7 +1597,7 @@ test "callWithArgs (i64...i64, i32, i32)" {
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
-        fn function(arg0: i64, ...) callconv(.C) i64 {
+        fn function(arg0: i64, ...) callconv(.c) i64 {
             var va_list = @cVaStart();
             defer @cVaEnd(&va_list);
             const arg1 = @cVaArg(&va_list, i64);
@@ -1631,7 +1631,7 @@ test "callWithArgs (i64...i32, i32, i32)" {
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
-        fn function(arg0: i64, ...) callconv(.C) i64 {
+        fn function(arg0: i64, ...) callconv(.c) i64 {
             var va_list = @cVaStart();
             defer @cVaEnd(&va_list);
             const arg1 = @cVaArg(&va_list, i32);
@@ -1665,7 +1665,7 @@ test "callWithArgs (i64...i32, f32, f32)" {
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
-        fn function(arg0: i64, ...) callconv(.C) f64 {
+        fn function(arg0: i64, ...) callconv(.c) f64 {
             var va_list = @cVaStart();
             defer @cVaEnd(&va_list);
             const arg1 = @cVaArg(&va_list, i32);
@@ -1710,7 +1710,7 @@ test "callWithArgs (i64...i16, i16)" {
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
-        fn function(arg0: i64, ...) callconv(.C) i64 {
+        fn function(arg0: i64, ...) callconv(.c) i64 {
             var va_list = @cVaStart();
             defer @cVaEnd(&va_list);
             const arg1 = @cVaArg(&va_list, i16);
@@ -1748,7 +1748,7 @@ test "callWithArgs (i64...i8, i8)" {
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
-        fn function(arg0: i64, ...) callconv(.C) i64 {
+        fn function(arg0: i64, ...) callconv(.c) i64 {
             var va_list = @cVaStart();
             defer @cVaEnd(&va_list);
             const arg1 = @cVaArg(&va_list, i8);
@@ -1786,7 +1786,7 @@ test "callWithArgs (i64...i128)" {
     if (comptime is(.x86_64, .windows)) return error.SkipZigTest; // missing support
     const abi = Abi.init(builtin.target.cpu.arch, builtin.target.os.tag);
     const ns = struct {
-        fn function(arg0: i64, ...) callconv(.C) i128 {
+        fn function(arg0: i64, ...) callconv(.c) i128 {
             var va_list = @cVaStart();
             defer @cVaEnd(&va_list);
             const arg1 = @cVaArg(&va_list, i128);

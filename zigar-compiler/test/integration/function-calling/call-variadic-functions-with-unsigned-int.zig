@@ -6,7 +6,7 @@ pub const Uint32 = u32;
 pub const Uint64 = u64;
 pub const Uint128 = u128;
 
-pub fn printUnsigned(bits: u8, count: usize, ...) callconv(.C) void {
+pub fn printUnsigned(bits: u8, count: usize, ...) callconv(.c) void {
     var va_list = @cVaStart();
     for (0..count) |_| {
         inline for (.{ u8, u16, u32, u64, u128 }) |T| {

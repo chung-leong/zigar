@@ -1481,7 +1481,7 @@ const ModuleHost = struct {
     }
 
     const threadsafe_callback = struct {
-        fn handle_jscall(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
+        fn handle_jscall(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.c) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
             const call: *Jscall = @ptrCast(@alignCast(data));
             _ = handleJscall(self, call) catch {
@@ -1490,7 +1490,7 @@ const ModuleHost = struct {
             };
         }
 
-        fn handle_syscall(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
+        fn handle_syscall(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.c) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
             const call: *Syscall = @ptrCast(@alignCast(data));
             _ = handleSyscall(self, call) catch {
@@ -1498,13 +1498,13 @@ const ModuleHost = struct {
             };
         }
 
-        fn release_function(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.C) void {
+        fn release_function(_: *Env, _: Value, context: *anyopaque, data: *anyopaque) callconv(.c) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
             const fn_id = @intFromPtr(data);
             releaseFunction(self, fn_id) catch {};
         }
 
-        fn disable_multithread(_: *Env, _: Value, context: *anyopaque, _: *anyopaque) callconv(.C) void {
+        fn disable_multithread(_: *Env, _: Value, context: *anyopaque, _: *anyopaque) callconv(.c) void {
             const self: *ModuleHost = @ptrCast(@alignCast(context));
             disableMultithread(self) catch {};
         }
