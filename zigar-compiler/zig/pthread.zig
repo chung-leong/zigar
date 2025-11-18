@@ -68,6 +68,7 @@ const Pthread = struct {
                 self.thread.impl.thread = wasi_thread;
                 self.state = .init(if (state == .detached) .detached else .joinable);
             }
+            current = self;
             break :create self;
         };
     }
