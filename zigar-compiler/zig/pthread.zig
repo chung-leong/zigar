@@ -139,11 +139,11 @@ const Pthread = struct {
         }
         const self = getCurrent();
         self.cancel_progress.store(.canceled, .unordered);
+        self.return_value = PTHREAD_CANCELED;
         self.performExitCleanup();
     }
 
     fn performExitCleanup(self: *@This()) void {
-        self.return_value = PTHREAD_CANCELED;
         // call destructors inserted by pthread_key_create()
         _ = pthread_spin_lock(&key_list_spinlock);
         defer _ = pthread_spin_unlock(&key_list_spinlock);
@@ -205,6 +205,12 @@ const Pthread = struct {
         // this function is called from JavaScript when cancel_type is PTHREAD_CANCEL_ASYNCHRONOUS
         // by a new worker taking over after the original worker has been killed; the pointer
         // argument provide the necessary info for it to assume the identity of the original
+        const clothed = struct {
+            fn run(remnant: *ThreadRemnant) callconv(.c) void {
+                wasm_allocator.destroy(remnant);
+                performCancellationCleanUp();
+            }
+        };
         asm volatile (
             \\ local.get 0
             \\ i32.load %[stack_pointer]
@@ -213,19 +219,13 @@ const Pthread = struct {
             \\ i32.load %[tls_base]
             \\ global.set __tls_base
             \\ local.get 0
-            \\ call wasi_thread_clean_async_cont
+            \\ call %[cont]
             \\ return
             :
             : [stack_pointer] "X" (@offsetOf(ThreadRemnant, "stack_pointer")),
               [tls_base] "X" (@offsetOf(ThreadRemnant, "tls_base")),
+              [cont] "X" (&clothed.run),
         );
-        const cont = struct {
-            fn run(remnant: *ThreadRemnant) callconv(.c) void {
-                wasm_allocator.destroy(remnant);
-                performCancellationCleanUp();
-            }
-        };
-        @export(&cont.run, .{ .name = "wasi_thread_clean_async_cont", .visibility = .hidden });
     }
 
     export fn wasi_thread_clean_deferred() callconv(.c) void {
