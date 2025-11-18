@@ -1,12 +1,12 @@
 import childProcess from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
-import fs, { chmod, lstat, mkdir, open, readdir, readFile, realpath, rmdir, stat, unlink, writeFile } from 'node:fs/promises';
+import fs, { open, readdir, lstat, rmdir, unlink, readFile, stat, mkdir, writeFile, chmod, realpath } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import os from 'node:os';
-import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
+import { sep, dirname, join, resolve, relative, parse, basename, isAbsolute } from 'node:path';
 import { fileURLToPath, URL as URL$1 } from 'node:url';
 import { promisify } from 'node:util';
+import { writeFileSync } from 'node:fs';
 
 const StructureType = {
   Primitive: 0,
@@ -32,10 +32,8 @@ const StructurePurpose = {
   AbortSignal: 3,
   Allocator: 4,
   Iterator: 5,
-  Reader: 6,
-  Writer: 7,
-  File: 8,
-  Directory: 9,
+  File: 6,
+  Directory: 7,
 };
 const structureNames = Object.keys(StructureType);
 const StructureFlag = {
@@ -1544,8 +1542,8 @@ function formatProjectConfig(config) {
   const lines = [];
   const fields = [
     'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath', 'useLibc', 
-    'useLLVM', 'useRedirection', 'isWASM', 'multithreaded', 'stackSize', 'maxMemory', 
-    'evalBranchQuota', 'omitFunctions', 'omitVariables',
+    'useLLVM', 'usePthreadEmulation', 'useRedirection', 'isWASM', 'multithreaded', 'stackSize', 
+    'maxMemory', 'evalBranchQuota', 'omitFunctions', 'omitVariables',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -3232,20 +3230,6 @@ function throwReadOnly() {
   throw new ReadOnly();
 }
 
-function checkInefficientAccess(progress, access, len) {
-  progress.bytes += len;
-  progress.calls++;
-  if (progress.calls === 100) {
-    const bytesPerCall = progress.bytes / progress.calls;
-    if (bytesPerCall < 8) {
-      const s = bytesPerCall !== 1 ? 's' : '';
-      const action = (access === 'read') ? 'reading' : 'writing';
-      const name = (access === 'read') ? 'Reader' : 'Writer';
-      throw new Error(`Inefficient ${access} access. Each call is only ${action} ${bytesPerCall} byte${s}. Please use std.io.Buffered${name}.`);
-    }
-  }
-}
-
 function deanimalizeErrorName(name) {
   // deal with snake_case first
   let s = name.replace(/_/g, ' ');
@@ -3833,12 +3817,6 @@ var callMarshalingOutbound = mixin({
             // AbortSignal object if found
             signal ||= this.createSignal(structure, options?.['signal']);
             arg = signal;
-            break;
-          case StructurePurpose.Reader:
-            arg = this.createReader(argList[srcIndex++]);
-            break;
-          case StructurePurpose.Writer:
-            arg = this.createWriter(argList[srcIndex++]);
             break;
           case StructurePurpose.File:
             arg = this.createFile(argList[srcIndex++]);
@@ -4755,21 +4733,21 @@ var moduleLoading = mixin({
         }
       }
       if (memoryInitial) {
-        this.memory = env.memory = new w.Memory({
+        this.memory = env.memory = new WA.Memory({
           initial: memoryInitial,
           maximum: memoryMax,
           shared: multithreaded,
         });
       }
       if (tableInitial) {
-        this.table = env.__indirect_function_table = new w.Table({
+        this.table = env.__indirect_function_table = new WA.Table({
           initial: tableInitial,
           element: 'anyfunc',
           shared: multithreaded,
         });
-        this.initialTableLength = tableInitial;
       }
-      return w.instantiate(executable, exports);
+      this.initialTableLength = tableInitial;
+      return WA.instantiate(executable, exports);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
@@ -5888,140 +5866,6 @@ var promise = mixin({
   },
 });
 
-var reader = mixin({
-  init() {
-    this.readerCallback = null;
-    this.readerMap = new Map();
-    this.nextReaderId = usize(0x1000);
-    if (import.meta.env?.PROD !== true) {
-      this.readerProgressMap = new Map();
-    }
-  },
-  // create AnyReader struct for outbound call
-  createReader(arg) {
-    // check if argument isn't already an AnyReader struct
-    if (typeof(arg) === 'object' && arg) {
-      if('context' in arg && 'readFn' in arg) return arg;
-    }
-    const reader = this.convertReader(arg);
-    if (!reader) {
-        throw new InvalidStream(PosixDescriptorRight.fd_read, arg);
-    }
-    // create a handle referencing the reader 
-    const readerId = this.nextReaderId++;
-    const context = this.obtainZigView(readerId, 0, false);
-    const onClose = reader.onClose = () => {
-      this.readerMap.delete(readerId);
-      if (import.meta.env?.PROD !== true) {
-        this.readerProgressMap.delete(readerId);
-      }
-    };
-    this.readerMap.set(readerId, reader);
-    if (import.meta.env?.PROD !== true) {
-      this.readerProgressMap.set(readerId, { bytes: 0, calls: 0 });
-    }
-    // use the same callback for all readers
-    let readFn = this.readerCallback;
-    if (!readFn) {
-      const onError = (err) => {
-        console.error(err);
-        onClose();
-        throw err;
-      };
-      readFn = this.readerCallback = (context, buffer) => {
-        const readerId = this.getViewAddress(context['*'][MEMORY]);
-        const reader = this.readerMap.get(readerId);
-        if (!reader) return 0;    
-        try {
-          const dv = buffer['*'][MEMORY];
-          const len = dv.byteLength;
-          const onResult = (chunk) => {
-            const len = chunk.length;
-            const address = this.getViewAddress(buffer['*'][MEMORY]);
-            this.moveExternBytes(chunk, address, true);
-            return len;
-          };
-          if (import.meta.env?.PROD !== true) {
-            const progress = this.readerProgressMap.get(readerId);
-            checkInefficientAccess(progress, 'read', len);
-          }
-          const result = reader.read(len);          
-          return isPromise(result) ? result.then(onResult).catch(onError) : onResult(result);
-        } catch (err) {
-          onError(err);
-        }
-      };
-      this.destructors.push(() => this.freeFunction(readFn));
-    }
-    return { context, readFn };
-  },
-});
-
-var writer = mixin({
-  init() {
-    this.writerCallback = null;
-    this.writerMap = new Map();
-    this.nextWriterContextId = usize(0x2000);
-    if (import.meta.env?.PROD !== true) {
-      this.writerProgressMap = new Map();
-    }
-  },
-  // create AnyWriter struct for outbound call
-  createWriter(arg) {
-    // check if argument isn't already an AnyWriter struct
-    if (typeof(arg) === 'object' && arg) {
-      if('context' in arg && 'writeFn' in arg) return arg;
-    }
-    const writer = this.convertWriter(arg);
-    if (!writer) {
-      throw new InvalidStream(PosixDescriptorRight.fd_write, arg);
-    }
-    // create a handle referencing the writer 
-    const writerId = this.nextWriterContextId++;
-    const context = this.obtainZigView(writerId, 0, false);
-    const onClose = writer.onClose = () => {
-      this.writerMap.delete(writerId);
-      if (import.meta.env?.PROD !== true) {
-        this.writerProgressMap.delete(writerId);
-      }
-    };
-    this.writerMap.set(writerId, writer);
-    if (import.meta.env?.PROD !== true) {
-      this.writerProgressMap.set(writerId, { bytes: 0, calls: 0 });
-    }
-    // use the same callback for all writers
-    let writeFn = this.writerCallback;
-    if (!writeFn) {
-      const onError = (err) => {
-        console.error(err);
-        onClose();
-        throw err;
-      };
-      writeFn = this.writerCallback = (context, buffer) => {
-        const writerId = this.getViewAddress(context['*'][MEMORY]);
-        const writer = this.writerMap.get(writerId);
-        if (!writer) return 0;
-        try {
-          const dv = buffer['*'][MEMORY];
-          if (import.meta.env?.PROD !== true) {
-            const progress = this.writerProgressMap.get(writerId);
-            checkInefficientAccess(progress, 'write', dv.byteLength);
-          }
-          const len = dv.byteLength;
-          const src = new Uint8Array(dv.buffer, dv.byteOffset, len);
-          const copy = new Uint8Array(src);
-          const result = writer.write(copy);
-          return isPromise(result) ? result.then(() => len, onError) : len;
-        } catch (err) {
-          onError(err);
-        }
-      };
-      this.destructors.push(() => this.freeFunction(writeFn));
-    }
-    return { context, writeFn };
-  },
-});
-
 var copyInt = mixin({
   copyUint64(bufAddress, value) {
     const buf = createView(8);
@@ -6950,49 +6794,64 @@ function workerMain() {
 
   {
     // web worker
-    self.onmessage = evt => run(evt.data);
-    postMessage = msg => self.postMessage(msg);
-    exit = () => self.close();
+    self.onmessage = (evt) => process(evt.data);
+    port = self;
   }
 
-  function run({ executable, memory, options, tid, arg }) {
-    const w = WebAssembly;
-    const env = { memory }, wasi = {}, wasiPreview = {};
-    const imports = { env, wasi, wasi_snapshot_preview1: wasiPreview };
-    for (const { module, name, kind } of w.Module.imports(executable)) {
-      if (kind === 'function') {
-        const f = createRouter(module, name);
-        if (module === 'env') {
-          env[name] = f;
-        } else if (module === 'wasi_snapshot_preview1') {
-          wasiPreview[name] = f;
-        } else if (module === 'wasi') {
-          wasi[name] = f;
+  function process(msg) {
+    switch (msg.type) {
+      case 'start': {
+        const { executable, memory, futex, options } = msg;
+        const imports = { 
+          env: { memory },
+          wasi: {},
+          wasi_snapshot_preview1: {},
+        };
+        const exit = () => { throw new Error('Exit') };
+        for (const { module, name, kind } of WA.Module.imports(executable)) {
+          const ns = imports[module];
+          if (kind === 'function' && ns) {
+            ns[name] = (name === 'proc_exit') ? exit : function(...args) {
+              Atomics.store(futex, 0, 0);
+              port.postMessage({ type: 'call', module, name, args });
+              Atomics.wait(futex, 0, 0);
+              if (Atomics.load(futex, 0) === 2) {
+                // was canceled in the middle of a call; jump back jump back into Zig to execute 
+                // cleanup routines and TLS destructors then exit
+                instance.exports.wasi_thread_clean_deferred?.();
+                exit();
+              }
+              return Atomics.load(futex, 1);
+            };             
+          }
         }
-      }
+        if (options.tableInitial) {
+          imports.env.__indirect_function_table = new WA.Table({
+            initial: options.tableInitial,
+            element: 'anyfunc',
+          });
+        }
+        instance = new WA.Instance(executable, imports);
+      } break;
+      case 'run': {
+        // catch thread termination exception
+        try {
+          instance.exports.wasi_thread_start(msg.tid, msg.taddr);
+        } catch {
+        }
+        port.postMessage({ type: 'done' });
+      } break;
+      case 'clean': {
+        try {
+          instance.exports.wasi_thread_clean_async(msg.raddr);
+        } catch {
+        }
+        port.postMessage({ type: 'done' });
+      } break;
+      case 'end': {
+        port.close();
+      } break;
     }
-    const { tableInitial } = options;
-    if (tableInitial) {
-      env.__indirect_function_table = new w.Table({
-        initial: tableInitial,
-        element: 'anyfunc',
-      });
-    }
-    const { exports } = new w.Instance(executable, imports);
-    const { wasi_thread_start } = exports;
-    wasi_thread_start(tid, arg);
-    postMessage({ type: 'exit' });
-    exit();
-  }
-
-  function createRouter(module, name) {
-    const array = new Int32Array(new SharedArrayBuffer(8));
-    return function(...args) {
-      array[0] = 0;
-      postMessage({ type: 'call', module, name, args, array });
-      Atomics.wait(array, 0, 0);
-      return array[1];
-    };
   }
 }
 
@@ -7235,14 +7094,6 @@ var structureAcquisition = mixin({
                 break;
               case StructurePurpose.AbortSignal:
                 this.use(abortSignal);
-                break;
-              case StructurePurpose.Reader:
-                this.use(reader);
-                this.use(readerConversion);
-                break;
-              case StructurePurpose.Writer:
-                this.use(writer);
-                this.use(writerConversion);
                 break;
               case StructurePurpose.File:
                 this.use(file);
@@ -11146,14 +10997,12 @@ var mixins = /*#__PURE__*/Object.freeze({
   StructurePointer: pointer,
   StructurePrimitive: primitive,
   StructurePromise: promise,
-  StructureReader: reader,
   StructureSlice: slice,
   StructureStruct: struct,
   StructureStructLike: structLike,
   StructureUnion: union,
   StructureVariadicStruct: variadicStruct,
   StructureVector: vector,
-  StructureWriter: writer,
   SyscallClockResGet: clockResGet,
   SyscallClockTimeGet: clockTimeGet,
   SyscallCopyInt: copyInt,

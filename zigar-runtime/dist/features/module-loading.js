@@ -1,6 +1,6 @@
 import { PosixError } from '../constants.js';
 import { mixin } from '../environment.js';
-import { decodeText, defineProperty, defineValue, empty, isPromise } from '../utils.js';
+import { decodeText, isPromise, empty, defineProperty, defineValue } from '../utils.js';
 
 const WA = WebAssembly;
 
@@ -133,21 +133,21 @@ var moduleLoading = mixin({
         }
       }
       if (memoryInitial) {
-        this.memory = env.memory = new w.Memory({
+        this.memory = env.memory = new WA.Memory({
           initial: memoryInitial,
           maximum: memoryMax,
           shared: multithreaded,
         });
       }
       if (tableInitial) {
-        this.table = env.__indirect_function_table = new w.Table({
+        this.table = env.__indirect_function_table = new WA.Table({
           initial: tableInitial,
           element: 'anyfunc',
           shared: multithreaded,
         });
-        this.initialTableLength = tableInitial;
       }
-      return w.instantiate(executable, exports);
+      this.initialTableLength = tableInitial;
+      return WA.instantiate(executable, exports);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {

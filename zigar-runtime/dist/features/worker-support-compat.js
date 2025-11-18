@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { isPromise, remove } from '../utils.js';
+import { remove, isPromise } from '../utils.js';
 
 let NodeWorker;
 
@@ -156,51 +156,66 @@ function workerMain() {
     port = self;
   } else {
     // Node.js worker-thread
-    import(/* webpackIgnore: true */ 'worker_threads').then(({ parentPort, workerData }) => {
-      postMessage = msg => parentPort.postMessage(msg);
-      exit = () => process.exit();
-      run(workerData);
+    import(/* webpackIgnore: true */ 'node:worker_threads').then((module) => {
+      port = module.parentPort;
+      port.on('message', process);
     });
   }
 
-  function run({ executable, memory, options, tid, arg }) {
-    const w = WebAssembly;
-    const env = { memory }, wasi = {}, wasiPreview = {};
-    const imports = { env, wasi, wasi_snapshot_preview1: wasiPreview };
-    for (const { module, name, kind } of w.Module.imports(executable)) {
-      if (kind === 'function') {
-        const f = createRouter(module, name);
-        if (module === 'env') {
-          env[name] = f;
-        } else if (module === 'wasi_snapshot_preview1') {
-          wasiPreview[name] = f;
-        } else if (module === 'wasi') {
-          wasi[name] = f;
+  function process(msg) {
+    switch (msg.type) {
+      case 'start': {
+        const { executable, memory, futex, options } = msg;
+        const imports = { 
+          env: { memory },
+          wasi: {},
+          wasi_snapshot_preview1: {},
+        };
+        const exit = () => { throw new Error('Exit') };
+        for (const { module, name, kind } of WA.Module.imports(executable)) {
+          const ns = imports[module];
+          if (kind === 'function' && ns) {
+            ns[name] = (name === 'proc_exit') ? exit : function(...args) {
+              Atomics.store(futex, 0, 0);
+              port.postMessage({ type: 'call', module, name, args });
+              Atomics.wait(futex, 0, 0);
+              if (Atomics.load(futex, 0) === 2) {
+                // was canceled in the middle of a call; jump back jump back into Zig to execute 
+                // cleanup routines and TLS destructors then exit
+                instance.exports.wasi_thread_clean_deferred?.();
+                exit();
+              }
+              return Atomics.load(futex, 1);
+            };             
+          }
         }
-      }
+        if (options.tableInitial) {
+          imports.env.__indirect_function_table = new WA.Table({
+            initial: options.tableInitial,
+            element: 'anyfunc',
+          });
+        }
+        instance = new WA.Instance(executable, imports);
+      } break;
+      case 'run': {
+        // catch thread termination exception
+        try {
+          instance.exports.wasi_thread_start(msg.tid, msg.taddr);
+        } catch {
+        }
+        port.postMessage({ type: 'done' });
+      } break;
+      case 'clean': {
+        try {
+          instance.exports.wasi_thread_clean_async(msg.raddr);
+        } catch {
+        }
+        port.postMessage({ type: 'done' });
+      } break;
+      case 'end': {
+        port.close();
+      } break;
     }
-    const { tableInitial } = options;
-    if (tableInitial) {
-      env.__indirect_function_table = new w.Table({
-        initial: tableInitial,
-        element: 'anyfunc',
-      });
-    }
-    const { exports } = new w.Instance(executable, imports);
-    const { wasi_thread_start } = exports;
-    wasi_thread_start(tid, arg);
-    postMessage({ type: 'exit' });
-    exit();
-  }
-
-  function createRouter(module, name) {
-    const array = new Int32Array(new SharedArrayBuffer(8));
-    return function(...args) {
-      array[0] = 0;
-      postMessage({ type: 'call', module, name, args, array });
-      Atomics.wait(array, 0, 0);
-      return array[1];
-    };
   }
 }
 

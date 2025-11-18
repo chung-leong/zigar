@@ -1,5 +1,5 @@
 import { mixin } from '../environment.js';
-import { isPromise, remove } from '../utils.js';
+import { remove, isPromise } from '../utils.js';
 
 var workerSupport = mixin({
   init() {

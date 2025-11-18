@@ -9,7 +9,7 @@ pub const host = switch (builtin.target.cpu.arch.isWasm()) {
 };
 
 pub const std_options: std.Options = if (@hasDecl(module, "std_options")) module.std_options else .{};
-pub const debug: std.Options = if (@hasDecl(module, "debug")) module.debug else .{};
+pub const debug: type = if (@hasDecl(module, "debug")) module.debug else struct {};
 
 pub const panic = switch (@hasDecl(module, "panic") and @TypeOf(module.panic) == type) {
     true => module.panic,
