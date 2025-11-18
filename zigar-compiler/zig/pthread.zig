@@ -11,8 +11,10 @@ const Pthread = struct {
     arg: ?*anyopaque = undefined,
     return_value: ?*anyopaque = null,
     state: std.atomic.Value(State) = .init(.joinable),
-    cancel_state: u8 = PTHREAD_CANCEL_ENABLE,
-    cancel_type: u8 = PTHREAD_CANCEL_DEFERRED,
+    cancel_state: std.atomic.Value(u8) = .init(PTHREAD_CANCEL_ENABLE),
+    cancel_type: std.atomic.Value(u8) = .init(PTHREAD_CANCEL_DEFERRED),
+    cancel_progress: std.atomic.Value(CancelProgress) = .init(.none),
+    cancelled: bool = false,
     attributes: Attributes = .{},
 
     const Attributes = struct {
@@ -24,7 +26,8 @@ const Pthread = struct {
         schedule_scope: u8 = PTHREAD_SCOPE_SYSTEM,
         schedule_parameters: struct { priority: u8 = 50 } = .{},
     };
-    const State = enum(u8) { joinable, joined, detached, unknown, canceled };
+    const State = enum(u8) { joinable, joined, detached };
+    const CancelProgress = enum(u8) { none, canceling, canceled };
 
     const first_id = 1;
     const def_stack_size = 2 * 1024 * 1024;
@@ -49,9 +52,22 @@ const Pthread = struct {
         return current orelse create: {
             // current thread is not created through pthread
             const self = alloc() catch @panic("Out of memory");
-            self.id = if (std.Thread.getCurrentId() == 0) first_id else allocId();
-            self.wasi_thread_id = std.Thread.getCurrentId();
-            self.state.store(.unknown, .unordered);
+            const wasi_thread_id = std.Thread.getCurrentId();
+            self.wasi_thread_id = wasi_thread_id;
+            const WasiThread = @TypeOf(self.thread.impl.thread.*);
+            if (wasi_thread_id == 0) {
+                // main thread
+                self.id = first_id;
+                self.state = .init(.detached);
+            } else {
+                // get the address of the thread from JavaScript
+                const address = @"thread-address"(wasi_thread_id);
+                const wasi_thread: *WasiThread = @ptrFromInt(address);
+                const state = wasi_thread.state.load(.unordered);
+                self.id = allocId();
+                self.thread.impl.thread = wasi_thread;
+                self.state = .init(if (state == .detached) .detached else .joinable);
+            }
             break :create self;
         };
     }
@@ -68,36 +84,38 @@ const Pthread = struct {
         list.release(self);
     }
 
-    fn cancel(self: *@This()) void {
-        if (self.state.load(.unordered) != .canceled) {
-            self.state.store(.canceled, .unordered);
-            if (self.cancel_state == PTHREAD_CANCEL_ENABLE) {
-                if (self.cancel_type == PTHREAD_CANCEL_ASYNCHRONOUS) {
-                    // immediate termination is desired; the web worker handling this thread is
-                    // going to be killed and another one will take its place during thread clean-up
-                    const WasiThread = @TypeOf(self.thread.impl.thread.*);
-                    const memory = self.thread.impl.thread.memory;
-                    const Instance = struct {
-                        // copied from lib/std/Thread.zig
-                        thread: WasiThread,
-                        tls_offset: usize,
-                        stack_offset: usize,
-                        raw_ptr: usize,
-                        call_back: *const fn (usize) void,
-                    };
-                    const instance: *Instance = @ptrCast(@alignCast(memory.ptr));
-                    // make call_back in WasiThreadImpl.Instance point to the clean-up function
-                    instance.call_back = @ptrCast(&performCancelationCleanUp);
-                    // adjust stack_offset so that stuff stored on the stack doesn't get overwritten
-                    // 4K from the end should be enough
-                    instance.stack_offset = memory.len - 4096;
-                }
-                // cancelation is handled on the JavaScript side; depending on the value of cancel_type,
-                // the JS runtime can either immediately axe the worker handling the thread specified
-                // by id or wait until it makes a syscall or calls pthread_testcancel()
-                @"thread-cancel"(self.wasi_thread_id, self.cancel_type);
-            }
-        }
+    fn cancel(self: *@This()) !void {
+        const cancel_arg: ?*anyopaque = switch (self.cancel_type.load(.unordered)) {
+            PTHREAD_CANCEL_ASYNCHRONOUS => init: {
+                // immediate termination is desired; the web worker handling this thread is going
+                // to be killed and a replace worker will take its place during thread clean-up
+                // we need to provide the necessary information allowing this to happen
+                const wasi_thread = self.thread.impl.thread;
+                const WasiThread = @TypeOf(wasi_thread.*);
+                const Instance = struct {
+                    // struct from lib/std/Thread.zig
+                    thread: WasiThread,
+                    tls_offset: usize,
+                    stack_offset: usize,
+                    raw_ptr: usize,
+                    call_back: *const fn (usize) void,
+                    original_stack_pointer: [*]u8,
+                };
+                const instance: *Instance = @ptrCast(self.thread.impl.thread);
+                const thread_remnant = try wasm_allocator.create(ThreadRemnant);
+                thread_remnant.* = .{
+                    // 4K from the end should provide enough room running clean-up functions
+                    .stack_pointer = wasi_thread.memory.ptr + wasi_thread.memory.len - 4096,
+                    .tls_base = wasi_thread.memory.ptr + instance.tls_offset,
+                };
+                break :init thread_remnant;
+            },
+            else => null,
+        };
+        // cancellation is handled on the JavaScript side; depending on whether cancel_arg is null,
+        // the JS runtime can either immediately axe the worker handling the thread specified
+        // by id or wait until it makes a syscall or calls pthread_testcancel()
+        @"thread-cancel"(self.wasi_thread_id, cancel_arg);
     }
 
     fn match(self: *const @This(), id: c_ulong) bool {
@@ -110,7 +128,7 @@ const Pthread = struct {
         }
     }
 
-    fn performCancelationCleanUp() void {
+    fn performCancellationCleanUp() void {
         // this function runs in a new worker after the one handling the thread was killed
         // since the thread id is reused, we'd have the same TLS variable as before; getCurrent()
         // would still give us the right struct
@@ -120,12 +138,12 @@ const Pthread = struct {
             top = ptcb.next;
         }
         const self = getCurrent();
+        self.cancel_progress.store(.canceled, .unordered);
         self.performExitCleanup();
     }
 
     fn performExitCleanup(self: *@This()) void {
-        // remove thread from list
-        defer self.release();
+        self.return_value = PTHREAD_CANCELED;
         // call destructors inserted by pthread_key_create()
         _ = pthread_spin_lock(&key_list_spinlock);
         defer _ = pthread_spin_unlock(&key_list_spinlock);
@@ -141,8 +159,6 @@ const Pthread = struct {
             }
         }
         key_value_list.deinit(wasm_allocator);
-        // just exit when .thread isn't actually populated
-        if (self.state.load(.unordered) == .unknown) return;
         // termination code copied from WasiThreadImpl
         const wasi_thread = self.thread.impl.thread;
         switch (wasi_thread.state.swap(.completed, .seq_cst)) {
@@ -174,15 +190,52 @@ const Pthread = struct {
                 free(ptr, wasi_thread.memory, std.mem.Alignment.@"1", 0);
             },
         }
+        // remove from list if it's detached
+        if (self.state.load(.unordered) == .detached) {
+            self.release();
+        }
     }
 
-    export fn wasi_thread_clean() callconv(.c) void {
-        // this function is called directly from JavaScript when cancel_type is PTHREAD_CANCEL_DEFERRED
+    const ThreadRemnant = struct {
+        stack_pointer: [*]u8,
+        tls_base: [*]u8,
+    };
+
+    export fn wasi_thread_clean_async(_: *ThreadRemnant) callconv(.naked) void {
+        // this function is called from JavaScript when cancel_type is PTHREAD_CANCEL_ASYNCHRONOUS
+        // by a new worker taking over after the original worker has been killed; the pointer
+        // argument provide the necessary info for it to assume the identity of the original
+        asm volatile (
+            \\ local.get 0
+            \\ i32.load %[stack_pointer]
+            \\ global.set __stack_pointer
+            \\ local.get 0
+            \\ i32.load %[tls_base]
+            \\ global.set __tls_base
+            \\ local.get 0
+            \\ call wasi_thread_clean_async_cont
+            \\ return
+            :
+            : [stack_pointer] "X" (@offsetOf(ThreadRemnant, "stack_pointer")),
+              [tls_base] "X" (@offsetOf(ThreadRemnant, "tls_base")),
+        );
+        const cont = struct {
+            fn run(remnant: *ThreadRemnant) callconv(.c) void {
+                wasm_allocator.destroy(remnant);
+                performCancellationCleanUp();
+            }
+        };
+        @export(&cont.run, .{ .name = "wasi_thread_clean_async_cont", .visibility = .hidden });
+    }
+
+    export fn wasi_thread_clean_deferred() callconv(.c) void {
+        // this function is called from JavaScript when cancel_type is PTHREAD_CANCEL_DEFERRED
         // and a cancellation point has just been reached (i.e. a syscall happened)
-        performCancelationCleanUp();
+        performCancellationCleanUp();
     }
 
-    extern "wasi" fn @"thread-cancel"(id: u32, cancel_type: i32) void;
+    extern "wasi" fn @"thread-cancel"(id: u32, ptr: ?*anyopaque) void;
+    extern "wasi" fn @"thread-address"(id: u32) usize;
 };
 
 pub fn pthread_create(
@@ -241,6 +294,8 @@ pub fn pthread_join(
     pthread.setState(.joinable, .joined) catch return errno(.INVAL);
     pthread.thread.join();
     thread_return.* = pthread.return_value;
+    // release a second time to remove it from the list
+    pthread.release();
     return 0;
 }
 
@@ -503,10 +558,12 @@ pub fn pthread_setcancelstate(
     oldstate: [*c]c_int,
 ) callconv(.c) c_int {
     const pthread = Pthread.getCurrent();
-    oldstate.* = pthread.cancel_state;
-    pthread.cancel_state = @intCast(state);
+    if (oldstate) |ptr| ptr.* = pthread.cancel_state.load(.unordered);
+    pthread.cancel_state.store(@intCast(state), .unordered);
     if (state == PTHREAD_CANCEL_ENABLE) {
-        pthread_testcancel();
+        if (pthread.cancel_progress.load(.unordered) == .canceling) {
+            pthread.cancel() catch return errno(.NOMEM);
+        }
     }
     return 0;
 }
@@ -516,23 +573,29 @@ pub fn pthread_setcanceltype(
     oldtype: [*c]c_int,
 ) callconv(.c) c_int {
     const pthread = Pthread.getCurrent();
-    oldtype.* = pthread.cancel_type;
-    pthread.cancel_state = @intCast(cantype);
+    if (oldtype) |ptr| ptr.* = pthread.cancel_type.load(.unordered);
+    pthread.cancel_type.store(@intCast(cantype), .unordered);
     return 0;
 }
 
 pub fn pthread_cancel(
     th: pthread_t,
 ) callconv(.c) c_int {
+    // can't cancel the main thread
+    if (th == 1) return errno(.PERM);
     const pthread = Pthread.find(th) orelse return errno(.SRCH);
-    pthread.cancel();
+    if (pthread.cancel_progress.cmpxchgStrong(.none, .canceling, .monotonic, .monotonic) == null) {
+        if (pthread.cancel_state.load(.unordered) == PTHREAD_CANCEL_ENABLE) {
+            pthread.cancel() catch return errno(.NOMEM);
+        }
+    }
     return 0;
 }
 
 pub fn pthread_testcancel() callconv(.c) void {
     const pthread = Pthread.getCurrent();
-    if (pthread.state.load(.unordered) == .canceled) {
-        // sched_yield() is treated as a cancellation point
+    if (pthread.cancel_progress.load(.unordered) == .canceling) {
+        // sched_yield() acts as a cancellation point
         std.Thread.yield() catch {};
     }
 }
@@ -570,7 +633,8 @@ pub fn _pthread_cleanup_push(
 ) callconv(.c) void {
     ptcb.*.routine = @ptrCast(routine);
     ptcb.*.arg = arg;
-    PthreadCleanUpCallback.setTop(ptcb.*.next);
+    ptcb.*.next = null;
+    PthreadCleanUpCallback.setTop(ptcb);
 }
 
 const PthreadMutex = struct {
@@ -1596,6 +1660,7 @@ const PTHREAD_CANCEL_DISABLE = 1;
 const PTHREAD_CANCEL_MASKED = 2;
 const PTHREAD_CANCEL_DEFERRED = 0;
 const PTHREAD_CANCEL_ASYNCHRONOUS = 1;
+const PTHREAD_CANCELED: *anyopaque = @ptrFromInt(std.math.maxInt(usize));
 const SEM_FAILED: [*c]sem_t = @ptrFromInt(0);
 
 fn errno(e: std.posix.E) u16 {

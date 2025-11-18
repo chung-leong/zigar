@@ -18,6 +18,8 @@ var workerSupport = mixin({
         return this.spawnThread.bind(this);
       case 'thread-cancel':
         return this.cancelThread.bind(this);
+      case 'thread-address':
+        return this.getThreadAddress.bind(this);
     }
   },
   spawnThread(taddr) {
@@ -26,21 +28,24 @@ var workerSupport = mixin({
     worker.run(tid, taddr);
     return tid;
   },
-  cancelThread(tid, type) {
+  cancelThread(tid, raddr) {
     const worker = this.workers.find(w => w.tid === tid);
     if (worker) {
-      if (type === CancelType.Deferred) {
-        // defer termination until thread reaches a cancelation point
+      if (!raddr) {
+        // defer termination until thread reaches a cancellation point
         worker.canceled = true;
-      } else if (type === CancelType.Asynchronous) {
-        const { tid, taddr } = worker;
+      } else {
         worker.end(true);
         // create a replacement worker that'll perform the thread clean-up
-        const cleaner = this.obtainWorker();
-        cleaner.run(tid, taddr);
+        const replacement = this.obtainWorker();
+        replacement.clean(raddr);
       }
     }
-  },  
+  }, 
+  getThreadAddress(tid) {
+    const worker = this.workers.find(w => w.tid === tid);
+    return worker.taddr;
+  },
   obtainWorker() {
     // look for an idling worker
     let worker = this.workers.find(w => w.tid === 0);
@@ -61,7 +66,9 @@ var workerSupport = mixin({
                 finish(result);
               }
             } else {
-              // a deferred cancellation has occurred
+              // a deferred cancellation has occurred; set canceled to false so that debug print 
+              // works during the clean-up process
+              worker.canceled = false;
               worker.signal(2);
             }
           } break;
@@ -83,10 +90,10 @@ var workerSupport = mixin({
       const { executable, memory, options } = this;
       const futex = new Int32Array(new SharedArrayBuffer(8));      
       worker.postMessage({ type: 'start', executable, memory, options, futex });
-      worker.signal = (respose, result) => {
+      worker.signal = (response, result) => {
         if (futex[0] === 0) {
           futex[1] = result|0;
-          futex[0] = respose;
+          futex[0] = response;
           Atomics.notify(futex, 0, 1);
         }
       };
@@ -95,6 +102,10 @@ var workerSupport = mixin({
         worker.taddr = taddr;
         worker.canceled = false;
         worker.postMessage({ type: 'run', tid, taddr });
+      };
+      worker.clean = (raddr) => {
+        worker.tid = -1;
+        worker.postMessage({ type: 'clean', raddr });
       };
       worker.end = (force = false) => {
         if (force) {
@@ -157,7 +168,7 @@ function workerMain() {
               if (futex[0] === 2) {
                 // was canceled in the middle of a call; jump back jump back into Zig to execute 
                 // cleanup routines and TLS destructors then exit
-                instance.exports.wasi_thread_clean?.();
+                instance.exports.wasi_thread_clean_deferred?.();
                 exit();
               }
               return futex[1];
@@ -181,15 +192,16 @@ function workerMain() {
         }
         port.postMessage({ type: 'done' });
       } break;
+      case 'clean': {
+        const { raddr } = msg;
+        instance.exports.wasi_thread_clean_async(raddr);
+        port.postMessage({ type: 'done' });
+      } break;
       case 'end': {
         port.close();
       } break;
     }
   }
 }
-const CancelType = {
-  Deferred: 0,
-  Asynchronous: 1,
-};
 
 export { workerSupport as default };

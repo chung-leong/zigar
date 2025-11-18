@@ -901,6 +901,62 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    skip.unless(target === 'wasm32').
+    it('should perform deferred cancellation on thread mechanism thread using pthread', async function() {
+      const { 
+        spawn,
+        cancel,
+        startup,
+        shutdown,
+      } = await importTest('perform-deferred-cancellation-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+          cancel();
+          await delay(400);
+        });
+        expect(lines).to.eql([ 
+          'Clean-up function called: 12345', 
+          'Destructor called: Hello world' 
+        ]);
+     } finally {
+        shutdown();
+      }
+    })
+    skip.unless(target === 'wasm32').
+    it('should perform asynchronous cancellation on thread using pthread', async function() {
+      const { 
+        spawn,
+        cancel,
+        getCount,
+        startup,
+        shutdown,
+      } = await importTest('perform-async-cancellation-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
+      startup();
+      try {
+        const lines = await capture(async () => {
+          spawn();
+          await delay(250);
+          cancel();
+          await delay(500);
+        });
+        expect(lines).to.eql([
+          'Original cancellation type: 0',
+          'Clean-up function called: 12345', 
+          'Destructor called: Hello world' 
+        ]);
+        // double-check that the thread has stopped
+        const count1 = getCount();
+        await delay(50);
+        const count2 = getCount();
+        expect(count1).to.equal(count2);
+     } finally {
+        shutdown();
+      }
+    })
+
   })
 }
 
