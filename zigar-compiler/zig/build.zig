@@ -78,7 +78,7 @@ pub fn build(b: *std.Build) !void {
         lib.stack_size = cfg.stack_size;
         lib.max_memory = cfg.max_memory;
     } else if (cfg.use_redirection) {
-        lib.addCSourceFile(.{ .file = .{ .cwd_relative = cfg.zigar_src_path ++ "hooks.c" } });
+        lib.addCSourceFile(.{ .file = .{ .cwd_relative = cfg.zigar_src_path ++ "host/napi/hooks.c" } });
     }
     const options = b.addOptions();
     options.addOption(comptime_int, "eval_branch_quota", cfg.eval_branch_quota);

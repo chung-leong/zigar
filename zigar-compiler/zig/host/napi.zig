@@ -5,8 +5,6 @@ const builtin = @import("builtin");
 
 const exporter = @import("../exporter.zig");
 const Value = exporter.Value;
-const hooks = @import("../hooks.zig");
-const interface = @import("../interface.zig");
 const js_fn = @import("../thunk/js-fn.zig");
 const zig_fn = @import("../thunk/zig-fn.zig");
 pub const AbortSignal = @import("../type/abort-signal.zig").AbortSignal;
@@ -18,6 +16,8 @@ pub const PromiseOf = @import("../type/promise.zig").PromiseOf;
 pub const PromiseArgOf = @import("../type/promise.zig").PromiseArgOf;
 const util = @import("../type/util.zig");
 const fn_transform = @import("../zigft/fn-transform.zig");
+const hooks = @import("napi/hooks.zig");
+const interface = @import("napi/interface.zig");
 
 const Module = interface.Module(Value);
 
