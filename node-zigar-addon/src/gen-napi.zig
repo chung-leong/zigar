@@ -8,7 +8,7 @@ pub fn main() !void {
     // create instance of generator
     var gpa: std.heap.DebugAllocator(.{}) = .init;
     var generator: *api_translator.CodeGenerator(.{
-        .include_paths = &.{"../../node_modules/node-api-headers/include"},
+        .include_paths = &.{"../node_modules/node-api-headers/include"},
         .header_paths = &.{"node_api.h"},
         .zigft_path = "zigft/",
         .c_error_type = "napi_status",

@@ -375,7 +375,7 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                         if (bind_ns.func_ptr) |ptr| {
                             break :bind ptr;
                         } else {
-                            const ptr: *const OldFn = @alignCast(@ptrCast(get(fn_name)));
+                            const ptr: *const OldFn = @ptrCast(@alignCast(get(fn_name)));
                             bind_ns.func_ptr = ptr;
                             break :bind ptr;
                         }
@@ -2506,12 +2506,14 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                 // builtin is probably needed when late binding is used
                 try self.printTxt("const builtin = @import(\"builtin\");\n");
             }
+            try self.printTxt("\n");
             try self.printFmt("const api_translator = @import(\"{s}api-translator.zig\");\n", .{
                 options.zigft_path,
             });
             if (self.need_inout_import) {
                 try self.printTxt("const inout = api_translator.inout;\n");
             }
+            try self.printTxt("\n");
             try self.printFmt("const {s} = @cImport({{\n", .{options.c_import});
             for (options.header_paths) |path| {
                 try self.printFmt("@cInclude(\"{s}\");\n", .{path});
@@ -2821,10 +2823,12 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                 }
             }
             if (self.indent_level > 0 and !self.indented) {
-                for (0..self.indent_level) |_| {
-                    try self.write("    ", .{});
+                if (!std.mem.eql(u8, fmt, "\n")) {
+                    for (0..self.indent_level) |_| {
+                        try self.write("    ", .{});
+                    }
+                    self.indented = true;
                 }
-                self.indented = true;
             }
             try self.write(fmt, args);
             if (std.mem.endsWith(u8, fmt, "{\n")) {
