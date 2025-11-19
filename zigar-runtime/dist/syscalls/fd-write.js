@@ -31,7 +31,20 @@ var fdWrite = mixin({
       const chunk = new Uint8Array(buffer);
       const method = (flags & PosixDescriptorFlag.nonblock) ? writer.writenb : writer.write;
       return method.call(writer, chunk);
-    }, () => this.copyUint32(writtenAddress, total));
+    }, () => { 
+      if (writtenAddress) {
+        this.copyUint32(writtenAddress, total);
+      }
+    });
+  },
+  fdWriteStderr(chunk, canWait) {
+    catchPosixError(true, PosixError.EBADF, () => {
+      const[ writer, rights, flags ] = this.getStream(2);
+      checkAccessRight(rights, PosixDescriptorRight.fd_write);
+      const method = (flags & PosixDescriptorFlag.nonblock) ? writer.writenb : writer.write;
+      return method.call(writer, chunk);
+    });
+    return 0;
   },
 });
 

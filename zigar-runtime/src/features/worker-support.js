@@ -162,6 +162,7 @@ function getWorkerURL() {
 
 /* c8 ignore start */
 function workerMain() {
+  // this code must be entirely self-contained; don't call any imported functions
   const WA = WebAssembly;
   let port, instance;
 
@@ -201,7 +202,43 @@ function workerMain() {
                 exit();
               }
               return Atomics.load(futex, 1);
-            };             
+            };
+            if (name === 'fd_write') {
+              const write = ns[name];
+              ns[name] = function(fd, iovsAddress, iovsCount, writtenAddress) {                
+                if (fd === 2) {
+                  // get the total length first
+                  const dv = new DataView(memory.buffer);
+                  let total = 0;
+                  const ops = [];
+                  for (let i = 0, offset = 0; i < iovsCount; i++, offset += 8) {
+                    const ptr = dv.getUint32(iovsAddress + offset, true);
+                    const len = dv.getUint32(iovsAddress + offset + 4, true);
+                    ops.push({ ptr, len });
+                    total += len;
+                  }
+                  const array = new Uint8Array(total);
+                  // copy vectors into new array
+                  let pos = 0;
+                  for (const { ptr, len } of ops) {
+                    const vector = new Uint8Array(dv.buffer, ptr, len);
+                    array.set(vector, pos);
+                    pos += len;
+                  }
+                  port.postMessage({ 
+                    type: 'call', 
+                    module, 
+                    name: `${name}_stderr`, 
+                    args: [ array ] 
+                  }, [ array.buffer ]);
+                  // write the length, assuming the operation will succeed in the main thread
+                  dv.setUint32(writtenAddress, total, true);
+                  return 0;
+                } else {
+                  return write(fd, iovsAddress, iovsCount, writtenAddress);
+                }
+              };
+            }
           }
         }
         if (options.tableInitial) {

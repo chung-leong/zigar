@@ -218,6 +218,10 @@ pub const Syscall = extern struct {
             count: u32,
             written: u32 = undefined,
         },
+        write_stderr: extern struct {
+            bytes: [*]const u8,
+            len: u32,
+        },
     },
     futex_handle: usize = 0,
 
@@ -255,6 +259,7 @@ pub const Syscall = extern struct {
         utimes,
         write,
         writev,
+        write_stderr,
     };
     pub const Mask = packed struct {
         mkdir: bool = false,

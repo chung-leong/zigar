@@ -4737,6 +4737,9 @@ var moduleLoading = mixin({
             env[name] = functions[name] ?? empty;
           } else if (module === 'wasi_snapshot_preview1') {
             wasiPreview[name] = this.getWASIHandler(name);
+            if (name === 'fd_write') {
+              wasiPreview[`${name}_stderr`] = this.getWASIHandler(`${name}_stderr`);
+            }
           } else if (module === 'wasi') {
             wasi[name] = this.getThreadHandler?.(name) ?? empty;
           }
@@ -6503,7 +6506,20 @@ var fdWrite = mixin({
       const chunk = new Uint8Array(buffer);
       const method = (flags & PosixDescriptorFlag.nonblock) ? writer.writenb : writer.write;
       return method.call(writer, chunk);
-    }, () => this.copyUint32(writtenAddress, total));
+    }, () => { 
+      if (writtenAddress) {
+        this.copyUint32(writtenAddress, total);
+      }
+    });
+  },
+  fdWriteStderr(chunk, canWait) {
+    catchPosixError(true, PosixError.EBADF, () => {
+      const[ writer, rights, flags ] = this.getStream(2);
+      checkAccessRight(rights, PosixDescriptorRight.fd_write);
+      const method = (flags & PosixDescriptorFlag.nonblock) ? writer.writenb : writer.write;
+      return method.call(writer, chunk);
+    });
+    return 0;
   },
 });
 
@@ -6929,6 +6945,7 @@ function getWorkerURL() {
 }
 
 function workerMain() {
+  // this code must be entirely self-contained; don't call any imported functions
   const WA = WebAssembly;
   let port, instance;
 
@@ -6958,11 +6975,47 @@ function workerMain() {
               if (Atomics.load(futex, 0) === 2) {
                 // was canceled in the middle of a call; jump back jump back into Zig to execute 
                 // cleanup routines and TLS destructors then exit
-                instance.exports.wasi_thread_clean_deferred?.();
+                instance.exports.wasi_thread_clean(0);
                 exit();
               }
               return Atomics.load(futex, 1);
-            };             
+            };
+            if (name === 'fd_write') {
+              const write = ns[name];
+              ns[name] = function(fd, iovsAddress, iovsCount, writtenAddress) {                
+                if (fd === 2) {
+                  // get the total length first
+                  const dv = new DataView(memory.buffer);
+                  let total = 0;
+                  const ops = [];
+                  for (let i = 0, offset = 0; i < iovsCount; i++, offset += 8) {
+                    const ptr = dv.getUint32(iovsAddress + offset, true);
+                    const len = dv.getUint32(iovsAddress + offset + 4, true);
+                    ops.push({ ptr, len });
+                    total += len;
+                  }
+                  const array = new Uint8Array(total);
+                  // copy vectors into new array
+                  let pos = 0;
+                  for (const { ptr, len } of ops) {
+                    const vector = new Uint8Array(dv.buffer, ptr, len);
+                    array.set(vector, pos);
+                    pos += len;
+                  }
+                  port.postMessage({ 
+                    type: 'call', 
+                    module, 
+                    name: `${name}_stderr`, 
+                    args: [ array ] 
+                  }, [ array.buffer ]);
+                  // write the length, assuming the operation will succeed in the main thread
+                  dv.setUint32(writtenAddress, total, true);
+                  return 0;
+                } else {
+                  return write(fd, iovsAddress, iovsCount, writtenAddress);
+                }
+              };
+            }
           }
         }
         if (options.tableInitial) {
@@ -6983,7 +7036,7 @@ function workerMain() {
       } break;
       case 'clean': {
         try {
-          instance.exports.wasi_thread_clean_async(msg.raddr);
+          instance.exports.wasi_thread_clean(msg.raddr);
         } catch {
         }
         port.postMessage({ type: 'done' });
