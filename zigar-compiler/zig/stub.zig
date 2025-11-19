@@ -5,7 +5,7 @@ const module = @import("module");
 
 pub const host = switch (builtin.target.cpu.arch.isWasm()) {
     true => @import("host/wasm.zig"),
-    false => @import("host/napi.zig"),
+    false => @import("host/native.zig"),
 };
 
 pub const std_options: std.Options = if (@hasDecl(module, "std_options")) module.std_options else .{};

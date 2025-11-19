@@ -37,7 +37,7 @@ export default [
       }),
     ],
     output: {
-      file: 'src/addon.64b.js',
+      file: 'src/dist/addon.64b.js',
       format: 'iife',
       name: 'variable',
       plugins: [
@@ -65,7 +65,7 @@ export default [
       }),
     ],
     output: {
-      file: 'src/addon.32b.js',
+      file: 'src/dist/addon.32b.js',
       format: 'iife',
       name: 'variable',
       plugins: [

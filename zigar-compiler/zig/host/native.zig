@@ -16,8 +16,8 @@ pub const PromiseOf = @import("../type/promise.zig").PromiseOf;
 pub const PromiseArgOf = @import("../type/promise.zig").PromiseArgOf;
 const util = @import("../type/util.zig");
 const fn_transform = @import("../zigft/fn-transform.zig");
-const hooks = @import("napi/hooks.zig");
-const interface = @import("napi/interface.zig");
+const hooks = @import("native/hooks.zig");
+const interface = @import("native/interface.zig");
 
 const Module = interface.Module(Value);
 
