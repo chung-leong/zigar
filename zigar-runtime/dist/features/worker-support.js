@@ -163,7 +163,7 @@ function workerMain() {
               if (Atomics.load(futex, 0) === 2) {
                 // was canceled in the middle of a call; jump back jump back into Zig to execute 
                 // cleanup routines and TLS destructors then exit
-                instance.exports.wasi_thread_clean_deferred?.();
+                instance.exports.wasi_thread_clean(0);
                 exit();
               }
               return Atomics.load(futex, 1);
@@ -188,7 +188,7 @@ function workerMain() {
       } break;
       case 'clean': {
         try {
-          instance.exports.wasi_thread_clean_async(msg.raddr);
+          instance.exports.wasi_thread_clean(msg.raddr);
         } catch {
         }
         port.postMessage({ type: 'done' });

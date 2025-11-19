@@ -103,13 +103,15 @@ const Pthread = struct {
                     original_stack_pointer: [*]u8,
                 };
                 const instance: *Instance = @ptrCast(self.thread.impl.thread);
-                const thread_remnant = try wasm_allocator.create(ThreadRemnant);
-                thread_remnant.* = .{
-                    // 4K from the end should provide enough room running clean-up functions
-                    .stack_pointer = wasi_thread.memory.ptr + wasi_thread.memory.len - 4096,
+                const bytes = @sizeOf(AsyncCancellation) + 4096; // 4K should be more than enough
+                const memory_ptr = wasm_allocator.rawAlloc(bytes, .@"16", 0) orelse return error.OutOfMemory;
+                const ac: *AsyncCancellation = @ptrCast(@alignCast(memory_ptr));
+                ac.* = .{
+                    .memory = memory_ptr[0..bytes],
+                    .stack_pointer = memory_ptr + std.mem.alignForward(usize, @sizeOf(AsyncCancellation), 16),
                     .tls_base = wasi_thread.memory.ptr + instance.tls_offset,
                 };
-                break :init thread_remnant;
+                break :init ac;
             },
             else => null,
         };
@@ -197,45 +199,60 @@ const Pthread = struct {
         }
     }
 
-    const ThreadRemnant = struct {
+    const AsyncCancellation = struct {
+        memory: []u8,
         stack_pointer: [*]u8,
         tls_base: [*]u8,
     };
 
-    export fn wasi_thread_clean_async(_: *ThreadRemnant) callconv(.naked) void {
-        // this function is called from JavaScript when cancel_type is PTHREAD_CANCEL_ASYNCHRONOUS
-        // by a new worker taking over after the original worker has been killed; the pointer
-        // argument provide the necessary info for it to assume the identity of the original
+    /// This function is called after a thread has been canceled; if it was a deferred cancelation,
+    /// (i.e. the worker interrupted itself voluntarily), the argument would be null; if it was an
+    /// async cancelation, the worker has unceremoniously gotten the axe; the pointer provides the
+    /// for necessary information for the replacement worker to take on the identity of its
+    /// ill-fated comrade and clean up after it
+    export fn wasi_thread_clean(_: ?*AsyncCancellation) callconv(.naked) void {
         const clothed = struct {
-            fn run(remnant: *ThreadRemnant) callconv(.c) void {
-                wasm_allocator.destroy(remnant);
+            // cancel_type is PTHREAD_CANCEL_ASYNCHRONOUS and a new worker has just taken over;
+            // our assembly code has recreated the environment of the thread by this point; we
+            // just need to perform the clean-up then free the memory allocated for the temporary
+            // stack and the AsyncCancellation struct itself
+            fn runAsync(ac: *AsyncCancellation) callconv(.c) void {
+                // use raw free to avoid modification of stack memory
+                defer wasm_allocator.rawFree(ac.memory, .@"16", 0);
+                performCancellationCleanUp();
+            }
+
+            // cancel_type is PTHREAD_CANCEL_DEFERRED and a cancellation point has just been
+            // reached (i.e. a syscall happened); perform clean-up within the original thread
+            // using the thread's stack
+            fn runDeferred() callconv(.c) void {
                 performCancellationCleanUp();
             }
         };
         asm volatile (
             \\ local.get 0
-            \\ i32.load %[stack_pointer]
-            \\ global.set __stack_pointer
-            \\ local.get 0
-            \\ i32.load %[tls_base]
-            \\ global.set __tls_base
-            \\ local.get 0
-            \\ call %[cont]
+            \\ if
+            \\   local.get 0
+            \\   i32.load %[stack_pointer]
+            \\   global.set __stack_pointer
+            \\   local.get 0
+            \\   i32.load %[tls_base]
+            \\   global.set __tls_base
+            \\   local.get 0
+            \\   call %[run_async]
+            \\ else
+            \\   call %[run_deferred]
+            \\ end_if
             \\ return
             :
-            : [stack_pointer] "X" (@offsetOf(ThreadRemnant, "stack_pointer")),
-              [tls_base] "X" (@offsetOf(ThreadRemnant, "tls_base")),
-              [cont] "X" (&clothed.run),
+            : [stack_pointer] "X" (@offsetOf(AsyncCancellation, "stack_pointer")),
+              [tls_base] "X" (@offsetOf(AsyncCancellation, "tls_base")),
+              [run_async] "X" (&clothed.runAsync),
+              [run_deferred] "X" (&clothed.runDeferred),
         );
     }
 
-    export fn wasi_thread_clean_deferred() callconv(.c) void {
-        // this function is called from JavaScript when cancel_type is PTHREAD_CANCEL_DEFERRED
-        // and a cancellation point has just been reached (i.e. a syscall happened)
-        performCancellationCleanUp();
-    }
-
-    extern "wasi" fn @"thread-cancel"(id: u32, ptr: ?*anyopaque) void;
+    extern "wasi" fn @"thread-cancel"(id: u32, async_cancel: ?*anyopaque) void;
     extern "wasi" fn @"thread-address"(id: u32) usize;
 };
 
