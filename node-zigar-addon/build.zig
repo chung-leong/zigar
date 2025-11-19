@@ -1,6 +1,5 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const builtin = @import("builtin");
 
 pub fn build(b: *std.Build) !void {
     if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 15) {

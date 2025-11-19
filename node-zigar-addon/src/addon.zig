@@ -3,15 +3,15 @@ const c_allocator = std.heap.c_allocator;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
-const hooks = @import("extra/hooks.zig");
-const interface = @import("extra/interface.zig");
-const napi = @import("extra/napi.zig");
+const hooks = @import("module/native/hooks.zig");
+const interface = @import("module/native/interface.zig");
+const napi = @import("napi.zig");
 const Env = napi.Env;
 const Value = napi.Value;
 const Ref = napi.Ref;
 const ThreadsafeFunction = napi.ThreadsafeFunction;
-const fn_transform = @import("extra/zigft/fn-transform.zig");
 const redirect = @import("redirect.zig");
+const fn_transform = @import("zigft/fn-transform.zig");
 
 comptime {
     napi.createAddon(ModuleHost.attachExports);
@@ -191,8 +191,8 @@ const ModuleHost = struct {
 
     fn compileJavaScript(env: Env) !Value {
         const js_file_name = switch (@bitSizeOf(usize)) {
-            64 => "addon.64b.js.gz",
-            32 => "addon.32b.js.gz",
+            64 => "dist/addon.64b.js.gz",
+            32 => "dist/addon.32b.js.gz",
             else => unreachable,
         };
         // decompress JS

@@ -5,7 +5,7 @@ const pollfd = std.c.pollfd;
 const nfds_t = std.c.nfds_t;
 const builtin = @import("builtin");
 
-const fn_transform = @import("zigft/fn-transform.zig");
+const fn_transform = @import("../../zigft/fn-transform.zig");
 
 const dirent_h = @cImport({
     @cInclude("dirent.h");
