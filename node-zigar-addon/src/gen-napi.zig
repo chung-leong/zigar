@@ -8,7 +8,7 @@ pub fn main() !void {
     // create instance of generator
     var gpa: std.heap.DebugAllocator(.{}) = .init;
     var generator: *api_translator.CodeGenerator(.{
-        .include_paths = &.{"../../node_modules/node-api-headers/include"},
+        .include_paths = &.{"../node_modules/node-api-headers/include"},
         .header_paths = &.{"node_api.h"},
         .zigft_path = "zigft/",
         .c_error_type = "napi_status",
@@ -42,14 +42,18 @@ pub fn main() !void {
     defer output_file.close();
     var custom_file = try std.fs.openFileAbsolute(custom_path, .{});
     defer custom_file.close();
-    try generator.print(output_file.writer());
-    _ = try output_file.write("\n");
+    var write_buffer: [4096]u8 = undefined;
+    var file_writer = output_file.writer(&write_buffer);
+    const writer = &file_writer.interface;
+    try generator.print(writer);
+    _ = try writer.print("\n", .{});
     while (true) {
-        var buffer: [1024]u8 = undefined;
-        const count = try custom_file.read(&buffer);
+        var read_buffer: [1024]u8 = undefined;
+        const count = try custom_file.read(&read_buffer);
         if (count == 0) break;
-        _ = try output_file.write(buffer[0..count]);
+        _ = try writer.write(read_buffer[0..count]);
     }
+    try writer.flush();
 }
 
 const prefixes = .{
