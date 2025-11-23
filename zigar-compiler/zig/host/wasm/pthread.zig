@@ -3,7 +3,29 @@ const wasm_allocator = std.heap.wasm_allocator;
 
 const LinkedList = @import("../../type/linked-list.zig").LinkedList;
 
+fn RefCount(comptime T: type) type {
+    return struct {
+        count: std.atomic.Value(usize) = .init(1),
+
+        pub fn inc(self: *@This()) void {
+            _ = self.count.fetchAdd(1, .monotonic);
+        }
+
+        pub fn dec(self: *@This()) void {
+            const prev_count = self.count.fetchSub(1, .monotonic);
+            if (prev_count == 1) {
+                const parent: *T = @fieldParentPtr("ref", self);
+                if (@hasDecl(T, "deinit")) {
+                    parent.deinit();
+                }
+                wasm_allocator.destroy(parent);
+            }
+        }
+    };
+}
+
 const Pthread = struct {
+    ref: RefCount(@This()) = .{},
     id: pthread_t = undefined,
     wasi_thread_id: u32 = undefined,
     thread: std.Thread = undefined,
@@ -32,16 +54,16 @@ const Pthread = struct {
     const first_id = 1;
     const def_stack_size = 2 * 1024 * 1024;
 
-    var list: LinkedList(@This()) = .init(wasm_allocator);
+    var list: LinkedList(*@This()) = .init(wasm_allocator);
     var next_id: std.atomic.Value(pthread_t) = .init(first_id + 1);
 
     threadlocal var current: ?*@This() = null;
 
-    fn alloc() !*@This() {
-        return try list.push(.{});
+    pub fn deinit(self: *@This()) void {
+        _ = list.remove(.eql, self);
     }
 
-    fn allocId() pthread_t {
+    fn generateId() pthread_t {
         while (true) {
             const id = next_id.fetchAdd(1, .acq_rel);
             if (id > first_id) return id;
@@ -51,7 +73,8 @@ const Pthread = struct {
     fn getCurrent() *@This() {
         return current orelse create: {
             // current thread is not created through pthread
-            const self = alloc() catch @panic("Out of memory");
+            const self = wasm_allocator.create(@This()) catch @panic("Out of memory");
+            self.* = .{};
             const wasi_thread_id = std.Thread.getCurrentId();
             self.wasi_thread_id = wasi_thread_id;
             const WasiThread = @TypeOf(self.thread.impl.thread.*);
@@ -64,25 +87,18 @@ const Pthread = struct {
                 const address = @"thread-address"(wasi_thread_id);
                 const wasi_thread: *WasiThread = @ptrFromInt(address);
                 const state = wasi_thread.state.load(.unordered);
-                self.id = allocId();
+                self.id = generateId();
                 self.thread.impl.thread = wasi_thread;
                 self.state = .init(if (state == .detached) .detached else .joinable);
             }
             current = self;
+            list.push(self) catch @panic("Out of memory");
             break :create self;
         };
     }
 
     fn find(id: pthread_t) ?*@This() {
         return list.find(match, id);
-    }
-
-    fn addRef(self: *@This()) void {
-        list.addRef(self);
-    }
-
-    fn release(self: *@This()) void {
-        list.release(self);
     }
 
     fn cancel(self: *@This()) !void {
@@ -195,7 +211,7 @@ const Pthread = struct {
         }
         // remove from list if it's detached
         if (self.state.load(.unordered) == .detached) {
-            self.release();
+            self.ref.dec();
         }
     }
 
@@ -266,12 +282,15 @@ pub fn pthread_create(
     const pthread = if (pthread_attrs) |pa| get: {
         const pt: *Pthread = @alignCast(@fieldParentPtr("attributes", pa));
         // increase ref count since we're now using the Pthread struct itself
-        pt.addRef();
+        pt.ref.inc();
         break :get pt;
-    } else Pthread.alloc() catch return errno(.NOMEM);
-    errdefer pthread.release();
+    } else alloc: {
+        const p = wasm_allocator.create(Pthread) catch return errno(.NOMEM);
+        p.* = .{};
+        break :alloc p;
+    };
     const detach = if (pthread_attrs) |pa| pa.detached == PTHREAD_CREATE_DETACHED else false;
-    pthread.id = Pthread.allocId();
+    pthread.id = Pthread.generateId();
     pthread.start_routine = start_routine.?;
     pthread.arg = arg;
     pthread.state = .init(if (detach) .detached else .joinable);
@@ -279,9 +298,16 @@ pub fn pthread_create(
     pthread.thread = std.Thread.spawn(.{
         .allocator = wasm_allocator,
         .stack_size = if (pthread_attrs) |pa| pa.stack_size else Pthread.def_stack_size,
-    }, run_pthread, .{pthread}) catch return errno(.INVAL);
+    }, run_pthread, .{pthread}) catch {
+        pthread.ref.dec();
+        return errno(.INVAL);
+    };
     if (detach) pthread.thread.detach();
     newthread.* = pthread.id;
+    Pthread.list.push(pthread) catch {
+        pthread.ref.dec();
+        return errno(.NOMEM);
+    };
     return 0;
 }
 
@@ -308,12 +334,12 @@ pub fn pthread_join(
     thread_return: [*c]?*anyopaque,
 ) callconv(.c) c_int {
     const pthread = Pthread.find(th) orelse return errno(.INVAL);
-    defer pthread.release();
+    defer pthread.ref.dec();
     pthread.setState(.joinable, .joined) catch return errno(.INVAL);
     pthread.thread.join();
     thread_return.* = pthread.return_value;
     // release a second time to remove it from the list
-    pthread.release();
+    pthread.ref.dec();
     return 0;
 }
 
@@ -321,7 +347,7 @@ pub fn pthread_detach(
     th: pthread_t,
 ) callconv(.c) c_int {
     const pthread = Pthread.find(th) orelse return errno(.INVAL);
-    defer pthread.release();
+    defer pthread.ref.dec();
     pthread.setState(.joinable, .detached) catch return errno(.INVAL);
     pthread.thread.detach();
     return 0;
@@ -342,7 +368,8 @@ pub fn pthread_equal(
 pub fn pthread_attr_init(
     attr: [*c]pthread_attr_t,
 ) callconv(.c) c_int {
-    const pthread = Pthread.alloc() catch return errno(.NOMEM);
+    const pthread = wasm_allocator.create(Pthread) catch return errno(.NOMEM);
+    pthread.* = .{};
     attr.* = &pthread.attributes;
     return 0;
 }
@@ -352,7 +379,7 @@ pub fn pthread_attr_destroy(
 ) callconv(.c) c_int {
     const pthread_attrs: *Pthread.Attributes = attr.*;
     const pthread: *Pthread = @alignCast(@fieldParentPtr("attributes", pthread_attrs));
-    pthread.release();
+    pthread.ref.dec();
     return 0;
 }
 
@@ -656,9 +683,9 @@ pub fn _pthread_cleanup_push(
 }
 
 const PthreadMutex = struct {
+    ref: RefCount(@This()) = .{},
     mutex: std.Thread.Mutex = .{},
     lock_count: usize = 0,
-    ref_count: std.atomic.Value(usize) = .init(1),
     thread_id: std.atomic.Value(pthread_t) = .init(0),
     wait_futex: std.atomic.Value(u32) = .init(0),
     attributes: Attributes = .{},
@@ -681,14 +708,6 @@ const PthreadMutex = struct {
         };
     }
 
-    fn addRef(self: *@This()) void {
-        _ = self.ref_count.fetchAdd(1, .monotonic);
-    }
-
-    fn release(self: *@This()) void {
-        if (self.ref_count.fetchSub(1, .monotonic) == 1) wasm_allocator.destroy(self);
-    }
-
     fn wait(self: *@This(), duration: u64) void {
         self.wait_futex.store(0, .unordered);
         std.Thread.Futex.timedWait(&self.wait_futex, 0, duration) catch {};
@@ -709,7 +728,7 @@ pub fn pthread_mutex_init(
     const pthread_mutex_attrs: ?*const PthreadMutex.Attributes = if (mutexattr) |ptr| @ptrCast(ptr.*) else null;
     const pthread_mutex: *PthreadMutex = if (pthread_mutex_attrs) |pma| get: {
         const pm: *PthreadMutex = @alignCast(@fieldParentPtr("attributes", @constCast(pma)));
-        pm.addRef();
+        pm.ref.inc();
         break :get pm;
     } else alloc: {
         const pm = wasm_allocator.create(PthreadMutex) catch return errno(.NOMEM);
@@ -724,7 +743,7 @@ pub fn pthread_mutex_destroy(
     mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
     const pthread_mutex = PthreadMutex.extract(mutex);
-    pthread_mutex.release();
+    pthread_mutex.ref.dec();
     return 0;
 }
 
@@ -867,7 +886,7 @@ pub fn pthread_mutexattr_destroy(
 ) callconv(.c) c_int {
     const pthread_mutex_attrs: *PthreadMutex.Attributes = attr.*;
     const pthread_mutex: *PthreadMutex = @alignCast(@fieldParentPtr("attributes", pthread_mutex_attrs));
-    pthread_mutex.release();
+    pthread_mutex.ref.dec();
     return 0;
 }
 
@@ -962,8 +981,8 @@ pub fn pthread_mutexattr_setrobust(
 }
 
 const PthreadRwLock = struct {
+    ref: RefCount(@This()) = .{},
     lock: std.Thread.RwLock = .{},
-    ref_count: std.atomic.Value(usize) = .init(1),
     writer_thread_id: pthread_t = 0,
     reader_thread_list: std.ArrayListUnmanaged(pthread_t) = .{},
     reader_thread_list_spinlock: pthread_spinlock_t = 0,
@@ -983,17 +1002,6 @@ const PthreadRwLock = struct {
             mutable.* = prw;
             break :init_static prw;
         };
-    }
-
-    fn addRef(self: *@This()) void {
-        _ = self.ref_count.fetchAdd(1, .acq_rel);
-    }
-
-    fn release(self: *@This()) void {
-        if (self.ref_count.fetchSub(1, .acq_rel) == 1) {
-            self.reader_thread_list.deinit(wasm_allocator);
-            wasm_allocator.destroy(self);
-        }
     }
 
     fn wait(self: *@This(), duration: u64) void {
@@ -1016,7 +1024,7 @@ pub fn pthread_rwlock_init(
     const pthread_rwlock_attrs: ?*const PthreadRwLock.Attributes = if (attr) |ptr| @ptrCast(ptr.*) else null;
     const pthread_rwlock: *PthreadRwLock = if (pthread_rwlock_attrs) |prwa| get: {
         const prw: *PthreadRwLock = @alignCast(@fieldParentPtr("attributes", @constCast(prwa)));
-        prw.addRef();
+        prw.ref.inc();
         break :get prw;
     } else alloc: {
         const prw = wasm_allocator.create(PthreadRwLock) catch return errno(.NOMEM);
@@ -1031,7 +1039,7 @@ pub fn pthread_rwlock_destroy(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
     const pthread_rwlock = PthreadRwLock.extract(rwlock);
-    pthread_rwlock.release();
+    pthread_rwlock.ref.dec();
     return 0;
 }
 
@@ -1163,7 +1171,7 @@ pub fn pthread_rwlockattr_destroy(
 ) callconv(.c) c_int {
     const pthread_rwlock_attrs: *PthreadRwLock.Attributes = attr.*;
     const pthread_rwlock: *PthreadRwLock = @alignCast(@fieldParentPtr("attributes", pthread_rwlock_attrs));
-    pthread_rwlock.release();
+    pthread_rwlock.ref.dec();
     return 0;
 }
 
@@ -1204,8 +1212,8 @@ pub fn pthread_rwlockattr_setkind_np(
 }
 
 const PthreadCondition = struct {
+    ref: RefCount(@This()) = .{},
     condition: std.Thread.Condition = .{},
-    ref_count: std.atomic.Value(usize) = .init(1),
     attributes: PthreadCondition.Attributes = .{},
 
     const Attributes = struct {
@@ -1222,14 +1230,6 @@ const PthreadCondition = struct {
             break :init_static pc;
         };
     }
-
-    fn addRef(self: *@This()) void {
-        _ = self.ref_count.fetchAdd(1, .acq_rel);
-    }
-
-    fn release(self: *@This()) void {
-        if (self.ref_count.fetchSub(1, .acq_rel) == 1) wasm_allocator.destroy(self);
-    }
 };
 
 pub fn pthread_cond_init(
@@ -1239,7 +1239,7 @@ pub fn pthread_cond_init(
     const pthread_condition_attrs: ?*const PthreadCondition.Attributes = if (attr) |ptr| @ptrCast(ptr.*) else null;
     const pthread_condition: *PthreadCondition = if (pthread_condition_attrs) |pca| get: {
         const pc: *PthreadCondition = @alignCast(@fieldParentPtr("attributes", @constCast(pca)));
-        pc.addRef();
+        pc.ref.inc();
         break :get pc;
     } else alloc: {
         const pc = wasm_allocator.create(PthreadCondition) catch return errno(.NOMEM);
@@ -1254,7 +1254,7 @@ pub fn pthread_cond_destroy(
     cond: [*c]pthread_cond_t,
 ) callconv(.c) c_int {
     const pthread_condition = PthreadCondition.extract(cond);
-    pthread_condition.release();
+    pthread_condition.ref.dec();
     return 0;
 }
 
@@ -1316,7 +1316,7 @@ pub fn pthread_condattr_destroy(
 ) callconv(.c) c_int {
     const pthread_condition_attrs: *PthreadCondition.Attributes = attr.*;
     const pthread_condition: *PthreadCondition = @alignCast(@fieldParentPtr("attributes", pthread_condition_attrs));
-    pthread_condition.release();
+    pthread_condition.ref.dec();
     return 0;
 }
 
@@ -1473,8 +1473,8 @@ pub fn pthread_getcpuclockid(
 }
 
 const PthreadSemaphore = struct {
+    ref: RefCount(@This()) = .{},
     semaphore: std.Thread.Semaphore = .{},
-    ref_count: std.atomic.Value(usize) = .init(1),
     attributes: Attributes = .{},
     name: ?[]u8 = null,
 
@@ -1488,19 +1488,8 @@ const PthreadSemaphore = struct {
         return if (sem.*) |prw| @constCast(prw) else unreachable;
     }
 
-    fn addRef(self: *@This()) void {
-        _ = self.ref_count.fetchAdd(1, .monotonic);
-    }
-
-    fn release(self: *@This()) void {
-        if (self.ref_count.fetchSub(1, .monotonic) == 1) {
-            if (self.name) |slice| wasm_allocator.free(slice);
-            wasm_allocator.destroy(self);
-        }
-    }
-
-    fn match(ptr: **@This(), name: []const u8) bool {
-        return std.mem.eql(u8, ptr.*.name.?, name);
+    fn match(ptr: *@This(), name: []const u8) bool {
+        return std.mem.eql(u8, ptr.name.?, name);
     }
 };
 
@@ -1526,7 +1515,7 @@ pub fn sem_destroy(
     sem: [*c]sem_t,
 ) callconv(.c) c_int {
     const pthread_semaphore = PthreadSemaphore.extract(sem);
-    pthread_semaphore.release();
+    pthread_semaphore.ref.dec();
     return 0;
 }
 
@@ -1537,7 +1526,7 @@ pub fn sem_open(
 ) callconv(.c) [*c]sem_t {
     const flags: std.c.O = @bitCast(oflag);
     const name_s = name[0..std.mem.len(name)];
-    const ptr = if (PthreadSemaphore.list.find(PthreadSemaphore.match, name_s)) |ptr| use: {
+    const pthread_semaphore = if (PthreadSemaphore.list.find(PthreadSemaphore.match, name_s)) |ptr| use: {
         if (flags.CREAT and flags.EXCL) return semErrno(.EXIST, SEM_FAILED);
         break :use ptr;
     } else create: {
@@ -1546,30 +1535,30 @@ pub fn sem_open(
         defer @cVaEnd(&va_list);
         _ = @cVaArg(&va_list, std.c.mode_t);
         const value = @cVaArg(&va_list, c_uint);
-        const pthread_semaphore: *PthreadSemaphore = wasm_allocator.create(PthreadSemaphore) catch {
+        const ps = wasm_allocator.create(PthreadSemaphore) catch {
             return semErrno(.NOMEM, SEM_FAILED);
         };
         const name_dupe = wasm_allocator.dupe(u8, name_s) catch {
-            wasm_allocator.destroy(pthread_semaphore);
+            wasm_allocator.destroy(ps);
             return semErrno(.NOMEM, SEM_FAILED);
         };
-        pthread_semaphore.* = .{
+        ps.* = .{
             .semaphore = .{
                 .permits = @intCast(value),
             },
             .attributes = .{ .shared = PTHREAD_PROCESS_SHARED },
             .name = name_dupe,
         };
-        break :create PthreadSemaphore.list.push(pthread_semaphore) catch {
-            pthread_semaphore.release();
+        PthreadSemaphore.list.push(ps) catch {
+            ps.ref.dec();
             return semErrno(.NOMEM, SEM_FAILED);
         };
+        break :create ps;
     };
-    const pthread_semaphore = ptr.*;
     // newly created semaphore will have ref_count = 2, such that a call to sem_close()
     // wouldn't cause its deallocation
-    pthread_semaphore.addRef();
-    return @ptrCast(ptr);
+    pthread_semaphore.ref.inc();
+    return @ptrCast(pthread_semaphore);
 }
 
 pub fn sem_close(
@@ -1577,7 +1566,7 @@ pub fn sem_close(
 ) callconv(.c) c_int {
     const pthread_semaphore = PthreadSemaphore.extract(sem);
     if (pthread_semaphore.name == null) return semErrno(.INVAL, -1);
-    pthread_semaphore.release();
+    pthread_semaphore.ref.dec();
     return 0;
 }
 
@@ -1585,14 +1574,11 @@ pub fn sem_unlink(
     name: [*c]const u8,
 ) callconv(.c) c_int {
     const name_s = name[0..std.mem.len(name)];
-    const ptr = PthreadSemaphore.list.find(PthreadSemaphore.match, name_s) orelse {
+    const pthread_semaphore = PthreadSemaphore.list.remove(PthreadSemaphore.match, name_s) orelse {
         return semErrno(.NOENT, -1);
     };
-    defer PthreadSemaphore.list.release(ptr); // undo increment made by find()
-    PthreadSemaphore.list.release(ptr); // remove from list
-    const pthread_semaphore = ptr.*;
-    pthread_semaphore.release();
-    pthread_semaphore.release(); // extra release to deallocate it
+    pthread_semaphore.ref.dec();
+    pthread_semaphore.ref.dec(); // extra dec to deallocate it
     return 0;
 }
 

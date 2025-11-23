@@ -142,7 +142,7 @@ pub fn LinkedList(comptime T: type) type {
             return null;
         }
 
-        pub fn find(self: *@This(), comptime match: anytype, arg: anytype) ?T {
+        pub fn find(self: *@This(), comptime match_fn: anytype, arg: anytype) ?T {
             var current = self.head.load();
             while (!current.isNull()) {
                 const next = current.ptr().next.load();
@@ -150,7 +150,7 @@ pub fn LinkedList(comptime T: type) type {
                     const payload = current.ptr().payload;
                     // check state again if copying cannot be done atomically
                     if (@sizeOf(T) <= @sizeOf(usize) or current.ptr().next.load().state() == .previous_in_use) {
-                        if (match(payload, arg)) {
+                        if (check(match_fn, payload, arg)) {
                             return payload;
                         }
                     }
@@ -160,7 +160,7 @@ pub fn LinkedList(comptime T: type) type {
             return null;
         }
 
-        pub fn remove(self: *@This(), comptime match: anytype, arg: anytype) ?T {
+        pub fn remove(self: *@This(), comptime match_fn: anytype, arg: anytype) ?T {
             while (true) {
                 var current = self.head.load();
                 while (!current.isNull()) {
@@ -168,7 +168,7 @@ pub fn LinkedList(comptime T: type) type {
                     if (next.state() == .previous_in_use) {
                         const payload = current.ptr().payload;
                         if (@sizeOf(T) <= @sizeOf(usize) or current.ptr().next.load().state() == .previous_in_use) {
-                            if (match(payload, arg)) {
+                            if (check(match_fn, payload, arg)) {
                                 if (current.ptr().next.exchange(next, next.change(.previous_free), .monotonic)) {
                                     return payload;
                                 } else {
@@ -183,6 +183,17 @@ pub fn LinkedList(comptime T: type) type {
                 break;
             }
             return null;
+        }
+
+        fn check(comptime match_fn: anytype, payload: T, arg: anytype) bool {
+            return switch (@typeInfo(@TypeOf(match_fn))) {
+                .@"fn" => match_fn(payload, arg),
+                .enum_literal => switch (match_fn) {
+                    .eql => payload == arg,
+                    else => @compileLog("Unknown operation"),
+                },
+                else => @compileLog("Function expected"),
+            };
         }
 
         pub fn deinit(self: *@This()) void {
@@ -228,38 +239,28 @@ test "ListedList.shift()" {
     try expectEqual(null, list.shift());
 }
 
-test "ListedList.remove()" {
-    var gpa = std.heap.DebugAllocator(.{}).init;
-    var list: LinkedList(i32) = .init(gpa.allocator());
-    defer list.deinit();
-    const ns = struct {
-        fn match(self: i32, other: i32) bool {
-            return self == other;
-        }
-    };
-    try list.push(123);
-    try list.push(456);
-    try expectEqual(123, list.remove(ns.match, 123));
-    try expectEqual(null, list.remove(ns.match, 123));
-    try expectEqual(456, list.shift());
-    try expectEqual(null, list.remove(ns.match, 456));
-}
-
 test "ListedList.find()" {
     var gpa = std.heap.DebugAllocator(.{}).init;
     var list: LinkedList(i32) = .init(gpa.allocator());
     defer list.deinit();
-    const ns = struct {
-        fn match(self: i32, other: i32) bool {
-            return self == other;
-        }
-    };
     try list.push(123);
     try list.push(456);
-    try expectEqual(123, list.find(ns.match, 123));
-    try expectEqual(123, list.find(ns.match, 123));
+    try expectEqual(123, list.find(.eql, 123));
+    try expectEqual(123, list.find(.eql, 123));
     try expectEqual(123, list.shift());
-    try expectEqual(null, list.find(ns.match, 123));
+    try expectEqual(null, list.find(.eql, 123));
     try expectEqual(456, list.shift());
-    try expectEqual(null, list.find(ns.match, 456));
+    try expectEqual(null, list.find(.eql, 456));
+}
+
+test "ListedList.remove()" {
+    var gpa = std.heap.DebugAllocator(.{}).init;
+    var list: LinkedList(i32) = .init(gpa.allocator());
+    defer list.deinit();
+    try list.push(123);
+    try list.push(456);
+    try expectEqual(123, list.remove(.eql, 123));
+    try expectEqual(null, list.remove(.eql, 123));
+    try expectEqual(456, list.shift());
+    try expectEqual(null, list.remove(.eql, 456));
 }
