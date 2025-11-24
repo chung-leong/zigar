@@ -8,6 +8,7 @@ fn MarkedPointer(comptime T: type) type {
 
         const State = enum(u2) {
             previous_in_use,
+            previous_selected,
             previous_free,
             previous_allocated,
         };
@@ -36,8 +37,8 @@ fn MarkedPointer(comptime T: type) type {
             }
         };
 
-        pub fn load(self: *@This()) PtrState {
-            return self.ptr_state.load(.unordered);
+        pub fn load(self: *@This(), comptime order: std.builtin.AtomicOrder) PtrState {
+            return self.ptr_state.load(order);
         }
 
         pub fn store(self: *@This(), ps: PtrState, comptime order: std.builtin.AtomicOrder) void {
@@ -72,9 +73,9 @@ pub fn LinkedList(comptime T: type) type {
             while (true) {
                 var candidate_node: ?*Node = null;
                 var tail_ptr = &self.head;
-                var current = self.head.load();
+                var current = self.head.load(.unordered);
                 while (!current.isNull()) {
-                    const next = current.ptr().next.load();
+                    const next = current.ptr().next.load(.unordered);
                     if (next.state() == .previous_free) {
                         // this node is free
                         if (candidate_node == null) {
@@ -84,35 +85,35 @@ pub fn LinkedList(comptime T: type) type {
                         // since the new node need to be behind what's on the list already,
                         // we can't use an unused node that got picked earlier
                         candidate_node = null;
-                        if (next.isNull()) {
-                            tail_ptr = &current.ptr().next;
-                        }
+                    }
+                    if (next.isNull()) {
+                        tail_ptr = &current.ptr().next;
                     }
                     current = next;
                 }
                 if (candidate_node) |node| {
                     // set the next pointer's state to .previous_allocated first, then copy the payload
-                    const next = node.next.load();
-                    if (node.next.exchange(next, next.change(.previous_allocated), .monotonic)) {
-                        node.payload = payload;
-                        // mark the node as in-play
-                        node.next.store(next.change(.previous_in_use), .release);
-                        return &node.payload;
-                    } else {
-                        // try again
+                    const next = node.next.load(.unordered);
+                    if (next.state() == .previous_free) {
+                        if (node.next.exchange(next, next.change(.previous_allocated), .monotonic)) {
+                            node.payload = payload;
+                            // mark the node as in-use
+                            node.next.store(next.change(.previous_in_use), .release);
+                            return &node.payload;
+                        }
                     }
+                    // try again
                 } else {
                     // create a new node
                     const new_node = try self.allocator.create(Node);
                     new_node.* = .{ .payload = payload };
                     while (true) {
-                        const next = tail_ptr.load();
+                        const next = tail_ptr.load(.unordered);
                         if (next.isNull()) {
                             if (tail_ptr.exchange(next, .init(new_node, next.state()), .release)) {
                                 return &new_node.payload;
-                            } else {
-                                // try again
                             }
+                            // try again
                         } else {
                             // another thread has pushed another node just before we did
                             // try attaching our new node to that one instead
@@ -124,64 +125,83 @@ pub fn LinkedList(comptime T: type) type {
         }
 
         pub fn shift(self: *@This()) ?T {
+            var attempt: usize = 1;
             while (true) {
-                var current = self.head.load();
+                var current = self.head.load(.unordered);
                 while (!current.isNull()) {
-                    const next = current.ptr().next.load();
+                    const current_node = current.ptr();
+                    const next = current_node.next.load(.acquire);
                     if (next.state() == .previous_in_use) {
-                        // this node is in use; we make a copy of its payload first
-                        const payload = current.ptr().payload;
-                        // then we try to it off the list by changing its next pointer's state
-                        if (current.ptr().next.exchange(next, next.change(.previous_free), .monotonic)) {
-                            return payload;
-                        } else {
+                        // this node is in use; change its next pointer's state to .previous_selected first
+                        if (!current_node.next.exchange(next, next.change(.previous_selected), .monotonic)) {
                             // start over, since the exchange failure could be spurious
                             break;
                         }
+                        const payload = current_node.payload;
+                        // we can free the node now
+                        current_node.next.store(next.change(.previous_free), .monotonic);
+                        return payload;
                     }
                     current = next;
-                }
-                break;
+                } else if (attempt == 1) {
+                    // an item could be inserted while we're scanning through an empty list
+                    attempt += 1;
+                } else return null;
             }
-            return null;
         }
 
         pub fn find(self: *@This(), comptime match_fn: anytype, arg: anytype) ?T {
-            const payload, _ = self.findReturnPtr(match_fn, arg) orelse return null;
-            return payload;
+            const ptr = self.findReturnPtr(match_fn, arg) orelse return null;
+            return ptr.*;
         }
 
-        pub fn findReturnPtr(self: *@This(), comptime match_fn: anytype, arg: anytype) ?std.meta.Tuple(&.{ T, *const T }) {
-            var current = self.head.load();
-            while (!current.isNull()) {
-                const next = current.ptr().next.load();
-                if (next.state() == .previous_in_use) {
-                    const payload = current.ptr().payload;
-                    // check state again if copying cannot be done atomically
-                    if (@sizeOf(T) <= @sizeOf(usize) or current.ptr().next.load().state() == .previous_in_use) {
-                        if (check(match_fn, payload, arg)) {
-                            return .{ payload, &current.ptr().payload };
+        pub fn findReturnPtr(self: *@This(), comptime match_fn: anytype, arg: anytype) ?*const T {
+            while (true) {
+                var has_selected = false;
+                var current = self.head.load(.unordered);
+                while (!current.isNull()) {
+                    const current_node = current.ptr();
+                    const next = current_node.next.load(.acquire);
+                    if (next.state() == .previous_in_use) {
+                        if (check(match_fn, current_node.payload, arg)) {
+                            return &current_node.payload;
                         }
+                    } else if (next.state() == .previous_selected) {
+                        // not available momentarily
+                        has_selected = true;
                     }
+                    current = next;
+                } else {
+                    // start over from beginning if a node was skipped over
+                    if (!has_selected) return null;
                 }
-                current = next;
             }
-            return null;
         }
 
         pub fn remove(self: *@This(), comptime match_fn: anytype, arg: anytype) ?T {
+            var current = self.head.load(.unordered);
             while (true) {
-                const payload, const ptr = self.findReturnPtr(match_fn, arg) orelse break;
-                const node: *Node = @alignCast(@constCast(@fieldParentPtr("payload", ptr)));
-                const next = node.next.load();
-                if (next.state() != .previous_in_use) break;
-                if (node.next.exchange(next, next.change(.previous_free), .monotonic)) {
-                    return payload;
-                } else {
-                    // try again
-                }
+                while (!current.isNull()) {
+                    const current_node = current.ptr();
+                    const next = current_node.next.load(.acquire);
+                    if (next.state() == .previous_in_use) {
+                        if (!current_node.next.exchange(next, next.change(.previous_selected), .monotonic)) {
+                            // start over, since the exchange failure could be spurious
+                            break;
+                        }
+                        if (check(match_fn, current_node.payload, arg)) {
+                            // copy payload
+                            const payload = current_node.payload;
+                            current_node.next.store(next.change(.previous_free), .monotonic);
+                            return payload;
+                        } else {
+                            // change it back
+                            current_node.next.store(next.change(.previous_in_use), .monotonic);
+                        }
+                    }
+                    current = next;
+                } else return null;
             }
-            return null;
         }
 
         fn check(comptime match_fn: anytype, payload: T, arg: anytype) bool {
@@ -196,9 +216,9 @@ pub fn LinkedList(comptime T: type) type {
         }
 
         pub fn deinit(self: *@This()) void {
-            var current = self.head.load();
+            var current = self.head.load(.unordered);
             while (!current.isNull()) {
-                const next = current.ptr().next.load();
+                const next = current.ptr().next.load(.unordered);
                 self.allocator.destroy(current.ptr());
                 current = next;
             }
@@ -265,7 +285,7 @@ test "ListedList.remove()" {
 }
 
 test "Multithreaded: push() + shift()" {
-    const operations = 1000;
+    const operations = 100000;
     const pushers = 4;
     const pullers = 8;
     const test_ns = struct {
@@ -276,6 +296,7 @@ test "Multithreaded: push() + shift()" {
         var pusher_count: std.atomic.Value(usize) = .init(0);
 
         var gpa = std.heap.DebugAllocator(.{}).init;
+        var count: std.atomic.Value(isize) = .init(0);
         var sum: std.atomic.Value(isize) = .init(0);
         var list: LinkedList(isize) = .init(gpa.allocator());
 
@@ -300,15 +321,17 @@ test "Multithreaded: push() + shift()" {
                 const num: isize = @intCast(i);
                 try list.push(num);
                 _ = sum.fetchAdd(num, .monotonic);
+                _ = count.fetchAdd(1, .monotonic);
             }
         }
 
-        fn runPull(_: usize) !void {
+        fn runPull(_: usize) void {
             waitForOthers();
             defer done();
             while (true) {
                 if (list.shift()) |num| {
                     _ = sum.fetchSub(num, .monotonic);
+                    _ = count.fetchSub(1, .monotonic);
                 } else {
                     if (pusher_count.load(.unordered) == 0) break;
                 }
@@ -333,6 +356,108 @@ test "Multithreaded: push() + shift()" {
         }
     };
     try test_ns.run();
+    const count = test_ns.count.load(.unordered);
     const sum = test_ns.sum.load(.unordered);
+    try expectEqual(0, count);
+    try expectEqual(0, sum);
+}
+
+test "Multithreaded: push() + shift() + remove()" {
+    const operations = 100000;
+    const pushers = 4;
+    const pullers = 8;
+    const removers = 2;
+    const test_ns = struct {
+        var ready_futex: std.atomic.Value(u32) = .init(0);
+        var finish_futex: std.atomic.Value(u32) = .init(0);
+        var thread_count: std.atomic.Value(usize) = .init(0);
+        var finish_count: std.atomic.Value(usize) = .init(0);
+        var pusher_count: std.atomic.Value(usize) = .init(0);
+
+        var gpa = std.heap.DebugAllocator(.{}).init;
+        var count: std.atomic.Value(isize) = .init(0);
+        var sum: std.atomic.Value(isize) = .init(0);
+        var list: LinkedList(isize) = .init(gpa.allocator());
+
+        fn run() !void {
+            for (0..pushers) |i| {
+                const thread = try std.Thread.spawn(.{}, runPush, .{i});
+                thread.detach();
+            }
+            for (0..pullers) |i| {
+                const thread = try std.Thread.spawn(.{}, runPull, .{i});
+                thread.detach();
+            }
+            for (0..removers) |i| {
+                const thread = try std.Thread.spawn(.{}, runRemove, .{i});
+                thread.detach();
+            }
+            std.Thread.Futex.wait(&finish_futex, 0);
+        }
+
+        fn runPush(_: usize) !void {
+            waitForOthers();
+            defer done();
+            _ = pusher_count.fetchAdd(1, .monotonic);
+            defer _ = pusher_count.fetchSub(1, .monotonic);
+            for (0..operations) |i| {
+                const num: isize = @intCast(i);
+                try list.push(num);
+                _ = sum.fetchAdd(num, .monotonic);
+                _ = count.fetchAdd(1, .monotonic);
+            }
+        }
+
+        fn runPull(_: usize) !void {
+            waitForOthers();
+            defer done();
+            while (true) {
+                if (list.shift()) |num| {
+                    _ = sum.fetchSub(num, .monotonic);
+                    _ = count.fetchSub(1, .monotonic);
+                } else {
+                    if (pusher_count.load(.unordered) == 0) break;
+                }
+            }
+        }
+
+        fn runRemove(_: usize) !void {
+            waitForOthers();
+            defer done();
+            while (true) {
+                if (list.remove(divisibleBy, 7)) |num| {
+                    _ = sum.fetchSub(num, .monotonic);
+                    _ = count.fetchSub(1, .monotonic);
+                } else {
+                    if (pusher_count.load(.unordered) == 0) break;
+                }
+            }
+        }
+
+        fn divisibleBy(num: isize, arg: isize) bool {
+            return @rem(num, arg) == 0;
+        }
+
+        fn waitForOthers() void {
+            const prev_count = thread_count.fetchAdd(1, .monotonic);
+            if (prev_count == pushers + pullers + removers - 1) {
+                ready_futex.store(1, .unordered);
+                std.Thread.Futex.wake(&ready_futex, std.math.maxInt(u32));
+            }
+            std.Thread.Futex.wait(&ready_futex, 0);
+        }
+
+        fn done() void {
+            const prev_count = finish_count.fetchAdd(1, .monotonic);
+            if (prev_count == pushers + pullers + removers - 1) {
+                finish_futex.store(1, .unordered);
+                std.Thread.Futex.wake(&finish_futex, std.math.maxInt(u32));
+            }
+        }
+    };
+    try test_ns.run();
+    const count = test_ns.count.load(.unordered);
+    const sum = test_ns.sum.load(.unordered);
+    try expectEqual(0, count);
     try expectEqual(0, sum);
 }
