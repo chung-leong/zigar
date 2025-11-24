@@ -63,7 +63,7 @@ const Pthread = struct {
         _ = list.remove(.eql, self);
     }
 
-    fn run(self: *@This()) void {
+    pub fn run(self: *@This()) void {
         // set threadlocal variable so pthread_self() can get itself
         current = self;
         // obtain system thread id (i.e. WASI) for the purpose of cancellation
@@ -72,14 +72,14 @@ const Pthread = struct {
         key_value_list.deinit(wasm_allocator);
     }
 
-    fn generateId() pthread_t {
+    pub fn generateId() pthread_t {
         while (true) {
             const id = next_id.fetchAdd(1, .acq_rel);
             if (id > first_id) return id;
         }
     }
 
-    fn getCurrent() *@This() {
+    pub fn getCurrent() *@This() {
         return current orelse create: {
             // current thread is not created through pthread
             const self = wasm_allocator.create(@This()) catch @panic("Out of memory");
@@ -106,11 +106,11 @@ const Pthread = struct {
         };
     }
 
-    fn find(id: pthread_t) ?*@This() {
+    pub fn find(id: pthread_t) ?*@This() {
         return list.find(match, id);
     }
 
-    fn cancel(self: *@This()) !void {
+    pub fn cancel(self: *@This()) !void {
         const cancel_arg: ?*anyopaque = switch (self.cancel_type.load(.unordered)) {
             PTHREAD_CANCEL_ASYNCHRONOUS => init: {
                 // immediate termination is desired; the web worker handling this thread is going
@@ -146,17 +146,17 @@ const Pthread = struct {
         @"thread-cancel"(self.wasi_thread_id, cancel_arg);
     }
 
-    fn match(self: *const @This(), id: c_ulong) bool {
+    pub fn match(self: *const @This(), id: c_ulong) bool {
         return self.id == id;
     }
 
-    fn setState(self: *@This(), expected: State, new: State) !void {
+    pub fn setState(self: *@This(), expected: State, new: State) !void {
         if (self.state.cmpxchgStrong(expected, new, .acq_rel, .monotonic) != null) {
             return error.IncorrectState;
         }
     }
 
-    fn performCancellationCleanUp() void {
+    pub fn performCancellationCleanUp() void {
         // this function runs in a new worker after the one handling the thread was killed
         // since the thread id is reused, we'd have the same TLS variable as before; getCurrent()
         // would still give us the right struct
@@ -171,7 +171,7 @@ const Pthread = struct {
         self.performExitCleanup();
     }
 
-    fn performExitCleanup(self: *@This()) void {
+    pub fn performExitCleanup(self: *@This()) void {
         // call destructors inserted by pthread_key_create()
         _ = pthread_spin_lock(&key_list_spinlock);
         defer _ = pthread_spin_unlock(&key_list_spinlock);
@@ -650,11 +650,11 @@ const PthreadCleanUpCallback = extern struct {
 
     threadlocal var top: std.atomic.Value(?*@This()) = .init(null);
 
-    fn getTop() ?*@This() {
+    pub fn getTop() ?*@This() {
         return top.load(.acquire);
     }
 
-    fn setTop(ptcb: ?*@This()) void {
+    pub fn setTop(ptcb: ?*@This()) void {
         top.store(ptcb, .release);
     }
 };
@@ -696,7 +696,7 @@ const PthreadMutex = struct {
         robustness: c_int = PTHREAD_MUTEX_STALLED,
     };
 
-    fn extract(mutex: [*c]const pthread_mutex_t) *@This() {
+    pub fn extract(mutex: [*c]const pthread_mutex_t) *@This() {
         return if (mutex.*) |pm| pm else init_static: {
             const pm = wasm_allocator.create(@This()) catch @panic("Out of memory");
             pm.* = .{};
@@ -706,12 +706,12 @@ const PthreadMutex = struct {
         };
     }
 
-    fn wait(self: *@This(), duration: u64) void {
+    pub fn wait(self: *@This(), duration: u64) void {
         self.wait_futex.store(0, .unordered);
         std.Thread.Futex.timedWait(&self.wait_futex, 0, duration) catch {};
     }
 
-    fn wake(self: *@This()) void {
+    pub fn wake(self: *@This()) void {
         if (self.wait_futex.load(.unordered) != 0) {
             self.wait_futex.store(1, .unordered);
             std.Thread.Futex.wake(&self.wait_futex, 1);
@@ -992,7 +992,7 @@ const PthreadRwLock = struct {
         shared: u8 = PTHREAD_PROCESS_PRIVATE,
     };
 
-    fn extract(rwlock: [*c]const pthread_rwlock_t) *@This() {
+    pub fn extract(rwlock: [*c]const pthread_rwlock_t) *@This() {
         return if (rwlock.*) |prw| prw else init_static: {
             const prw = wasm_allocator.create(@This()) catch @panic("Out of memory");
             prw.* = .{};
@@ -1002,12 +1002,12 @@ const PthreadRwLock = struct {
         };
     }
 
-    fn wait(self: *@This(), duration: u64) void {
+    pub fn wait(self: *@This(), duration: u64) void {
         self.wait_futex.store(0, .unordered);
         std.Thread.Futex.timedWait(&self.wait_futex, 0, duration) catch {};
     }
 
-    fn wake(self: *@This()) void {
+    pub fn wake(self: *@This()) void {
         if (self.wait_futex.load(.unordered) != 0) {
             self.wait_futex.store(1, .unordered);
             std.Thread.Futex.wake(&self.wait_futex, 1);
@@ -1219,7 +1219,7 @@ const PthreadCondition = struct {
         clock_id: std.posix.clockid_t = .REALTIME,
     };
 
-    fn extract(cond: [*c]const pthread_cond_t) *@This() {
+    pub fn extract(cond: [*c]const pthread_cond_t) *@This() {
         return if (cond.*) |pc| pc else init_static: {
             const pc = wasm_allocator.create(@This()) catch @panic("Out of memory");
             pc.* = .{};
@@ -1482,11 +1482,15 @@ const PthreadSemaphore = struct {
 
     var list: LinkedList(*@This()) = .init(wasm_allocator);
 
-    fn extract(sem: [*c]const sem_t) *@This() {
+    pub fn deinit(self: *@This()) void {
+        if (self.name) |n| wasm_allocator.free(n);
+    }
+
+    pub fn extract(sem: [*c]const sem_t) *@This() {
         return if (sem.*) |prw| @constCast(prw) else unreachable;
     }
 
-    fn match(ptr: *@This(), name: []const u8) bool {
+    pub fn match(ptr: *@This(), name: []const u8) bool {
         return std.mem.eql(u8, ptr.name.?, name);
     }
 };
@@ -1524,9 +1528,9 @@ pub fn sem_open(
 ) callconv(.c) [*c]sem_t {
     const flags: std.c.O = @bitCast(oflag);
     const name_s = name[0..std.mem.len(name)];
-    const pthread_semaphore = if (PthreadSemaphore.list.find(PthreadSemaphore.match, name_s)) |ptr| use: {
+    const pthread_semaphore, const ps_ptr = if (PthreadSemaphore.list.findReturnPtr(PthreadSemaphore.match, name_s)) |tuple| use: {
         if (flags.CREAT and flags.EXCL) return semErrno(.EXIST, SEM_FAILED);
-        break :use ptr;
+        break :use tuple;
     } else create: {
         if (!flags.CREAT) return semErrno(.NOENT, SEM_FAILED);
         var va_list = @cVaStart();
@@ -1547,16 +1551,16 @@ pub fn sem_open(
             .attributes = .{ .shared = PTHREAD_PROCESS_SHARED },
             .name = name_dupe,
         };
-        PthreadSemaphore.list.push(ps) catch {
+        const ps_ptr = PthreadSemaphore.list.pushReturnPtr(ps) catch {
             ps.ref.dec();
             return semErrno(.NOMEM, SEM_FAILED);
         };
-        break :create ps;
+        break :create .{ ps, ps_ptr };
     };
     // newly created semaphore will have ref_count = 2, such that a call to sem_close()
     // wouldn't cause its deallocation
     pthread_semaphore.ref.inc();
-    return @ptrCast(pthread_semaphore);
+    return @ptrCast(@constCast(ps_ptr));
 }
 
 pub fn sem_close(

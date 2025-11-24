@@ -65,6 +65,10 @@ pub fn LinkedList(comptime T: type) type {
         }
 
         pub fn push(self: *@This(), payload: T) !void {
+            _ = try self.pushReturnPtr(payload);
+        }
+
+        pub fn pushReturnPtr(self: *@This(), payload: T) !*const T {
             while (true) {
                 var candidate_node: ?*Node = null;
                 var tail_ptr = &self.head;
@@ -93,7 +97,7 @@ pub fn LinkedList(comptime T: type) type {
                         node.payload = payload;
                         // mark the node as in-play
                         node.next.store(next.change(.previous_in_use), .release);
-                        return;
+                        return &node.payload;
                     } else {
                         // try again
                     }
@@ -105,7 +109,7 @@ pub fn LinkedList(comptime T: type) type {
                         const next = tail_ptr.load();
                         if (next.isNull()) {
                             if (tail_ptr.exchange(next, .init(new_node, next.state()), .release)) {
-                                return;
+                                return &new_node.payload;
                             } else {
                                 // try again
                             }
@@ -143,6 +147,11 @@ pub fn LinkedList(comptime T: type) type {
         }
 
         pub fn find(self: *@This(), comptime match_fn: anytype, arg: anytype) ?T {
+            const payload, _ = self.findReturnPtr(match_fn, arg) orelse return null;
+            return payload;
+        }
+
+        pub fn findReturnPtr(self: *@This(), comptime match_fn: anytype, arg: anytype) ?std.meta.Tuple(&.{ T, *const T }) {
             var current = self.head.load();
             while (!current.isNull()) {
                 const next = current.ptr().next.load();
@@ -151,7 +160,7 @@ pub fn LinkedList(comptime T: type) type {
                     // check state again if copying cannot be done atomically
                     if (@sizeOf(T) <= @sizeOf(usize) or current.ptr().next.load().state() == .previous_in_use) {
                         if (check(match_fn, payload, arg)) {
-                            return payload;
+                            return .{ payload, &current.ptr().payload };
                         }
                     }
                 }
@@ -162,25 +171,15 @@ pub fn LinkedList(comptime T: type) type {
 
         pub fn remove(self: *@This(), comptime match_fn: anytype, arg: anytype) ?T {
             while (true) {
-                var current = self.head.load();
-                while (!current.isNull()) {
-                    const next = current.ptr().next.load();
-                    if (next.state() == .previous_in_use) {
-                        const payload = current.ptr().payload;
-                        if (@sizeOf(T) <= @sizeOf(usize) or current.ptr().next.load().state() == .previous_in_use) {
-                            if (check(match_fn, payload, arg)) {
-                                if (current.ptr().next.exchange(next, next.change(.previous_free), .monotonic)) {
-                                    return payload;
-                                } else {
-                                    // start from beginning again
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    current = next;
+                const payload, const ptr = self.findReturnPtr(match_fn, arg) orelse break;
+                const node: *Node = @alignCast(@constCast(@fieldParentPtr("payload", ptr)));
+                const next = node.next.load();
+                if (next.state() != .previous_in_use) break;
+                if (node.next.exchange(next, next.change(.previous_free), .monotonic)) {
+                    return payload;
+                } else {
+                    // try again
                 }
-                break;
             }
             return null;
         }

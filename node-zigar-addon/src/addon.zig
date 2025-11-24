@@ -1025,8 +1025,9 @@ const ModuleHost = struct {
                 try napi.callThreadsafeFunction(func, new_call, .nonblocking);
                 call.u.write.written = call.u.write.len;
                 futex.timeout = 50000;
+            } else {
+                try napi.callThreadsafeFunction(func, call, .nonblocking);
             }
-            try napi.callThreadsafeFunction(func, call, .nonblocking);
             return futex.wait();
         }
     }
