@@ -263,3 +263,76 @@ test "ListedList.remove()" {
     try expectEqual(456, list.shift());
     try expectEqual(null, list.remove(.eql, 456));
 }
+
+test "Multithreaded: push() + shift()" {
+    const operations = 1000;
+    const pushers = 4;
+    const pullers = 8;
+    const test_ns = struct {
+        var ready_futex: std.atomic.Value(u32) = .init(0);
+        var finish_futex: std.atomic.Value(u32) = .init(0);
+        var thread_count: std.atomic.Value(usize) = .init(0);
+        var finish_count: std.atomic.Value(usize) = .init(0);
+        var pusher_count: std.atomic.Value(usize) = .init(0);
+
+        var gpa = std.heap.DebugAllocator(.{}).init;
+        var sum: std.atomic.Value(isize) = .init(0);
+        var list: LinkedList(isize) = .init(gpa.allocator());
+
+        fn run() !void {
+            for (0..pushers) |i| {
+                const thread = try std.Thread.spawn(.{}, runPush, .{i});
+                thread.detach();
+            }
+            for (0..pullers) |i| {
+                const thread = try std.Thread.spawn(.{}, runPull, .{i});
+                thread.detach();
+            }
+            std.Thread.Futex.wait(&finish_futex, 0);
+        }
+
+        fn runPush(_: usize) !void {
+            waitForOthers();
+            defer done();
+            _ = pusher_count.fetchAdd(1, .monotonic);
+            defer _ = pusher_count.fetchSub(1, .monotonic);
+            for (0..operations) |i| {
+                const num: isize = @intCast(i);
+                try list.push(num);
+                _ = sum.fetchAdd(num, .monotonic);
+            }
+        }
+
+        fn runPull(_: usize) !void {
+            waitForOthers();
+            defer done();
+            while (true) {
+                if (list.shift()) |num| {
+                    _ = sum.fetchSub(num, .monotonic);
+                } else {
+                    if (pusher_count.load(.unordered) == 0) break;
+                }
+            }
+        }
+
+        fn waitForOthers() void {
+            const prev_count = thread_count.fetchAdd(1, .monotonic);
+            if (prev_count == pushers + pullers - 1) {
+                ready_futex.store(1, .unordered);
+                std.Thread.Futex.wake(&ready_futex, std.math.maxInt(u32));
+            }
+            std.Thread.Futex.wait(&ready_futex, 0);
+        }
+
+        fn done() void {
+            const prev_count = finish_count.fetchAdd(1, .monotonic);
+            if (prev_count == pushers + pullers - 1) {
+                finish_futex.store(1, .unordered);
+                std.Thread.Futex.wake(&finish_futex, std.math.maxInt(u32));
+            }
+        }
+    };
+    try test_ns.run();
+    const sum = test_ns.sum.load(.unordered);
+    try expectEqual(0, sum);
+}
