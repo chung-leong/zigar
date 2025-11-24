@@ -895,7 +895,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
-    skip.unless(target === 'wasm32').
+    skip.entirely.unless(target === 'wasm32').
     it('should perform deferred cancellation on thread mechanism thread using pthread', async function() {
       const { 
         spawn,
@@ -919,7 +919,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
-    skip.unless(target === 'wasm32').
+    skip.entirely.unless(target === 'wasm32').
     it('should perform asynchronous cancellation on thread using pthread', async function() {
       const { 
         spawn,
@@ -950,7 +950,6 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
-
   })
 }
 

@@ -31,7 +31,7 @@ fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 1 acquiring read lock\n", .{});
     var time: c.struct_timespec = undefined;
     _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
-    time.tv_nsec += 10 * 1000000;
+    add(&time, 10 * 1000000);
     const retval = c.pthread_rwlock_timedrdlock(&rwlock, &time);
     if (retval == 0) {
         defer _ = c.pthread_rwlock_unlock(&rwlock);
@@ -46,7 +46,7 @@ fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 2 acquiring read lock\n", .{});
     var time: c.struct_timespec = undefined;
     _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
-    time.tv_nsec += 750 * 1000000;
+    add(&time, 750 * 1000000);
     const retval = c.pthread_rwlock_timedrdlock(&rwlock, &time);
     if (retval == 0) {
         defer _ = c.pthread_rwlock_unlock(&rwlock);
@@ -55,6 +55,14 @@ fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
         std.debug.print("Thread 2 timed out: {}\n", .{retval == @intFromEnum(std.c.E.TIMEDOUT)});
     }
     return null;
+}
+
+fn add(time: *c.struct_timespec, ns: c_long) void {
+    time.tv_nsec += ns;
+    if (time.tv_nsec > 1000000000) {
+        time.tv_sec += 1;
+        time.tv_nsec -= 1000000_000;
+    }
 }
 
 pub fn startup() !void {
