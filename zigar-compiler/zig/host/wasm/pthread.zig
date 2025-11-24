@@ -1528,9 +1528,9 @@ pub fn sem_open(
 ) callconv(.c) [*c]sem_t {
     const flags: std.c.O = @bitCast(oflag);
     const name_s = name[0..std.mem.len(name)];
-    const pthread_semaphore, const ps_ptr = if (PthreadSemaphore.list.findReturnPtr(PthreadSemaphore.match, name_s)) |tuple| use: {
+    const ps_ptr = if (PthreadSemaphore.list.findReturnPtr(PthreadSemaphore.match, name_s)) |ptr| use: {
         if (flags.CREAT and flags.EXCL) return semErrno(.EXIST, SEM_FAILED);
-        break :use tuple;
+        break :use ptr;
     } else create: {
         if (!flags.CREAT) return semErrno(.NOENT, SEM_FAILED);
         var va_list = @cVaStart();
@@ -1551,14 +1551,14 @@ pub fn sem_open(
             .attributes = .{ .shared = PTHREAD_PROCESS_SHARED },
             .name = name_dupe,
         };
-        const ps_ptr = PthreadSemaphore.list.pushReturnPtr(ps) catch {
+        break :create PthreadSemaphore.list.pushReturnPtr(ps) catch {
             ps.ref.dec();
             return semErrno(.NOMEM, SEM_FAILED);
         };
-        break :create .{ ps, ps_ptr };
     };
     // newly created semaphore will have ref_count = 2, such that a call to sem_close()
     // wouldn't cause its deallocation
+    const pthread_semaphore = ps_ptr.*;
     pthread_semaphore.ref.inc();
     return @ptrCast(@constCast(ps_ptr));
 }
