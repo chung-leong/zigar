@@ -6032,7 +6032,7 @@ var clockResGet = mixin({
 var clockTimeGet = mixin({
   clockTimeGet(clockId, precision, timeAddress) {
     const t = (clockId === 0) ? Date.now() : performance.now();
-    this.copyUint64(timeAddress, BigInt(t * 1000000));
+    this.copyUint64(timeAddress, BigInt(Math.ceil(t * 1000000)));
     return PosixError.NONE;
   },
 });
@@ -7019,7 +7019,7 @@ function workerMain() {
                   }, [ array.buffer ]);
                   // write the length, assuming the operation will succeed in the main thread
                   dv.setUint32(writtenAddress, total, true);
-                  // block for only up to 5ms
+                  // block for only up to 50ms
                   return wait(futex, 50000);
                 } else {
                   return write(fd, iovsAddress, iovsCount, writtenAddress);
