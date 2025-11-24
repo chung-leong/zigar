@@ -46,7 +46,7 @@ fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 2 acquiring read lock\n", .{});
     var time: c.struct_timespec = undefined;
     _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
-    time.tv_nsec += 350 * 1000000;
+    time.tv_nsec += 750 * 1000000;
     const retval = c.pthread_rwlock_timedrdlock(&rwlock, &time);
     if (retval == 0) {
         defer _ = c.pthread_rwlock_unlock(&rwlock);

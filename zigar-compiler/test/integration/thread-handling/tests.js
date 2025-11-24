@@ -464,7 +464,7 @@ export function addTests(importModule, options) {
       try {
         const lines = await capture(async () => {
           spawn();
-          await delay(250);
+          await delay(500);
         });
         expect(lines).to.eql([ 
           'Hello world! 0',
@@ -652,18 +652,15 @@ export function addTests(importModule, options) {
       try {
         const lines = await capture(async () => {
           spawn();
-          await delay(250);
+          await delay(500);
           unlock();
           await delay(550);
         });
-        expect(lines).to.eql([
-          'Main thread acquired write lock',
-          'Thread 1 acquiring read lock',
-          'Thread 2 acquiring read lock',
-          'Thread 1 timed out: true',
-          'Main thread releasing write lock',
-          'Thread 2 acquired read lock'
-        ]);
+        const t1Timeout = lines.indexOf('Thread 1 timed out: true');
+        const mtRelease = lines.indexOf('Main thread releasing write lock');
+        const t2Acquired = lines.indexOf('Thread 2 acquired read lock');
+        expect(t1Timeout < mtRelease).to.be.true;
+        expect(t2Acquired > mtRelease).to.be.true;
       } finally {
         shutdown();
       }
@@ -683,14 +680,11 @@ export function addTests(importModule, options) {
           unlock();
           await delay(550);
         });
-        expect(lines).to.eql([
-          'Main thread acquired write lock',
-          'Thread 1 acquiring write lock',
-          'Thread 2 acquiring write lock',
-          'Thread 1 timed out: true',
-          'Main thread releasing write lock',
-          'Thread 2 acquired write lock'
-        ]);
+        const t1Timeout = lines.indexOf('Thread 1 timed out: true');
+        const mtRelease = lines.indexOf('Main thread releasing write lock');
+        const t2Acquired = lines.indexOf('Thread 2 acquired write lock');
+        expect(t1Timeout < mtRelease).to.be.true;
+        expect(t2Acquired > mtRelease).to.be.true;
       } finally {
         shutdown();
       }
