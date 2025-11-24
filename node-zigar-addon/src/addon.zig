@@ -1004,6 +1004,8 @@ const ModuleHost = struct {
             };
         } else {
             const func = self.ts.handle_syscall orelse return error.Disabled;
+            var futex: Futex = undefined;
+            call.futex_handle = futex.init();
             if (call.cmd == .write and call.u.write.fd == 2) {
                 const len: usize = call.u.write.len;
                 const bytes = call.u.write.bytes;
@@ -1022,10 +1024,8 @@ const ModuleHost = struct {
                 };
                 try napi.callThreadsafeFunction(func, new_call, .nonblocking);
                 call.u.write.written = call.u.write.len;
-                return .SUCCESS;
+                futex.timeout = 50000;
             }
-            var futex: Futex = undefined;
-            call.futex_handle = futex.init();
             try napi.callThreadsafeFunction(func, call, .nonblocking);
             return futex.wait();
         }
@@ -1560,6 +1560,7 @@ const Futex = struct {
 
     value: std.atomic.Value(u32),
     handle: usize,
+    timeout: usize = 0,
 
     pub fn init(self: *@This()) usize {
         self.value = std.atomic.Value(u32).init(initial_value);
@@ -1568,7 +1569,13 @@ const Futex = struct {
     }
 
     pub fn wait(self: *@This()) E {
-        std.Thread.Futex.wait(&self.value, initial_value);
+        if (self.timeout != 0) {
+            std.Thread.Futex.timedWait(&self.value, .initial_value, self.timeout) catch {
+                return E.SUCCESS;
+            };
+        } else {
+            std.Thread.Futex.wait(&self.value, initial_value);
+        }
         const final_value = self.value.load(.acquire);
         return std.meta.intToEnum(E, final_value) catch E.FAULT;
     }

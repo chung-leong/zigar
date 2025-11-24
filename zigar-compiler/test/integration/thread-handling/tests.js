@@ -588,7 +588,7 @@ export function addTests(importModule, options) {
           spawn();
           await delay(250);
           unlock();
-          await delay(250);
+          await delay(500);
         });
         expect(lines).to.eql([
           'Main thread acquired spinlock',

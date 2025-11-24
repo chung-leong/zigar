@@ -38,7 +38,7 @@ var fdWrite = mixin({
     });
   },
   fdWriteStderr(chunk, canWait) {
-    catchPosixError(true, PosixError.EBADF, () => {
+    catchPosixError(canWait, PosixError.EBADF, () => {
       const[ writer, rights, flags ] = this.getStream(2);
       checkAccessRight(rights, PosixDescriptorRight.fd_write);
       const method = (flags & PosixDescriptorFlag.nonblock) ? writer.writenb : writer.write;

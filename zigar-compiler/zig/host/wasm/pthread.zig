@@ -63,6 +63,15 @@ const Pthread = struct {
         _ = list.remove(.eql, self);
     }
 
+    fn run(self: *@This()) void {
+        // set threadlocal variable so pthread_self() can get itself
+        current = self;
+        // obtain system thread id (i.e. WASI) for the purpose of cancellation
+        self.wasi_thread_id = std.Thread.getCurrentId();
+        self.return_value = self.start_routine(self.arg);
+        key_value_list.deinit(wasm_allocator);
+    }
+
     fn generateId() pthread_t {
         while (true) {
             const id = next_id.fetchAdd(1, .acq_rel);
@@ -298,7 +307,7 @@ pub fn pthread_create(
     pthread.thread = std.Thread.spawn(.{
         .allocator = wasm_allocator,
         .stack_size = if (pthread_attrs) |pa| pa.stack_size else Pthread.def_stack_size,
-    }, run_pthread, .{pthread}) catch {
+    }, Pthread.run, .{pthread}) catch {
         pthread.ref.dec();
         return errno(.INVAL);
     };
@@ -309,15 +318,6 @@ pub fn pthread_create(
         return errno(.NOMEM);
     };
     return 0;
-}
-
-fn run_pthread(thread: *Pthread) void {
-    // set threadlocal variable so pthread_self() can get itself
-    Pthread.current = thread;
-    // obtain system thread id (i.e. WASI) for the purpose of cancellation
-    thread.wasi_thread_id = std.Thread.getCurrentId();
-    thread.return_value = thread.start_routine(thread.arg);
-    key_value_list.deinit(wasm_allocator);
 }
 
 pub fn pthread_exit(
@@ -334,7 +334,6 @@ pub fn pthread_join(
     thread_return: [*c]?*anyopaque,
 ) callconv(.c) c_int {
     const pthread = Pthread.find(th) orelse return errno(.INVAL);
-    defer pthread.ref.dec();
     pthread.setState(.joinable, .joined) catch return errno(.INVAL);
     pthread.thread.join();
     thread_return.* = pthread.return_value;
@@ -347,7 +346,6 @@ pub fn pthread_detach(
     th: pthread_t,
 ) callconv(.c) c_int {
     const pthread = Pthread.find(th) orelse return errno(.INVAL);
-    defer pthread.ref.dec();
     pthread.setState(.joinable, .detached) catch return errno(.INVAL);
     pthread.thread.detach();
     return 0;

@@ -6513,7 +6513,7 @@ var fdWrite = mixin({
     });
   },
   fdWriteStderr(chunk, canWait) {
-    catchPosixError(true, PosixError.EBADF, () => {
+    catchPosixError(canWait, PosixError.EBADF, () => {
       const[ writer, rights, flags ] = this.getStream(2);
       checkAccessRight(rights, PosixDescriptorRight.fd_write);
       const method = (flags & PosixDescriptorFlag.nonblock) ? writer.writenb : writer.write;
@@ -6864,12 +6864,12 @@ var workerSupport = mixin({
     const handler = (msg) => {
       switch (msg.type) {
         case 'call': {
+          const { module, name, args, futex } = msg;        
           if (!worker.canceled) {
-            const { module, name, args } = msg;        
             const fn = this.exportedModules[module]?.[name];
             // add a true argument to indicate that waiting is possible
             const result = fn?.(...args, true);
-            const finish = (value) => worker.signal(1, value);
+            const finish = (value) => worker.signal(futex, 1, value);
             if (isPromise(result)) {
               result.then(finish);
             } else {
@@ -6879,7 +6879,7 @@ var workerSupport = mixin({
             // a deferred cancellation has occurred; set canceled to false so that debug print 
             // works during the clean-up process
             worker.canceled = false;
-            worker.signal(2);
+            worker.signal(futex, 2);
           }
         } break;
         case 'done': {
@@ -6896,9 +6896,8 @@ var workerSupport = mixin({
     }
     // send WebAssembly start-up data
     const { executable, memory, options } = this;
-    const futex = new Int32Array(new SharedArrayBuffer(8));      
-    worker.postMessage({ type: 'start', executable, memory, options, futex });
-    worker.signal = (response, result) => {
+    worker.postMessage({ type: 'start', executable, memory, options });
+    worker.signal = (futex, response, result) => {
       if (Atomics.load(futex, 0) === 0) {
         Atomics.store(futex, 0, response);
         Atomics.store(futex, 1, result|0);
@@ -6958,27 +6957,35 @@ function workerMain() {
   function process(msg) {
     switch (msg.type) {
       case 'start': {
-        const { executable, memory, futex, options } = msg;
+        const { executable, memory, options } = msg;
         const imports = { 
           env: { memory },
           wasi: {},
           wasi_snapshot_preview1: {},
         };
         const exit = () => { throw new Error('Exit') };
+        const wait = (futex, timeout) => {
+          const result = Atomics.wait(futex, 0, 0, timeout);
+          if (result !== 'timed-out') {
+            if (Atomics.load(futex, 0) === 2) {
+              // was canceled in the middle of a call; jump back jump back into Zig to execute 
+              // cleanup routines and TLS destructors then exit
+              instance.exports.wasi_thread_clean(0);
+              exit();
+            }
+            return Atomics.load(futex, 1);
+          } else {
+            return 0;
+          }
+        };
+        const createFutex = () => new Int32Array(new SharedArrayBuffer(8));
         for (const { module, name, kind } of WA.Module.imports(executable)) {
           const ns = imports[module];
           if (kind === 'function' && ns) {
             ns[name] = (name === 'proc_exit') ? exit : function(...args) {
-              Atomics.store(futex, 0, 0);
-              port.postMessage({ type: 'call', module, name, args });
-              Atomics.wait(futex, 0, 0);
-              if (Atomics.load(futex, 0) === 2) {
-                // was canceled in the middle of a call; jump back jump back into Zig to execute 
-                // cleanup routines and TLS destructors then exit
-                instance.exports.wasi_thread_clean(0);
-                exit();
-              }
-              return Atomics.load(futex, 1);
+              const futex = createFutex();
+              port.postMessage({ type: 'call', module, name, args, futex });
+              return wait(futex);
             };
             if (name === 'fd_write') {
               const write = ns[name];
@@ -7002,15 +7009,18 @@ function workerMain() {
                     array.set(vector, pos);
                     pos += len;
                   }
+                  const futex = createFutex();
                   port.postMessage({ 
                     type: 'call', 
                     module, 
                     name: `${name}_stderr`, 
-                    args: [ array ] 
+                    args: [ array ],
+                    futex,
                   }, [ array.buffer ]);
                   // write the length, assuming the operation will succeed in the main thread
                   dv.setUint32(writtenAddress, total, true);
-                  return 0;
+                  // block for only up to 5ms
+                  return wait(futex, 50000);
                 } else {
                   return write(fd, iovsAddress, iovsCount, writtenAddress);
                 }
