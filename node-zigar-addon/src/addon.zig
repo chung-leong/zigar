@@ -1570,7 +1570,7 @@ const Futex = struct {
 
     pub fn wait(self: *@This()) E {
         if (self.timeout != 0) {
-            std.Thread.Futex.timedWait(&self.value, .initial_value, self.timeout) catch {
+            std.Thread.Futex.timedWait(&self.value, initial_value, self.timeout) catch {
                 return E.SUCCESS;
             };
         } else {
