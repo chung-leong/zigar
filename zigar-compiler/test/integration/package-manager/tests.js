@@ -29,7 +29,7 @@ export function addTests(importModule, options) {
       }
     })
     // zig-sqlite won't compile under Debug due to 
-    skip.if(optimize == 'Debug').
+    skip.if(optimize == 'Debug' && target == 'wasm32').
     it('should link in zig-sqlite', async function() {
       this.timeout(0);
       // need pthread emulation because package is set up to be threadsafe for the next test
@@ -56,7 +56,7 @@ export function addTests(importModule, options) {
       expect(lines[0]).to.contain('Handel');
       expect(lines[3]).to.contain('Mozart');
     })
-    skip.if(optimize == 'Debug').
+    skip.if(optimize == 'Debug' && target == 'wasm32').
     it('should use zig-sqlite in multithread mode', async function() {
       this.timeout(0);
       const { __zigar, startup, shutdown, open, close, search } = await importTest('use-zig-sqlite/zig-sqlite-threaded', { 
