@@ -1550,13 +1550,12 @@ const ModuleHost = struct {
 const Futex = struct {
     const initial_value = 0xffff_ffff;
 
-    value: std.atomic.Value(u32),
+    value: std.atomic.Value(u32) = .init(initial_value),
     handle: usize,
     timeout: usize = 0,
 
     pub fn init(self: *@This()) usize {
-        self.value = std.atomic.Value(u32).init(initial_value);
-        self.handle = @intFromPtr(self);
+        self.* = .{ .handle = @intFromPtr(self) };
         return self.handle;
     }
 
