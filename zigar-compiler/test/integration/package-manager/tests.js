@@ -1,11 +1,12 @@
 import { expect } from 'chai';
 import { readFile } from 'fs/promises';
+import 'mocha-skip-if';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import { capture } from '../test-utils.js';
 
 export function addTests(importModule, options) {
-  const { target } = options;
+  const { target, optimize } = options;
   const importTest = async (name, options) => {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url, options);
@@ -27,9 +28,17 @@ export function addTests(importModule, options) {
         }
       }
     })
+    // zig-sqlite won't compile under Debug due to 
+    skip.if(optimize == 'Debug').
     it('should link in zig-sqlite', async function() {
       this.timeout(0);
-      const { __zigar, search } = await importTest('use-zig-sqlite/zig-sqlite', { useLLVM: true, useLibc: true });
+      // need pthread emulation because package is set up to be threadsafe for the next test
+      const { __zigar, search } = await importTest('use-zig-sqlite/zig-sqlite', { 
+        multithreaded: true, 
+        useLLVM: true, 
+        useLibc: true, 
+        usePthreadEmulation: true 
+      });
       const path = fileURLToPath(new URL('./use-zig-sqlite/chinook.db', import.meta.url));
       const content = await readFile(path);
       __zigar.on('open', ({ path }) => {
@@ -47,9 +56,15 @@ export function addTests(importModule, options) {
       expect(lines[0]).to.contain('Handel');
       expect(lines[3]).to.contain('Mozart');
     })
+    skip.if(optimize == 'Debug').
     it('should use zig-sqlite in multithread mode', async function() {
       this.timeout(0);
-      const { __zigar, startup, shutdown, open, close, search } = await importTest('use-zig-sqlite/zig-sqlite-threaded', { useLibc: true, multithreaded: true, usePthreadEmulation: true });
+      const { __zigar, startup, shutdown, open, close, search } = await importTest('use-zig-sqlite/zig-sqlite-threaded', { 
+        multithreaded: true, 
+        useLLVM: true, 
+        useLibc: true, 
+        usePthreadEmulation: true 
+      });
       const path = fileURLToPath(new URL('./use-zig-sqlite/chinook.db', import.meta.url));
       const content = await readFile(path);
       const blob = new Blob([ content ]);

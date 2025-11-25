@@ -288,7 +288,6 @@ pub fn pthread_create(
     start_routine: ?*const fn (?*anyopaque) callconv(.c) ?*anyopaque,
     noalias arg: ?*anyopaque,
 ) callconv(.c) c_int {
-    if (builtin.single_threaded) return errno(.PERM);
     const pthread_attrs: ?*Pthread.Attributes = if (attr) |ptr| @ptrCast(ptr.*) else null;
     const pthread = if (pthread_attrs) |pa| get: {
         const pt: *Pthread = @alignCast(@fieldParentPtr("attributes", pa));
