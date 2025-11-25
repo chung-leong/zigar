@@ -2824,11 +2824,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             if (self.indent_level > 0 and !self.indented) {
                 if (!std.mem.eql(u8, fmt, "\n")) {
                     for (0..self.indent_level) |_| {
-<<<<<<< HEAD
                         try writer.print("    ", .{});
-=======
-                        try self.write("    ", .{});
->>>>>>> dev-0.14
                     }
                     self.indented = true;
                 }

@@ -2,8 +2,6 @@ const std = @import("std");
 const wasm_allocator = std.heap.wasm_allocator;
 
 const LinkedList = @import("../../type/linked-list.zig").LinkedList;
-<<<<<<< HEAD
-=======
 
 fn RefCount(comptime T: type) type {
     return struct {
@@ -25,7 +23,6 @@ fn RefCount(comptime T: type) type {
         }
     };
 }
->>>>>>> dev-0.14
 
 const Pthread = struct {
     ref: RefCount(@This()) = .{},
