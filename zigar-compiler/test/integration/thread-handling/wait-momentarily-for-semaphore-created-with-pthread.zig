@@ -25,7 +25,7 @@ pub fn spawn() !void {
 fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 1 acquiring semaphore\n", .{});
     var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
+    _ = c.clock_gettime(c.CLOCK_REALTIME_COARSE, &time);
     add(&time, 1000000);
     if (c.sem_timedwait(&semaphore, &time) != 0) {
         std.debug.print("Thread 1 timed out: {}\n", .{std.c._errno().* == @intFromEnum(std.c.E.TIMEDOUT)});
@@ -45,7 +45,7 @@ fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
 fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 2 acquiring semaphore\n", .{});
     var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
+    _ = c.clock_gettime(c.CLOCK_REALTIME_COARSE, &time);
     add(&time, 1000000);
     if (c.sem_timedwait(&semaphore, &time) != 0) {
         std.debug.print("Thread 2 timed out: {}\n", .{std.c._errno().* == @intFromEnum(std.c.E.TIMEDOUT)});
@@ -65,7 +65,7 @@ fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
 fn run3(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 3 acquiring semaphore\n", .{});
     var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
+    _ = c.clock_gettime(c.CLOCK_REALTIME_COARSE, &time);
     add(&time, 1000000);
     if (c.sem_timedwait(&semaphore, &time) != 0) {
         std.debug.print("Thread 3 timed out: {}\n", .{std.c._errno().* == @intFromEnum(std.c.E.TIMEDOUT)});

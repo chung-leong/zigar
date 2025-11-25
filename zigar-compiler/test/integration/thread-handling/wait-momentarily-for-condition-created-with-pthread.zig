@@ -42,7 +42,7 @@ fn run(arg: ?*anyopaque) callconv(.c) ?*anyopaque {
     defer _ = c.pthread_mutex_unlock(&mutex);
     std.debug.print("Thread waiting for condition\n", .{});
     var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
+    _ = c.clock_gettime(c.CLOCK_REALTIME_COARSE, &time);
     const duration: usize = @intFromPtr(arg);
     add(&time, @intCast(duration));
     const retval = c.pthread_cond_timedwait(&cond, &mutex, &time);

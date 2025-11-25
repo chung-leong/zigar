@@ -8,6 +8,7 @@ const c = @cImport({
 });
 const pthread_t = c.pthread_t;
 const pthread_mutex_t = c.pthread_mutex_t;
+const pthread_mutex_attr_t = c.pthread_mutex_attr_t;
 
 var mutex: pthread_mutex_t = undefined;
 
@@ -33,7 +34,7 @@ fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
 fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.Thread.sleep(10 * 1000000);
     var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
+    _ = c.clock_gettime(c.CLOCK_REALTIME_COARSE, &time);
     add(&time, 150 * 1000000);
     const retval = c.pthread_mutex_timedlock(&mutex, &time);
     if (retval == 0) {
@@ -48,7 +49,7 @@ fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
 fn run3(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.Thread.sleep(10 * 1000000);
     var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
+    _ = c.clock_gettime(c.CLOCK_REALTIME_COARSE, &time);
     add(&time, 20 * 1000000);
     const retval = c.pthread_mutex_timedlock(&mutex, &time);
     if (retval == 0) {
