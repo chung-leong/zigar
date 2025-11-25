@@ -27,6 +27,8 @@ const ns = struct {
         var deflate: std.compress.flate.Decompress = .init(&reader.interface, .gzip, &.{});
         var write_buffer: [4096]u8 = undefined;
         var writer = out_file.writer(&write_buffer);
-        return try deflate.reader.stream(&writer.interface, .unlimited);
+        const interface = &writer.interface;
+        defer interface.flush() catch {};
+        return try deflate.reader.stream(interface, .unlimited);
     }
 };
