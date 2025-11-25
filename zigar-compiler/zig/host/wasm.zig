@@ -357,7 +357,7 @@ extern "env" fn _findJsThunk(controller_address: usize, thunk_address: usize) us
 extern "env" fn _displayPanic(bytes: [*]const u8, len: usize) void;
 
 comptime {
-    if (!builtin.single_threaded and exporter.options.use_pthread_emulation) {
+    if (exporter.options.use_pthread_emulation) {
         const pthread = @import("wasm/pthread.zig");
         for (std.meta.declarations(pthread)) |decl| {
             @export(&@field(pthread, decl.name), .{ .name = decl.name, .visibility = .hidden });
