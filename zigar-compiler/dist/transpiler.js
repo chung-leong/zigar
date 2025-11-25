@@ -676,7 +676,7 @@ function extractTimes(st_atim, st_mtim, fst_flags) {
   return times;
 }
 
-const require = createRequire(import.meta.url);
+const require$1 = createRequire(import.meta.url);
 const execFile$1 = promisify(childProcess.execFile);
 
 async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
@@ -822,7 +822,7 @@ function getPlatform() {
         const list = [];
         try {
           // scan ELF executable for imported shared libraries
-          const { closeSync, openSync, readSync } = require('fs');
+          const { closeSync, openSync, readSync } = require$1('fs');
           const fd = openSync(process.execPath, 'r');
           const sig = new Uint8Array(8);
           readSync(fd, sig);
@@ -967,7 +967,7 @@ function generateCode(definition, params) {
     envVariables = {},
     standaloneLoader,
   } = params;
-  const exports = getExports(structures);
+  const exports$1 = getExports(structures);
   const lines = [];
   const type = standaloneLoader?.type ?? 'esm';
   const add = manageIndentation(lines);
@@ -1038,9 +1038,9 @@ function generateCode(definition, params) {
     add(`const { constructor: v0 } = root;`);
     add(`const v1 = env.getSpecialExports();`);
     specialVarName = 'v1';
-    if (exports.length > 2) {
+    if (exports$1.length > 2) {
       add(`const {`);
-      for (const [ index, name ] of exports.entries()) {
+      for (const [ index, name ] of exports$1.entries()) {
         if (index >= 2) {
           add(`${name}: v${index},`);
         }
@@ -1049,13 +1049,13 @@ function generateCode(definition, params) {
     }
     if (type == 'esm') {
       add(`export {`);
-      for (const [ index, name ] of exports.entries()) {
+      for (const [ index, name ] of exports$1.entries()) {
         add(`v${index} as ${name},`);
       }
       add(`};`);
     } else {
       add(`module.exports = {`);
-      for (const [ index, name ] of exports.entries()) {
+      for (const [ index, name ] of exports$1.entries()) {
         add(`${name}: v${index},`);
       }
       add(`};`);
@@ -1074,7 +1074,7 @@ function generateCode(definition, params) {
     add(`\n${getLibraryExt}`);
   }
   const code = lines.join('\n');
-  return { code, exports, structures };
+  return { code, exports: exports$1, structures };
 }
 
 function addStructureDefinitions(lines, definition) {
@@ -4695,12 +4695,12 @@ var moduleLoading = mixin({
       }
       return imports;
     },
-    importFunctions(exports) {
+    importFunctions(exports$1) {
       if (!this.memory) {
-        this.memory = exports.memory;
+        this.memory = exports$1.memory;
       }
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
-        const fn = exports[name];
+        const fn = exports$1[name];
         if (fn) {
           defineProperty(this, name, defineValue(this.importFunction(fn, argType, returnType)));
           this.destructors.push(() => this[name] = throwError$1);
@@ -4720,7 +4720,7 @@ var moduleLoading = mixin({
       const executable = this.executable = await f(res);
       const functions = this.exportFunctions();
       const env = {}, wasi = {}, wasiPreview = {};
-      const exports = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
+      const exports$1 = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
       for (const { module, name, kind } of WA.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {
@@ -4750,7 +4750,7 @@ var moduleLoading = mixin({
         });
       }
       this.initialTableLength = tableInitial;
-      return WA.instantiate(executable, exports);
+      return WA.instantiate(executable, exports$1);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
@@ -5351,8 +5351,8 @@ var thunkAllocation = mixin({
         initial: tableInitial,
         element: 'anyfunc',
       });
-      const { exports } = new w.Instance(this.executable, imports);
-      const { createJsThunk, destroyJsThunk, identifyJsThunk } = exports;
+      const { exports: exports$1 } = new w.Instance(this.executable, imports);
+      const { createJsThunk, destroyJsThunk, identifyJsThunk } = exports$1;
       const source = {
         thunkCount: 0,
         createJsThunk,
@@ -11519,13 +11519,13 @@ function parseBinary(binary) {
         return { type, imports };
       }
       case SectionType.Export: {
-        const exports = readArray(() => {
+        const exports$1 = readArray(() => {
           const name = readString();
           const type = readU8();
           const index = readU32Leb128();
           return { name, type, index };
         });
-        return { type, exports };
+        return { type, exports: exports$1 };
       }
       case SectionType.Function: {
         const types = readArray(readU32Leb128);
@@ -12564,7 +12564,7 @@ async function transpile(srcPath, options) {
       binarySource = await wasmLoader(srcPath, dv);
     }
   }
-  const { code, exports, structures } = generateCode(definition, {
+  const { code, exports: exports$1, structures } = generateCode(definition, {
     runtimeURL,
     binarySource,
     topLevelAwait,
@@ -12572,7 +12572,7 @@ async function transpile(srcPath, options) {
     moduleOptions,
     mixinPaths,
   });
-  return { code, exports, structures, sourcePaths };
+  return { code, exports: exports$1, structures, sourcePaths };
 }
 
 function embed(path, dv) {

@@ -60,7 +60,7 @@ function findObjects(structures, SLOTS) {
   return list;
 }
 
-const require = createRequire(import.meta.url);
+const require$1 = createRequire(import.meta.url);
 const execFile$1 = promisify(childProcess.execFile);
 
 async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
@@ -208,7 +208,7 @@ function getPlatform() {
         const list = [];
         try {
           // scan ELF executable for imported shared libraries
-          const { closeSync, openSync, readSync } = require('fs');
+          const { closeSync, openSync, readSync } = require$1('fs');
           const fd = openSync(process.execPath, 'r');
           const sig = new Uint8Array(8);
           readSync(fd, sig);
@@ -353,7 +353,7 @@ function generateCode(definition, params) {
     envVariables = {},
     standaloneLoader,
   } = params;
-  const exports = getExports(structures);
+  const exports$1 = getExports(structures);
   const lines = [];
   const type = standaloneLoader?.type ?? 'esm';
   const add = manageIndentation(lines);
@@ -424,9 +424,9 @@ function generateCode(definition, params) {
     add(`const { constructor: v0 } = root;`);
     add(`const v1 = env.getSpecialExports();`);
     specialVarName = 'v1';
-    if (exports.length > 2) {
+    if (exports$1.length > 2) {
       add(`const {`);
-      for (const [ index, name ] of exports.entries()) {
+      for (const [ index, name ] of exports$1.entries()) {
         if (index >= 2) {
           add(`${name}: v${index},`);
         }
@@ -435,13 +435,13 @@ function generateCode(definition, params) {
     }
     if (type == 'esm') {
       add(`export {`);
-      for (const [ index, name ] of exports.entries()) {
+      for (const [ index, name ] of exports$1.entries()) {
         add(`v${index} as ${name},`);
       }
       add(`};`);
     } else {
       add(`module.exports = {`);
-      for (const [ index, name ] of exports.entries()) {
+      for (const [ index, name ] of exports$1.entries()) {
         add(`${name}: v${index},`);
       }
       add(`};`);
@@ -460,7 +460,7 @@ function generateCode(definition, params) {
     add(`\n${getLibraryExt}`);
   }
   const code = lines.join('\n');
-  return { code, exports, structures };
+  return { code, exports: exports$1, structures };
 }
 
 function addStructureDefinitions(lines, definition) {
