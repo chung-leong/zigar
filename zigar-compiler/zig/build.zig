@@ -11,12 +11,10 @@ pub fn build(b: *std.Build) !void {
     }
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const use_llvm = @as(?bool, cfg.use_llvm) orelse switch (cfg.is_wasm) {
-        true => null,
-        false => switch (builtin.target.cpu.arch) {
-            .x86_64 => cfg.multithreaded,
-            else => null,
-        },
+    const use_llvm = @as(?bool, cfg.use_llvm) orelse default: {
+        if (cfg.is_wasm) break :default true;
+        if (builtin.target.cpu.arch == .x86_64 and cfg.multithreaded) break :default true;
+        break :default null;
     };
     const lib = b.addLibrary(.{
         .linkage = .dynamic,
