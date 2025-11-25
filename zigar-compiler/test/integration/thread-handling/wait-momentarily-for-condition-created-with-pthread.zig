@@ -44,7 +44,7 @@ fn run(arg: ?*anyopaque) callconv(.c) ?*anyopaque {
     var time: c.struct_timespec = undefined;
     _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
     const duration: usize = @intFromPtr(arg);
-    time.tv_nsec += @as(c_long, @intCast(duration));
+    add(&time, @intCast(duration));
     const retval = c.pthread_cond_timedwait(&cond, &mutex, &time);
     if (retval == 0) {
         std.debug.print("Thread saw condition\n", .{});
@@ -52,6 +52,14 @@ fn run(arg: ?*anyopaque) callconv(.c) ?*anyopaque {
         std.debug.print("Thread timed out: {}\n", .{retval == @intFromEnum(std.c.E.TIMEDOUT)});
     }
     return null;
+}
+
+fn add(time: *c.struct_timespec, ns: c_long) void {
+    time.tv_nsec += ns;
+    if (time.tv_nsec > 1000000000) {
+        time.tv_sec += 1;
+        time.tv_nsec -= 1000000_000;
+    }
 }
 
 pub fn startup() !void {

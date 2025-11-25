@@ -4727,6 +4727,9 @@ var moduleLoading = mixin({
             env[name] = functions[name] ?? empty;
           } else if (module === 'wasi_snapshot_preview1') {
             wasiPreview[name] = this.getWASIHandler(name);
+            if (name === 'fd_write') {
+              wasiPreview[`${name}_stderr`] = this.getWASIHandler(`${name}_stderr`);
+            }
           } else if (module === 'wasi') {
             wasi[name] = this.getThreadHandler?.(name) ?? empty;
           }
@@ -5889,7 +5892,7 @@ var clockResGet = mixin({
 var clockTimeGet = mixin({
   clockTimeGet(clockId, precision, timeAddress) {
     const t = (clockId === 0) ? Date.now() : performance.now();
-    this.copyUint64(timeAddress, BigInt(t * 1000000));
+    this.copyUint64(timeAddress, BigInt(Math.ceil(t * 1000000)));
     return PosixError.NONE;
   },
 });
@@ -6363,7 +6366,20 @@ var fdWrite = mixin({
       const chunk = new Uint8Array(buffer);
       const method = (flags & PosixDescriptorFlag.nonblock) ? writer.writenb : writer.write;
       return method.call(writer, chunk);
-    }, () => this.copyUint32(writtenAddress, total));
+    }, () => { 
+      if (writtenAddress) {
+        this.copyUint32(writtenAddress, total);
+      }
+    });
+  },
+  fdWriteStderr(chunk, canWait) {
+    catchPosixError(canWait, PosixError.EBADF, () => {
+      const[ writer, rights, flags ] = this.getStream(2);
+      checkAccessRight(rights, PosixDescriptorRight.fd_write);
+      const method = (flags & PosixDescriptorFlag.nonblock) ? writer.writenb : writer.write;
+      return method.call(writer, chunk);
+    });
+    return 0;
   },
 });
 
@@ -6708,12 +6724,12 @@ var workerSupport = mixin({
     const handler = (msg) => {
       switch (msg.type) {
         case 'call': {
+          const { module, name, args, futex } = msg;        
           if (!worker.canceled) {
-            const { module, name, args } = msg;        
             const fn = this.exportedModules[module]?.[name];
             // add a true argument to indicate that waiting is possible
             const result = fn?.(...args, true);
-            const finish = (value) => worker.signal(1, value);
+            const finish = (value) => worker.signal(futex, 1, value);
             if (isPromise(result)) {
               result.then(finish);
             } else {
@@ -6723,7 +6739,7 @@ var workerSupport = mixin({
             // a deferred cancellation has occurred; set canceled to false so that debug print 
             // works during the clean-up process
             worker.canceled = false;
-            worker.signal(2);
+            worker.signal(futex, 2);
           }
         } break;
         case 'done': {
@@ -6740,9 +6756,8 @@ var workerSupport = mixin({
     }
     // send WebAssembly start-up data
     const { executable, memory, options } = this;
-    const futex = new Int32Array(new SharedArrayBuffer(8));      
-    worker.postMessage({ type: 'start', executable, memory, options, futex });
-    worker.signal = (response, result) => {
+    worker.postMessage({ type: 'start', executable, memory, options });
+    worker.signal = (futex, response, result) => {
       if (Atomics.load(futex, 0) === 0) {
         Atomics.store(futex, 0, response);
         Atomics.store(futex, 1, result|0);
@@ -6789,6 +6804,7 @@ function getWorkerURL() {
 }
 
 function workerMain() {
+  // this code must be entirely self-contained; don't call any imported functions
   const WA = WebAssembly;
   let port, instance;
 
@@ -6801,28 +6817,75 @@ function workerMain() {
   function process(msg) {
     switch (msg.type) {
       case 'start': {
-        const { executable, memory, futex, options } = msg;
+        const { executable, memory, options } = msg;
         const imports = { 
           env: { memory },
           wasi: {},
           wasi_snapshot_preview1: {},
         };
         const exit = () => { throw new Error('Exit') };
+        const wait = (futex, timeout) => {
+          const result = Atomics.wait(futex, 0, 0, timeout);
+          if (result !== 'timed-out') {
+            if (Atomics.load(futex, 0) === 2) {
+              // was canceled in the middle of a call; jump back jump back into Zig to execute 
+              // cleanup routines and TLS destructors then exit
+              instance.exports.wasi_thread_clean(0);
+              exit();
+            }
+            return Atomics.load(futex, 1);
+          } else {
+            return 0;
+          }
+        };
+        const createFutex = () => new Int32Array(new SharedArrayBuffer(8));
         for (const { module, name, kind } of WA.Module.imports(executable)) {
           const ns = imports[module];
           if (kind === 'function' && ns) {
             ns[name] = (name === 'proc_exit') ? exit : function(...args) {
-              Atomics.store(futex, 0, 0);
-              port.postMessage({ type: 'call', module, name, args });
-              Atomics.wait(futex, 0, 0);
-              if (Atomics.load(futex, 0) === 2) {
-                // was canceled in the middle of a call; jump back jump back into Zig to execute 
-                // cleanup routines and TLS destructors then exit
-                instance.exports.wasi_thread_clean_deferred?.();
-                exit();
-              }
-              return Atomics.load(futex, 1);
-            };             
+              const futex = createFutex();
+              port.postMessage({ type: 'call', module, name, args, futex });
+              return wait(futex);
+            };
+            if (name === 'fd_write') {
+              const write = ns[name];
+              ns[name] = function(fd, iovsAddress, iovsCount, writtenAddress) {                
+                if (fd === 2) {
+                  // get the total length first
+                  const dv = new DataView(memory.buffer);
+                  let total = 0;
+                  const ops = [];
+                  for (let i = 0, offset = 0; i < iovsCount; i++, offset += 8) {
+                    const ptr = dv.getUint32(iovsAddress + offset, true);
+                    const len = dv.getUint32(iovsAddress + offset + 4, true);
+                    ops.push({ ptr, len });
+                    total += len;
+                  }
+                  const array = new Uint8Array(total);
+                  // copy vectors into new array
+                  let pos = 0;
+                  for (const { ptr, len } of ops) {
+                    const vector = new Uint8Array(dv.buffer, ptr, len);
+                    array.set(vector, pos);
+                    pos += len;
+                  }
+                  const futex = createFutex();
+                  port.postMessage({ 
+                    type: 'call', 
+                    module, 
+                    name: `${name}_stderr`, 
+                    args: [ array ],
+                    futex,
+                  }, [ array.buffer ]);
+                  // write the length, assuming the operation will succeed in the main thread
+                  dv.setUint32(writtenAddress, total, true);
+                  // block for only up to 50ms
+                  return wait(futex, 50000);
+                } else {
+                  return write(fd, iovsAddress, iovsCount, writtenAddress);
+                }
+              };
+            }
           }
         }
         if (options.tableInitial) {
@@ -6843,7 +6906,7 @@ function workerMain() {
       } break;
       case 'clean': {
         try {
-          instance.exports.wasi_thread_clean_async(msg.raddr);
+          instance.exports.wasi_thread_clean(msg.raddr);
         } catch {
         }
         port.postMessage({ type: 'done' });
@@ -12063,7 +12126,6 @@ function createDecoder(reader) {
     0x02: readI32Leb128,
     0x03: readI32Leb128,
     0x04: readI32Leb128,
-    0x05: readI32Leb128,
     0x0C: readOne,
     0x0D: readOne,
     0x0E: () => [ readArray(readOne), readU32Leb128() ],
@@ -12254,7 +12316,6 @@ function createEncoder(writer) {
     0x02: writeI32Leb128,
     0x03: writeI32Leb128,
     0x04: writeI32Leb128,
-    0x05: writeI32Leb128,
     0x0C: writeOne,
     0x0D: writeOne,
     0x0E: (op) => [ writeArray(op[0], writeOne), writeOne(op[1]) ],

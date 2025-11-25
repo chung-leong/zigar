@@ -89,6 +89,7 @@ const ModuleHost = struct {
         fd_tell: ?Ref = null,
         fd_write: ?Ref = null,
         fd_write1: ?Ref = null,
+        fd_write_stderr: ?Ref = null,
         path_create_directory: ?Ref = null,
         path_filestat_get: ?Ref = null,
         path_filestat_set_times: ?Ref = null,
@@ -944,7 +945,7 @@ const ModuleHost = struct {
             const func = self.ts.handle_jscall orelse return error.Disabled;
             var futex: Futex = undefined;
             call.futex_handle = futex.init();
-            try napi.callThreadsafeFunction(func, @ptrCast(@constCast(call)), .nonblocking);
+            try napi.callThreadsafeFunction(func, @constCast(call), .nonblocking);
             return futex.wait();
         }
     }
@@ -990,12 +991,34 @@ const ModuleHost = struct {
                 .rename => try self.handleRename(futex, &call.u.rename),
                 .poll => try self.handlePoll(futex, &call.u.poll),
                 .environ => try self.handleGetEnvironmentStrings(futex, &call.u.environ),
+                .write_stderr => try self.handleWriteStderr(futex, &call.u.write_stderr),
             };
         } else {
             const func = self.ts.handle_syscall orelse return error.Disabled;
             var futex: Futex = undefined;
             call.futex_handle = futex.init();
-            try napi.callThreadsafeFunction(func, @ptrCast(call), .nonblocking);
+            if (call.cmd == .write and call.u.write.fd == 2) {
+                const len: usize = call.u.write.len;
+                const bytes = call.u.write.bytes;
+                const new_call = try c_allocator.create(Syscall);
+                errdefer c_allocator.destroy(new_call);
+                const new_bytes = try c_allocator.alloc(u8, len);
+                errdefer c_allocator.free(new_bytes);
+                @memcpy(new_bytes, bytes[0..len]);
+                new_call.* = .{
+                    .cmd = .write_stderr,
+                    .u = .{ .write_stderr = .{
+                        .bytes = new_bytes.ptr,
+                        .len = call.u.write.len,
+                    } },
+                    .futex_handle = 0,
+                };
+                try napi.callThreadsafeFunction(func, new_call, .nonblocking);
+                call.u.write.written = call.u.write.len;
+                futex.timeout = 50000;
+            } else {
+                try napi.callThreadsafeFunction(func, call, .nonblocking);
+            }
             return futex.wait();
         }
     }
@@ -1091,6 +1114,28 @@ const ModuleHost = struct {
             try env.createUsize(@intFromPtr(args.bytes)),
             try env.createUint32(args.len),
             try env.createUsize(@intFromPtr(&args.written)),
+            futex,
+        });
+    }
+
+    fn handleWriteStderr(self: *@This(), futex: Value, args: anytype) !E {
+        const env = self.env;
+        const len: usize = args.len;
+        const bytes = args.bytes;
+        defer {
+            // free the buffer and the struct
+            const u_ptr: *@FieldType(Syscall, "u") = @ptrCast(@alignCast(args));
+            const call: *Syscall = @fieldParentPtr("u", u_ptr);
+            c_allocator.free(bytes[0..len]);
+            c_allocator.destroy(call);
+        }
+        const opaque_ptr, const buffer = try env.createArraybuffer(len);
+        const dest: [*]u8 = @ptrCast(opaque_ptr);
+        @memcpy(dest[0..len], bytes[0..len]);
+        // _ = buffer;
+        // _ = futex;
+        return try self.callPosixFunction(self.js.fd_write_stderr, &.{
+            try env.createTypedarray(.uint8_array, len, buffer, 0),
             futex,
         });
     }
@@ -1507,6 +1552,7 @@ const Futex = struct {
 
     value: std.atomic.Value(u32),
     handle: usize,
+    timeout: usize = 0,
 
     pub fn init(self: *@This()) usize {
         self.value = std.atomic.Value(u32).init(initial_value);
@@ -1515,7 +1561,13 @@ const Futex = struct {
     }
 
     pub fn wait(self: *@This()) E {
-        std.Thread.Futex.wait(&self.value, initial_value);
+        if (self.timeout != 0) {
+            std.Thread.Futex.timedWait(&self.value, initial_value, self.timeout) catch {
+                return E.SUCCESS;
+            };
+        } else {
+            std.Thread.Futex.wait(&self.value, initial_value);
+        }
         const final_value = self.value.load(.acquire);
         return std.meta.intToEnum(E, final_value) catch E.FAULT;
     }

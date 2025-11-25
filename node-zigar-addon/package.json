@@ -12,7 +12,11 @@
     "test:gc": "mocha --v8-expose-gc -- test/gc/*.test.js",
     "debug": "mocha --reporter spec --inspect-brk -- test/*.test.js",
     "coverage": "c8 mocha -- test/*.test.js",
+<<<<<<< HEAD
     "rollup": "rollup -c rollup.config.js && rm src/dist/addon.??b.js && cp ../zigar-compiler/zig/host/native/interface.zig ../zigar-compiler/zig/host/native/hooks.zig ./src/module/native",
+=======
+    "rollup": "rollup -c rollup.config.js && rm src/dist/addon.??b.js && cp ../zigar-compiler/zig/host/native/interface.zig ../zigar-compiler/zig/host/native/hooks.zig ./src/module/native/",
+>>>>>>> dev-0.14
     "copy": "cp ../zigar-compiler/zig/host/native/interface.zig ../zigar-compiler/zig/host/native/hooks.zig ./src/module/native"
   },
   "files": [

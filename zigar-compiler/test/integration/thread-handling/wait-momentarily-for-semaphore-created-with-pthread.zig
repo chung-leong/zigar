@@ -26,7 +26,7 @@ fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 1 acquiring semaphore\n", .{});
     var time: c.struct_timespec = undefined;
     _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
-    time.tv_nsec += 1000000;
+    add(&time, 1000000);
     if (c.sem_timedwait(&semaphore, &time) != 0) {
         std.debug.print("Thread 1 timed out: {}\n", .{std.c._errno().* == @intFromEnum(std.c.E.TIMEDOUT)});
         return null;
@@ -46,7 +46,7 @@ fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 2 acquiring semaphore\n", .{});
     var time: c.struct_timespec = undefined;
     _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
-    time.tv_nsec += 1000000;
+    add(&time, 1000000);
     if (c.sem_timedwait(&semaphore, &time) != 0) {
         std.debug.print("Thread 2 timed out: {}\n", .{std.c._errno().* == @intFromEnum(std.c.E.TIMEDOUT)});
         return null;
@@ -66,7 +66,7 @@ fn run3(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 3 acquiring semaphore\n", .{});
     var time: c.struct_timespec = undefined;
     _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
-    time.tv_nsec += 1000000;
+    add(&time, 1000000);
     if (c.sem_timedwait(&semaphore, &time) != 0) {
         std.debug.print("Thread 3 timed out: {}\n", .{std.c._errno().* == @intFromEnum(std.c.E.TIMEDOUT)});
         return null;
@@ -80,6 +80,14 @@ fn run3(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 3 acquired semaphore: {d}\n", .{value});
     std.Thread.sleep(100 * 1000000);
     return null;
+}
+
+fn add(time: *c.struct_timespec, ns: c_long) void {
+    time.tv_nsec += ns;
+    if (time.tv_nsec > 1000000000) {
+        time.tv_sec += 1;
+        time.tv_nsec -= 1000000_000;
+    }
 }
 
 pub fn startup() !void {

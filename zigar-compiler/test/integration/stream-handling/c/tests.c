@@ -32,6 +32,7 @@ void scan_stdin_with_scanf() {
             printf("count = %d\n", count);
         }
     } while (count > 0);
+    fflush(stdout);
 }
 
 void scan_stdin_with_scanf_once() {
@@ -44,4 +45,5 @@ void scan_stdin_with_scanf_once() {
     } else if (count > 0) {
         printf("count = %d\n", count);
     }
+    fflush(stdout);
 }

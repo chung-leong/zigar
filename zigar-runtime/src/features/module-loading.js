@@ -127,6 +127,9 @@ export default mixin({
             env[name] = functions[name] ?? /* c8 ignore next */ empty;
           } else if (module === 'wasi_snapshot_preview1') {
             wasiPreview[name] = this.getWASIHandler(name);
+            if (name === 'fd_write') {
+              wasiPreview[`${name}_stderr`] = this.getWASIHandler(`${name}_stderr`);
+            }
           } else if (module === 'wasi') {
             wasi[name] = this.getThreadHandler?.(name) ?? /* c8 ignore next */ empty;
           }

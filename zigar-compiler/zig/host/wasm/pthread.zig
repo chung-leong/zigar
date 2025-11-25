@@ -2,8 +2,33 @@ const std = @import("std");
 const wasm_allocator = std.heap.wasm_allocator;
 
 const LinkedList = @import("../../type/linked-list.zig").LinkedList;
+<<<<<<< HEAD
+=======
+
+fn RefCount(comptime T: type) type {
+    return struct {
+        count: std.atomic.Value(usize) = .init(1),
+
+        pub fn inc(self: *@This()) void {
+            _ = self.count.fetchAdd(1, .monotonic);
+        }
+
+        pub fn dec(self: *@This()) void {
+            const prev_count = self.count.fetchSub(1, .monotonic);
+            if (prev_count == 1) {
+                const parent: *T = @fieldParentPtr("ref", self);
+                if (@hasDecl(T, "deinit")) {
+                    parent.deinit();
+                }
+                wasm_allocator.destroy(parent);
+            }
+        }
+    };
+}
+>>>>>>> dev-0.14
 
 const Pthread = struct {
+    ref: RefCount(@This()) = .{},
     id: pthread_t = undefined,
     wasi_thread_id: u32 = undefined,
     thread: std.Thread = undefined,
@@ -32,26 +57,36 @@ const Pthread = struct {
     const first_id = 1;
     const def_stack_size = 2 * 1024 * 1024;
 
-    var list: LinkedList(@This()) = .init(wasm_allocator);
+    var list: LinkedList(*@This()) = .init(wasm_allocator);
     var next_id: std.atomic.Value(pthread_t) = .init(first_id + 1);
 
     threadlocal var current: ?*@This() = null;
 
-    fn alloc() !*@This() {
-        return try list.push(.{});
+    pub fn deinit(self: *@This()) void {
+        _ = list.remove(.eql, self);
     }
 
-    fn allocId() pthread_t {
+    pub fn run(self: *@This()) void {
+        // set threadlocal variable so pthread_self() can get itself
+        current = self;
+        // obtain system thread id (i.e. WASI) for the purpose of cancellation
+        self.wasi_thread_id = std.Thread.getCurrentId();
+        self.return_value = self.start_routine(self.arg);
+        key_value_list.deinit(wasm_allocator);
+    }
+
+    pub fn generateId() pthread_t {
         while (true) {
             const id = next_id.fetchAdd(1, .acq_rel);
             if (id > first_id) return id;
         }
     }
 
-    fn getCurrent() *@This() {
+    pub fn getCurrent() *@This() {
         return current orelse create: {
             // current thread is not created through pthread
-            const self = alloc() catch @panic("Out of memory");
+            const self = wasm_allocator.create(@This()) catch @panic("Out of memory");
+            self.* = .{};
             const wasi_thread_id = std.Thread.getCurrentId();
             self.wasi_thread_id = wasi_thread_id;
             const WasiThread = @TypeOf(self.thread.impl.thread.*);
@@ -64,28 +99,21 @@ const Pthread = struct {
                 const address = @"thread-address"(wasi_thread_id);
                 const wasi_thread: *WasiThread = @ptrFromInt(address);
                 const state = wasi_thread.state.load(.unordered);
-                self.id = allocId();
+                self.id = generateId();
                 self.thread.impl.thread = wasi_thread;
                 self.state = .init(if (state == .detached) .detached else .joinable);
             }
             current = self;
+            list.push(self) catch @panic("Out of memory");
             break :create self;
         };
     }
 
-    fn find(id: pthread_t) ?*@This() {
+    pub fn find(id: pthread_t) ?*@This() {
         return list.find(match, id);
     }
 
-    fn addRef(self: *@This()) void {
-        list.addRef(self);
-    }
-
-    fn release(self: *@This()) void {
-        list.release(self);
-    }
-
-    fn cancel(self: *@This()) !void {
+    pub fn cancel(self: *@This()) !void {
         const cancel_arg: ?*anyopaque = switch (self.cancel_type.load(.unordered)) {
             PTHREAD_CANCEL_ASYNCHRONOUS => init: {
                 // immediate termination is desired; the web worker handling this thread is going
@@ -103,13 +131,15 @@ const Pthread = struct {
                     original_stack_pointer: [*]u8,
                 };
                 const instance: *Instance = @ptrCast(self.thread.impl.thread);
-                const thread_remnant = try wasm_allocator.create(ThreadRemnant);
-                thread_remnant.* = .{
-                    // 4K from the end should provide enough room running clean-up functions
-                    .stack_pointer = wasi_thread.memory.ptr + wasi_thread.memory.len - 4096,
+                const bytes = @sizeOf(AsyncCancellation) + 4096; // 4K should be more than enough
+                const memory_ptr = wasm_allocator.rawAlloc(bytes, .@"16", 0) orelse return error.OutOfMemory;
+                const ac: *AsyncCancellation = @ptrCast(@alignCast(memory_ptr));
+                ac.* = .{
+                    .memory = memory_ptr[0..bytes],
+                    .stack_pointer = memory_ptr + std.mem.alignForward(usize, @sizeOf(AsyncCancellation), 16),
                     .tls_base = wasi_thread.memory.ptr + instance.tls_offset,
                 };
-                break :init thread_remnant;
+                break :init ac;
             },
             else => null,
         };
@@ -119,17 +149,17 @@ const Pthread = struct {
         @"thread-cancel"(self.wasi_thread_id, cancel_arg);
     }
 
-    fn match(self: *const @This(), id: c_ulong) bool {
+    pub fn match(self: *const @This(), id: c_ulong) bool {
         return self.id == id;
     }
 
-    fn setState(self: *@This(), expected: State, new: State) !void {
+    pub fn setState(self: *@This(), expected: State, new: State) !void {
         if (self.state.cmpxchgStrong(expected, new, .acq_rel, .monotonic) != null) {
             return error.IncorrectState;
         }
     }
 
-    fn performCancellationCleanUp() void {
+    pub fn performCancellationCleanUp() void {
         // this function runs in a new worker after the one handling the thread was killed
         // since the thread id is reused, we'd have the same TLS variable as before; getCurrent()
         // would still give us the right struct
@@ -144,7 +174,7 @@ const Pthread = struct {
         self.performExitCleanup();
     }
 
-    fn performExitCleanup(self: *@This()) void {
+    pub fn performExitCleanup(self: *@This()) void {
         // call destructors inserted by pthread_key_create()
         _ = pthread_spin_lock(&key_list_spinlock);
         defer _ = pthread_spin_unlock(&key_list_spinlock);
@@ -193,49 +223,64 @@ const Pthread = struct {
         }
         // remove from list if it's detached
         if (self.state.load(.unordered) == .detached) {
-            self.release();
+            self.ref.dec();
         }
     }
 
-    const ThreadRemnant = struct {
+    const AsyncCancellation = struct {
+        memory: []u8,
         stack_pointer: [*]u8,
         tls_base: [*]u8,
     };
 
-    export fn wasi_thread_clean_async(_: *ThreadRemnant) callconv(.naked) void {
-        // this function is called from JavaScript when cancel_type is PTHREAD_CANCEL_ASYNCHRONOUS
-        // by a new worker taking over after the original worker has been killed; the pointer
-        // argument provide the necessary info for it to assume the identity of the original
+    /// This function is called after a thread has been canceled; if it was a deferred cancelation,
+    /// (i.e. the worker interrupted itself voluntarily), the argument would be null; if it was an
+    /// async cancelation, the worker has unceremoniously gotten the axe; the pointer provides the
+    /// for necessary information for the replacement worker to take on the identity of its
+    /// ill-fated comrade and clean up after it
+    export fn wasi_thread_clean(_: ?*AsyncCancellation) callconv(.naked) void {
         const clothed = struct {
-            fn run(remnant: *ThreadRemnant) callconv(.c) void {
-                wasm_allocator.destroy(remnant);
+            // cancel_type is PTHREAD_CANCEL_ASYNCHRONOUS and a new worker has just taken over;
+            // our assembly code has recreated the environment of the thread by this point; we
+            // just need to perform the clean-up then free the memory allocated for the temporary
+            // stack and the AsyncCancellation struct itself
+            fn runAsync(ac: *AsyncCancellation) callconv(.c) void {
+                // use raw free to avoid modification of stack memory
+                defer wasm_allocator.rawFree(ac.memory, .@"16", 0);
+                performCancellationCleanUp();
+            }
+
+            // cancel_type is PTHREAD_CANCEL_DEFERRED and a cancellation point has just been
+            // reached (i.e. a syscall happened); perform clean-up within the original thread
+            // using the thread's stack
+            fn runDeferred() callconv(.c) void {
                 performCancellationCleanUp();
             }
         };
         asm volatile (
             \\ local.get 0
-            \\ i32.load %[stack_pointer]
-            \\ global.set __stack_pointer
-            \\ local.get 0
-            \\ i32.load %[tls_base]
-            \\ global.set __tls_base
-            \\ local.get 0
-            \\ call %[cont]
+            \\ if
+            \\   local.get 0
+            \\   i32.load %[stack_pointer]
+            \\   global.set __stack_pointer
+            \\   local.get 0
+            \\   i32.load %[tls_base]
+            \\   global.set __tls_base
+            \\   local.get 0
+            \\   call %[run_async]
+            \\ else
+            \\   call %[run_deferred]
+            \\ end_if
             \\ return
             :
-            : [stack_pointer] "X" (@offsetOf(ThreadRemnant, "stack_pointer")),
-              [tls_base] "X" (@offsetOf(ThreadRemnant, "tls_base")),
-              [cont] "X" (&clothed.run),
+            : [stack_pointer] "X" (@offsetOf(AsyncCancellation, "stack_pointer")),
+              [tls_base] "X" (@offsetOf(AsyncCancellation, "tls_base")),
+              [run_async] "X" (&clothed.runAsync),
+              [run_deferred] "X" (&clothed.runDeferred),
         );
     }
 
-    export fn wasi_thread_clean_deferred() callconv(.c) void {
-        // this function is called from JavaScript when cancel_type is PTHREAD_CANCEL_DEFERRED
-        // and a cancellation point has just been reached (i.e. a syscall happened)
-        performCancellationCleanUp();
-    }
-
-    extern "wasi" fn @"thread-cancel"(id: u32, ptr: ?*anyopaque) void;
+    extern "wasi" fn @"thread-cancel"(id: u32, async_cancel: ?*anyopaque) void;
     extern "wasi" fn @"thread-address"(id: u32) usize;
 };
 
@@ -249,12 +294,15 @@ pub fn pthread_create(
     const pthread = if (pthread_attrs) |pa| get: {
         const pt: *Pthread = @alignCast(@fieldParentPtr("attributes", pa));
         // increase ref count since we're now using the Pthread struct itself
-        pt.addRef();
+        pt.ref.inc();
         break :get pt;
-    } else Pthread.alloc() catch return errno(.NOMEM);
-    errdefer pthread.release();
+    } else alloc: {
+        const p = wasm_allocator.create(Pthread) catch return errno(.NOMEM);
+        p.* = .{};
+        break :alloc p;
+    };
     const detach = if (pthread_attrs) |pa| pa.detached == PTHREAD_CREATE_DETACHED else false;
-    pthread.id = Pthread.allocId();
+    pthread.id = Pthread.generateId();
     pthread.start_routine = start_routine.?;
     pthread.arg = arg;
     pthread.state = .init(if (detach) .detached else .joinable);
@@ -262,19 +310,17 @@ pub fn pthread_create(
     pthread.thread = std.Thread.spawn(.{
         .allocator = wasm_allocator,
         .stack_size = if (pthread_attrs) |pa| pa.stack_size else Pthread.def_stack_size,
-    }, run_pthread, .{pthread}) catch return errno(.INVAL);
+    }, Pthread.run, .{pthread}) catch {
+        pthread.ref.dec();
+        return errno(.INVAL);
+    };
     if (detach) pthread.thread.detach();
     newthread.* = pthread.id;
+    Pthread.list.push(pthread) catch {
+        pthread.ref.dec();
+        return errno(.NOMEM);
+    };
     return 0;
-}
-
-fn run_pthread(thread: *Pthread) void {
-    // set threadlocal variable so pthread_self() can get itself
-    Pthread.current = thread;
-    // obtain system thread id (i.e. WASI) for the purpose of cancellation
-    thread.wasi_thread_id = std.Thread.getCurrentId();
-    thread.return_value = thread.start_routine(thread.arg);
-    key_value_list.deinit(wasm_allocator);
 }
 
 pub fn pthread_exit(
@@ -291,12 +337,11 @@ pub fn pthread_join(
     thread_return: [*c]?*anyopaque,
 ) callconv(.c) c_int {
     const pthread = Pthread.find(th) orelse return errno(.INVAL);
-    defer pthread.release();
     pthread.setState(.joinable, .joined) catch return errno(.INVAL);
     pthread.thread.join();
     thread_return.* = pthread.return_value;
     // release a second time to remove it from the list
-    pthread.release();
+    pthread.ref.dec();
     return 0;
 }
 
@@ -304,7 +349,6 @@ pub fn pthread_detach(
     th: pthread_t,
 ) callconv(.c) c_int {
     const pthread = Pthread.find(th) orelse return errno(.INVAL);
-    defer pthread.release();
     pthread.setState(.joinable, .detached) catch return errno(.INVAL);
     pthread.thread.detach();
     return 0;
@@ -325,7 +369,8 @@ pub fn pthread_equal(
 pub fn pthread_attr_init(
     attr: [*c]pthread_attr_t,
 ) callconv(.c) c_int {
-    const pthread = Pthread.alloc() catch return errno(.NOMEM);
+    const pthread = wasm_allocator.create(Pthread) catch return errno(.NOMEM);
+    pthread.* = .{};
     attr.* = &pthread.attributes;
     return 0;
 }
@@ -335,7 +380,7 @@ pub fn pthread_attr_destroy(
 ) callconv(.c) c_int {
     const pthread_attrs: *Pthread.Attributes = attr.*;
     const pthread: *Pthread = @alignCast(@fieldParentPtr("attributes", pthread_attrs));
-    pthread.release();
+    pthread.ref.dec();
     return 0;
 }
 
@@ -608,11 +653,11 @@ const PthreadCleanUpCallback = extern struct {
 
     threadlocal var top: std.atomic.Value(?*@This()) = .init(null);
 
-    fn getTop() ?*@This() {
+    pub fn getTop() ?*@This() {
         return top.load(.acquire);
     }
 
-    fn setTop(ptcb: ?*@This()) void {
+    pub fn setTop(ptcb: ?*@This()) void {
         top.store(ptcb, .release);
     }
 };
@@ -639,9 +684,9 @@ pub fn _pthread_cleanup_push(
 }
 
 const PthreadMutex = struct {
+    ref: RefCount(@This()) = .{},
     mutex: std.Thread.Mutex = .{},
     lock_count: usize = 0,
-    ref_count: std.atomic.Value(usize) = .init(1),
     thread_id: std.atomic.Value(pthread_t) = .init(0),
     wait_futex: std.atomic.Value(u32) = .init(0),
     attributes: Attributes = .{},
@@ -654,7 +699,7 @@ const PthreadMutex = struct {
         robustness: c_int = PTHREAD_MUTEX_STALLED,
     };
 
-    fn extract(mutex: [*c]const pthread_mutex_t) *@This() {
+    pub fn extract(mutex: [*c]const pthread_mutex_t) *@This() {
         return if (mutex.*) |pm| pm else init_static: {
             const pm = wasm_allocator.create(@This()) catch @panic("Out of memory");
             pm.* = .{};
@@ -664,20 +709,12 @@ const PthreadMutex = struct {
         };
     }
 
-    fn addRef(self: *@This()) void {
-        _ = self.ref_count.fetchAdd(1, .monotonic);
-    }
-
-    fn release(self: *@This()) void {
-        if (self.ref_count.fetchSub(1, .monotonic) == 1) wasm_allocator.destroy(self);
-    }
-
-    fn wait(self: *@This(), duration: u64) void {
+    pub fn wait(self: *@This(), duration: u64) void {
         self.wait_futex.store(0, .unordered);
         std.Thread.Futex.timedWait(&self.wait_futex, 0, duration) catch {};
     }
 
-    fn wake(self: *@This()) void {
+    pub fn wake(self: *@This()) void {
         if (self.wait_futex.load(.unordered) != 0) {
             self.wait_futex.store(1, .unordered);
             std.Thread.Futex.wake(&self.wait_futex, 1);
@@ -692,7 +729,7 @@ pub fn pthread_mutex_init(
     const pthread_mutex_attrs: ?*const PthreadMutex.Attributes = if (mutexattr) |ptr| @ptrCast(ptr.*) else null;
     const pthread_mutex: *PthreadMutex = if (pthread_mutex_attrs) |pma| get: {
         const pm: *PthreadMutex = @alignCast(@fieldParentPtr("attributes", @constCast(pma)));
-        pm.addRef();
+        pm.ref.inc();
         break :get pm;
     } else alloc: {
         const pm = wasm_allocator.create(PthreadMutex) catch return errno(.NOMEM);
@@ -707,7 +744,7 @@ pub fn pthread_mutex_destroy(
     mutex: [*c]pthread_mutex_t,
 ) callconv(.c) c_int {
     const pthread_mutex = PthreadMutex.extract(mutex);
-    pthread_mutex.release();
+    pthread_mutex.ref.dec();
     return 0;
 }
 
@@ -850,7 +887,7 @@ pub fn pthread_mutexattr_destroy(
 ) callconv(.c) c_int {
     const pthread_mutex_attrs: *PthreadMutex.Attributes = attr.*;
     const pthread_mutex: *PthreadMutex = @alignCast(@fieldParentPtr("attributes", pthread_mutex_attrs));
-    pthread_mutex.release();
+    pthread_mutex.ref.dec();
     return 0;
 }
 
@@ -945,8 +982,8 @@ pub fn pthread_mutexattr_setrobust(
 }
 
 const PthreadRwLock = struct {
+    ref: RefCount(@This()) = .{},
     lock: std.Thread.RwLock = .{},
-    ref_count: std.atomic.Value(usize) = .init(1),
     writer_thread_id: pthread_t = 0,
     reader_thread_list: std.ArrayListUnmanaged(pthread_t) = .{},
     reader_thread_list_spinlock: pthread_spinlock_t = 0,
@@ -958,7 +995,7 @@ const PthreadRwLock = struct {
         shared: u8 = PTHREAD_PROCESS_PRIVATE,
     };
 
-    fn extract(rwlock: [*c]const pthread_rwlock_t) *@This() {
+    pub fn extract(rwlock: [*c]const pthread_rwlock_t) *@This() {
         return if (rwlock.*) |prw| prw else init_static: {
             const prw = wasm_allocator.create(@This()) catch @panic("Out of memory");
             prw.* = .{};
@@ -968,23 +1005,12 @@ const PthreadRwLock = struct {
         };
     }
 
-    fn addRef(self: *@This()) void {
-        _ = self.ref_count.fetchAdd(1, .acq_rel);
-    }
-
-    fn release(self: *@This()) void {
-        if (self.ref_count.fetchSub(1, .acq_rel) == 1) {
-            self.reader_thread_list.deinit(wasm_allocator);
-            wasm_allocator.destroy(self);
-        }
-    }
-
-    fn wait(self: *@This(), duration: u64) void {
+    pub fn wait(self: *@This(), duration: u64) void {
         self.wait_futex.store(0, .unordered);
         std.Thread.Futex.timedWait(&self.wait_futex, 0, duration) catch {};
     }
 
-    fn wake(self: *@This()) void {
+    pub fn wake(self: *@This()) void {
         if (self.wait_futex.load(.unordered) != 0) {
             self.wait_futex.store(1, .unordered);
             std.Thread.Futex.wake(&self.wait_futex, 1);
@@ -999,7 +1025,7 @@ pub fn pthread_rwlock_init(
     const pthread_rwlock_attrs: ?*const PthreadRwLock.Attributes = if (attr) |ptr| @ptrCast(ptr.*) else null;
     const pthread_rwlock: *PthreadRwLock = if (pthread_rwlock_attrs) |prwa| get: {
         const prw: *PthreadRwLock = @alignCast(@fieldParentPtr("attributes", @constCast(prwa)));
-        prw.addRef();
+        prw.ref.inc();
         break :get prw;
     } else alloc: {
         const prw = wasm_allocator.create(PthreadRwLock) catch return errno(.NOMEM);
@@ -1014,7 +1040,7 @@ pub fn pthread_rwlock_destroy(
     rwlock: [*c]pthread_rwlock_t,
 ) callconv(.c) c_int {
     const pthread_rwlock = PthreadRwLock.extract(rwlock);
-    pthread_rwlock.release();
+    pthread_rwlock.ref.dec();
     return 0;
 }
 
@@ -1146,7 +1172,7 @@ pub fn pthread_rwlockattr_destroy(
 ) callconv(.c) c_int {
     const pthread_rwlock_attrs: *PthreadRwLock.Attributes = attr.*;
     const pthread_rwlock: *PthreadRwLock = @alignCast(@fieldParentPtr("attributes", pthread_rwlock_attrs));
-    pthread_rwlock.release();
+    pthread_rwlock.ref.dec();
     return 0;
 }
 
@@ -1187,8 +1213,8 @@ pub fn pthread_rwlockattr_setkind_np(
 }
 
 const PthreadCondition = struct {
+    ref: RefCount(@This()) = .{},
     condition: std.Thread.Condition = .{},
-    ref_count: std.atomic.Value(usize) = .init(1),
     attributes: PthreadCondition.Attributes = .{},
 
     const Attributes = struct {
@@ -1196,7 +1222,7 @@ const PthreadCondition = struct {
         clock_id: std.posix.clockid_t = .REALTIME,
     };
 
-    fn extract(cond: [*c]const pthread_cond_t) *@This() {
+    pub fn extract(cond: [*c]const pthread_cond_t) *@This() {
         return if (cond.*) |pc| pc else init_static: {
             const pc = wasm_allocator.create(@This()) catch @panic("Out of memory");
             pc.* = .{};
@@ -1204,14 +1230,6 @@ const PthreadCondition = struct {
             mutable.* = pc;
             break :init_static pc;
         };
-    }
-
-    fn addRef(self: *@This()) void {
-        _ = self.ref_count.fetchAdd(1, .acq_rel);
-    }
-
-    fn release(self: *@This()) void {
-        if (self.ref_count.fetchSub(1, .acq_rel) == 1) wasm_allocator.destroy(self);
     }
 };
 
@@ -1222,7 +1240,7 @@ pub fn pthread_cond_init(
     const pthread_condition_attrs: ?*const PthreadCondition.Attributes = if (attr) |ptr| @ptrCast(ptr.*) else null;
     const pthread_condition: *PthreadCondition = if (pthread_condition_attrs) |pca| get: {
         const pc: *PthreadCondition = @alignCast(@fieldParentPtr("attributes", @constCast(pca)));
-        pc.addRef();
+        pc.ref.inc();
         break :get pc;
     } else alloc: {
         const pc = wasm_allocator.create(PthreadCondition) catch return errno(.NOMEM);
@@ -1237,7 +1255,7 @@ pub fn pthread_cond_destroy(
     cond: [*c]pthread_cond_t,
 ) callconv(.c) c_int {
     const pthread_condition = PthreadCondition.extract(cond);
-    pthread_condition.release();
+    pthread_condition.ref.dec();
     return 0;
 }
 
@@ -1299,7 +1317,7 @@ pub fn pthread_condattr_destroy(
 ) callconv(.c) c_int {
     const pthread_condition_attrs: *PthreadCondition.Attributes = attr.*;
     const pthread_condition: *PthreadCondition = @alignCast(@fieldParentPtr("attributes", pthread_condition_attrs));
-    pthread_condition.release();
+    pthread_condition.ref.dec();
     return 0;
 }
 
@@ -1456,8 +1474,8 @@ pub fn pthread_getcpuclockid(
 }
 
 const PthreadSemaphore = struct {
+    ref: RefCount(@This()) = .{},
     semaphore: std.Thread.Semaphore = .{},
-    ref_count: std.atomic.Value(usize) = .init(1),
     attributes: Attributes = .{},
     name: ?[]u8 = null,
 
@@ -1467,23 +1485,16 @@ const PthreadSemaphore = struct {
 
     var list: LinkedList(*@This()) = .init(wasm_allocator);
 
-    fn extract(sem: [*c]const sem_t) *@This() {
+    pub fn deinit(self: *@This()) void {
+        if (self.name) |n| wasm_allocator.free(n);
+    }
+
+    pub fn extract(sem: [*c]const sem_t) *@This() {
         return if (sem.*) |prw| @constCast(prw) else unreachable;
     }
 
-    fn addRef(self: *@This()) void {
-        _ = self.ref_count.fetchAdd(1, .monotonic);
-    }
-
-    fn release(self: *@This()) void {
-        if (self.ref_count.fetchSub(1, .monotonic) == 1) {
-            if (self.name) |slice| wasm_allocator.free(slice);
-            wasm_allocator.destroy(self);
-        }
-    }
-
-    fn match(ptr: **@This(), name: []const u8) bool {
-        return std.mem.eql(u8, ptr.*.name.?, name);
+    pub fn match(ptr: *@This(), name: []const u8) bool {
+        return std.mem.eql(u8, ptr.name.?, name);
     }
 };
 
@@ -1509,7 +1520,7 @@ pub fn sem_destroy(
     sem: [*c]sem_t,
 ) callconv(.c) c_int {
     const pthread_semaphore = PthreadSemaphore.extract(sem);
-    pthread_semaphore.release();
+    pthread_semaphore.ref.dec();
     return 0;
 }
 
@@ -1520,7 +1531,7 @@ pub fn sem_open(
 ) callconv(.c) [*c]sem_t {
     const flags: std.c.O = @bitCast(oflag);
     const name_s = name[0..std.mem.len(name)];
-    const ptr = if (PthreadSemaphore.list.find(PthreadSemaphore.match, name_s)) |ptr| use: {
+    const ps_ptr = if (PthreadSemaphore.list.findReturnPtr(PthreadSemaphore.match, name_s)) |ptr| use: {
         if (flags.CREAT and flags.EXCL) return semErrno(.EXIST, SEM_FAILED);
         break :use ptr;
     } else create: {
@@ -1529,30 +1540,30 @@ pub fn sem_open(
         defer @cVaEnd(&va_list);
         _ = @cVaArg(&va_list, std.c.mode_t);
         const value = @cVaArg(&va_list, c_uint);
-        const pthread_semaphore: *PthreadSemaphore = wasm_allocator.create(PthreadSemaphore) catch {
+        const ps = wasm_allocator.create(PthreadSemaphore) catch {
             return semErrno(.NOMEM, SEM_FAILED);
         };
         const name_dupe = wasm_allocator.dupe(u8, name_s) catch {
-            wasm_allocator.destroy(pthread_semaphore);
+            wasm_allocator.destroy(ps);
             return semErrno(.NOMEM, SEM_FAILED);
         };
-        pthread_semaphore.* = .{
+        ps.* = .{
             .semaphore = .{
                 .permits = @intCast(value),
             },
             .attributes = .{ .shared = PTHREAD_PROCESS_SHARED },
             .name = name_dupe,
         };
-        break :create PthreadSemaphore.list.push(pthread_semaphore) catch {
-            pthread_semaphore.release();
+        break :create PthreadSemaphore.list.pushReturnPtr(ps) catch {
+            ps.ref.dec();
             return semErrno(.NOMEM, SEM_FAILED);
         };
     };
-    const pthread_semaphore = ptr.*;
     // newly created semaphore will have ref_count = 2, such that a call to sem_close()
     // wouldn't cause its deallocation
-    pthread_semaphore.addRef();
-    return @ptrCast(ptr);
+    const pthread_semaphore = ps_ptr.*;
+    pthread_semaphore.ref.inc();
+    return @ptrCast(@constCast(ps_ptr));
 }
 
 pub fn sem_close(
@@ -1560,7 +1571,7 @@ pub fn sem_close(
 ) callconv(.c) c_int {
     const pthread_semaphore = PthreadSemaphore.extract(sem);
     if (pthread_semaphore.name == null) return semErrno(.INVAL, -1);
-    pthread_semaphore.release();
+    pthread_semaphore.ref.dec();
     return 0;
 }
 
@@ -1568,14 +1579,11 @@ pub fn sem_unlink(
     name: [*c]const u8,
 ) callconv(.c) c_int {
     const name_s = name[0..std.mem.len(name)];
-    const ptr = PthreadSemaphore.list.find(PthreadSemaphore.match, name_s) orelse {
+    const pthread_semaphore = PthreadSemaphore.list.remove(PthreadSemaphore.match, name_s) orelse {
         return semErrno(.NOENT, -1);
     };
-    defer PthreadSemaphore.list.release(ptr); // undo increment made by find()
-    PthreadSemaphore.list.release(ptr); // remove from list
-    const pthread_semaphore = ptr.*;
-    pthread_semaphore.release();
-    pthread_semaphore.release(); // extra release to deallocate it
+    pthread_semaphore.ref.dec();
+    pthread_semaphore.ref.dec(); // extra dec to deallocate it
     return 0;
 }
 

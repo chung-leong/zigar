@@ -218,6 +218,10 @@ pub const Syscall = extern struct {
             count: u32,
             written: u32 = undefined,
         },
+        write_stderr: extern struct {
+            bytes: [*]const u8,
+            len: u32,
+        },
     },
     futex_handle: usize = 0,
 
@@ -255,6 +259,7 @@ pub const Syscall = extern struct {
         utimes,
         write,
         writev,
+        write_stderr,
     };
     pub const Mask = packed struct {
         mkdir: bool = false,
@@ -3292,6 +3297,71 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
     };
 }
 
+pub fn Win32ThreadSubsitute(comptime redirector: type) type {
+    return struct {
+        const posix = PosixSubstitute(redirector);
+
+        pub fn _beginthread(start_routine: *const fn (?*anyopaque) callconv(.c) void, stack_size: c_uint, arg: ?*anyopaque) callconv(.c) usize {
+            const instance = redirector.Host.getInstance();
+            const info = c_allocator.create(ThreadInfo) catch {
+                posix.setError(@intFromEnum(std.c.E.ACCES));
+                return std.math.maxInt(usize);
+            };
+            info.* = .{
+                .proc = start_routine,
+                .arg = arg,
+                .instance = instance,
+            };
+            return Original._beginthread(&setThreadContext, stack_size, info);
+        }
+
+        pub fn _beginthreadex(security: ?*anyopaque, stack_size: c_uint, start_routine: *const fn (?*anyopaque) callconv(WINAPI) c_uint, arg: ?*anyopaque, initflag: c_uint, thrdaddr: *c_uint) callconv(.c) usize {
+            const instance = redirector.Host.getInstance();
+            const info = c_allocator.create(ThreadInfo) catch {
+                posix.setError(@intFromEnum(std.c.E.ACCES));
+                return std.math.maxInt(usize);
+            };
+            info.* = .{
+                .proc = start_routine,
+                .arg = arg,
+                .instance = instance,
+            };
+            return Original._beginthreadex(security, stack_size, &setThreadContextEx, info, initflag, thrdaddr);
+        }
+
+        fn setThreadContext(ptr: ?*anyopaque) callconv(.c) void {
+            const info: *ThreadInfo = @ptrCast(@alignCast(ptr.?));
+            const proc: *const fn (?*anyopaque) callconv(.c) void = @ptrCast(@alignCast(info.proc));
+            const arg = info.arg;
+            const instance = info.instance;
+            c_allocator.destroy(info);
+            redirector.Host.initializeThread(instance) catch unreachable;
+            defer redirector.Host.deinitializeThread(instance) catch {};
+            proc(arg);
+        }
+
+        fn setThreadContextEx(ptr: ?*anyopaque) callconv(WINAPI) c_uint {
+            const info: *ThreadInfo = @ptrCast(@alignCast(ptr.?));
+            const proc: *const fn (?*anyopaque) callconv(.c) c_uint = @ptrCast(@alignCast(info.proc));
+            const arg = info.arg;
+            const instance = info.instance;
+            c_allocator.destroy(info);
+            redirector.Host.initializeThread(instance) catch unreachable;
+            defer redirector.Host.deinitializeThread(instance) catch {};
+            return proc(arg);
+        }
+
+        const WINAPI: std.builtin.CallingConvention = if (builtin.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c;
+
+        const Self = @This();
+        pub const Original = struct {
+            pub var _beginthread: *const @TypeOf(Self._beginthread) = undefined;
+            pub var _beginthreadex: *const @TypeOf(Self._beginthreadex) = undefined;
+        };
+        pub const calling_convention = std.builtin.CallingConvention.c;
+    };
+}
+
 pub fn Win32Substitute(comptime redirector: type) type {
     return struct {
         pub fn CloseHandle(handle: HANDLE) callconv(WINAPI) BOOL {
@@ -4918,12 +4988,12 @@ pub fn getHookTable(comptime Host: type, comptime redirect_io: bool) std.StaticS
         },
         .windows => .{
             PosixSubstitute(redirector),
-            PthreadSubstitute(redirector), // in case someone is using pthread-win32
             LibcSubstitute(redirector),
             LibcNonIOSubsitute(redirector),
             Win32LibcSubsitute(redirector),
             Win32Substitute(redirector),
             Win32NonIOSubstitute(redirector),
+            Win32ThreadSubsitute(redirector),
         },
         else => .{},
     } else switch (os) {
@@ -4935,6 +5005,7 @@ pub fn getHookTable(comptime Host: type, comptime redirect_io: bool) std.StaticS
             PthreadSubstitute(redirector),
             LibcNonIOSubsitute(redirector),
             Win32NonIOSubstitute(redirector),
+            Win32ThreadSubsitute(redirector),
         },
         else => .{},
     };

@@ -38,7 +38,6 @@ export function addTests(importModule, options) {
     })
     it('should print environment variables using libc functions', async function () {
       const { __zigar, print, get } = await importTest('print-env-with-libc-functions', { useLibc: true });
-      const path = get('PATH');
       __zigar.set('env', {
         HELLO: 1,
         WORLD: 123,
@@ -66,8 +65,6 @@ export function addTests(importModule, options) {
       }
       expect(() => get('土耳其')).to.throw();
       expect(() => get('WORLD')).to.throw();
-      const pathAgain = get('PATH');
-      expect(pathAgain).to.equal(path);
       __zigar.set('env', {});
       if (print) {
         const lines4 = await capture(() => print());

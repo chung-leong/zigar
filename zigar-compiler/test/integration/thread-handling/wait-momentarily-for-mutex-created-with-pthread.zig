@@ -34,7 +34,7 @@ fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.Thread.sleep(10 * 1000000);
     var time: c.struct_timespec = undefined;
     _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
-    time.tv_nsec += 150 * 1000000;
+    add(&time, 150 * 1000000);
     const retval = c.pthread_mutex_timedlock(&mutex, &time);
     if (retval == 0) {
         defer _ = c.pthread_mutex_unlock(&mutex);
@@ -49,7 +49,7 @@ fn run3(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.Thread.sleep(10 * 1000000);
     var time: c.struct_timespec = undefined;
     _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
-    time.tv_nsec += 20 * 1000000;
+    add(&time, 20 * 1000000);
     const retval = c.pthread_mutex_timedlock(&mutex, &time);
     if (retval == 0) {
         defer _ = c.pthread_mutex_unlock(&mutex);
@@ -58,6 +58,14 @@ fn run3(_: ?*anyopaque) callconv(.c) ?*anyopaque {
         std.debug.print("Thread 3 timed out: {}\n", .{retval == @intFromEnum(std.c.E.TIMEDOUT)});
     }
     return null;
+}
+
+fn add(time: *c.struct_timespec, ns: c_long) void {
+    time.tv_nsec += ns;
+    if (time.tv_nsec > 1000000000) {
+        time.tv_sec += 1;
+        time.tv_nsec -= 1000000_000;
+    }
 }
 
 pub fn startup() !void {
