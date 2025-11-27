@@ -22,10 +22,8 @@ const StructurePurpose = {
   AbortSignal: 3,
   Allocator: 4,
   Iterator: 5,
-  Reader: 6,
-  Writer: 7,
-  File: 8,
-  Directory: 9,
+  File: 6,
+  Directory: 7,
 };
 const structureNames = Object.keys(StructureType);
 const StructureFlag = {
@@ -83,13 +81,18 @@ const MemberType = {
 };
 const memberNames = Object.keys(MemberType);
 const MemberFlag = {
-  IsRequired:       0x0001,
-  IsReadOnly:       0x0002,
-  IsMethod:         0x0010,
-  IsBackingInt:     0x0040,
-  IsString:         0x0080,
-  IsPlain:          0x0100,
-  IsTypedArray:     0x0200,
+  IsRequired: 1 << 0,
+  IsReadOnly: 1 << 1,
+  IsPartOfSet: 1 << 2,
+  IsSelector: 1 << 3,
+  IsMethod: 1 << 4,
+  IsExpectingInstance: 1 << 5,
+  IsSentinel: 1 << 6,
+  IsBackingInt: 1 << 7,
+  IsString: 1 << 8,
+  IsPlain: 1 << 9,
+  IsTypedArray: 1 << 10,
+  IsClampedArray: 1 << 11,
 };
 const ProxyType = {
   Pointer: 1 << 0,
@@ -98,13 +101,12 @@ const ProxyType = {
   ReadOnly: 1 << 3,
 };
 const VisitorFlag = {
-  IsInactive:       0x0001,
-  IsImmutable:      0x0002,
-
-  IgnoreUncreated:  0x0004,
-  IgnoreInactive:   0x0008,
-  IgnoreArguments:  0x0010,
-  IgnoreRetval:     0x0020,
+  IsInactive: 1 << 0,
+  IsImmutable: 1 << 1,
+  IgnoreUncreated: 1 << 2,
+  IgnoreInactive: 1 << 3,
+  IgnoreArguments: 1 << 4,
+  IgnoreRetval: 1 << 5,
 };
 const PosixError = { // values mirror std.os.wasi.errno_t
   NONE: 0,  
@@ -118,6 +120,7 @@ const PosixError = { // values mirror std.os.wasi.errno_t
   EIO: 29,
   EMFILE: 34,
   ENOENT: 44,
+  ENOSPC: 51,
   ENOTSUP: 58,
   EPERM: 63,
   ESPIPE: 70,
@@ -155,10 +158,10 @@ const PosixDescriptor = {
   max: 0x00ff_ffff, 
 };
 
-const dict = globalThis[Symbol.for('ZIGAR')] ||= {};
+const zigGobals = globalThis[Symbol.for('ZIGAR')] ??= {};
 
 function __symbol(name) {
-  return dict[name] ||= Symbol(name);
+  return zigGobals[name] ??= Symbol(name);
 }
 
 function symbol(name) {
@@ -618,7 +621,8 @@ class InvalidIntConversion extends SyntaxError {
 }
 
 class Unsupported extends TypeError {
-  code = PosixError.ENOTSUP;
+  errno = PosixError.ENOTSUP;
+  hide = true;
 
   constructor() {
     super(`Unsupported`);
@@ -891,7 +895,7 @@ class UnexpectedGenerator extends TypeError {
 }
 
 class InvalidFileDescriptor extends Error {
-  code = PosixError.EBADF;
+  errno = PosixError.EBADF;
 
   constructor() {
     super(`Invalid file descriptor`);
@@ -899,7 +903,7 @@ class InvalidFileDescriptor extends Error {
 }
 
 class TooManyFiles extends Error {
-  code = PosixError.EMFILE;
+  errno = PosixError.EMFILE;
 
   constructor() {
     super(`Too many open files`);
@@ -907,10 +911,10 @@ class TooManyFiles extends Error {
 }
 
 class Deadlock extends Error {
-  code = PosixError.EDEADLK;
+  errno = PosixError.EDEADLK;
 
   constructor() {
-    super(`Unable to await promise`);
+    super(`Deadlock`);
   }
 }
 
@@ -957,21 +961,20 @@ function adjustStack(stack, search) {
 }
 
 function throwReadOnly() {
-  debugger;
   throw new ReadOnly();
 }
 
-function catchPosixError(canWait = false, defErrorCode, run, resolve, reject) {
+function catchPosixError(canWait = false, defErrorNo, run, resolve, reject) {
   const fail = (err) => {
     let result;
     if (reject) {
       result = reject(err);
     } else {
-      if (err.code !== PosixError.EAGAIN && err.code !== PosixError.ENOTSUP) {
+      if (!err.hide) {
         console.error(err);
       }
     }
-    return result ?? err.code ?? defErrorCode;
+    return result ?? err.errno ?? defErrorNo;
   };
   const done = (value) => {
     const result = resolve?.(value);
@@ -1020,14 +1023,14 @@ function formatList(list, conj = 'or') {
   }
 }
 
-const events = [ 'log', 'mkdir', 'stat', 'set_times', 'open', 'rmdir', 'unlink', 'syscall' ];
+const events = [ 
+  'log', 'mkdir', 'stat', 'utimes', 'open', 'rename', 'readlink', 'rmdir', 'symlink', 'unlink'
+];
 
 mixin({
   init() {
     this.variables = [];
-    this.listenerMap = new Map([
-      [ 'log', (e) => console.log(e.message) ],
-    ]);
+    this.listenerMap = new Map();
     this.envVariables = this.envVarArrays = null;
   },
   getSpecialExports() {
@@ -1038,7 +1041,7 @@ mixin({
     return {
       init: () => this.initPromise,
       abandon: () => this.abandonModule?.(),
-      redirect: (fd, stream) => this.redirectStream(fd, stream),
+      redirect: (name, stream) => this.redirectStream(name, stream),
       sizeOf: (T) => check(T?.[SIZE]),
       alignOf: (T) => check(T?.[ALIGN]),
       typeOf: (T) => structureNamesLC[check(T?.[TYPE])],
@@ -1099,26 +1102,20 @@ mixin({
           const { array, offset, length } = memory;
           const dv = this.obtainView(getBuffer(array), offset, length);
           const { handle } = placeholder;
-          let object;
-          if (structure) {
-            const { constructor } = structure;
-            object = constructor.call(ENVIRONMENT, dv);
-            if (slots) {
-              insertObjects(object[SLOTS], slots);
-            }
-            if (handle) {
-              // need to replace dataview with one pointing to Zig memory later,
-              // when the VM is up and running
-              this.variables.push({ handle, object });
-            } else if (offset === undefined) {
-              // save the object for later, since it constructor isn't isn't finalized yet
-              // when offset is not undefined, the object is a child of another object and 
-              // will be made read-only thru the parent (which might have a linkage handle)
-              readOnlyObjects.push(object);
-            }
-          } else {
-            // console.log({ dv, placeholder });
-            object = { [MEMORY]: dv };
+          const { constructor } = structure;
+          const object = constructor.call(ENVIRONMENT, dv);
+          if (slots) {
+            insertObjects(object[SLOTS], slots);
+          }
+          if (handle !== undefined) {
+            // need to replace dataview with one pointing to Zig memory later,
+            // when the VM is up and running
+            this.variables.push({ handle, object });
+          } else if (offset === undefined) {
+            // save the object for later, since it constructor isn't isn't finalized yet
+            // when offset is not undefined, the object is a child of another object and 
+            // will be made read-only thru the parent (which might have a linkage handle)
+            readOnlyObjects.push(object);
           }
           placeholder.actual = object;
           return object;
@@ -1137,7 +1134,7 @@ mixin({
           if (memory) {
             const { array, offset, length } = memory;
             object[MEMORY] = this.obtainView(getBuffer(array), offset, length);
-            if (handle) {
+            if (handle !== undefined) {
               this.variables.push({ handle, object });
             }
           }
@@ -1422,12 +1419,6 @@ mixin({
             signal ||= this.createSignal(structure, options?.['signal']);
             arg = signal;
             break;
-          case StructurePurpose.Reader:
-            arg = this.createReader(argList[srcIndex++]);
-            break;
-          case StructurePurpose.Writer:
-            arg = this.createWriter(argList[srcIndex++]);
-            break;
           case StructurePurpose.File:
             arg = this.createFile(argList[srcIndex++]);
             break;
@@ -1687,6 +1678,9 @@ mixin({
     }
   },
   findMemory(context, address, count, size) {
+    if (isInvalidAddress(count)) {
+      count = 0;
+    }
     let len = count * (size ?? 0);
     const index = findMemoryIndex(this.memoryList, address);
     const entry = this.memoryList[index - 1];
@@ -1813,6 +1807,8 @@ const MemoryType = {
   Scratch: 1,
 };
 
+const WA = WebAssembly;
+
 mixin({
   init() {
     this.abandoned = false;
@@ -1904,9 +1900,12 @@ mixin({
       }
       return imports;
     },
-    importFunctions(exports) {
+    importFunctions(exports$1) {
+      if (!this.memory) {
+        this.memory = exports$1.memory;
+      }
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
-        const fn = exports[name];
+        const fn = exports$1[name];
         if (fn) {
           defineProperty(this, name, defineValue(this.importFunction(fn, argType, returnType)));
           this.destructors.push(() => this[name] = throwError$1);
@@ -1922,35 +1921,41 @@ mixin({
       } = this.options = options;
       const res = await source;
       const suffix = (res[Symbol.toStringTag] === 'Response') ? 'Streaming' : '';
-      const w = WebAssembly;
-      const f = w['compile' + suffix];
+      const f = WA['compile' + suffix];
       const executable = this.executable = await f(res);
       const functions = this.exportFunctions();
       const env = {}, wasi = {}, wasiPreview = {};
-      const exports = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
-      for (const { module, name, kind } of w.Module.imports(executable)) {
+      const exports$1 = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
+      for (const { module, name, kind } of WA.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {
             env[name] = functions[name] ?? empty;
           } else if (module === 'wasi_snapshot_preview1') {
             wasiPreview[name] = this.getWASIHandler(name);
+            if (name === 'fd_write') {
+              wasiPreview[`${name}_stderr`] = this.getWASIHandler(`${name}_stderr`);
+            }
           } else if (module === 'wasi') {
             wasi[name] = this.getThreadHandler?.(name) ?? empty;
           }
         }
       }
-      this.memory = env.memory = new w.Memory({
-        initial: memoryInitial,
-        maximum: memoryMax,
-        shared: multithreaded,
-      });
-      this.table = env.__indirect_function_table = new w.Table({
-        initial: tableInitial,
-        element: 'anyfunc',
-        shared: multithreaded,
-      });
+      if (memoryInitial) {
+        this.memory = env.memory = new WA.Memory({
+          initial: memoryInitial,
+          maximum: memoryMax,
+          shared: multithreaded,
+        });
+      }
+      if (tableInitial) {
+        this.table = env.__indirect_function_table = new WA.Table({
+          initial: tableInitial,
+          element: 'anyfunc',
+          shared: multithreaded,
+        });
+      }
       this.initialTableLength = tableInitial;
-      return w.instantiate(executable, exports);
+      return WA.instantiate(executable, exports$1);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
@@ -2316,8 +2321,9 @@ mixin({
       this.streamMap.delete(fd);
     }
   },
-  redirectStream(fd, arg) {
+  redirectStream(name, arg) {
     const map = this.streamMap;
+    const fd = PosixDescriptor[name];
     const previous = map.get(fd);
     if (arg !== undefined) {
       let stream, rights;
@@ -2331,7 +2337,7 @@ mixin({
         stream = this.convertDirectory(arg);
         rights = this.getDefaultRights('dir');
       } else {
-        throw new Error(`Expecting 0, 1, 2, or -1, received ${fd}`);
+        throw new Error(`Expecting 'stdin', 'stdout', 'stderr', or 'root', received ${name}`);
       }
       if (!stream) {
         throw new InvalidStream(rights[0], arg);
@@ -2348,24 +2354,26 @@ mixin({
       pending: [],
 
       write(chunk) {
-          // send text up to the last newline character
-          const index = chunk.lastIndexOf(0x0a);
-          if (index === -1) {
-            this.pending.push(chunk);
-          } else {
-            const beginning = chunk.subarray(0, index);
-            const remaining = chunk.subarray(index + 1);
-            this.dispatch([ ...this.pending, beginning ]);
-            this.pending.splice(0);
-            if (remaining.length > 0) {
-              this.pending.push(remaining);
-            }
+        // send text up to the last newline character
+        const index = chunk.lastIndexOf(0x0a);
+        if (index === -1) {
+          this.pending.push(chunk);
+        } else {
+          const beginning = chunk.subarray(0, index);
+          const remaining = chunk.subarray(index + 1);
+          this.dispatch([ ...this.pending, beginning ]);
+          this.pending.splice(0);
+          if (remaining.length > 0) {
+            this.pending.push(remaining);
           }
-          env.scheduleFlush(this, this.pending.length > 0, 250);
+        }
+        env.scheduleFlush(this, this.pending.length > 0, 250);
       },
       dispatch(array) {
         const message = decodeText(array);
-        env.triggerEvent('log', { source, message });
+        if (env.triggerEvent('log', { source, message }) == undefined) {
+          console.log(message);
+        }
       },
       flush() {
         if (this.pending.length > 0) {
@@ -2620,7 +2628,7 @@ function throwError(structure) {
   throw new BufferExpected(structure);
 }
 
-const proxyMaps = [ 
+const proxyMaps = zigGobals.proxyMaps ??= [ 
   0, 
   ProxyType.Const, 
   ProxyType.ReadOnly, 
@@ -2629,7 +2637,7 @@ const proxyMaps = [
   hash[type] = new WeakMap();
   return hash;
 }, {});
-const proxyTargetMap = new WeakMap();
+const proxyTargetMap = zigGobals.proxyTargetMap ??= new WeakMap();
 
 function getProxy(target, type) {
   const key = target;
@@ -2645,15 +2653,14 @@ function getProxy(target, type) {
 
 function getProxyType(structure, readOnly = false) {
   const { type, flags } = structure;
-  let proxyType = (readOnly) ? ProxyType.ReadOnly : 0;
+  // functions don't mean to be made read-only
+  let proxyType = (readOnly && type !== StructureType.Function) ? ProxyType.ReadOnly : 0;
   if (flags & StructureFlag.HasProxy) {
     if (type === StructureType.Pointer) {
       proxyType |= ProxyType.Pointer;
       if (flags & PointerFlag.IsConst) {
         proxyType |= ProxyType.Const;
       }
-    } else if (type === StructureType.Function) {
-      proxyType = 0;
     } else {
       proxyType |= ProxyType.Slice;
     }
@@ -2685,7 +2692,7 @@ function getReadOnlyProxy(object) {
     }
   } else {
     // the check below will filter out functions, which doesn't need the protection
-    if (!object || typeof(object) !== 'object' || object[READ_ONLY]) {
+    if (!object?.[MEMORY] || typeof(object) !== 'object' || object[READ_ONLY]) {
       return object;
     }
     proxyType = object.constructor[PROXY_TYPE] ?? ProxyType.ReadOnly;
@@ -2749,7 +2756,8 @@ const readOnlyPointerHandlers = {
 
 const readOnlyHandlers = {
   get(target, name) {
-    return getReadOnlyProxy(target[name]);
+    const value = target[name];
+    return (typeof(name) === 'string') ? getReadOnlyProxy(value) : value;
   },
   set(target, name, value) {
     throwReadOnly();
@@ -2760,7 +2768,7 @@ const constPointerHandlers = {
   ...pointerHandlers,
   get(pointer, name) {
     if (name in pointer) {
-      return pointer[name];
+      return readOnlyHandlers.get(pointer, name);
     } else {
       return readOnlyHandlers.get(pointer[TARGET], name);
     }
@@ -3121,24 +3129,27 @@ mixin({
 
 mixin({
   defineMemberObject(member) {
+    const { flags, structure, slot } = member;
     let get, set;
-    if (member.flags & MemberFlag.IsString) {
+    if (flags & MemberFlag.IsString) {
       get = getString;
-    } else if (member.flags & MemberFlag.IsTypedArray) {
+    } else if (flags & MemberFlag.IsTypedArray) {
       get = getTypedArray;
-    } else if (member.flags & MemberFlag.IsPlain) {
+    } else if (flags & MemberFlag.IsClampedArray) {
+      get = getClampedArray;
+    } else if (flags & MemberFlag.IsPlain) {
       get = getPlain;
-    } else if (member.structure.flags & (StructureFlag.HasValue | StructureFlag.HasProxy)) {
+    } else if (structure.flags & (StructureFlag.HasValue | StructureFlag.HasProxy)) {
       get = getValue;
     } else {
       get = getObject;
     }
-    if (member.flags & MemberFlag.IsReadOnly) {
+    if (flags & MemberFlag.IsReadOnly) {
       set = throwReadOnly;
     } else {
       set = setValue;
     }
-    return bindSlot(member.slot, { get, set });
+    return bindSlot(slot, { get, set });
   }
 });
 
@@ -3152,6 +3163,10 @@ function getString(slot) {
 
 function getTypedArray(slot) {
   return getValue.call(this, slot)?.typedArray ?? null;
+}
+
+function getClampedArray(slot) {
+  return getValue.call(this, slot)?.clampedArray ?? null;
 }
 
 function getPlain(slot) {
@@ -3457,6 +3472,8 @@ mixin({
           let fn = template[SLOTS][slot];
           if (flags & MemberFlag.IsString) {
             fn[TRANSFORM] = (retval) => retval.string;
+          } else if (flags & MemberFlag.IsClampedArray) {
+            fn[TRANSFORM] = (retval) => retval.clampedArray;
           } else if (flags & MemberFlag.IsTypedArray) {
             fn[TRANSFORM] = (retval) => retval.typedArray;
           } else if (flags & MemberFlag.IsPlain) {
@@ -3476,10 +3493,16 @@ mixin({
             descriptor[accessorType] = fn;
           }
           // see if it's a method
-          if (member.flags & MemberFlag.IsMethod) {
+          if (flags & MemberFlag.IsMethod) {
             const method = function(...args) {
               try {
-                return fn(this, ...args);
+                let [ self, proxyType ] = removeProxy(this);
+                if (flags & MemberFlag.IsExpectingInstance) {
+                  if (proxyType === ProxyType.Pointer) {
+                    self = self['*'];
+                  }
+                }
+                return fn(self, ...args);
               } catch (err) {
                 // adjust argument index/count
                 err[UPDATE]?.(1);
@@ -4024,7 +4047,6 @@ mixin({
 mixin({
   definePointer(structure, descriptors) {
     const {
-      type,
       flags,
       byteSize,
       instance: { members: [ member ] },
@@ -4185,7 +4207,7 @@ mixin({
       setLength?.call?.(this, len);
     };
     const thisEnv = this;
-    const initializer = this.createInitializer(function(arg, allocator, proxyType) {
+    const initializer = this.createInitializer(function(arg, allocator, targetProxyType) {
       const Target = targetStructure.constructor;
       if (isPointerOf(arg, Target)) {
         if (!(flags & PointerFlag.IsConst) && arg.constructor.const) {
@@ -4216,7 +4238,7 @@ mixin({
           arg[RESTORE]();
         }
         // if the target is read-only, then only a const pointer can point to it
-        if (proxyType === ProxyType.Const) {
+        if (targetProxyType === ProxyType.ReadOnly || arg[READ_ONLY]) {
           if (!(flags & PointerFlag.IsConst)) {
             throw new ReadOnlyTarget(structure);
           }
@@ -4299,8 +4321,8 @@ mixin({
     descriptors[INITIALIZE] = defineValue(initializer);
     descriptors[FINALIZE] = (targetType === StructureType.Function) && {
       value() {
-        const self = (...args) => {
-          const f = this['*'];
+        const self = function(...args) {
+          const f = self['*'];
           return f.call(this, ...args);
         };
         self[MEMORY] = this[MEMORY];
@@ -4309,7 +4331,7 @@ mixin({
         return self;
       }
     };
-    descriptors[PROXY] = (targetType !== StructureType.Function && targetType !== StructureType.Pointer) && {
+    descriptors[PROXY] = (proxyType) && {
       value() {
         return getProxy(this, proxyType);
       },
@@ -4875,7 +4897,7 @@ $(o12, {
 $(s0, {
   ...s,
   flags: 1,
-  signature: 0x0000000000000000n,
+  signature: 0x9ddcbac74b6ccec3n,
   byteSize: 1,
   align: 1,
   instance: {
@@ -4899,7 +4921,7 @@ $(s1, {
   ...s,
   type: 1,
   flags: 464,
-  signature: 0x0000000000000000n,
+  signature: 0x895cd48551caff55n,
   length: 40,
   byteSize: 40,
   align: 1,
@@ -4922,7 +4944,7 @@ $(s1, {
 $(s2, {
   ...s,
   flags: 9,
-  signature: 0x0000000000000000n,
+  signature: 0x7fd3df143c9cd14an,
   byteSize: 0,
   align: 1,
   instance: {
@@ -4947,7 +4969,7 @@ $(s2, {
 $(s3, {
   ...s,
   flags: 1,
-  signature: 0x0000000000000000n,
+  signature: 0x31a09f12f6815cbdn,
   byteSize: 1,
   align: 1,
   instance: {
@@ -4970,7 +4992,7 @@ $(s3, {
 $(s4, {
   ...s,
   type: 2,
-  signature: 0x0000000000000000n,
+  signature: 0x03fe2ef485ad3365n,
   byteSize: 2,
   align: 1,
   instance: {
@@ -5008,7 +5030,7 @@ $(s5, {
   ...s,
   type: 7,
   flags: 43,
-  signature: 0x0000000000000000n,
+  signature: 0x9547fe6aa04d896dn,
   byteSize: 3,
   align: 1,
   instance: {
@@ -5043,7 +5065,7 @@ $(s6, {
   ...s,
   type: 9,
   flags: 464,
-  signature: 0x0000000000000000n,
+  signature: 0x3ee4c60c00bcc22cn,
   byteSize: 1,
   align: 1,
   instance: {
@@ -5067,7 +5089,7 @@ $(s7, {
   ...s,
   type: 8,
   flags: 380,
-  signature: 0x0000000000000000n,
+  signature: 0xe77d2e409417beb5n,
   byteSize: 8,
   align: 4,
   instance: {
@@ -5092,7 +5114,7 @@ $(s8, {
   ...s,
   type: 12,
   flags: 14,
-  signature: 0x0000000000000000n,
+  signature: 0x33e78f7e2bb19e92n,
   length: 1,
   byteSize: 48,
   align: 4,
@@ -5131,7 +5153,7 @@ $(s8, {
 $(s9, {
   ...s,
   type: 14,
-  signature: 0x0000000000000000n,
+  signature: 0x089a7b7af91f7642n,
   length: 1,
   byteSize: 0,
   instance: {
@@ -5156,7 +5178,7 @@ $(s10, {
   name: "sha1",
   type: 2,
   flags: 256,
-  signature: 0x0000000000000000n,
+  signature: 0xa8a31dac43a38551n,
   byteSize: 0,
   align: 1,
   instance: {
@@ -5168,7 +5190,7 @@ $(s10, {
         ...m,
         name: "sha1",
         type: 5,
-        flags: 130,
+        flags: 258,
         slot: 0,
         structure: s9,
       },
@@ -5197,7 +5219,7 @@ env.recreateStructures(structures, settings);
 // initiate loading and compilation of WASM bytecodes
 const source = (async () => {
   // sha1.zig
-  const binaryString = atob("AGFzbQEAAAABWQ5gA39/fwBgAn9/AX9gBH9/f38Bf2AGf39/f39/AX9gBX9/f39/AGAAAX9gAX8AYAR/f39/AGACf38AYAN/f38Bf2ACfn8Bf2AAAGAFf39/f38Bf2ABfwF/Am4FA2VudgZtZW1vcnkCAAUDZW52GV9faW5kaXJlY3RfZnVuY3Rpb25fdGFibGUBcAAMA2VudhBfYWxsb2NhdGVKc1RodW5rAAEDZW52DF9mcmVlSnNUaHVuawABA2VudgxfZmluZEpzVGh1bmsAAQMcGwsFAAgBCQwBAQELAQYCAgMDAwMEAAUCDQMDBAYIAX8BQYCAEAsHswEKD2dldEZhY3RvcnlUaHVuawAECHJ1blRodW5rAAgQcnVuVmFyaWFkaWNUaHVuawAJDWNyZWF0ZUpzVGh1bmsACg5kZXN0cm95SnNUaHVuawALD2lkZW50aWZ5SnNUaHVuawAMCmluaXRpYWxpemUADRVhbGxvY2F0ZVNjcmF0Y2hNZW1vcnkADhFmcmVlU2NyYXRjaE1lbW9yeQAXE2dldE1vZHVsZUF0dHJpYnV0ZXMAGAgBAwkRAQBBAQsLAAUHGRscHRASFBYKqDcbDgBBqIMQQQBB1AH8CwALBABBAQuJBQIEfwF+IwBBwAFrIgMkACADQSBqQZiCEEHgAPwKAABBACEEAkADQCAEQcAAaiIFIAJLDQEgA0EgaiABIARqEAYgBSEEDAALCyACIARrIQYgAy0AfCEFAkAgAiAERg0AIANBIGogBWpBHGogASAEaiAG/AoAACADLQB8IQULIAMgBSAGaiIBOgB8IAMgAykDICACrXw3AyBBwAAhBCADQTxqIQUCQCABQf8BcSICQcAARg0AIAUgAmpBAEHAACACa/wLACADLQB8IQQLIAUgBGpBgAE6AAAgAyADLQB8IgRBAWo6AHwCQCAEQTdNDQAgA0EgaiAFEAYgBUEAQcAA/AsACyADIAMpAyAiB6dBA3Q6AHsgB0IFiCEHQdoAIQQCQANAIARB0wBGDQEgA0EgaiAEaiAHPAAAIARBf2ohBCAHQgiIIQcMAAsLIANBIGogBRAGIANBgAFqQRBqIANBIGpBGGooAgA2AgAgA0GAAWpBCGogA0EgakEQaikDADcDACADIAMpAyg3A4ABQQAhBAJAA0AgBEEURg0BIANBDGogBGogA0GAAWogBGooAgAiBUEYdCAFQYD+A3FBCHRyIAVBCHZBgP4DcSAFQRh2cnI2AAAgBEEEaiEEDAALC0EAIQQgA0EoakEALwCygRA7AQAgA0EuakEALwDFgBA7AQAgA0EAKQCqgRA3AyAgA0EAKADBgBA2ASogA0EMaiEFAkADQCAEQShGDQEgA0GYAWogBGoiAiADQSBqIAUtAAAiAUEEdmotAAA6AAAgAkEBaiADQSBqIAFBD3FqLQAAOgAAIAVBAWohBSAEQQJqIQQMAAsLIAAgA0GYAWpBKPwKAAAgA0HAAWokAAuVIgFOfyAAIAEoABQiAkEYdCACQYD+A3FBCHRyIAJBCHZBgP4DcSACQRh2cnIiAyABKAAMIgJBGHQgAkGA/gNxQQh0ciACQQh2QYD+A3EgAkEYdnJyIgRzIAEoACwiAkEYdCACQYD+A3FBCHRyIAJBCHZBgP4DcSACQRh2cnIiBXMgASgACCICQRh0IAJBgP4DcUEIdHIgAkEIdkGA/gNxIAJBGHZyciIGIAEoAAAiAkEYdCACQYD+A3FBCHRyIAJBCHZBgP4DcSACQRh2cnIiB3MgASgAICICQRh0IAJBgP4DcUEIdHIgAkEIdkGA/gNxIAJBGHZyciIIcyABKAA0IgJBGHQgAkGA/gNxQQh0ciACQQh2QYD+A3EgAkEYdnJyIgJzQQF3IglzQQF3IgogBCABKAAEIgtBGHQgC0GA/gNxQQh0ciALQQh2QYD+A3EgC0EYdnJyIgxzIAEoACQiC0EYdCALQYD+A3FBCHRyIAtBCHZBgP4DcSALQRh2cnIiDXMgASgAOCILQRh0IAtBgP4DcUEIdHIgC0EIdkGA/gNxIAtBGHZyciILc0EBdyIOcyAFIA1zIA5zIAggASgAGCIPQRh0IA9BgP4DcUEIdHIgD0EIdkGA/gNxIA9BGHZyciIQcyALcyAKc0EBdyIPc0EBdyIRcyAJIAtzIA9zIAIgBXMgCnMgASgAKCISQRh0IBJBgP4DcUEIdHIgEkEIdkGA/gNxIBJBGHZyciITIAhzIAlzIAEoABwiEkEYdCASQYD+A3FBCHRyIBJBCHZBgP4DcSASQRh2cnIiFCADcyACcyABKAAQIhJBGHQgEkGA/gNxQQh0ciASQQh2QYD+A3EgEkEYdnJyIhUgBnMgE3MgASgAPCISQRh0IBJBgP4DcUEIdHIgEkEIdkGA/gNxIBJBGHZyciISc0EBdyIWc0EBdyIXc0EBdyIYc0EBdyIZc0EBdyIac0EBdyIbIA4gEnMgDSAUcyAScyAQIBVzIAEoADAiAUEYdCABQYD+A3FBCHRyIAFBCHZBgP4DcSABQRh2cnIiHHMgDnNBAXciAXNBAXciHXMgCyAccyABcyARc0EBdyIec0EBdyIfcyARIB1zIB9zIA8gAXMgHnMgG3NBAXciIHNBAXciIXMgGiAecyAgcyAZIBFzIBtzIBggD3MgGnMgFyAKcyAZcyAWIAlzIBhzIBIgAnMgF3MgHCATcyAWcyAdc0EBdyIic0EBdyIjc0EBdyIkc0EBdyIlc0EBdyImc0EBdyInc0EBdyIoc0EBdyIpIB8gI3MgHSAXcyAjcyABIBZzICJzIB9zQQF3IipzQQF3IitzIB4gInMgKnMgIXNBAXciLHNBAXciLXMgISArcyAtcyAgICpzICxzIClzQQF3Ii5zQQF3Ii9zICggLHMgLnMgJyAhcyApcyAmICBzIChzICUgG3MgJ3MgJCAacyAmcyAjIBlzICVzICIgGHMgJHMgK3NBAXciMHNBAXciMXNBAXciMnNBAXciM3NBAXciNHNBAXciNXNBAXciNnNBAXciNyAtIDFzICsgJXMgMXMgKiAkcyAwcyAtc0EBdyI4c0EBdyI5cyAsIDBzIDhzIC9zQQF3IjpzQQF3IjtzIC8gOXMgO3MgLiA4cyA6cyA3c0EBdyI8c0EBdyI9cyA2IDpzIDxzIDUgL3MgN3MgNCAucyA2cyAzIClzIDVzIDIgKHMgNHMgMSAncyAzcyAwICZzIDJzIDlzQQF3Ij5zQQF3Ij9zQQF3IkBzQQF3IkFzQQF3IkJzQQF3IkNzQQF3IkRzQQF3IkUgOiA+cyA4IDJzID5zIDtzQQF3IkZzID1zQQF3IkcgOSAzcyA/cyBGc0EBdyJIIEAgNSAuIC0gMCAlIBogESABIBIgEyAAKAIIIklBBXcgACgCGCJKaiAAKAIUIksgACgCDCJMQX9zcSAAKAIQIk0gTHFyaiAHakGZ84nUBWoiB0EedyJOIANqIExBHnciTyAEaiBLIE8gSXEgTSBJQX9zcXJqIAxqIAdBBXdqQZnzidQFaiIDIE5xIElBHnciDCADQX9zcXJqIE0gBmogByAMcSBPIAdBf3NxcmogA0EFd2pBmfOJ1AVqIgdBBXdqQZnzidQFaiIEIAdBHnciBnEgA0EedyJPIARBf3NxcmogDCAVaiAHIE9xIE4gB0F/c3FyaiAEQQV3akGZ84nUBWoiB0EFd2pBmfOJ1AVqIgNBHnciFWogCCAEQR53IhNqIBAgT2ogByATcSAGIAdBf3NxcmogA0EFd2pBmfOJ1AVqIgggFXEgB0EedyIEIAhBf3NxcmogFCAGaiADIARxIBMgA0F/c3FyaiAIQQV3akGZ84nUBWoiE0EFd2pBmfOJ1AVqIgcgE0EedyIDcSAIQR53IgYgB0F/c3FyaiANIARqIBMgBnEgFSATQX9zcXJqIAdBBXdqQZnzidQFaiIIQQV3akGZ84nUBWoiDUEedyITaiACIAdBHnciEmogBSAGaiAIIBJxIAMgCEF/c3FyaiANQQV3akGZ84nUBWoiAiATcSAIQR53IgggAkF/c3FyaiAcIANqIA0gCHEgEiANQX9zcXJqIAJBBXdqQZnzidQFaiISQQV3akGZ84nUBWoiBSASQR53Ig1xIAJBHnciHCAFQX9zcXJqIAsgCGogEiAccSATIBJBf3NxcmogBUEFd2pBmfOJ1AVqIgJBBXdqQZnzidQFaiILQR53IhJqIA4gDWogCyACQR53Ig5xIAVBHnciBSALQX9zcXJqIAkgHGogAiAFcSANIAJBf3NxcmogC0EFd2pBmfOJ1AVqIgFBBXdqQZnzidQFaiICQR53IgkgAUEedyILcyAWIAVqIAEgEnEgDiABQX9zcXJqIAJBBXdqQZnzidQFaiIBc2ogCiAOaiACIAtxIBIgAkF/c3FyaiABQQV3akGZ84nUBWoiAkEFd2pBodfn9gZqIgpBHnciDmogDyAJaiACQR53Ig8gAUEedyIBcyAKc2ogFyALaiABIAlzIAJzaiAKQQV3akGh1+f2BmoiAkEFd2pBodfn9gZqIglBHnciCiACQR53IgtzIB0gAWogDiAPcyACc2ogCUEFd2pBodfn9gZqIgFzaiAYIA9qIAsgDnMgCXNqIAFBBXdqQaHX5/YGaiICQQV3akGh1+f2BmoiCUEedyIOaiAZIApqIAJBHnciDyABQR53IgFzIAlzaiAiIAtqIAEgCnMgAnNqIAlBBXdqQaHX5/YGaiICQQV3akGh1+f2BmoiCUEedyIKIAJBHnciC3MgHiABaiAOIA9zIAJzaiAJQQV3akGh1+f2BmoiAXNqICMgD2ogCyAOcyAJc2ogAUEFd2pBodfn9gZqIgJBBXdqQaHX5/YGaiIJQR53Ig5qICQgCmogAkEedyIPIAFBHnciAXMgCXNqIB8gC2ogASAKcyACc2ogCUEFd2pBodfn9gZqIgJBBXdqQaHX5/YGaiIJQR53IgogAkEedyILcyAbIAFqIA4gD3MgAnNqIAlBBXdqQaHX5/YGaiIBc2ogKiAPaiALIA5zIAlzaiABQQV3akGh1+f2BmoiAkEFd2pBodfn9gZqIglBHnciDmogJiABQR53IgFqIA4gAkEedyIPcyAgIAtqIAEgCnMgAnNqIAlBBXdqQaHX5/YGaiICc2ogKyAKaiAPIAFzIAlzaiACQQV3akGh1+f2BmoiCUEFd2pBodfn9gZqIgsgCUEedyIBIAJBHnciCnNxIAEgCnFzaiAhIA9qIAogDnMgCXNqIAtBBXdqQaHX5/YGaiIOQQV3akHc+e74eGoiD0EedyICaiAxIAtBHnciCWogJyAKaiAOIAkgAXNxIAkgAXFzaiAPQQV3akHc+e74eGoiCyACIA5BHnciCnNxIAIgCnFzaiAsIAFqIA8gCiAJc3EgCiAJcXNqIAtBBXdqQdz57vh4aiIOQQV3akHc+e74eGoiDyAOQR53IgEgC0EedyIJc3EgASAJcXNqICggCmogDiAJIAJzcSAJIAJxc2ogD0EFd2pB3Pnu+HhqIgtBBXdqQdz57vh4aiIOQR53IgJqIDggD0EedyIKaiAyIAlqIAsgCiABc3EgCiABcXNqIA5BBXdqQdz57vh4aiIPIAIgC0EedyIJc3EgAiAJcXNqICkgAWogDiAJIApzcSAJIApxc2ogD0EFd2pB3Pnu+HhqIgtBBXdqQdz57vh4aiIOIAtBHnciASAPQR53IgpzcSABIApxc2ogMyAJaiALIAogAnNxIAogAnFzaiAOQQV3akHc+e74eGoiC0EFd2pB3Pnu+HhqIg9BHnciAmogLyAOQR53IglqIDkgCmogCyAJIAFzcSAJIAFxc2ogD0EFd2pB3Pnu+HhqIg4gAiALQR53IgpzcSACIApxc2ogNCABaiAPIAogCXNxIAogCXFzaiAOQQV3akHc+e74eGoiC0EFd2pB3Pnu+HhqIg8gC0EedyIBIA5BHnciCXNxIAEgCXFzaiA+IApqIAsgCSACc3EgCSACcXNqIA9BBXdqQdz57vh4aiIOQQV3akHc+e74eGoiEUEedyICaiA/IAFqIBEgDkEedyIKIA9BHnciC3NxIAogC3FzaiA6IAlqIA4gCyABc3EgCyABcXNqIBFBBXdqQdz57vh4aiIJQQV3akHc+e74eGoiDkEedyIPIAlBHnciAXMgNiALaiAJIAIgCnNxIAIgCnFzaiAOQQV3akHc+e74eGoiCXNqIDsgCmogDiABIAJzcSABIAJxc2ogCUEFd2pB3Pnu+HhqIgJBBXdqQdaDi9N8aiIKQR53IgtqIEYgD2ogAkEedyIOIAlBHnciCXMgCnNqIDcgAWogCSAPcyACc2ogCkEFd2pB1oOL03xqIgFBBXdqQdaDi9N8aiICQR53IgogAUEedyIPcyBBIAlqIAsgDnMgAXNqIAJBBXdqQdaDi9N8aiIBc2ogPCAOaiAPIAtzIAJzaiABQQV3akHWg4vTfGoiAkEFd2pB1oOL03xqIglBHnciC2ogPSAKaiACQR53Ig4gAUEedyIBcyAJc2ogQiAPaiABIApzIAJzaiAJQQV3akHWg4vTfGoiAkEFd2pB1oOL03xqIglBHnciCiACQR53Ig9zID4gNHMgQHMgSHNBAXciESABaiALIA5zIAJzaiAJQQV3akHWg4vTfGoiAXNqIEMgDmogDyALcyAJc2ogAUEFd2pB1oOL03xqIgJBBXdqQdaDi9N8aiIJQR53IgtqIEQgCmogAkEedyIOIAFBHnciAXMgCXNqID8gNXMgQXMgEXNBAXciEiAPaiABIApzIAJzaiAJQQV3akHWg4vTfGoiAkEFd2pB1oOL03xqIglBHnciCiACQR53Ig9zIDsgP3MgSHMgR3NBAXciFiABaiALIA5zIAJzaiAJQQV3akHWg4vTfGoiAXNqIEAgNnMgQnMgEnNBAXciFyAOaiAPIAtzIAlzaiABQQV3akHWg4vTfGoiAkEFd2pB1oOL03xqIglBHnciCyBKajYCGCAAIEsgRiBAcyARcyAWc0EBdyIRIA9qIAFBHnciASAKcyACc2ogCUEFd2pB1oOL03xqIg5BHnciD2o2AhQgACBNIEEgN3MgQ3MgF3NBAXcgCmogAkEedyICIAFzIAlzaiAOQQV3akHWg4vTfGoiCUEed2o2AhAgACBMIDwgRnMgR3MgRXNBAXcgAWogCyACcyAOc2ogCUEFd2pB1oOL03xqIgFqNgIMIAAgSSBIIEFzIBJzIBFzQQF3aiACaiAPIAtzIAlzaiABQQV3akHWg4vTfGo2AggLOgEBfyMAQTBrIgIkACACQQhqIAEoAgAgASgCBCAAEQAAIAFBCGogAkEIakEo/AoAACACQTBqJABBAAsaACABIAJBqtWq1XogAhsgABEBAEH//wNxRQsnACABIAJBqtWq1XogAhsgA0Gq1arVeiACGyAEIAARAgBB//8DcUULVwEDfyMAQRBrIgIkAEEAIQNBAC0AqIMQIQQgAkEIakEAIAEgABEAAAJAAkAgAi8BDA0AIAIoAgghAwwBCyAEQQFxRQ0AIAAgARAAIQMLIAJBEGokACADC1cBA38jAEEQayICJABBACEDQQAtAKiDECEEIAJBCGpBASABIAARAAACQAJAIAIvAQwNACACKAIIIQMMAQsgBEEBcUUNACAAIAEQASEDCyACQRBqJAAgAwtXAQN/IwBBEGsiAiQAQQAhA0EALQCogxAhBCACQQhqQQIgASAAEQAAAkACQCACLwEMDQAgAigCCCEDDAELIARBAXFFDQAgACABEAIhAwsgAkEQaiQAIAMLCwBBAEEBOgCogxALRAIBfwF+IwBBEGsiAiQAIAJBCGoQDyACKQMIIgOnIAAgAUEBIAFBAUsbaEEAIANCIIinKAIAEQIAIQEgAkEQaiQAIAELngEDAX8BfgF/IwBBEGsiASQAAkBBAC0AuIMQDQBBACkDkIMQIgKnQYCABEEAQQAgAkIgiKcoAgARAgAhA0EAQQE6ANSDEEEAQYCABDYC0IMQQQAgAzYCzIMQQQAgAjcDwIMQQQBBAToAuIMQQQBBmIMQNgK0gxBBAEHAgxA2ArCDEEEAQQA2AsiDEAsgAEEAKQOwgxA3AgAgAUEQaiQACzIBAX8CQCAAQQhqIAEgAiAAEBEiBA0AIAAoAgAgASACIAMgACgCBCgCABECACEECyAEC50BAQd/IwBBEGsiBCQAIAQgAkEfcSIFOgALIAAoAgQhBiAAKAIAIQdBACEIQQAhCQJAAkACQCAFRQ0AIARBASACdCIJIAYgB2oiAmpBf2oiCiACSSIFOgAMIAUNASAKQQAgCWtxIAJrIQkLIAkgB2oiAiABaiIHIAAoAghLDQEgACAHNgIAIAYgAmohCAwBC0EAIQgLIARBEGokACAIC0wBAX8CQCAAKAIMIgYgAUsNACAAKAIQIAZqIAFNDQAgAEEIaiABIAIgACAEIAAQEw8LIAAoAgAgASACIAMgBCAFIAAoAgQoAgQRAwALZQEBfwJAAkAgASACaiAAKAIEIAAoAgAiAWpGDQAgBCACTSECDAELIAQgAmshBgJAIAQgAksNACAAIAYgAWo2AgBBAQ8LQQAhAiABIAZqIgQgACgCCEsNACAAIAQ2AgBBAQ8LIAILTAEBfwJAIAAoAgwiBiABSw0AIAAoAhAgBmogAU0NACAAQQhqIAEgAiAAIAQgABAVDwsgACgCACABIAIgAyAEIAUgACgCBCgCCBEDAAsYACABQQAgACABIAIgASAEIAEQE0EBcRsLWAEBfwJAAkAgACgCDCIFIAFLDQAgACgCECAFaiABTQ0AIAEgAmogBSAAKAIIIgFqRw0BIAAgASACazYCCA8LIAAoAgAgASACIAMgBCAAKAIEKAIMEQQACwtCAgF/AX4jAEEQayIDJAAgA0EIahAPIAMpAwgiBKcgACABIAJBASACQQFLG2hBACAEQiCIpygCDBEEACADQRBqJAALBABBCQvtAQEEfyMAQRBrIgQkACAEIAJBH3E6AA9BACEFAkBBfyABQQRqIgYgBiABSRsiAUEBIAJ0IgIgASACSxsiAUF/amciAkUNAAJAAkBCAUEgIAJrrUL//wODhqciBmhBfWoiAkENTw0AIAJBAnQiB0HYgxBqIgEoAgAiAkUNASABIAYgAmpBfGooAgA2AgAgAiEFDAILIAFBg4AEakEQdhAaIQUMAQsCQCAHQYyEEGoiASgCACICQf//A3ENAEEBEBoiAkUNASABIAIgBmo2AgAgAiEFDAELIAEgAiAGajYCACACIQULIARBEGokACAFC1YBAn8CQEIBQSAgAEF/amdrrUL//wODhqciAWhBAnRBwIQQaiICKAIAIgBFDQAgAiABQRB0IABqQXxqKAIANgIAIAAPC0EAIAFAACIAQRB0IABBf0YbC9UBAQJ/IwBBEGsiBiQAIAYgA0EfcToAD0F/IARBBGoiByAHIARJGyIEQQEgA3QiAyAEIANLGyEEAkACQAJAQgFBICACQQRqIgIgAyACIANLGyIDQX9qZ2utQv//A4OGpyICaEF9akEMSw0AIARBf2pnIgMNAUEAIQMMAgtCAUEgIANBg4AEakEQdkF/amdrrUL//wODhqdCAUEgIARBg4AEakEQdkF/amdrrUL//wODhqdGIQMMAQsgAkIBQSAgA2utQv//A4OGp0YhAwsgBkEQaiQAIAMLGAAgAUEAIAQgBCACIAMgBCAEEBtBAXEbC7YBAQJ/IwBBEGsiBSQAIAUgA0EfcToADwJAAkBCAUEgIAJBBGoiAkEBIAN0IgMgAiADSxsiA0F/amdrrUL//wODhqciAmhBfWoiBkENTw0AIAZBAnRB2IMQaiEDIAEgAmpBfGohAgwBC0IBQSAgA0GDgARqQRB2QX9qZ2utQv//A4OGpyICaEECdEHAhBBqIQMgASACQRB0akF8aiECCyACIAMoAgA2AgAgAyABNgIAIAVBEGokAAsLsQMBAEGAgBALqAMAAAAACAAAAAAAAAAAAAAAc2xvdABiaXRPZmZzZXQAbWVtYmVycwBmbGFncwBhbGlnbgByZXR2YWwAbGVuZ3RoAGFiY2RlZgBiaXRTaXplAGJ5dGVTaXplAHZhbHVlAHRlbXBsYXRlAHB1cnBvc2UAc3RydWN0dXJlAHNpZ25hdHVyZQB0eXBlAG5hbWUAaW5zdGFuY2UAaXNfcmVxdWlyZWQAc3RhdGljADAxMjM0NTY3ODkAc2hhMQAwAHR5cGVzLlNsaWNlKHU4LG51bGwpAHR5cGVzLlNlbnRpbmVsKGFueW9wYXF1ZSkAdHlwZXMuQXJndW1lbnRTdHJ1Y3QoZm4gKFtdY29uc3QgdTgpIFs0MF11OCkAAAAAAAAAAAABI0VniavN7/7cuph2VDIQ8OHSwwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAEAAAABQAAAAYAAAAHAAAAAAAAAIABBAAIAAAACQAAAAoAAAALAAAA");
+  const binaryString = atob("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");
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);
@@ -5205,7 +5227,7 @@ const source = (async () => {
   await new Promise(r => setTimeout(r, 0));
   return bytes.buffer;
 })();
-env.loadModule(source, {"delay":false,"memoryInitial":5,"tableInitial":12,"multithreaded":false});
+env.loadModule(source, {"delay":false,"tableInitial":12,"multithreaded":false});
 env.linkVariables(false);
 
 // export root namespace and its methods and constants
