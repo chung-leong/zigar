@@ -92,7 +92,7 @@ const a6 = U(32);
 const a7 = U([ 4 ]);
 const a8 = U(32);
 const a9 = U(32);
-const a10 = U([ 11, 0 ]);
+const a10 = U([ 27, 0 ]);
 const a11 = U([ 0, 1 ]);
 const a12 = U(3);
 const a13 = U(a5);
@@ -122,17 +122,17 @@ const a36 = U(a7);
 const a37 = U(32);
 const a38 = U(32);
 const a39 = U(4);
-const a40 = U([ 10, 0 ]);
-const a41 = U(a10);
-const a42 = U([ 13, 0 ]);
-const a43 = U([ 14, 0 ]);
-const a44 = U([ 15, 0 ]);
-const a45 = U([ 16, 0 ]);
-const a46 = U([ 17, 0 ]);
+const a40 = U([ 7, 0 ]);
+const a41 = U([ 20, 0 ]);
+const a42 = U(a10);
+const a43 = U([ 29, 0 ]);
+const a44 = U([ 30, 0 ]);
+const a45 = U([ 31, 0 ]);
+const a46 = U([ 32, 0 ]);
 const a47 = U(16);
-const a48 = U(a40);
+const a48 = U(a41);
 const a49 = U(a10);
-const a50 = U([ 18, 0 ]);
+const a50 = U([ 33, 0 ]);
 const a51 = U(16);
 const a52 = U(8);
 const a53 = U(8);
@@ -144,12 +144,12 @@ const a58 = U([ 0, 0, 0, 0, 0, 0, 240, 63 ]);
 const a59 = U(8);
 const a60 = U(a7);
 const a61 = U(a7);
-const a62 = U([ 212, 113, 41, 32, 79, 127, 0, 0 ]);
+const a62 = U([ 253, 22, 89, 116, 150, 127, 0, 0 ]);
 const a63 = U([ 65, 73, 70, 0 ]);
-const a64 = U([ 11, 108, 41, 32, 79, 127, 0, 0 ]);
+const a64 = U([ 25, 17, 89, 116, 150, 127, 0, 0 ]);
 const a65 = U([ 65, 100, 111, 98, 101, 32, 83, 121, 115, 116, 101, 109, 115, 0 ]);
 const a66 = U(a18);
-const a67 = U([ 243, 108, 41, 32, 79, 127, 0, 0 ]);
+const a67 = U([ 1, 18, 89, 116, 150, 127, 0, 0 ]);
 const a68 = U([ 97, 32, 118, 97, 114, 105, 97, 98, 108, 101, 32, 115, 101, 112, 105, 97, 32, 102, 105, 108, 116, 101, 114, 0 ]);
 
 // fill in object properties
@@ -200,7 +200,7 @@ $(o12, {
 $(o13, {});
 $(o14, {
   memory: { array: a6 },
-  handle: 187466,
+  handle: 193442,
   slots: {
     0: o15,
   },
@@ -251,7 +251,7 @@ $(o22, {
 });
 $(o23, {
   memory: { array: a8 },
-  handle: 187466,
+  handle: 193442,
   slots: {
     0: o24,
   },
@@ -259,7 +259,7 @@ $(o23, {
 $(o24, {
   structure: s13,
   memory: { array: a9 },
-  handle: 187466,
+  handle: 193442,
   slots: {
     0: o15,
   },
@@ -326,24 +326,24 @@ $(o40, {});
 $(o41, {});
 $(o42, {
   memory: { array: a1 },
-  handle: 298016,
+  handle: 303518,
 });
 $(o43, {
   memory: { array: a1 },
-  handle: 298029,
+  handle: 303531,
 });
 $(o44, {
   memory: { array: a1 },
-  handle: 318166,
+  handle: 323873,
 });
 $(o45, {});
 $(o46, {
   memory: { array: a1 },
-  handle: 318179,
+  handle: 323886,
 });
 $(o47, {
   memory: { array: a1 },
-  handle: 318205,
+  handle: 323912,
 });
 $(o48, {
   slots: {
@@ -353,7 +353,7 @@ $(o48, {
 $(o49, {
   structure: s35,
   memory: { array: a1 },
-  handle: 318153,
+  handle: 323860,
 });
 $(o50, {
   structure: s36,
@@ -381,7 +381,7 @@ $(o55, {
 });
 $(o56, {
   memory: { array: a1 },
-  handle: 318192,
+  handle: 323899,
 });
 $(o57, {
   slots: {
@@ -391,17 +391,17 @@ $(o57, {
 $(o58, {
   structure: s30,
   memory: { array: a1 },
-  handle: 318075,
+  handle: 323782,
 });
 $(o59, {
   structure: s33,
   memory: { array: a1 },
-  handle: 318088,
+  handle: 323795,
 });
 $(o60, {
   structure: s38,
   memory: { array: a1 },
-  handle: 318101,
+  handle: 323808,
 });
 $(o61, {
   structure: s39,
@@ -417,74 +417,74 @@ $(o63, {
 });
 $(o64, {
   memory: { array: a1 },
-  handle: 304368,
+  handle: 309882,
 });
 $(o65, {
   memory: { array: a1 },
-  handle: 309512,
+  handle: 315041,
 });
 $(o66, {
   memory: { array: a1 },
-  handle: 309525,
+  handle: 315054,
 });
 $(o67, {
   memory: { array: a1 },
-  handle: 309538,
+  handle: 315067,
 });
 $(o68, {
   memory: { array: a1 },
-  handle: 309551,
+  handle: 315080,
 });
 $(o69, {
   slots: {
-    0: o70, 1: o71, 2: o72, 3: o73, 4: o74, 5: o75, 6: o76, 7: o77, 8: o78, 9: o79,
-    10: o80, 11: o81, 12: o82, 13: o83, 14: o84, 15: o85,
+    0: o70, 1: o71, 3: o72, 4: o73, 5: o74, 6: o75, 7: o76, 8: o77, 9: o78, 10: o79,
+    11: o80, 12: o81, 13: o82, 14: o83, 15: o84, 16: o85,
   },
 });
 $(o70, {
   structure: s26,
   memory: { array: a1 },
-  handle: 294617,
+  handle: 299896,
 });
 $(o71, {
   structure: s28,
   memory: { array: a1 },
-  handle: 294630,
+  handle: 299909,
 });
 $(o72, {
   structure: s41,
   memory: { array: a1 },
-  handle: 294643,
+  handle: 299922,
 });
 $(o73, {
   structure: s43,
   memory: { array: a1 },
-  handle: 294656,
+  handle: 299935,
 });
 $(o74, {
   structure: s45,
   memory: { array: a1 },
-  handle: 294669,
+  handle: 299948,
 });
 $(o75, {
   structure: s45,
   memory: { array: a1 },
-  handle: 294682,
+  handle: 299961,
 });
 $(o76, {
   structure: s47,
   memory: { array: a1 },
-  handle: 294695,
+  handle: 299974,
 });
 $(o77, {
   structure: s47,
   memory: { array: a1 },
-  handle: 294708,
+  handle: 299987,
 });
 $(o78, {
   structure: s49,
   memory: { array: a1 },
-  handle: 294721,
+  handle: 300000,
 });
 $(o79, {
   structure: s50,
@@ -517,47 +517,47 @@ $(o85, {
 $(o86, {});
 $(o87, {
   memory: { array: a1 },
-  handle: 295087,
+  handle: 300366,
 });
 $(o88, {
   memory: { array: a1 },
-  handle: 296591,
+  handle: 301879,
 });
 $(o89, {});
 $(o90, {});
 $(o91, {});
 $(o92, {
   memory: { array: a1 },
-  handle: 259089,
+  handle: 265313,
 });
 $(o93, {
   memory: { array: a1 },
-  handle: 261905,
+  handle: 268179,
 });
 $(o94, {});
 $(o95, {});
 $(o96, {
   memory: { array: a1 },
-  handle: 265926,
+  handle: 272200,
 });
 $(o97, {
   memory: { array: a1 },
-  handle: 267430,
+  handle: 273713,
 });
 $(o98, {});
 $(o99, {});
 $(o100, {
   memory: { array: a1 },
-  handle: 267443,
+  handle: 273726,
 });
 $(o101, {
   memory: { array: a1 },
-  handle: 268947,
+  handle: 275239,
 });
 $(o102, {});
 $(o103, {
   memory: { array: a32 },
-  handle: 187466,
+  handle: 193442,
   slots: {
     0: o104, 1: o106, 2: o108, 3: o110,
   },
@@ -610,22 +610,22 @@ $(o112, {});
 $(o113, {});
 $(o114, {
   memory: { array: a1 },
-  handle: 270642,
+  handle: 276934,
 });
 $(o115, {});
 $(o116, {
   memory: { array: a1 },
-  handle: 271495,
+  handle: 277787,
 });
 $(o117, {});
 $(o118, {
   memory: { array: a1 },
-  handle: 271508,
+  handle: 277800,
 });
 $(o119, {});
 $(o120, {
   memory: { array: a1 },
-  handle: 271521,
+  handle: 277813,
 });
 $(o121, {
   slots: {
@@ -638,23 +638,23 @@ $(o122, {
 });
 $(o123, {
   memory: { array: a1 },
-  handle: 270642,
+  handle: 276934,
 });
 $(o124, {
   memory: { array: a1 },
-  handle: 271495,
+  handle: 277787,
 });
 $(o125, {
   memory: { array: a1 },
-  handle: 271508,
+  handle: 277800,
 });
 $(o126, {
   memory: { array: a1 },
-  handle: 271521,
+  handle: 277813,
 });
 $(o127, {
   memory: { array: a34 },
-  handle: 240470,
+  handle: 246775,
   slots: {
     0: o128, 1: o129,
   },
@@ -705,42 +705,42 @@ $(o136, {
 $(o137, {
   structure: s56,
   memory: { array: a1 },
-  handle: 237801,
+  handle: 245211,
 });
 $(o138, {
   structure: s59,
   memory: { array: a1 },
-  handle: 237814,
+  handle: 245224,
 });
 $(o139, {
   structure: s63,
   memory: { array: a1 },
-  handle: 237827,
+  handle: 245237,
 });
 $(o140, {
   structure: s77,
   memory: { array: a1 },
-  handle: 237840,
+  handle: 245250,
 });
 $(o141, {
   structure: s78,
   memory: { array: a1 },
-  handle: 237853,
+  handle: 245263,
 });
 $(o142, {
   structure: s79,
   memory: { array: a1 },
-  handle: 237866,
+  handle: 245276,
 });
 $(o143, {
   structure: s80,
   memory: { array: a1 },
-  handle: 237879,
+  handle: 245289,
 });
 $(o144, {});
 $(o145, {
   memory: { array: a35 },
-  handle: 187466,
+  handle: 193442,
   slots: {
     0: o146,
   },
@@ -784,7 +784,7 @@ $(o151, {
 });
 $(o152, {
   memory: { array: a37 },
-  handle: 187466,
+  handle: 193442,
   slots: {
     0: o153,
   },
@@ -792,7 +792,7 @@ $(o152, {
 $(o153, {
   structure: s83,
   memory: { array: a38 },
-  handle: 187466,
+  handle: 193442,
   slots: {
     0: o146,
   },
@@ -803,7 +803,7 @@ $(o154, {
 $(o155, {});
 $(o156, {
   memory: { array: a1 },
-  handle: 169488,
+  handle: 175576,
 });
 $(o157, {
   slots: {
@@ -841,22 +841,22 @@ $(o164, {
 $(o165, {});
 $(o166, {
   memory: { array: a1 },
-  handle: 170404,
+  handle: 176492,
 });
 $(o167, {});
 $(o168, {});
 $(o169, {
   memory: { array: a1 },
-  handle: 290278,
+  handle: 295619,
 });
 $(o170, {
   memory: { array: a1 },
-  handle: 291782,
+  handle: 297132,
 });
 $(o171, {});
 $(o172, {
   memory: { array: a47 },
-  handle: 240470,
+  handle: 246775,
   slots: {
     0: o173, 1: o174,
   },
@@ -882,7 +882,7 @@ $(o175, {
 $(o176, {});
 $(o177, {
   memory: { array: a1 },
-  handle: 171106,
+  handle: 177186,
 });
 $(o178, {
   slots: {
@@ -910,16 +910,16 @@ $(o183, {});
 $(o184, {});
 $(o185, {
   memory: { array: a1 },
-  handle: 291795,
+  handle: 297145,
 });
 $(o186, {
   memory: { array: a1 },
-  handle: 293299,
+  handle: 298658,
 });
 $(o187, {});
 $(o188, {
   memory: { array: a51 },
-  handle: 240470,
+  handle: 246775,
   slots: {
     0: o173, 1: o189,
   },
@@ -938,7 +938,7 @@ $(o190, {
 $(o191, {});
 $(o192, {
   memory: { array: a52 },
-  handle: 241122,
+  handle: 247419,
   slots: {
     0: o193,
   },
@@ -946,12 +946,12 @@ $(o192, {
 $(o193, {
   structure: s108,
   memory: { array: a53 },
-  handle: 241122,
+  handle: 247419,
 });
 $(o194, {});
 $(o195, {
   memory: { array: a1 },
-  handle: 172913,
+  handle: 178945,
 });
 $(o196, {
   memory: { array: a54 },
@@ -1090,7 +1090,7 @@ $(o224, {
 $(o225, {
   structure: s113,
   memory: { array: a62 },
-  handle: 178599,
+  handle: 184671,
   slots: {
     0: o226,
   },
@@ -1102,7 +1102,7 @@ $(o226, {
 $(o227, {
   structure: s115,
   memory: { array: a64 },
-  handle: 178612,
+  handle: 184684,
   slots: {
     0: o228,
   },
@@ -1125,7 +1125,7 @@ $(o230, {
 $(o231, {
   structure: s117,
   memory: { array: a67 },
-  handle: 178625,
+  handle: 184697,
   slots: {
     0: o232,
   },
@@ -1203,29 +1203,29 @@ $(o244, {
 $(o245, {
   structure: s87,
   memory: { array: a1 },
-  handle: 153538,
+  handle: 159615,
 });
 $(o246, {
   structure: s91,
   memory: { array: a1 },
-  handle: 153551,
+  handle: 159628,
 });
 $(o247, {
   structure: s98,
   memory: { array: a1 },
-  handle: 153564,
+  handle: 159641,
 });
 $(o248, {
   structure: s111,
   memory: { array: a1 },
-  handle: 153577,
+  handle: 159654,
 });
 
 // fill in structure properties
 $(s0, {
   ...s,
   flags: 9,
-  signature: 0x406b8a99e2cc9d59n,
+  signature: 0x7fd3df143c9cd14an,
   byteSize: 0,
   align: 1,
   instance: {
@@ -1250,7 +1250,7 @@ $(s0, {
 $(s1, {
   ...s,
   flags: 1,
-  signature: 0x370ee22b85937307n,
+  signature: 0x9ddcbac74b6ccec3n,
   byteSize: 1,
   align: 1,
   instance: {
@@ -1274,7 +1274,7 @@ $(s2, {
   ...s,
   type: 10,
   flags: 32,
-  signature: 0x4a655686401d154en,
+  signature: 0x2b2cf86f480e5680n,
   length: 4,
   byteSize: 4,
   align: 4,
@@ -1297,7 +1297,7 @@ $(s2, {
 $(s3, {
   ...s,
   flags: 1,
-  signature: 0x6eddab4b13ff06c5n,
+  signature: 0x31a09f12f6815cbdn,
   byteSize: 1,
   align: 1,
   instance: {
@@ -1321,7 +1321,7 @@ $(s4, {
   ...s,
   type: 2,
   flags: 10,
-  signature: 0x46af08e1d3da0e40n,
+  signature: 0x960781b441c39140n,
   byteSize: 8,
   align: 4,
   instance: {
@@ -1359,7 +1359,7 @@ $(s5, {
   ...s,
   type: 7,
   flags: 43,
-  signature: 0x80ca36163670dff3n,
+  signature: 0x01a37275ac243c7an,
   byteSize: 12,
   align: 4,
   instance: {
@@ -1394,7 +1394,7 @@ $(s6, {
   ...s,
   type: 9,
   flags: 410,
-  signature: 0x465ecc8b06dbf648n,
+  signature: 0x94852809f0e2c350n,
   byteSize: 4,
   align: 4,
   instance: {
@@ -1419,7 +1419,7 @@ $(s7, {
   ...s,
   type: 8,
   flags: 124,
-  signature: 0x73c45a8d050bb472n,
+  signature: 0x7303fed28cd8baa0n,
   byteSize: 16,
   align: 8,
   instance: {
@@ -1443,7 +1443,7 @@ $(s7, {
 $(s8, {
   ...s,
   flags: 1,
-  signature: 0x68598db431a811a3n,
+  signature: 0xa0953051ee32940an,
   byteSize: 4,
   align: 4,
   instance: {
@@ -1468,7 +1468,7 @@ $(s9, {
   name: "ColorSpace",
   type: 6,
   flags: 1,
-  signature: 0xe1b1d2cee1fb73cen,
+  signature: 0x1a2a0afa69e514fcn,
   byteSize: 1,
   align: 1,
   instance: {
@@ -1508,7 +1508,7 @@ $(s9, {
 $(s10, {
   ...s,
   flags: 9,
-  signature: 0x7db343cac9f4fa83n,
+  signature: 0x9eeca1f200027e77n,
   byteSize: 0,
   align: 1,
   instance: {
@@ -1533,7 +1533,7 @@ $(s10, {
 $(s11, {
   ...s,
   flags: 1,
-  signature: 0x61e77abe97c52d51n,
+  signature: 0xb964b9ada17bde2cn,
   byteSize: 4,
   align: 4,
   instance: {
@@ -1557,7 +1557,7 @@ $(s12, {
   ...s,
   type: 10,
   flags: 32,
-  signature: 0x54c1b3c549d13acan,
+  signature: 0xaa00e4946712b185n,
   length: 4,
   byteSize: 16,
   align: 16,
@@ -1581,7 +1581,7 @@ $(s13, {
   ...s,
   type: 2,
   flags: 14,
-  signature: 0x8be4e7cd4e9dae1bn,
+  signature: 0xe564db1de526e4bdn,
   byteSize: 32,
   align: 8,
   instance: {
@@ -1667,7 +1667,7 @@ $(s14, {
   ...s,
   type: 2,
   flags: 270,
-  signature: 0xb09f4d4f6f129d44n,
+  signature: 0x42d7742699675128n,
   byteSize: 32,
   align: 8,
   instance: {
@@ -1694,7 +1694,7 @@ $(s15, {
   ...s,
   type: 5,
   flags: 1,
-  signature: 0x25c89e63075b428an,
+  signature: 0x003bc02d80e29180n,
   byteSize: 2,
   align: 2,
   instance: {
@@ -1728,7 +1728,7 @@ $(s16, {
   ...s,
   type: 4,
   flags: 15,
-  signature: 0x197cec53847b7ab3n,
+  signature: 0x577c8f2024cc62b0n,
   byteSize: 40,
   align: 8,
   instance: {
@@ -1762,7 +1762,7 @@ $(s16, {
 $(s17, {
   ...s,
   type: 2,
-  signature: 0x4485a9035cc2b0d7n,
+  signature: 0x03fe2ef485ad3365n,
   byteSize: 2,
   align: 1,
   instance: {
@@ -1800,7 +1800,7 @@ $(s18, {
   ...s,
   type: 7,
   flags: 43,
-  signature: 0x6cc1b27fb3d21636n,
+  signature: 0x9547fe6aa04d896dn,
   byteSize: 3,
   align: 1,
   instance: {
@@ -1835,7 +1835,7 @@ $(s19, {
   ...s,
   type: 9,
   flags: 976,
-  signature: 0x9b3f78f92307ba61n,
+  signature: 0x3ee4c60c00bcc22cn,
   instance: {
     members: [
       {
@@ -1857,7 +1857,7 @@ $(s20, {
   ...s,
   type: 8,
   flags: 668,
-  signature: 0x4057fadddf1d8877n,
+  signature: 0x83a54d808cf88dd6n,
   byteSize: 8,
   align: 8,
   instance: {
@@ -1882,7 +1882,7 @@ $(s21, {
   ...s,
   type: 9,
   flags: 464,
-  signature: 0x9b3f78f92307ba61n,
+  signature: 0x3ee4c60c00bcc22cn,
   byteSize: 1,
   align: 1,
   instance: {
@@ -1906,7 +1906,7 @@ $(s22, {
   ...s,
   type: 8,
   flags: 92,
-  signature: 0xdc4e40b42e2be1a4n,
+  signature: 0x6b4922acc2aa1729n,
   byteSize: 8,
   align: 8,
   instance: {
@@ -1930,7 +1930,7 @@ $(s22, {
 $(s23, {
   ...s,
   flags: 33,
-  signature: 0xad790f74c7d61933n,
+  signature: 0x2ee9c2d7fc6b1e44n,
   byteSize: 8,
   align: 8,
   instance: {
@@ -1954,7 +1954,7 @@ $(s24, {
   ...s,
   type: 7,
   flags: 15,
-  signature: 0x46d9c68a3fe0a71cn,
+  signature: 0x7b48561de1668547n,
   byteSize: 8,
   align: 8,
   instance: {
@@ -1988,7 +1988,7 @@ $(s24, {
 $(s25, {
   ...s,
   type: 12,
-  signature: 0xde13efb989eab233n,
+  signature: 0x2a8e057d3fac55c3n,
   length: 1,
   byteSize: 16,
   align: 8,
@@ -2026,7 +2026,7 @@ $(s25, {
 $(s26, {
   ...s,
   type: 14,
-  signature: 0x511f3836ff34e93an,
+  signature: 0xcada47f9c16c3a87n,
   length: 1,
   byteSize: 0,
   instance: {
@@ -2049,7 +2049,7 @@ $(s26, {
 $(s27, {
   ...s,
   type: 12,
-  signature: 0x3d33381cd47940b4n,
+  signature: 0x8e1a4c456f3a4bf3n,
   length: 1,
   byteSize: 16,
   align: 8,
@@ -2087,7 +2087,7 @@ $(s27, {
 $(s28, {
   ...s,
   type: 14,
-  signature: 0x950458df9df4743bn,
+  signature: 0x0353c8d18f3b5451n,
   length: 1,
   byteSize: 0,
   instance: {
@@ -2110,7 +2110,7 @@ $(s28, {
 $(s29, {
   ...s,
   type: 12,
-  signature: 0xa358945228ebaff3n,
+  signature: 0xdd2c6cd0895aaaafn,
   length: 1,
   byteSize: 2,
   align: 1,
@@ -2148,7 +2148,7 @@ $(s29, {
 $(s30, {
   ...s,
   type: 14,
-  signature: 0x09217ef45d6a5583n,
+  signature: 0x4556ad567359c057n,
   length: 1,
   byteSize: 0,
   instance: {
@@ -2172,7 +2172,7 @@ $(s31, {
   ...s,
   type: 7,
   flags: 33,
-  signature: 0x45d6d2728e09761bn,
+  signature: 0x3dd59d2a12841050n,
   byteSize: 2,
   align: 1,
   instance: {
@@ -2206,7 +2206,7 @@ $(s32, {
   ...s,
   type: 12,
   flags: 10,
-  signature: 0x818dc2d151e5b733n,
+  signature: 0x6b752ee8e13b7ecfn,
   length: 1,
   byteSize: 3,
   align: 1,
@@ -2245,7 +2245,7 @@ $(s32, {
 $(s33, {
   ...s,
   type: 14,
-  signature: 0x54ab34151663d188n,
+  signature: 0x23895f9be71924f6n,
   length: 1,
   byteSize: 0,
   instance: {
@@ -2268,7 +2268,7 @@ $(s33, {
 $(s34, {
   ...s,
   type: 12,
-  signature: 0xb4bc84552cdf048fn,
+  signature: 0x1112ed04d9135c68n,
   length: 1,
   byteSize: 2,
   align: 1,
@@ -2306,7 +2306,7 @@ $(s34, {
 $(s35, {
   ...s,
   type: 14,
-  signature: 0x7614c9fef669bdabn,
+  signature: 0x04d406b3f95be9adn,
   length: 1,
   byteSize: 0,
   instance: {
@@ -2331,7 +2331,7 @@ $(s36, {
   name: "CompareOperator",
   type: 6,
   flags: 1,
-  signature: 0x89697612f8e25e90n,
+  signature: 0x10893b0878b048a0n,
   byteSize: 1,
   align: 1,
   instance: {
@@ -2411,7 +2411,7 @@ $(s36, {
 $(s37, {
   ...s,
   type: 12,
-  signature: 0xacf11acba856b940n,
+  signature: 0x3a73a3888170629an,
   length: 2,
   byteSize: 3,
   align: 1,
@@ -2460,7 +2460,7 @@ $(s37, {
 $(s38, {
   ...s,
   type: 14,
-  signature: 0xf27159573848fb68n,
+  signature: 0x67c715f953df34abn,
   length: 2,
   byteSize: 0,
   instance: {
@@ -2485,7 +2485,7 @@ $(s39, {
   name: "Order",
   type: 6,
   flags: 1,
-  signature: 0x1aec8487f6280122n,
+  signature: 0x4f420ca6108bec6fn,
   byteSize: 1,
   align: 1,
   instance: {
@@ -2557,7 +2557,7 @@ $(s39, {
 $(s40, {
   ...s,
   type: 12,
-  signature: 0xf2ead49fdfa38e2bn,
+  signature: 0x555ad0f759586049n,
   length: 2,
   byteSize: 3,
   align: 1,
@@ -2606,7 +2606,7 @@ $(s40, {
 $(s41, {
   ...s,
   type: 14,
-  signature: 0xf13cee4b7fda58c4n,
+  signature: 0x987630ac1b70cdf7n,
   length: 2,
   byteSize: 0,
   instance: {
@@ -2629,7 +2629,7 @@ $(s41, {
 $(s42, {
   ...s,
   type: 12,
-  signature: 0x05739b3b38be1fe7n,
+  signature: 0xa45a5b343ff9e13dn,
   length: 3,
   byteSize: 4,
   align: 1,
@@ -2689,7 +2689,7 @@ $(s42, {
 $(s43, {
   ...s,
   type: 14,
-  signature: 0x5fb140f1464d545dn,
+  signature: 0x206335b70673a104n,
   length: 3,
   byteSize: 0,
   instance: {
@@ -2712,7 +2712,7 @@ $(s43, {
 $(s44, {
   ...s,
   type: 12,
-  signature: 0x19f9b9e423c9240bn,
+  signature: 0xe56c033a4acfb6f2n,
   length: 2,
   byteSize: 3,
   align: 1,
@@ -2761,7 +2761,7 @@ $(s44, {
 $(s45, {
   ...s,
   type: 14,
-  signature: 0x502383542de53673n,
+  signature: 0xf1298fc476137d0bn,
   length: 2,
   byteSize: 0,
   instance: {
@@ -2784,7 +2784,7 @@ $(s45, {
 $(s46, {
   ...s,
   type: 12,
-  signature: 0x84835b8f7162244fn,
+  signature: 0x6d1e9a0f800746ddn,
   length: 2,
   byteSize: 24,
   align: 8,
@@ -2833,7 +2833,7 @@ $(s46, {
 $(s47, {
   ...s,
   type: 14,
-  signature: 0xf22d521b6289ec09n,
+  signature: 0xdb7960d77aa44c71n,
   length: 2,
   byteSize: 0,
   instance: {
@@ -2856,7 +2856,7 @@ $(s47, {
 $(s48, {
   ...s,
   type: 12,
-  signature: 0x053c5d5cf40c778fn,
+  signature: 0x2ec6e84ed8be9922n,
   length: 2,
   byteSize: 16,
   align: 8,
@@ -2905,7 +2905,7 @@ $(s48, {
 $(s49, {
   ...s,
   type: 14,
-  signature: 0xc152dfb87eadb0b4n,
+  signature: 0x4f9531acbd69c56bn,
   length: 2,
   byteSize: 0,
   instance: {
@@ -2930,7 +2930,7 @@ $(s50, {
   name: "Alignment",
   type: 6,
   flags: 33,
-  signature: 0x585b7f21a11e5af0n,
+  signature: 0x10c2b479f949ea69n,
   byteSize: 1,
   align: 1,
   instance: {
@@ -2968,7 +2968,7 @@ $(s50, {
         name: "order",
         type: 5,
         flags: 562,
-        slot: 2,
+        slot: 3,
         structure: s41,
       },
       {
@@ -2976,7 +2976,7 @@ $(s50, {
         name: "compare",
         type: 5,
         flags: 50,
-        slot: 3,
+        slot: 4,
         structure: s43,
       },
       {
@@ -2984,7 +2984,7 @@ $(s50, {
         name: "max",
         type: 5,
         flags: 562,
-        slot: 4,
+        slot: 5,
         structure: s45,
       },
       {
@@ -2992,7 +2992,7 @@ $(s50, {
         name: "min",
         type: 5,
         flags: 562,
-        slot: 5,
+        slot: 6,
         structure: s45,
       },
       {
@@ -3000,7 +3000,7 @@ $(s50, {
         name: "forward",
         type: 5,
         flags: 50,
-        slot: 6,
+        slot: 7,
         structure: s47,
       },
       {
@@ -3008,7 +3008,7 @@ $(s50, {
         name: "backward",
         type: 5,
         flags: 50,
-        slot: 7,
+        slot: 8,
         structure: s47,
       },
       {
@@ -3016,7 +3016,7 @@ $(s50, {
         name: "check",
         type: 5,
         flags: 50,
-        slot: 8,
+        slot: 9,
         structure: s49,
       },
       {
@@ -3024,7 +3024,7 @@ $(s50, {
         name: "1",
         type: 5,
         flags: 4,
-        slot: 9,
+        slot: 10,
         structure: s50,
       },
       {
@@ -3032,7 +3032,7 @@ $(s50, {
         name: "2",
         type: 5,
         flags: 4,
-        slot: 10,
+        slot: 11,
         structure: s50,
       },
       {
@@ -3040,7 +3040,7 @@ $(s50, {
         name: "4",
         type: 5,
         flags: 4,
-        slot: 11,
+        slot: 12,
         structure: s50,
       },
       {
@@ -3048,7 +3048,7 @@ $(s50, {
         name: "8",
         type: 5,
         flags: 4,
-        slot: 12,
+        slot: 13,
         structure: s50,
       },
       {
@@ -3056,7 +3056,7 @@ $(s50, {
         name: "16",
         type: 5,
         flags: 4,
-        slot: 13,
+        slot: 14,
         structure: s50,
       },
       {
@@ -3064,7 +3064,7 @@ $(s50, {
         name: "32",
         type: 5,
         flags: 4,
-        slot: 14,
+        slot: 15,
         structure: s50,
       },
       {
@@ -3072,7 +3072,7 @@ $(s50, {
         name: "64",
         type: 5,
         flags: 4,
-        slot: 15,
+        slot: 16,
         structure: s50,
       },
     ],
@@ -3083,7 +3083,7 @@ $(s51, {
   ...s,
   type: 12,
   flags: 14,
-  signature: 0xe9635dad30c6baf7n,
+  signature: 0x6a48ad5485a09d1bn,
   length: 4,
   byteSize: 40,
   align: 8,
@@ -3155,7 +3155,7 @@ $(s51, {
 $(s52, {
   ...s,
   type: 14,
-  signature: 0xbed86186ab27c14cn,
+  signature: 0x24f0769ea612b5d9n,
   length: 4,
   byteSize: 0,
   instance: {
@@ -3180,7 +3180,7 @@ $(s53, {
   ...s,
   type: 8,
   flags: 396,
-  signature: 0x4e622a40d4cd5ff1n,
+  signature: 0x48b13a411d319211n,
   byteSize: 8,
   align: 8,
   instance: {
@@ -3205,7 +3205,7 @@ $(s54, {
   ...s,
   type: 8,
   flags: 124,
-  signature: 0x559135659a0a19ean,
+  signature: 0x94f49c493a527b38n,
   byteSize: 16,
   align: 8,
   instance: {
@@ -3230,7 +3230,7 @@ $(s55, {
   ...s,
   type: 12,
   flags: 14,
-  signature: 0xcdf6dc4e0de8422cn,
+  signature: 0x8223575b7c62e19dn,
   length: 5,
   byteSize: 48,
   align: 8,
@@ -3313,7 +3313,7 @@ $(s55, {
 $(s56, {
   ...s,
   type: 14,
-  signature: 0xb1911d4efbc4e934n,
+  signature: 0xae5e7bd9b87f8520n,
   length: 5,
   byteSize: 0,
   instance: {
@@ -3338,7 +3338,7 @@ $(s57, {
   ...s,
   type: 8,
   flags: 396,
-  signature: 0x493ea89f26eed44an,
+  signature: 0xa13115bf6eac0a84n,
   byteSize: 8,
   align: 8,
   instance: {
@@ -3363,7 +3363,7 @@ $(s58, {
   ...s,
   type: 12,
   flags: 14,
-  signature: 0x9205d7e9600828c7n,
+  signature: 0xbadd5ef506c6c75bn,
   length: 5,
   byteSize: 56,
   align: 8,
@@ -3446,7 +3446,7 @@ $(s58, {
 $(s59, {
   ...s,
   type: 14,
-  signature: 0xa62dc1e1ab682848n,
+  signature: 0x2a476dc4282d3651n,
   length: 5,
   byteSize: 0,
   instance: {
@@ -3471,7 +3471,7 @@ $(s60, {
   ...s,
   type: 8,
   flags: 396,
-  signature: 0x77acf15c3d1d71d3n,
+  signature: 0x7c1fbfc252342195n,
   byteSize: 8,
   align: 8,
   instance: {
@@ -3495,7 +3495,7 @@ $(s60, {
 $(s61, {
   ...s,
   flags: 1,
-  signature: 0xa310b7d01f11b8can,
+  signature: 0xcb1f69cbe6954c96n,
   byteSize: 0,
   align: 1,
   instance: {
@@ -3518,7 +3518,7 @@ $(s62, {
   ...s,
   type: 12,
   flags: 14,
-  signature: 0x904e42ce696930c2n,
+  signature: 0x92bae266d964e602n,
   length: 4,
   byteSize: 40,
   align: 8,
@@ -3589,7 +3589,7 @@ $(s62, {
 $(s63, {
   ...s,
   type: 14,
-  signature: 0x6d484295c0c3632en,
+  signature: 0x192e0fddf4e3cee0n,
   length: 4,
   byteSize: 0,
   instance: {
@@ -3614,7 +3614,7 @@ $(s64, {
   ...s,
   type: 8,
   flags: 396,
-  signature: 0xa160bce25686afaen,
+  signature: 0xe1a99eb544aca4e8n,
   byteSize: 8,
   align: 8,
   instance: {
@@ -3640,7 +3640,7 @@ $(s65, {
   name: "VTable",
   type: 2,
   flags: 14,
-  signature: 0x82fdd6a3c2718ac5n,
+  signature: 0xe70cc1cba84ca0d1n,
   byteSize: 32,
   align: 8,
   instance: {
@@ -3700,7 +3700,7 @@ $(s66, {
   ...s,
   type: 8,
   flags: 412,
-  signature: 0x032c51cdc1d57444n,
+  signature: 0xbc33da823ad41b4dn,
   byteSize: 8,
   align: 8,
   instance: {
@@ -3725,7 +3725,7 @@ $(s67, {
   ...s,
   type: 12,
   flags: 46,
-  signature: 0xfbc5dcd792c9aee9n,
+  signature: 0xb7feaa1a6739f86an,
   length: 3,
   byteSize: 48,
   align: 8,
@@ -3797,7 +3797,7 @@ $(s67, {
 $(s68, {
   ...s,
   type: 14,
-  signature: 0xa1c6c8ddb44e8aa1n,
+  signature: 0x55db8c5210778576n,
   length: 3,
   byteSize: 0,
   instance: {
@@ -3821,7 +3821,7 @@ $(s69, {
   ...s,
   type: 12,
   flags: 46,
-  signature: 0x844b7d91572e5617n,
+  signature: 0xf5d17633582b848fn,
   length: 4,
   byteSize: 56,
   align: 8,
@@ -3904,7 +3904,7 @@ $(s69, {
 $(s70, {
   ...s,
   type: 14,
-  signature: 0xde63f52f14d5bc74n,
+  signature: 0xc0ffc101f028b746n,
   length: 4,
   byteSize: 0,
   instance: {
@@ -3928,7 +3928,7 @@ $(s71, {
   ...s,
   type: 12,
   flags: 46,
-  signature: 0xca4d0a4d3768c190n,
+  signature: 0xa946f778929e845dn,
   length: 4,
   byteSize: 64,
   align: 8,
@@ -4011,7 +4011,7 @@ $(s71, {
 $(s72, {
   ...s,
   type: 14,
-  signature: 0x5694954bb4defd4fn,
+  signature: 0x8647ac3670571555n,
   length: 4,
   byteSize: 0,
   instance: {
@@ -4035,7 +4035,7 @@ $(s73, {
   ...s,
   type: 12,
   flags: 46,
-  signature: 0x8cbf4dbbc76d157cn,
+  signature: 0xea9da4bc18f2c7d4n,
   length: 3,
   byteSize: 48,
   align: 8,
@@ -4106,7 +4106,7 @@ $(s73, {
 $(s74, {
   ...s,
   type: 14,
-  signature: 0x0c1808e686843fafn,
+  signature: 0x757e5d0a3dc0d873n,
   length: 3,
   byteSize: 0,
   instance: {
@@ -4130,7 +4130,7 @@ $(s75, {
   ...s,
   type: 5,
   flags: 1,
-  signature: 0x25c89e63075b428an,
+  signature: 0x003bc02d80e29180n,
   byteSize: 2,
   align: 2,
   instance: {
@@ -4163,7 +4163,7 @@ $(s75, {
 $(s76, {
   ...s,
   flags: 1,
-  signature: 0xb89afc1d323aa0a6n,
+  signature: 0x2bfab51f66275485n,
   byteSize: 1,
   align: 1,
   instance: {
@@ -4186,7 +4186,7 @@ $(s76, {
 $(s77, {
   ...s,
   type: 14,
-  signature: 0x3150e96a1cf4fb3en,
+  signature: 0xd88587ab15ee8e5bn,
   length: 3,
   byteSize: 0,
   instance: {
@@ -4209,7 +4209,7 @@ $(s77, {
 $(s78, {
   ...s,
   type: 14,
-  signature: 0xbacda0ec6bc94329n,
+  signature: 0x921cdda51398f30bn,
   length: 4,
   byteSize: 0,
   instance: {
@@ -4232,7 +4232,7 @@ $(s78, {
 $(s79, {
   ...s,
   type: 14,
-  signature: 0xef3e466f3864f3f8n,
+  signature: 0x49b76f5e6266ed88n,
   length: 4,
   byteSize: 0,
   instance: {
@@ -4255,7 +4255,7 @@ $(s79, {
 $(s80, {
   ...s,
   type: 14,
-  signature: 0x65e6caa57226340dn,
+  signature: 0x62750b768d774a07n,
   length: 3,
   byteSize: 0,
   instance: {
@@ -4281,7 +4281,7 @@ $(s81, {
   type: 2,
   purpose: 4,
   flags: 14,
-  signature: 0x792f7b78d636007fn,
+  signature: 0x623a493140e67edan,
   byteSize: 16,
   align: 8,
   instance: {
@@ -4401,7 +4401,7 @@ $(s82, {
   ...s,
   type: 8,
   flags: 380,
-  signature: 0x2c3ab052067a6f4en,
+  signature: 0x69f8381f03cb6a99n,
   byteSize: 16,
   align: 8,
   instance: {
@@ -4426,7 +4426,7 @@ $(s83, {
   ...s,
   type: 2,
   flags: 14,
-  signature: 0xe553791214dc2f6bn,
+  signature: 0x337c00bed4ef2e2an,
   byteSize: 32,
   align: 8,
   instance: {
@@ -4512,7 +4512,7 @@ $(s84, {
   ...s,
   type: 2,
   flags: 270,
-  signature: 0x7031f65c3c5d4f77n,
+  signature: 0x9454cb4954675b2bn,
   byteSize: 32,
   align: 8,
   instance: {
@@ -4539,7 +4539,7 @@ $(s85, {
   ...s,
   type: 2,
   flags: 256,
-  signature: 0x8b859b03f42bd192n,
+  signature: 0xa3907fe5a3f21709n,
   byteSize: 4,
   align: 4,
   instance: {
@@ -4566,7 +4566,7 @@ $(s86, {
   ...s,
   type: 12,
   flags: 110,
-  signature: 0x84e3636fdfbdd69an,
+  signature: 0x44e023d3f1d82656n,
   length: 4,
   byteSize: 104,
   align: 8,
@@ -4649,7 +4649,7 @@ $(s86, {
 $(s87, {
   ...s,
   type: 14,
-  signature: 0xdf25bb10d1b0231dn,
+  signature: 0x434e1838bc130504n,
   length: 4,
   byteSize: 0,
   instance: {
@@ -4673,7 +4673,7 @@ $(s88, {
   ...s,
   type: 5,
   flags: 1,
-  signature: 0x5c8ee1f4224f967dn,
+  signature: 0xb0e609169e48d0d0n,
   byteSize: 2,
   align: 2,
   instance: {
@@ -4692,7 +4692,7 @@ $(s88, {
     members: [
       {
         ...m,
-        name: "Unexpected",
+        name: "SystemResources",
         type: 5,
         flags: 4,
         slot: 0,
@@ -4700,7 +4700,7 @@ $(s88, {
       },
       {
         ...m,
-        name: "OutOfMemory",
+        name: "Unexpected",
         type: 5,
         flags: 4,
         slot: 1,
@@ -4708,7 +4708,7 @@ $(s88, {
       },
       {
         ...m,
-        name: "Deinitializing",
+        name: "OutOfMemory",
         type: 5,
         flags: 4,
         slot: 2,
@@ -4716,7 +4716,7 @@ $(s88, {
       },
       {
         ...m,
-        name: "UnableToUseThread",
+        name: "Deinitializing",
         type: 5,
         flags: 4,
         slot: 3,
@@ -4724,7 +4724,7 @@ $(s88, {
       },
       {
         ...m,
-        name: "ThreadQuotaExceeded",
+        name: "UnableToUseThread",
         type: 5,
         flags: 4,
         slot: 4,
@@ -4732,7 +4732,7 @@ $(s88, {
       },
       {
         ...m,
-        name: "SystemResources",
+        name: "ThreadQuotaExceeded",
         type: 5,
         flags: 4,
         slot: 5,
@@ -4755,7 +4755,7 @@ $(s89, {
   ...s,
   type: 4,
   flags: 1,
-  signature: 0x62953c5804784650n,
+  signature: 0x59f8821423ada5efn,
   byteSize: 2,
   align: 2,
   instance: {
@@ -4788,7 +4788,7 @@ $(s90, {
   ...s,
   type: 12,
   flags: 74,
-  signature: 0x70e147ebc67eb277n,
+  signature: 0xfcdd0ef91c54177fn,
   length: 1,
   byteSize: 8,
   align: 4,
@@ -4827,7 +4827,7 @@ $(s90, {
 $(s91, {
   ...s,
   type: 14,
-  signature: 0x3597ca5a050d5c23n,
+  signature: 0xe5d8b4bb861c1e8an,
   length: 1,
   byteSize: 0,
   instance: {
@@ -4851,7 +4851,7 @@ $(s92, {
   ...s,
   type: 7,
   flags: 15,
-  signature: 0xfd89f2070573d249n,
+  signature: 0xc483f40888e1ec6an,
   byteSize: 8,
   align: 8,
   instance: {
@@ -4886,7 +4886,7 @@ $(s93, {
   ...s,
   type: 12,
   flags: 14,
-  signature: 0xa4f4ca33336a9dbcn,
+  signature: 0x219d9248a4265ce9n,
   length: 2,
   byteSize: 8,
   align: 8,
@@ -4934,7 +4934,7 @@ $(s93, {
 $(s94, {
   ...s,
   type: 14,
-  signature: 0xab938596c6214c24n,
+  signature: 0xc8327291b80e2195n,
   length: 2,
   byteSize: 0,
   instance: {
@@ -4959,7 +4959,7 @@ $(s95, {
   ...s,
   type: 8,
   flags: 396,
-  signature: 0x3383733aa3b32c56n,
+  signature: 0x90af5e5877878ecen,
   byteSize: 8,
   align: 8,
   instance: {
@@ -4985,7 +4985,7 @@ $(s96, {
   type: 2,
   purpose: 1,
   flags: 14,
-  signature: 0x0d15352f0eaaaee2n,
+  signature: 0x47ea380ec4c708c4n,
   byteSize: 16,
   align: 8,
   instance: {
@@ -5023,7 +5023,7 @@ $(s97, {
   ...s,
   type: 12,
   flags: 174,
-  signature: 0x4df95d08659081dcn,
+  signature: 0x55f2ac4baaa9bc07n,
   length: 0,
   byteSize: 16,
   align: 8,
@@ -5061,7 +5061,7 @@ $(s97, {
 $(s98, {
   ...s,
   type: 14,
-  signature: 0xc449c79e7d730846n,
+  signature: 0xd2abee79f7b9a378n,
   length: 0,
   byteSize: 0,
   instance: {
@@ -5085,7 +5085,7 @@ $(s99, {
   ...s,
   type: 5,
   flags: 1,
-  signature: 0xc3ba8da026469b22n,
+  signature: 0x7974fd22cdd85648n,
   byteSize: 2,
   align: 2,
   instance: {
@@ -5127,7 +5127,7 @@ $(s100, {
   ...s,
   type: 4,
   flags: 1,
-  signature: 0xa65ab153c9e26fc7n,
+  signature: 0x99eb7dc26c76225bn,
   byteSize: 2,
   align: 2,
   instance: {
@@ -5160,7 +5160,7 @@ $(s101, {
   ...s,
   type: 5,
   flags: 1,
-  signature: 0xf6baaaf6f5cb446en,
+  signature: 0xabc85773291e1411n,
   byteSize: 2,
   align: 2,
   instance: {
@@ -5194,7 +5194,7 @@ $(s102, {
   ...s,
   type: 4,
   flags: 15,
-  signature: 0xe305adcbd10aa187n,
+  signature: 0x83ce7fc9db9c2e21n,
   byteSize: 40,
   align: 8,
   instance: {
@@ -5229,7 +5229,7 @@ $(s103, {
   ...s,
   type: 12,
   flags: 14,
-  signature: 0x7692d43fb11b4684n,
+  signature: 0xb3313df90a674431n,
   length: 2,
   byteSize: 48,
   align: 8,
@@ -5278,7 +5278,7 @@ $(s103, {
 $(s104, {
   ...s,
   type: 14,
-  signature: 0x1fe262a6498cfd30n,
+  signature: 0xc73ea89a078e339dn,
   length: 2,
   byteSize: 0,
   instance: {
@@ -5303,7 +5303,7 @@ $(s105, {
   ...s,
   type: 8,
   flags: 396,
-  signature: 0x644592e2a71d7fc3n,
+  signature: 0x6cff4a586a3350een,
   byteSize: 8,
   align: 8,
   instance: {
@@ -5329,7 +5329,7 @@ $(s106, {
   type: 2,
   purpose: 1,
   flags: 14,
-  signature: 0x20d8796d53ed09e6n,
+  signature: 0x3265da45286ca913n,
   byteSize: 16,
   align: 8,
   instance: {
@@ -5366,7 +5366,7 @@ $(s106, {
 $(s107, {
   ...s,
   flags: 1,
-  signature: 0xbdb875b052db9ef8n,
+  signature: 0xb31f6af1d3bc75b0n,
   byteSize: 4,
   align: 4,
   instance: {
@@ -5390,7 +5390,7 @@ $(s108, {
   ...s,
   type: 8,
   flags: 412,
-  signature: 0x73bde77802a3eff9n,
+  signature: 0x030f360bbeff01f2n,
   byteSize: 8,
   align: 8,
   instance: {
@@ -5417,7 +5417,7 @@ $(s109, {
   type: 2,
   purpose: 3,
   flags: 14,
-  signature: 0x6202dd78a023834bn,
+  signature: 0xf5a2a1af2c82de4dn,
   byteSize: 8,
   align: 8,
   instance: {
@@ -5444,7 +5444,7 @@ $(s110, {
   ...s,
   type: 12,
   flags: 238,
-  signature: 0x4d87aa72e68e9896n,
+  signature: 0x439ad6eb848bf105n,
   length: 4,
   byteSize: 88,
   align: 8,
@@ -5549,7 +5549,7 @@ $(s110, {
 $(s111, {
   ...s,
   type: 14,
-  signature: 0x01cad0d3c4750148n,
+  signature: 0xd2c9e0b64ce55175n,
   length: 4,
   byteSize: 0,
   instance: {
@@ -5573,7 +5573,7 @@ $(s112, {
   ...s,
   type: 1,
   flags: 496,
-  signature: 0x6d0df926eed44617n,
+  signature: 0x7a90d8480d524432n,
   length: 3,
   byteSize: 4,
   align: 1,
@@ -5606,7 +5606,7 @@ $(s113, {
   ...s,
   type: 8,
   flags: 412,
-  signature: 0x9e594923df8578c6n,
+  signature: 0x445085a3f3b11320n,
   byteSize: 8,
   align: 8,
   instance: {
@@ -5631,7 +5631,7 @@ $(s114, {
   ...s,
   type: 1,
   flags: 496,
-  signature: 0x8529e76c65ef0020n,
+  signature: 0xc94b1a912bfbb75en,
   length: 13,
   byteSize: 14,
   align: 1,
@@ -5664,7 +5664,7 @@ $(s115, {
   ...s,
   type: 8,
   flags: 412,
-  signature: 0x8efd97692f62ebd3n,
+  signature: 0x673cfb800fe3f7e6n,
   byteSize: 8,
   align: 8,
   instance: {
@@ -5689,7 +5689,7 @@ $(s116, {
   ...s,
   type: 1,
   flags: 496,
-  signature: 0x8d62bac20b49ae2bn,
+  signature: 0xe1ee1f66f2cb71cdn,
   length: 23,
   byteSize: 24,
   align: 1,
@@ -5722,7 +5722,7 @@ $(s117, {
   ...s,
   type: 8,
   flags: 412,
-  signature: 0xc3220978c5104787n,
+  signature: 0x0110559b96335704n,
   byteSize: 8,
   align: 8,
   instance: {
@@ -5746,7 +5746,7 @@ $(s117, {
 $(s118, {
   ...s,
   flags: 9,
-  signature: 0x30a39b42da92ab1bn,
+  signature: 0xdd41f64139c09b1bn,
   byteSize: 0,
   align: 1,
   instance: {
@@ -5771,7 +5771,7 @@ $(s118, {
 $(s119, {
   ...s,
   flags: 1,
-  signature: 0xf1e897a7e0984b71n,
+  signature: 0xb8ac896a18a90007n,
   byteSize: 8,
   align: 8,
   instance: {
@@ -5795,7 +5795,7 @@ $(s120, {
   ...s,
   type: 2,
   flags: 264,
-  signature: 0x239ab4f327f6ac1bn,
+  signature: 0xa8a31dac43a38551n,
   byteSize: 0,
   align: 1,
   instance: {
@@ -5844,7 +5844,7 @@ $(s121, {
   ...s,
   type: 2,
   flags: 266,
-  signature: 0x239ab4f327f6ac1bn,
+  signature: 0xa8a31dac43a38551n,
   byteSize: 0,
   align: 1,
   instance: {
@@ -5869,7 +5869,7 @@ $(s122, {
   ...s,
   type: 2,
   flags: 264,
-  signature: 0x239ab4f327f6ac1bn,
+  signature: 0xa8a31dac43a38551n,
   byteSize: 0,
   align: 1,
   instance: {
@@ -5894,7 +5894,7 @@ $(s123, {
   ...s,
   type: 2,
   flags: 266,
-  signature: 0x239ab4f327f6ac1bn,
+  signature: 0xa8a31dac43a38551n,
   byteSize: 0,
   align: 1,
   instance: {
@@ -5919,7 +5919,7 @@ $(s124, {
   ...s,
   type: 2,
   flags: 264,
-  signature: 0x239ab4f327f6ac1bn,
+  signature: 0xa8a31dac43a38551n,
   byteSize: 0,
   align: 1,
   instance: {
@@ -5944,7 +5944,7 @@ $(s125, {
   ...s,
   type: 2,
   flags: 266,
-  signature: 0x239ab4f327f6ac1bn,
+  signature: 0xa8a31dac43a38551n,
   byteSize: 0,
   align: 1,
   instance: {
@@ -5970,7 +5970,7 @@ $(s126, {
   name: "kernel",
   type: 2,
   flags: 256,
-  signature: 0x239ab4f327f6ac1bn,
+  signature: 0xa8a31dac43a38551n,
   byteSize: 0,
   align: 1,
   instance: {
@@ -5982,7 +5982,7 @@ $(s126, {
         ...m,
         name: "namespace",
         type: 5,
-        flags: 514,
+        flags: 2,
         slot: 0,
         structure: s113,
       },
@@ -5990,7 +5990,7 @@ $(s126, {
         ...m,
         name: "vendor",
         type: 5,
-        flags: 514,
+        flags: 2,
         slot: 1,
         structure: s115,
       },
@@ -6006,7 +6006,7 @@ $(s126, {
         ...m,
         name: "description",
         type: 5,
-        flags: 514,
+        flags: 2,
         slot: 3,
         structure: s117,
       },
@@ -6014,7 +6014,7 @@ $(s126, {
         ...m,
         name: "parameters",
         type: 5,
-        flags: 514,
+        flags: 2,
         slot: 4,
         structure: s121,
       },
@@ -6022,7 +6022,7 @@ $(s126, {
         ...m,
         name: "inputImages",
         type: 5,
-        flags: 514,
+        flags: 2,
         slot: 5,
         structure: s123,
       },
@@ -6030,7 +6030,7 @@ $(s126, {
         ...m,
         name: "outputImages",
         type: 5,
-        flags: 514,
+        flags: 2,
         slot: 6,
         structure: s125,
       },
@@ -6043,7 +6043,7 @@ $(s127, {
   name: "sepia",
   type: 2,
   flags: 256,
-  signature: 0x239ab4f327f6ac1bn,
+  signature: 0xa8a31dac43a38551n,
   byteSize: 0,
   align: 1,
   instance: {
@@ -6188,7 +6188,7 @@ function getPlatform() {
         const list = [];
         try {
           // scan ELF executable for imported shared libraries
-          const { closeSync, openSync, readSync } = require('fs');
+          const { closeSync, openSync, readSync } = require$1('fs');
           const fd = openSync(process.execPath, 'r');
           const sig = new Uint8Array(8);
           readSync(fd, sig);
