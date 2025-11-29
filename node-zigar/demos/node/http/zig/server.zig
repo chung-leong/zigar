@@ -76,7 +76,10 @@ const ServerThread = struct {
 
     fn handleConnection(self: *@This(), connection: *std.net.Server.Connection) void {
         var read_buffer: [4096]u8 = undefined;
-        var http = std.http.Server.init(connection.*, &read_buffer);
+        var reader = connection.stream.reader(&read_buffer);
+        var write_buffer: [4096]u8 = undefined;
+        var writer = connection.stream.writer(&write_buffer);
+        var http = std.http.Server.init(reader.interface(), &writer.interface);
         self.connection = connection;
         while (true) {
             var request = http.receiveHead() catch {
