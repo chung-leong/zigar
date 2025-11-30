@@ -4231,13 +4231,22 @@ pub fn Win32Substitute(comptime redirector: type) type {
             if (isPrivateDescriptor(fd)) {
                 const len_s = cast(off_t, len, true) catch return FALSE;
                 var result: off_t = undefined;
-                if (extractOffset(overlapped) catch return FALSE) |offset| {
-                    signalBeginning(overlapped);
-                    defer signalCompletion(overlapped);
-                    var result64: off64_t = undefined;
-                    _ = redirector.pread64(fd, @ptrCast(buffer), len_s, offset, &result64);
-                    result = @intCast(result64);
-                } else {
+                var done = false;
+                signalBeginning(overlapped);
+                defer signalCompletion(overlapped);
+                if (isSeekable(fd)) {
+                    if (extractOffset(overlapped)) |offset| {
+                        var result64: off64_t = undefined;
+                        _ = redirector.pread64(fd, @ptrCast(buffer), len_s, offset, &result64);
+                        result = @intCast(result64);
+                        if (result != -@as(off_t, @intFromEnum(std.c.E.SPIPE))) {
+                            done = true;
+                        } else {
+                            addUnseekable(fd);
+                        }
+                    }
+                }
+                if (!done) {
                     _ = redirector.read(fd, @ptrCast(buffer), len_s, &result);
                 }
                 if (result < 0) return saveError(result);
@@ -4363,13 +4372,27 @@ pub fn Win32Substitute(comptime redirector: type) type {
             if (isPrivateDescriptor(fd)) {
                 const len_s = cast(off_t, len, true) catch return FALSE;
                 var result: off_t = undefined;
-                if (extractOffset(overlapped) catch return FALSE) |offset| {
-                    signalBeginning(overlapped);
-                    defer signalCompletion(overlapped);
-                    var result64: off64_t = undefined;
-                    _ = redirector.pwrite64(fd, @ptrCast(buffer), len_s, offset, &result64);
-                    result = @intCast(result64);
-                } else {
+                var done = false;
+                signalBeginning(overlapped);
+                defer signalCompletion(overlapped);
+                if (isSeekable(fd)) {
+                    if (extractOffset(overlapped)) |offset| {
+                        if (offset != -1) {
+                            var result64: off64_t = undefined;
+                            _ = redirector.pwrite64(fd, @ptrCast(buffer), len_s, offset, &result64);
+                            result = @intCast(result64);
+                            if (result != -@as(off_t, @intFromEnum(std.c.E.SPIPE))) {
+                                done = true;
+                            } else {
+                                addUnseekable(fd);
+                            }
+                        } else {
+                            var seek_result64: off64_t = undefined;
+                            _ = redirector.lseek64(fd, 0, 2, &seek_result64);
+                        }
+                    }
+                }
+                if (!done) {
                     _ = redirector.write(fd, @ptrCast(buffer), len_s, &result);
                 }
                 if (result < 0) return saveError(result);
@@ -4455,11 +4478,14 @@ pub fn Win32Substitute(comptime redirector: type) type {
             };
         }
 
-        fn extractOffset(overlapped: ?*OVERLAPPED) !?off64_t {
+        fn extractOffset(overlapped: ?*OVERLAPPED) ?off64_t {
             const ptr = overlapped orelse return null;
-            const low = @as(u64, ptr.DUMMYUNIONNAME.DUMMYSTRUCTNAME.Offset);
-            const high = @as(u64, ptr.DUMMYUNIONNAME.DUMMYSTRUCTNAME.OffsetHigh);
-            return try cast(off64_t, low | high << 32, true);
+            const offset = ptr.DUMMYUNIONNAME.DUMMYSTRUCTNAME.Offset;
+            const offset_high = ptr.DUMMYUNIONNAME.DUMMYSTRUCTNAME.OffsetHigh;
+            if (offset == 0xffff_ffff and offset_high == 0xffff_ffff) return -1;
+            const low = @as(u64, offset);
+            const high = @as(u64, offset_high);
+            return cast(off64_t, low | high << 32, true) catch null;
         }
 
         fn signalBeginning(overlapped: ?*OVERLAPPED) void {
@@ -4522,8 +4548,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         fn createTemporaryHandle(path: [*:0]const u8, dirfd: c_int, arg: anytype) !HANDLE {
-            temp_handle_mutex.lock();
-            defer temp_handle_mutex.unlock();
+            mutex.lock();
+            defer mutex.unlock();
             var fd: c_int = fd_temp_min;
             for (temp_handle_list.items) |item| {
                 if (item.fd >= fd) fd = item.fd + 1;
@@ -4546,8 +4572,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         fn destroyTemporaryHandle(handle: HANDLE) void {
-            temp_handle_mutex.lock();
-            defer temp_handle_mutex.unlock();
+            mutex.lock();
+            defer mutex.unlock();
             const fd = toDescriptor(handle);
             for (temp_handle_list.items, 0..) |item, i| {
                 if (item.fd == fd) {
@@ -4560,8 +4586,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
         }
 
         fn getTemporaryHandleInfo(handle: HANDLE) ?TemporaryHandleInfo {
-            temp_handle_mutex.lock();
-            defer temp_handle_mutex.unlock();
+            mutex.lock();
+            defer mutex.unlock();
             const fd = toDescriptor(handle);
             return for (temp_handle_list.items) |item| {
                 if (item.fd == fd) break item;
@@ -4573,6 +4599,24 @@ pub fn Win32Substitute(comptime redirector: type) type {
             return fd >= fd_temp_min;
         }
 
+        fn isSeekable(fd: c_int) bool {
+            switch (fd) {
+                0, 1, 2 => return true,
+                else => if (unseekable_descriptor_list.items.len == 0) return true,
+            }
+            mutex.lock();
+            defer mutex.unlock();
+            return for (unseekable_descriptor_list.items) |ufd| {
+                if (ufd == fd) break false;
+            } else true;
+        }
+
+        fn addUnseekable(fd: c_int) void {
+            mutex.lock();
+            defer mutex.unlock();
+            unseekable_descriptor_list.append(c_allocator, fd) catch {};
+        }
+
         const TemporaryHandleInfo = struct {
             fd: c_int,
             dirfd: c_int,
@@ -4580,8 +4624,9 @@ pub fn Win32Substitute(comptime redirector: type) type {
             path: [:0]const u8,
             buffer: ?[]u8,
         };
-        var temp_handle_mutex: std.Thread.Mutex = .{};
+        var mutex: std.Thread.Mutex = .{};
         var temp_handle_list: std.ArrayListUnmanaged(TemporaryHandleInfo) = .empty;
+        var unseekable_descriptor_list: std.ArrayListUnmanaged(c_int) = .empty;
 
         const fd_format_string = "\\\\??\\UNC\\dev\\fd\\{d}";
         const fd_path_prefix = fd_format_string[0 .. fd_format_string.len - 3];

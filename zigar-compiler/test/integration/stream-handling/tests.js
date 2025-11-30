@@ -2645,6 +2645,14 @@ export function addTests(importModule, options) {
         await shutdown();
       }
     })
+    skip.entirely.unless(target === 'win32').
+    it('should ignore offset given to WriteFile when stream is unseekable', async function() {
+      const { write } = await importTest('write-to-stdout-at-position-with-win32-function');
+      const [ line1 ] = await capture(() => write());
+      expect(line1).to.equal('Hello world');
+      const [ line2 ] = await capture(() => write());
+      expect(line2).to.equal('Hello world');
+    })
   })
 }
 
