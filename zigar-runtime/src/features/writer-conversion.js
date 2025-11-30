@@ -3,7 +3,7 @@ import { ArrayWriter, NullStream, Uint8ArrayReadWriter, WebStreamWriter } from '
 
 export default mixin({
   convertWriter(arg) {
-    if (arg instanceof WritableStreamDefaultWriter) {
+    if (arg instanceof WritableStream || arg instanceof WritableStreamDefaultWriter) {
       return new WebStreamWriter(arg);
     } else if (Array.isArray(arg)) {
       return new ArrayWriter(arg);

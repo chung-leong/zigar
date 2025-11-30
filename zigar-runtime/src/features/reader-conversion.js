@@ -6,7 +6,7 @@ import { hasMethod } from '../utils.js';
 
 export default mixin({
   convertReader(arg) {
-    if (arg instanceof ReadableStreamDefaultReader) {
+    if (arg instanceof ReadableStream || arg instanceof ReadableStreamDefaultReader) {
       return new WebStreamReader(arg);
     } else if(typeof(ReadableStreamBYOBReader) === 'function' && arg instanceof ReadableStreamBYOBReader) {
       return new WebStreamReaderBYOB(arg);

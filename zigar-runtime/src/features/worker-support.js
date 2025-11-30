@@ -165,11 +165,11 @@ function workerMain() {
   const WA = WebAssembly;
   let port, instance;
 
-  if (typeof(self) === 'object' || process.env.COMPAT !== 'node') {
+  if (typeof(self) === 'object') {
     // web worker
     self.onmessage = (evt) => process(evt.data);
     port = self;
-  } else if (process.env.COMPAT === 'node') {
+  } else {
     // Node.js worker-thread
     import(/* webpackIgnore: true */ 'node:worker_threads').then((module) => {
       port = module.parentPort;
