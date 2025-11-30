@@ -787,7 +787,7 @@ describe('Error functions', function() {
         .with.property('message').that.contains('1 byte.');
     }) 
     it('should use plural when byte per call is not one', function() {
-      expect(() => checkInefficientAccess({ calls: 99, bytes: 199 }, 'read', 1)).to.throw(Error)
+      expect(() => checkInefficientAccess({ calls: 99, bytes: 199 }, 'write', 1)).to.throw(Error)
         .with.property('message').that.contains('2 bytes.');
     }) 
   })

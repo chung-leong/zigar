@@ -455,5 +455,14 @@ describe('Feature: view-management', function() {
         expect(called).to.be.true;
       })
     })
+  } else if (process.env.TARGET === 'wasm') {
+    describe('moveExternBytes', function() {
+      it('should immediately return when len is zero', function() {
+        const env = new Env();
+        let called = false;
+        const dv = new DataView(new ArrayBuffer(0));
+        env.moveExternBytes(dv, 0xabcd, true);
+      })
+    })
   }
 })

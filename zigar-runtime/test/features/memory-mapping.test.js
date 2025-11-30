@@ -503,7 +503,18 @@ describe('Feature: memory-mapping', function() {
       env.obtainZigView = (address, len) => new DataView(new ArrayBuffer(len));
       env.getBufferAddress = () => usize(0x1000);
       const context = env.startContext();
-      const dv = env.findMemory(context, 0xaaaaaaaa, 0, 5);
+      const address = (process.env.BITS === '64') ? 0xaaaa_aaaa_aaaa_aaaan : 0xaaaa_aaaa;
+      const dv = env.findMemory(context, address, 0, 5);
+      expect(dv.byteLength).to.equal(0);
+    })
+    it('should return empty view when count is invalid', function() {
+      const env = new Env();
+      env.obtainZigView = (address, len) => new DataView(new ArrayBuffer(len));
+      env.getBufferAddress = () => usize(0x1000);
+      const context = env.startContext();
+      const address = (process.env.BITS === '64') ? 0xaaaa_aaaa_aaaa_aaaan : 0xaaaa_aaaa;
+      const count = (process.env.BITS === '64') ? 0xaaaa_aaaa_aaaa_aaaan : 0xaaaa_aaaa;
+      const dv = env.findMemory(context, address, count, 5);
       expect(dv.byteLength).to.equal(0);
     })
     it('should copy content from shadow when memory is not on list of shadows', function() {
