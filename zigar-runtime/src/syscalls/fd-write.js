@@ -41,8 +41,7 @@ export default mixin({
     catchPosixError(canWait, PosixError.EBADF, () => {
       const[ writer, rights, flags ] = this.getStream(2);
       checkAccessRight(rights, PosixDescriptorRight.fd_write);
-      const method = (flags & PosixDescriptorFlag.nonblock) ? writer.writenb : writer.write;
-      return method.call(writer, chunk);
+      return writer.write(chunk);
     });
     return 0;
   },
