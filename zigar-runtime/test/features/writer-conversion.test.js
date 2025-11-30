@@ -11,6 +11,24 @@ const Env = defineEnvironment();
 
 describe('Feature: writer-conversion', function() {
   describe('convertWriter', function() {
+    it('should convert WritableStream to a writer', async function() {
+      const env = new Env();
+      const chunks = [];
+      const stream = new WritableStream({
+        async write(chunk) {
+          chunks.push(chunk);
+        }
+      });
+      const writer = env.convertWriter(stream);
+      const bytes = new Uint8Array([ 0, 1, 2, 3 ]);
+      await writer.write(bytes);
+      expect(chunks).to.have.lengthOf(1);
+      let called = false;
+      writer.onClose = () => called = true;
+      await stream.close();
+      await delay(100);
+      expect(called).to.be.true;
+    })
     it('should convert WritableStreamDefaultWriter to a writer', async function() {
       const env = new Env();
       const chunks = [];

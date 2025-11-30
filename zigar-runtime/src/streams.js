@@ -68,10 +68,11 @@ export class AsyncReader {
 export class WebStreamReader extends AsyncReader {
   onClose = null;
 
-  constructor(reader) {
+  constructor(arg) {
     super();
+    const reader = (arg instanceof ReadableStream) ? arg.getReader() : arg;
     this.reader = reader;
-    attachClose(reader, this);
+    attachClose(arg, this);
   }
 
   async fetch() {
@@ -128,8 +129,20 @@ export class WebStreamWriter extends AsyncWriter {
   onClose = null;
   done = false;
 
-  constructor(writer) {
+  constructor(arg) {
     super();
+    let writer;
+    if (arg instanceof WritableStream) {
+      writer = arg.getWriter();
+      // replace close function with one that closes the writer
+      arg.close = async () => {
+        delete arg.close;
+        await writer.close();
+        writer.releaseLock();
+      };
+    } else {
+      writer = arg;
+    }
     this.writer = writer;
     writer.closed.catch(empty).then(() => {
       this.done = true;

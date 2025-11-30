@@ -12,7 +12,33 @@ const Env = defineEnvironment();
 
 describe('Feature: reader-conversion', function() {
   describe('convertReader', function() {
-    it('should convert ReadStreamDefaultReader to a reader', async function() {
+    it('should convert ReadableStream to a reader', async function() {
+      const env = new Env();
+      const stream = new ReadableStream({
+        count: 0,
+
+        async pull(controller) {
+          if (this.count++ === 0) {
+            controller.enqueue(new Uint8Array([ 1, 2, 3, 4, 5, 6, 7, 8, 9 ]));
+          } else {
+            controller.close();
+          }
+        }
+      });
+      const reader = env.convertReader(stream);
+      let called = false;
+      reader.onClose = () => called = true;
+      const res1 = await reader.read(4);
+      expect(res1).to.eql(new Uint8Array([ 1, 2, 3, 4 ]));
+      const res2 = await reader.read(4);
+      expect(res2).to.eql(new Uint8Array([ 5, 6, 7, 8 ]));
+      const res3 = await reader.read(4);
+      expect(res3).to.eql(new Uint8Array([ 9 ]));
+      await delay(0);
+      stream.close();
+      expect(called).to.be.true;
+    })
+    it('should convert ReadableStreamDefaultReader to a reader', async function() {
       const env = new Env();
       const stream = new ReadableStream({
         count: 0,
@@ -26,6 +52,40 @@ describe('Feature: reader-conversion', function() {
         }
       });
       const streamReader = stream.getReader()
+      const reader = env.convertReader(streamReader);
+      let called = false;
+      reader.onClose = () => called = true;
+      const res1 = await reader.read(4);
+      expect(res1).to.eql(new Uint8Array([ 1, 2, 3, 4 ]));
+      const res2 = await reader.read(4);
+      expect(res2).to.eql(new Uint8Array([ 5, 6, 7, 8 ]));
+      const res3 = await reader.read(4);
+      expect(res3).to.eql(new Uint8Array([ 9 ]));
+      await delay(0);
+      streamReader.close();
+      expect(called).to.be.true;
+    })
+    it('should convert ReadableStreamBYOBReader to a reader', async function() {
+      const env = new Env();
+      const stream = new ReadableStream({
+        count: 0,
+
+        async pull(controller) {
+          const { byobRequest } = controller;
+          if (this.count++ === 0) {
+            const { view } = byobRequest;
+            for (let i = 0; i < 9; i++) {
+              view[i] = i + 1;
+            }
+            byobRequest.respond(9);
+          } else {
+            controller.close();
+            byobRequest.respond(0);
+          }
+        },
+        type: 'bytes',
+      });
+      const streamReader = stream.getReader({ mode: 'byob' })
       const reader = env.convertReader(streamReader);
       let called = false;
       reader.onClose = () => called = true;
