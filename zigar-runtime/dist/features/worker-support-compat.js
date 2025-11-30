@@ -150,7 +150,7 @@ function workerMain() {
   const WA = WebAssembly;
   let port, instance;
 
-  if (typeof(self) === 'object' || "node" !== 'node') {
+  if (typeof(self) === 'object') {
     // web worker
     self.onmessage = (evt) => process(evt.data);
     port = self;
