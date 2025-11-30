@@ -1,52 +1,37 @@
 const std = @import("std");
+
 const zigar = @import("zigar");
 
-var gpa: std.heap.DebugAllocator(.{}) = .init;
-var work_queue: zigar.thread.WorkQueue(thread_ns) = .{};
+var work_queue: zigar.thread.WorkQueue(worker) = .{};
 
-pub fn startup() !void {
-    try work_queue.init(.{ .allocator = gpa.allocator() });
-}
+pub const startup = work_queue.promisify(.startup);
+pub const shutdown = work_queue.promisify(.shutdown);
+pub const extract = work_queue.asyncify(worker.extract);
 
-pub fn shutdown(promise: zigar.function.Promise(void)) void {
-    work_queue.deinitAsync(promise);
-}
-
-pub fn extract(
-    reader: std.io.AnyReader,
-    generator: zigar.function.GeneratorOf(thread_ns.extract),
-) !void {
-    try work_queue.push(thread_ns.extract, .{reader}, generator);
-}
-
-const thread_ns = struct {
-    pub fn extract(reader: std.io.AnyReader) !Iterator {
-        return .{
-            .reader = reader,
-        };
+const worker = struct {
+    pub fn extract(file: std.fs.File) !Iterator {
+        return .{ .file = file };
     }
 
     const Iterator = struct {
-        const Decompressor = std.compress.gzip.Decompressor(Buffer.Reader);
-        const TarIterator = std.tar.Iterator(Decompressor.Reader);
-        const Buffer = std.io.BufferedReader(1024 * 16, std.io.AnyReader);
-
-        reader: std.io.AnyReader,
+        file: std.fs.File,
         started: bool = false,
-        decompressor: Decompressor = undefined,
-        buffer: Buffer = undefined,
+        reader: std.fs.File.Reader = undefined,
+        read_buffer: [4096]u8 = undefined,
+        decompressor: std.compress.flate.Decompress = undefined,
+        decompress_buffer: [std.compress.flate.max_window_len]u8 = undefined,
         file_name_buffer: [std.fs.max_path_bytes]u8 = undefined,
         link_name_buffer: [std.fs.max_path_bytes]u8 = undefined,
-        tar_iter: TarIterator = undefined,
+        tar_iter: std.tar.Iterator = undefined,
 
         pub fn next(self: *@This(), allocator: std.mem.Allocator) !?File {
             if (!self.started) {
-                // create buffered reader
-                self.buffer = .{ .unbuffered_reader = self.reader };
+                // create file reader
+                self.reader = self.file.reader(&self.read_buffer);
                 // create decompressor
-                self.decompressor = std.compress.gzip.decompressor(self.buffer.reader());
+                self.decompressor = .init(&self.reader.interface, .gzip, &self.decompress_buffer);
                 // obtain the tar iterator
-                self.tar_iter = std.tar.iterator(self.decompressor.reader(), .{
+                self.tar_iter = .init(&self.decompressor.reader, .{
                     .file_name_buffer = &self.file_name_buffer,
                     .link_name_buffer = &self.link_name_buffer,
                 });
@@ -54,17 +39,16 @@ const thread_ns = struct {
             }
             // get next item
             const f = try self.tar_iter.next() orelse return null;
-            const reader = f.reader();
-            // read data
-            const correct_len: usize = @intCast(f.size);
-            const data = try allocator.alloc(u8, correct_len);
-            errdefer allocator.free(data);
-            const len = try reader.readAll(data);
-            if (len != correct_len) return error.SizeMismatch;
             const name = try allocator.dupe(u8, f.name);
             errdefer allocator.free(name);
             const link_name = try allocator.dupe(u8, f.link_name);
             errdefer allocator.free(link_name);
+            // read file content
+            const correct_len: usize = @intCast(f.size);
+            const data = try allocator.alloc(u8, correct_len);
+            errdefer allocator.free(data);
+            var data_writer: std.Io.Writer = .fixed(data);
+            try self.tar_iter.streamRemaining(f, &data_writer);
             return .{
                 .name = name,
                 .link_name = link_name,
