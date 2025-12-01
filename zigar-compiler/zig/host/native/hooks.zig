@@ -1277,6 +1277,14 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn preadv(fd: c_int, iovs: [*]const std.c.iovec, count: c_int, offset: off_t, result: *off_t) callconv(.c) bool {
+            return preadvT(off64_t, fd, iovs, count, offset, result);
+        }
+
+        pub fn preadv64(fd: c_int, iovs: [*]const std.c.iovec, count: c_int, offset: off64_t, result: *off64_t) callconv(.c) bool {
+            return preadvT(off64_t, fd, iovs, count, offset, result);
+        }
+
+        fn preadvT(comptime T: type, fd: c_int, iovs: [*]const std.c.iovec, count: c_int, offset: T, result: *T) bool {
             if (isPrivateDescriptor(fd)) {
                 var call: Syscall = .{ .cmd = .preadv, .u = .{
                     .preadv = .{
@@ -1841,6 +1849,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const pread = makeStdHook("pread");
         pub const pread64 = makeStdHook("pread64");
         pub const preadv = makeStdHook("preadv");
+        pub const preadv64 = makeStdHook("preadv64");
         pub const pwrite = makeStdHook("pwrite");
         pub const pwrite64 = makeStdHook("pwrite64");
         pub const pwritev = makeStdHook("pwritev");
@@ -2325,6 +2334,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var pread: *const @TypeOf(Self.pread) = undefined;
             pub var pread64: *const @TypeOf(Self.pread64) = undefined;
             pub var preadv: *const @TypeOf(Self.preadv) = undefined;
+            pub var preadv64: *const @TypeOf(Self.preadv64) = undefined;
             pub var pwrite: *const @TypeOf(Self.pwrite) = undefined;
             pub var pwritev: *const @TypeOf(Self.pwritev) = undefined;
             pub var pwrite64: *const @TypeOf(Self.pwrite64) = undefined;
