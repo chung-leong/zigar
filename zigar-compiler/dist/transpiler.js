@@ -4000,10 +4000,11 @@ class AsyncReader {
 class WebStreamReader extends AsyncReader {
   onClose = null;
 
-  constructor(reader) {
+  constructor(arg) {
     super();
+    const reader = (arg instanceof ReadableStream) ? arg.getReader() : arg;
     this.reader = reader;
-    attachClose(reader, this);
+    attachClose(arg, this);
   }
 
   async fetch() {
@@ -4060,8 +4061,20 @@ class WebStreamWriter extends AsyncWriter {
   onClose = null;
   done = false;
 
-  constructor(writer) {
+  constructor(arg) {
     super();
+    let writer;
+    if (arg instanceof WritableStream) {
+      writer = arg.getWriter();
+      // replace close function with one that closes the writer
+      arg.close = async () => {
+        delete arg.close;
+        await writer.close();
+        writer.releaseLock();
+      };
+    } else {
+      writer = arg;
+    }
     this.writer = writer;
     writer.closed.catch(empty).then(() => {
       this.done = true;
@@ -5016,7 +5029,7 @@ var pointerSynchronization = mixin({
 
 var readerConversion = mixin({
   convertReader(arg) {
-    if (arg instanceof ReadableStreamDefaultReader) {
+    if (arg instanceof ReadableStream || arg instanceof ReadableStreamDefaultReader) {
       return new WebStreamReader(arg);
     } else if(typeof(ReadableStreamBYOBReader) === 'function' && arg instanceof ReadableStreamBYOBReader) {
       return new WebStreamReaderBYOB(arg);
@@ -5428,7 +5441,7 @@ var thunkAllocation = mixin({
 
 var writerConversion = mixin({
   convertWriter(arg) {
-    if (arg instanceof WritableStreamDefaultWriter) {
+    if (arg instanceof WritableStream || arg instanceof WritableStreamDefaultWriter) {
       return new WebStreamWriter(arg);
     } else if (Array.isArray(arg)) {
       return new ArrayWriter(arg);
@@ -6376,8 +6389,7 @@ var fdWrite = mixin({
     catchPosixError(canWait, PosixError.EBADF, () => {
       const[ writer, rights, flags ] = this.getStream(2);
       checkAccessRight(rights, PosixDescriptorRight.fd_write);
-      const method = (flags & PosixDescriptorFlag.nonblock) ? writer.writenb : writer.write;
-      return method.call(writer, chunk);
+      return writer.write(chunk);
     });
     return 0;
   },
@@ -6808,10 +6820,16 @@ function workerMain() {
   const WA = WebAssembly;
   let port, instance;
 
-  {
+  if (typeof(self) === 'object') {
     // web worker
     self.onmessage = (evt) => process(evt.data);
     port = self;
+  } else {
+    // Node.js worker-thread
+    import(/* webpackIgnore: true */ 'node:worker_threads').then((module) => {
+      port = module.parentPort;
+      port.on('message', process);
+    });
   }
 
   function process(msg) {
