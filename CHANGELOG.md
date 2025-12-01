@@ -1,3 +1,24 @@
+## 0.15.2
+
+* Support for Zig 0.15.x
+* Implemented pthread emulation for WebAssembly
+* Implemented auto-initialization of work queue
+* Added means to define generic work queue startup and shutdown functions
+* Added support for all remaining WASI functions
+* Added missing hooks for preadv64/pwritev64
+* Removed support for AnyReader and AnyWriter
+* Fixed support for pthread in Windows
+* Fixed hooks for wide-character functions in Windows
+* Fixed handling of env variables in Windows
+* Fixed deadlock due to simultaneous debug print by main thread amd worker thread
+* Fixed reference error in early versions of Safari
+* Fixed WebAssembly encoding
+* Fixed concurrency bug with work queue
+
+## 0.14.3
+
+* Backported feature enhancements from 0.15.2
+
 ## 0.14.2
 
 * Implemented virtual file system
