@@ -7,6 +7,7 @@
 * Added support for all remaining WASI functions
 * Added missing hooks for preadv64/pwritev64
 * Removed support for AnyReader and AnyWriter
+* Renamed set_times event to utimes
 * Fixed support for pthread in Windows
 * Fixed hooks for wide-character functions in Windows
 * Fixed handling of env variables in Windows
