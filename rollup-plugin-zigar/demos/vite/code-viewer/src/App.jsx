@@ -5,7 +5,7 @@ import '@sinm/react-file-tree/styles.css';
 import { startTransition, useCallback, useEffect, useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { dark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { extract, shutdown, startup } from '../zig/decompress.zig';
+import { extract, shutdown } from '../zig/decompress.zig';
 import './App.css';
 
 const decoder = new TextDecoder;
@@ -54,17 +54,16 @@ function App() {
   useEffect(() => {
     let unmounted = false;    
     async function load() {
-      startup(1);
-      const response = await fetch('https://corsproxy.io/?url=https://github.com/ziglang/zig/archive/refs/tags/0.1.1.tar.gz');
-      const reader = response.body.getReader()
+      const { body: stream } = await fetch('https://corsproxy.io/?url=https://github.com/ziglang/zig/archive/refs/tags/0.1.1.tar.gz');
       try {
-        for await (const file of extract(reader)) {
+        for await (const file of extract(stream)) {
           if (unmounted) break;
           startTransition(() => {
             setTree((tree) => {
               const uri = file.name.string.replace(/\/$/, '');
               const slashIndex = uri.lastIndexOf('/');
               if (slashIndex === -1) {
+                // root
                 return { uri, expanded: true };
               } else {
                 const parentUri = uri.slice(0, slashIndex);

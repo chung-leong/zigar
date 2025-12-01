@@ -4,7 +4,6 @@ const zigar = @import("zigar");
 
 var work_queue: zigar.thread.WorkQueue(worker) = .{};
 
-pub const startup = work_queue.promisify(.startup);
 pub const shutdown = work_queue.promisify(.shutdown);
 pub const extract = work_queue.asyncify(worker.extract);
 
@@ -44,8 +43,8 @@ const worker = struct {
             const link_name = try allocator.dupe(u8, f.link_name);
             errdefer allocator.free(link_name);
             // read file content
-            const correct_len: usize = @intCast(f.size);
-            const data = try allocator.alloc(u8, correct_len);
+            const len: usize = @intCast(f.size);
+            const data = try allocator.alloc(u8, len);
             errdefer allocator.free(data);
             var data_writer: std.Io.Writer = .fixed(data);
             try self.tar_iter.streamRemaining(f, &data_writer);
