@@ -1327,6 +1327,14 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn pwritev(fd: c_int, iovs: [*]const std.c.iovec_const, count: c_int, offset: off_t, result: *off_t) callconv(.c) bool {
+            return pwritevT(off_t, fd, iovs, count, offset, result);
+        }
+
+        pub fn pwritev64(fd: c_int, iovs: [*]const std.c.iovec_const, count: c_int, offset: off64_t, result: *off64_t) callconv(.c) bool {
+            return pwritevT(off64_t, fd, iovs, count, offset, result);
+        }
+
+        pub fn pwritevT(comptime T: type, fd: c_int, iovs: [*]const std.c.iovec_const, count: c_int, offset: T, result: *T) bool {
             if (isPrivateDescriptor(fd)) {
                 var call: Syscall = .{ .cmd = .pwritev, .u = .{
                     .pwritev = .{
@@ -1853,6 +1861,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const pwrite = makeStdHook("pwrite");
         pub const pwrite64 = makeStdHook("pwrite64");
         pub const pwritev = makeStdHook("pwritev");
+        pub const pwritev64 = makeStdHook("pwritev64");
         pub const read = makeStdHook("read");
         pub const readlink = makeStdHook("readlink");
         pub const readlinkat = makeStdHook("readlinkat");
@@ -2336,8 +2345,9 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var preadv: *const @TypeOf(Self.preadv) = undefined;
             pub var preadv64: *const @TypeOf(Self.preadv64) = undefined;
             pub var pwrite: *const @TypeOf(Self.pwrite) = undefined;
-            pub var pwritev: *const @TypeOf(Self.pwritev) = undefined;
             pub var pwrite64: *const @TypeOf(Self.pwrite64) = undefined;
+            pub var pwritev: *const @TypeOf(Self.pwritev) = undefined;
+            pub var pwritev64: *const @TypeOf(Self.pwritev64) = undefined;
             pub var read: *const @TypeOf(Self.read) = undefined;
             pub var readlink: *const @TypeOf(Self.readlink) = undefined;
             pub var readlinkat: *const @TypeOf(Self.readlinkat) = undefined;
