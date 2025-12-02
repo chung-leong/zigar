@@ -36,7 +36,7 @@ pub fn change(i: i32) void {
 
 pub fn print(v: @Vector(4, *anyopaque)) void {
     var array: [4]i32 = undefined;
-    for (0..4) |i| {
+    inline for (0..4) |i| {
         const int_ptr: *i32 = @ptrCast(@alignCast(v[i]));
         array[i] = int_ptr.*;
     }
