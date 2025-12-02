@@ -1334,7 +1334,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return pwritevT(off64_t, fd, iovs, count, offset, result);
         }
 
-        pub fn pwritevT(comptime T: type, fd: c_int, iovs: [*]const std.c.iovec_const, count: c_int, offset: T, result: *T) bool {
+        fn pwritevT(comptime T: type, fd: c_int, iovs: [*]const std.c.iovec_const, count: c_int, offset: T, result: *T) bool {
             if (isPrivateDescriptor(fd)) {
                 var call: Syscall = .{ .cmd = .pwritev, .u = .{
                     .pwritev = .{
