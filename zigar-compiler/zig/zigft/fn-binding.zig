@@ -190,12 +190,13 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
     const arg_mapping = getArgumentMapping(FT, CT);
     const ctx_mapping = getContextMapping(FT, CT);
     const BFArgsTuple = std.meta.ArgsTuple(BFT);
-    const ArgsTuple = init: {
-        // std.meta.ArgsTuple() fails when anytype is in the argument list
-        const params = @typeInfo(FT).@"fn".params;
-        var tuple_fields: [params.len]std.builtin.Type.StructField = undefined;
-        inline for (params, 0..) |param, index| {
-            const name = std.fmt.comptimePrint("{d}", .{index});
+    const ArgsStruct = init: {
+        const f = @typeInfo(FT).@"fn";
+        var field_names: [f.params.len][]const u8 = undefined;
+        var field_types: [f.params.len]type = undefined;
+        var field_attrs: [f.params.len]std.builtin.Type.StructField.Attributes = undefined;
+        inline for (f.params, 0..) |param, i| {
+            const name = std.fmt.comptimePrint("{d}", .{i});
             const var_type: ?type, const var_def_ptr: ?*const anyopaque = find: {
                 // find the variable bound to this param, if any
                 inline for (ctx_mapping) |m| {
@@ -209,22 +210,14 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
                     }
                 } else break :find .{ null, null };
             };
-            tuple_fields[index] = .{
-                .name = name,
-                .type = var_type orelse (param.type orelse unreachable),
+            field_names[i] = name;
+            field_types[i] = var_type orelse param.type.?;
+            field_attrs[i] = .{
+                .@"comptime" = var_def_ptr != null,
                 .default_value_ptr = var_def_ptr,
-                .is_comptime = var_def_ptr != null,
-                .alignment = 0,
             };
         }
-        break :init @Type(.{
-            .@"struct" = .{
-                .is_tuple = true,
-                .layout = .auto,
-                .decls = &.{},
-                .fields = &tuple_fields,
-            },
-        });
+        break :init @Struct(.auto, null, &field_names, &field_types, &field_attrs);
     };
 
     return struct {
@@ -278,7 +271,7 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
         pub fn getComptime(comptime func: anytype, comptime vars: anytype) *const BFT {
             const ns = struct {
                 inline fn call(bf_args: BFArgsTuple) @typeInfo(BFT).@"fn".return_type.? {
-                    var args: ArgsTuple = undefined;
+                    var args: ArgsStruct = undefined;
                     inline for (arg_mapping) |m| @field(args, m.dest) = @field(bf_args, m.src);
                     inline for (ctx_mapping) |m| @field(args, m.dest) = @field(vars, m.src);
                     return @call(.auto, func, args);
@@ -298,7 +291,7 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
                     // insert nop x 3 so we can find the displacement for target in the instruction stream
                     insertNOPs(&target);
                     const ctx_ptr: *const CT = @ptrFromInt(target[0]);
-                    var args: ArgsTuple = undefined;
+                    var args: std.meta.ArgsTuple(@TypeOf(func)) = undefined;
                     inline for (arg_mapping) |m| @field(args, m.dest) = @field(bf_args, m.src);
                     inline for (ctx_mapping) |m| @field(args, m.dest) = @field(ctx_ptr.*, m.src);
                     switch (@typeInfo(@TypeOf(func))) {
@@ -1053,7 +1046,9 @@ pub fn BoundFnWithCallConv(comptime T: type, comptime CT: type, cc: ?std.builtin
     const params = @typeInfo(FT).@"fn".params;
     const fields = @typeInfo(CT).@"struct".fields;
     const context_mapping = getContextMapping(FT, CT);
-    var new_params: [params.len - fields.len]std.builtin.Type.Fn.Param = undefined;
+    const param_count = params.len - fields.len;
+    var param_types: [param_count]type = undefined;
+    var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
     var index = 0;
     for (params, 0..) |param, number| {
         const name = std.fmt.comptimePrint("{d}", .{number});
@@ -1061,15 +1056,14 @@ pub fn BoundFnWithCallConv(comptime T: type, comptime CT: type, cc: ?std.builtin
             if (param.type == null) {
                 @compileError("A variable must be bound to an 'anytype' parameter");
             }
-            new_params[index] = param;
+            param_types[index] = param.type.?;
+            param_attrs[index] = .{ .@"noalias" = param.is_noalias };
             index += 1;
         }
     }
-    var new_f = f;
-    new_f.params = &new_params;
-    new_f.is_generic = false;
-    if (cc) |c| new_f.calling_convention = c;
-    return @Type(.{ .@"fn" = new_f });
+    return @Fn(&param_types, &param_attrs, f.return_type.?, .{
+        .@"callconv" = cc orelse f.calling_convention,
+    });
 }
 
 /// Return type of bind(), create(), etc.

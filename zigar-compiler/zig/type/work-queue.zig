@@ -39,6 +39,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
         };
         pub const Error = std.mem.Allocator.Error || error{Unexpected};
         pub const Options = init: {
+            // when thread_start_params or thread_end_params is void, we want it to have a default value
             const fields = std.meta.fields(struct {
                 allocator: std.mem.Allocator = def_allocator,
                 stack_size: usize = if (builtin.target.cpu.arch.isWasm()) 262144 else std.Thread.SpawnConfig.default_stack_size,
@@ -46,22 +47,17 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                 thread_start_params: ThreadStartParams,
                 thread_end_params: ThreadEndParams,
             });
-            // there're no start or end params, provide a default value
-            var new_fields: [fields.len]std.builtin.Type.StructField = undefined;
+            var field_names: [fields.len][]const u8 = undefined;
+            var field_types: [fields.len]type = undefined;
+            var field_attrs: [fields.len]std.builtin.Type.StructField.Attributes = undefined;
             for (fields, 0..) |field, i| {
-                new_fields[i] = field;
-                if (@sizeOf(field.type) == 0) {
-                    new_fields[i].default_value_ptr = @ptrCast(&@as(field.type, .{}));
-                }
+                field_names[i] = field.name;
+                field_types[i] = field.type;
+                field_attrs[i] = .{
+                    .default_value_ptr = if (@sizeOf(field.type) == 0) @ptrCast(&@as(field.type, .{})) else null,
+                };
             }
-            break :init @Type(.{
-                .@"struct" = .{
-                    .layout = .auto,
-                    .fields = &new_fields,
-                    .decls = &.{},
-                    .is_tuple = false,
-                },
-            });
+            break :init @Struct(.auto, null, &field_names, &field_types, &field_attrs);
         };
         pub const InitResult = @typeInfo(@TypeOf(init)).@"fn".return_type.?;
         pub const InitError = @typeInfo(InitResult).error_union.error_set;
@@ -265,22 +261,17 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
         pub fn Asyncified(comptime FT: type) type {
             const PorG = PromiseOrGenerator(FT);
             const fn_info = @typeInfo(FT).@"fn";
-            const org_params = fn_info.params;
-            var params: [org_params.len + 1]std.builtin.Type.Fn.Param = undefined;
-            inline for (org_params, 0..) |org_param, i| params[i] = org_param;
-            params[params.len - 1] = .{
-                .is_generic = false,
-                .is_noalias = false,
-                .type = PorG,
-            };
-            return @Type(.{
-                .@"fn" = .{
-                    .calling_convention = fn_info.calling_convention,
-                    .is_generic = false,
-                    .is_var_args = false,
-                    .params = &params,
-                    .return_type = Error!void,
-                },
+            const param_count = fn_info.params.len + 1;
+            var param_types: [param_count]type = undefined;
+            var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
+            inline for (fn_info.params, 0..) |param, i| {
+                param_types[i] = param.type.?;
+                param_attrs[i] = .{ .@"noalias" = param.is_noalias };
+            }
+            param_types[param_count - 1] = PorG;
+            param_attrs[param_count - 1] = .{};
+            return @Fn(&param_types, &param_attrs, Error!void, .{
+                .@"callconv" = fn_info.calling_convention,
             });
         }
 
@@ -314,8 +305,10 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             else => ThreadStartError!void,
         };
         const WorkItem = init: {
-            var enum_fields: [decls.len]std.builtin.Type.EnumField = undefined;
-            var union_fields: [decls.len]std.builtin.Type.UnionField = undefined;
+            var fields: [decls.len]struct {
+                name: [:0]const u8,
+                type: type,
+            } = undefined;
             var count = 0;
             for (decls) |decl| {
                 const DT = @TypeOf(@field(ns, decl.name));
@@ -324,18 +317,16 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                         if (f.return_type) |RT| {
                             // if the return value is an iterator, then a generator is expected
                             // otherwise an optional promise can be provided
-                            const Task = if (util.IteratorReturnValue(RT)) |IT| struct {
+                            const Request = if (util.IteratorReturnValue(RT)) |IT| struct {
                                 args: std.meta.ArgsTuple(DT),
                                 generator: ?Generator(IT, util.isIteratorAllocating(RT)),
                             } else struct {
                                 args: std.meta.ArgsTuple(DT),
                                 promise: ?Promise(RT),
                             };
-                            enum_fields[count] = .{ .name = decl.name, .value = count };
-                            union_fields[count] = .{
+                            fields[count] = .{
                                 .name = decl.name,
-                                .type = Task,
-                                .alignment = @alignOf(Task),
+                                .type = Request,
                             };
                             count += 1;
                         }
@@ -343,21 +334,19 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                     else => {},
                 }
             }
-            break :init @Type(.{
-                .@"union" = .{
-                    .layout = .auto,
-                    .tag_type = @Type(.{
-                        .@"enum" = .{
-                            .tag_type = if (count <= 256) u8 else u16,
-                            .fields = enum_fields[0..count],
-                            .decls = &.{},
-                            .is_exhaustive = true,
-                        },
-                    }),
-                    .fields = union_fields[0..count],
-                    .decls = &.{},
-                },
-            });
+            const TagInt = if (count <= 256) u8 else u16;
+            var field_names: [count][]const u8 = undefined;
+            var field_types: [count]type = undefined;
+            var field_attrs: [count]std.builtin.Type.UnionField.Attributes = undefined;
+            var tag_values: [count]TagInt = undefined;
+            for (fields[0..count], 0..) |field, i| {
+                field_names[i] = field.name;
+                field_types[i] = field.type;
+                field_attrs[i] = .{};
+                tag_values[i] = i;
+            }
+            const Tag = @Enum(TagInt, .exchaustive, &field_names, &tag_values);
+            break :init @Union(.auto, Tag, &field_names, &field_types, &field_attrs);
         };
         const WorkItemEnum = @typeInfo(WorkItem).@"union".tag_type.?;
 

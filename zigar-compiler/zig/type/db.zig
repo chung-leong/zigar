@@ -1160,12 +1160,7 @@ test {
     _ = TypeDataCollector;
 }
 
-const ErrorInt = @Type(.{
-    .int = .{
-        .signedness = .unsigned,
-        .bits = @bitSizeOf(anyerror),
-    },
-});
+const ErrorInt = @Int(.unsigned, @bitSizeOf(anyerror));
 
 fn ComptimeList(comptime T: type) type {
     return struct {

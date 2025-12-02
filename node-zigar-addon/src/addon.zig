@@ -776,22 +776,14 @@ const ModuleHost = struct {
                 const args_info = @typeInfo(Args).@"struct";
                 const fields = args_info.fields;
                 const arg_count = fields.len + extra;
-                var field_names: [arg_count][]const u8 = undefined;
                 var field_types: [arg_count]type = undefined;
-                var field_attrs: [arg_count]std.builtin.Type.StructField.Attributes = undefined;
                 for (0..arg_count) |i| {
-                    field_names[i] = std.fmt.comptimePrint("{d}", .{i});
                     field_types[i] = switch (i) {
                         0 => *Module.Host,
                         else => if (extra == 1 and i == arg_count - 1) *Payload else fields[i].type,
                     };
-                    field_attrs[i] = .{
-                        .default_value_ptr = null,
-                        .@"comptime" = false,
-                        .@"align" = @alignOf(field_types[i]),
-                    };
                 }
-                break :define @Struct(.auto, null, &field_names, &field_types, &field_attrs);
+                break :define @Tuple(&field_types);
             };
             const ns = struct {
                 fn call(new_args: NewArgs) E {

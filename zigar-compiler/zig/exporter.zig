@@ -1245,44 +1245,30 @@ fn ComptimeFree(comptime T: type) type {
         => void,
         .array => |ar| [ar.len]ComptimeFree(ar.child),
         .@"struct" => |st| derive: {
-            var new_fields: [st.fields.len]std.builtin.Type.StructField = undefined;
-            inline for (st.fields, 0..) |field, index| {
-                const FT = if (field.is_comptime) void else ComptimeFree(field.type);
-                new_fields[index] = .{
-                    .name = field.name,
-                    .type = FT,
+            var field_names: [st.fields.len][]const u8 = undefined;
+            var field_types: [st.fields.len]type = undefined;
+            var field_attrs: [st.fields.len]std.builtin.TYpe.StructField.Attributes = undefined;
+            inline for (st.fields, 0..) |field, i| {
+                field_names[i] = field.name;
+                field_types[i] = if (field.is_comptime) void else ComptimeFree(field.type);
+                field_attrs[i] = .{
                     .default_value_ptr = null,
-                    .is_comptime = false,
-                    .alignment = if (st.layout != .@"packed") @alignOf(FT) else 0,
+                    .@"comptime" = false,
+                    .@"align" = if (st.layout != .@"packed") @alignOf(field_types[i]) else 0,
                 };
             }
-            break :derive @Type(.{
-                .@"struct" = .{
-                    .layout = st.layout,
-                    .fields = &new_fields,
-                    .decls = &.{},
-                    .is_tuple = st.is_tuple,
-                },
-            });
+            break :derive @Struct(st.layout, st.backing_integer, &field_names, &field_types, &field_attrs);
         },
         .@"union" => |un| derive: {
-            var new_fields: [un.fields.len]std.builtin.Type.UnionField = undefined;
-            inline for (un.fields, 0..) |field, index| {
-                const FT = ComptimeFree(field.type);
-                new_fields[index] = .{
-                    .name = field.name,
-                    .type = FT,
-                    .alignment = @alignOf(FT),
-                };
+            var field_names: [un.fields.len][]const u8 = undefined;
+            var field_types: [un.fields.len]type = undefined;
+            var field_attrs: [un.fields.len]std.builtin.TYpe.UnionField.Attributes = undefined;
+            inline for (un.fields, 0..) |field, i| {
+                field_names[i] = field.name;
+                field_types[i] = ComptimeFree(field.type);
+                field_attrs[i] = .{};
             }
-            break :derive @Type(.{
-                .@"union" = .{
-                    .layout = un.layout,
-                    .tag_type = un.tag_type,
-                    .fields = &new_fields,
-                    .decls = &.{},
-                },
-            });
+            break :derive @Union(un.layout, un.tag_type, &field_names, &field_types, &field_attrs);
         },
         .optional => |op| ?ComptimeFree(op.child),
         .error_union => |eu| eu.error_set!ComptimeFree(eu.payload),

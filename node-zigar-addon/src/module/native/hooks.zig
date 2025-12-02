@@ -5110,11 +5110,7 @@ pub const HandlerVTable = init: {
         if (@typeInfo(T) == .@"fn") {
             field_names[index] = decl.name;
             field_types[index] = *const T;
-            field_attrs[index] = .{
-                .default_value_ptr = null,
-                .@"comptime" = false,
-                .@"align" = @alignOf(field_types[index]),
-            };
+            field_attrs[index] = .{};
             index += 1;
         }
     }
