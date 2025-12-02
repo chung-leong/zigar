@@ -286,14 +286,12 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                 break :init types[start_index..];
             };
             const param_count = old_fn.params.len + extra - OutputTypes.len;
-            var params: [param_count]std.builtin.Type.Fn.Param = undefined;
-            inline for (old_fn.params, 0..) |param, index| {
-                if (index < param_count) {
-                    params[index] = .{
-                        .type = Substitute(param.type.?, local_subs, index, old_fn.params.len),
-                        .is_generic = false,
-                        .is_noalias = false,
-                    };
+            var param_types: [param_count]type = undefined;
+            var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
+            inline for (old_fn.params, 0..) |param, i| {
+                if (i < param_count) {
+                    param_types[i] = Substitute(param.type.?, local_subs, i, old_fn.params.len);
+                    param_attrs[i] = .{ .@"noalias" = false };
                 }
             }
             // determine the payload of the return type
@@ -302,18 +300,11 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                 1 => OutputTypes[0],
                 else => std.meta.Tuple(OutputTypes),
             };
-            return @Type(.{
-                .@"fn" = .{
-                    .calling_convention = .auto,
-                    .is_generic = false,
-                    .is_var_args = false,
-                    .return_type = switch (return_error_union) {
-                        true => options.error_scheme.ErrorSet!Payload,
-                        else => Payload,
-                    },
-                    .params = &params,
-                },
-            });
+            const RT = switch (return_error_union) {
+                true => options.error_scheme.ErrorSet!Payload,
+                else => Payload,
+            };
+            return @Fn(&param_types, &param_attrs, RT, .{});
         }
 
         pub fn translate(
@@ -408,11 +399,17 @@ pub fn Translator(comptime options: TranslatorOptions) type {
         pub fn SliceType(comptime T: type) type {
             return switch (@typeInfo(T)) {
                 .pointer => |pt| define: {
-                    var new_pt = pt;
-                    new_pt.size = .slice;
-                    new_pt.sentinel_ptr = null;
-                    if (@typeInfo(new_pt.child) == .@"opaque") new_pt.child = u8;
-                    break :define @Type(.{ .pointer = new_pt });
+                    const ET = switch (@typeInfo(pt.child)) {
+                        .@"opaque" => u8,
+                        else => pt.child,
+                    };
+                    break :define @Pointer(.slice, .{
+                        .@"const" = pt.is_const,
+                        .@"volatile" = pt.is_volatile,
+                        .@"allowzero" = pt.is_allowzero,
+                        .@"addrspace" = pt.address_space,
+                        .@"align" = pt.alignment,
+                    }, ET, null);
                 },
                 .optional => |op| ?SliceType(op.child),
                 else => @compileError("Argument is not a pointer"),
@@ -429,7 +426,8 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                 else => @compileError("Function type expected, received '" ++ @typeName(OldFn) ++ "'"),
             };
             const param_count = old_fn.params.len - pairs.len;
-            var new_params: [param_count]std.builtin.Type.Fn.Param = undefined;
+            var param_types: [param_count]type = undefined;
+            var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
             var j: usize = 0;
             inline for (old_fn.params, 0..) |param, i| {
                 const PT = param.type orelse @compileError("Cannot merge generic argument");
@@ -437,11 +435,14 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                     if (pair.len_index == i) break true;
                 } else false;
                 if (!is_index) {
-                    new_params[j] = param;
                     const is_ptr = inline for (pairs) |pair| {
                         if (pair.ptr_index == i) break true;
                     } else false;
-                    if (is_ptr) new_params[j].type = SliceType(PT);
+                    param_types[j] = switch (is_ptr) {
+                        true => SliceType(PT),
+                        false => PT,
+                    };
+                    param_attrs[j] = .{ .@"noalias" = param.is_noalias };
                     j += 1;
                 } else {
                     switch (@typeInfo(PT)) {
@@ -450,9 +451,7 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                     }
                 }
             }
-            var new_fn = old_fn;
-            new_fn.params = &new_params;
-            return @Type(.{ .@"fn" = new_fn });
+            return @Fn(&param_types, &param_attrs, old_fn.return_type.?, .{ .@"callconv" = old_fn.calling_convention });
         }
 
         pub fn mergeSlice(

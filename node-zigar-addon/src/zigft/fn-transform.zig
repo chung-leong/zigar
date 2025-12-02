@@ -21,22 +21,14 @@ pub fn spreadArgs(func: anytype, comptime conv: ?std.builtin.CallingConvention) 
 pub fn SpreadFn(comptime T: type, comptime conv: ?std.builtin.CallingConvention) type {
     const fields = getTupleFields(T);
     const f = @typeInfo(T).@"fn";
-    var params: [fields.len]std.builtin.Type.Fn.Param = undefined;
-    inline for (fields, 0..) |field, index| {
-        params[index] = .{
-            .type = field.type,
-            .is_generic = false,
-            .is_noalias = false,
-        };
+    var param_types: [fields.len]type = undefined;
+    var param_attrs: [fields.len]std.builtin.Type.Fn.Param.Attributes = undefined;
+    inline for (fields, 0..) |field, i| {
+        param_types[i] = field.type;
+        param_attrs[i] = .{};
     }
-    return @Type(.{
-        .@"fn" = .{
-            .params = &params,
-            .is_generic = false,
-            .is_var_args = false,
-            .return_type = f.return_type.?,
-            .calling_convention = conv orelse f.calling_convention,
-        },
+    return @Fn(&param_types, &param_attrs, f.return_type.?, .{
+        .@"callconv" = conv orelse f.calling_convention,
     });
 }
 
@@ -415,14 +407,14 @@ test "uninline" {
 pub fn Uninlined(comptime FT: type) type {
     const f = @typeInfo(FT).@"fn";
     if (f.calling_convention != .@"inline") return FT;
-    return @Type(.{
-        .@"fn" = .{
-            .calling_convention = .auto,
-            .is_generic = f.is_generic,
-            .is_var_args = f.is_var_args,
-            .return_type = f.return_type,
-            .params = f.params,
-        },
+    var param_types: [f.params.len]type = undefined;
+    var param_attrs: [f.params.len]std.builtin.Type.Fn.Param.Attributes = undefined;
+    inline for (f.params, 0..) |param, i| {
+        param_types[i] = param.type.?;
+        param_attrs[i] = .{ .@"noalias" = param.is_noalias };
+    }
+    return @Fn(&param_types, &param_attrs, f.return_type.?, .{
+        .varargs = f.is_var_args,
     });
 }
 

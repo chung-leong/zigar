@@ -579,12 +579,7 @@ pub fn Controller(comptime Host: type) type {
                                 ptr.* = if (arg_index == handler_args.len - 1) &result else switch (@typeInfo(ArgT)) {
                                     .pointer => @ptrFromInt(args[arg_index]),
                                     .int => |int| cast: {
-                                        const arg_trunc: @Type(.{
-                                            .int = .{
-                                                .bits = int.bits,
-                                                .signedness = .unsigned,
-                                            },
-                                        }) = @truncate(args[arg_index]);
+                                        const arg_trunc: @Int(.unsigned, int.bits) = @truncate(args[arg_index]);
                                         break :cast @bitCast(arg_trunc);
                                     },
                                     else => @compileError("Unrecognized type"),
@@ -593,12 +588,7 @@ pub fn Controller(comptime Host: type) type {
                             if (@call(.auto, handler, handler_args)) {
                                 // call was handled--set the return value
                                 const rv_unsigned: switch (@typeInfo(RvT)) {
-                                    .int => |int| @Type(.{
-                                        .int = .{
-                                            .bits = int.bits,
-                                            .signedness = .unsigned,
-                                        },
-                                    }),
+                                    .int => |int| @Int(.unsigned, int.bits),
                                     else => usize,
                                 } = switch (@typeInfo(RvT)) {
                                     .pointer => @intFromPtr(result),

@@ -6,7 +6,7 @@ const cfg = @import("build.cfg.zig");
 const extra = @import("build.extra.zig");
 
 pub fn build(b: *std.Build) !void {
-    if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 15) {
+    if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 16) {
         @compileError("Unsupported Zig version");
     }
     const target = b.standardTargetOptions(.{});
