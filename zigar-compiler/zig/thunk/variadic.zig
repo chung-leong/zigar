@@ -1424,31 +1424,35 @@ fn callWithArgs(
     const Float = @typeInfo(@TypeOf(fixed_floats)).array.child;
     const Int = @typeInfo(@TypeOf(fixed_ints)).array.child;
     const fixed_arg_count = fixed_floats.len + fixed_ints.len;
-    var param_types: [fixed_arg_count]type = undefined;
-    var param_attrs: [fixed_arg_count]std.builtin.Type.Fn.Param.Attributes = undefined;
-    inline for (0..fixed_arg_count) |i| {
-        param_types[i] = if (i < fixed_floats.len) Float else Int;
-        param_attrs[i] = .{};
-    }
-    const VarargFn = @Fn(&param_types, &param_attrs, RT, .{
-        .@"callconv" = cc,
-        .varargs = true,
-    });
-    const total_arg_count = fixed_arg_count + variadic_floats.len + variadic_ints.len;
-    var field_types: [total_arg_count]type = undefined;
-    inline for (0..total_arg_count) |i| {
-        field_types[i] = switch (i < fixed_arg_count) {
-            true => switch (i < fixed_floats.len) {
-                true => Float,
-                false => Int,
-            },
-            false => switch (i < fixed_arg_count + variadic_floats.len) {
-                true => Float,
-                false => Int,
-            },
-        };
-    }
-    const Args = @Tuple(&field_types);
+    const VarargFn = comptime define: {
+        var param_types: [fixed_arg_count]type = undefined;
+        var param_attrs: [fixed_arg_count]std.builtin.Type.Fn.Param.Attributes = undefined;
+        for (0..fixed_arg_count) |i| {
+            param_types[i] = if (i < fixed_floats.len) Float else Int;
+            param_attrs[i] = .{};
+        }
+        break :define @Fn(&param_types, &param_attrs, RT, .{
+            .@"callconv" = cc,
+            .varargs = true,
+        });
+    };
+    const Args = comptime define: {
+        const total_arg_count = fixed_arg_count + variadic_floats.len + variadic_ints.len;
+        var field_types: [total_arg_count]type = undefined;
+        for (0..total_arg_count) |i| {
+            field_types[i] = switch (i < fixed_arg_count) {
+                true => switch (i < fixed_floats.len) {
+                    true => Float,
+                    false => Int,
+                },
+                false => switch (i < fixed_arg_count + variadic_floats.len) {
+                    true => Float,
+                    false => Int,
+                },
+            };
+        }
+        break :define @Tuple(&field_types);
+    };
     var args: Args = undefined;
     comptime var index = 0;
     inline for (fixed_floats) |float| {

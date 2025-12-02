@@ -54,7 +54,10 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                 field_names[i] = field.name;
                 field_types[i] = field.type;
                 field_attrs[i] = .{
-                    .default_value_ptr = if (@sizeOf(field.type) == 0) @ptrCast(&@as(field.type, .{})) else null,
+                    .default_value_ptr = field.default_value_ptr orelse switch (@sizeOf(field.type)) {
+                        0 => @ptrCast(&@as(field.type, .{})),
+                        else => null,
+                    },
                 };
             }
             break :init @Struct(.auto, null, &field_names, &field_types, &field_attrs);
@@ -345,7 +348,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                 field_attrs[i] = .{};
                 tag_values[i] = i;
             }
-            const Tag = @Enum(TagInt, .exchaustive, &field_names, &tag_values);
+            const Tag = @Enum(TagInt, .exhaustive, &field_names, &tag_values);
             break :init @Union(.auto, Tag, &field_names, &field_types, &field_attrs);
         };
         const WorkItemEnum = @typeInfo(WorkItem).@"union".tag_type.?;

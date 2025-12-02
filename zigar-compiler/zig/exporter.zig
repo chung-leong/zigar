@@ -1247,7 +1247,7 @@ fn ComptimeFree(comptime T: type) type {
         .@"struct" => |st| derive: {
             var field_names: [st.fields.len][]const u8 = undefined;
             var field_types: [st.fields.len]type = undefined;
-            var field_attrs: [st.fields.len]std.builtin.TYpe.StructField.Attributes = undefined;
+            var field_attrs: [st.fields.len]std.builtin.Type.StructField.Attributes = undefined;
             inline for (st.fields, 0..) |field, i| {
                 field_names[i] = field.name;
                 field_types[i] = if (field.is_comptime) void else ComptimeFree(field.type);
@@ -1262,7 +1262,7 @@ fn ComptimeFree(comptime T: type) type {
         .@"union" => |un| derive: {
             var field_names: [un.fields.len][]const u8 = undefined;
             var field_types: [un.fields.len]type = undefined;
-            var field_attrs: [un.fields.len]std.builtin.TYpe.UnionField.Attributes = undefined;
+            var field_attrs: [un.fields.len]std.builtin.Type.UnionField.Attributes = undefined;
             inline for (un.fields, 0..) |field, i| {
                 field_names[i] = field.name;
                 field_types[i] = ComptimeFree(field.type);

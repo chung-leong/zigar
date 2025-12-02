@@ -1817,7 +1817,11 @@ export function addTests(importModule, options) {
         }
       };
       const lock = check(file3).valueOf();
-      expect(lock).to.eql({ type: 0, whence: 0, start: 1234n, len: 8000n, pid: 123 });
+      expect(lock.type).to.equal(0);
+      expect(lock.whence).to.equal(0);
+      expect(lock.start).to.equal(1234n);
+      expect(lock.len).to.equal(8000n);
+      expect(lock.pid).to.equal(123);
     })
     skip.entirely.if(target === 'win32').or.if(target === 'wasm32').
     it('should set lock on file using posix function', async function() {
