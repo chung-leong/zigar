@@ -1277,7 +1277,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn preadv(fd: c_int, iovs: [*]const std.c.iovec, count: c_int, offset: off_t, result: *off_t) callconv(.c) bool {
-            return preadvT(off64_t, fd, iovs, count, offset, result);
+            return preadvT(off_t, fd, iovs, count, offset, result);
         }
 
         pub fn preadv64(fd: c_int, iovs: [*]const std.c.iovec, count: c_int, offset: off64_t, result: *off64_t) callconv(.c) bool {
