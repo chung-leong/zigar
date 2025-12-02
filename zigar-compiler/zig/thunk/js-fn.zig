@@ -142,23 +142,20 @@ test "createThunkController" {
 
 fn CallHandler(comptime BFT: type) type {
     const f = @typeInfo(BFT).@"fn";
-    var new_params: [f.params.len + 2]std.builtin.Type.Fn.Param = undefined;
-    for (f.params, 0..) |param, index| {
-        new_params[index] = param;
+    const param_count = f.params.len + 2;
+    var param_types: [param_count]type = undefined;
+    var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
+    for (f.params, 0..) |param, i| {
+        param_types[i] = param.type.?;
+        param_attrs[i] = .{ .@"noalias" = param.is_noalias };
     }
-    new_params[f.params.len] = .{
-        .type = ?*anyopaque,
-        .is_generic = false,
-        .is_noalias = false,
-    };
-    new_params[f.params.len + 1] = .{
-        .type = usize,
-        .is_generic = false,
-        .is_noalias = false,
-    };
-    var new_f = f;
-    new_f.params = &new_params;
-    return @Type(.{ .@"fn" = new_f });
+    param_types[param_count - 2] = ?*anyopaque;
+    param_attrs[param_count - 2] = .{};
+    param_types[param_count - 1] = usize;
+    param_attrs[param_count - 1] = .{};
+    return @Fn(&param_types, &param_attrs, f.return_type.?, .{
+        .@"callconv" = f.calling_convention,
+    });
 }
 
 fn getJscallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {

@@ -28,29 +28,18 @@ pub fn call(
     const arg_attrs = @as([*]const ArgAttributes, @ptrCast(@alignCast(attr_ptr)))[0..arg_count];
     if (comptime builtin.target.cpu.arch.isWasm()) {
         const param_count = f.params.len + 1;
-        const params: [param_count]std.builtin.Type.Fn.Param = define: {
-            comptime var list: [param_count]std.builtin.Type.Fn.Param = undefined;
-            inline for (&list, 0..) |*p, index| {
-                if (index < f.params.len) {
-                    p.* = f.params[index];
-                } else {
-                    p.is_generic = false;
-                    p.is_noalias = false;
-                    p.type = [*]const u8;
-                }
-            }
-            break :define list;
-        };
-        const F = @Type(.{
-            .@"fn" = .{
-                .calling_convention = f.calling_convention,
-                .is_generic = false,
-                .is_var_args = false,
-                .return_type = f.return_type,
-                .params = &params,
-            },
+        var param_types: [param_count]type = undefined;
+        var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
+        inline for (f.params, 0..) |param, i| {
+            param_types[i] = param.type.?;
+            param_attrs[i] = .{ .@"noalias" = param.is_noalias };
+        }
+        param_types[param_count - 1] = [*]const u8;
+        param_attrs[param_count - 1] = .{};
+        const NotVarargFn = @Fn(&param_types, &param_attrs, f.return_type.?, .{
+            .@"callconv" = f.calling_convention,
         });
-        var args: std.meta.ArgsTuple(F) = undefined;
+        var args: std.meta.ArgsTuple(NotVarargFn) = undefined;
         const vararg_offset = switch (arg_count > f.params.len) {
             // use the offset of the first vararg arg
             true => arg_attrs[f.params.len].offset,
@@ -68,7 +57,7 @@ pub fn call(
         }
         // use a variable here, so that Zig doesn't try to call it as a vararg function
         // despite the cast to a non-vararg one
-        var not_vararg_func: *const F = @ptrCast(function);
+        var not_vararg_func: *const NotVarargFn = @ptrCast(function);
         std.mem.doNotOptimizeAway(&not_vararg_func);
         arg_s.retval = @call(.auto, not_vararg_func, args);
     } else {
@@ -1302,19 +1291,13 @@ const Abi = struct {
             .callee => .unsigned,
             .caller => .signed,
         } else .unsigned;
-        const IntType = @Type(.{ .int = .{
-            .bits = value_bits,
-            .signedness = signedness,
-        } });
+        const IntType = @Int(signedness, value_bits);
         const retval_bits = switch (@typeInfo(T)) {
             .int => |int| int.bits,
             .float => |float| float.bits,
             else => @sizeOf(T) * 8,
         };
-        const BigIntType = @Type(.{ .int = .{
-            .bits = retval_bits,
-            .signedness = signedness,
-        } });
+        const BigIntType = @Int(signedness, retval_bits);
         const int_value: IntType = @bitCast(value);
         const big_int_value: BigIntType = @intCast(int_value);
         return @bitCast(big_int_value);
@@ -1330,12 +1313,7 @@ const Abi = struct {
                     if (@sizeOf(@TypeOf(value)) == size * count) {
                         break :get std.mem.toBytes(value);
                     } else {
-                        const BigInt = @Type(.{
-                            .int = .{
-                                .bits = size * count * 8,
-                                .signedness = .signed,
-                            },
-                        });
+                        const BigInt = @Int(.signed, size * count * 8);
                         const big_int_value = self.extend(BigInt, value);
                         break :get std.mem.toBytes(big_int_value);
                     }
@@ -1442,84 +1420,54 @@ fn callWithArgs(
     variadic_floats: anytype,
     variadic_ints: anytype,
 ) RT {
+    @setEvalBranchQuota(1000000);
     const Float = @typeInfo(@TypeOf(fixed_floats)).array.child;
     const Int = @typeInfo(@TypeOf(fixed_ints)).array.child;
     const fixed_arg_count = fixed_floats.len + fixed_ints.len;
-    const params = define: {
-        comptime var params: [fixed_arg_count]std.builtin.Type.Fn.Param = undefined;
-        inline for (&params, 0..) |*p, index| {
-            p.* = .{
-                .is_generic = false,
-                .is_noalias = false,
-                .type = if (index < fixed_floats.len) Float else Int,
-            };
-        }
-        break :define params;
-    };
-    const F = @Type(.{
-        .@"fn" = .{
-            .calling_convention = cc,
-            .is_generic = false,
-            .is_var_args = true,
-            .return_type = RT,
-            .params = &params,
-        },
+    var param_types: [fixed_arg_count]type = undefined;
+    var param_attrs: [fixed_arg_count]std.builtin.Type.Fn.Param.Attributes = undefined;
+    inline for (0..fixed_arg_count) |i| {
+        param_types[i] = if (i < fixed_floats.len) Float else Int;
+        param_attrs[i] = .{};
+    }
+    const VarargFn = @Fn(&param_types, &param_attrs, RT, .{
+        .@"callconv" = cc,
+        .varargs = true,
     });
     const total_arg_count = fixed_arg_count + variadic_floats.len + variadic_ints.len;
-    const fields = define: {
-        @setEvalBranchQuota(1000000);
-        comptime var fields: [total_arg_count]std.builtin.Type.StructField = undefined;
-        inline for (&fields, 0..) |*f, index| {
-            const T = switch (index < fixed_arg_count) {
-                true => switch (index < fixed_floats.len) {
-                    true => Float,
-                    false => Int,
-                },
-                false => switch (index < fixed_arg_count + variadic_floats.len) {
-                    true => Float,
-                    false => Int,
-                },
-            };
-            f.* = .{
-                .name = std.fmt.comptimePrint("{d}", .{index}),
-                .type = T,
-                .default_value_ptr = null,
-                .is_comptime = false,
-                .alignment = if (@sizeOf(T) > 0) @alignOf(T) else 0,
-            };
-        }
-        break :define fields;
-    };
-    const Args = @Type(.{
-        .@"struct" = .{
-            .is_tuple = true,
-            .layout = .auto,
-            .decls = &.{},
-            .fields = &fields,
-        },
-    });
-    const args = create: {
-        var args: Args = undefined;
-        comptime var index = 0;
-        inline for (fixed_floats) |float| {
-            args[index] = float;
-            index += 1;
-        }
-        inline for (fixed_ints) |int| {
-            args[index] = int;
-            index += 1;
-        }
-        inline for (variadic_floats) |float| {
-            args[index] = float;
-            index += 1;
-        }
-        inline for (variadic_ints) |int| {
-            args[index] = int;
-            index += 1;
-        }
-        break :create args;
-    };
-    const function_ptr: *const F = @ptrCast(@alignCast(ptr));
+    var field_types: [total_arg_count]type = undefined;
+    inline for (0..total_arg_count) |i| {
+        field_types[i] = switch (i < fixed_arg_count) {
+            true => switch (i < fixed_floats.len) {
+                true => Float,
+                false => Int,
+            },
+            false => switch (i < fixed_arg_count + variadic_floats.len) {
+                true => Float,
+                false => Int,
+            },
+        };
+    }
+    const Args = @Tuple(&field_types);
+    var args: Args = undefined;
+    comptime var index = 0;
+    inline for (fixed_floats) |float| {
+        args[index] = float;
+        index += 1;
+    }
+    inline for (fixed_ints) |int| {
+        args[index] = int;
+        index += 1;
+    }
+    inline for (variadic_floats) |float| {
+        args[index] = float;
+        index += 1;
+    }
+    inline for (variadic_ints) |int| {
+        args[index] = int;
+        index += 1;
+    }
+    const function_ptr: *const VarargFn = @ptrCast(@alignCast(ptr));
     return @call(.auto, function_ptr, args);
 }
 

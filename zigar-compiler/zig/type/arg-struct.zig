@@ -17,36 +17,18 @@ pub fn ArgStruct(comptime T: type) type {
         noreturn => void,
         else => RT,
     } else void;
-    var fields: [count]std.builtin.Type.StructField = undefined;
-    fields[0] = .{
-        .name = "retval",
-        .type = RT,
-        .is_comptime = false,
-        .alignment = @alignOf(RT),
-        .default_value_ptr = null,
-    };
-    var arg_index = 0;
-    for (f.params) |param| {
-        if (param.type != null) {
-            const name = std.fmt.comptimePrint("{d}", .{arg_index});
-            fields[arg_index + 1] = .{
-                .name = name,
-                .type = param.type.?,
-                .is_comptime = false,
-                .alignment = @alignOf(param.type.?),
-                .default_value_ptr = null,
-            };
-            arg_index += 1;
-        }
+    var field_names: [count][]const u8 = undefined;
+    var field_types: [count]type = undefined;
+    var field_attrs: [count]std.builtin.Type.StructField.Attributes = undefined;
+    field_names[0] = "retval";
+    field_types[0] = RT;
+    field_attrs[0] = .{};
+    inline for (f.params, 0..) |param, i| {
+        field_names[i + 1] = std.fmt.comptimePrint("{d}", .{i});
+        field_types[i + 1] = param.type orelse void;
+        field_attrs[i + 1] = .{};
     }
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .decls = &.{},
-            .fields = &fields,
-            .is_tuple = false,
-        },
-    });
+    return @Struct(.auto, null, &field_names, &field_types, &field_attrs);
 }
 
 test "ArgStruct" {
