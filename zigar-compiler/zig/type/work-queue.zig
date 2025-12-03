@@ -201,7 +201,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             return fn_transform.spreadArgs(async_ns.push, cc);
         }
 
-        pub fn Promsified(comptime func: anytype) type {
+        pub fn Promisified(comptime func: anytype) type {
             const FT = @TypeOf(func);
             return switch (@typeInfo(FT)) {
                 .@"fn" => Asyncified(FT),
@@ -215,7 +215,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
             };
         }
 
-        pub fn promisify(comptime self: *@This(), comptime func: anytype) Promsified(func) {
+        pub fn promisify(comptime self: *@This(), comptime func: anytype) Promisified(func) {
             const FT = @TypeOf(func);
             switch (@typeInfo(FT)) {
                 .@"fn" => {
