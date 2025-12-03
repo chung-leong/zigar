@@ -37,8 +37,8 @@
     // internet connectivity.
     .dependencies = .{
         .sqlite = .{
-            .url = "https://github.com/vrischmann/zig-sqlite/archive/refs/heads/zig-0.14.0.zip",
-            .hash = "sqlite-3.48.0-F2R_awuMDgB5YDySyIsltg2fbJWc480EWhD04OIPnlbM",
+            .url = "https://github.com/vrischmann/zig-sqlite/archive/refs/heads/master.zip",
+            .hash = "sqlite-3.48.0-F2R_a8eODgD9X8XjvWlZ1K7C-tDuHae4FuShM2N-yIT2",
         },
     },
     .paths = .{
