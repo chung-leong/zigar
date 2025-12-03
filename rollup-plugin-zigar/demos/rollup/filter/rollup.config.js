@@ -9,6 +9,7 @@ export default [
       zigar({
         optimize: 'ReleaseSmall',
         embedWASM: true,
+        topLevelAwait: false,
         multithreaded: true,
       }),
       nodeResolve(),
