@@ -1,10 +1,8 @@
 import { useCallback, useDeferredValue, useEffect, useState } from 'react';
-import { __zigar, closeDb, findCustomers, getOrders, openDb, startup } from '../zig/sqlite.zig';
+import { __zigar, closeDb, findCustomers, getOrders, openDb } from '../zig/sqlite.zig';
 import './App.css';
 import northwind from './assets/northwind.jpg';
 import { WebFile } from './web-file.js';
-
-startup()
 
 let data;
 

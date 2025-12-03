@@ -1,9 +1,9 @@
 export class WebFile {
   static async create(url, prefetch = 16384) {
     const resp = await fetch(url, {
-			headers: {
-				Range: `bytes=0-${prefetch - 1}`,
-			},
+      headers: {
+        Range: `bytes=0-${prefetch - 1}`,
+      },
     });
     const data = await resp.bytes();
     let size;
@@ -18,7 +18,7 @@ export class WebFile {
     self.size = size;
     self.pos = 0;
     self.cache = data;
-		return self;
+    return self;
   }
   
   async pread(len, offset) {
@@ -27,10 +27,10 @@ export class WebFile {
       return this.cache.slice(offset, end);
     }
     const resp = await fetch(this.url, {
-			headers: {
-				Range: `bytes=${offset}-${end - 1}`,
-			},
-		});
+      headers: {
+        Range: `bytes=${offset}-${end - 1}`,
+      },
+    });
     if (!resp.headers.get('content-range')) {
       throw new Error('Missing range header');
     }

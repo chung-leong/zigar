@@ -7,17 +7,6 @@ const worker = @import("./worker.zig");
 
 var work_queue: zigar.thread.WorkQueue(worker) = .{};
 
-pub fn startup() !void {
-    try work_queue.init(.{
-        .allocator = wasm_allocator,
-        .n_jobs = 1,
-    });
-}
-
-pub fn shutdown(promise: zigar.function.Promise(void)) void {
-    work_queue.deinitAsync(promise);
-}
-
 pub const openDb = work_queue.promisify(worker.openDb);
 pub const closeDb = work_queue.promisify(worker.closeDb);
 pub const findCustomers = work_queue.promisify(worker.findCustomers);

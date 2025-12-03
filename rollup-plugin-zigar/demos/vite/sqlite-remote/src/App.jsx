@@ -1,10 +1,8 @@
 import { useCallback, useDeferredValue, useEffect, useState } from 'react';
-import { __zigar, closeDb, findAlbums, getTracks, openDb, startup } from '../zig/sqlite.zig';
+import { __zigar, closeDb, findAlbums, getTracks, openDb } from '../zig/sqlite.zig';
 import './App.css';
 import chinook from './assets/chinook.jpg';
 import { WebFile } from './web-file.js';
-
-startup()
 
 let data;
 
