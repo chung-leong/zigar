@@ -41,7 +41,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
         pub const Options = init: {
             // when thread_start_params or thread_end_params is void, we want it to have a default value
             const fields = std.meta.fields(struct {
-                allocator: std.mem.Allocator,
+                allocator: std.mem.Allocator = def_allocator,
                 stack_size: usize = if (builtin.target.cpu.arch.isWasm()) 262144 else std.Thread.SpawnConfig.default_stack_size,
                 n_jobs: usize = 1,
                 thread_start_params: ThreadStartParams,
@@ -149,10 +149,7 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                         break :check true;
                     };
                     if (can_auto_init) {
-                        self.init(.{
-                            .allocator = def_allocator,
-                            .n_jobs = 1,
-                        }) catch |err| {
+                        self.init(.{ .n_jobs = 1 }) catch |err| {
                             return switch (err) {
                                 error.OutOfMemory => error.OutOfMemory,
                                 else => error.Unexpected,
@@ -236,19 +233,13 @@ pub fn WorkQueue(comptime ns: type, comptime internal_ns: type) type {
                             const f_ns = switch (func == .startup) {
                                 true => struct {
                                     fn startup(thread_count: usize, promise: Promise(WaitResult)) !void {
-                                        try self.init(.{
-                                            .allocator = def_allocator,
-                                            .n_jobs = thread_count,
-                                        });
+                                        try self.init(.{ .n_jobs = thread_count });
                                         self.waitAsync(promise);
                                     }
                                 },
                                 false => struct {
                                     fn startup(promise: Promise(WaitResult)) !void {
-                                        try self.init(.{
-                                            .allocator = def_allocator,
-                                            .n_jobs = 1,
-                                        });
+                                        try self.init(.{ .n_jobs = 1 });
                                         self.waitAsync(promise);
                                     }
                                 },
