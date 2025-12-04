@@ -1910,8 +1910,6 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const rename = makeStdHook("rename");
         pub const renameat = makeStdHook("renameat");
         pub const rmdir = makeStdHook("rmdir");
-        pub const sendfile = makeStdHook("sendfile");
-        pub const sendfile64 = makeStdHook("sendfile64");
         pub const stat = makeStdHook("stat");
         pub const stat64 = makeStdHook("stat64");
         pub const symlink = makeStdHook("symlink");
@@ -2402,8 +2400,6 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var renameat: *const @TypeOf(Self.renameat) = undefined;
             pub var rmdir: *const @TypeOf(Self.rmdir) = undefined;
             pub var seekdir: *const @TypeOf(Self.seekdir) = undefined;
-            pub var sendfile: *const @TypeOf(Self.sendfile) = undefined;
-            pub var sendfile64: *const @TypeOf(Self.sendfile64) = undefined;
             pub var stat: *const @TypeOf(Self.stat) = undefined;
             pub var stat64: *const @TypeOf(Self.stat64) = undefined;
             pub var symlink: *const @TypeOf(Self.symlink) = undefined;
@@ -2417,6 +2413,61 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var utimes: *const @TypeOf(Self.utimes) = undefined;
             pub var write: *const @TypeOf(Self.write) = undefined;
             pub var writev: *const @TypeOf(Self.writev) = undefined;
+        };
+        pub const calling_convention = std.builtin.CallingConvention.c;
+    };
+}
+
+pub fn PosixSubstituteLinux(comptime redirector: type) type {
+    return struct {
+        pub const sendfile = makeStdHook("sendfile");
+        pub const sendfile64 = makeStdHook("sendfile64");
+
+        const makeStdHook = PosixSubstitute(redirector).makeStdHook;
+
+        const Self = @This();
+        pub const Original = struct {
+            pub extern var sendfile: *const @TypeOf(Self.sendfile);
+            pub extern var sendfile64: *const @TypeOf(Self.sendfile64);
+        };
+        pub const calling_convention = std.builtin.CallingConvention.c;
+    };
+}
+
+pub fn PosixSubstituteDarwin(comptime redirector: type) type {
+    return struct {
+        const posix = PosixSubstitute(redirector);
+
+        pub fn sendfile(in_fd: fd_t, out_fd: fd_t, offset: off_t, len: *off_t, hdtr: [*c]sf_hdtr, flags: u32) callconv(.c) c_int {
+            if (redirector.isPrivateDescriptor(in_fd) or redirector.isPrivateDescriptor(out_fd)) {
+                if (flags != 0) {
+                    posix.setError(@intFromEnum(std.c.E.INVAL));
+                    return -1;
+                }
+                if (hdtr != null) {
+                    // no support for headers/trailers
+                    posix.setError(@intFromEnum(std.c.E.OPNOTSUPP));
+                    return -1;
+                }
+                var offset64: off64_t = offset;
+                var len64: size_t = @intCast(len.*);
+                if (len64 == 0) len64 = std.math.maxInt(u32);
+                var result: ssize_t = undefined;
+                if (redirector.sendfile64(in_fd, out_fd, &offset64, len64, &result)) {
+                    if (result < 0) return @intCast(posix.saveError(result));
+                    len.* = result;
+                    return 0;
+                }
+            }
+            return Original.sendfile(in_fd, out_fd, offset, len, hdtr, flags);
+        }
+
+        const fd_t = i32;
+        const sf_hdtr = std.c.sf_hdtr;
+
+        const Self = @This();
+        pub const Original = struct {
+            pub var sendfile: *const @TypeOf(Self.sendfile) = undefined;
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
     };
@@ -2449,6 +2500,71 @@ pub fn PthreadSubstitute(comptime redirector: type) type {
         const Self = @This();
         pub const Original = struct {
             pub var pthread_create: *const @TypeOf(Self.pthread_create) = undefined;
+        };
+        pub const calling_convention = std.builtin.CallingConvention.c;
+    };
+}
+
+pub fn PthreadSubsituteWindows(comptime redirector: type) type {
+    return struct {
+        const posix = PosixSubstitute(redirector);
+
+        pub fn _beginthread(start_routine: *const fn (?*anyopaque) callconv(.c) void, stack_size: c_uint, arg: ?*anyopaque) callconv(.c) usize {
+            const instance = redirector.Host.getInstance();
+            const info = c_allocator.create(ThreadInfo) catch {
+                posix.setError(@intFromEnum(std.c.E.ACCES));
+                return std.math.maxInt(usize);
+            };
+            info.* = .{
+                .proc = start_routine,
+                .arg = arg,
+                .instance = instance,
+            };
+            return Original._beginthread(&setThreadContext, stack_size, info);
+        }
+
+        pub fn _beginthreadex(security: ?*anyopaque, stack_size: c_uint, start_routine: *const fn (?*anyopaque) callconv(WINAPI) c_uint, arg: ?*anyopaque, initflag: c_uint, thrdaddr: *c_uint) callconv(.c) usize {
+            const instance = redirector.Host.getInstance();
+            const info = c_allocator.create(ThreadInfo) catch {
+                posix.setError(@intFromEnum(std.c.E.ACCES));
+                return std.math.maxInt(usize);
+            };
+            info.* = .{
+                .proc = start_routine,
+                .arg = arg,
+                .instance = instance,
+            };
+            return Original._beginthreadex(security, stack_size, &setThreadContextEx, info, initflag, thrdaddr);
+        }
+
+        fn setThreadContext(ptr: ?*anyopaque) callconv(.c) void {
+            const info: *ThreadInfo = @ptrCast(@alignCast(ptr.?));
+            const proc: *const fn (?*anyopaque) callconv(.c) void = @ptrCast(@alignCast(info.proc));
+            const arg = info.arg;
+            const instance = info.instance;
+            c_allocator.destroy(info);
+            redirector.Host.initializeThread(instance) catch unreachable;
+            defer redirector.Host.deinitializeThread(instance) catch {};
+            proc(arg);
+        }
+
+        fn setThreadContextEx(ptr: ?*anyopaque) callconv(WINAPI) c_uint {
+            const info: *ThreadInfo = @ptrCast(@alignCast(ptr.?));
+            const proc: *const fn (?*anyopaque) callconv(.c) c_uint = @ptrCast(@alignCast(info.proc));
+            const arg = info.arg;
+            const instance = info.instance;
+            c_allocator.destroy(info);
+            redirector.Host.initializeThread(instance) catch unreachable;
+            defer redirector.Host.deinitializeThread(instance) catch {};
+            return proc(arg);
+        }
+
+        const WINAPI: std.builtin.CallingConvention = if (builtin.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c;
+
+        const Self = @This();
+        pub const Original = struct {
+            pub var _beginthread: *const @TypeOf(Self._beginthread) = undefined;
+            pub var _beginthreadex: *const @TypeOf(Self._beginthreadex) = undefined;
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
     };
@@ -3136,7 +3252,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
     };
 }
 
-pub fn LibcNonIOSubsitute(comptime redirector: type) type {
+pub fn LibcSubsituteNonIO(comptime redirector: type) type {
     return struct {
         pub fn getenv(name: [*:0]const u8) callconv(.c) ?[*:0]const u8 {
             var list: [*:null]?[*:0]const u8 = undefined;
@@ -3167,7 +3283,7 @@ pub fn LibcNonIOSubsitute(comptime redirector: type) type {
     };
 }
 
-pub fn LinuxLibcSubstitute(comptime redirector: type) type {
+pub fn LibcSubstituteLinux(comptime redirector: type) type {
     return struct {
         const libc = LibcSubstitute(redirector);
 
@@ -3196,7 +3312,7 @@ pub fn LinuxLibcSubstitute(comptime redirector: type) type {
     };
 }
 
-pub fn Win32LibcSubsitute(comptime redirector: type) type {
+pub fn LibcSubstituteWindows(comptime redirector: type) type {
     return struct {
         const posix = PosixSubstitute(redirector);
         const libc = LibcSubstitute(redirector);
@@ -3357,71 +3473,6 @@ pub fn Win32LibcSubsitute(comptime redirector: type) type {
 
             pub extern var __stdio_common_vfprintf_orig: *const @TypeOf(Self.__stdio_common_vfprintf_hook);
             pub extern var __stdio_common_vfscanf_orig: *const @TypeOf(Self.__stdio_common_vfscanf_hook);
-        };
-        pub const calling_convention = std.builtin.CallingConvention.c;
-    };
-}
-
-pub fn Win32ThreadSubsitute(comptime redirector: type) type {
-    return struct {
-        const posix = PosixSubstitute(redirector);
-
-        pub fn _beginthread(start_routine: *const fn (?*anyopaque) callconv(.c) void, stack_size: c_uint, arg: ?*anyopaque) callconv(.c) usize {
-            const instance = redirector.Host.getInstance();
-            const info = c_allocator.create(ThreadInfo) catch {
-                posix.setError(@intFromEnum(std.c.E.ACCES));
-                return std.math.maxInt(usize);
-            };
-            info.* = .{
-                .proc = start_routine,
-                .arg = arg,
-                .instance = instance,
-            };
-            return Original._beginthread(&setThreadContext, stack_size, info);
-        }
-
-        pub fn _beginthreadex(security: ?*anyopaque, stack_size: c_uint, start_routine: *const fn (?*anyopaque) callconv(WINAPI) c_uint, arg: ?*anyopaque, initflag: c_uint, thrdaddr: *c_uint) callconv(.c) usize {
-            const instance = redirector.Host.getInstance();
-            const info = c_allocator.create(ThreadInfo) catch {
-                posix.setError(@intFromEnum(std.c.E.ACCES));
-                return std.math.maxInt(usize);
-            };
-            info.* = .{
-                .proc = start_routine,
-                .arg = arg,
-                .instance = instance,
-            };
-            return Original._beginthreadex(security, stack_size, &setThreadContextEx, info, initflag, thrdaddr);
-        }
-
-        fn setThreadContext(ptr: ?*anyopaque) callconv(.c) void {
-            const info: *ThreadInfo = @ptrCast(@alignCast(ptr.?));
-            const proc: *const fn (?*anyopaque) callconv(.c) void = @ptrCast(@alignCast(info.proc));
-            const arg = info.arg;
-            const instance = info.instance;
-            c_allocator.destroy(info);
-            redirector.Host.initializeThread(instance) catch unreachable;
-            defer redirector.Host.deinitializeThread(instance) catch {};
-            proc(arg);
-        }
-
-        fn setThreadContextEx(ptr: ?*anyopaque) callconv(WINAPI) c_uint {
-            const info: *ThreadInfo = @ptrCast(@alignCast(ptr.?));
-            const proc: *const fn (?*anyopaque) callconv(.c) c_uint = @ptrCast(@alignCast(info.proc));
-            const arg = info.arg;
-            const instance = info.instance;
-            c_allocator.destroy(info);
-            redirector.Host.initializeThread(instance) catch unreachable;
-            defer redirector.Host.deinitializeThread(instance) catch {};
-            return proc(arg);
-        }
-
-        const WINAPI: std.builtin.CallingConvention = if (builtin.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c;
-
-        const Self = @This();
-        pub const Original = struct {
-            pub var _beginthread: *const @TypeOf(Self._beginthread) = undefined;
-            pub var _beginthreadex: *const @TypeOf(Self._beginthreadex) = undefined;
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
     };
@@ -4784,7 +4835,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
     };
 }
 
-pub fn Win32NonIOSubstitute(comptime redirector: type) type {
+pub fn Win32SubstituteNonIO(comptime redirector: type) type {
     const win32 = Win32Substitute(redirector);
 
     return struct {
@@ -5085,37 +5136,38 @@ pub fn getHookTable(comptime Host: type, comptime redirect_io: bool) std.StaticS
     const list = if (redirect_io) switch (os) {
         .linux => .{
             PosixSubstitute(redirector),
+            PosixSubstituteLinux(redirector),
             PthreadSubstitute(redirector),
             LibcSubstitute(redirector),
-            LibcNonIOSubsitute(redirector),
-            LinuxLibcSubstitute(redirector),
+            LibcSubsituteNonIO(redirector),
+            LibcSubstituteLinux(redirector),
         },
         .darwin => .{
             PosixSubstitute(redirector),
+            PosixSubstituteDarwin(redirector),
             PthreadSubstitute(redirector),
             LibcSubstitute(redirector),
-            LibcNonIOSubsitute(redirector),
+            LibcSubsituteNonIO(redirector),
         },
         .windows => .{
             PosixSubstitute(redirector),
+            PthreadSubsituteWindows(redirector),
             LibcSubstitute(redirector),
-            LibcNonIOSubsitute(redirector),
-            Win32LibcSubsitute(redirector),
+            LibcSubsituteNonIO(redirector),
+            LibcSubstituteWindows(redirector),
             Win32Substitute(redirector),
-            Win32NonIOSubstitute(redirector),
-            Win32ThreadSubsitute(redirector),
+            Win32SubstituteNonIO(redirector),
         },
         else => .{},
     } else switch (os) {
         .darwin, .linux => .{
             PthreadSubstitute(redirector),
-            LibcNonIOSubsitute(redirector),
+            LibcSubsituteNonIO(redirector),
         },
         .windows => .{
-            PthreadSubstitute(redirector),
-            LibcNonIOSubsitute(redirector),
-            Win32NonIOSubstitute(redirector),
-            Win32ThreadSubsitute(redirector),
+            PthreadSubsituteWindows(redirector),
+            LibcSubsituteNonIO(redirector),
+            Win32SubstituteNonIO(redirector),
         },
         else => .{},
     };

@@ -2581,7 +2581,7 @@ export function addTests(importModule, options) {
       const [ line2 ] = await capture(() => write());
       expect(line2).to.equal('Hello world');
     })
-    it('should copy real file to virtual file', async function() {
+    it('should copy real file to virtual file using sendfile', async function() {
       const { copy } = await importTest('copy-real-file-to-virtual-file-with-sendfile');
       const file = await open(absolute('data/macbeth.txt'));
       const { size } = await file.stat();
@@ -2590,7 +2590,7 @@ export function addTests(importModule, options) {
       expect(copied).to.equal(size);
       expect(array).to.have.lengthOf(1);
     })
-    it('should copy virtual file to virtual file', async function() {
+    it('should copy virtual file to virtual file using sendfile', async function() {
       const { copy } = await importTest('copy-virtual-file-to-virtual-file-with-sendfile');
       const string = 'Hello world!';
       const array = [];
@@ -2599,7 +2599,7 @@ export function addTests(importModule, options) {
       expect(copied).to.equal(size);
       expect(array).to.have.lengthOf(1);
     })
-    it('should copy virtual file to real file', async function() {
+    it('should copy virtual file to real file using sendfile', async function() {
       const { copy } = await importTest('copy-virtual-file-to-real-file-with-sendfile');
       const path = absolute('data/virtual-file-test.txt');
       try {
