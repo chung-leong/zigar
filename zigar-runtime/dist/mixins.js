@@ -111,6 +111,7 @@ export { default as SyscallFdPwrite } from './syscalls/fd-pwrite.js';
 export { default as SyscallFdRead } from './syscalls/fd-read.js';
 export { default as SyscallFdReaddir } from './syscalls/fd-readdir.js';
 export { default as SyscallFdSeek } from './syscalls/fd-seek.js';
+export { default as SyscallFdSendfile } from './syscalls/fd-sendfile.js';
 export { default as SyscallFdSync } from './syscalls/fd-sync.js';
 export { default as SyscallFdTell } from './syscalls/fd-tell.js';
 export { default as SyscallFdWrite } from './syscalls/fd-write.js';
