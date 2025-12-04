@@ -2667,7 +2667,7 @@ export function addTests(importModule, options) {
         file.close();
       }
     })
-    it('should copy virtual file to virtual file', async function() {
+    it('should copy virtual file to virtual file using sendfile', async function() {
       const { copy } = await importTest('copy-virtual-file-to-virtual-file-with-sendfile');
       const string = 'Hello world!';
       const array = [];
@@ -2676,7 +2676,7 @@ export function addTests(importModule, options) {
       expect(copied).to.equal(size);
       expect(array).to.have.lengthOf(1);
     })
-    it('should copy virtual file to real file', async function() {
+    it('should copy virtual file to real file using sendfile', async function() {
       const { copy } = await importTest('copy-virtual-file-to-real-file-with-sendfile');
       const path = absolute('data/virtual-file-test.txt');
       try {

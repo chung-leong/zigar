@@ -53,8 +53,9 @@ export default (process.env.TARGET === 'node') ? mixin({
         }
       };
       const discharge = (chunk) => {
-        const result = write(chunk);
         written = chunk.length;
+        if (written === 0) return copied;
+        const result = write(chunk);
         if (isPromise(result)) {
           return result.then(intake);
         } else {
