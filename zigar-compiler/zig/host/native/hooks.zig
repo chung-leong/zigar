@@ -166,6 +166,13 @@ pub const Syscall = extern struct {
             whence: u32,
             position: u64 = undefined,
         },
+        sendfile: extern struct {
+            out_fd: i32,
+            in_fd: i32,
+            offset: ?*i64,
+            len: u32,
+            sent: u32 = undefined,
+        },
         setfl: extern struct {
             fd: i32,
             fdflags: Fdflags = undefined,
@@ -249,6 +256,7 @@ pub const Syscall = extern struct {
         rename,
         rmdir,
         seek,
+        sendfile,
         setfl,
         setlk,
         stat,
@@ -292,6 +300,7 @@ const ThreadInfo = struct {
     arg: ?*anyopaque,
     instance: *anyopaque,
 };
+const size_t = c_ulong;
 const ssize_t = c_long;
 const off_t = c_long;
 const off64_t = i64;
@@ -1450,6 +1459,38 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return unlinkat(fd_cwd, path, AT.REMOVEDIR, result);
         }
 
+        pub fn sendfile(out_fd: c_int, in_fd: c_int, offset: [*c]off_t, len: size_t, result: *ssize_t) callconv(.c) bool {
+            return sendfileT(off_t, out_fd, in_fd, offset, len, result);
+        }
+
+        pub fn sendfile64(out_fd: c_int, in_fd: c_int, offset: [*c]off64_t, len: size_t, result: *ssize_t) callconv(.c) bool {
+            return sendfileT(off64_t, out_fd, in_fd, offset, len, result);
+        }
+
+        fn sendfileT(comptime T: type, out_fd: c_int, in_fd: c_int, offset: [*c]T, len: size_t, result: *ssize_t) bool {
+            if (isPrivateDescriptor(out_fd) or isPrivateDescriptor(in_fd)) {
+                var offset64: off64_t = if (offset) |ptr| ptr.* else 0;
+                var call: Syscall = .{ .cmd = .sendfile, .u = .{
+                    .sendfile = .{
+                        .out_fd = out_fd,
+                        .in_fd = in_fd,
+                        .offset = if (offset != null) &offset64 else null,
+                        .len = @intCast(len),
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS) {
+                    if (offset) |ptr| ptr.* = @intCast(offset64);
+                    result.* = @intCast(call.u.sendfile.sent);
+                    return true;
+                } else if (err != .OPNOTSUPP) {
+                    result.* = intFromError(err);
+                    return true;
+                }
+            }
+            return false;
+        }
+
         pub fn stat(path: [*:0]const u8, buf: *Stat, result: *c_int) callconv(.c) bool {
             return fstatat(fd_cwd, path, buf, 0, result);
         }
@@ -1869,6 +1910,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const rename = makeStdHook("rename");
         pub const renameat = makeStdHook("renameat");
         pub const rmdir = makeStdHook("rmdir");
+        pub const sendfile = makeStdHook("sendfile");
+        pub const sendfile64 = makeStdHook("sendfile64");
         pub const stat = makeStdHook("stat");
         pub const stat64 = makeStdHook("stat64");
         pub const symlink = makeStdHook("symlink");
@@ -2359,6 +2402,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var renameat: *const @TypeOf(Self.renameat) = undefined;
             pub var rmdir: *const @TypeOf(Self.rmdir) = undefined;
             pub var seekdir: *const @TypeOf(Self.seekdir) = undefined;
+            pub var sendfile: *const @TypeOf(Self.sendfile) = undefined;
+            pub var sendfile64: *const @TypeOf(Self.sendfile64) = undefined;
             pub var stat: *const @TypeOf(Self.stat) = undefined;
             pub var stat64: *const @TypeOf(Self.stat64) = undefined;
             pub var symlink: *const @TypeOf(Self.symlink) = undefined;
