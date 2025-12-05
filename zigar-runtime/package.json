@@ -1,6 +1,6 @@
 {
   "name": "zigar-runtime",
-  "version": "0.15.2-alpha.1",
+  "version": "0.15.2-rc.0",
   "description": "JavaScript runtime for code transpiled using Zigar",
   "main": "./dist/index.js",
   "exports": {
@@ -21,7 +21,8 @@
     "rollup": "rollup -c rollup.config.js"
   },
   "files": [
-    "dist/*"
+    "dist/*",
+    "!**/.*"
   ],
   "repository": {
     "type": "git",

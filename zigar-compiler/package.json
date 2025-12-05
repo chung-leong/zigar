@@ -1,6 +1,6 @@
 {
   "name": "zigar-compiler",
-  "version": "0.15.2-alpha.1",
+  "version": "0.15.2-rc.0",
   "description": "Compile Zig code into WASM or native module",
   "main": "./dist/index.js",
   "exports": {
@@ -21,7 +21,8 @@
   "files": [
     "dist/*",
     "zig/**/*",
-    "*.patch"
+    "*.patch",
+    "!**/.*"
   ],
   "repository": {
     "type": "git",
