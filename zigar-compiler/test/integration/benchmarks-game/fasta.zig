@@ -32,6 +32,7 @@ fn repeatAndWrap(out: anytype, comptime sequence: []const u8, count: usize) void
 
         _ = out.write(padded_sequence[off .. off + line_length]) catch unreachable;
         _ = out.writeByte('\n') catch unreachable;
+        out.flush() catch unreachable;
 
         off += line_length;
         if (off > sequence.len) {
@@ -72,14 +73,15 @@ fn generateAndWrap(out: anytype, comptime nucleotides: []const AminoAcid, count:
 
         line[line_length] = '\n';
         _ = out.write(line[0 .. line_length + 1]) catch unreachable;
+        out.flush() catch unreachable;
         idx += line_length;
     }
 }
 
 pub fn fasta(n: usize) !void {
-    var buffered_stdout = std.io.bufferedWriter(std.io.getStdOut().writer());
-    defer buffered_stdout.flush() catch unreachable;
-    const stdout = buffered_stdout.writer();
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
 
     const homo_sapiens_alu = "GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGATCACCTGAGGTC" ++
         "AGGAGTTCGAGACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAATACAAAAATTAGCCGGGCG" ++
@@ -116,4 +118,5 @@ pub fn fasta(n: usize) !void {
     };
     _ = try stdout.write(">THREE Homo sapiens frequency\n");
     generateAndWrap(stdout, homo_sapien_nucleotide_info, 5 * n);
+    try stdout.flush();
 }

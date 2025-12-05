@@ -33,7 +33,7 @@ export function addTests(importModule, options) {
       const b = new StructA({ hello: 234 });
       expect(b.valueOf()).to.eql({ empty1: null, empty2: null, hello: 234 });
       const [ line ] = await capture(() => print());
-      expect(line).to.equal('in-struct.StructA{ .empty1 = null, .empty2 = null, .hello = 1234 }');
+      expect(line).to.equal('.{ .empty1 = null, .empty2 = null, .hello = 1234 }');
     })
     it('should not compile code with null in packed struct', async function() {
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;

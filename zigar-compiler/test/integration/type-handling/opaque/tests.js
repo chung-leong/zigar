@@ -36,7 +36,7 @@ export function addTests(importModule, options) {
       const { create, print } = await importTest('as-return-value');
       const s = create(123, 456);
       const [ line ] = await capture(() => print(s));
-      expect(line).to.equal('as-return-value.Struct{ .number1 = 123, .number2 = 456 }');
+      expect(line).to.equal('.{ .number1 = 123, .number2 = 456 }');
     })
     it('should handle opaque pointer in array', async function() {
       const { default: module, Opaque, print } = await importTest('array-of');
@@ -73,7 +73,7 @@ export function addTests(importModule, options) {
       const b = new StructA({ number: 500 });
       expect(b.ptr['*']).to.be.instanceOf(Opaque);
       const [ line ] = await capture(() => print(b));
-      expect(line).to.contain('as-comptime-field.StructA{ .number = 500, .ptr = as-comptime-field.Opaque@');
+      expect(line).to.contain('.{ .number = 500, .ptr = as-comptime-field.Opaque@');
     })
     it('should handle opaque pointer in bare union', async function() {
       const { default: module, UnionA } = await importTest('in-bare-union');

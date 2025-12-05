@@ -1,5 +1,4 @@
 const std = @import("std");
-pub const Reader = std.io.AnyReader;
 
 const zigar = @import("zigar");
 

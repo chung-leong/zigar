@@ -19,8 +19,14 @@ pub fn spawn() !void {
     thread.detach();
 }
 
-fn destructor(ptr: ?*anyopaque) callconv(.c) void {
-    std.debug.print("Destructor called: {?}\n", .{ptr});
+var destructor_called: usize = 0;
+
+fn destructor(_: ?*anyopaque) callconv(.c) void {
+    destructor_called += 1;
+}
+
+pub fn getDestruction() usize {
+    return destructor_called;
 }
 
 fn run() void {

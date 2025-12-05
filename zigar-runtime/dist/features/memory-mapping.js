@@ -116,6 +116,9 @@ var memoryMapping = mixin({
     }
   },
   findMemory(context, address, count, size) {
+    if (isInvalidAddress(count)) {
+      count = 0;
+    }
     let len = count * (size ?? 0);
     const index = findMemoryIndex(this.memoryList, address);
     const entry = this.memoryList[index - 1];

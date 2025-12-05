@@ -169,7 +169,7 @@ export function addTests(importModule, options) {
       const b = new StructA({ number: 500 });
       expect(b.function['*']).to.be.a('function');
       const [ line ] = await capture(() => print(b));
-      expect(line).to.match(/as\-comptime\-field\.StructA{ \.number = 500, \.function = fn\s*\(\) void@/);
+      expect(line).to.match(/\.{ \.number = 500, \.function = fn\s*\(\) void@/);
     })
     it('should export bare union containing function pointers', async function() {
       const { default: module } = await importTest('in-bare-union');

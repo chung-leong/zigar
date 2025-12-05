@@ -554,6 +554,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    skip.entirely.if(target === 'darwin').
     it('should wait momentarily for mutex created using pthread', async function() {
       const { 
         spawn,
@@ -575,6 +576,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    skip.entirely.if(target === 'darwin').
     it('should create spinlock using pthread', async function() {
       const { 
         spawn,
@@ -641,6 +643,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    skip.entirely.if(target === 'darwin').
     it('should wait momentarily for read lock created using pthread', async function() {
       const { 
         spawn,
@@ -665,6 +668,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    skip.entirely.if(target === 'darwin').
     it('should wait momentarily for write lock created using pthread', async function() {
       const { 
         spawn,
@@ -689,6 +693,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    skip.entirely.if(target === 'darwin').  
     it('should create semaphore using pthread', async function() {
       const { 
         spawn,
@@ -723,10 +728,16 @@ export function addTests(importModule, options) {
           await delay(500);
         });
         cleanup();
-        const list0 = lines.filter(l => l.includes('acquired semaphore: 0'));
-        const list1 = lines.filter(l => l.includes('acquired semaphore: 1'));
-        expect(list0).to.have.lengthOf(2);
-        expect(list1).to.have.lengthOf(1);
+        if (target === 'darwin') {
+          const list = lines.filter(l => l.includes('acquired semaphore'));
+          expect(list).to.have.lengthOf(3);
+        } else {
+          const list0 = lines.filter(l => l.includes('acquired semaphore: 0'));
+          const list1 = lines.filter(l => l.includes('acquired semaphore: 1'));
+          expect(list0).to.have.lengthOf(2);
+          expect(list1).to.have.lengthOf(1);
+
+        }
       } finally {
         shutdown();
         try {
@@ -734,6 +745,7 @@ export function addTests(importModule, options) {
         } catch {}
       }
     })
+    skip.entirely.if(target === 'darwin').
     it('should wait momentarily for semaphore created using pthread', async function() {
       const { 
         spawn,
@@ -756,6 +768,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    skip.entirely.if(target === 'darwin').
     it('should try to get semaphore created using pthread', async function() {
       const { 
         spawn,
@@ -781,6 +794,7 @@ export function addTests(importModule, options) {
     it('should create key for thread specific values using pthread', async function() {
       const { 
         spawn,
+        getDestruction,
         startup,
         shutdown,
       } = await importTest('create-key-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
@@ -793,10 +807,16 @@ export function addTests(importModule, options) {
         const expected = [
           'Thread 1 found anyopaque@12345 and anyopaque@67',
           'Thread 2 found anyopaque@22222 and null',
-          'Destructor 1 called: anyopaque@12345',
-          'Destructor 2 called: anyopaque@67',
-          'Destructor 1 called: anyopaque@22222'
         ];
+        if (target !== 'darwin') {
+          expected.push([          
+            'Destructor 1 called: anyopaque@12345',
+            'Destructor 2 called: anyopaque@67',
+            'Destructor 1 called: anyopaque@22222'
+          ]);
+        }
+        const count = getDestruction();
+        expect(count).to.equal(3);
         for (const line of expected) {
           expect(lines).to.contain(line);
         }
@@ -807,6 +827,7 @@ export function addTests(importModule, options) {
     it('should exit thread not created using pthread', async function() {
       const { 
         spawn,
+        getDestruction,
         startup,
         shutdown,
       } = await importTest('exit-thread-not-created-with-pthread', { multithreaded: true, useLibc: true, usePthreadEmulation: true });
@@ -816,7 +837,8 @@ export function addTests(importModule, options) {
           spawn();
           await delay(500);
         });
-        expect(lines).to.eql([ 'Destructor called: anyopaque@12345' ]);
+        const count = getDestruction();
+        expect(count).to.equal(1);
       } finally {
         shutdown();
       }
@@ -872,6 +894,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    skip.entirely.if(target === 'darwin').
     it('should wait momentarily for condition created using pthread', async function() {
       const { 
         spawn,

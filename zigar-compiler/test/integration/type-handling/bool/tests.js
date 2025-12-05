@@ -61,10 +61,10 @@ export function addTests(importModule, options) {
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ state1: true, state2: false });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-struct.StructA{ .state1 = false, .state2 = true }');
+      expect(before).to.equal('.{ .state1 = false, .state2 = true }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-struct.StructA{ .state1 = true, .state2 = false }');
+      expect(after).to.equal('.{ .state1 = true, .state2 = false }');
     })
     it('should handle bool in packed struct', async function() {
       const { default: module, StructA, print } = await importTest('in-packed-struct');
@@ -72,10 +72,10 @@ export function addTests(importModule, options) {
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ state1: true, state2: false, number: 100, state3: false });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-packed-struct.StructA{ .state1 = false, .state2 = true, .number = 200, .state3 = true }');
+      expect(before).to.equal('.{ .state1 = false, .state2 = true, .number = 200, .state3 = true }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-packed-struct.StructA{ .state1 = true, .state2 = false, .number = 100, .state3 = false }');
+      expect(after).to.equal('.{ .state1 = true, .state2 = false, .number = 100, .state3 = false }');
     })
     it('should handle bool as comptime field', async function() {
       const { default: module, StructA, print } = await importTest('as-comptime-field');
@@ -83,7 +83,7 @@ export function addTests(importModule, options) {
       const b = new StructA({ number: 500 });
       expect(b.state).to.equal(false);
       const [ line ] = await capture(() => print(b));
-      expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .state = false }');
+      expect(line).to.equal('.{ .number = 500, .state = false }');
     })
     it('should handle bool in bare union', async function() {
       const { default: module, UnionA } = await importTest('in-bare-union');

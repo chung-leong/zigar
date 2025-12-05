@@ -32,10 +32,8 @@ const StructurePurpose = {
   AbortSignal: 3,
   Allocator: 4,
   Iterator: 5,
-  Reader: 6,
-  Writer: 7,
-  File: 8,
-  Directory: 9,
+  File: 6,
+  Directory: 7,
 };
 const structureNames = Object.keys(StructureType);
 const StructureFlag = {
@@ -678,7 +676,7 @@ function extractTimes(st_atim, st_mtim, fst_flags) {
   return times;
 }
 
-const require = createRequire(import.meta.url);
+const require$1 = createRequire(import.meta.url);
 const execFile$1 = promisify(childProcess.execFile);
 
 async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
@@ -824,7 +822,7 @@ function getPlatform() {
         const list = [];
         try {
           // scan ELF executable for imported shared libraries
-          const { closeSync, openSync, readSync } = require('fs');
+          const { closeSync, openSync, readSync } = require$1('fs');
           const fd = openSync(process.execPath, 'r');
           const sig = new Uint8Array(8);
           readSync(fd, sig);
@@ -969,7 +967,7 @@ function generateCode(definition, params) {
     envVariables = {},
     standaloneLoader,
   } = params;
-  const exports = getExports(structures);
+  const exports$1 = getExports(structures);
   const lines = [];
   const type = standaloneLoader?.type ?? 'esm';
   const add = manageIndentation(lines);
@@ -1040,9 +1038,9 @@ function generateCode(definition, params) {
     add(`const { constructor: v0 } = root;`);
     add(`const v1 = env.getSpecialExports();`);
     specialVarName = 'v1';
-    if (exports.length > 2) {
+    if (exports$1.length > 2) {
       add(`const {`);
-      for (const [ index, name ] of exports.entries()) {
+      for (const [ index, name ] of exports$1.entries()) {
         if (index >= 2) {
           add(`${name}: v${index},`);
         }
@@ -1051,13 +1049,13 @@ function generateCode(definition, params) {
     }
     if (type == 'esm') {
       add(`export {`);
-      for (const [ index, name ] of exports.entries()) {
+      for (const [ index, name ] of exports$1.entries()) {
         add(`v${index} as ${name},`);
       }
       add(`};`);
     } else {
       add(`module.exports = {`);
-      for (const [ index, name ] of exports.entries()) {
+      for (const [ index, name ] of exports$1.entries()) {
         add(`${name}: v${index},`);
       }
       add(`};`);
@@ -1076,7 +1074,7 @@ function generateCode(definition, params) {
     add(`\n${getLibraryExt}`);
   }
   const code = lines.join('\n');
-  return { code, exports, structures };
+  return { code, exports: exports$1, structures };
 }
 
 function addStructureDefinitions(lines, definition) {
@@ -1544,8 +1542,8 @@ function formatProjectConfig(config) {
   const lines = [];
   const fields = [
     'moduleName', 'modulePath', 'moduleDir', 'outputPath', 'pdbPath', 'zigarSrcPath', 'useLibc', 
-    'useRedirection', 'usePthreadEmulation', 'isWASM', 'multithreaded', 'stackSize', 'maxMemory',
-    'evalBranchQuota', 'omitFunctions', 'omitVariables',
+    'useLLVM', 'usePthreadEmulation', 'useRedirection', 'isWASM', 'multithreaded', 'stackSize', 
+    'maxMemory', 'evalBranchQuota', 'omitFunctions', 'omitVariables',
   ];
   for (const [ name, value ] of Object.entries(config)) {
     if (fields.includes(name)) {
@@ -1601,6 +1599,7 @@ function createConfig(srcPath, modPath, options = {}) {
     optimize = 'Debug',
     isWASM = false,
     useLibc = isWASM ? false : true,
+    useLLVM = null,
     useRedirection = true,
     usePthreadEmulation = false,
     clean = false,
@@ -1702,6 +1701,7 @@ function createConfig(srcPath, modPath, options = {}) {
     zigPath,
     zigArgs,
     useLibc,
+    useLLVM,
     useRedirection,
     usePthreadEmulation,
     isWASM,
@@ -1835,6 +1835,10 @@ const optionsForCompile = {
   useLibc: {
     type: 'boolean',
     title: 'Link in C standard library',
+  },
+  useLLVM: {
+    type: 'boolean',
+    title: 'Use LLVM as compiler backend',
   },
   useRedirection: {
     type: 'boolean',
@@ -3226,20 +3230,6 @@ function throwReadOnly() {
   throw new ReadOnly();
 }
 
-function checkInefficientAccess(progress, access, len) {
-  progress.bytes += len;
-  progress.calls++;
-  if (progress.calls === 100) {
-    const bytesPerCall = progress.bytes / progress.calls;
-    if (bytesPerCall < 8) {
-      const s = bytesPerCall !== 1 ? 's' : '';
-      const action = (access === 'read') ? 'reading' : 'writing';
-      const name = (access === 'read') ? 'Reader' : 'Writer';
-      throw new Error(`Inefficient ${access} access. Each call is only ${action} ${bytesPerCall} byte${s}. Please use std.io.Buffered${name}.`);
-    }
-  }
-}
-
 function deanimalizeErrorName(name) {
   // deal with snake_case first
   let s = name.replace(/_/g, ' ');
@@ -3828,12 +3818,6 @@ var callMarshalingOutbound = mixin({
             signal ||= this.createSignal(structure, options?.['signal']);
             arg = signal;
             break;
-          case StructurePurpose.Reader:
-            arg = this.createReader(argList[srcIndex++]);
-            break;
-          case StructurePurpose.Writer:
-            arg = this.createWriter(argList[srcIndex++]);
-            break;
           case StructurePurpose.File:
             arg = this.createFile(argList[srcIndex++]);
             break;
@@ -4016,10 +4000,11 @@ class AsyncReader {
 class WebStreamReader extends AsyncReader {
   onClose = null;
 
-  constructor(reader) {
+  constructor(arg) {
     super();
+    const reader = (arg instanceof ReadableStream) ? arg.getReader() : arg;
     this.reader = reader;
-    attachClose(reader, this);
+    attachClose(arg, this);
   }
 
   async fetch() {
@@ -4076,8 +4061,20 @@ class WebStreamWriter extends AsyncWriter {
   onClose = null;
   done = false;
 
-  constructor(writer) {
+  constructor(arg) {
     super();
+    let writer;
+    if (arg instanceof WritableStream) {
+      writer = arg.getWriter();
+      // replace close function with one that closes the writer
+      arg.close = async () => {
+        delete arg.close;
+        await writer.close();
+        writer.releaseLock();
+      };
+    } else {
+      writer = arg;
+    }
     this.writer = writer;
     writer.closed.catch(empty).then(() => {
       this.done = true;
@@ -4489,6 +4486,9 @@ var memoryMapping = mixin({
     }
   },
   findMemory(context, address, count, size) {
+    if (isInvalidAddress(count)) {
+      count = 0;
+    }
     let len = count * (size ?? 0);
     const index = findMemoryIndex(this.memoryList, address);
     const entry = this.memoryList[index - 1];
@@ -4708,9 +4708,12 @@ var moduleLoading = mixin({
       }
       return imports;
     },
-    importFunctions(exports) {
+    importFunctions(exports$1) {
+      if (!this.memory) {
+        this.memory = exports$1.memory;
+      }
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
-        const fn = exports[name];
+        const fn = exports$1[name];
         if (fn) {
           defineProperty(this, name, defineValue(this.importFunction(fn, argType, returnType)));
           this.destructors.push(() => this[name] = throwError$1);
@@ -4730,7 +4733,7 @@ var moduleLoading = mixin({
       const executable = this.executable = await f(res);
       const functions = this.exportFunctions();
       const env = {}, wasi = {}, wasiPreview = {};
-      const exports = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
+      const exports$1 = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
       for (const { module, name, kind } of WA.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {
@@ -4745,18 +4748,22 @@ var moduleLoading = mixin({
           }
         }
       }
-      this.memory = env.memory = new WA.Memory({
-        initial: memoryInitial,
-        maximum: memoryMax,
-        shared: multithreaded,
-      });
-      this.table = env.__indirect_function_table = new WA.Table({
-        initial: tableInitial,
-        element: 'anyfunc',
-        shared: multithreaded,
-      });
+      if (memoryInitial) {
+        this.memory = env.memory = new WA.Memory({
+          initial: memoryInitial,
+          maximum: memoryMax,
+          shared: multithreaded,
+        });
+      }
+      if (tableInitial) {
+        this.table = env.__indirect_function_table = new WA.Table({
+          initial: tableInitial,
+          element: 'anyfunc',
+          shared: multithreaded,
+        });
+      }
       this.initialTableLength = tableInitial;
-      return WA.instantiate(executable, exports);
+      return WA.instantiate(executable, exports$1);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
@@ -5022,7 +5029,7 @@ var pointerSynchronization = mixin({
 
 var readerConversion = mixin({
   convertReader(arg) {
-    if (arg instanceof ReadableStreamDefaultReader) {
+    if (arg instanceof ReadableStream || arg instanceof ReadableStreamDefaultReader) {
       return new WebStreamReader(arg);
     } else if(typeof(ReadableStreamBYOBReader) === 'function' && arg instanceof ReadableStreamBYOBReader) {
       return new WebStreamReaderBYOB(arg);
@@ -5357,8 +5364,8 @@ var thunkAllocation = mixin({
         initial: tableInitial,
         element: 'anyfunc',
       });
-      const { exports } = new w.Instance(this.executable, imports);
-      const { createJsThunk, destroyJsThunk, identifyJsThunk } = exports;
+      const { exports: exports$1 } = new w.Instance(this.executable, imports);
+      const { createJsThunk, destroyJsThunk, identifyJsThunk } = exports$1;
       const source = {
         thunkCount: 0,
         createJsThunk,
@@ -5434,7 +5441,7 @@ var thunkAllocation = mixin({
 
 var writerConversion = mixin({
   convertWriter(arg) {
-    if (arg instanceof WritableStreamDefaultWriter) {
+    if (arg instanceof WritableStream || arg instanceof WritableStreamDefaultWriter) {
       return new WebStreamWriter(arg);
     } else if (Array.isArray(arg)) {
       return new ArrayWriter(arg);
@@ -5872,140 +5879,6 @@ var promise = mixin({
       const result = (argList.length === 2) ? argList[0] ?? argList[1] : argList[0];
       return args[RETURN](result);
     };
-  },
-});
-
-var reader = mixin({
-  init() {
-    this.readerCallback = null;
-    this.readerMap = new Map();
-    this.nextReaderId = usize(0x1000);
-    if (import.meta.env?.PROD !== true) {
-      this.readerProgressMap = new Map();
-    }
-  },
-  // create AnyReader struct for outbound call
-  createReader(arg) {
-    // check if argument isn't already an AnyReader struct
-    if (typeof(arg) === 'object' && arg) {
-      if('context' in arg && 'readFn' in arg) return arg;
-    }
-    const reader = this.convertReader(arg);
-    if (!reader) {
-        throw new InvalidStream(PosixDescriptorRight.fd_read, arg);
-    }
-    // create a handle referencing the reader 
-    const readerId = this.nextReaderId++;
-    const context = this.obtainZigView(readerId, 0, false);
-    const onClose = reader.onClose = () => {
-      this.readerMap.delete(readerId);
-      if (import.meta.env?.PROD !== true) {
-        this.readerProgressMap.delete(readerId);
-      }
-    };
-    this.readerMap.set(readerId, reader);
-    if (import.meta.env?.PROD !== true) {
-      this.readerProgressMap.set(readerId, { bytes: 0, calls: 0 });
-    }
-    // use the same callback for all readers
-    let readFn = this.readerCallback;
-    if (!readFn) {
-      const onError = (err) => {
-        console.error(err);
-        onClose();
-        throw err;
-      };
-      readFn = this.readerCallback = (context, buffer) => {
-        const readerId = this.getViewAddress(context['*'][MEMORY]);
-        const reader = this.readerMap.get(readerId);
-        if (!reader) return 0;    
-        try {
-          const dv = buffer['*'][MEMORY];
-          const len = dv.byteLength;
-          const onResult = (chunk) => {
-            const len = chunk.length;
-            const address = this.getViewAddress(buffer['*'][MEMORY]);
-            this.moveExternBytes(chunk, address, true);
-            return len;
-          };
-          if (import.meta.env?.PROD !== true) {
-            const progress = this.readerProgressMap.get(readerId);
-            checkInefficientAccess(progress, 'read', len);
-          }
-          const result = reader.read(len);          
-          return isPromise(result) ? result.then(onResult).catch(onError) : onResult(result);
-        } catch (err) {
-          onError(err);
-        }
-      };
-      this.destructors.push(() => this.freeFunction(readFn));
-    }
-    return { context, readFn };
-  },
-});
-
-var writer = mixin({
-  init() {
-    this.writerCallback = null;
-    this.writerMap = new Map();
-    this.nextWriterContextId = usize(0x2000);
-    if (import.meta.env?.PROD !== true) {
-      this.writerProgressMap = new Map();
-    }
-  },
-  // create AnyWriter struct for outbound call
-  createWriter(arg) {
-    // check if argument isn't already an AnyWriter struct
-    if (typeof(arg) === 'object' && arg) {
-      if('context' in arg && 'writeFn' in arg) return arg;
-    }
-    const writer = this.convertWriter(arg);
-    if (!writer) {
-      throw new InvalidStream(PosixDescriptorRight.fd_write, arg);
-    }
-    // create a handle referencing the writer 
-    const writerId = this.nextWriterContextId++;
-    const context = this.obtainZigView(writerId, 0, false);
-    const onClose = writer.onClose = () => {
-      this.writerMap.delete(writerId);
-      if (import.meta.env?.PROD !== true) {
-        this.writerProgressMap.delete(writerId);
-      }
-    };
-    this.writerMap.set(writerId, writer);
-    if (import.meta.env?.PROD !== true) {
-      this.writerProgressMap.set(writerId, { bytes: 0, calls: 0 });
-    }
-    // use the same callback for all writers
-    let writeFn = this.writerCallback;
-    if (!writeFn) {
-      const onError = (err) => {
-        console.error(err);
-        onClose();
-        throw err;
-      };
-      writeFn = this.writerCallback = (context, buffer) => {
-        const writerId = this.getViewAddress(context['*'][MEMORY]);
-        const writer = this.writerMap.get(writerId);
-        if (!writer) return 0;
-        try {
-          const dv = buffer['*'][MEMORY];
-          if (import.meta.env?.PROD !== true) {
-            const progress = this.writerProgressMap.get(writerId);
-            checkInefficientAccess(progress, 'write', dv.byteLength);
-          }
-          const len = dv.byteLength;
-          const src = new Uint8Array(dv.buffer, dv.byteOffset, len);
-          const copy = new Uint8Array(src);
-          const result = writer.write(copy);
-          return isPromise(result) ? result.then(() => len, onError) : len;
-        } catch (err) {
-          onError(err);
-        }
-      };
-      this.destructors.push(() => this.freeFunction(writeFn));
-    }
-    return { context, writeFn };
   },
 });
 
@@ -6516,8 +6389,7 @@ var fdWrite = mixin({
     catchPosixError(canWait, PosixError.EBADF, () => {
       const[ writer, rights, flags ] = this.getStream(2);
       checkAccessRight(rights, PosixDescriptorRight.fd_write);
-      const method = (flags & PosixDescriptorFlag.nonblock) ? writer.writenb : writer.write;
-      return method.call(writer, chunk);
+      return writer.write(chunk);
     });
     return 0;
   },
@@ -6948,10 +6820,16 @@ function workerMain() {
   const WA = WebAssembly;
   let port, instance;
 
-  {
+  if (typeof(self) === 'object') {
     // web worker
     self.onmessage = (evt) => process(evt.data);
     port = self;
+  } else {
+    // Node.js worker-thread
+    import(/* webpackIgnore: true */ 'node:worker_threads').then((module) => {
+      port = module.parentPort;
+      port.on('message', process);
+    });
   }
 
   function process(msg) {
@@ -7297,14 +7175,6 @@ var structureAcquisition = mixin({
                 break;
               case StructurePurpose.AbortSignal:
                 this.use(abortSignal);
-                break;
-              case StructurePurpose.Reader:
-                this.use(reader);
-                this.use(readerConversion);
-                break;
-              case StructurePurpose.Writer:
-                this.use(writer);
-                this.use(writerConversion);
                 break;
               case StructurePurpose.File:
                 this.use(file);
@@ -11208,14 +11078,12 @@ var mixins = /*#__PURE__*/Object.freeze({
   StructurePointer: pointer,
   StructurePrimitive: primitive,
   StructurePromise: promise,
-  StructureReader: reader,
   StructureSlice: slice,
   StructureStruct: struct,
   StructureStructLike: structLike,
   StructureUnion: union,
   StructureVariadicStruct: variadicStruct,
   StructureVector: vector,
-  StructureWriter: writer,
   SyscallClockResGet: clockResGet,
   SyscallClockTimeGet: clockTimeGet,
   SyscallCopyInt: copyInt,
@@ -11669,13 +11537,13 @@ function parseBinary(binary) {
         return { type, imports };
       }
       case SectionType.Export: {
-        const exports = readArray(() => {
+        const exports$1 = readArray(() => {
           const name = readString();
           const type = readU8();
           const index = readU32Leb128();
           return { name, type, index };
         });
-        return { type, exports };
+        return { type, exports: exports$1 };
       }
       case SectionType.Function: {
         const types = readArray(readU32Leb128);
@@ -12714,7 +12582,7 @@ async function transpile(srcPath, options) {
       binarySource = await wasmLoader(srcPath, dv);
     }
   }
-  const { code, exports, structures } = generateCode(definition, {
+  const { code, exports: exports$1, structures } = generateCode(definition, {
     runtimeURL,
     binarySource,
     topLevelAwait,
@@ -12722,7 +12590,7 @@ async function transpile(srcPath, options) {
     moduleOptions,
     mixinPaths,
   });
-  return { code, exports, structures, sourcePaths };
+  return { code, exports: exports$1, structures, sourcePaths };
 }
 
 function embed(path, dv) {

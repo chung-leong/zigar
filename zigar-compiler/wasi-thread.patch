@@ -1,6 +1,6 @@
-diff -ruN heap/WasmAllocator.zig heap/WasmAllocator.zig
---- heap/WasmAllocator.zig	2025-05-23 06:31:41.000000000 +0200
-+++ heap/WasmAllocator.zig	2025-09-15 21:57:14.425214241 +0200
+diff -ruN "heap/WasmAllocator.zig" heap/WasmAllocator.zig
+--- "heap/WasmAllocator.zig"	2025-10-11 05:53:21.000000000 +0200
++++ heap/WasmAllocator.zig	2025-11-10 14:13:38.110576374 +0100
 @@ -10,9 +10,6 @@
      if (!builtin.target.cpu.arch.isWasm()) {
          @compileError("only available for wasm32 arch");
@@ -31,19 +31,19 @@ diff -ruN heap/WasmAllocator.zig heap/WasmAllocator.zig
      // Make room for the freelist next pointer.
      const actual_len = @max(len +| @sizeOf(usize), alignment.toByteUnits());
      const slot_size = math.ceilPowerOfTwo(usize, actual_len) catch return null;
-@@ -90,6 +96,8 @@
- ) bool {
+@@ -127,6 +133,8 @@
+ ) void {
      _ = ctx;
      _ = return_address;
 +    mutex.lock();
 +    defer mutex.unlock();
-     // We don't want to move anything from one size class to another, but we
-     // can recover bytes in between powers of two.
      const buf_align = alignment.toByteUnits();
-diff -ruN std.zig std.zig
---- std.zig	2025-05-23 06:31:41.000000000 +0200
-+++ std.zig	2025-09-15 21:58:50.244676094 +0200
-@@ -106,6 +106,8 @@
+     const actual_len = @max(buf.len + @sizeOf(usize), buf_align);
+     const slot_size = math.ceilPowerOfTwoAssert(usize, actual_len);
+diff -ruN "std.zig" std.zig
+--- "std.zig"	2025-10-11 05:53:21.000000000 +0200
++++ std.zig	2025-11-10 14:02:42.144567439 +0100
+@@ -119,6 +119,8 @@
  
      /// Function used to implement `std.fs.cwd` for WASI.
      wasiCwd: fn () os.wasi.fd_t = fs.defaultWasiCwd,
@@ -52,9 +52,9 @@ diff -ruN std.zig std.zig
  
      /// The current log level.
      log_level: log.Level = log.default_level,
-diff -ruN Thread/Mutex.zig Thread/Mutex.zig
---- Thread/Mutex.zig	2025-05-23 06:31:41.000000000 +0200
-+++ Thread/Mutex.zig	2025-09-15 21:58:23.315443273 +0200
+diff -ruN "Thread/Mutex.zig" Thread/Mutex.zig
+--- "Thread/Mutex.zig"	2025-10-11 05:53:21.000000000 +0200
++++ Thread/Mutex.zig	2025-11-10 14:03:10.168932706 +0100
 @@ -51,6 +51,8 @@
      WindowsImpl
  else if (builtin.os.tag.isDarwin())
@@ -142,10 +142,10 @@ diff -ruN Thread/Mutex.zig Thread/Mutex.zig
  test "smoke test" {
      var mutex = Mutex{};
  
-diff -ruN Thread.zig Thread.zig
---- Thread.zig	2025-05-23 06:31:41.000000000 +0200
-+++ Thread.zig	2025-09-15 22:00:06.480869901 +0200
-@@ -1022,14 +1022,33 @@
+diff -ruN "Thread.zig" Thread.zig
+--- "Thread.zig"	2025-10-11 05:53:21.000000000 +0200
++++ Thread.zig	2025-11-10 14:10:39.916701350 +0100
+@@ -1037,14 +1037,38 @@
  
      comptime {
          if (!builtin.single_threaded) {
@@ -161,7 +161,12 @@ diff -ruN Thread.zig Thread.zig
      }
  
 +    /// Set the stack pointer then call wasi_thread_start
-+    fn wasi_thread_start_debug(_: i32, arg: *Instance) callconv(.naked) void {
++    fn wasi_thread_start_debug(_: i32, _: *Instance) callconv(.naked) void {
++        const arg = asm (
++            \\ local.get 1
++            \\ local.set %[ret]
++            : [ret] "=r" (-> *Instance)
++        );
 +        __set_stack_pointer(arg.thread.memory.ptr + arg.stack_offset);
 +        asm volatile (
 +            \\ local.get 0
@@ -181,7 +186,7 @@ diff -ruN Thread.zig Thread.zig
          __wasm_init_tls(arg.thread.memory.ptr + arg.tls_offset);
          @atomicStore(u32, &WasiThreadImpl.tls_thread_id, @intCast(tid), .seq_cst);
  
-@@ -1059,12 +1078,10 @@
+@@ -1074,12 +1098,10 @@
              },
              .completed => unreachable,
              .detached => {

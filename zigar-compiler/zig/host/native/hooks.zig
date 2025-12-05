@@ -2279,19 +2279,18 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         fn StdHook(comptime Func: type) type {
             const params = @typeInfo(Func).@"fn".params;
-            var new_params: [params.len - 1]std.builtin.Type.Fn.Param = undefined;
-            for (&new_params, 0..) |*ptr, index| ptr.* = params[index];
-            const RPtrT = params[params.len - 1].type.?;
+            const param_count = params.len - 1;
+            var param_types: [param_count]type = undefined;
+            var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
+            inline for (params, 0..) |param, i| {
+                if (i < param_count) {
+                    param_types[i] = param.type.?;
+                    param_attrs[i] = .{ .@"noalias" = param.is_noalias };
+                }
+            }
+            const RPtrT = params[param_count].type.?;
             const RT = @typeInfo(RPtrT).pointer.child;
-            return @Type(.{
-                .@"fn" = .{
-                    .params = &new_params,
-                    .return_type = RT,
-                    .is_generic = false,
-                    .is_var_args = false,
-                    .calling_convention = .c,
-                },
-            });
+            return @Fn(&param_types, &param_attrs, RT, .{ .@"callconv" = .c });
         }
 
         fn saveError(result: anytype) @TypeOf(result) {
@@ -2487,7 +2486,7 @@ const RedirectedFile = struct {
 
     pub const signature = 0x4C49_4652_4147_495A;
     pub const BufferMode = enum { read, write };
-    pub var list = std.ArrayList(*@This()).init(c_allocator);
+    pub var list: std.ArrayList(*@This()) = .{};
 
     pub fn cast(s: *std.c.FILE) ?*@This() {
         if (!std.mem.isAligned(@intFromPtr(s), @alignOf(u64))) return null;
@@ -3016,7 +3015,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
                 .fd = fd,
                 .flags = oflags,
             };
-            try RedirectedFile.list.append(file);
+            try RedirectedFile.list.append(c_allocator, file);
             return @ptrCast(file);
         }
 
@@ -4690,8 +4689,8 @@ pub fn Win32Substitute(comptime redirector: type) type {
             buffer: ?[]u8,
         };
         var mutex: std.Thread.Mutex = .{};
-        var temp_handle_list: std.ArrayListUnmanaged(TemporaryHandleInfo) = .empty;
-        var unseekable_descriptor_list: std.ArrayListUnmanaged(c_int) = .empty;
+        var temp_handle_list: std.ArrayList(TemporaryHandleInfo) = .empty;
+        var unseekable_descriptor_list: std.ArrayList(c_int) = .empty;
 
         const fd_format_string = "\\\\??\\UNC\\dev\\fd\\{d}";
         const fd_path_prefix = fd_format_string[0 .. fd_format_string.len - 3];
@@ -5043,29 +5042,20 @@ pub const HandlerVTable = init: {
         }
         break :count count;
     };
-    var fields: [len]std.builtin.Type.StructField = undefined;
+    var field_names: [len][]const u8 = undefined;
+    var field_types: [len]type = undefined;
+    var field_attrs: [len]std.builtin.Type.StructField.Attributes = undefined;
     var index: usize = 0;
     for (std.meta.declarations(redirector)) |decl| {
         const T = @TypeOf(@field(redirector, decl.name));
         if (@typeInfo(T) == .@"fn") {
-            fields[index] = .{
-                .name = decl.name,
-                .type = *const T,
-                .default_value_ptr = null,
-                .is_comptime = false,
-                .alignment = @alignOf(T),
-            };
+            field_names[index] = decl.name;
+            field_types[index] = *const T;
+            field_attrs[index] = .{};
             index += 1;
         }
     }
-    break :init @Type(.{
-        .@"struct" = .{
-            .layout = .@"extern",
-            .fields = &fields,
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
+    break :init @Struct(.@"extern", null, &field_names, &field_types, &field_attrs);
 };
 
 pub fn getHandlerVtable(comptime Host: type) HandlerVTable {
@@ -5081,6 +5071,7 @@ pub fn getHandlerVtable(comptime Host: type) HandlerVTable {
 }
 
 pub fn getHookTable(comptime Host: type, comptime redirect_io: bool) std.StaticStringMap(Entry) {
+    @setEvalBranchQuota(1000000);
     const redirector = SyscallRedirector(Host);
     const list = if (redirect_io) switch (os) {
         .linux => .{

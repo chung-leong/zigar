@@ -48,7 +48,7 @@ pub fn destroy(allocator: std.mem.Allocator, fn_ptr: *const anyopaque) void {
             defer protect(true);
             header_ptr.signature = 0;
             const binding_ptr: [*]u8 = @ptrCast(header_ptr);
-            const alignment: std.mem.Alignment = @enumFromInt(@ctz(header_ptr.alignment));
+            const alignment: std.mem.Alignment = @enumFromInt(header_ptr.alignment);
             allocator.rawFree(binding_ptr[0..header_ptr.len], alignment, 0);
         }
     }
@@ -190,12 +190,13 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
     const arg_mapping = getArgumentMapping(FT, CT);
     const ctx_mapping = getContextMapping(FT, CT);
     const BFArgsTuple = std.meta.ArgsTuple(BFT);
-    const ArgsTuple = init: {
-        // std.meta.ArgsTuple() fails when anytype is in the argument list
-        const params = @typeInfo(FT).@"fn".params;
-        var tuple_fields: [params.len]std.builtin.Type.StructField = undefined;
-        inline for (params, 0..) |param, index| {
-            const name = std.fmt.comptimePrint("{d}", .{index});
+    const ArgsStruct = init: {
+        const f = @typeInfo(FT).@"fn";
+        var field_names: [f.params.len][]const u8 = undefined;
+        var field_types: [f.params.len]type = undefined;
+        var field_attrs: [f.params.len]std.builtin.Type.StructField.Attributes = undefined;
+        inline for (f.params, 0..) |param, i| {
+            const name = std.fmt.comptimePrint("{d}", .{i});
             const var_type: ?type, const var_def_ptr: ?*const anyopaque = find: {
                 // find the variable bound to this param, if any
                 inline for (ctx_mapping) |m| {
@@ -209,22 +210,14 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
                     }
                 } else break :find .{ null, null };
             };
-            tuple_fields[index] = .{
-                .name = name,
-                .type = var_type orelse (param.type orelse unreachable),
+            field_names[i] = name;
+            field_types[i] = var_type orelse param.type.?;
+            field_attrs[i] = .{
+                .@"comptime" = var_def_ptr != null,
                 .default_value_ptr = var_def_ptr,
-                .is_comptime = var_def_ptr != null,
-                .alignment = 0,
             };
         }
-        break :init @Type(.{
-            .@"struct" = .{
-                .is_tuple = true,
-                .layout = .auto,
-                .decls = &.{},
-                .fields = &tuple_fields,
-            },
-        });
+        break :init @Struct(.auto, null, &field_names, &field_types, &field_attrs);
     };
 
     return struct {
@@ -248,7 +241,15 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
                 .pointer => fn_address_index + @sizeOf(usize),
                 else => unreachable,
             };
-            const max_align = @max(@alignOf(Header), @alignOf(CT));
+            const max_align: std.mem.Alignment = switch (@max(@alignOf(Header), @alignOf(CT))) {
+                1 => .@"1",
+                2 => .@"2",
+                4 => .@"4",
+                8 => .@"8",
+                16 => .@"16",
+                32 => .@"32",
+                else => .@"64",
+            };
             const new_bytes = try allocator.alignedAlloc(u8, max_align, binding_len);
             const header_ptr: *Header = @ptrCast(@alignCast(new_bytes.ptr));
             const instr_slice: []u8 = new_bytes[instr_index .. instr_index + instr_len];
@@ -257,7 +258,7 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
             header_ptr.* = .{
                 .ctx_offset = @intCast(ctx_index - instr_index),
                 .len = @intCast(binding_len),
-                .alignment = @intCast(max_align),
+                .alignment = @intFromEnum(max_align),
             };
             const actual_instr_len = try encodeInstructions(instr_slice, @intFromPtr(ctx_ptr), func);
             assert(instr_len == actual_instr_len);
@@ -270,7 +271,7 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
         pub fn getComptime(comptime func: anytype, comptime vars: anytype) *const BFT {
             const ns = struct {
                 inline fn call(bf_args: BFArgsTuple) @typeInfo(BFT).@"fn".return_type.? {
-                    var args: ArgsTuple = undefined;
+                    var args: ArgsStruct = undefined;
                     inline for (arg_mapping) |m| @field(args, m.dest) = @field(bf_args, m.src);
                     inline for (ctx_mapping) |m| @field(args, m.dest) = @field(vars, m.src);
                     return @call(.auto, func, args);
@@ -290,7 +291,7 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
                     // insert nop x 3 so we can find the displacement for target in the instruction stream
                     insertNOPs(&target);
                     const ctx_ptr: *const CT = @ptrFromInt(target[0]);
-                    var args: ArgsTuple = undefined;
+                    var args: std.meta.ArgsTuple(@TypeOf(func)) = undefined;
                     inline for (arg_mapping) |m| @field(args, m.dest) = @field(bf_args, m.src);
                     inline for (ctx_mapping) |m| @field(args, m.dest) = @field(ctx_ptr.*, m.src);
                     switch (@typeInfo(@TypeOf(func))) {
@@ -362,12 +363,6 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
             var encoder: InstructionEncoder = .{ .output = output };
             switch (builtin.target.cpu.arch) {
                 .x86_64 => {
-                    // mov rax, address
-                    encoder.encode(.{
-                        .rex = .{},
-                        .opcode = .@"mov ax imm32/64",
-                        .imm64 = address,
-                    });
                     if (pos.stack_align_mask) |mask| {
                         // mov r11, rsp
                         encoder.encode(.{
@@ -390,20 +385,26 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
                             .imm8 = @bitCast(@as(i8, @truncate(mask))),
                         });
                     }
-                    // mov [rsp + po.offset], rax
+                    // mov r10, address
+                    encoder.encode(.{
+                        .rex = .{ .b = 1 },
+                        .opcode = .@"mov dx imm32/64",
+                        .imm64 = address,
+                    });
+                    // mov [rsp + po.offset], r10
                     if (pos.offset >= std.math.minInt(i8) and pos.offset <= std.math.maxInt(i8)) {
                         encoder.encode(.{
-                            .rex = .{},
+                            .rex = .{ .r = 1 },
                             .opcode = .@"mov r/m r",
-                            .mod_rm = .{ .rm = 4, .mod = 1, .reg = 0 },
+                            .mod_rm = .{ .rm = 4, .mod = 1, .reg = 2 },
                             .sib = .{ .base = 4, .index = 4, .scale = 0 },
                             .disp8 = @truncate(pos.offset),
                         });
                     } else {
                         encoder.encode(.{
-                            .rex = .{},
+                            .rex = .{ .r = 1 },
                             .opcode = .@"mov r/m r",
-                            .mod_rm = .{ .rm = 4, .mod = 2, .reg = 0 },
+                            .mod_rm = .{ .rm = 4, .mod = 2, .reg = 2 },
                             .sib = .{ .base = 4, .index = 4, .scale = 0 },
                             .disp32 = @truncate(pos.offset),
                         });
@@ -416,17 +417,17 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
                             .mod_rm = .{ .rm = 4, .mod = 3, .reg = 3 },
                         });
                     }
-                    // mov rax, trampoline_address
+                    // mov r10, trampoline_address
                     encoder.encode(.{
-                        .rex = .{},
-                        .opcode = .@"mov ax imm32/64",
+                        .rex = .{ .b = 1 },
+                        .opcode = .@"mov dx imm32/64",
                         .imm64 = trampoline_address,
                     });
-                    // jmp [rax]
+                    // jmp [r10]
                     encoder.encode(.{
-                        .rex = .{},
+                        .rex = .{ .b = 1 },
                         .opcode = .@"jmp/call/etc r/m",
-                        .mod_rm = .{ .reg = 4, .mod = 3, .rm = 0 },
+                        .mod_rm = .{ .rm = 2, .mod = 3, .reg = 4 },
                     });
                 },
                 .aarch64 => {
@@ -1039,12 +1040,15 @@ fn Binding(comptime T: type, comptime CT: type, comptime cc: ?std.builtin.Callin
 
 /// Return type of bindWithCallConv(), createWithCallConv(), etc.
 pub fn BoundFnWithCallConv(comptime T: type, comptime CT: type, cc: ?std.builtin.CallingConvention) type {
+    @setEvalBranchQuota(1000000);
     const FT = FnType(T);
     const f = @typeInfo(FT).@"fn";
     const params = @typeInfo(FT).@"fn".params;
     const fields = @typeInfo(CT).@"struct".fields;
     const context_mapping = getContextMapping(FT, CT);
-    var new_params: [params.len - fields.len]std.builtin.Type.Fn.Param = undefined;
+    const param_count = params.len - fields.len;
+    var param_types: [param_count]type = undefined;
+    var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
     var index = 0;
     for (params, 0..) |param, number| {
         const name = std.fmt.comptimePrint("{d}", .{number});
@@ -1052,15 +1056,14 @@ pub fn BoundFnWithCallConv(comptime T: type, comptime CT: type, cc: ?std.builtin
             if (param.type == null) {
                 @compileError("A variable must be bound to an 'anytype' parameter");
             }
-            new_params[index] = param;
+            param_types[index] = param.type.?;
+            param_attrs[index] = .{ .@"noalias" = param.is_noalias };
             index += 1;
         }
     }
-    var new_f = f;
-    new_f.params = &new_params;
-    new_f.is_generic = false;
-    if (cc) |c| new_f.calling_convention = c;
-    return @Type(.{ .@"fn" = new_f });
+    return @Fn(&param_types, &param_attrs, f.return_type.?, .{
+        .@"callconv" = cc orelse f.calling_convention,
+    });
 }
 
 /// Return type of bind(), create(), etc.

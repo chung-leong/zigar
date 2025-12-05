@@ -54,7 +54,7 @@ export function addTests(importModule, options) {
       expect(b.Type1).to.equal(undefined);
       expect(b.Type2).to.equal(undefined);
       const [ line ] = await capture(() => print());
-      expect(line).to.equal('in-struct.StructA{ .Type1 = u8, .Type2 = u16 }');
+      expect(line).to.equal('.{ .Type1 = u8, .Type2 = u16 }');
     })
     it('should handle type in packed struct', async function() {
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;

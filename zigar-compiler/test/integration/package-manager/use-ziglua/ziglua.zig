@@ -1,12 +1,13 @@
 const std = @import("std");
-const lua_wrapper = @import("lua_wrapper");
+
+const zlua = @import("zlua");
 
 pub fn run(code: [:0]const u8) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
 
-    var lua = try lua_wrapper.Lua.init(allocator);
+    var lua = try zlua.Lua.init(allocator);
     defer lua.deinit();
 
     lua.openLibs();

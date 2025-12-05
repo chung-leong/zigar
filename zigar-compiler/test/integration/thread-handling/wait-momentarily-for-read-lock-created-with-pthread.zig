@@ -30,7 +30,7 @@ pub fn unlock() !void {
 fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 1 acquiring read lock\n", .{});
     var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
+    _ = c.clock_gettime(c.CLOCK_REALTIME_COARSE, &time);
     add(&time, 10 * 1000000);
     const retval = c.pthread_rwlock_timedrdlock(&rwlock, &time);
     if (retval == 0) {
@@ -45,7 +45,7 @@ fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
 fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 2 acquiring read lock\n", .{});
     var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(c.CLOCK_REALTIME, &time);
+    _ = c.clock_gettime(c.CLOCK_REALTIME_COARSE, &time);
     add(&time, 750 * 1000000);
     const retval = c.pthread_rwlock_timedrdlock(&rwlock, &time);
     if (retval == 0) {

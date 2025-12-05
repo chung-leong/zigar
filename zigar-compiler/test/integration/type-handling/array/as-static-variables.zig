@@ -9,7 +9,7 @@ pub const float64_array4x4: [4][4]f64 = .{
 };
 
 pub fn print() void {
-    std.debug.print("{d}", .{int32_array4});
+    std.debug.print("{any}", .{int32_array4});
 }
 
 pub var string: [5]u8 = .{ 'H', 'e', 'l', 'l', 'o' };

@@ -75,7 +75,7 @@ export function addTests(importModule, options) {
       const [ line2 ] = await capture(() => {
         printArray(f2);
       });
-      expect(line2).to.equal('{ 1e0, 2e0, 3e0, 4e0 }');
+      expect(line2).to.equal('{ 1, 2, 3, 4 }');
     })
     it('should correctly pass abort signal as argument', async function() {
       const { call } = await importTest('abort-signal', { multithreaded: true });

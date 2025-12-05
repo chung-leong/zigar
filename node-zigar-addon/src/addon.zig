@@ -45,8 +45,8 @@ const ModuleHost = struct {
     hooks_installed: bool = false,
     syscall_trap_installed: bool = false,
     syscall_trap_count: usize = 0,
-    thread_syscall_trap_mutex: std.Thread.Mutex = undefined,
-    thread_syscall_trap_switches: std.ArrayList(*bool) = undefined,
+    thread_syscall_trap_list: std.ArrayList(*bool) = .{},
+    thread_syscall_trap_list_mutex: std.Thread.Mutex = .{},
     env_variable_deferred: Deferred = .{},
     env_variable_list: ?[]?[*:0]const u8 = null,
     env_variable_bytes: ?[]const u8 = null,
@@ -113,7 +113,7 @@ const ModuleHost = struct {
     threadlocal var main_thread_syscall_trap_count: usize = 0;
     threadlocal var in_main_thread: bool = undefined;
 
-    var host_list: std.ArrayList(*@This()) = .init(c_allocator);
+    var host_list: std.ArrayList(*@This()) = .{};
     var host_list_mutex: std.Thread.Mutex = .{};
 
     var module_count: i32 = 0;
@@ -126,7 +126,7 @@ const ModuleHost = struct {
     fn register(self: *@This()) !void {
         host_list_mutex.lock();
         defer host_list_mutex.unlock();
-        try host_list.append(self);
+        try host_list.append(c_allocator, self);
     }
 
     fn unregister(self: *@This()) void {
@@ -164,11 +164,7 @@ const ModuleHost = struct {
         // create the environment
         const js_env = try env.callFunction(try env.getNull(), create_env, &.{});
         const self = try c_allocator.create(@This());
-        self.* = .{
-            .env = env,
-            .thread_syscall_trap_mutex = .{},
-            .thread_syscall_trap_switches = .init(c_allocator),
-        };
+        self.* = .{ .env = env };
         defer self.release();
         try self.register();
         // import functions from the environment
@@ -202,18 +198,12 @@ const ModuleHost = struct {
             else => unreachable,
         };
         // decompress JS
-        var input: std.io.FixedBufferStream([]const u8) = .{
-            .buffer = @embedFile(js_file_name),
-            .pos = 0,
-        };
+        var input: std.Io.Reader = .fixed(@embedFile(js_file_name));
+        var decompression_buffer: [std.compress.flate.max_window_len]u8 = undefined;
+        var decompressor: std.compress.flate.Decompress = .init(&input, .gzip, &decompression_buffer);
         var buffer: [512 * 1024]u8 = undefined;
-        var output: std.io.FixedBufferStream([]u8) = .{
-            .buffer = &buffer,
-            .pos = 0,
-        };
-        try std.compress.gzip.decompress(input.reader(), output.writer());
-        const end_index: usize = @truncate(try output.getPos());
-        const js_bytes = buffer[0..end_index];
+        const len = try decompressor.reader.readSliceShort(&buffer);
+        const js_bytes = buffer[0..len];
         const js_str = try env.createStringUtf8(js_bytes);
         return try env.runScript(js_str);
     }
@@ -356,9 +346,9 @@ const ModuleHost = struct {
         in_main_thread = false;
         if (self.syscall_trap_installed) {
             try redirection_controller.installSyscallTrap(&trapping_syscalls);
-            self.thread_syscall_trap_mutex.lock();
-            defer self.thread_syscall_trap_mutex.unlock();
-            try self.thread_syscall_trap_switches.append(&trapping_syscalls);
+            self.thread_syscall_trap_list_mutex.lock();
+            defer self.thread_syscall_trap_list_mutex.unlock();
+            try self.thread_syscall_trap_list.append(c_allocator, &trapping_syscalls);
             if (self.syscall_trap_count > 0) {
                 trapping_syscalls = true;
             }
@@ -377,12 +367,12 @@ const ModuleHost = struct {
 
     pub fn deinitializeThread(self: *@This()) !void {
         if (self.syscall_trap_installed) {
-            self.thread_syscall_trap_mutex.lock();
-            defer self.thread_syscall_trap_mutex.unlock();
-            const index = for (self.thread_syscall_trap_switches.items, 0..) |ptr, i| {
+            self.thread_syscall_trap_list_mutex.lock();
+            defer self.thread_syscall_trap_list_mutex.unlock();
+            const index = for (self.thread_syscall_trap_list.items, 0..) |ptr, i| {
                 if (ptr == &trapping_syscalls) break i;
             } else return;
-            _ = self.thread_syscall_trap_switches.swapRemove(index);
+            _ = self.thread_syscall_trap_list.swapRemove(index);
         }
     }
 
@@ -725,9 +715,9 @@ const ModuleHost = struct {
             main_thread_syscall_trap_count += 1;
             if (main_thread_syscall_trap_count == 1) trapping_syscalls = true;
             // turn on all syscall traps in threads belonging to this module
-            self.thread_syscall_trap_mutex.lock();
-            defer self.thread_syscall_trap_mutex.unlock();
-            for (self.thread_syscall_trap_switches.items) |ptr| ptr.* = true;
+            self.thread_syscall_trap_list_mutex.lock();
+            defer self.thread_syscall_trap_list_mutex.unlock();
+            for (self.thread_syscall_trap_list.items) |ptr| ptr.* = true;
         }
     }
 
@@ -737,13 +727,14 @@ const ModuleHost = struct {
         if (self.syscall_trap_count == 0) {
             main_thread_syscall_trap_count -= 1;
             if (main_thread_syscall_trap_count == 0) trapping_syscalls = false;
-            self.thread_syscall_trap_mutex.lock();
-            defer self.thread_syscall_trap_mutex.unlock();
-            for (self.thread_syscall_trap_switches.items) |ptr| ptr.* = false;
+            self.thread_syscall_trap_list_mutex.lock();
+            defer self.thread_syscall_trap_list_mutex.unlock();
+            for (self.thread_syscall_trap_list.items) |ptr| ptr.* = false;
         }
     }
 
     fn exportFunctionsToModule(self: *@This()) !void {
+        @setEvalBranchQuota(2000000);
         const module = self.module orelse return error.NoLoadedModule;
         inline for (std.meta.fields(Module.Imports)) |field| {
             const name_c = comptime camelize(field.name);
@@ -756,24 +747,17 @@ const ModuleHost = struct {
             };
             const extra = if (Payload == void or Payload == E) 0 else 1;
             const NewArgs = comptime define: {
-                const fields = std.meta.fields(Args);
-                var new_fields: [fields.len + extra]std.builtin.Type.StructField = undefined;
-                var new_args_info = @typeInfo(Args);
-                new_args_info.@"struct".fields = &new_fields;
-                for (&new_fields, 0..) |*field_ptr, i| {
-                    const Arg = switch (i) {
+                const args_info = @typeInfo(Args).@"struct";
+                const fields = args_info.fields;
+                const arg_count = fields.len + extra;
+                var field_types: [arg_count]type = undefined;
+                for (0..arg_count) |i| {
+                    field_types[i] = switch (i) {
                         0 => *Module.Host,
-                        else => if (extra == 1 and i == new_fields.len - 1) *Payload else fields[i].type,
-                    };
-                    field_ptr.* = .{
-                        .name = std.fmt.comptimePrint("{d}", .{i}),
-                        .type = Arg,
-                        .default_value_ptr = null,
-                        .is_comptime = false,
-                        .alignment = @alignOf(Arg),
+                        else => if (extra == 1 and i == arg_count - 1) *Payload else fields[i].type,
                     };
                 }
-                break :define @Type(new_args_info);
+                break :define @Tuple(&field_types);
             };
             const ns = struct {
                 fn call(new_args: NewArgs) E {
@@ -1599,13 +1583,12 @@ const ModuleHost = struct {
 const Futex = struct {
     const initial_value = 0xffff_ffff;
 
-    value: std.atomic.Value(u32),
+    value: std.atomic.Value(u32) = .init(initial_value),
     handle: usize,
     timeout: usize = 0,
 
     pub fn init(self: *@This()) usize {
-        self.value = std.atomic.Value(u32).init(initial_value);
-        self.handle = @intFromPtr(self);
+        self.* = .{ .handle = @intFromPtr(self) };
         return self.handle;
     }
 

@@ -72,12 +72,6 @@ export default mixin({
             signal ||= this.createSignal(structure, options?.['signal']);
             arg = signal;
             break;
-          case StructurePurpose.Reader:
-            arg = this.createReader(argList[srcIndex++]);
-            break;
-          case StructurePurpose.Writer:
-            arg = this.createWriter(argList[srcIndex++]);
-            break;
           case StructurePurpose.File:
             arg = this.createFile(argList[srcIndex++]);
             break;

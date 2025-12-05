@@ -27,11 +27,7 @@ export function addTests(importModule, options) {
     it('should print vector arguments', async function() {
       const { print } = await importTest('as-function-parameters');
       const lines = await capture(() => print([ 1.1, 2.2, 3.3, 4.4 ]));
-      if (compilerVersion === '0.11.0') {
-        expect(lines).to.eql([ '{ 1.1e+00, 2.2e+00, 3.3e+00, 4.4e+00 }' ]);
-      } else {
-        expect(lines).to.eql([ '{ 1.1e0, 2.2e0, 3.3e0, 4.4e0 }' ]);
-      }
+      expect(lines).to.eql([ '{ 1.1, 2.2, 3.3, 4.4 }' ]);
     })
     it('should return vector', async function() {
       const { default: module } = await importTest('as-return-value');
@@ -62,10 +58,10 @@ export function addTests(importModule, options) {
         vector2: [ 5, 6, 7, 8 ],
       });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-struct.StructA{ .vector1 = { 10, 20, 30, 40 }, .vector2 = { 11, 21, 31, 41 } }');
+      expect(before).to.equal('.{ .vector1 = { 10, 20, 30, 40 }, .vector2 = { 11, 21, 31, 41 } }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-struct.StructA{ .vector1 = { 1, 2, 3, 4 }, .vector2 = { 5, 6, 7, 8 } }');
+      expect(after).to.equal('.{ .vector1 = { 1, 2, 3, 4 }, .vector2 = { 5, 6, 7, 8 } }');
     })
     it('should handle vector in packed struct', async function() {
       const { default: module } = await importTest('in-packed-struct');
@@ -78,7 +74,7 @@ export function addTests(importModule, options) {
       expect(b.number).to.to.equal(500);
       expect([ ...b.vector ]).to.to.eql([ 1, 2, 3, 4 ]);
       const [ line ] = await capture(() => print(b));
-      expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .vector = { 1, 2, 3, 4 } }');
+      expect(line).to.equal('.{ .number = 500, .vector = { 1, 2, 3, 4 } }');
     })
     it('should handle vector in bare union', async function() {
       const { default: module, UnionA } = await importTest('in-bare-union');

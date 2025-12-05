@@ -23,13 +23,17 @@ async function importModule(path, options) {
     omitFunctions,
     omitVariables,
     useRedirection = true,
+    useLLVM = null,
   } = options;
   currentModule?.__zigar?.abandon();
-  const query = `optimize=${optimize}&`
+  let query = `optimize=${optimize}&`
               + `multithreaded=${multithreaded ? 1 : 0}&`
               + `omit-functions=${omitFunctions ? 1 : 0}&`
               + `omit-variables=${omitVariables ? 1 : 0}&`
               + `use-redirection=${useRedirection ? 1 : 0}&`;
+  if (useLLVM !== null) {
+    query += `use-llvm=${useRedirection ? 1 : 0}&`;
+  }
   const module = await import(path + '?' + query);
   if (!options.preserve) {
     currentModule = module;

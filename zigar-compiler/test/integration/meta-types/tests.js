@@ -7,7 +7,7 @@ export function addTests(importModule, options) {
       const url = new URL(`./${name}.zig`, import.meta.url).href;
       return importModule(url, options);
   };
-  describe('Metadata', function() {
+  describe('Meta types', function() {
     this.timeout(0);
     it('should make fields string, typed array, or object', async function() {
       const { object } = await importTest('special-fields');

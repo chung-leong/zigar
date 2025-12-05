@@ -2,9 +2,9 @@
     .name = .ziglua_example,
     .version = "0.0.0",
     .dependencies = .{
-        .lua_wrapper = .{
-            .url = "https://github.com/natecraddock/ziglua/archive/7bfb3c2b87220cdc89ef01cc99a200dad7a28e50.zip",
-            .hash = "lua_wrapper-0.1.0-OyMC27fOBAAU3E2ueB-EWGSgsuCFQZL83pT0nQJ1ufOI",
+        .zlua = .{
+            .url = "https://github.com/natecraddock/ziglua/archive/refs/tags/0.5.0.zip",
+            .hash = "zlua-0.1.0-hGRpC444BQDrHc6QhcEeGh1eWMwFbl-c21vlGPWjKBfQ",
         },
     },
     .paths = .{

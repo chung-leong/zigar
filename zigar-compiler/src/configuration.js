@@ -28,6 +28,10 @@ export const optionsForCompile = {
     type: 'boolean',
     title: 'Link in C standard library',
   },
+  useLLVM: {
+    type: 'boolean',
+    title: 'Use LLVM as compiler backend',
+  },
   useRedirection: {
     type: 'boolean',
     title: 'Redirect IO operations to JavaScript handlers',

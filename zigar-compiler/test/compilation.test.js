@@ -345,6 +345,18 @@ describe('Compilation', function() {
       const names = await readdir(buildDir);
       expect(names).to.have.lengthOf(0);
     })
+    it('should use LLVM as compiler backend', async function() {
+      const srcPath = absolute('./zig-samples/basic/backend-llvm.zig');
+      const options = { optimize: 'Debug', useLLVM: true };
+      const modPath = getModuleCachePath(srcPath, options);
+      await expect(compile(srcPath, modPath, options)).to.eventually.be.fulfilled;
+    })
+    it('should use self-hosted backend', async function() {
+      const srcPath = absolute('./zig-samples/basic/backend-self-hosted.zig');
+      const options = { optimize: 'Debug', arch: 'x64', platform: 'linux', useLLVM: false };
+      const modPath = getModuleCachePath(srcPath, options);
+      await expect(compile(srcPath, modPath, options)).to.eventually.be.fulfilled;
+    })
   })
 })
 

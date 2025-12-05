@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const zigar = @import("zigar");
 
@@ -21,12 +22,25 @@ pub fn spawn() !void {
     if (c.pthread_detach(thread_id) != 0) return error.CannotDetachThread;
 }
 
+var destructor_called: usize = 0;
+
+pub fn getDestruction() usize {
+    return destructor_called;
+}
+
 fn destructor1(ptr: ?*anyopaque) callconv(.c) void {
-    std.debug.print("Destructor 1 called: {?}\n", .{ptr});
+    destructor_called += 1;
+    // can't output during clean-up in MacOS
+    if (!builtin.target.os.tag.isDarwin()) {
+        std.debug.print("Destructor 1 called: {?}\n", .{ptr});
+    }
 }
 
 fn destructor2(ptr: ?*anyopaque) callconv(.c) void {
-    std.debug.print("Destructor 2 called: {?}\n", .{ptr});
+    destructor_called += 1;
+    if (!builtin.target.os.tag.isDarwin()) {
+        std.debug.print("Destructor 2 called: {?}\n", .{ptr});
+    }
 }
 
 fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {

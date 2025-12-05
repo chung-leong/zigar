@@ -291,7 +291,7 @@ describe('Streams', function() {
         const blob = new Blob([ new Uint8Array(128) ]);
         const stream = new BlobReader(blob);
         const chunk = await stream.read(32);
-        expect(chunk).to.have.lengthOf(32);
+        expect(chunk).to.have.lengthOf(32);       
       })
     })
     describe('readnb', function() {
@@ -341,8 +341,13 @@ describe('Streams', function() {
         const blob = new Blob([ new Uint8Array(128) ]);
         const stream = new BlobReader(blob);
         const chunk = await stream.read(28);
+        expect(chunk).to.have.lengthOf(28);
         const amount = stream.poll();
         expect(amount).to.equal(100);
+        const remaining = await stream.read(100);
+        expect(remaining).to.have.lengthOf(100);
+        const amountAfter = await stream.poll();
+        expect(amountAfter).to.equal(0);
       })
     })
     describe('valueOf', function() {

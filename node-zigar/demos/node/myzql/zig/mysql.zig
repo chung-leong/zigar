@@ -61,7 +61,7 @@ const worker = struct {
 
             pub fn init(prep_res: PrepareResult, params: anytype) !@This() {
                 const stmt = try prep_res.expect(.stmt);
-                const query_res = try client.executeRows(&stmt, params);
+                const query_res = try client.executeRows(allocator, &stmt, params);
                 const rows = try query_res.expect(.rows);
                 return .{ .rows = rows };
             }
@@ -101,7 +101,7 @@ const worker = struct {
                 .address = address,
             },
         );
-        errdefer client.deinit();
+        errdefer client.deinit(allocator);
         inline for (comptime std.meta.declarations(queries)) |qs_decl| {
             const query_set = @field(queries, qs_decl.name);
             inline for (comptime std.meta.declarations(query_set)) |q_decl| {
@@ -121,7 +121,7 @@ const worker = struct {
                 query.prep_res.deinit(allocator);
             }
         }
-        client.deinit();
+        client.deinit(allocator);
     }
 
     pub fn findPersons() !StructIterator(Person) {

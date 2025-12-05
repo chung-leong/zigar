@@ -44,10 +44,10 @@ export function addTests(importModule, options) {
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ empty1: undefined, empty2: undefined });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-struct.StructA{ .empty1 = void, .empty2 = void }');
+      expect(before).to.equal('.{ .empty1 = void, .empty2 = void }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-struct.StructA{ .empty1 = void, .empty2 = void }');
+      expect(after).to.equal('.{ .empty1 = void, .empty2 = void }');
     })
     it('should handle void in packed struct', async function() {
       const { default: module, StructA, print } = await importTest('in-packed-struct');
@@ -55,10 +55,10 @@ export function addTests(importModule, options) {
       const b = new StructA({});
       expect(b.valueOf()).to.eql({ empty1: undefined, empty2: undefined, number: 100, empty3: undefined });
       const [ before ] = await capture(() => print());
-      expect(before).to.equal('in-packed-struct.StructA{ .empty1 = void, .empty2 = void, .number = 200, .empty3 = void }');
+      expect(before).to.equal('.{ .empty1 = void, .empty2 = void, .number = 200, .empty3 = void }');
       module.struct_a = b;
       const [ after ] = await capture(() => print());
-      expect(after).to.equal('in-packed-struct.StructA{ .empty1 = void, .empty2 = void, .number = 100, .empty3 = void }');
+      expect(after).to.equal('.{ .empty1 = void, .empty2 = void, .number = 100, .empty3 = void }');
     })
     it('should handle void as comptime field', async function() {
       const { default: module, StructA, print } = await importTest('as-comptime-field');
@@ -66,7 +66,7 @@ export function addTests(importModule, options) {
       const b = new StructA({ number: 500 });
       expect(b.empty).to.be.undefined;
       const [ line ] = await capture(() => print(b));
-      expect(line).to.equal('as-comptime-field.StructA{ .number = 500, .empty = void }');
+      expect(line).to.equal('.{ .number = 500, .empty = void }');
     })
     it('should handle void in bare union', async function() {
       const { default: module, UnionA } = await importTest('in-bare-union');

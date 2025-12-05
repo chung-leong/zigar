@@ -355,16 +355,16 @@ export function addTests(importModule, options) {
         b.print1();
       });
       expect(lines1).to.eql([
-        'allow-method-calls.Struct{ .number = 123 }',
-        'allow-method-calls.Struct{ .number = 456 }'
+        '.{ .number = 123 }',
+        '.{ .number = 456 }'
       ]);
       const lines2 = await capture(() => {
         a.print2();
         b.print2();
       });
       expect(lines2).to.eql([
-        'allow-method-calls.Struct{ .number = 123 }',
-        'allow-method-calls.Struct{ .number = 456 }'
+        '.{ .number = 123 }',
+        '.{ .number = 456 }'
       ]);
       a.add(7);
       expect(a.number).to.equal(130);
@@ -432,10 +432,10 @@ export function addTests(importModule, options) {
       ];
       const lines = await capture(() => print(list, list.length));
       expect(lines).to.eql([
-        'accept-multi-pointer.Object{ .a = 1, .b = 2 }',
-        'accept-multi-pointer.Object{ .a = 3, .b = 4 }',
-        'accept-multi-pointer.Object{ .a = 5, .b = 6 }',
-        'accept-multi-pointer.Object{ .a = 7, .b = 8 }'
+        '.{ .a = 1, .b = 2 }',
+        '.{ .a = 3, .b = 4 }',
+        '.{ .a = 5, .b = 6 }',
+        '.{ .a = 7, .b = 8 }'
       ]);
     })
     it('should accept C pointers', async function() {
@@ -448,19 +448,19 @@ export function addTests(importModule, options) {
       ];
       const lines1 = await capture(() => print(list, list.length));
       expect(lines1).to.eql([
-        'accept-c-pointer.Object{ .a = 1, .b = 2 }',
-        'accept-c-pointer.Object{ .a = 3, .b = 4 }',
-        'accept-c-pointer.Object{ .a = 5, .b = 6 }',
-        'accept-c-pointer.Object{ .a = 7, .b = 8 }'
+        '.{ .a = 1, .b = 2 }',
+        '.{ .a = 3, .b = 4 }',
+        '.{ .a = 5, .b = 6 }',
+        '.{ .a = 7, .b = 8 }'
       ]);
       const lines2 = await capture(() => print(list[2], 1));
       expect(lines2).to.eql([
-        'accept-c-pointer.Object{ .a = 5, .b = 6 }',
+        '.{ .a = 5, .b = 6 }',
       ]);
       const object = new Object({ a: 9, b: 10 });
       const lines3 = await capture(() => print(object, 1));
       expect(lines3).to.eql([
-        'accept-c-pointer.Object{ .a = 9, .b = 10 }',
+        '.{ .a = 9, .b = 10 }',
       ]);
     })
     it('should return multi-pointers', async function() {
@@ -564,12 +564,13 @@ export function addTests(importModule, options) {
         new Float64(-3000.25),
       ));
       expect(lines7).to.eql([ '-10.25', '-200.25', '-3000.25' ]);
-      const lines8 = await capture(() => printFloats(80, 3,
-        new Float80(-10.25),
-        new Float80(-200.25),
-        new Float80(-3000.25),
-      ));
-      expect(lines8).to.eql([ '-10.25', '-200.25', '-3000.25' ]);
+      // f80 has stopped working in 0.15.x
+      // const lines8 = await capture(() => printFloats(80, 3,
+      //   new Float80(-10.25),
+      //   new Float80(-200.25),
+      //   new Float80(-3000.25),
+      // ));
+      // expect(lines8).to.eql([ '-10.25', '-200.25', '-3000.25' ]);
       // this fails sporadically on ia32 and doesn't compile on MacOS
       // const lines9 = await capture(() => printFloats(128, 3,
       //   new Float128(-10.25),

@@ -44,7 +44,7 @@ export function addTests(importModule, options) {
       const { default: module, print } = await importTest('in-struct');
       expect(module.struct_a.valueOf()).to.eql({ literal1: 'hello', literal2: 'world' });
       const [ line ] = await capture(() => print());
-      expect(line).to.equal('in-struct.StructA{ .literal1 = .hello, .literal2 = .world }');
+      expect(line).to.equal('.{ .literal1 = .hello, .literal2 = .world }');
     })
     it('should handle enum literal in packed struct', async function() {
       await expect(importTest('in-packed-struct')).to.eventually.be.rejected;
@@ -53,7 +53,7 @@ export function addTests(importModule, options) {
       const { default: module, print } = await importTest('as-comptime-field');
       expect(module.struct_a.literal).to.equal('hello');
       const [ line ] = await capture(() => print());
-      expect(line).to.equal('as-comptime-field.StructA{ .number = 123, .literal = .hello }');
+      expect(line).to.equal('.{ .number = 123, .literal = .hello }');
     })
     it('should not compile code with enum literal in bare union', async function() {
       await expect(importTest('in-bare-union')).to.eventually.be.rejected;

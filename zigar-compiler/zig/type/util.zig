@@ -7,7 +7,7 @@ pub fn IntFor(comptime n: comptime_int) type {
     comptime var bits = 8;
     const signedness = if (n < 0) .signed else .unsigned;
     return inline while (true) : (bits *= 2) {
-        const T = @Type(.{ .int = .{ .signedness = signedness, .bits = bits } });
+        const T = @Int(signedness, bits);
         if (std.math.minInt(T) <= n and n <= std.math.maxInt(T)) {
             break T;
         }
@@ -39,11 +39,16 @@ test "FnPointerTarget" {
 
 pub fn removeSentinel(comptime ptr: anytype) retval_type: {
     const PT = @TypeOf(ptr);
-    var pt = @typeInfo(PT).pointer;
-    var ar = @typeInfo(pt.child).array;
-    ar.sentinel_ptr = null;
-    pt.child = @Type(.{ .array = ar });
-    break :retval_type @Type(.{ .pointer = pt });
+    const pt = @typeInfo(PT).pointer;
+    const ar = @typeInfo(pt.child).array;
+    const CT = [ar.len]ar.child;
+    break :retval_type @Pointer(pt.size, .{
+        .@"const" = pt.is_const,
+        .@"volatile" = pt.is_volatile,
+        .@"allowzero" = pt.is_allowzero,
+        .@"addrspace" = pt.address_space,
+        .@"align" = pt.alignment,
+    }, CT, null);
 } {
     return @ptrCast(ptr);
 }

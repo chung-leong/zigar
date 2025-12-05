@@ -286,14 +286,12 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                 break :init types[start_index..];
             };
             const param_count = old_fn.params.len + extra - OutputTypes.len;
-            var params: [param_count]std.builtin.Type.Fn.Param = undefined;
-            inline for (old_fn.params, 0..) |param, index| {
-                if (index < param_count) {
-                    params[index] = .{
-                        .type = Substitute(param.type.?, local_subs, index, old_fn.params.len),
-                        .is_generic = false,
-                        .is_noalias = false,
-                    };
+            var param_types: [param_count]type = undefined;
+            var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
+            inline for (old_fn.params, 0..) |param, i| {
+                if (i < param_count) {
+                    param_types[i] = Substitute(param.type.?, local_subs, i, old_fn.params.len);
+                    param_attrs[i] = .{ .@"noalias" = false };
                 }
             }
             // determine the payload of the return type
@@ -302,18 +300,11 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                 1 => OutputTypes[0],
                 else => std.meta.Tuple(OutputTypes),
             };
-            return @Type(.{
-                .@"fn" = .{
-                    .calling_convention = .auto,
-                    .is_generic = false,
-                    .is_var_args = false,
-                    .return_type = switch (return_error_union) {
-                        true => options.error_scheme.ErrorSet!Payload,
-                        else => Payload,
-                    },
-                    .params = &params,
-                },
-            });
+            const RT = switch (return_error_union) {
+                true => options.error_scheme.ErrorSet!Payload,
+                else => Payload,
+            };
+            return @Fn(&param_types, &param_attrs, RT, .{});
         }
 
         pub fn translate(
@@ -408,11 +399,17 @@ pub fn Translator(comptime options: TranslatorOptions) type {
         pub fn SliceType(comptime T: type) type {
             return switch (@typeInfo(T)) {
                 .pointer => |pt| define: {
-                    var new_pt = pt;
-                    new_pt.size = .slice;
-                    new_pt.sentinel_ptr = null;
-                    if (@typeInfo(new_pt.child) == .@"opaque") new_pt.child = u8;
-                    break :define @Type(.{ .pointer = new_pt });
+                    const ET = switch (@typeInfo(pt.child)) {
+                        .@"opaque" => u8,
+                        else => pt.child,
+                    };
+                    break :define @Pointer(.slice, .{
+                        .@"const" = pt.is_const,
+                        .@"volatile" = pt.is_volatile,
+                        .@"allowzero" = pt.is_allowzero,
+                        .@"addrspace" = pt.address_space,
+                        .@"align" = pt.alignment,
+                    }, ET, null);
                 },
                 .optional => |op| ?SliceType(op.child),
                 else => @compileError("Argument is not a pointer"),
@@ -429,7 +426,8 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                 else => @compileError("Function type expected, received '" ++ @typeName(OldFn) ++ "'"),
             };
             const param_count = old_fn.params.len - pairs.len;
-            var new_params: [param_count]std.builtin.Type.Fn.Param = undefined;
+            var param_types: [param_count]type = undefined;
+            var param_attrs: [param_count]std.builtin.Type.Fn.Param.Attributes = undefined;
             var j: usize = 0;
             inline for (old_fn.params, 0..) |param, i| {
                 const PT = param.type orelse @compileError("Cannot merge generic argument");
@@ -437,11 +435,14 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                     if (pair.len_index == i) break true;
                 } else false;
                 if (!is_index) {
-                    new_params[j] = param;
                     const is_ptr = inline for (pairs) |pair| {
                         if (pair.ptr_index == i) break true;
                     } else false;
-                    if (is_ptr) new_params[j].type = SliceType(PT);
+                    param_types[j] = switch (is_ptr) {
+                        true => SliceType(PT),
+                        false => PT,
+                    };
+                    param_attrs[j] = .{ .@"noalias" = param.is_noalias };
                     j += 1;
                 } else {
                     switch (@typeInfo(PT)) {
@@ -450,9 +451,7 @@ pub fn Translator(comptime options: TranslatorOptions) type {
                     }
                 }
             }
-            var new_fn = old_fn;
-            new_fn.params = &new_params;
-            return @Type(.{ .@"fn" = new_fn });
+            return @Fn(&param_types, &param_attrs, old_fn.return_type.?, .{ .@"callconv" = old_fn.calling_convention });
         }
 
         pub fn mergeSlice(
@@ -784,9 +783,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
         non_error_enum_count: usize,
         anonymous_type_count: usize,
         current_root: *const Expression,
-        write_to_byte_array: bool,
-        byte_array: std.ArrayList(u8),
-        output_writer: std.io.AnyWriter,
+        output_writer: ?*std.Io.Writer,
         need_inout_import: bool,
         add_child_type: bool,
         new_root_original_type: ?*const Expression,
@@ -801,7 +798,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             self.cwd = try std.process.getCwdAlloc(self.allocator);
             self.indent_level = 0;
             self.indented = false;
-            self.close_bracket_stack = .init(self.allocator);
+            self.close_bracket_stack = .empty;
             self.old_root = try self.createType(.{
                 .container = .{ .kind = "struct" },
             });
@@ -814,8 +811,6 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             self.new_namespace = .init(self.allocator);
             self.non_error_enum_count = 0;
             self.anonymous_type_count = 0;
-            self.write_to_byte_array = false;
-            self.byte_array = .init(self.allocator);
             self.need_inout_import = false;
             self.add_child_type = false;
             self.new_root_original_type = null;
@@ -834,8 +829,8 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             try self.translateDeclarations();
         }
 
-        pub fn print(self: *@This(), writer: anytype) anyerror!void {
-            self.output_writer = writer.any();
+        pub fn print(self: *@This(), writer: *std.Io.Writer) !void {
+            self.output_writer = writer;
             self.add_child_type = true;
             try self.printImports();
             try self.printExpression(self.new_root, .new);
@@ -876,17 +871,14 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
         fn processVarDecl(self: *@This(), tree: Ast, decl: Ast.full.VarDecl) !void {
             if (decl.visib_token == null) return;
             const var_name = tree.tokenSlice(decl.ast.mut_token + 1);
-            const var_type = switch (decl.ast.type_node) {
-                0 => null,
-                else => try self.obtainExpression(tree, decl.ast.type_node),
-            };
-            const expr = try self.obtainExpressionEx(tree, decl.ast.init_node, true);
+            const var_type = if (decl.ast.type_node.unwrap()) |n| try self.obtainExpression(tree, n) else null;
+            const expr = try self.obtainExpressionEx(tree, decl.ast.init_node.unwrap().?, true);
             try self.append(&self.old_root.type.container.decls, .{
                 .mutable = std.mem.eql(u8, "var", tree.tokenSlice(decl.ast.mut_token)),
                 .extern_export = if (decl.extern_export_token) |t| tree.tokenSlice(t) else null,
                 .name = var_name,
                 .type = var_type,
-                .alignment = nodeSlice(tree, decl.ast.align_node),
+                .alignment = if (decl.ast.align_node.unwrap()) |n| nodeSlice(tree, n) else null,
                 .expr = expr,
             });
             try self.old_namespace.addExpression(var_name, expr);
@@ -899,14 +891,13 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
         fn obtainExpressionEx(self: *@This(), tree: Ast, node: Ast.Node.Index, is_rhs: bool) !*const Expression {
             var buffer1: [1]Ast.Node.Index = undefined;
             var buffer2: [2]Ast.Node.Index = undefined;
-            if (node == 0) return self.createExpression(.{ .empty = {} });
             const type_maybe = if (tree.fullFnProto(&buffer1, node)) |fn_proto|
                 try self.obtainFunctionType(tree, fn_proto)
             else if (tree.fullContainerDecl(&buffer2, node)) |decl|
                 try self.obtainContainerType(tree, decl)
             else if (tree.fullPtrType(node)) |ptr|
                 try self.obtainPointerType(tree, ptr)
-            else if (tree.nodes.items(.tag)[node] == .optional_type)
+            else if (tree.nodeTag(node) == .optional_type)
                 try self.obtainOptionalType(tree, node)
             else if (self.detectEnumType(tree, node, is_rhs)) |e|
                 try self.obtainEnumType(tree, e.item_count, e.is_signed)
@@ -914,7 +905,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                 null;
             return if (type_maybe) |t|
                 self.createExpression(.{ .type = t })
-            else if (tree.nodes.items(.tag)[node] == .identifier)
+            else if (tree.nodeTag(node) == .identifier)
                 self.createExpression(.{ .identifier = nodeSlice(tree, node).? })
             else
                 self.createExpression(.{ .any = nodeSlice(tree, node).? });
@@ -936,9 +927,9 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             return .{
                 .function = .{
                     .parameters = params,
-                    .return_type = try self.obtainExpression(tree, proto.ast.return_type),
-                    .alignment = nodeSlice(tree, proto.ast.align_expr),
-                    .call_convention = nodeSlice(tree, proto.ast.callconv_expr),
+                    .return_type = try self.obtainExpression(tree, proto.ast.return_type.unwrap().?),
+                    .alignment = if (proto.ast.align_expr.unwrap()) |n| nodeSlice(tree, n) else null,
+                    .call_convention = if (proto.ast.callconv_expr.unwrap()) |n| nodeSlice(tree, n) else null,
                 },
             };
         }
@@ -949,8 +940,8 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                 if (tree.fullContainerField(member)) |field| {
                     try self.append(&fields, .{
                         .name = tree.tokenSlice(field.ast.main_token),
-                        .type = try self.obtainExpression(tree, field.ast.type_expr),
-                        .alignment = nodeSlice(tree, field.ast.align_expr),
+                        .type = try self.obtainExpression(tree, field.ast.type_expr.unwrap().?),
+                        .alignment = if (field.ast.align_expr.unwrap()) |n| nodeSlice(tree, n) else null,
                     });
                 }
             }
@@ -967,21 +958,21 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             return .{
                 .pointer = .{
                     .child_type = try self.obtainExpression(tree, ptr_type.ast.child_type),
-                    .sentinel = nodeSlice(tree, ptr_type.ast.sentinel),
+                    .sentinel = if (ptr_type.ast.sentinel.unwrap()) |n| nodeSlice(tree, n) else null,
                     .size = ptr_type.size,
                     .is_const = ptr_type.const_token != null,
                     .is_volatile = ptr_type.volatile_token != null,
                     .allows_zero = ptr_type.allowzero_token != null,
-                    .alignment = nodeSlice(tree, ptr_type.ast.align_node),
+                    .alignment = if (ptr_type.ast.align_node.unwrap()) |n| nodeSlice(tree, n) else null,
                 },
             };
         }
 
         fn obtainOptionalType(self: *@This(), tree: Ast, node: Ast.Node.Index) !Expression.Type {
-            const data = tree.nodes.items(.data)[node];
+            const data = tree.nodeData(node);
             return .{
                 .optional = .{
-                    .child_type = try self.obtainExpression(tree, data.lhs),
+                    .child_type = try self.obtainExpression(tree, data.node),
                 },
             };
         }
@@ -1061,7 +1052,6 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
         }
 
         fn nodeSlice(tree: Ast, node: Ast.Node.Index) ?[]const u8 {
-            if (node == 0) return null;
             const span = tree.nodeToSpan(node);
             return tree.source[span.start..span.end];
         }
@@ -1084,8 +1074,8 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
 
         fn translateDeclarations(self: *@This()) !void {
             // convert constants to enum
-            var constant_map: std.StringHashMap(?*Expression) = .init(self.allocator);
-            var packed_structs: std.ArrayList(*Expression) = .init(self.allocator);
+            var constant_map: std.StringHashMapUnmanaged(?*Expression) = .empty;
+            var packed_structs: std.ArrayList(*Expression) = .empty;
             for (self.old_root.type.container.decls) |decl| {
                 if (self.isTypeOf(decl.type, .function) or self.isType(decl.expr)) continue;
                 const value = self.extractInteger(decl.expr) orelse continue;
@@ -1113,10 +1103,10 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                         .name = item_name,
                         .value = value,
                     });
-                    try constant_map.put(decl.name, if (is_new_enum) enum_expr else null);
+                    try constant_map.put(self.allocator, decl.name, if (is_new_enum) enum_expr else null);
                     if (is_new_enum and enum_info.is_packed_struct) {
                         // remember that the enum is actually a packed struct
-                        try packed_structs.append(enum_expr);
+                        try packed_structs.append(self.allocator, enum_expr);
                     }
                 }
             }
@@ -2482,11 +2472,14 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             const indent_before = self.indent_level;
             defer self.indent_level = indent_before;
             self.indent_level = 0;
-            self.write_to_byte_array = true;
-            defer self.write_to_byte_array = false;
-            self.byte_array.clearRetainingCapacity();
-            self.printRef(expr, ns) catch {};
-            return try self.allocator.dupe(u8, self.byte_array.items);
+            var buffer: [4096]u8 = undefined;
+            var writer = std.Io.Writer.fixed(&buffer);
+            const original_writer = self.output_writer;
+            self.output_writer = &writer;
+            defer self.output_writer = original_writer;
+            self.printRef(expr, ns) catch return "[ERROR]";
+            writer.flush() catch return "[ERROR]";
+            return try self.allocator.dupe(u8, buffer[0..writer.end]);
         }
 
         fn obtainFunctionName(self: *@This(), expr: *const Expression) ![]const u8 {
@@ -2500,7 +2493,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             };
         }
 
-        fn printImports(self: *@This()) anyerror!void {
+        fn printImports(self: *@This()) !void {
             try self.printTxt("const std = @import(\"std\");\n");
             if (options.late_bind_expr != null) {
                 // builtin is probably needed when late binding is used
@@ -2521,7 +2514,9 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             try self.printTxt("}});\n\n");
         }
 
-        fn printRef(self: *@This(), expr: *const Expression, ns: NamespaceType) anyerror!void {
+        const PrintError = std.Io.Writer.Error || std.mem.Allocator.Error;
+
+        fn printRef(self: *@This(), expr: *const Expression, ns: NamespaceType) !void {
             if (ns == .old) {
                 if (expr == self.old_root) {
                     try self.printTxt("@This()");
@@ -2532,6 +2527,8 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
                 }
             } else if (ns == .new) {
                 if (expr == self.current_root) {
+                    try self.printTxt("@This()");
+                } else if (expr == self.new_root) {
                     try self.printTxt("@This()");
                 } else if (expr == self.old_root) {
                     try self.printTxt(options.c_import);
@@ -2547,7 +2544,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             }
         }
 
-        fn printExpression(self: *@This(), expr: *const Expression, ns: NamespaceType) anyerror!void {
+        fn printExpression(self: *@This(), expr: *const Expression, ns: NamespaceType) PrintError!void {
             switch (expr.*) {
                 .any, .function_body => |i| try self.printFmt("{s}", .{i}),
                 .identifier => |i| try self.printIdentifier(i, ns),
@@ -2573,7 +2570,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             }
         }
 
-        fn printIdentifier(self: *@This(), i: []const u8, ns: NamespaceType) anyerror!void {
+        fn printIdentifier(self: *@This(), i: []const u8, ns: NamespaceType) !void {
             if (ns == .old) {
                 try self.printFmt("{s}", .{i});
             } else {
@@ -2585,7 +2582,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             }
         }
 
-        fn printArrayInit(self: *@This(), a: Expression.ArrayInit, ns: NamespaceType) anyerror!void {
+        fn printArrayInit(self: *@This(), a: Expression.ArrayInit, ns: NamespaceType) !void {
             if (a.is_reference) {
                 try self.printTxt("&");
             }
@@ -2612,7 +2609,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             }
         }
 
-        fn printStructInit(self: *@This(), s: Expression.StructInit, ns: NamespaceType) anyerror!void {
+        fn printStructInit(self: *@This(), s: Expression.StructInit, ns: NamespaceType) !void {
             if (s.initializers.len == 0) {
                 try self.printTxt(".{{}}");
                 return;
@@ -2636,7 +2633,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             }
         }
 
-        fn printFunctionCall(self: *@This(), f: Expression.FunctionCall, ns: NamespaceType) anyerror!void {
+        fn printFunctionCall(self: *@This(), f: Expression.FunctionCall, ns: NamespaceType) !void {
             try self.printRef(f.fn_ref, ns);
             try self.printTxt("(");
             for (f.arguments, 0..) |arg, i| {
@@ -2646,7 +2643,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             try self.printTxt(")");
         }
 
-        fn printContainerDef(self: *@This(), c: Expression.Type.Container, ns: NamespaceType, is_root: bool) anyerror!void {
+        fn printContainerDef(self: *@This(), c: Expression.Type.Container, ns: NamespaceType, is_root: bool) !void {
             if (!is_root) {
                 if (c.layout) |l| try self.printFmt("{s} ", .{l});
                 try self.printFmt("{s}", .{c.kind});
@@ -2672,7 +2669,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             }
         }
 
-        fn printPointerDef(self: *@This(), p: Expression.Type.Pointer, ns: NamespaceType) anyerror!void {
+        fn printPointerDef(self: *@This(), p: Expression.Type.Pointer, ns: NamespaceType) !void {
             switch (p.size) {
                 .one => try self.printTxt("*"),
                 .many => try self.printTxt("[*"),
@@ -2688,7 +2685,7 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             try self.printRef(p.child_type, ns);
         }
 
-        fn printEnumerationDef(self: *@This(), e: Expression.Type.Enumeration, _: NamespaceType) anyerror!void {
+        fn printEnumerationDef(self: *@This(), e: Expression.Type.Enumeration, _: NamespaceType) !void {
             try self.printFmt("enum({s}) {{\n", .{e.tag_type});
             const is_sequential = for (e.items, 0..) |item, index| {
                 if (index > 0 and item.value != e.items[index - 1].value + 1) break false;
@@ -2726,19 +2723,19 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             try self.printTxt("}}");
         }
 
-        fn printErrorSetDef(self: *@This(), e: Expression.Type.ErrorSet, _: NamespaceType) anyerror!void {
+        fn printErrorSetDef(self: *@This(), e: Expression.Type.ErrorSet, _: NamespaceType) !void {
             try self.printTxt("error{{\n");
             for (e.names) |n| try self.printFmt("{s},\n", .{n});
             try self.printTxt("}}");
         }
 
-        fn printErrorUnionDef(self: *@This(), e: Expression.Type.ErrorUnion, ns: NamespaceType) anyerror!void {
+        fn printErrorUnionDef(self: *@This(), e: Expression.Type.ErrorUnion, ns: NamespaceType) !void {
             try self.printRef(e.error_set, ns);
             try self.printTxt("!");
             try self.printRef(e.payload_type, ns);
         }
 
-        fn printFunctionDef(self: *@This(), f: Expression.Type.Function, ns: NamespaceType) anyerror!void {
+        fn printFunctionDef(self: *@This(), f: Expression.Type.Function, ns: NamespaceType) !void {
             if (f.parameters.len > 0) {
                 try self.printTxt("fn (\n");
                 for (f.parameters) |param| {
@@ -2755,17 +2752,17 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             try self.printRef(f.return_type, ns);
         }
 
-        fn printReferenceTo(self: *@This(), r: *const Expression, ns: NamespaceType) anyerror!void {
+        fn printReferenceTo(self: *@This(), r: *const Expression, ns: NamespaceType) !void {
             try self.printTxt("&");
             try self.printRef(r, ns);
         }
 
-        fn printOptionalDef(self: *@This(), o: Expression.Type.Optional, ns: NamespaceType) anyerror!void {
+        fn printOptionalDef(self: *@This(), o: Expression.Type.Optional, ns: NamespaceType) !void {
             try self.printTxt("?");
             try self.printRef(o.child_type, ns);
         }
 
-        fn printField(self: *@This(), field: Field, ns: NamespaceType) anyerror!void {
+        fn printField(self: *@This(), field: Field, ns: NamespaceType) !void {
             try self.printFmt("{s}: ", .{field.name});
             try self.printRef(field.type, ns);
             if (field.alignment) |a| try self.printFmt(" align({s})", .{a});
@@ -2773,14 +2770,14 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             try self.printTxt(",\n");
         }
 
-        fn printDocComment(self: *@This(), text: []const u8) anyerror!void {
+        fn printDocComment(self: *@This(), text: []const u8) !void {
             var iterator = std.mem.splitScalar(u8, text, '\n');
             while (iterator.next()) |line| {
                 try self.printFmt("/// {s}\n", .{line});
             }
         }
 
-        fn printDeclaration(self: *@This(), decl: Declaration, ns: NamespaceType) anyerror!void {
+        fn printDeclaration(self: *@This(), decl: Declaration, ns: NamespaceType) !void {
             if (decl.doc_comment) |c| try self.printDocComment(c);
             if (decl.public) try self.printTxt("pub ");
             if (decl.extern_export) |e| try self.printFmt("{s}", .{e});
@@ -2815,7 +2812,8 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             try self.printTxt("}}\n");
         }
 
-        fn printFmt(self: *@This(), comptime fmt: []const u8, args: anytype) anyerror!void {
+        fn printFmt(self: *@This(), comptime fmt: []const u8, args: anytype) !void {
+            const writer = self.output_writer orelse return error.WriteFailed;
             if (self.close_bracket_stack.getLastOrNull()) |close_bracket| {
                 if (std.mem.startsWith(u8, fmt, close_bracket)) {
                     self.indent_level -= 1;
@@ -2825,17 +2823,17 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             if (self.indent_level > 0 and !self.indented) {
                 if (!std.mem.eql(u8, fmt, "\n")) {
                     for (0..self.indent_level) |_| {
-                        try self.write("    ", .{});
+                        try writer.print("    ", .{});
                     }
                     self.indented = true;
                 }
             }
-            try self.write(fmt, args);
+            try writer.print(fmt, args);
             if (std.mem.endsWith(u8, fmt, "{\n")) {
-                try self.close_bracket_stack.append("}");
+                try self.close_bracket_stack.append(self.allocator, "}");
                 self.indent_level += 1;
             } else if (std.mem.endsWith(u8, fmt, "(\n")) {
-                try self.close_bracket_stack.append(")");
+                try self.close_bracket_stack.append(self.allocator, ")");
                 self.indent_level += 1;
             }
             if (std.mem.endsWith(u8, fmt, "\n")) {
@@ -2843,16 +2841,8 @@ pub fn CodeGenerator(comptime options: CodeGeneratorOptions) type {
             }
         }
 
-        fn printTxt(self: *@This(), comptime txt: []const u8) anyerror!void {
-            return self.printFmt(txt, .{});
-        }
-
-        fn write(self: *@This(), comptime fmt: []const u8, args: anytype) anyerror!void {
-            const writer = if (self.write_to_byte_array)
-                self.byte_array.writer().any()
-            else
-                self.output_writer;
-            return writer.print(fmt, args);
+        fn printTxt(self: *@This(), comptime txt: []const u8) !void {
+            _ = try self.printFmt(txt, .{});
         }
 
         fn translateHeaderFile(self: *@This(), full_path: []const u8) ![]const u8 {

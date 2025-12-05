@@ -6,17 +6,26 @@ const cfg = @import("build.cfg.zig");
 const extra = @import("build.extra.zig");
 
 pub fn build(b: *std.Build) !void {
-    if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 14) {
+    if (builtin.zig_version.major != 0 or builtin.zig_version.minor != 16) {
         @compileError("Unsupported Zig version");
     }
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const lib = b.addSharedLibrary(.{
+    const use_llvm = @as(?bool, cfg.use_llvm) orelse default: {
+        if (cfg.is_wasm) break :default true;
+        if (builtin.target.cpu.arch == .x86_64 and cfg.multithreaded) break :default true;
+        break :default null;
+    };
+    const lib = b.addLibrary(.{
+        .linkage = .dynamic,
         .name = cfg.module_name,
-        .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "stub.zig" },
-        .target = target,
-        .optimize = optimize,
-        .single_threaded = !cfg.multithreaded,
+        .root_module = b.addModule("root", .{
+            .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "stub.zig" },
+            .target = target,
+            .optimize = optimize,
+            .single_threaded = !cfg.multithreaded,
+        }),
+        .use_llvm = use_llvm,
     });
     const zigar = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.zigar_src_path ++ "zigar.zig" },
@@ -73,8 +82,8 @@ pub fn build(b: *std.Build) !void {
         lib.entry = .disabled;
         lib.rdynamic = true;
         lib.wasi_exec_model = .reactor;
-        lib.import_memory = true;
-        lib.import_table = true;
+        lib.import_memory = cfg.multithreaded;
+        lib.import_table = !cfg.multithreaded;
         lib.stack_size = cfg.stack_size;
         lib.max_memory = cfg.max_memory;
     } else if (cfg.use_redirection) {

@@ -55,8 +55,14 @@ pub fn useMonkey() void {
 }
 
 const PackedUnion = packed union {
-    one_bit: bool,
-    four_bits: u4,
+    first: packed struct {
+        one_bit: bool,
+        seven_bits: u7,
+    },
+    second: packed struct {
+        four_bits: u4,
+        another_four_bits: u4,
+    },
     eight_bits: u8,
 };
 
