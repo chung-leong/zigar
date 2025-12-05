@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const zigar = @import("zigar");
 
@@ -8,6 +9,10 @@ const c = @cImport({
 });
 const pthread_t = c.pthread_t;
 const pthread_rwlock_t = c.pthread_rwlock_t;
+const clock_id = switch (builtin.target.os.tag) {
+    .windows => c.CLOCK_REALTIME_COARSE,
+    else => c.CLOCK_REALTIME,
+};
 
 var rwlock: pthread_rwlock_t = undefined;
 
@@ -30,7 +35,7 @@ pub fn unlock() !void {
 fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 1 acquiring write lock\n", .{});
     var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(c.CLOCK_REALTIME_COARSE, &time);
+    _ = c.clock_gettime(clock_id, &time);
     add(&time, 1000);
     const retval = c.pthread_rwlock_timedwrlock(&rwlock, &time);
     if (retval == 0) {
@@ -45,7 +50,7 @@ fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
 fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
     std.debug.print("Thread 2 acquiring write lock\n", .{});
     var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(c.CLOCK_REALTIME_COARSE, &time);
+    _ = c.clock_gettime(clock_id, &time);
     add(&time, 750 * 1000000);
     const retval = c.pthread_rwlock_timedrdlock(&rwlock, &time);
     if (retval == 0) {

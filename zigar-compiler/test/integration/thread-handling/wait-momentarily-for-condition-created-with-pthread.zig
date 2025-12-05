@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const zigar = @import("zigar");
 
@@ -9,6 +10,10 @@ const pthread_t = c.pthread_t;
 const pthread_mutex_t = c.pthread_mutex_t;
 const pthread_cond_t = c.pthread_cond_t;
 const pthread_condattr_t = c.pthread_condattr_t;
+const clock_id = switch (builtin.target.os.tag) {
+    .windows => c.CLOCK_REALTIME_COARSE,
+    else => c.CLOCK_REALTIME,
+};
 
 var mutex: pthread_mutex_t = undefined;
 var cond: pthread_cond_t = undefined;
@@ -42,7 +47,7 @@ fn run(arg: ?*anyopaque) callconv(.c) ?*anyopaque {
     defer _ = c.pthread_mutex_unlock(&mutex);
     std.debug.print("Thread waiting for condition\n", .{});
     var time: c.struct_timespec = undefined;
-    _ = c.clock_gettime(c.CLOCK_REALTIME_COARSE, &time);
+    _ = c.clock_gettime(clock_id, &time);
     const duration: usize = @intFromPtr(arg);
     add(&time, @intCast(duration));
     const retval = c.pthread_cond_timedwait(&cond, &mutex, &time);
