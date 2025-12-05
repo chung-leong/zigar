@@ -6,6 +6,8 @@
 * Added means to define generic work queue startup and shutdown functions
 * Added support for all remaining WASI functions
 * Added missing hooks for preadv64/pwritev64
+* Added support for sendfile()
+* Added `npx zigar <cmd>` shortcut for running CLI command
 * Removed support for AnyReader and AnyWriter
 * Renamed set_times event to utimes
 * Fixed support for pthread in Windows
