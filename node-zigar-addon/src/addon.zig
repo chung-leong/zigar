@@ -610,7 +610,7 @@ const ModuleHost = struct {
 
     fn readFile(self: *@This(), handle: Value, amount: Value, position: Value) !Value {
         const env = self.env;
-        const file: std.fs.File = .{ .handle = try env.getValueInt32(handle) };
+        const file = try self.getFile(handle);
         const len = try env.getValueUint32(amount);
         const opaque_ptr, const buffer = try env.createArraybuffer(len);
         const u8_ptr: [*]u8 = @ptrCast(opaque_ptr);
@@ -624,11 +624,24 @@ const ModuleHost = struct {
 
     fn writeFile(self: *@This(), handle: Value, chunk: Value) !void {
         const env = self.env;
-        const file: std.fs.File = .{ .handle = try env.getValueInt32(handle) };
+        const file = try self.getFile(handle);
         _, const len, const opaque_ptr, _, _ = try env.getTypedarrayInfo(chunk);
         const u8_ptr: [*]const u8 = @ptrCast(opaque_ptr);
         const u8_slice = u8_ptr[0..len];
         _ = try file.write(u8_slice);
+    }
+
+    fn getFile(self: *@This(), handle: Value) !std.fs.File {
+        const env = self.env;
+        const handle_value = try env.getValueInt32(handle);
+        const Handle = @FieldType(std.fs.File, "handle");
+        return .{
+            .handle = switch (@typeInfo(Handle)) {
+                .int => handle_value,
+                .pointer => @ptrFromInt(@as(u32, @bitCast(handle_value))),
+                else => @compileError("Unknown handle type"),
+            },
+        };
     }
 
     fn initializeLibc(self: *@This()) !void {
