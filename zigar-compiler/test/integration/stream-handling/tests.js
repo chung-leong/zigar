@@ -26,12 +26,12 @@ export function addTests(importModule, options) {
         hash,
       } = await importTest('read-from-file', { multithreaded: true });
       startup(1);
+      const correct = (platform() === 'win32') 
+      ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
+      : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+      const path = absolute('./data/test.txt');
+      const fd = await open(path);
       try {
-        const correct = (platform() === 'win32') 
-        ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
-        : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
-        const path = absolute('./data/test.txt');
-        const fd = await open(path);
         const stream = fd.readableWebStream();
         const reader = stream.getReader();
         const digest1 = await hash(reader);
@@ -46,6 +46,7 @@ export function addTests(importModule, options) {
         const digest3 = await hash(content);
         expect(digest3.string).to.equal(correct);
       } finally {
+        fd.close();
         await shutdown();
       }
     })
@@ -244,7 +245,6 @@ export function addTests(importModule, options) {
         await shutdown();;
       }
     })
-    skip.
     it('should open a file and seek to a particular position using posix function', async function() {
       const { __zigar, read } = await importTest('seek-file-with-posix-functions', { useLibc: true });
       const path = absolute('./data/test.txt');
@@ -286,7 +286,6 @@ export function addTests(importModule, options) {
       expect(chunk.string).to.equal('ur fathers broug');
       expect(event).to.be.an('object');
     })
-    skip.
     it('should obtain the expected position after a seek operation using posix function', async function() {
       const { __zigar, seek } = await importTest('return-file-position-with-posix-functions', { useLibc: true });
       const content = new TextEncoder().encode('Hello world!');
@@ -2603,12 +2602,15 @@ export function addTests(importModule, options) {
       const { copy } = await importTest('copy-virtual-file-to-real-file');
       const path = absolute('data/virtual-file-test.txt');
       try {
-        const file = await open(path, 'w');;
-        const string = 'Hello world!';
-        const size = string.length;
-        const copied = copy(string, file);
-        expect(copied).to.equal(size);
-        file.close();       
+        const file = await open(path, 'w');
+        try {
+          const string = 'Hello world!';
+          const size = string.length;
+          const copied = copy(string, file);
+          expect(copied).to.equal(size);
+        } finally {
+          file.close();       
+        }
         const content = await readFile(path, 'utf-8');
         expect(content).to.equal(string);
       } finally {
@@ -2621,11 +2623,15 @@ export function addTests(importModule, options) {
     it('should copy real file to virtual file using sendfile', async function() {
       const { copy } = await importTest('copy-real-file-to-virtual-file-with-sendfile');
       const file = await open(absolute('data/macbeth.txt'));
-      const { size } = await file.stat();
-      const array = [];
-      const copied = copy(file, array, size);
-      expect(copied).to.equal(size);
-      expect(array).to.have.lengthOf(1);
+      try {
+        const { size } = await file.stat();
+        const array = [];
+        const copied = copy(file, array, size);
+        expect(copied).to.equal(size);
+        expect(array).to.have.lengthOf(1);
+      } finally {
+        file.close();
+      }
     })
     it('should copy virtual file to virtual file using sendfile', async function() {
       const { copy } = await importTest('copy-virtual-file-to-virtual-file-with-sendfile');
@@ -2640,7 +2646,7 @@ export function addTests(importModule, options) {
       const { copy } = await importTest('copy-virtual-file-to-real-file-with-sendfile');
       const path = absolute('data/virtual-file-test.txt');
       try {
-        const file = await open(path, 'w');;
+        const file = await open(path, 'w');
         const string = 'Hello world!';
         const size = string.length;
         const copied = copy(string, file, size);

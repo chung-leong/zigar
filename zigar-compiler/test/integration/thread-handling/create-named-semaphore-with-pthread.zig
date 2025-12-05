@@ -10,20 +10,23 @@ const c = @cImport({
 });
 const pthread_t = c.pthread_t;
 const sem_t = c.sem_t;
-const SEM_FAILED: [*c]align(1) sem_t = @ptrFromInt(std.math.maxInt(usize));
+const SEM_FAILED: [*c]align(1) sem_t = if (builtin.target.os.tag.isDarwin())
+    @ptrFromInt(std.math.maxInt(usize)) // translate-c couldn't deal with macro
+else
+    @ptrCast(c.SEM_FAILED);
 
 pub fn spawn() !void {
     const mode: c_int = 0o666;
     const value: c_int = 2;
     var semaphore: [*c]sem_t = undefined;
     semaphore = c.sem_open("dingo", 0, mode, value);
-    if (semaphore != SEM_FAILED) return error.IncorrectResponse;
-    semaphore = c.sem_open("hello", c.O_CREAT | c.O_EXCL, mode, value);
+    if (semaphore != SEM_FAILED) return error.IncorrectResponse1;
+    semaphore = c.sem_open("hello", c.O_CREAT | c.O_EXCL, 0, value);
     if (semaphore == SEM_FAILED) return error.CannotCreateNamedSemaphore;
     semaphore = c.sem_open("hello", c.O_CREAT | c.O_EXCL, mode, value);
-    if (semaphore != SEM_FAILED) return error.IncorrectResponse;
+    if (semaphore != SEM_FAILED) return error.IncorrectResponse2;
     semaphore = c.sem_open("dingo", 0, mode, value);
-    if (semaphore != SEM_FAILED) return error.IncorrectResponse;
+    if (semaphore != SEM_FAILED) return error.IncorrectResponse3;
     semaphore = c.sem_open("hello", 0, mode, value);
     if (semaphore == SEM_FAILED) return error.CannotFindNamedSemaphore;
     defer _ = c.sem_close(semaphore);
