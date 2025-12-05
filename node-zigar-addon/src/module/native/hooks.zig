@@ -1866,7 +1866,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
     return struct {
         pub const access = makeStdHook("access");
         pub const close = makeStdHook("close");
-        pub const faccessat = makeStdHookUsing("faccessat", "faccessat2");
+        pub const faccessat = makeStdHookUsing(Original, "faccessat", "faccessat2");
         pub const fallocate = makeStdHook("fallocate");
         pub const fchmod = makeStdHook("fchmod");
         pub const fchown = makeStdHook("fchown");
@@ -1894,7 +1894,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const mmap64 = makeStdHook("mmap64");
         pub const munmap = makeStdHook("munmap");
         pub const poll = makeStdHook("poll");
-        pub const posix_fadvise = makeStdHookUsing("posix_fadvise", "fadvise64");
+        pub const posix_fadvise = makeStdHookUsing(Original, "posix_fadvise", "fadvise64");
         pub const pread = makeStdHook("pread");
         pub const pread64 = makeStdHook("pread64");
         pub const preadv = makeStdHook("preadv");
@@ -2247,10 +2247,10 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
         fn makeStdHook(comptime name: []const u8) StdHook(@TypeOf(@field(redirector, name))) {
             // default case where the name of the handler matches the name of the function being hooked
-            return makeStdHookUsing(name, name);
+            return makeStdHookUsing(Original, name, name);
         }
 
-        fn makeStdHookUsing(comptime original_name: []const u8, comptime handler_name: []const u8) StdHook(@TypeOf(@field(redirector, handler_name))) {
+        fn makeStdHookUsing(comptime original_ns: type, comptime original_name: []const u8, comptime handler_name: []const u8) StdHook(@TypeOf(@field(redirector, handler_name))) {
             const handler = @field(redirector, handler_name);
             const Handler = @TypeOf(handler);
             const HandlerArgs = std.meta.ArgsTuple(Handler);
@@ -2268,7 +2268,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
                     if (@call(.auto, handler, handler_args)) {
                         return saveError(result);
                     }
-                    const original = @field(Original, original_name);
+                    const original = @field(original_ns, original_name);
                     return @call(.auto, original, hook_args);
                 }
             };
@@ -2420,15 +2420,19 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
 pub fn PosixSubstituteLinux(comptime redirector: type) type {
     return struct {
+        const posix = PosixSubstitute(redirector);
+
         pub const sendfile = makeStdHook("sendfile");
         pub const sendfile64 = makeStdHook("sendfile64");
 
-        const makeStdHook = PosixSubstitute(redirector).makeStdHook;
+        fn makeStdHook(comptime name: []const u8) posix.StdHook(@TypeOf(@field(redirector, name))) {
+            return posix.makeStdHookUsing(Original, name, name);
+        }
 
         const Self = @This();
         pub const Original = struct {
-            pub extern var sendfile: *const @TypeOf(Self.sendfile);
-            pub extern var sendfile64: *const @TypeOf(Self.sendfile64);
+            pub var sendfile: *const @TypeOf(Self.sendfile) = undefined;
+            pub var sendfile64: *const @TypeOf(Self.sendfile64) = undefined;
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
     };
@@ -2455,7 +2459,6 @@ pub fn PosixSubstituteDarwin(comptime redirector: type) type {
                 var result: ssize_t = undefined;
                 if (redirector.sendfile64(in_fd, out_fd, &offset64, len64, &result)) {
                     if (result < 0) return @intCast(posix.saveError(result));
-                    std.debug.print("result = {d}\n", .{result});
                     len.* = result;
                     return 0;
                 }
