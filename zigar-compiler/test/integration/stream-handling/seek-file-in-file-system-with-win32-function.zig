@@ -15,6 +15,7 @@ pub fn read(allocator: std.mem.Allocator, path: [:0]const u16, offset: usize, le
         null,
     );
     if (handle == null) return error.UnableToOpenFile;
+    defer _ = windows_h.CloseHandle(handle);
     if (windows_h.SetFilePointer(handle, @intCast(offset), null, windows_h.FILE_BEGIN) == 0) {
         return error.UnableToSeekFile;
     }
