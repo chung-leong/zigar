@@ -1,15 +1,28 @@
 const std = @import("std");
 const allocator = std.heap.c_allocator;
+const builtin = @import("builtin");
 
 const c = @cImport({
     @cInclude("dirent.h");
     @cInclude("sys/stat.h");
 });
 
+const darwin = struct {
+    // translate-c currently doesn't handle the __DARWIN_INODE64 macro
+    extern fn @"stat$INODE64"([*c]const u8, [*c]c.struct_stat) c_int;
+    extern fn @"opendir$INODE64"([*c]const u8) [*c]c.DIR;
+    extern fn @"readdir$INODE64"([*c]c.DIR) [*c]c.struct_dirent;
+};
+
+const opendir = if (builtin.target.os.tag.isDarwin()) darwin.@"opendir$INODE64" else c.opendir;
+const readdir = if (builtin.target.os.tag.isDarwin()) darwin.@"readdir$INODE64" else c.readdir;
+const closedir = c.closedir;
+const stat = if (builtin.target.os.tag.isDarwin()) darwin.@"stat$INODE64" else c.stat;
+
 pub fn print(path: [*:0]const u8) !void {
-    const dir = c.opendir(path) orelse return error.UnableToOpenDirectory;
-    defer _ = c.closedir(dir);
-    while (c.readdir(dir)) |entry_c_ptr| {
+    const dir = opendir(path) orelse return error.UnableToOpenDirectory;
+    defer _ = closedir(dir);
+    while (readdir(dir)) |entry_c_ptr| {
         const entry = entry_c_ptr.*;
         const Entry = @TypeOf(entry);
         const name_bytes: [*:0]const u8 = if (@hasField(Entry, "d_name"))
@@ -27,7 +40,7 @@ pub fn print(path: [*:0]const u8) !void {
         });
         defer allocator.free(child_path);
         var info: c.struct_stat = undefined;
-        const result = c.stat(child_path.ptr, &info);
+        const result = stat(child_path.ptr, &info);
         if (result < 0) return error.UnableToStatFile;
         if (c.S_ISDIR(info.st_mode)) {
             std.debug.print("{s}\n", .{name});

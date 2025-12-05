@@ -28,10 +28,17 @@ export function addTests(importModule, options) {
       const { fail } = await importTest('stack-trace');
       const lines = await capture(() => fail());
       const text = lines.join('\n');
-      expect(text).to.contain('return error.HomerSimpson');
-      expect(text).to.contain('try @call(.never_inline, d, .{})');
-      expect(text).to.contain('try @call(.never_inline, c, .{})');
-      expect(text).to.contain('try @call(.never_inline, b, .{})');
+      if (target === 'linux') {
+        expect(text).to.contain('return error.HomerSimpson');
+        expect(text).to.contain('try @call(.never_inline, d, .{})');
+        expect(text).to.contain('try @call(.never_inline, c, .{})');
+        expect(text).to.contain('try @call(.never_inline, b, .{})');
+      } else if (target === 'darwin') {
+        expect(text).to.contain('in _stack-trace.d');
+        expect(text).to.contain('in _stack-trace.c');
+        expect(text).to.contain('in _stack-trace.b');
+        expect(text).to.contain('in _stack-trace.a');
+      }
     })
     skip.entirely.unless(target === 'wasm32').and(runtimeSafety).
     it('should produce an error return trace', async function() {
