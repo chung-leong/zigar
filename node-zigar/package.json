@@ -8,7 +8,8 @@
     "./cjs": "./dist/index.cjs"
   },
   "bin": {
-    "node-zigar": "bin/cli.js"
+    "node-zigar": "bin/cli.js",
+    "zigar": "bin/cli.js"
   },
   "type": "module",
   "directories": {

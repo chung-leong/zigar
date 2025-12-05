@@ -4,7 +4,8 @@
   "description": "Webpack plugin for transpiling Zig code",
   "main": "./dist/index.js",
   "bin": {
-    "zigar-loader": "bin/cli.js"
+    "zigar-loader": "bin/cli.js",
+    "zigar": "bin/cli.js"
   },
   "type": "commonjs",
   "directories": {

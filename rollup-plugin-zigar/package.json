@@ -4,7 +4,8 @@
   "description": "Rollup plugin for transpiling Zig code",
   "main": "./dist/index.js",
   "bin": {
-    "rollup-plugin-zigar": "bin/cli.js"
+    "rollup-plugin-zigar": "bin/cli.js",
+    "zigar": "bin/cli.js"
   },
   "type": "module",
   "directories": {
