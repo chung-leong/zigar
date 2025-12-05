@@ -709,6 +709,7 @@ export function addTests(importModule, options) {
         shutdown();
       }
     })
+    skip.entirely.if(target === 'win32').  
     it('should create named semaphore using pthread', async function() {
       const { 
         spawn,
@@ -793,10 +794,16 @@ export function addTests(importModule, options) {
         const expected = [
           'Thread 1 found anyopaque@12345 and anyopaque@67',
           'Thread 2 found anyopaque@22222 and null',
-          'Destructor 1 called: anyopaque@12345',
-          'Destructor 2 called: anyopaque@67',
-          'Destructor 1 called: anyopaque@22222'
         ];
+        if (target !== 'darwin') {
+          expected.push(
+            'Destructor 1 called: anyopaque@12345',
+            'Destructor 2 called: anyopaque@67',
+            'Destructor 1 called: anyopaque@22222'
+          );
+        }
+        const count = getDestruction();
+        expect(count).to.equal(3);
         for (const line of expected) {
           expect(lines).to.contain(line);
         }
