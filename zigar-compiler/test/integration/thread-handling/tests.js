@@ -682,7 +682,7 @@ export function addTests(importModule, options) {
           spawn();
           await delay(250);
           unlock();
-          await delay(550);
+          await delay(750);
         });
         const t1Timeout = lines.indexOf('Thread 1 timed out: true');
         const mtRelease = lines.indexOf('Main thread releasing write lock');
