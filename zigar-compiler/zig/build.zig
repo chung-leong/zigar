@@ -33,6 +33,8 @@ pub fn build(b: *std.Build) !void {
     const imports = try std.mem.concat(b.allocator, Import, &.{ zigar_imports, extra_imports });
     const mod = b.createModule(.{
         .root_source_file = .{ .cwd_relative = cfg.module_path },
+        .target = target,
+        .optimize = optimize,
         .imports = imports,
     });
     mod.addIncludePath(.{ .cwd_relative = cfg.module_dir });
@@ -94,4 +96,8 @@ pub fn build(b: *std.Build) !void {
     }
     wf.step.dependOn(&lib.step);
     b.getInstallStep().dependOn(&wf.step);
+    const mod_tests = b.addTest(.{ .root_module = mod });
+    const run_mod_tests = b.addRunArtifact(mod_tests);
+    const test_step = b.step("test", "Run tests");
+    test_step.dependOn(&run_mod_tests.step);
 }
