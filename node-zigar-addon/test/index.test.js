@@ -70,19 +70,19 @@ describe('Addon functionalities', function() {
       arch: os.arch(),
       platform: os.platform(),
     };
-    const getModulePath = (name) => {
+    const getModulePath = async (name) => {
       const modPath = join(sampleDir, `${name}.zigar`);
-      const { outputPath } = createConfig(null, modPath, options);
+      const { outputPath } = await createConfig(null, modPath, options);
       return outputPath;
     };
     describe('importModule', function() {
-      it('should load module', function() {
-        const path = getModulePath('integers');
+      it('should load module', async function() {
+        const path = await getModulePath('integers');
         const module = importModule(path, { recompile: true });
         expect(module.int32).to.equal(1234);
       })
-      it('should throw when module is missing', function() {
-        const path = getModulePath('missing');
+      it('should throw when module is missing', async function() {
+        const path = await getModulePath('missing');
         let error;
         try {
           importModule(path, { addonDir });

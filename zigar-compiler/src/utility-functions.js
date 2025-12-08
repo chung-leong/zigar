@@ -1,4 +1,4 @@
-import childProcess from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   chmod, lstat, mkdir, open, readFile, readdir, realpath, rmdir, stat, unlink, writeFile
@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 const require = createRequire(import.meta.url);
-const execFile = promisify(childProcess.execFile);
+const execFileAsync = promisify(execFile);
 
 export async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
   while (true)   {
@@ -50,7 +50,7 @@ async function checkPidFile(pidPath, staleTime) {
       const win32 = os.platform() === 'win32';
       const program = (win32) ? 'tasklist' : 'ps';
       const args = (win32) ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
-      const { stdout } = await execFile(program, args, { windowsHide: true });
+      const { stdout } = await execFileAsync(program, args, { windowsHide: true });
       if (win32 && !stdout.includes(pid)) {
         throw new Error('Process not found');
       }

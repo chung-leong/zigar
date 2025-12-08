@@ -11,7 +11,8 @@ import {
   compile,
   createConfig,
   getModuleCachePath,
-  runCompiler
+  runCompiler,
+  test,
 } from '../src/compilation.js';
 import { delay } from '../src/utility-functions.js';
 
@@ -64,7 +65,7 @@ describe('Compilation', function() {
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options = { optimize: 'Debug', zigPath: 'donut', zigArgs: '-Dsomething=123' };
       const modPath = getModuleCachePath(srcPath, options);
-      const config = createConfig(srcPath, modPath, options);
+      const config = await createConfig(srcPath, modPath, options);
       expect(config.zigPath).to.equal('donut');
       expect(config.zigArgs).to.contain('build');
       expect(config.zigArgs).to.contain('-Dsomething=123');
@@ -73,7 +74,7 @@ describe('Compilation', function() {
       const srcPath = absolute('./zig-samples/basic/integers.zig');
       const options = { optimize: 'Debug', zigArgs: 'donut -Dtarget=hello -Doptimize=hello' };
       const modPath = getModuleCachePath(srcPath, options);
-      const config = createConfig(srcPath, modPath, options);
+      const config = await createConfig(srcPath, modPath, options);
       expect(config.zigPath).to.equal('zig');
       expect(config.zigArgs).to.not.contain('build');
       expect(config.zigArgs).to.contain('donut');
@@ -81,24 +82,24 @@ describe('Compilation', function() {
       expect(config.zigArgs).to.contain('-Doptimize=hello');
       expect(config.zigArgs).to.have.lengthOf(3);
     })
-    it('should place DLL inside module folder', function() {
+    it('should place DLL inside module folder', async function() {
       const srcPath = '/project/src/hello.zig';
       const options = {
         platform: 'win32',
         arch: 'x64',
       };
       const modPath = join('lib', 'hello.zigar');
-      const config = createConfig(srcPath, modPath, options);
+      const config = await createConfig(srcPath, modPath, options);
       expect(config.outputPath).to.equal(join(modPath, 'win32.x64.dll'));
     })
-    it('should use Unix extension for unrecogized platforms', function() {
+    it('should use Unix extension for unrecogized platforms', async function() {
       const srcPath = '/project/src/hello.zig';
       const options = {
         platform: 'freebsd',
         arch: 'arm64',
       };
       const modPath = join('lib', 'hello.zigar');
-      const config = createConfig(srcPath, modPath, options);
+      const config = await createConfig(srcPath, modPath, options);
       expect(config.outputPath).to.equal(join(modPath, 'freebsd.arm64.so'));
     })
   })
@@ -279,7 +280,7 @@ describe('Compilation', function() {
       const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch(), clean: true };
       const modPath = getModuleCachePath(srcPath, options);
       await expect(compile(srcPath, modPath, options)).to.eventually.be.rejectedWith(Error);
-      const { moduleBuildDir } = createConfig(srcPath, modPath, options);
+      const { moduleBuildDir } = await createConfig(srcPath, modPath, options);
       let info;
       try {
         info = await stat(moduleBuildDir);
@@ -356,6 +357,15 @@ describe('Compilation', function() {
       const options = { optimize: 'Debug', arch: 'x64', platform: 'linux', useLLVM: false };
       const modPath = getModuleCachePath(srcPath, options);
       await expect(compile(srcPath, modPath, options)).to.eventually.be.fulfilled;
+    })
+  })
+  describe('test', function() {
+    it('should run zig test cases', async function() {
+      const srcPath = absolute('./zig-samples/basic/test.zig');
+      const options = { optimize: 'Debug', platform: os.platform(), arch: os.arch(), silent: true };
+      const { code, stderr } = await test(srcPath, options);
+      expect(code).to.equal(1);
+      expect(stderr).to.contain(`error: 'test.test.Test 3' failed`);
     })
   })
 })

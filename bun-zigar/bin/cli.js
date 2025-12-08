@@ -6,9 +6,9 @@ import { buildAddon, optionsForAddon } from 'node-zigar-addon';
 import os from 'os';
 import { dirname, extname, join, parse, relative, resolve } from 'path';
 import {
-  compile, findConfigFile, generateCode, getArch, getPlatform, optionsForCompile, processConfig,
+  compile, findConfigFile, generateCode, getArch, getPlatform, hideStatus, optionsForCompile,
+  processConfig, showResult, showStatus, test,
 } from 'zigar-compiler';
-import { hideStatus, showResult, showStatus } from '../dist/status.js';
 
 const require = createRequire(import.meta.url);
 
@@ -216,6 +216,21 @@ function findZigarCompiler() {
   return resolve(jsPath, '../..');
 }
 
+async function runTests(args) {
+  let srcPath, extraArgs = [];
+  for (const arg of args) {
+    if (!srcPath && !arg.startsWith('-')) {
+      srcPath = resolve(process.cwd(), arg);
+    } else {
+      extraArgs.push(arg);
+    }
+  }  
+  const { code } = await test(srcPath, { extraArgs });
+  if (code) {
+    process.exit(code);
+  }
+}
+
 function printHelp() {
   const lines = [
     'Usage: bunx bun-zigar [command]',
@@ -227,6 +242,7 @@ function printHelp() {
     '  custom        Create a copy of Zigar\'s build.zig in the current folder',
     '  extra         Create a barebone build.extra.zig in the current folder',
     '  preload       Add bun-zigar as preloaded module to bunfig.toml',
+    '  test <path>   Run a Zig module\'s unit tests',
     '',
     '  help          Show this message',
     '',
@@ -253,6 +269,9 @@ try {
       break;
     case 'preload':
       await addPreload();
+      break;
+    case 'test':
+      await runTests(process.argv.slice(3));
       break;
     case 'help':
     case undefined:

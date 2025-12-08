@@ -5,9 +5,9 @@
   const { workerData } = require('worker_threads');
   const {
     compile, extractOptions, findConfigFile, findSourceFile, getArch, getCachePath,
-    getModuleCachePath, getPlatform, loadConfigFile, normalizePath, optionsForCompile,
+    getModuleCachePath, getPlatform, hideStatus, loadConfigFile, normalizePath, optionsForCompile,
+    showStatus,
   } = require('zigar-compiler/cjs');
-  const { hideStatus, showStatus } = require('./status.cjs');
 
   const { url, buffers } = workerData;
   let status = 0, result = null;

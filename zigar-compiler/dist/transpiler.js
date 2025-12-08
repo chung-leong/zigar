@@ -1,4 +1,4 @@
-import childProcess from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs, { open, readdir, lstat, rmdir, unlink, readFile, stat, mkdir, writeFile, chmod, realpath } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -677,7 +677,7 @@ function extractTimes(st_atim, st_mtim, fst_flags) {
 }
 
 const require$1 = createRequire(import.meta.url);
-const execFile$1 = promisify(childProcess.execFile);
+const execFileAsync$1 = promisify(execFile);
 
 async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
   while (true)   {
@@ -716,7 +716,7 @@ async function checkPidFile(pidPath, staleTime) {
       const win32 = os.platform() === 'win32';
       const program = (win32) ? 'tasklist' : 'ps';
       const args = (win32) ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
-      const { stdout } = await execFile$1(program, args, { windowsHide: true });
+      const { stdout } = await execFileAsync$1(program, args, { windowsHide: true });
       if (win32 && !stdout.includes(pid)) {
         throw new Error('Process not found');
       }
@@ -1397,44 +1397,18 @@ function* chunk(arr, n) {
   }
 }
 
-const execFile = promisify(childProcess.execFile);
+const execFileAsync = promisify(execFile);
 
 async function compile(srcPath, modPath, options) {
   const srcInfo = (srcPath) ? await stat(srcPath) : null;
   if (srcInfo?.isDirectory()) {
     srcPath = join(srcPath, '?');
   }
-  const config = createConfig(srcPath, modPath, options);
-  const { moduleDir, outputPath, ignoreBuildFile } = config;
+  const config = await createConfig(srcPath, modPath, options);
+  const { outputPath } = config;
   let changed = false;
   let sourcePaths = [];
   if (srcPath) {
-    if (!ignoreBuildFile) {
-      try {
-        // add custom build file if one is found
-        const path = moduleDir + 'build.zig';
-        const code = await readFile(path, 'utf-8');
-        const remaining = code.replace(/\/\/.*/g, '').trim();
-        if (remaining) {
-          config.buildFilePath = path;
-        }
-      } catch (err) {
-      }
-    }
-    try {
-      // add path to build.extra.zig if it exists
-      const path = moduleDir + 'build.extra.zig';
-      await stat(path);
-      config.extraFilePath = path;
-    } catch (err) {
-    }
-    try {
-    // add package manager manifest
-      const path = moduleDir + 'build.zig.zon';
-      await stat(path);
-      config.packageConfigPath = path;
-    } catch (err) {
-    }
     const { zigPath, zigArgs, moduleBuildDir, pdbPath, optimize } = config;
     // only one process can compile a given file at a time
     const pidPath = `${moduleBuildDir}.pid`;
@@ -1504,7 +1478,7 @@ async function runCompiler(path, args, options) {
   const unlock = await getLock();
   try {
     onStart?.();
-    return await execFile(path, args, { cwd, windowsHide: true });
+    return execFileAsync(path, args, { cwd, windowsHide: true });
   } catch (err) {
     throw new CompilationError(path, args, cwd, err);
   } finally {
@@ -1592,7 +1566,17 @@ function getModuleCachePath(srcPath, options) {
   return join(cacheDir, folder, optimize, `${src.name}.zigar`);
 }
 
-function createConfig(srcPath, modPath, options = {}) {
+async function findModuleFile(moduleDir, fileName) {
+  try {
+    // add custom build file if one is found
+    const path = moduleDir + fileName;
+    await stat(path);
+    return path;
+  } catch (err) {
+  }
+}
+
+async function createConfig(srcPath, modPath, options = {}) {
   const {
     platform = getPlatform(),
     arch = getArch(),
@@ -1634,7 +1618,7 @@ function createConfig(srcPath, modPath, options = {}) {
   })();
   let pdbPath;
   if (platform === 'win32') {
-    pdbPath = join(modPath, `${platform}.${arch}.pdb`);
+    pdbPath = join(dirname(outputPath), `${platform}.${arch}.pdb`);
   }
   const zigArgs = zigArgsStr.split(/\s+/).filter(s => !!s);
   if (!zigArgs.find(s => /^[^-]/.test(s))) {
@@ -1681,7 +1665,22 @@ function createConfig(srcPath, modPath, options = {}) {
     }
   }
   const zigarSrcPath = fileURLToPath(new URL$1('../zig/', import.meta.url));
-  const buildFilePath = join(zigarSrcPath, `build.zig`);
+  let buildFilePath = join(zigarSrcPath, `build.zig`);
+  if (!ignoreBuildFile) {
+    // use custom build file if one is found
+    const customBuildFilePath = await findModuleFile(moduleDir, 'build.zig');
+    if (customBuildFilePath) {
+      const code = await readFile(customBuildFilePath, 'utf-8');
+      const remaining = code.replace(/\/\/.*/g, '').trim();
+      if (remaining) {
+        buildFilePath = customBuildFilePath;
+      }
+    }
+  }
+  // add path to build.extra.zig if it exists
+  const extraFilePath = await findModuleFile(moduleDir, 'build.extra.zig');
+  // add package manager manifest
+  const packageConfigPath = await findModuleFile(moduleDir, 'build.zig.zon');
   return {
     platform,
     arch,
@@ -1694,7 +1693,7 @@ function createConfig(srcPath, modPath, options = {}) {
     buildDir,
     buildDirSize,
     buildFilePath,
-    packageConfigPath: undefined,
+    packageConfigPath,
     outputPath,
     pdbPath,
     clean,
@@ -1712,7 +1711,7 @@ function createConfig(srcPath, modPath, options = {}) {
     omitFunctions,
     omitVariables,
     ignoreBuildFile,
-    extraFilePath: undefined,
+    extraFilePath,
   };
 }
 
@@ -10806,6 +10805,8 @@ var fdLockSet = mixin({
   },
 });
 
+var fdSendfile = undefined;
+
 var all = mixin({
   defineVisitor() {
     return {
@@ -11108,6 +11109,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   SyscallFdRead: fdRead,
   SyscallFdReaddir: fdReaddir,
   SyscallFdSeek: fdSeek,
+  SyscallFdSendfile: fdSendfile,
   SyscallFdSync: fdSync,
   SyscallFdTell: fdTell,
   SyscallFdWrite: fdWrite,

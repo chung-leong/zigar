@@ -1,4 +1,4 @@
-import childProcess from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs, { open, readdir, lstat, rmdir, unlink, readFile, stat, mkdir, writeFile, chmod, realpath } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -7,6 +7,10 @@ import { sep, dirname, join, resolve, relative, parse, basename, isAbsolute } fr
 import { fileURLToPath, URL } from 'node:url';
 import { promisify } from 'node:util';
 import { writeFileSync } from 'node:fs';
+import { execSync } from 'child_process';
+import { write } from 'fs';
+import { platform } from 'os';
+import { isatty } from 'tty';
 
 const StructureType = {
   Primitive: 0};
@@ -61,7 +65,7 @@ function findObjects(structures, SLOTS) {
 }
 
 const require$1 = createRequire(import.meta.url);
-const execFile$1 = promisify(childProcess.execFile);
+const execFileAsync$1 = promisify(execFile);
 
 async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
   while (true)   {
@@ -101,7 +105,7 @@ async function checkPidFile(pidPath, staleTime) {
       const win32 = os.platform() === 'win32';
       const program = (win32) ? 'tasklist' : 'ps';
       const args = (win32) ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
-      const { stdout } = await execFile$1(program, args, { windowsHide: true });
+      const { stdout } = await execFileAsync$1(program, args, { windowsHide: true });
       if (win32 && !stdout.includes(pid)) {
         throw new Error('Process not found');
       }
@@ -783,44 +787,34 @@ function* chunk(arr, n) {
   }
 }
 
-const execFile = promisify(childProcess.execFile);
+const execFileAsync = promisify(execFile);
+
+async function test(srcPath, options) {
+  const { silent = false, extraArgs = [] } = options;
+  const config = await createConfig(srcPath, '', options);
+  const { zigPath, zigArgs, moduleBuildDir } = config;
+  // create config file
+  await createProject(config, moduleBuildDir);
+  const cwd = moduleBuildDir;
+  const stdio = (silent) ? 'pipe' : 'inherit';
+  const child = spawn(zigPath, [ ...zigArgs, 'test', ...extraArgs ], { cwd, stdio, windowsHide: true });
+  const output = [];
+  child.stderr?.on('data', chunk => output.push(chunk));
+  const code = await new Promise(resolve => child.on('close', resolve));
+  const blob = new Blob(output);
+  return { code, stderr: await blob.text() };
+}
 
 async function compile(srcPath, modPath, options) {
   const srcInfo = (srcPath) ? await stat(srcPath) : null;
   if (srcInfo?.isDirectory()) {
     srcPath = join(srcPath, '?');
   }
-  const config = createConfig(srcPath, modPath, options);
-  const { moduleDir, outputPath, ignoreBuildFile } = config;
+  const config = await createConfig(srcPath, modPath, options);
+  const { outputPath } = config;
   let changed = false;
   let sourcePaths = [];
   if (srcPath) {
-    if (!ignoreBuildFile) {
-      try {
-        // add custom build file if one is found
-        const path = moduleDir + 'build.zig';
-        const code = await readFile(path, 'utf-8');
-        const remaining = code.replace(/\/\/.*/g, '').trim();
-        if (remaining) {
-          config.buildFilePath = path;
-        }
-      } catch (err) {
-      }
-    }
-    try {
-      // add path to build.extra.zig if it exists
-      const path = moduleDir + 'build.extra.zig';
-      await stat(path);
-      config.extraFilePath = path;
-    } catch (err) {
-    }
-    try {
-    // add package manager manifest
-      const path = moduleDir + 'build.zig.zon';
-      await stat(path);
-      config.packageConfigPath = path;
-    } catch (err) {
-    }
     const { zigPath, zigArgs, moduleBuildDir, pdbPath, optimize } = config;
     // only one process can compile a given file at a time
     const pidPath = `${moduleBuildDir}.pid`;
@@ -890,7 +884,7 @@ async function runCompiler(path, args, options) {
   const unlock = await getLock();
   try {
     onStart?.();
-    return await execFile(path, args, { cwd, windowsHide: true });
+    return execFileAsync(path, args, { cwd, windowsHide: true });
   } catch (err) {
     throw new CompilationError(path, args, cwd, err);
     /* c8 ignore next */
@@ -979,7 +973,17 @@ function getModuleCachePath(srcPath, options) {
   return join(cacheDir, folder, optimize, `${src.name}.zigar`);
 }
 
-function createConfig(srcPath, modPath, options = {}) {
+async function findModuleFile(moduleDir, fileName) {
+  try {
+    // add custom build file if one is found
+    const path = moduleDir + fileName;
+    await stat(path);
+    return path;
+  } catch (err) {
+  }
+}
+
+async function createConfig(srcPath, modPath, options = {}) {
   const {
     platform = getPlatform(),
     arch = getArch(),
@@ -1021,7 +1025,7 @@ function createConfig(srcPath, modPath, options = {}) {
   })();
   let pdbPath;
   if (platform === 'win32') {
-    pdbPath = join(modPath, `${platform}.${arch}.pdb`);
+    pdbPath = join(dirname(outputPath), `${platform}.${arch}.pdb`);
   }
   const zigArgs = zigArgsStr.split(/\s+/).filter(s => !!s);
   if (!zigArgs.find(s => /^[^-]/.test(s))) {
@@ -1068,7 +1072,22 @@ function createConfig(srcPath, modPath, options = {}) {
     }
   }
   const zigarSrcPath = fileURLToPath(new URL('../zig/', import.meta.url));
-  const buildFilePath = join(zigarSrcPath, `build.zig`);
+  let buildFilePath = join(zigarSrcPath, `build.zig`);
+  if (!ignoreBuildFile) {
+    // use custom build file if one is found
+    const customBuildFilePath = await findModuleFile(moduleDir, 'build.zig');
+    if (customBuildFilePath) {
+      const code = await readFile(customBuildFilePath, 'utf-8');
+      const remaining = code.replace(/\/\/.*/g, '').trim();
+      if (remaining) {
+        buildFilePath = customBuildFilePath;
+      }
+    }
+  }
+  // add path to build.extra.zig if it exists
+  const extraFilePath = await findModuleFile(moduleDir, 'build.extra.zig');
+  // add package manager manifest
+  const packageConfigPath = await findModuleFile(moduleDir, 'build.zig.zon');
   return {
     platform,
     arch,
@@ -1081,7 +1100,7 @@ function createConfig(srcPath, modPath, options = {}) {
     buildDir,
     buildDirSize,
     buildFilePath,
-    packageConfigPath: undefined,
+    packageConfigPath,
     outputPath,
     pdbPath,
     clean,
@@ -1099,7 +1118,7 @@ function createConfig(srcPath, modPath, options = {}) {
     omitFunctions,
     omitVariables,
     ignoreBuildFile,
-    extraFilePath: undefined,
+    extraFilePath,
   };
 }
 
@@ -1428,4 +1447,75 @@ function findSourceFile(modulePath, options) {
   return modules?.[modulePath]?.source;
 }
 
-export { compile, extractOptions, findConfigFile, findSourceFile, generateCode, getArch, getCachePath, getLibraryExt, getModuleCachePath, getPlatform, loadConfigFile, normalizePath, optionsForCompile, optionsForTranspile, processConfig };
+const statusCharacters = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
+let statusClear;
+
+function showStatus(message) {
+  const fd = 2;
+  const tty = isatty(fd);
+  let currentCP;
+  hideStatus();
+  if (tty) {
+    /* c8 ignore start */
+    if (platform() === 'win32') {
+      try {
+        const m = /\d+/.exec(execSync('chcp').toString().trim());
+        if (m) {
+          currentCP = parseInt(m[0]);
+          if (currentCP !== 65001) {
+            execSync('chcp 65001');
+          }
+        }
+      } catch (err) {
+      }
+    }
+    /* c8 ignore end */
+    let pos = 0;
+    const update = () => {
+      const c = statusCharacters.charAt(pos++);
+      if (pos >= statusCharacters.length) {
+        pos = 0;
+      }
+      write(fd, `\r\x1b[33m${c}\x1b[0m ${message}`, () => {});
+    };
+    const interval = setInterval(update, 150);
+    statusClear = () => {
+      clearInterval(interval);
+      write(fd, '\r\x1b[K', () => {});
+      /* c8 ignore start */
+      if (currentCP && currentCP !== 65001) {
+        try {
+          execSync(`chcp ${currentCP}`);
+        } catch (err){
+        }
+      }
+      /* c8 ignore end */
+    };
+    update();
+    /* c8 ignore next 6 */
+  } else {
+    write(fd, message, () => {});
+    statusClear = () => {
+      write(fd, `\b \b`.repeat(message.length), () => {});
+    };
+  }
+}
+
+function hideStatus() {
+  statusClear?.();
+  statusClear = null;
+}
+
+function showResult(message) {
+  const fd = 2;
+  const tty = isatty(fd);
+  const c = '\u2713';
+  if (tty) {
+    write(fd, `\r\x1b[32m${c}\x1b[0m ${message}\n`, () => {});
+    /* c8 ignore next 3 */
+  } else {
+    write(fd, `${message}\n`, () => {});
+  }
+}
+
+export { compile, extractOptions, findConfigFile, findSourceFile, generateCode, getArch, getCachePath, getLibraryExt, getModuleCachePath, getPlatform, hideStatus, loadConfigFile, normalizePath, optionsForCompile, optionsForTranspile, processConfig, showResult, showStatus, test };
