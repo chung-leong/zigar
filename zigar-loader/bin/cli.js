@@ -2,8 +2,8 @@
 
 const { execSync } = require('child_process');
 const { copyFile } = require('fs/promises');
-const { createRequire } = require('module');
 const { join, resolve } = require('path');
+const { test } = require('zigar-compiler/cjs');
 
 async function copyBuildFile() {
   const modPath = findZigarCompiler();
@@ -57,6 +57,21 @@ function findExecutable(cmd) {
   return path;
 }
 
+async function runTests(args) {
+  let srcPath, extraArgs = [];
+  for (const arg of args) {
+    if (!srcPath && !arg.startsWith('-')) {
+      srcPath = resolve(process.cwd(), arg);
+    } else {
+      extraArgs.push(arg);
+    }
+  }  
+  const { code } = await test(srcPath, { extraArgs });
+  if (code) {
+    process.exit(code);
+  }
+}
+
 function printHelp() {
   const lines = [
     'Usage: npx zigar-loader [command]',
@@ -66,6 +81,8 @@ function printHelp() {
     '  custom        Create a copy of Zigar\'s build.zig in the current folder',
     '  extra         Create a barebone build.extra.zig in the current folder',
     '  patch         Patch Zig\'s standard library to enable thread support',
+    '  test <path>   Run a Zig module\'s unit tests',
+    '',
     '  help          Show this message',
     '',
   ];
@@ -86,6 +103,9 @@ function printHelp() {
         break;
       case 'patch':
         await patchStandardLibrary();
+        break;
+      case 'test':
+        await runTests(process.argv.slice(3));
         break;
       case 'help':
       case undefined:
