@@ -6,9 +6,9 @@ import { buildAddon, optionsForAddon } from 'node-zigar-addon';
 import os from 'os';
 import { dirname, extname, join, parse, relative, resolve } from 'path';
 import {
-  compile, findConfigFile, generateCode, getArch, getPlatform, loadConfigFile, optionsForCompile,
+  compile, findConfigFile, generateCode, getArch, getPlatform, hideStatus, loadConfigFile,
+  optionsForCompile, showResult, showStatus, test
 } from 'zigar-compiler';
-import { hideStatus, showResult, showStatus } from '../dist/status.cjs';
 
 const require = createRequire(import.meta.url);
 
@@ -188,6 +188,21 @@ function findZigarCompiler() {
   return resolve(jsPath, '../..');
 }
 
+async function runTests(args) {
+  let srcPath, extraArgs = [];
+  for (const arg of args) {
+    if (!srcPath && !arg.startsWith('-')) {
+      srcPath = resolve(process.cwd(), arg);
+    } else {
+      extraArgs.push(arg);
+    }
+  }  
+  const { code } = await test(srcPath, { extraArgs });
+  if (code) {
+    process.exit(code);
+  }
+}
+
 function printHelp() {
   const lines = [
     'Usage: npx node-zigar [command]',
@@ -198,6 +213,7 @@ function printHelp() {
     '  build         Build library files for Zig modules and Node.js addon',
     '  custom        Create a copy of Zigar\'s build.zig in the current folder',
     '  extra         Create a barebone build.extra.zig in the current folder',
+    '  test <path>   Run a Zig module\'s unit tests',
     '',
     '  help          Show this message',
     '',
@@ -221,6 +237,9 @@ try {
       break;
     case 'extra':
       await copyBuildExtraFile();
+      break;
+    case 'test':
+      await runTests(process.argv.slice(3));
       break;
     case 'help':
     case undefined:

@@ -4,9 +4,9 @@ import { cwd } from 'process';
 import { pathToFileURL } from 'url';
 import {
   compile, extractOptions, findConfigFile, findSourceFile, generateCode, getArch, getCachePath,
-  getModuleCachePath, getPlatform, loadConfigFile, normalizePath, optionsForCompile
+  getModuleCachePath, getPlatform, hideStatus, loadConfigFile, normalizePath, optionsForCompile,
+  showStatus,
 } from 'zigar-compiler';
-import { hideStatus, showStatus } from './status.cjs';
 
 const baseURL = pathToFileURL(`${cwd()}/`).href;
 const extensionsRegex = /\.(zig|zigar)(\?|$)/;

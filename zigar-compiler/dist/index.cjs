@@ -1,6 +1,6 @@
 'use strict';
 
-var childProcess = require('node:child_process');
+var node_child_process = require('node:child_process');
 var node_crypto = require('node:crypto');
 var fs = require('node:fs/promises');
 var node_module = require('node:module');
@@ -9,6 +9,10 @@ var node_path = require('node:path');
 var node_url = require('node:url');
 var node_util = require('node:util');
 var node_fs = require('node:fs');
+var child_process = require('child_process');
+var fs$1 = require('fs');
+var os$1 = require('os');
+var tty = require('tty');
 
 var _documentCurrentScript = typeof document !== 'undefined' ? document.currentScript : null;
 const StructureType = {
@@ -64,7 +68,7 @@ function findObjects(structures, SLOTS) {
 }
 
 const require$1 = node_module.createRequire((typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (_documentCurrentScript && _documentCurrentScript.tagName.toUpperCase() === 'SCRIPT' && _documentCurrentScript.src || new URL('index.cjs', document.baseURI).href)));
-const execFile$1 = node_util.promisify(childProcess.execFile);
+const execFileAsync$1 = node_util.promisify(node_child_process.execFile);
 
 async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
   while (true)   {
@@ -104,7 +108,7 @@ async function checkPidFile(pidPath, staleTime) {
       const win32 = os.platform() === 'win32';
       const program = (win32) ? 'tasklist' : 'ps';
       const args = (win32) ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
-      const { stdout } = await execFile$1(program, args, { windowsHide: true });
+      const { stdout } = await execFileAsync$1(program, args, { windowsHide: true });
       if (win32 && !stdout.includes(pid)) {
         throw new Error('Process not found');
       }
@@ -356,7 +360,7 @@ function generateCode(definition, params) {
     envVariables = {},
     standaloneLoader,
   } = params;
-  const exports = getExports(structures);
+  const exports$1 = getExports(structures);
   const lines = [];
   const type = standaloneLoader?.type ?? 'esm';
   const add = manageIndentation(lines);
@@ -427,9 +431,9 @@ function generateCode(definition, params) {
     add(`const { constructor: v0 } = root;`);
     add(`const v1 = env.getSpecialExports();`);
     specialVarName = 'v1';
-    if (exports.length > 2) {
+    if (exports$1.length > 2) {
       add(`const {`);
-      for (const [ index, name ] of exports.entries()) {
+      for (const [ index, name ] of exports$1.entries()) {
         if (index >= 2) {
           add(`${name}: v${index},`);
         }
@@ -438,13 +442,13 @@ function generateCode(definition, params) {
     }
     if (type == 'esm') {
       add(`export {`);
-      for (const [ index, name ] of exports.entries()) {
+      for (const [ index, name ] of exports$1.entries()) {
         add(`v${index} as ${name},`);
       }
       add(`};`);
     } else {
       add(`module.exports = {`);
-      for (const [ index, name ] of exports.entries()) {
+      for (const [ index, name ] of exports$1.entries()) {
         add(`${name}: v${index},`);
       }
       add(`};`);
@@ -463,7 +467,7 @@ function generateCode(definition, params) {
     add(`\n${getLibraryExt}`);
   }
   const code = lines.join('\n');
-  return { code, exports, structures };
+  return { code, exports: exports$1, structures };
 }
 
 function addStructureDefinitions(lines, definition) {
@@ -786,44 +790,34 @@ function* chunk(arr, n) {
   }
 }
 
-const execFile = node_util.promisify(childProcess.execFile);
+const execFileAsync = node_util.promisify(node_child_process.execFile);
+
+async function test(srcPath, options) {
+  const { silent = false, extraArgs = [] } = options;
+  const config = await createConfig(srcPath, '', options);
+  const { zigPath, zigArgs, moduleBuildDir } = config;
+  // create config file
+  await createProject(config, moduleBuildDir);
+  const cwd = moduleBuildDir;
+  const stdio = (silent) ? 'pipe' : 'inherit';
+  const child = node_child_process.spawn(zigPath, [ ...zigArgs, 'test', ...extraArgs ], { cwd, stdio, windowsHide: true });
+  const output = [];
+  child.stderr?.on('data', chunk => output.push(chunk));
+  const code = await new Promise(resolve => child.on('close', resolve));
+  const blob = new Blob(output);
+  return { code, stderr: await blob.text() };
+}
 
 async function compile(srcPath, modPath, options) {
   const srcInfo = (srcPath) ? await fs.stat(srcPath) : null;
   if (srcInfo?.isDirectory()) {
     srcPath = node_path.join(srcPath, '?');
   }
-  const config = createConfig(srcPath, modPath, options);
-  const { moduleDir, outputPath, ignoreBuildFile } = config;
+  const config = await createConfig(srcPath, modPath, options);
+  const { outputPath } = config;
   let changed = false;
   let sourcePaths = [];
   if (srcPath) {
-    if (!ignoreBuildFile) {
-      try {
-        // add custom build file if one is found
-        const path = moduleDir + 'build.zig';
-        const code = await fs.readFile(path, 'utf-8');
-        const remaining = code.replace(/\/\/.*/g, '').trim();
-        if (remaining) {
-          config.buildFilePath = path;
-        }
-      } catch (err) {
-      }
-    }
-    try {
-      // add path to build.extra.zig if it exists
-      const path = moduleDir + 'build.extra.zig';
-      await fs.stat(path);
-      config.extraFilePath = path;
-    } catch (err) {
-    }
-    try {
-    // add package manager manifest
-      const path = moduleDir + 'build.zig.zon';
-      await fs.stat(path);
-      config.packageConfigPath = path;
-    } catch (err) {
-    }
     const { zigPath, zigArgs, moduleBuildDir, pdbPath, optimize } = config;
     // only one process can compile a given file at a time
     const pidPath = `${moduleBuildDir}.pid`;
@@ -893,7 +887,7 @@ async function runCompiler(path, args, options) {
   const unlock = await getLock();
   try {
     onStart?.();
-    return await execFile(path, args, { cwd, windowsHide: true });
+    return execFileAsync(path, args, { cwd, windowsHide: true });
   } catch (err) {
     throw new CompilationError(path, args, cwd, err);
     /* c8 ignore next */
@@ -982,7 +976,17 @@ function getModuleCachePath(srcPath, options) {
   return node_path.join(cacheDir, folder, optimize, `${src.name}.zigar`);
 }
 
-function createConfig(srcPath, modPath, options = {}) {
+async function findModuleFile(moduleDir, fileName) {
+  try {
+    // add custom build file if one is found
+    const path = moduleDir + fileName;
+    await fs.stat(path);
+    return path;
+  } catch (err) {
+  }
+}
+
+async function createConfig(srcPath, modPath, options = {}) {
   const {
     platform = getPlatform(),
     arch = getArch(),
@@ -1023,7 +1027,7 @@ function createConfig(srcPath, modPath, options = {}) {
   })();
   let pdbPath;
   if (platform === 'win32') {
-    pdbPath = node_path.join(modPath, `${platform}.${arch}.pdb`);
+    pdbPath = node_path.join(node_path.dirname(outputPath), `${platform}.${arch}.pdb`);
   }
   const zigArgs = zigArgsStr.split(/\s+/).filter(s => !!s);
   if (!zigArgs.find(s => /^[^-]/.test(s))) {
@@ -1070,7 +1074,22 @@ function createConfig(srcPath, modPath, options = {}) {
     }
   }
   const zigarSrcPath = node_url.fileURLToPath(new node_url.URL('../zig/', (typeof document === 'undefined' ? require('u' + 'rl').pathToFileURL(__filename).href : (_documentCurrentScript && _documentCurrentScript.tagName.toUpperCase() === 'SCRIPT' && _documentCurrentScript.src || new URL('index.cjs', document.baseURI).href))));
-  const buildFilePath = node_path.join(zigarSrcPath, `build.zig`);
+  let buildFilePath = node_path.join(zigarSrcPath, `build.zig`);
+  if (!ignoreBuildFile) {
+    // use custom build file if one is found
+    const customBuildFilePath = await findModuleFile(moduleDir, 'build.zig');
+    if (customBuildFilePath) {
+      const code = await fs.readFile(customBuildFilePath, 'utf-8');
+      const remaining = code.replace(/\/\/.*/g, '').trim();
+      if (remaining) {
+        buildFilePath = customBuildFilePath;
+      }
+    }
+  }
+  // add path to build.extra.zig if it exists
+  const extraFilePath = await findModuleFile(moduleDir, 'build.extra.zig');
+  // add package manager manifest
+  const packageConfigPath = await findModuleFile(moduleDir, 'build.zig.zon');
   return {
     platform,
     arch,
@@ -1083,7 +1102,7 @@ function createConfig(srcPath, modPath, options = {}) {
     buildDir,
     buildDirSize,
     buildFilePath,
-    packageConfigPath: undefined,
+    packageConfigPath,
     outputPath,
     pdbPath,
     clean,
@@ -1100,7 +1119,7 @@ function createConfig(srcPath, modPath, options = {}) {
     omitFunctions,
     omitVariables,
     ignoreBuildFile,
-    extraFilePath: undefined,
+    extraFilePath,
   };
 }
 
@@ -1425,6 +1444,77 @@ function findSourceFile(modulePath, options) {
   return modules?.[modulePath]?.source;
 }
 
+const statusCharacters = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
+let statusClear;
+
+function showStatus(message) {
+  const fd = 2;
+  const tty$1 = tty.isatty(fd);
+  let currentCP;
+  hideStatus();
+  if (tty$1) {
+    /* c8 ignore start */
+    if (os$1.platform() === 'win32') {
+      try {
+        const m = /\d+/.exec(child_process.execSync('chcp').toString().trim());
+        if (m) {
+          currentCP = parseInt(m[0]);
+          if (currentCP !== 65001) {
+            child_process.execSync('chcp 65001');
+          }
+        }
+      } catch (err) {
+      }
+    }
+    /* c8 ignore end */
+    let pos = 0;
+    const update = () => {
+      const c = statusCharacters.charAt(pos++);
+      if (pos >= statusCharacters.length) {
+        pos = 0;
+      }
+      fs$1.write(fd, `\r\x1b[33m${c}\x1b[0m ${message}`, () => {});
+    };
+    const interval = setInterval(update, 150);
+    statusClear = () => {
+      clearInterval(interval);
+      fs$1.write(fd, '\r\x1b[K', () => {});
+      /* c8 ignore start */
+      if (currentCP && currentCP !== 65001) {
+        try {
+          child_process.execSync(`chcp ${currentCP}`);
+        } catch (err){
+        }
+      }
+      /* c8 ignore end */
+    };
+    update();
+    /* c8 ignore next 6 */
+  } else {
+    fs$1.write(fd, message, () => {});
+    statusClear = () => {
+      fs$1.write(fd, `\b \b`.repeat(message.length), () => {});
+    };
+  }
+}
+
+function hideStatus() {
+  statusClear?.();
+  statusClear = null;
+}
+
+function showResult(message) {
+  const fd = 2;
+  const tty$1 = tty.isatty(fd);
+  const c = '\u2713';
+  if (tty$1) {
+    fs$1.write(fd, `\r\x1b[32m${c}\x1b[0m ${message}\n`, () => {});
+    /* c8 ignore next 3 */
+  } else {
+    fs$1.write(fd, `${message}\n`, () => {});
+  }
+}
+
 exports.compile = compile;
 exports.extractOptions = extractOptions;
 exports.findConfigFile = findConfigFile;
@@ -1435,8 +1525,12 @@ exports.getCachePath = getCachePath;
 exports.getLibraryExt = getLibraryExt;
 exports.getModuleCachePath = getModuleCachePath;
 exports.getPlatform = getPlatform;
+exports.hideStatus = hideStatus;
 exports.loadConfigFile = loadConfigFile;
 exports.normalizePath = normalizePath;
 exports.optionsForCompile = optionsForCompile;
 exports.optionsForTranspile = optionsForTranspile;
 exports.processConfig = processConfig;
+exports.showResult = showResult;
+exports.showStatus = showStatus;
+exports.test = test;

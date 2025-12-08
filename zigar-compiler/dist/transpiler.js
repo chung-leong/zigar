@@ -1,4 +1,4 @@
-import childProcess from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs, { open, readdir, lstat, rmdir, unlink, readFile, stat, mkdir, writeFile, chmod, realpath } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -678,8 +678,8 @@ function extractTimes(st_atim, st_mtim, fst_flags) {
   return times;
 }
 
-const require = createRequire(import.meta.url);
-const execFile$1 = promisify(childProcess.execFile);
+const require$1 = createRequire(import.meta.url);
+const execFileAsync$1 = promisify(execFile);
 
 async function acquireLock(pidPath, wait = true, staleTime = 60000 * 5) {
   while (true)   {
@@ -718,7 +718,7 @@ async function checkPidFile(pidPath, staleTime) {
       const win32 = os.platform() === 'win32';
       const program = (win32) ? 'tasklist' : 'ps';
       const args = (win32) ? [ '/nh', '/fi', `pid eq ${pid}` ] : [ '-p', pid ];
-      const { stdout } = await execFile$1(program, args, { windowsHide: true });
+      const { stdout } = await execFileAsync$1(program, args, { windowsHide: true });
       if (win32 && !stdout.includes(pid)) {
         throw new Error('Process not found');
       }
@@ -824,7 +824,7 @@ function getPlatform() {
         const list = [];
         try {
           // scan ELF executable for imported shared libraries
-          const { closeSync, openSync, readSync } = require('fs');
+          const { closeSync, openSync, readSync } = require$1('fs');
           const fd = openSync(process.execPath, 'r');
           const sig = new Uint8Array(8);
           readSync(fd, sig);
@@ -969,7 +969,7 @@ function generateCode(definition, params) {
     envVariables = {},
     standaloneLoader,
   } = params;
-  const exports = getExports(structures);
+  const exports$1 = getExports(structures);
   const lines = [];
   const type = standaloneLoader?.type ?? 'esm';
   const add = manageIndentation(lines);
@@ -1040,9 +1040,9 @@ function generateCode(definition, params) {
     add(`const { constructor: v0 } = root;`);
     add(`const v1 = env.getSpecialExports();`);
     specialVarName = 'v1';
-    if (exports.length > 2) {
+    if (exports$1.length > 2) {
       add(`const {`);
-      for (const [ index, name ] of exports.entries()) {
+      for (const [ index, name ] of exports$1.entries()) {
         if (index >= 2) {
           add(`${name}: v${index},`);
         }
@@ -1051,13 +1051,13 @@ function generateCode(definition, params) {
     }
     if (type == 'esm') {
       add(`export {`);
-      for (const [ index, name ] of exports.entries()) {
+      for (const [ index, name ] of exports$1.entries()) {
         add(`v${index} as ${name},`);
       }
       add(`};`);
     } else {
       add(`module.exports = {`);
-      for (const [ index, name ] of exports.entries()) {
+      for (const [ index, name ] of exports$1.entries()) {
         add(`${name}: v${index},`);
       }
       add(`};`);
@@ -1076,7 +1076,7 @@ function generateCode(definition, params) {
     add(`\n${getLibraryExt}`);
   }
   const code = lines.join('\n');
-  return { code, exports, structures };
+  return { code, exports: exports$1, structures };
 }
 
 function addStructureDefinitions(lines, definition) {
@@ -1399,44 +1399,18 @@ function* chunk(arr, n) {
   }
 }
 
-const execFile = promisify(childProcess.execFile);
+const execFileAsync = promisify(execFile);
 
 async function compile(srcPath, modPath, options) {
   const srcInfo = (srcPath) ? await stat(srcPath) : null;
   if (srcInfo?.isDirectory()) {
     srcPath = join(srcPath, '?');
   }
-  const config = createConfig(srcPath, modPath, options);
-  const { moduleDir, outputPath, ignoreBuildFile } = config;
+  const config = await createConfig(srcPath, modPath, options);
+  const { outputPath } = config;
   let changed = false;
   let sourcePaths = [];
   if (srcPath) {
-    if (!ignoreBuildFile) {
-      try {
-        // add custom build file if one is found
-        const path = moduleDir + 'build.zig';
-        const code = await readFile(path, 'utf-8');
-        const remaining = code.replace(/\/\/.*/g, '').trim();
-        if (remaining) {
-          config.buildFilePath = path;
-        }
-      } catch (err) {
-      }
-    }
-    try {
-      // add path to build.extra.zig if it exists
-      const path = moduleDir + 'build.extra.zig';
-      await stat(path);
-      config.extraFilePath = path;
-    } catch (err) {
-    }
-    try {
-    // add package manager manifest
-      const path = moduleDir + 'build.zig.zon';
-      await stat(path);
-      config.packageConfigPath = path;
-    } catch (err) {
-    }
     const { zigPath, zigArgs, moduleBuildDir, pdbPath, optimize } = config;
     // only one process can compile a given file at a time
     const pidPath = `${moduleBuildDir}.pid`;
@@ -1506,7 +1480,7 @@ async function runCompiler(path, args, options) {
   const unlock = await getLock();
   try {
     onStart?.();
-    return await execFile(path, args, { cwd, windowsHide: true });
+    return execFileAsync(path, args, { cwd, windowsHide: true });
   } catch (err) {
     throw new CompilationError(path, args, cwd, err);
   } finally {
@@ -1594,7 +1568,17 @@ function getModuleCachePath(srcPath, options) {
   return join(cacheDir, folder, optimize, `${src.name}.zigar`);
 }
 
-function createConfig(srcPath, modPath, options = {}) {
+async function findModuleFile(moduleDir, fileName) {
+  try {
+    // add custom build file if one is found
+    const path = moduleDir + fileName;
+    await stat(path);
+    return path;
+  } catch (err) {
+  }
+}
+
+async function createConfig(srcPath, modPath, options = {}) {
   const {
     platform = getPlatform(),
     arch = getArch(),
@@ -1635,7 +1619,7 @@ function createConfig(srcPath, modPath, options = {}) {
   })();
   let pdbPath;
   if (platform === 'win32') {
-    pdbPath = join(modPath, `${platform}.${arch}.pdb`);
+    pdbPath = join(dirname(outputPath), `${platform}.${arch}.pdb`);
   }
   const zigArgs = zigArgsStr.split(/\s+/).filter(s => !!s);
   if (!zigArgs.find(s => /^[^-]/.test(s))) {
@@ -1682,7 +1666,22 @@ function createConfig(srcPath, modPath, options = {}) {
     }
   }
   const zigarSrcPath = fileURLToPath(new URL$1('../zig/', import.meta.url));
-  const buildFilePath = join(zigarSrcPath, `build.zig`);
+  let buildFilePath = join(zigarSrcPath, `build.zig`);
+  if (!ignoreBuildFile) {
+    // use custom build file if one is found
+    const customBuildFilePath = await findModuleFile(moduleDir, 'build.zig');
+    if (customBuildFilePath) {
+      const code = await readFile(customBuildFilePath, 'utf-8');
+      const remaining = code.replace(/\/\/.*/g, '').trim();
+      if (remaining) {
+        buildFilePath = customBuildFilePath;
+      }
+    }
+  }
+  // add path to build.extra.zig if it exists
+  const extraFilePath = await findModuleFile(moduleDir, 'build.extra.zig');
+  // add package manager manifest
+  const packageConfigPath = await findModuleFile(moduleDir, 'build.zig.zon');
   return {
     platform,
     arch,
@@ -1695,7 +1694,7 @@ function createConfig(srcPath, modPath, options = {}) {
     buildDir,
     buildDirSize,
     buildFilePath,
-    packageConfigPath: undefined,
+    packageConfigPath,
     outputPath,
     pdbPath,
     clean,
@@ -1712,7 +1711,7 @@ function createConfig(srcPath, modPath, options = {}) {
     omitFunctions,
     omitVariables,
     ignoreBuildFile,
-    extraFilePath: undefined,
+    extraFilePath,
   };
 }
 
@@ -4016,10 +4015,11 @@ class AsyncReader {
 class WebStreamReader extends AsyncReader {
   onClose = null;
 
-  constructor(reader) {
+  constructor(arg) {
     super();
+    const reader = (arg instanceof ReadableStream) ? arg.getReader() : arg;
     this.reader = reader;
-    attachClose(reader, this);
+    attachClose(arg, this);
   }
 
   async fetch() {
@@ -4076,8 +4076,20 @@ class WebStreamWriter extends AsyncWriter {
   onClose = null;
   done = false;
 
-  constructor(writer) {
+  constructor(arg) {
     super();
+    let writer;
+    if (arg instanceof WritableStream) {
+      writer = arg.getWriter();
+      // replace close function with one that closes the writer
+      arg.close = async () => {
+        delete arg.close;
+        await writer.close();
+        writer.releaseLock();
+      };
+    } else {
+      writer = arg;
+    }
     this.writer = writer;
     writer.closed.catch(empty).then(() => {
       this.done = true;
@@ -4708,9 +4720,9 @@ var moduleLoading = mixin({
       }
       return imports;
     },
-    importFunctions(exports) {
+    importFunctions(exports$1) {
       for (const [ name, { argType, returnType } ] of Object.entries(this.imports)) {
-        const fn = exports[name];
+        const fn = exports$1[name];
         if (fn) {
           defineProperty(this, name, defineValue(this.importFunction(fn, argType, returnType)));
           this.destructors.push(() => this[name] = throwError$1);
@@ -4730,7 +4742,7 @@ var moduleLoading = mixin({
       const executable = this.executable = await f(res);
       const functions = this.exportFunctions();
       const env = {}, wasi = {}, wasiPreview = {};
-      const exports = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
+      const exports$1 = this.exportedModules = { env, wasi, wasi_snapshot_preview1: wasiPreview };
       for (const { module, name, kind } of WA.Module.imports(executable)) {
         if (kind === 'function') {
           if (module === 'env') {
@@ -4756,7 +4768,7 @@ var moduleLoading = mixin({
         shared: multithreaded,
       });
       this.initialTableLength = tableInitial;
-      return WA.instantiate(executable, exports);
+      return WA.instantiate(executable, exports$1);
     },
     loadModule(source, options) {
       return this.initPromise = (async () => {
@@ -5022,7 +5034,7 @@ var pointerSynchronization = mixin({
 
 var readerConversion = mixin({
   convertReader(arg) {
-    if (arg instanceof ReadableStreamDefaultReader) {
+    if (arg instanceof ReadableStream || arg instanceof ReadableStreamDefaultReader) {
       return new WebStreamReader(arg);
     } else if(typeof(ReadableStreamBYOBReader) === 'function' && arg instanceof ReadableStreamBYOBReader) {
       return new WebStreamReaderBYOB(arg);
@@ -5357,8 +5369,8 @@ var thunkAllocation = mixin({
         initial: tableInitial,
         element: 'anyfunc',
       });
-      const { exports } = new w.Instance(this.executable, imports);
-      const { createJsThunk, destroyJsThunk, identifyJsThunk } = exports;
+      const { exports: exports$1 } = new w.Instance(this.executable, imports);
+      const { createJsThunk, destroyJsThunk, identifyJsThunk } = exports$1;
       const source = {
         thunkCount: 0,
         createJsThunk,
@@ -5434,7 +5446,7 @@ var thunkAllocation = mixin({
 
 var writerConversion = mixin({
   convertWriter(arg) {
-    if (arg instanceof WritableStreamDefaultWriter) {
+    if (arg instanceof WritableStream || arg instanceof WritableStreamDefaultWriter) {
       return new WebStreamWriter(arg);
     } else if (Array.isArray(arg)) {
       return new ArrayWriter(arg);
@@ -6516,8 +6528,7 @@ var fdWrite = mixin({
     catchPosixError(canWait, PosixError.EBADF, () => {
       const[ writer, rights, flags ] = this.getStream(2);
       checkAccessRight(rights, PosixDescriptorRight.fd_write);
-      const method = (flags & PosixDescriptorFlag.nonblock) ? writer.writenb : writer.write;
-      return method.call(writer, chunk);
+      return writer.write(chunk);
     });
     return 0;
   },
@@ -6948,10 +6959,16 @@ function workerMain() {
   const WA = WebAssembly;
   let port, instance;
 
-  {
+  if (typeof(self) === 'object') {
     // web worker
     self.onmessage = (evt) => process(evt.data);
     port = self;
+  } else {
+    // Node.js worker-thread
+    import(/* webpackIgnore: true */ 'node:worker_threads').then((module) => {
+      port = module.parentPort;
+      port.on('message', process);
+    });
   }
 
   function process(msg) {
@@ -10936,6 +10953,8 @@ var fdLockSet = mixin({
   },
 });
 
+var fdSendfile = undefined;
+
 var all = mixin({
   defineVisitor() {
     return {
@@ -11240,6 +11259,7 @@ var mixins = /*#__PURE__*/Object.freeze({
   SyscallFdRead: fdRead,
   SyscallFdReaddir: fdReaddir,
   SyscallFdSeek: fdSeek,
+  SyscallFdSendfile: fdSendfile,
   SyscallFdSync: fdSync,
   SyscallFdTell: fdTell,
   SyscallFdWrite: fdWrite,
@@ -11669,13 +11689,13 @@ function parseBinary(binary) {
         return { type, imports };
       }
       case SectionType.Export: {
-        const exports = readArray(() => {
+        const exports$1 = readArray(() => {
           const name = readString();
           const type = readU8();
           const index = readU32Leb128();
           return { name, type, index };
         });
-        return { type, exports };
+        return { type, exports: exports$1 };
       }
       case SectionType.Function: {
         const types = readArray(readU32Leb128);
@@ -12714,7 +12734,7 @@ async function transpile(srcPath, options) {
       binarySource = await wasmLoader(srcPath, dv);
     }
   }
-  const { code, exports, structures } = generateCode(definition, {
+  const { code, exports: exports$1, structures } = generateCode(definition, {
     runtimeURL,
     binarySource,
     topLevelAwait,
@@ -12722,7 +12742,7 @@ async function transpile(srcPath, options) {
     moduleOptions,
     mixinPaths,
   });
-  return { code, exports, structures, sourcePaths };
+  return { code, exports: exports$1, structures, sourcePaths };
 }
 
 function embed(path, dv) {
