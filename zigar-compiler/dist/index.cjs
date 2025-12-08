@@ -795,12 +795,12 @@ const execFileAsync = node_util.promisify(node_child_process.execFile);
 async function test(srcPath, options) {
   const { silent = false, extraArgs = [] } = options;
   const config = await createConfig(srcPath, '', options);
-  const { zigPath, zigArgs, moduleBuildDir } = config;
+  const { zigPath, moduleBuildDir } = config;
   // create config file
   await createProject(config, moduleBuildDir);
   const cwd = moduleBuildDir;
   const stdio = (silent) ? 'pipe' : 'inherit';
-  const child = node_child_process.spawn(zigPath, [ ...zigArgs, 'test', ...extraArgs ], { cwd, stdio, windowsHide: true });
+  const child = node_child_process.spawn(zigPath, [ 'build', 'test', ...extraArgs ], { cwd, stdio, windowsHide: true });
   const output = [];
   child.stderr?.on('data', chunk => output.push(chunk));
   const code = await new Promise(resolve => child.on('close', resolve));
