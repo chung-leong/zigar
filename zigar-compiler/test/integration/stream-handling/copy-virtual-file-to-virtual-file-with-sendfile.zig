@@ -8,7 +8,7 @@ pub fn copy(src: std.fs.File, dest: std.fs.File, len: usize) !usize {
         return @intCast(sent);
     } else if (builtin.target.os.tag.isDarwin()) {
         var sent: std.c.off_t = 0;
-        if (std.c.sendfile(dest.handle, src.handle, 0, &sent, null, 0) != 0) {
+        if (std.c.sendfile(src.handle, dest.handle, 0, &sent, null, 0) != 0) {
             return error.UnableToSendFile;
         }
         return @intCast(sent);

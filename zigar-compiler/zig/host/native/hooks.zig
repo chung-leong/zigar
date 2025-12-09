@@ -2457,7 +2457,7 @@ pub fn PosixSubstituteDarwin(comptime redirector: type) type {
                 var len64: size_t = @intCast(len.*);
                 if (len64 == 0) len64 = std.math.maxInt(u32);
                 var result: ssize_t = undefined;
-                if (redirector.sendfile64(in_fd, out_fd, &offset64, len64, &result)) {
+                if (redirector.sendfile64(out_fd, in_fd, &offset64, len64, &result)) {
                     if (result < 0) return @intCast(posix.saveError(result));
                     len.* = result;
                     return 0;
