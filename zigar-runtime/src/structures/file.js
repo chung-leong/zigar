@@ -8,7 +8,13 @@ export default mixin({
   createFile(arg) {
     if (process.env.TARGET === 'node') {
       if (typeof(arg) === 'object' && typeof(arg?.fd) === 'number') {
-        return { handle: arg.fd  };
+        let { fd } = arg;
+        if (process.env.TARGET === 'node' && process.platform === 'win32') {
+          // need to get handle from Node.js
+          const address = this.getFileHandle(fd);
+          fd = this.obtainZigView(address, 0, false);
+        }
+        return { handle: fd  };
       }
     }
     if (typeof(arg) === 'object' && typeof(arg?.handle) === 'number') {
@@ -36,9 +42,14 @@ export default mixin({
     /* c8 ignore start */
     if (process.env.TARGET === 'node' && process.platform === 'win32') {
       // handle is pointer
-      fd = this.obtainZigView(usize(fd << 1), 0);
+      fd = this.obtainZigView(usize(fd << 1), 0, false);
     }
     /* c8 ignore end */
     return { handle: fd };
   },
+  ...(process.env.TARGET === 'node' ? {
+    imports: {
+      getFileHandle: {},
+    },
+  } : undefined),
 });

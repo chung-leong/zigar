@@ -2588,7 +2588,12 @@ export function addTests(importModule, options) {
       const array = [];
       const copied = copy(file, array);
       expect(copied).to.equal(size);
-      expect(array).to.have.lengthOf(1);
+      if (target === 'win32') {
+        // no sendfile() and buffer is only 1024 bytes in size
+        expect(array).to.have.lengthOf(3);
+      } else {
+        expect(array).to.have.lengthOf(1);
+      }
     })
     it('should copy virtual file to virtual file', async function() {
       const { copy } = await importTest('copy-virtual-file-to-virtual-file');

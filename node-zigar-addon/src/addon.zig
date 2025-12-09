@@ -267,6 +267,7 @@ const ModuleHost = struct {
             "requireBufferFallback",
             "readFile",
             "writeFile",
+            "getFileHandle",
             "setRedirectionMask",
             "initializeLibc",
             "setSyscallTrap",
@@ -619,6 +620,18 @@ const ModuleHost = struct {
         const u8_ptr: [*]const u8 = @ptrCast(opaque_ptr);
         const u8_slice = u8_ptr[0..len];
         _ = try file.write(u8_slice);
+    }
+
+    fn getFileHandle(self: *@This(), fd: Value) !Value {
+        const env = self.env;
+        if (builtin.target.os.tag == .windows) {
+            const uv_get_osfhandle: *const fn (c_int) callconv(.c) usize = @ptrCast(napi.getProcAddress("uv_get_osfhandle"));
+            const fd_value = try env.getValueInt32(fd);
+            const handle_value = uv_get_osfhandle(fd_value);
+            return env.createUsize(handle_value);
+        } else {
+            return env.getNull();
+        }
     }
 
     fn getFile(self: *@This(), handle: Value) !std.fs.File {
