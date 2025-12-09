@@ -2420,15 +2420,19 @@ pub fn PosixSubstitute(comptime redirector: type) type {
 
 pub fn PosixSubstituteLinux(comptime redirector: type) type {
     return struct {
+        const posix = PosixSubstitute(redirector);
+
         pub const sendfile = makeStdHook("sendfile");
         pub const sendfile64 = makeStdHook("sendfile64");
 
-        const makeStdHook = PosixSubstitute(redirector).makeStdHook;
+        fn makeStdHook(comptime name: []const u8) posix.StdHook(@TypeOf(@field(redirector, name))) {
+            return posix.makeStdHookUsing(Original, name, name);
+        }
 
         const Self = @This();
         pub const Original = struct {
-            pub extern var sendfile: *const @TypeOf(Self.sendfile);
-            pub extern var sendfile64: *const @TypeOf(Self.sendfile64);
+            pub var sendfile: *const @TypeOf(Self.sendfile) = undefined;
+            pub var sendfile64: *const @TypeOf(Self.sendfile64) = undefined;
         };
         pub const calling_convention = std.builtin.CallingConvention.c;
     };
@@ -2603,7 +2607,7 @@ const RedirectedFile = struct {
 
     pub const signature = 0x4C49_4652_4147_495A;
     pub const BufferMode = enum { read, write };
-    pub var list = std.ArrayList(*@This()).init(c_allocator);
+    pub var list: std.ArrayListUnmanaged(*@This()) = .{};
 
     pub fn cast(s: *std.c.FILE) ?*@This() {
         if (!std.mem.isAligned(@intFromPtr(s), @alignOf(u64))) return null;
@@ -3132,7 +3136,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
                 .fd = fd,
                 .flags = oflags,
             };
-            try RedirectedFile.list.append(file);
+            try RedirectedFile.list.append(c_allocator, file);
             return @ptrCast(file);
         }
 
