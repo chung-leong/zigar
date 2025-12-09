@@ -159,7 +159,7 @@ fn getErrorMessage(err: anytype) [:0]const u8 {
     }
 }
 
-fn getProcAddress(name: [:0]const u8) *const anyopaque {
+pub fn getProcAddress(name: [:0]const u8) *const anyopaque {
     const module = std.os.windows.kernel32.GetModuleHandleW(null) orelse unreachable;
     return std.os.windows.kernel32.GetProcAddress(module, name) orelse {
         var buffer: [256]u8 = undefined;
