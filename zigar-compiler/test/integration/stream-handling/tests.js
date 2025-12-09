@@ -2610,11 +2610,11 @@ export function addTests(importModule, options) {
           const size = string.length;
           const copied = copy(string, file);
           expect(copied).to.equal(size);
+          const content = await readFile(path, 'utf-8');
+          expect(content).to.equal(string);
         } finally {
           file.close();       
         }
-        const content = await readFile(path, 'utf-8');
-        expect(content).to.equal(string);
       } finally {
         try {
           await unlink(path);
