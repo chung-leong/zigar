@@ -781,6 +781,7 @@ export function addTests(importModule, options) {
     })
     it('should create key for thread specific values using pthread', async function() {
       const { 
+        getDestruction,
         spawn,
         startup,
         shutdown,
