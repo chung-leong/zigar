@@ -45,8 +45,8 @@ const ModuleHost = struct {
     hooks_installed: bool = false,
     syscall_trap_installed: bool = false,
     syscall_trap_count: usize = 0,
-    thread_syscall_trap_mutex: std.Thread.Mutex = undefined,
-    thread_syscall_trap_switches: std.ArrayList(*bool) = undefined,
+    thread_syscall_trap_list: std.ArrayListUnmanaged(*bool) = .{},
+    thread_syscall_trap_list_mutex: std.Thread.Mutex = .{},
     env_variable_deferred: Deferred = .{},
     env_variable_list: ?[]?[*:0]const u8 = null,
     env_variable_bytes: ?[]const u8 = null,
@@ -113,7 +113,7 @@ const ModuleHost = struct {
     threadlocal var main_thread_syscall_trap_count: usize = 0;
     threadlocal var in_main_thread: bool = undefined;
 
-    var host_list: std.ArrayList(*@This()) = .init(c_allocator);
+    var host_list: std.ArrayListUnmanaged(*@This()) = .{};
     var host_list_mutex: std.Thread.Mutex = .{};
 
     var module_count: i32 = 0;
@@ -126,7 +126,7 @@ const ModuleHost = struct {
     fn register(self: *@This()) !void {
         host_list_mutex.lock();
         defer host_list_mutex.unlock();
-        try host_list.append(self);
+        try host_list.append(c_allocator, self);
     }
 
     fn unregister(self: *@This()) void {
@@ -164,11 +164,7 @@ const ModuleHost = struct {
         // create the environment
         const js_env = try env.callFunction(try env.getNull(), create_env, &.{});
         const self = try c_allocator.create(@This());
-        self.* = .{
-            .env = env,
-            .thread_syscall_trap_mutex = .{},
-            .thread_syscall_trap_switches = .init(c_allocator),
-        };
+        self.* = .{ .env = env };
         defer self.release();
         try self.register();
         // import functions from the environment
@@ -357,9 +353,9 @@ const ModuleHost = struct {
         in_main_thread = false;
         if (self.syscall_trap_installed) {
             try redirection_controller.installSyscallTrap(&trapping_syscalls);
-            self.thread_syscall_trap_mutex.lock();
-            defer self.thread_syscall_trap_mutex.unlock();
-            try self.thread_syscall_trap_switches.append(&trapping_syscalls);
+            self.thread_syscall_trap_list_mutex.lock();
+            defer self.thread_syscall_trap_list_mutex.unlock();
+            try self.thread_syscall_trap_list.append(c_allocator, &trapping_syscalls);
             if (self.syscall_trap_count > 0) {
                 trapping_syscalls = true;
             }
@@ -378,12 +374,12 @@ const ModuleHost = struct {
 
     pub fn deinitializeThread(self: *@This()) !void {
         if (self.syscall_trap_installed) {
-            self.thread_syscall_trap_mutex.lock();
-            defer self.thread_syscall_trap_mutex.unlock();
-            const index = for (self.thread_syscall_trap_switches.items, 0..) |ptr, i| {
+            self.thread_syscall_trap_list_mutex.lock();
+            defer self.thread_syscall_trap_list_mutex.unlock();
+            const index = for (self.thread_syscall_trap_list.items, 0..) |ptr, i| {
                 if (ptr == &trapping_syscalls) break i;
             } else return;
-            _ = self.thread_syscall_trap_switches.swapRemove(index);
+            _ = self.thread_syscall_trap_list.swapRemove(index);
         }
     }
 
@@ -751,9 +747,9 @@ const ModuleHost = struct {
             main_thread_syscall_trap_count += 1;
             if (main_thread_syscall_trap_count == 1) trapping_syscalls = true;
             // turn on all syscall traps in threads belonging to this module
-            self.thread_syscall_trap_mutex.lock();
-            defer self.thread_syscall_trap_mutex.unlock();
-            for (self.thread_syscall_trap_switches.items) |ptr| ptr.* = true;
+            self.thread_syscall_trap_list_mutex.lock();
+            defer self.thread_syscall_trap_list_mutex.unlock();
+            for (self.thread_syscall_trap_list.items) |ptr| ptr.* = true;
         }
     }
 
@@ -763,13 +759,14 @@ const ModuleHost = struct {
         if (self.syscall_trap_count == 0) {
             main_thread_syscall_trap_count -= 1;
             if (main_thread_syscall_trap_count == 0) trapping_syscalls = false;
-            self.thread_syscall_trap_mutex.lock();
-            defer self.thread_syscall_trap_mutex.unlock();
-            for (self.thread_syscall_trap_switches.items) |ptr| ptr.* = false;
+            self.thread_syscall_trap_list_mutex.lock();
+            defer self.thread_syscall_trap_list_mutex.unlock();
+            for (self.thread_syscall_trap_list.items) |ptr| ptr.* = false;
         }
     }
 
     fn exportFunctionsToModule(self: *@This()) !void {
+        @setEvalBranchQuota(2000000);
         const module = self.module orelse return error.NoLoadedModule;
         inline for (std.meta.fields(Module.Imports)) |field| {
             const name_c = comptime camelize(field.name);
@@ -1625,13 +1622,12 @@ const ModuleHost = struct {
 const Futex = struct {
     const initial_value = 0xffff_ffff;
 
-    value: std.atomic.Value(u32),
+    value: std.atomic.Value(u32) = .init(initial_value),
     handle: usize,
     timeout: usize = 0,
 
     pub fn init(self: *@This()) usize {
-        self.value = std.atomic.Value(u32).init(initial_value);
-        self.handle = @intFromPtr(self);
+        self.* = .{ .handle = @intFromPtr(self) };
         return self.handle;
     }
 
