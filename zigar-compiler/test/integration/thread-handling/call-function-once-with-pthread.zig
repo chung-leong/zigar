@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const zigar = @import("zigar");
 
@@ -8,7 +9,10 @@ const c = @cImport({
 const pthread_t = c.pthread_t;
 const pthread_once_t = c.pthread_once_t;
 
-var once: pthread_once_t = c.PTHREAD_ONCE_INIT;
+var once: pthread_once_t = if (builtin.target.os.tag.isDarwin())
+    .{ .__sig = 0x30B1BCBA }
+else
+    c.PTHREAD_ONCE_INIT;
 
 pub fn spawn() !void {
     var thread_id: pthread_t = undefined;

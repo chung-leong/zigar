@@ -44,49 +44,65 @@ pub fn cleanup() !void {
 }
 
 fn run1(_: ?*anyopaque) callconv(.c) ?*anyopaque {
-    const semaphore = c.sem_open("hello", 0);
-    if (semaphore == c.SEM_FAILED) return null;
+    const semaphore = c.sem_open("hello", 0, @as(c_int, 0), @as(c_int, 0));
+    if (semaphore == SEM_FAILED) {
+        std.debug.print("Thread 1 could not acquire semaphore\n", .{});
+        return null;
+    }
     std.debug.print("Thread 1 acquiring semaphore\n", .{});
     if (c.sem_wait(semaphore) != 0) return null;
     defer {
         std.debug.print("Thread 1 releasing semaphore\n", .{});
         _ = c.sem_post(semaphore);
     }
-    var value: c_int = undefined;
-    if (c.sem_getvalue(semaphore, &value) != 0) return null;
-    std.debug.print("Thread 1 acquired semaphore: {d}\n", .{value});
+    if (builtin.target.os.tag.isDarwin()) {
+        // sem_getvalue() doesn't work on MacOS
+        std.debug.print("Thread 1 acquired semaphore\n", .{});
+    } else {
+        var value: c_int = undefined;
+        if (c.sem_getvalue(semaphore, &value) != 0) return null;
+        std.debug.print("Thread 1 acquired semaphore: {d}\n", .{value});
+    }
     std.Thread.sleep(100 * 1000000);
     return null;
 }
 
 fn run2(_: ?*anyopaque) callconv(.c) ?*anyopaque {
-    const semaphore = c.sem_open("hello", 0);
-    if (semaphore == c.SEM_FAILED) return null;
+    const semaphore = c.sem_open("hello", 0, @as(c_int, 0), @as(c_int, 0));
+    if (semaphore == SEM_FAILED) return null;
     std.debug.print("Thread 2 acquiring semaphore\n", .{});
     if (c.sem_wait(semaphore) != 0) return null;
     defer {
         std.debug.print("Thread 2 releasing semaphore\n", .{});
         _ = c.sem_post(semaphore);
     }
-    var value: c_int = undefined;
-    if (c.sem_getvalue(semaphore, &value) != 0) return null;
-    std.debug.print("Thread 2 acquired semaphore: {d}\n", .{value});
+    if (builtin.target.os.tag.isDarwin()) {
+        std.debug.print("Thread 2 acquired semaphore\n", .{});
+    } else {
+        var value: c_int = undefined;
+        if (c.sem_getvalue(semaphore, &value) != 0) return null;
+        std.debug.print("Thread 2 acquired semaphore: {d}\n", .{value});
+    }
     std.Thread.sleep(100 * 1000000);
     return null;
 }
 
 fn run3(_: ?*anyopaque) callconv(.c) ?*anyopaque {
-    const semaphore = c.sem_open("hello", 0);
-    if (semaphore == c.SEM_FAILED) return null;
+    const semaphore = c.sem_open("hello", 0, @as(c_int, 0), @as(c_int, 0));
+    if (semaphore == SEM_FAILED) return null;
     std.debug.print("Thread 3 acquiring semaphore\n", .{});
     if (c.sem_wait(semaphore) != 0) return null;
     defer {
         std.debug.print("Thread 3 releasing semaphore\n", .{});
         _ = c.sem_post(semaphore);
     }
-    var value: c_int = undefined;
-    if (c.sem_getvalue(semaphore, &value) != 0) return null;
-    std.debug.print("Thread 3 acquired semaphore: {d}\n", .{value});
+    if (builtin.target.os.tag.isDarwin()) {
+        std.debug.print("Thread 3 acquired semaphore\n", .{});
+    } else {
+        var value: c_int = undefined;
+        if (c.sem_getvalue(semaphore, &value) != 0) return null;
+        std.debug.print("Thread 3 acquired semaphore: {d}\n", .{value});
+    }
     std.Thread.sleep(100 * 1000000);
     return null;
 }
