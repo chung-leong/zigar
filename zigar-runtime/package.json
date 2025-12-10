@@ -1,6 +1,6 @@
 {
   "name": "zigar-runtime",
-  "version": "0.14.2",
+  "version": "0.14.3-rc.0",
   "description": "JavaScript runtime for code transpiled using Zigar",
   "main": "./dist/index.js",
   "exports": {
@@ -21,7 +21,8 @@
     "rollup": "rollup -c rollup.config.js"
   },
   "files": [
-    "dist/*"
+    "dist/*",
+    "!**/.*"
   ],
   "repository": {
     "type": "git",
@@ -40,11 +41,11 @@
   "devDependencies": {
     "@rollup/plugin-replace": "^6.0.3",
     "c8": "^10.1.3",
-    "chai": "^6.2.0",
+    "chai": "^6.2.1",
     "chai-as-promised": "^8.0.2",
     "mersenne-twister": "^1.1.0",
-    "mocha": "^11.7.4",
+    "mocha": "^11.7.5",
     "mocha-skip-if": "^1.0.4",
-    "rollup": "^4.52.5"
+    "rollup": "^4.53.3"
   }
 }
