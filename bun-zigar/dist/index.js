@@ -4,9 +4,8 @@ import { dirname, extname, join, parse } from 'path';
 import { pathToFileURL } from 'url';
 import {
   compile, findConfigFile, findSourceFile, generateCode, getArch, getCachePath, getModuleCachePath,
-  getPlatform, normalizePath, optionsForCompile, processConfig,
+  getPlatform, hideStatus, normalizePath, optionsForCompile, processConfig, showStatus,
 } from 'zigar-compiler';
-import { hideStatus, showStatus } from './status.js';
 
 await plugin({
   name: "zigar",
