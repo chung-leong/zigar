@@ -1478,7 +1478,7 @@ async function runCompiler(path, args, options) {
   const unlock = await getLock();
   try {
     onStart?.();
-    return execFileAsync(path, args, { cwd, windowsHide: true });
+    await execFileAsync(path, args, { cwd, windowsHide: true });
   } catch (err) {
     throw new CompilationError(path, args, cwd, err);
   } finally {
