@@ -1720,6 +1720,7 @@ export function addTests(importModule, options) {
         } catch {}
       }
     })
+    skip.entirely.unless(target == 'win32').
     it('should create a symlink using win32 function', async function() {
       const { __zigar, symlink } = await importTest('create-symlink-with-win32-function', { useLibc: true });      
       let event;
@@ -2654,6 +2655,7 @@ export function addTests(importModule, options) {
       const [ line2 ] = await capture(() => write());
       expect(line2).to.equal('Hello world');
     })
+    skip.entirely.if(target === 'wasm32').or(target === 'win32').
     it('should copy real file to virtual file using sendfile', async function() {
       const { copy } = await importTest('copy-real-file-to-virtual-file-with-sendfile');
       const file = await open(absolute('data/macbeth.txt'));
@@ -2667,6 +2669,7 @@ export function addTests(importModule, options) {
         file.close();
       }
     })
+    skip.entirely.if(target === 'wasm32').or(target === 'win32').
     it('should copy virtual file to virtual file using sendfile', async function() {
       const { copy } = await importTest('copy-virtual-file-to-virtual-file-with-sendfile');
       const string = 'Hello world!';
@@ -2676,6 +2679,7 @@ export function addTests(importModule, options) {
       expect(copied).to.equal(size);
       expect(array).to.have.lengthOf(1);
     })
+    skip.entirely.if(target === 'wasm32').or(target === 'win32').
     it('should copy virtual file to real file using sendfile', async function() {
       const { copy } = await importTest('copy-virtual-file-to-real-file-with-sendfile');
       const path = absolute('data/virtual-file-test.txt');
