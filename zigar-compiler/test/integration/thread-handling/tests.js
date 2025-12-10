@@ -803,7 +803,7 @@ export function addTests(importModule, options) {
       try {
         const lines = await capture(async () => {
           spawn();
-          await delay(500);
+          await delay(600);
         });
         const expected = [
           'Thread 1 found anyopaque@12345 and anyopaque@67',
