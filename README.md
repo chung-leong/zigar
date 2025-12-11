@@ -24,8 +24,7 @@ and tutorials.
 The major and minor version numbers of Zigar correspond to the version of the Zig compiler
 it's designed for. The current version is 0.15.2. It works with Zig 0.15.x.
 
-Version 0.14.3 has the same feature set as 0.15.2 and works with Zig 0.14.x. Use the `v0.14` tag 
-to install it.
+Version 0.14.3 has the same feature set as 0.15.2 and works with Zig 0.14.x. 
 
 ## Technical support
 
