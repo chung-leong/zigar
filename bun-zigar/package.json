@@ -1,6 +1,6 @@
 {
   "name": "bun-zigar",
-  "version": "0.15.2",
+  "version": "0.16.0-dev.0",
   "description": "Enable the use of Zig in Bun.js",
   "main": "./dist/index.js",
   "exports": {
@@ -39,8 +39,8 @@
   },
   "homepage": "https://github.com/chung-leong/zigar/wiki",
   "dependencies": {
-    "node-zigar-addon": "0.15.2",
-    "zigar-compiler": "^0.15.2"
+    "node-zigar-addon": "0.16.0-dev.0",
+    "zigar-compiler": "^0.16.0-dev.0"
   },
   "devDependencies": {
     "c8": "^10.1.3",
