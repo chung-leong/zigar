@@ -26,6 +26,11 @@ it's designed for. The current version is 0.15.2. It works with Zig 0.15.x.
 
 Version 0.14.3 has the same feature set as 0.15.2 and works with Zig 0.14.x. 
 
+For those on the absolutely bleeding edge, a development version of this toolkit is available that
+works with master. Append the package name with the tag `@dev` to install it. At any given time it
+might be broken due to changes to the language itself. Please file a bug report when you encounter
+a problem.
+
 ## Technical support
 
 If you have questions concerning this project, please post them at this project's
