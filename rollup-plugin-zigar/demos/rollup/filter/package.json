@@ -16,6 +16,6 @@
     "@rollup/plugin-terser": "^0.4.4",
     "http-server": "^14.1.1",
     "rollup": "^4.52.5",
-    "rollup-plugin-zigar": "^0.15.2-alpha.0"
+    "rollup-plugin-zigar": "^0.15.2"
   }
 }

@@ -11,6 +11,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "bun-zigar": "0.15.2-alpha.0"
+    "bun-zigar": "0.15.2"
   }
 }
