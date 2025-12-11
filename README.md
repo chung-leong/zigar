@@ -13,7 +13,7 @@ and tutorials.
 * Access to all Zig data types in JavaScript
 * Zig-to-JavaScript, JavaScript-to-Zig call marshalling
 * Async task management
-* Threads in native code and WebAssembly
+* Threads in native code and WebAssembly (with support for pthread)
 * Emulating of file system operations
 * Support for MacOS, Linux, and Windows (both 64-bit and 32-bit)
 * Support for Node.js, Bun.js, Electron, and NW.js (native code execution)
@@ -22,9 +22,10 @@ and tutorials.
 ## Versioning
 
 The major and minor version numbers of Zigar correspond to the version of the Zig compiler
-it's designed for. The current version is 0.14.2. It works with Zig 0.14.0 and 0.14.1.
+it's designed for. The current version is 0.15.2. It works with Zig 0.15.x.
 
-A version designed for Zig 0.15.x is currently in the works.
+Version 0.14.3 has the same feature set as 0.15.2 and works with Zig 0.14.x. Use the `v0.14` tag 
+to install it.
 
 ## Technical support
 
