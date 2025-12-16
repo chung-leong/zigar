@@ -1,42 +1,93 @@
 #root {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 2rem;
+  flex: 1 1 auto;
+}
+
+.Loading {
   text-align: center;
+  opacity: 0%;
+  font-size: 2em;
+  font-weight: bold;
+  margin-top: 2em;
+	animation: fadeIn 4s ease-in 500ms infinite normal;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+@keyframes fadeIn {
+	0% {
+		opacity: 0;
+	}
+	50% {
+		opacity: 25%;
+	}
+	100% {
+		opacity: 0;
+	}
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.Page {
+  padding: 1em;
 }
 
-.card {
-  padding: 2em;
+.TopNav {
+  width: 100%;
+  background-color: #ccccee;
+  padding: .5em 1em .5em 2em;
 }
 
-.read-the-docs {
-  color: #888;
+.TopNav h2 {
+  margin-top: .5em;
+  margin-bottom: .5em;
+}
+
+.SearchBox {
+  float: right;
+}
+
+.PostList {
+  padding-inline-start: 0;
+  list-style-type: none;
+}
+
+.PostListing {
+  margin-left: 0;
+  margin-bottom: 0.6em;
+  clear: both;
+}
+
+.PublishDate {
+  float: right;
+  color: #999999
+}
+
+.Title {
+  font-weight: 500;
+}
+
+.Excerpt p {
+  margin-top: 0.2em;
+  margin-bottom: 0.3em;
+}
+
+.Author {
+  float: right;
+  margin-bottom: 0.3em;
+}
+
+.Author a {
+  color: #000000;
+}
+
+.Tag {  
+  display: inline-block;
+  background-color: #333355;
+  color: #ffffff;
+  font-size: 0.8em;
+  padding: 1px 6px 1px 6px;
+  margin-right: 4px;
+  border-radius: 5px;
+}
+
+.Tag:hover {
+  color: #eeee00;
 }

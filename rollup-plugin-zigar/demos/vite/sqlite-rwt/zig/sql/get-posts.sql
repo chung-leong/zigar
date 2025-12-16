@@ -1,8 +1,10 @@
-SELECT 
+SELECT
+  a.id,
   a.slug, 
   a.date, 
   a.title, 
   a.excerpt,
+  NULL as content,
   b.name || '|' || b.slug AS author, 
   (
 	SELECT group_concat(d.name || '|' || d.slug, ',') 

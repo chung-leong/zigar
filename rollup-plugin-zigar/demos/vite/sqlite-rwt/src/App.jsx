@@ -1,35 +1,41 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect, useState } from 'react';
+import { __zigar, database, remote } from '../zig/backend.zig';
+import './App.css';
+import rwt from './assets/rwt.db';
+import MainPage from './pages/MainPage.jsx';
+import { WebFile } from './web-file.js';
+import TopNav from './widgets/TopNav.jsx';
+
+const remoteFile = WebFile.create(rwt);
+let localFile = null;
+
+__zigar.on('open', ({ path }) => {
+  switch (path) {
+    case 'remote.db':
+      return remoteFile;
+    case 'local.db':
+      return localFile;
+    default: return false;
+  }
+});
+__zigar.on('mkdir', () => true);
+__zigar.on('rmdir', () => true);
+
+await remote.open('/remote.db');
+await remote.close();
 
 function App() {
-  const [count, setCount] = useState(0)
-
+  const [ api, setApi ] = useState(() => remote);
+  let Page = MainPage;
+  useEffect(() => {
+    return () => database.close();
+  }, [ remote, database ])
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <div className="App">
+      <TopNav />
+      <Page api={api} />
+    </div>
+  );
 }
 
 export default App
