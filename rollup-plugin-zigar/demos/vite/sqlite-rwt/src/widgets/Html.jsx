@@ -1,4 +1,4 @@
-export function Html({ content }) {
+function Html({ content }) {
     return <div className="Html" dangerouslySetInnerHTML={{ __html: content }} />
 }
 

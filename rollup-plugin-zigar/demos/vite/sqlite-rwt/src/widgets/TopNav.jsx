@@ -1,16 +1,10 @@
 function TopNav({}) {
   return (
     <div className="TopNav">            
-      <SearchBox />
+      <div className="search">
+        <input type="text" placeholder="Search"/>
+      </div>
       <h2>Client-side database demo</h2>
-    </div>
-  );
-}
-
-function SearchBox() {
-  return (
-    <div className="SearchBox">
-      <input type="text" placeholder="Search"/>
     </div>
   );
 }

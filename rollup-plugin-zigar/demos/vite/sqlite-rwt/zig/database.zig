@@ -18,6 +18,7 @@ pub fn open(path: [:0]const u8) !void {
 pub fn close() void {
     if (database == null) return;
     database.?.deinit();
+    database = null;
 }
 
 fn SQL(comptime path: []const u8) type {
@@ -45,7 +46,6 @@ fn SQL(comptime path: []const u8) type {
 }
 
 const Post = struct {
-    id: usize,
     slug: []const u8,
     date: f64,
     title: []const u8,
@@ -60,4 +60,10 @@ pub fn getPosts(allocator: std.mem.Allocator, offset: usize, limit: usize) ![]Po
     var stmt = try SQL("sql/get-posts.sql").prepare();
     defer stmt.reset();
     return stmt.all(Post, allocator, .{}, .{ limit, offset });
+}
+
+pub fn getPost(allocator: std.mem.Allocator, slug: []const u8) !?Post {
+    var stmt = try SQL("sql/get-post.sql").prepare();
+    defer stmt.reset();
+    return stmt.oneAlloc(Post, allocator, .{}, .{slug});
 }

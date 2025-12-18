@@ -1,17 +1,13 @@
-import { Suspense, useState } from "react";
+import { Suspense } from "react";
+import { usePagination } from "../utils";
 import Loading from "../widgets/Loading";
 import PostList from "../widgets/PostList";
 
-function MainPage({ api, onLoad }) {
-  const [ posts, setPosts ] = useState(() => api.getPosts(0, 20));
-  const more = async () => {
-    const list = await posts;
-    const extra = await api.getPosts(list.length, 20);
-    setPosts([ ...list, ...extra ]);
-  };
+function MainPage({ api, onAsyncLoad }) {
+  const [ posts, more ] = usePagination((offset, limit) => api.getPosts(offset, limit));
   return (
     <div className="Page">
-      <Suspense fallback={<Loading onUnload={onLoad}/>}>
+      <Suspense fallback={<Loading onUnmount={onAsyncLoad}/>}>
         <PostList posts={posts} onBottomReached={more} />
       </Suspense>
     </div>

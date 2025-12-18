@@ -40,7 +40,7 @@
   margin-bottom: .5em;
 }
 
-.SearchBox {
+.TopNav .search {
   float: right;
 }
 
@@ -55,30 +55,31 @@
   clear: both;
 }
 
-.PublishDate {
+.PostListing .date {
   float: right;
   color: #999999
 }
 
-.Title {
+.PostListing .title {
   font-weight: 500;
 }
 
-.Excerpt p {
+.PostListing .excerpt p {
   margin-top: 0.2em;
   margin-bottom: 0.3em;
 }
 
-.Author {
+.PostListing .author {
   float: right;
   margin-bottom: 0.3em;
 }
 
-.Author a {
+.PostListing .author a {
   color: #000000;
 }
 
-.Tag {  
+.PostListing .tags a,
+.Article .tags a {  
   display: inline-block;
   background-color: #333355;
   color: #ffffff;
@@ -88,6 +89,29 @@
   border-radius: 5px;
 }
 
-.Tag:hover {
+.PostListing .tags a:hover,
+.Article .tags a:hover {
   color: #eeee00;
+}
+
+.Article .title {
+  font-size: 2em;
+  font-weight: bold;
+}
+
+.Article .author-date {
+  float: left;
+}
+
+.Article .date {
+  margin-left: .5em;
+}
+
+.Article .tags {
+  float: right;
+}
+
+.Article .content {  
+  clear: both;
+  padding-top: 1em;
 }

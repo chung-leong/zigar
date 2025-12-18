@@ -3,7 +3,7 @@ SELECT
   a.date, 
   a.title, 
   a.excerpt,
-  NULL as content,
+  a.content,
   b.name || '|' || b.slug AS author, 
   (
 	SELECT group_concat(d.name || '|' || d.slug, ',') 
@@ -17,8 +17,6 @@ SELECT
 	INNER JOIN categories d ON c.category_id = d.id 
 	WHERE c.post_id = a.id
   ) AS categories
-FROM posts_wo_contents a 
+FROM posts a 
 INNER JOIN users b ON a.author_id = b.id
-ORDER BY a.date DESC
-LIMIT ?
-OFFSET ?;
+WHERE a.slug = ?;

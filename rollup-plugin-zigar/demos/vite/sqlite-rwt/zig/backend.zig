@@ -12,4 +12,5 @@ pub const remote = struct {
     pub const open = work_queue.promisify(database.open);
     pub const close = work_queue.promisify(database.close);
     pub const getPosts = work_queue.promisify(database.getPosts);
+    pub const getPost = work_queue.promisify(database.getPost);
 };

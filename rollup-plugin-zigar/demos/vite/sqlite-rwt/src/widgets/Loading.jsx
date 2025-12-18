@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
-function Loading({ onUnload }) {
-  useEffect(() => onUnload);
+function Loading({ onUnmount }) {
+  useEffect(() => onUnmount);
   return <div className="Loading">LOADING</div>;
 }
 
