@@ -16,6 +16,7 @@
 body {
   margin: 0;
   display: flex;
+  overflow-y: scroll;
 }
 
 a:visited, a:link {

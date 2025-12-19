@@ -59,11 +59,11 @@ const Post = struct {
 pub fn getPosts(allocator: std.mem.Allocator, offset: usize, limit: usize) ![]Post {
     var stmt = try SQL("sql/get-posts.sql").prepare();
     defer stmt.reset();
-    return stmt.all(Post, allocator, .{}, .{ limit, offset });
+    return try stmt.all(Post, allocator, .{}, .{ limit, offset });
 }
 
-pub fn getPost(allocator: std.mem.Allocator, slug: []const u8) !?Post {
+pub fn getPost(allocator: std.mem.Allocator, slug: []const u8) !Post {
     var stmt = try SQL("sql/get-post.sql").prepare();
     defer stmt.reset();
-    return stmt.oneAlloc(Post, allocator, .{}, .{slug});
+    return try stmt.oneAlloc(Post, allocator, .{}, .{slug}) orelse error.NotFound;
 }

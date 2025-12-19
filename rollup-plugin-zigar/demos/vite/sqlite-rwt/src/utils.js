@@ -16,12 +16,12 @@ export function usePagination(cb, count = 20) {
   return [ objects, more ];
 }
 
-export function parseRoute(location) {
+export function parseRoute(location, forward = false) {
   const url = new URL(location);
   const parts = url.pathname.split('/').filter(p => !!p);
   const query = {};
   for (const [ name, value ] of url.searchParams) {
     query[name] = value;
   }
-  return { parts, query };
+  return { parts, query, forward };
 }

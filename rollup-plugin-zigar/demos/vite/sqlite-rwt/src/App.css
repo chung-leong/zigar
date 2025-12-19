@@ -40,6 +40,11 @@
   margin-bottom: .5em;
 }
 
+.TopNav a:link,
+.TopNav a:visited {
+  color: #000000;
+}
+
 .TopNav .search {
   float: right;
 }

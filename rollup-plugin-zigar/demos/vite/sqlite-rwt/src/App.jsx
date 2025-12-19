@@ -29,6 +29,8 @@ __zigar.on('rmdir', () => true);
 
 remote.open('/remote.db');
 
+let linkClicked = false;
+
 function App() {
   const [ api, setApi ] = useState(() => remote);
   const [ route, setRoute ] = useState(() => parseRoute(window.location));
@@ -51,8 +53,9 @@ function App() {
         const link = target.closest('A');
         if (link && !link.target && !link.download && link.origin === location.origin) {
           if (link.pathname !== location.pathname || link.search !== location.search) {
-            history.pushState({}, 'undefined', link);
-            setRoute(parseRoute(link));
+            history.pushState({}, '', link);
+            setRoute(parseRoute(link, true));
+            linkClicked = true;
           }
           evt.preventDefault();
         }
@@ -68,9 +71,30 @@ function App() {
       window.removeEventListener('click', onLinkClick, true);
       window.removeEventListener('popstate', onPopState, true);
     };    
-  }, []); 
+  }, []);
+  useEffect(() => {
+    if (route.forward) {
+      window.scroll(0, 0);
+    }
+  }, [ route ]);
+  const onSearch = useCallback((search) => {
+    const { location, history } = window;
+    const url = new URL(location);
+    const searching = !!url.searchParams.get('search');
+    if (search) {
+      url.searchParams.set('search', search);
+    } else {
+      url.searchParams.delete('search');
+    }
+    if (searching) {
+      history.replaceState({}, '', url);
+    } else {
+      history.pushState({}, '', url);
+    }
+    setRoute(parseRoute(url, true));
+  }, []);
   let started = false;
-  const transition = useCallback(async () => {
+  const onTransition = useCallback(async () => {
     if (started) return;
     // download the file
     const response = await fetch(rwt);
@@ -86,8 +110,8 @@ function App() {
 
   return (
     <div className="App">
-      <TopNav api={api} route={route} />
-      <Page api={api} route={route} onAsyncLoad={transition}/>
+      <TopNav api={api} route={route} onSearch={onSearch}/>
+      <Page api={api} route={route} onAsyncLoad={onTransition}/>
     </div>
   );
 }

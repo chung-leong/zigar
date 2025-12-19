@@ -13,5 +13,5 @@ export default defineConfig({
       'Cross-Origin-Embedder-Policy': 'require-corp',
     }
   },
-  assetsInclude: [ '**/*.db' ],
+  assetsInclude: [ '**/*.db', '**/*.png', '**/*.svg' ],
 })
