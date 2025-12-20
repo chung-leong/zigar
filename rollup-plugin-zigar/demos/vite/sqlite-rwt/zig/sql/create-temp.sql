@@ -1,1 +1,0 @@
-CREATE VIRTUAL TABLE TEMP.fts5_test USING fts5(x);

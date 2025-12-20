@@ -15,5 +15,5 @@ pub const remote = struct {
     pub const getPost = work_queue.promisify(database.getPost);
     pub const findPosts = work_queue.promisify(database.findPosts);
     pub const findPostCount = work_queue.promisify(database.findPostCount);
-    pub const checkSearch = database.checkSearch;
+    pub const checkSearch = work_queue.promisify(database.checkSearch);
 };

@@ -35,6 +35,10 @@
   padding: .5em 1em .5em 2em;
 }
 
+.TopNav input.faulty {
+  background-color: #ffeeee;
+}
+
 .TopNav h2 {
   margin-top: .5em;
   margin-bottom: .5em;

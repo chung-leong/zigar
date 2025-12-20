@@ -1,1 +1,1 @@
-SELECT NULL FROM TEMP.fts5_test WHERE fts5_test MATCH ?;
+SELECT 1 FROM search WHERE search MATCH ? LIMIT 1;
