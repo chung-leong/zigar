@@ -1,0 +1,1 @@
+SELECT NULL FROM TEMP.fts5_test WHERE fts5_test MATCH ?;

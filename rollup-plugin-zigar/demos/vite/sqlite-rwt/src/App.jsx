@@ -29,20 +29,29 @@ __zigar.on('rmdir', () => true);
 
 remote.open('/remote.db');
 
-let linkClicked = false;
-
 function App() {
   const [ api, setApi ] = useState(() => remote);
   const [ route, setRoute ] = useState(() => parseRoute(window.location));
-  let Page;
+  let Page, key;
   if (route.query.search) {
     Page = SearchPage;
+    key = route.query.search;
   } else {
     switch (route.parts[0]) {
-      case undefined: Page = MainPage; break;
-      case 'authors': Page = AuthorPage; break;
-      case 'tags': Page = TagPage; break;
-      default: Page = (route.parts[1]) ? ArticlePage : CategoryPage; break;
+      case undefined: 
+        Page = MainPage; 
+        break;
+      case 'authors': 
+        Page = AuthorPage; 
+        key = route.parts[1];
+        break;
+      case 'tags': 
+        Page = TagPage; 
+        key = route.parts[1];
+        break;
+      default: 
+        Page = (route.parts[1]) ? ArticlePage : CategoryPage; 
+        break;
     }
   }
   useEffect(() => {
@@ -55,7 +64,6 @@ function App() {
           if (link.pathname !== location.pathname || link.search !== location.search) {
             history.pushState({}, '', link);
             setRoute(parseRoute(link, true));
-            linkClicked = true;
           }
           evt.preventDefault();
         }
@@ -80,13 +88,13 @@ function App() {
   const onSearch = useCallback((search) => {
     const { location, history } = window;
     const url = new URL(location);
-    const searching = !!url.searchParams.get('search');
+    const was_searching = !!url.searchParams.get('search');
     if (search) {
       url.searchParams.set('search', search);
     } else {
       url.searchParams.delete('search');
     }
-    if (searching) {
+    if (was_searching && search) {
       history.replaceState({}, '', url);
     } else {
       history.pushState({}, '', url);
@@ -111,7 +119,7 @@ function App() {
   return (
     <div className="App">
       <TopNav api={api} route={route} onSearch={onSearch}/>
-      <Page api={api} route={route} onAsyncLoad={onTransition}/>
+      <Page key={key} api={api} route={route} onAsyncLoad={onTransition}/>
     </div>
   );
 }
