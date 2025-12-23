@@ -1,1 +1,0 @@
-SELECT 1 FROM search WHERE search MATCH ? LIMIT 1;

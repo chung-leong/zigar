@@ -86,12 +86,6 @@ const Count = struct { count: u32 };
 pub fn findPostCount(search: []const u8) !u32 {
     var stmt = try SQL("sql/find-post-count.sql", .{}).prepare();
     defer stmt.reset();
-    const result = try stmt.one(Count, .{}, .{search}) orelse return error.NotFound;
+    const result = try stmt.one(Count, .{}, .{search}) orelse unreachable;
     return result.count;
-}
-
-pub fn checkSearch(search: []const u8) !bool {
-    var stmt = try SQL("sql/check-search.sql", .{}).prepare();
-    defer stmt.reset();
-    return if (stmt.one(Count, .{}, .{search})) |_| true else |_| false;
 }

@@ -19,9 +19,9 @@ export function usePagination(cb, count = 20) {
 export function parseRoute(location, forward = false) {
   const url = new URL(location);
   const parts = url.pathname.split('/').filter(p => !!p);
-  const query = {};
+  const params = {};
   for (const [ name, value ] of url.searchParams) {
-    query[name] = value;
+    params[name] = value;
   }
-  return { parts, query, forward };
+  return { parts, params, forward };
 }

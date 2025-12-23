@@ -10,6 +10,7 @@ import SearchPage from './pages/SearchPage.jsx';
 import TagPage from './pages/TagPage.jsx';
 import { parseRoute } from './utils.js';
 import { WebFile } from './web-file.js';
+import ErrorBoundary from './widgets/ErrorBoundary.jsx';
 import TopNav from './widgets/TopNav.jsx';
 
 const remoteFile = WebFile.create(rwt);
@@ -33,13 +34,14 @@ function App() {
   const [ api, setApi ] = useState(() => remote);
   const [ route, setRoute ] = useState(() => parseRoute(window.location));
   let Page, key;
-  if (route.query.search) {
+  if (route.params.search) {
     Page = SearchPage;
-    key = route.query.search;
+    key = route.params.search;
   } else {
     switch (route.parts[0]) {
       case undefined: 
         Page = MainPage; 
+        key = '';
         break;
       case 'authors': 
         Page = AuthorPage; 
@@ -49,8 +51,14 @@ function App() {
         Page = TagPage; 
         key = route.parts[1];
         break;
-      default: 
-        Page = (route.parts[1]) ? ArticlePage : CategoryPage; 
+      default:
+        if (route.parts[1]) {
+          Page = ArticlePage
+          key = route.parts[1];
+        } else {
+          Page = CategoryPage; 
+          key = route.parts[0];
+        }
         break;
     }
   }
@@ -85,16 +93,16 @@ function App() {
       window.scroll(0, 0);
     }
   }, [ route ]);
-  const onSearch = useCallback((search) => {
+  const onSearch = useCallback(({ search }) => {
     const { location, history } = window;
     const url = new URL(location);
-    const was_searching = !!url.searchParams.get('search');
+    const wasSearching = !!url.searchParams.get('search');
     if (search) {
       url.searchParams.set('search', search);
     } else {
       url.searchParams.delete('search');
     }
-    if (was_searching && search) {
+    if (wasSearching) {
       history.replaceState({}, '', url);
     } else {
       history.pushState({}, '', url);
@@ -119,7 +127,9 @@ function App() {
   return (
     <div className="App">
       <TopNav api={api} route={route} onSearch={onSearch}/>
-      <Page key={key} api={api} route={route} onAsyncLoad={onTransition}/>
+      <ErrorBoundary key={key}>
+        <Page api={api} route={route} onAsyncLoad={onTransition} onSearch={onSearch}/>
+      </ErrorBoundary>
     </div>
   );
 }

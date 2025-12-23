@@ -36,7 +36,7 @@
 }
 
 .TopNav input.faulty {
-  background-color: #ffeeee;
+  background-color: #ffdddd;
 }
 
 .TopNav h2 {
@@ -101,6 +101,15 @@
 .PostListing .tags a:hover,
 .Article .tags a:hover {
   color: #eeee00;
+}
+
+.PostCount {
+  font-size: 1.2em;
+  font-weight: bold;
+}
+
+.PostOrder {
+  float: right;
 }
 
 .Article .title {
