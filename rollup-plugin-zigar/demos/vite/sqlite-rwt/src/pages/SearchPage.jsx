@@ -3,13 +3,18 @@ import { isPromise, usePagination } from "../utils";
 import Loading from "../widgets/Loading";
 import PostList from "../widgets/PostList";
 
-function SearchPage({ api, route, onAsyncLoad }) {
+function SearchPage({ api, route, onAsyncLoad, onSearch }) {
   const { search, sort = 'rank' } = route.params;
   const [ posts, more ] = usePagination((offset, limit) => api.findPosts(search, sort, offset, limit));
   const count = api.findPostCount(search);
+  const onOrderChange = useCallback((evt) => {
+    const sort = evt.target.value;
+    onSearch?.({ search, sort, replace: true });
+  }, [ search, onSearch ]);
   return (
     <div className="Page">
       <Suspense fallback={<Loading onUnmount={onAsyncLoad}/>}>
+        <PageOrder order={sort} onChange={onOrderChange} />
         <PostCount count={count} />
         <PostList posts={posts} onBottomReached={more} />
       </Suspense>
@@ -27,24 +32,13 @@ function PostCount({ count }) {
   );
 }
 
-function PageOrder({ order }) {
-  const onChange = useCallback((evt) => {
-    const { location, history } = window;
-    const url = new URL(location);
-    const order = evt.target.value;
-    if (order === 'rank') {
-      url.searchParams.delete('order');
-    } else {
-      url.searchParams.set('order', order);
-    }
-    history.replaceState({}, '', url);
-  })
+function PageOrder({ order, onChange }) {
   return (
     <div className="PostOrder">
       <select onChange={onChange} value={order}>
         <option value="rank">Relevance</option>
-        <option value="date-desc">Date</option>
-        <option value="date-asc">Date (ascending)</option>
+        <option value="date desc">Date</option>
+        <option value="date asc">Date (ascending)</option>
       </select>
     </div>
   );

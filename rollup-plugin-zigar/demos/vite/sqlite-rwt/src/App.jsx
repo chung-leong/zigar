@@ -36,7 +36,7 @@ function App() {
   let Page, key;
   if (route.params.search) {
     Page = SearchPage;
-    key = route.params.search;
+    key = `${route.params.search}-${route.params.sort}`;
   } else {
     switch (route.parts[0]) {
       case undefined: 
@@ -93,16 +93,19 @@ function App() {
       window.scroll(0, 0);
     }
   }, [ route ]);
-  const onSearch = useCallback(({ search }) => {
+  const onSearch = useCallback(({ search, sort, replace = false }) => {
     const { location, history } = window;
     const url = new URL(location);
-    const wasSearching = !!url.searchParams.get('search');
     if (search) {
       url.searchParams.set('search', search);
+      if (sort) {
+        url.searchParams.set('sort', sort);
+      }
     } else {
       url.searchParams.delete('search');
+      url.searchParams.delete('sort');
     }
-    if (wasSearching) {
+    if (replace) {
       history.replaceState({}, '', url);
     } else {
       history.pushState({}, '', url);
