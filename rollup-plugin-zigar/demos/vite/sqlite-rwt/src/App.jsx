@@ -126,7 +126,6 @@ function App() {
     database.open('/local.db');
     setApi(() => database);
   }, [ database, remote ]);
-
   return (
     <div className="App">
       <TopNav api={api} route={route} onSearch={onSearch}/>

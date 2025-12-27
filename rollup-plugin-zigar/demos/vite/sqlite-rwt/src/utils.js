@@ -5,12 +5,20 @@ export function isPromise(arg) {
 }
 
 export function usePagination(cb, count = 20) {
-  const [ objects, setObjects ] = useState(() => cb(0, count));
+  const [ objects, setObjects ] = useState(() => {
+    const { hash } = window.location;
+    const initialCount = /^#\d+$/.test(hash) ? parseInt(hash.slice(1)) : count;
+    return cb(0, initialCount)
+  });
   const more = async () => {
     const existing = await objects;
     const extra = await cb(existing.length, count);
     if (extra.length > 0) {
-      setObjects([ ...existing, ...extra ]);
+      const list = [ ...existing, ...extra ];
+      setObjects(list);
+      const url = new URL(window.location);
+      url.hash = `#${list.length}`;
+      window.history.replaceState({}, '', url);
     }
   };
   return [ objects, more ];
