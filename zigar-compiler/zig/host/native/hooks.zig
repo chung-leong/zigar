@@ -333,6 +333,25 @@ const Stat = switch (os) {
         mtime: c_longlong,
         ctime: c_longlong,
     },
+    .linux => extern struct {
+        dev: u64,
+        ino: u64,
+        nlink: usize,
+
+        mode: u32,
+        uid: u32,
+        gid: u32,
+        __pad0: u32,
+        rdev: u64,
+        size: off_t,
+        blksize: isize,
+        blocks: i64,
+
+        atim: std.os.linux.timespec,
+        mtim: std.os.linux.timespec,
+        ctim: std.os.linux.timespec,
+        __unused: [3]isize,
+    },
     else => std.c.Stat,
 };
 const Stat64 = switch (os) {
@@ -348,6 +367,25 @@ const Stat64 = switch (os) {
         atime: c_longlong,
         mtime: c_longlong,
         ctime: c_longlong,
+    },
+    .linux => extern struct {
+        dev: u64,
+        ino: u64,
+        nlink: usize,
+
+        mode: u32,
+        uid: u32,
+        gid: u32,
+        __pad0: u32,
+        rdev: u64,
+        size: off64_t,
+        blksize: isize,
+        blocks: i64,
+
+        atim: std.os.linux.timespec,
+        mtim: std.os.linux.timespec,
+        ctim: std.os.linux.timespec,
+        __unused: [3]isize,
     },
     else => std.c.Stat,
 };
@@ -1734,12 +1772,15 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         fn copyStatx(dest: *std.os.linux.Statx, src: *const std.os.wasi.filestat_t, mask: c_uint) void {
+            const statx_mask: std.os.linux.STATX = @bitCast(@as(u32, @intCast(mask)));
             dest.* = std.mem.zeroes(std.os.linux.Statx);
-            dest.mask = @intCast(mask);
+            dest.mask = statx_mask;
             dest.ino = src.ino;
             dest.size = src.size;
-            if (mask & std.os.linux.STATX_MODE != 0) {}
-            if (mask & std.os.linux.STATX_TYPE != 0) {
+            if (statx_mask.MODE) {
+                // TODO: is something supposed to happen here?
+            }
+            if (statx_mask.TYPE) {
                 dest.mode |= switch (src.filetype) {
                     .BLOCK_DEVICE => std.os.linux.S.IFBLK,
                     .CHARACTER_DEVICE => std.os.linux.S.IFCHR,
@@ -1750,19 +1791,19 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     else => 0,
                 };
             }
-            if (mask & std.os.linux.STATX_NLINK != 0) {
+            if (statx_mask.NLINK) {
                 dest.nlink = @intCast(src.nlink);
             }
-            if (mask & std.os.linux.STATX_ATIME != 0) {
+            if (statx_mask.ATIME) {
                 copyTime(&dest.atime, src.atim);
             }
-            if (mask & std.os.linux.STATX_BTIME != 0) {
+            if (statx_mask.BTIME) {
                 copyTime(&dest.btime, src.ctim);
             }
-            if (mask & std.os.linux.STATX_CTIME != 0) {
+            if (statx_mask.CTIME) {
                 copyTime(&dest.ctime, src.ctim);
             }
-            if (mask & std.os.linux.STATX_MTIME != 0) {
+            if (statx_mask.MTIME) {
                 copyTime(&dest.mtime, src.mtim);
             }
         }
@@ -4569,7 +4610,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 .@"enum" => result,
                 .int => if (result >= 0) return 0 else convert: {
                     const num: u16 = @intCast(-result);
-                    break :convert std.meta.intToEnum(std.c.E, num) catch .FAULT;
+                    break :convert std.enums.fromInt(std.c.E, num) catch .FAULT;
                 },
                 else => @compileError("Unexpected"),
             };

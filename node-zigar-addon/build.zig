@@ -12,24 +12,25 @@ pub fn build(b: *std.Build) !void {
         return;
     };
     const os = if (@hasDecl(@TypeOf(target), "getOsTag")) target.getOsTag() else target.result.os.tag;
+    const mod = b.addModule("root", .{
+        .root_source_file = b.path("src/addon.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
     const lib = b.addLibrary(.{
         .linkage = .dynamic,
         .name = "node-zigar-addon",
-        .root_module = b.addModule("root", .{
-            .root_source_file = b.path("src/addon.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
+        .root_module = mod,
     });
-    lib.addIncludePath(b.path("./src"));
-    lib.addIncludePath(b.path("../node-api-headers/include"));
-    lib.addIncludePath(b.path("./node_modules/node-api-headers/include"));
+    mod.addIncludePath(b.path("./src"));
+    mod.addIncludePath(b.path("../node-api-headers/include"));
+    mod.addIncludePath(b.path("./node_modules/node-api-headers/include"));
     switch (os) {
-        .windows => lib.linkSystemLibrary("dbghelp"),
+        .windows => mod.linkSystemLibrary("dbghelp", .{}),
         .macos => lib.linker_allow_shlib_undefined = true,
         else => {},
     }
-    lib.linkLibC();
     const wf = b.addUpdateSourceFiles();
     wf.addCopyFileToSource(lib.getEmittedBin(), output_path);
     wf.step.dependOn(&lib.step);

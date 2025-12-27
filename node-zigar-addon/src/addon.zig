@@ -985,7 +985,7 @@ const ModuleHost = struct {
                 },
             );
             const status_value = try env.getValueUint32(status);
-            return std.meta.intToEnum(E, status_value) catch .FAULT;
+            return std.enums.fromInt(E, status_value) orelse .FAULT;
         } else {
             const func = self.ts.handle_jscall orelse return error.Disabled;
             var futex: Futex = undefined;
@@ -1077,7 +1077,7 @@ const ModuleHost = struct {
             args,
         );
         const error_code = try env.getValueUint32(result);
-        return try std.meta.intToEnum(E, error_code);
+        return std.enums.fromInt(E, error_code) orelse error.Unexpected;
     }
 
     fn handleOpen(self: *@This(), futex: Value, args: anytype) !E {
@@ -1627,7 +1627,7 @@ const Futex = struct {
             std.Thread.Futex.wait(&self.value, initial_value);
         }
         const final_value = self.value.load(.acquire);
-        return std.meta.intToEnum(E, final_value) catch E.FAULT;
+        return std.enums.fromInt(E, final_value) orelse .FAULT;
     }
 
     pub fn wake(handle: usize, result: E) !void {

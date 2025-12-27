@@ -1760,7 +1760,7 @@ const Instruction = switch (builtin.target.cpu.arch) {
         pub fn decode(bytes: [*]const u8) std.meta.Tuple(&.{ @This(), Attributes, usize }) {
             var i: usize = 0;
             var instr: @This() = .{};
-            if (std.meta.intToEnum(Prefix, bytes[i]) catch null) |prefix| {
+            if (std.enums.fromInt(Prefix, bytes[i])) |prefix| {
                 i += 1;
                 instr.prefix = prefix;
             }

@@ -4573,7 +4573,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
                 .@"enum" => result,
                 .int => if (result >= 0) return 0 else convert: {
                     const num: u16 = @intCast(-result);
-                    break :convert std.meta.intToEnum(std.c.E, num) catch .FAULT;
+                    break :convert std.enums.fromInt(std.c.E, num) catch .FAULT;
                 },
                 else => @compileError("Unexpected"),
             };
