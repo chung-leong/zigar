@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, use, useCallback, useEffect, useState } from "react";
+import { isPromise } from "../utils";
 
 function TopNav({ api, route, onSearch }) {
   const { search: currentSearch = '' } = route.params;
+  const [ categories ] = useState(() => api.getCategories());
   const [ search, setSearch ] = useState(currentSearch);
   const onChange = useCallback(evt => setSearch(evt.target.value), []);
   const [ status, setStatus ] = useState('ok');
@@ -29,7 +31,29 @@ function TopNav({ api, route, onSearch }) {
         <input className={status} type="text" value={search} placeholder="Search" onChange={onChange}/>
       </form>
       <h2><a href="/">Client-side database demo</a></h2>
+      <Suspense>
+        <CategoryMenu categories={categories} route={route} />
+      </Suspense>
     </div>
+  );
+}
+
+function CategoryMenu({ categories, route }) {
+  categories = isPromise(categories) ? use(categories) : categories;
+  let currentSlug = route.parts[0];
+  if (currentSlug === 'tags' || currentSlug === 'authors') {
+    currentSlug = undefined;
+  }
+  return (
+    <ul className="menu">
+      {
+        categories.map(({ name, slug }, i) => {
+          const className = (currentSlug == slug) ? 'active' : 'inactive';
+          const url = `/${slug}/`;
+          return <li key={i} className={className}><a href={url}>{name}</a></li>;
+        })
+      }
+    </ul>
   );
 }
 

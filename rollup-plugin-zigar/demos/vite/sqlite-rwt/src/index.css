@@ -22,3 +22,8 @@ body {
 a:visited, a:link {
   text-decoration: none;
 }
+
+img {
+  max-width: 90vw;
+  height: auto;
+}

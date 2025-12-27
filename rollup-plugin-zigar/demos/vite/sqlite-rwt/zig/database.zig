@@ -63,6 +63,24 @@ pub fn getPosts(allocator: std.mem.Allocator, offset: usize, limit: usize) ![]Po
     return try stmt.all(Post, allocator, .{}, .{ limit, offset });
 }
 
+pub fn getPostsByAuthor(allocator: std.mem.Allocator, slug: []const u8, offset: usize, limit: usize) ![]Post {
+    var stmt = try SQL("sql/get-posts-by-author.sql", .{}).prepare();
+    defer stmt.reset();
+    return try stmt.all(Post, allocator, .{}, .{ slug, limit, offset });
+}
+
+pub fn getPostsByTag(allocator: std.mem.Allocator, slug: []const u8, offset: usize, limit: usize) ![]Post {
+    var stmt = try SQL("sql/get-posts-by-tag.sql", .{}).prepare();
+    defer stmt.reset();
+    return try stmt.all(Post, allocator, .{}, .{ slug, limit, offset });
+}
+
+pub fn getPostsByCategory(allocator: std.mem.Allocator, slug: []const u8, offset: usize, limit: usize) ![]Post {
+    var stmt = try SQL("sql/get-posts-by-category.sql", .{}).prepare();
+    defer stmt.reset();
+    return try stmt.all(Post, allocator, .{}, .{ slug, limit, offset });
+}
+
 pub fn getPost(allocator: std.mem.Allocator, slug: []const u8) !Post {
     var stmt = try SQL("sql/get-post.sql", .{}).prepare();
     defer stmt.reset();
@@ -88,4 +106,46 @@ pub fn findPostCount(search: []const u8) !u32 {
     defer stmt.reset();
     const result = try stmt.one(Count, .{}, .{search}) orelse unreachable;
     return result.count;
+}
+
+const Author = struct {
+    slug: []const u8,
+    name: []const u8,
+    description: []const u8,
+};
+
+pub fn getAuthor(allocator: std.mem.Allocator, slug: []const u8) !Author {
+    var stmt = try SQL("sql/get-author.sql", .{}).prepare();
+    defer stmt.reset();
+    return try stmt.oneAlloc(Author, allocator, .{}, .{slug}) orelse error.NotFound;
+}
+
+const Tag = struct {
+    slug: []const u8,
+    name: []const u8,
+    description: []const u8,
+};
+
+pub fn getTag(allocator: std.mem.Allocator, slug: []const u8) !Tag {
+    var stmt = try SQL("sql/get-tag.sql", .{}).prepare();
+    defer stmt.reset();
+    return try stmt.oneAlloc(Tag, allocator, .{}, .{slug}) orelse error.NotFound;
+}
+
+const Category = struct {
+    slug: []const u8,
+    name: []const u8,
+    description: []const u8,
+};
+
+pub fn getCategories(allocator: std.mem.Allocator) ![]Category {
+    var stmt = try SQL("sql/get-categories.sql", .{}).prepare();
+    defer stmt.reset();
+    return try stmt.all(Category, allocator, .{}, .{});
+}
+
+pub fn getCategory(allocator: std.mem.Allocator, slug: []const u8) !Category {
+    var stmt = try SQL("sql/get-category.sql", .{}).prepare();
+    defer stmt.reset();
+    return try stmt.oneAlloc(Category, allocator, .{}, .{slug}) orelse error.NotFound;
 }

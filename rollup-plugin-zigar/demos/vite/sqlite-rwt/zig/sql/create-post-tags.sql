@@ -8,3 +8,4 @@ CREATE UNIQUE INDEX post_tags_idx ON post_tags (
   post_id,
   tag_id
 );
+CREATE INDEX post_tags_idx_tag_id ON post_tags(tag_id);

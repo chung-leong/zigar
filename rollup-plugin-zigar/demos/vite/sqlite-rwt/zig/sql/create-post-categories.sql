@@ -8,3 +8,4 @@ CREATE UNIQUE INDEX post_categories_idx ON post_categories (
   post_id,
   category_id
 );
+CREATE INDEX post_categories_idx_category_id ON post_categories(category_id);
