@@ -52,6 +52,7 @@ const ModuleHost = struct {
     env_variable_bytes: ?[]const u8 = null,
     env_variable_ptr: *[*:null]?[*:0]const u8 = undefined,
     env_variable_original: *[*:null]?[*:0]const u8 = undefined,
+    using_atexit: bool = false,
     js: struct {
         create_view: ?Ref = null,
         create_instance: ?Ref = null,
@@ -228,7 +229,10 @@ const ModuleHost = struct {
                     redirection_controller.removeSyscallVtable(vtable) catch {};
                 }
             }
-            if (self.library) |*lib| lib.close();
+            if (!self.using_atexit) {
+                // we can unload the shared library only if it doesn't install atexit handlers
+                if (self.library) |*lib| lib.close();
+            }
             if (self.env_variable_list) |list| c_allocator.free(list);
             if (self.env_variable_bytes) |bytes| c_allocator.free(bytes);
             c_allocator.destroy(self);
@@ -388,7 +392,10 @@ const ModuleHost = struct {
             .handler = undefined,
             .original = undefined,
             .deferred = &self.env_variable_deferred,
-        } else null;
+        } else check: {
+            if (std.mem.eql(u8, name[0..std.mem.len(name)], "__cxa_atexit")) self.using_atexit = true;
+            break :check null;
+        };
     }
 
     fn getModuleAttributes(self: *@This()) !Value {
