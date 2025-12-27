@@ -123,5 +123,10 @@ export function addTests(importModule, options) {
       expect(() => module.array_of_nothing[0] = undefined).to.not.throw();
       expect(() => module.array_of_nothing[0] = 1).to.throw();
     })
+    it('should fix issue 837', async function() {
+      const { hello } = await importTest('issue-837/hello');
+      const [ line ] = await capture(() => hello());
+      expect(line).to.equal('Hello world!');
+    })
   })
 }
