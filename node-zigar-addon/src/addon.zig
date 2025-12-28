@@ -13,6 +13,10 @@ const ThreadsafeFunction = napi.ThreadsafeFunction;
 const redirect = @import("redirect.zig");
 const fn_transform = @import("zigft/fn-transform.zig");
 
+const windows_h = @cImport({
+    @cInclude("windows.h");
+});
+
 comptime {
     napi.createAddon(ModuleHost.attachExports);
 }
@@ -309,9 +313,9 @@ const ModuleHost = struct {
         self.base_address = get: {
             switch (builtin.target.os.tag) {
                 .windows => {
-                    const MBI = std.os.windows.MEMORY_BASIC_INFORMATION;
+                    const MBI = windows_h.MEMORY_BASIC_INFORMATION;
                     var mbi: MBI = undefined;
-                    _ = try std.os.windows.VirtualQuery(module, &mbi, @sizeOf(MBI));
+                    if (windows_h.VirtualQuery(module, &mbi, @sizeOf(MBI)) == 0) return error.Unexpected;
                     break :get @intFromPtr(mbi.AllocationBase);
                 },
                 else => {

@@ -347,14 +347,34 @@ pub fn Controller(comptime Host: type) type {
             if (ptr.* == target) return null;
             if (read_only) {
                 const page = getPageSlice(address);
-                // std.posix.mprotect() does support Windows
-                try std.posix.mprotect(page, std.c.PROT.READ | std.c.PROT.WRITE);
-                defer std.posix.mprotect(page, std.c.PROT.READ) catch {};
+                try protect(page, std.c.PROT.READ | std.c.PROT.WRITE);
+                defer protect(page, std.c.PROT.READ) catch {};
                 ptr.* = target;
             } else {
                 ptr.* = target;
             }
             return original;
+        }
+
+        fn protect(memory: []align(std.heap.page_size_min) u8, protection: u32) !void {
+            switch (os) {
+                .windows => {
+                    const win_prot: windows_h.DWORD = switch (@as(u3, @truncate(protection))) {
+                        0b000 => windows_h.PAGE_NOACCESS,
+                        0b001 => windows_h.PAGE_READONLY,
+                        0b010 => unreachable, // +w -r not allowed
+                        0b011 => windows_h.PAGE_READWRITE,
+                        0b100 => windows_h.PAGE_EXECUTE,
+                        0b101 => windows_h.PAGE_EXECUTE_READ,
+                        0b110 => unreachable, // +w -r not allowed
+                        0b111 => windows_h.PAGE_EXECUTE_READWRITE,
+                    };
+                    var old: windows_h.DWORD = undefined;
+                    if (windows_h.VirtualProtect(memory.ptr, memory.len, win_prot, &old) == 0)
+                        return error.Unexpected;
+                },
+                else => try std.posix.mprotect(memory, protection),
+            }
         }
 
         const HandlerEntry = struct {
