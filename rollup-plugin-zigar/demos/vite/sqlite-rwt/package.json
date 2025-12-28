@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:demo": "vite --config=demo.config.js --base=/demos/rollup-plugin-zigar/sqlite-rwt/",
+    "build:demo": "vite build --config=demo.config.js --base=/demos/rollup-plugin-zigar/sqlite-rwt/",
+    "preview:demo": "vite --config=demo.config.js --base=/demos/rollup-plugin-zigar/sqlite-rwt/ preview"
   },
   "dependencies": {
     "better-sqlite3": "^12.4.6",

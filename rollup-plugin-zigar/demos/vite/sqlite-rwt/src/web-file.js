@@ -1,16 +1,22 @@
 export class WebFile {
   static async create(url, prefetch = 16384) {
-    const resp = await fetch(url, {
+    let resp = await fetch(url, {
       headers: {
-        Range: `bytes=0-${prefetch - 1}`,
+        Range: `bytes=0-16383`,
       },
     });
-    const data = await resp.bytes();
     let size;
     if (resp.status === 206) {
-      const range = resp.headers.get("content-range");
-      size = parseInt(range.slice(range.indexOf('/') + 1));   // e.g. "bytes 0-16384/1261568"
-    } else {
+      const encoding = resp.headers.get("content-encoding");
+      if (encoding) {
+        resp = await fetch(url);
+      } else {
+        const range = resp.headers.get("content-range");
+        size = parseInt(range.slice(range.indexOf('/') + 1));   // e.g. "bytes 0-16384/1261568"
+      }
+    }
+    const data = await resp.bytes();
+    if (size === undefined) {
       size = data.length;
     }
     const self = new WebFile();

@@ -26,7 +26,8 @@ export function usePagination(cb, count = 20) {
 
 export function parseRoute(location, forward = false) {
   const url = new URL(location);
-  const parts = url.pathname.split('/').filter(p => !!p);
+  const path = url.pathname.slice(import.meta.env.BASE_URL.length);
+  const parts = path.split('/').filter(p => !!p);
   const params = {};
   for (const [ name, value ] of url.searchParams) {
     params[name] = value;

@@ -6,28 +6,25 @@ function PostListing({ post }) {
   const categories = post.categories.split(',');
   const tags = post.tags.split(',').filter(t => !!t);
   const [ catName, catSlug ] = categories[0].split('|');
-  const url = `/${catSlug}/${post.slug}/`;
   const date = new Date(post.date).toLocaleDateString();
   const [ authorName, authorSlug ] = post.author.split('|');
-  const authorUrl = `/authors/${authorSlug}/`;
   return (
     <li className="PostListing">
       <div className="date">{date}</div>
       <div className="title">
-        <a href={url}><Html content={post.title} /></a>
+        <a href={`${catSlug}/${post.slug}/`}><Html content={post.title} /></a>
       </div>
       <div className="excerpt">
         <Html content={post.excerpt} />
       </div>
       <div className="author">
-        by <a href={authorUrl}>{authorName}</a>
+        by <a href={`authors/${authorSlug}/`}>{authorName}</a>
       </div>
       <div className="tags">
         {
           tags.map((t, i) => {
             const [ name, slug ] = t.split('|');
-            const url = `/tags/${slug}/`;
-            return <a key={i} href={url}>{name}</a>;
+            return <a key={i} href={`tags/${slug}/`}>{name}</a>;
           })
         }
       </div>

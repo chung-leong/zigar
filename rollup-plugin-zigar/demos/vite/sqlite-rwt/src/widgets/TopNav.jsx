@@ -30,7 +30,7 @@ function TopNav({ api, route, onSearch }) {
       <form className="search" action={onAction}>
         <input className={status} type="text" value={search} placeholder="Search" onChange={onChange}/>
       </form>
-      <h2><a href="/">Client-side database demo</a></h2>
+      <h2><a href="">Client-side database demo</a></h2>
       <Suspense>
         <CategoryMenu categories={categories} route={route} />
       </Suspense>
@@ -49,8 +49,7 @@ function CategoryMenu({ categories, route }) {
       {
         categories.map(({ name, slug }, i) => {
           const className = (currentSlug == slug) ? 'active' : 'inactive';
-          const url = `/${slug}/`;
-          return <li key={i} className={className}><a href={url}>{name}</a></li>;
+          return <li key={i} className={className}><a href={`${slug}/`}>{name}</a></li>;
         })
       }
     </ul>
