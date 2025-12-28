@@ -5,13 +5,16 @@ const expectEqual = std.testing.expectEqual;
 const assert = std.debug.assert;
 const maxInt = std.math.maxInt;
 const mem = std.mem;
-const windows = std.os.windows;
 const posix = std.posix;
 const page_size_min = std.heap.page_size_min;
 const builtin = @import("builtin");
 const native_os = builtin.os.tag;
 
 const fn_transform = @import("fn-transform.zig");
+
+const windows_h = @cImport({
+    @cInclude("windows.h");
+});
 
 /// Create a binding using an user-provided allocator instead of the default.
 ///
@@ -2438,15 +2441,15 @@ pub const ExecutablePageAllocator = struct {
             // this logic first tries a call with exactly the size requested,
             // before falling back to the loop below.
             // https://devblogs.microsoft.com/oldnewthing/?p=42223
-            const addr = windows.VirtualAlloc(
+            const addr = windows_h.VirtualAlloc(
                 null,
                 // VirtualAlloc will round the length to a multiple of page size.
                 // "If the lpAddress parameter is NULL, this value is rounded up to
                 // the next page boundary".
                 n,
-                windows.MEM_COMMIT | windows.MEM_RESERVE,
-                windows.PAGE_EXECUTE_READWRITE,
-            ) catch return null;
+                windows_h.MEM_COMMIT | windows_h.MEM_RESERVE,
+                windows_h.PAGE_EXECUTE_READWRITE,
+            ) orelse return null;
 
             if (mem.isAligned(@intFromPtr(addr), alignment_bytes))
                 return @ptrCast(addr);
@@ -2455,26 +2458,26 @@ pub const ExecutablePageAllocator = struct {
             // sufficiently aligned address, then free the entire range and
             // immediately allocate the desired subset. Another thread may have won
             // the race to map the target range, in which case a retry is needed.
-            windows.VirtualFree(addr, 0, windows.MEM_RELEASE);
+            _ = windows_h.VirtualFree(addr, 0, windows_h.MEM_RELEASE);
 
             const overalloc_len = n + alignment_bytes - page_size;
             const aligned_len = mem.alignForward(usize, n, page_size);
 
             while (true) {
-                const reserved_addr = windows.VirtualAlloc(
+                const reserved_addr = windows_h.VirtualAlloc(
                     null,
                     overalloc_len,
-                    windows.MEM_RESERVE,
-                    windows.PAGE_NOACCESS,
-                ) catch return null;
+                    windows_h.MEM_RESERVE,
+                    windows_h.PAGE_NOACCESS,
+                ) orelse return null;
                 const aligned_addr = mem.alignForward(usize, @intFromPtr(reserved_addr), alignment_bytes);
-                windows.VirtualFree(reserved_addr, 0, windows.MEM_RELEASE);
-                const ptr = windows.VirtualAlloc(
+                _ = windows_h.VirtualFree(reserved_addr, 0, windows_h.MEM_RELEASE);
+                const ptr = windows_h.VirtualAlloc(
                     @ptrFromInt(aligned_addr),
                     aligned_len,
-                    windows.MEM_COMMIT | windows.MEM_RESERVE,
-                    windows.PAGE_READWRITE,
-                ) catch continue;
+                    windows_h.MEM_COMMIT | windows_h.MEM_RESERVE,
+                    windows_h.PAGE_READWRITE,
+                ) orelse continue;
                 return @ptrCast(ptr);
             }
         }
