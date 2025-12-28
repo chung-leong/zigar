@@ -397,7 +397,11 @@ const ModuleHost = struct {
             .original = undefined,
             .deferred = &self.env_variable_deferred,
         } else check: {
-            if (std.mem.eql(u8, name[0..std.mem.len(name)], "__cxa_atexit")) self.using_atexit = true;
+            const atexit_fn_name = switch (builtin.target.os.tag) {
+                .windows => "_register_onexit_function",
+                else => "__cxa_atexit",
+            };
+            if (std.mem.eql(u8, name[0..std.mem.len(name)], atexit_fn_name)) self.using_atexit = true;
             break :check null;
         };
     }
