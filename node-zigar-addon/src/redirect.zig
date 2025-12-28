@@ -180,7 +180,7 @@ pub fn Controller(comptime Host: type) type {
                 defer if (symbol_strs.len > 0) allocator.free(symbol_strs);
                 defer for (bindings) |b| allocator.free(b.byte_codes);
                 const base_address: usize = for (symbols) |s| {
-                    if (s.n_type & std.macho.N_EXT != 0) {
+                    if (s.n_type.bits.ext) {
                         const symbol_name_ptr: [*:0]const u8 = @ptrCast(&symbol_strs[s.n_strx]);
                         const symbol_name_len = std.mem.len(symbol_name_ptr);
                         const symbol_name: [:0]const u8 = @ptrCast(symbol_name_ptr[0..symbol_name_len]);
