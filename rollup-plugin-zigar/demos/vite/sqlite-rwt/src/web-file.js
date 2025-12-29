@@ -15,15 +15,15 @@ export class WebFile {
         size = parseInt(range.slice(range.indexOf('/') + 1));   // e.g. "bytes 0-16384/1261568"
       }
     }
-    const data = await resp.bytes();
+    const buffer = await resp.arrayBuffer();
     if (size === undefined) {
-      size = data.length;
+      size = buffer.byteLength;
     }
     const self = new WebFile();
     self.url = url;
     self.size = size;
     self.pos = 0;
-    self.cache = data;
+    self.cache = new Uint8Array(buffer);
     return self;
   }
   
