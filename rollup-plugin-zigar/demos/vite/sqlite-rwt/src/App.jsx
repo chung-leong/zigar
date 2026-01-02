@@ -122,12 +122,13 @@ function App() {
     // close the database and shut down the web worker
     await remote.close();  
     remote.shutdown();  
-    // reopen it using the cache file and set the API
+    // reopen it using the cached file and set the API
     database.open('/local.db');
     setApi(() => database);
   }, [ database, remote ]);
   return (
     <div className="App">
+      <base href={import.meta.env.BASE_URL} />
       <TopNav api={api} route={route} onSearch={onSearch}/>
       <ErrorBoundary key={key}>
         <Page api={api} route={route} onAsyncLoad={onTransition} onSearch={onSearch}/>
