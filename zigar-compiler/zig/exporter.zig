@@ -6,8 +6,12 @@ pub const options = @import("options.zig");
 const js_fn = @import("thunk/js-fn.zig");
 const zig_fn = @import("thunk/zig-fn.zig");
 const ArgStruct = @import("type/arg-struct.zig").ArgStruct;
+const bit_size = @import("type/bit-size.zig");
+const byte_size = @import("type/byte-size.zig");
+const comptime_only = @import("type/comptime-only.zig");
 const TypeData = @import("type/db.zig").TypeData;
 const TypeDataCollector = @import("type/db.zig").TypeDataCollector;
+const supported = @import("type/supported.zig");
 const util = @import("type/util.zig");
 const fn_transform = @import("zigft/fn-transform.zig");
 
@@ -119,7 +123,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .type,
                 .enum_literal,
                 => .{
-                    .has_slot = td.isComptimeOnly(),
+                    .has_slot = comptime_only.is(td.type),
                     .is_size = td.type == usize or td.type == isize,
                 },
                 .@"struct" => |st| init: {
@@ -129,7 +133,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     } else false;
                     const has_slot = inline for (st.fields) |field| {
                         const field_td = tdb.get(field.type);
-                        if (field_td.isObject() or field_td.isComptimeOnly() or field.is_comptime) break true;
+                        if (field_td.isObject() or comptime_only.is(field.type) or field.is_comptime) break true;
                     } else false;
                     break :init if (comptime td.isArguments()) .{
                         .has_object = has_object,
@@ -173,7 +177,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     } else false;
                     const has_slot = inline for (un.fields) |field| {
                         const field_td = tdb.get(field.type);
-                        if (field_td.isObject() or field_td.isComptimeOnly()) break true;
+                        if (field_td.isObject() or comptime_only.is(field.type)) break true;
                     } else false;
                     break :init .{
                         .has_object = has_object,
@@ -190,7 +194,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     const payload_td = tdb.get(eu.payload);
                     break :init .{
                         .has_object = payload_td.isObject(),
-                        .has_slot = payload_td.isObject() or payload_td.isComptimeOnly(),
+                        .has_slot = payload_td.isObject() or comptime_only.is(eu.payload),
                         .has_pointer = td.hasPointer(),
                     };
                 },
@@ -198,7 +202,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     const child_td = tdb.get(op.child);
                     break :init .{
                         .has_object = child_td.isObject(),
-                        .has_slot = child_td.isObject() or child_td.isComptimeOnly(),
+                        .has_slot = child_td.isObject() or comptime_only.is(op.child),
                         .has_pointer = td.hasPointer(),
                         .has_selector = td.hasSelector(),
                     };
@@ -213,7 +217,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     const child_td = tdb.get(ar.child);
                     break :init .{
                         .has_object = child_td.isObject(),
-                        .has_slot = child_td.isObject() or child_td.isComptimeOnly(),
+                        .has_slot = child_td.isObject() or comptime_only.is(ar.child),
                         .has_pointer = child_td.hasPointer(),
                         .has_sentinel = td.getSentinel() != null,
                         .is_string = td.getElementType() == u8 or td.getElementType() == u16,
@@ -324,7 +328,7 @@ fn Factory(comptime host: type, comptime module: type) type {
         }
 
         pub fn getMemberType(comptime td: TypeData, comptime is_comptime: bool) MemberType {
-            return switch (td.isSupported()) {
+            return switch (supported.is(td.type)) {
                 false => .unsupported,
                 true => switch (is_comptime) {
                     true => .object,
@@ -419,10 +423,10 @@ fn Factory(comptime host: type, comptime module: type) type {
         fn addPrimitiveMember(self: @This(), list: Value, comptime td: TypeData) !void {
             try appendList(list, .{
                 .type = getMemberType(td, false),
-                .bitSize = td.getBitSize(),
-                .byteSize = td.getByteSize(),
+                .bitSize = bit_size.get(td.type),
+                .byteSize = byte_size.get(td.type),
                 .bitOffset = 0,
-                .slot = if (td.isComptimeOnly()) @as(usize, 0) else null,
+                .slot = if (comptime_only.is(td.type)) @as(usize, 0) else null,
                 .structure = try self.getStructure(td.type),
             });
         }
@@ -431,8 +435,8 @@ fn Factory(comptime host: type, comptime module: type) type {
             const child_td = tdb.get(td.getElementType());
             try appendList(list, .{
                 .type = getMemberType(child_td, false),
-                .bitSize = child_td.getBitSize(),
-                .byteSize = child_td.getByteSize(),
+                .bitSize = bit_size.get(child_td.type),
+                .byteSize = byte_size.get(child_td.type),
                 .structure = try self.getStructure(child_td.type),
             });
             try self.addSentinelMember(list, td, child_td);
@@ -442,8 +446,8 @@ fn Factory(comptime host: type, comptime module: type) type {
             const child_td = tdb.get(td.getElementType());
             try appendList(list, .{
                 .type = getMemberType(child_td, false),
-                .bitSize = child_td.getBitSize(),
-                .byteSize = child_td.getByteSize(),
+                .bitSize = bit_size.get(child_td.type),
+                .byteSize = byte_size.get(child_td.type),
                 .structure = try self.getStructure(child_td.type),
             });
             try self.addSentinelMember(list, td, child_td);
@@ -457,8 +461,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .is_sentinel = true,
                         .is_required = sentinel.is_required,
                     },
-                    .bitSize = child_td.getBitSize(),
-                    .byteSize = child_td.getByteSize(),
+                    .bitSize = bit_size.get(child_td.type),
+                    .byteSize = byte_size.get(child_td.type),
                     .structure = try self.getStructure(child_td.type),
                 });
             }
@@ -468,8 +472,8 @@ fn Factory(comptime host: type, comptime module: type) type {
             const child_td = tdb.get(td.getElementType());
             try appendList(list, .{
                 .type = getMemberType(child_td, false),
-                .bitSize = child_td.getBitSize(),
-                .byteSize = if (td.isBitVector()) null else child_td.getByteSize(),
+                .bitSize = bit_size.get(child_td.type),
+                .byteSize = if (td.isBitVector()) null else byte_size.get(child_td.type),
                 .structure = try self.getStructure(child_td.type),
             });
         }
@@ -478,8 +482,8 @@ fn Factory(comptime host: type, comptime module: type) type {
             const TT = td.getTargetType();
             try appendList(list, .{
                 .type = getMemberType(td, false),
-                .bitSize = td.getBitSize(),
-                .byteSize = td.getByteSize(),
+                .bitSize = bit_size.get(td.type),
+                .byteSize = byte_size.get(td.type),
                 .slot = 0,
                 .structure = try self.getStructure(TT),
             });
@@ -512,8 +516,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .is_clamped_array = is_clamped_array,
                     },
                     .bitOffset = @bitOffsetOf(td.type, field.name),
-                    .bitSize = field_td.getBitSize(),
-                    .byteSize = field_td.getByteSize(),
+                    .bitSize = bit_size.get(field_td.type),
+                    .byteSize = byte_size.get(field_td.type),
                     .slot = index,
                     .structure = try self.getStructure(field.type),
                 });
@@ -527,7 +531,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 const field_enum = comptime std.meta.stringToEnum(FieldEnum, field.name).?;
                 // comptime fields are not actually stored in the struct
                 // fields of comptime util in comptime structs are handled in the same manner
-                const is_actual = comptime !field.is_comptime and !field_td.isComptimeOnly();
+                const is_actual = comptime !field.is_comptime and !comptime_only.is(field.type);
                 // check meta function to see if field should be handled in a special manner
                 const can_be_string = comptime canBeString(field.type);
                 const is_string = comptime can_be_string and meta.call("isFieldString", .{ td.type, field_enum });
@@ -537,7 +541,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 const is_typed_array = comptime can_be_typed_array and meta.call("isFieldTypedArray", .{ td.type, field_enum });
                 const can_be_plain = comptime !is_string and !is_typed_array and !is_clamped_array and canBePlain(field.type);
                 const is_plain = comptime can_be_plain and meta.call("isFieldPlain", .{ td.type, field_enum });
-                const supported = comptime field_td.isSupported();
+                const is_packed = @typeInfo(td.type).@"struct".layout == .@"packed";
                 try appendList(list, .{
                     .name = field.name,
                     .type = getMemberType(field_td, field.is_comptime),
@@ -550,10 +554,10 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .is_clamped_array = is_clamped_array,
                     },
                     .bitOffset = if (is_actual) @bitOffsetOf(td.type, field.name) else null,
-                    .bitSize = if (is_actual) field_td.getBitSize() else null,
-                    .byteSize = if (is_actual and !td.isPacked()) field_td.getByteSize() else null,
+                    .bitSize = if (is_actual) bit_size.get(field.type) else null,
+                    .byteSize = if (is_actual and !is_packed) byte_size.get(field.type) else null,
                     .slot = index,
-                    .structure = if (supported) try self.getStructure(field.type) else null,
+                    .structure = if (supported.is(field.type)) try self.getStructure(field.type) else null,
                 });
             }
             if (@typeInfo(td.type).@"struct".backing_integer) |IT| {
@@ -562,8 +566,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                 try appendList(list, .{
                     .type = getMemberType(int_td, false),
                     .flags = MemberFlags{ .is_backing_int = true },
-                    .bitSize = int_td.getBitSize(),
-                    .byteSize = int_td.getByteSize(),
+                    .bitSize = bit_size.get(IT),
+                    .byteSize = byte_size.get(IT),
                     .bitOffset = 0,
                     .structure = try self.getStructure(IT),
                 });
@@ -583,22 +587,21 @@ fn Factory(comptime host: type, comptime module: type) type {
                 const is_typed_array = comptime can_be_typed_array and meta.call("isFieldTypedArray", .{ td.type, field_enum });
                 const can_be_plain = comptime !is_string and !is_typed_array and !is_clamped_array and canBePlain(field.type);
                 const is_plain = comptime can_be_plain and meta.call("isFieldPlain", .{ td.type, field_enum });
-                const supported = comptime field_td.isSupported();
                 try appendList(list, .{
                     .name = field.name,
                     .type = getMemberType(field_td, false),
                     .flags = MemberFlags{
-                        .is_read_only = field_td.isComptimeOnly(),
+                        .is_read_only = comptime_only.is(field.type),
                         .is_string = is_string,
                         .is_plain = is_plain,
                         .is_typed_array = is_typed_array,
                         .is_clamped_array = is_clamped_array,
                     },
                     .bitOffset = td.getContentBitOffset(),
-                    .bitSize = field_td.getBitSize(),
-                    .byteSize = field_td.getByteSize(),
+                    .bitSize = bit_size.get(field.type),
+                    .byteSize = byte_size.get(field.type),
                     .slot = index,
-                    .structure = if (supported) try self.getStructure(field_td.type) else null,
+                    .structure = if (supported.is(field.type)) try self.getStructure(field_td.type) else null,
                 });
             }
             if (td.getSelectorType()) |TT| {
@@ -607,8 +610,8 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .type = getMemberType(selector_td, false),
                     .flags = MemberFlags{ .is_selector = true },
                     .bitOffset = td.getSelectorBitOffset(),
-                    .bitSize = selector_td.getBitSize(),
-                    .byteSize = selector_td.getByteSize(),
+                    .bitSize = bit_size.get(TT),
+                    .byteSize = byte_size.get(TT),
                     .structure = try self.getStructure(selector_td.type),
                 });
             }
@@ -616,11 +619,12 @@ fn Factory(comptime host: type, comptime module: type) type {
 
         fn addOptionalMembers(self: @This(), list: Value, comptime td: TypeData) !void {
             // value always comes first
+            const CT = @typeInfo(td.type).optional.child;
             const child_td = tdb.get(@typeInfo(td.type).optional.child);
             try appendList(list, .{
                 .type = getMemberType(child_td, false),
-                .bitSize = child_td.getBitSize(),
-                .byteSize = child_td.getByteSize(),
+                .bitSize = bit_size.get(CT),
+                .byteSize = byte_size.get(CT),
                 .bitOffset = 0,
                 .slot = 0,
                 .structure = try self.getStructure(child_td.type),
@@ -631,19 +635,20 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .type = getMemberType(selector_td, false),
                 .flags = MemberFlags{ .is_selector = true },
                 .bitOffset = td.getSelectorBitOffset(),
-                .bitSize = selector_td.getBitSize(),
-                .byteSize = selector_td.getByteSize(),
+                .bitSize = bit_size.get(ST),
+                .byteSize = byte_size.get(ST),
                 .structure = try self.getStructure(selector_td.type),
             });
         }
 
         fn addErrorUnionMembers(self: @This(), list: Value, comptime td: TypeData) !void {
+            const PT = @typeInfo(td.type).error_union.payload;
             const payload_td = tdb.get(@typeInfo(td.type).error_union.payload);
             try appendList(list, .{
                 .type = getMemberType(payload_td, false),
                 .bitOffset = td.getContentBitOffset(),
-                .bitSize = payload_td.getBitSize(),
-                .byteSize = payload_td.getByteSize(),
+                .bitSize = bit_size.get(PT),
+                .byteSize = byte_size.get(PT),
                 .slot = 0,
                 .structure = try self.getStructure(payload_td.type),
             });
@@ -657,20 +662,21 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .type = getMemberType(error_td, false),
                 .flags = MemberFlags{ .is_selector = true },
                 .bitOffset = td.getErrorBitOffset(),
-                .bitSize = error_td.getBitSize(),
-                .byteSize = error_td.getByteSize(),
+                .bitSize = bit_size.get(ES),
+                .byteSize = byte_size.get(ES),
                 .structure = try self.getStructure(error_td.type),
             });
         }
 
         fn addFunctionMember(self: @This(), list: Value, comptime td: TypeData) !void {
             const FT = fn_transform.Uninlined(td.type);
+            const AT = ArgStruct(FT);
             const arg_td = tdb.get(ArgStruct(FT));
             try appendList(list, .{
                 .type = getMemberType(arg_td, false),
-                .bitSize = arg_td.getBitSize(),
-                .byteSize = arg_td.getByteSize(),
-                .structure = try self.getStructure(arg_td.type),
+                .bitSize = bit_size.get(AT),
+                .byteSize = byte_size.get(AT),
+                .structure = try self.getStructure(AT),
             });
         }
 
@@ -700,9 +706,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     }
                     inline for (st.fields, 0..) |field, index| {
                         if (field.default_value_ptr) |opaque_ptr| {
-                            const field_td = tdb.get(field.type);
-                            const comptime_only = field.is_comptime or field_td.isComptimeOnly();
-                            if (comptime_only and comptime field_td.isSupported()) {
+                            if ((field.is_comptime or comptime_only.is(field.type)) and comptime supported.is(field.type)) {
                                 // comptime members aren't stored in the struct's memory
                                 // they're separate objects in the slots of the static template
                                 const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
@@ -746,17 +750,18 @@ fn Factory(comptime host: type, comptime module: type) type {
                         const decl_enum = comptime std.meta.stringToEnum(DeclEnum, decl.name).?;
                         const decl_ptr = &@field(td.type, decl.name);
                         const decl_ptr_td = tdb.get(@TypeOf(decl_ptr));
-                        if (comptime decl_ptr_td.isSupported()) {
+                        const PT = @TypeOf(decl_ptr);
+                        if (comptime supported.is(PT)) {
                             const decl_value = decl_ptr.*;
                             const DT = @TypeOf(decl_value);
                             // export type only if it's supported
                             const is_value_supported = switch (DT) {
-                                type => tdb.get(decl_value).isSupported(),
+                                type => supported.is(decl_value),
                                 else => true,
                             };
                             const should_export = if (is_value_supported) switch (@typeInfo(DT)) {
                                 .@"fn" => !options.omit_functions,
-                                else => !options.omit_variables or decl_ptr_td.isConst(),
+                                else => !options.omit_variables or @typeInfo(PT).pointer.is_const,
                             } else false;
                             if (should_export) {
                                 checkStaticMember(DT);
@@ -773,7 +778,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                                     .name = decl.name,
                                     .type = MemberType.object,
                                     .flags = MemberFlags{
-                                        .is_read_only = decl_ptr_td.isConst(),
+                                        .is_read_only = @typeInfo(PT).pointer.is_const,
                                         .is_method = decl_td.isMethodOf(td.type),
                                         .is_expecting_instance = decl_td.isExpectingInstanceOf(td.type),
                                         .is_string = is_string,
@@ -830,17 +835,17 @@ fn Factory(comptime host: type, comptime module: type) type {
                     inline for (comptime std.meta.declarations(td.type), 0..) |decl, index| {
                         if (comptime std.mem.startsWith(u8, decl.name, "meta(")) continue;
                         const decl_ptr = &@field(td.type, decl.name);
-                        const decl_ptr_td = tdb.get(@TypeOf(decl_ptr));
-                        if (comptime decl_ptr_td.isSupported()) {
+                        const PT = @TypeOf(decl_ptr);
+                        if (comptime supported.is(PT)) {
                             const decl_value = decl_ptr.*;
                             const DT = @TypeOf(decl_value);
                             const is_value_supported = switch (DT) {
-                                type => tdb.get(decl_value).isSupported(),
+                                type => supported.is(decl_value),
                                 else => true,
                             };
                             const should_export = if (is_value_supported) switch (@typeInfo(DT)) {
                                 .@"fn" => !options.omit_functions,
-                                else => !options.omit_variables or decl_ptr_td.isConst(),
+                                else => !options.omit_variables or @typeInfo(PT).pointer.is_const,
                             } else false;
                             if (should_export) {
                                 const target_ptr = comptime switch (@typeInfo(DT)) {
@@ -1020,7 +1025,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             const value_ptr = ptr: {
                 // values that only exist at comptime need to have their comptime part replaced with void
                 // (comptime keyword needed here since expression evaluates to different pointer util)
-                if (comptime target_td.isComptimeOnly()) {
+                if (comptime comptime_only.is(pt.child)) {
                     var runtime_value: ComptimeFree(target_td.type) = removeComptimeValues(ptr.*);
                     break :ptr &runtime_value;
                 } else {
@@ -1031,7 +1036,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             const export_handle = if (!is_comptime) host.getExportHandle(ptr) else null;
             if (casting) {
                 const structure = try self.getStructure(target_td.type);
-                const comptime_values = switch (comptime target_td.isComptimeOnly()) {
+                const comptime_values = switch (comptime comptime_only.is(pt.child)) {
                     true => try self.getComptimeValues(ptr.*),
                     false => null,
                 };
@@ -1082,8 +1087,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     try host.setSlotValue(slots, index, obj);
                 },
                 .@"struct" => |st| inline for (st.fields, 0..) |field, index| {
-                    const field_td = tdb.get(field.type);
-                    if (field_td.isComptimeOnly()) {
+                    if (comptime_only.is(field.type)) {
                         const field_value = @field(value, field.name);
                         const obj = try self.exportComptimeValue(field_value);
                         try host.setSlotValue(slots, index, obj);
@@ -1093,8 +1097,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     const tag: Tag = value;
                     inline for (un.fields, 0..) |field, index| {
                         if (@field(Tag, field.name) == tag) {
-                            const field_td = tdb.get(field.type);
-                            if (field_td.isComptimeOnly()) {
+                            if (comptime_only.is(field.type)) {
                                 const field_value = @field(value, field.name);
                                 const obj = try self.exportComptimeValue(field_value);
                                 try host.setSlotValue(slots, index, obj);
