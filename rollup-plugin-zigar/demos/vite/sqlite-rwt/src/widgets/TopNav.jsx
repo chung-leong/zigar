@@ -11,7 +11,9 @@ function TopNav({ api, route, onSearch }) {
     let status = 'ok';
     if (search !== currentSearch) {
       try {
-        api.findPosts(search, 'rank', 0, 1);
+        if (search) {
+          api.findPosts(search, 'rank', 0, 1);
+        }
         const replace = search.startsWith(currentSearch);
         onSearch?.({ search, replace });
       } catch {
