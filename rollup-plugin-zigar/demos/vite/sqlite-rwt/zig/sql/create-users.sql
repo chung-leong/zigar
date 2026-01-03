@@ -1,0 +1,7 @@
+CREATE TABLE users (
+  id INTEGER NOT NULL UNIQUE,
+  slug TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  PRIMARY KEY(id)
+);
