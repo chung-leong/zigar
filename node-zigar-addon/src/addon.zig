@@ -57,8 +57,8 @@ const ModuleHost = struct {
         create_instance: ?Ref = null,
         create_template: ?Ref = null,
         append_list: ?Ref = null,
-        get_slot_value: ?Ref = null,
-        set_slot_value: ?Ref = null,
+        get_structure: ?Ref = null,
+        set_structure: ?Ref = null,
         begin_structure: ?Ref = null,
         finish_structure: ?Ref = null,
         handle_jscall: ?Ref = null,
@@ -300,7 +300,7 @@ const ModuleHost = struct {
         var lib = try std.DynLib.open(path_s);
         errdefer lib.close();
         const module = lib.lookup(*Module, "zig_module") orelse return error.MissingSymbol;
-        if (module.version != 6) return error.IncorrectVersion;
+        if (module.version != Module.current_version) return error.IncorrectVersion;
         self.module = module;
         self.base_address = get: {
             switch (builtin.target.os.tag) {
@@ -921,17 +921,29 @@ const ModuleHost = struct {
     fn setProperty(self: *@This(), object: Value, key_bytes: [*]const u8, key_len: usize, value: ?Value) !void {
         const env = self.env;
         const key = try env.createStringUtf8(key_bytes[0..key_len]);
-        return try env.setProperty(object, key, value orelse try env.getNull());
+        return try env.setProperty(object, key, value orelse try env.getUndefined());
     }
 
-    fn getSlotValue(self: *@This(), object: ?Value, slot: usize) !Value {
+    fn getSlotValue(self: *@This(), object: Value, slot: usize) !Value {
         const env = self.env;
+        const key = try env.createUint32(@as(u32, @truncate(slot)));
+        return try env.getProperty(object, key);
+    }
+
+    fn setSlotValue(self: *@This(), object: Value, slot: usize, value: ?Value) !void {
+        const env = self.env;
+        const key = try env.createUint32(@as(u32, @truncate(slot)));
+        return try env.setProperty(object, key, value orelse try env.getUndefined());
+    }
+
+    fn getStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize) !Value {
+        const env = self.env;
+        const key = try env.createStringUtf8(key_bytes[0..key_len]);
         const result = try env.callFunction(
             try env.getNull(),
-            try env.getReferenceValue(self.js.get_slot_value orelse return error.Unexpected),
+            try env.getReferenceValue(self.js.get_structure orelse return error.Unexpected),
             &.{
-                object orelse try env.getNull(),
-                try env.createUint32(@as(u32, @truncate(slot))),
+                key,
             },
         );
         return switch (try env.typeof(result)) {
@@ -940,14 +952,14 @@ const ModuleHost = struct {
         };
     }
 
-    fn setSlotValue(self: *@This(), object: ?Value, slot: usize, value: ?Value) !void {
+    fn setStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize, value: ?Value) !void {
         const env = self.env;
+        const key = try env.createStringUtf8(key_bytes[0..key_len]);
         _ = try env.callFunction(
             try env.getNull(),
-            try env.getReferenceValue(self.js.set_slot_value orelse return error.Unexpected),
+            try env.getReferenceValue(self.js.set_structure orelse return error.Unexpected),
             &.{
-                object orelse try env.getNull(),
-                try env.createUint32(@as(u32, @truncate(slot))),
+                key,
                 value orelse try env.getNull(),
             },
         );

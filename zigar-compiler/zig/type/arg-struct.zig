@@ -78,9 +78,33 @@ test "ArgStruct" {
     const ArgC = ArgStruct(@TypeOf(ns.C));
     const fieldsC = std.meta.fields(ArgC);
     try expectEqual(4, fieldsC.len);
-    std.debug.print("{s}\n", .{@typeName(ArgA)});
 }
 
-pub fn is(comptime T: type) bool {
-    return @hasField(T, "retval") and std.mem.containsAtLeast(u8, @typeName(T), 1, ".ArgStruct(");
+pub fn is(comptime T: type, variadic: ?bool) bool {
+    if (@typeInfo(T) != .@"struct") return false;
+    if (@hasField(T, "retval") and std.mem.containsAtLeast(u8, @typeName(T), 1, ".ArgStruct(")) {
+        return if (variadic) |v| v == std.mem.containsAtLeast(u8, @typeName(T), 1, "...") else true;
+    }
+    return false;
+}
+
+test "is" {
+    const ns = struct {
+        fn foo(a: i32, b: bool) bool {
+            return if (a > 10 and b) true else false;
+        }
+
+        fn bar(a: i32, ...) callconv(.c) bool {
+            return if (a > 10) true else false;
+        }
+    };
+    const ArgFoo = ArgStruct(@TypeOf(ns.foo));
+    try expectEqual(true, is(ArgFoo, false));
+    try expectEqual(false, is(ArgFoo, true));
+    try expectEqual(true, is(ArgFoo, null));
+    const ArgBar = ArgStruct(@TypeOf(ns.bar));
+    try expectEqual(false, is(ArgBar, false));
+    try expectEqual(true, is(ArgBar, true));
+    try expectEqual(true, is(ArgBar, null));
+    try expectEqual(false, is(enum { foo, bar }, false));
 }

@@ -64,7 +64,7 @@ import workerSupport from './worker-support.js';
 export default mixin({
   init() {
     this.comptime = false;
-    this.slots = {};
+    this.structureMap = new Map();
     this.structures = [];
     this.structureCounters = {
       struct: 0,
@@ -111,13 +111,11 @@ export default mixin({
   appendList(list, element) {
     list.push(element);
   },
-  getSlotValue(slots, slot) {
-    if (!slots) slots = this.slots;
-    return slots[slot];
+  getStructure(name) {
+    return this.structureMap.get(name);
   },
-  setSlotValue(slots, slot, value) {
-    if (!slots) slots = this.slots;
-    slots[slot] = value;
+  setStructure(name, value) {
+    this.structureMap.set(name, value);
   },
   beginStructure(structure) {
     this.defineStructure(structure);
@@ -530,8 +528,8 @@ export default mixin({
       createInstance: {},
       createTemplate: {},
       appendList: {},
-      getSlotValue: {},
-      setSlotValue: {},
+      getStructure: {},
+      setStructure: {},
       beginStructure: {},
       finishStructure: {},
     },

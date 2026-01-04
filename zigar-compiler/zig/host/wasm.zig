@@ -100,9 +100,8 @@ pub fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
 }
 
 pub fn releaseFunction(fn_ptr: anytype) void {
-    const FT = util.FnPointerTarget(@TypeOf(fn_ptr));
     const thunk_address = @intFromPtr(fn_ptr);
-    const control = js_fn.createThunkController(@This(), FT);
+    const control = js_fn.createTargetController(@This(), @TypeOf(fn_ptr));
     const controller_address = @intFromPtr(control);
     const fn_id = identifyJsThunk(controller_address, thunk_address);
     _releaseFunction(fn_id);

@@ -32,3 +32,14 @@ test "get" {
     try expectEqual(-2, get(Slice(i32, .{ .value = -2 })).?.value);
     try expectEqual(null, get(Slice(i32, null)));
 }
+
+pub fn remove(comptime ptr: anytype) retval_type: {
+    const PT = @TypeOf(ptr);
+    var pt = @typeInfo(PT).pointer;
+    var ar = @typeInfo(pt.child).array;
+    ar.sentinel_ptr = null;
+    pt.child = @Type(.{ .array = ar });
+    break :retval_type @Type(.{ .pointer = pt });
+} {
+    return @ptrCast(ptr);
+}

@@ -11,8 +11,6 @@ const bit_size = @import("type/bit-size.zig");
 const byte_size = @import("type/byte-size.zig");
 const comptime_only = @import("type/comptime-only.zig");
 const content_offset = @import("type/content-offset.zig");
-const TypeData = @import("type/db.zig").TypeData;
-const TypeDataCollector = @import("type/db.zig").TypeDataCollector;
 const error_offset = @import("type/error-offset.zig");
 const method = @import("type/method.zig");
 const object = @import("type/object.zig");
@@ -30,22 +28,12 @@ const fn_transform = @import("zigft/fn-transform.zig");
 pub const Value = *opaque {};
 
 fn Factory(comptime host: type, comptime module: type) type {
-    const tdb = comptime result: {
-        var tdc = TypeDataCollector.init(256);
-        tdc.add(*const fn (*const anyopaque, *anyopaque) anyerror!void);
-        tdc.add(*const fn (*const anyopaque, *anyopaque, *const anyopaque, usize) anyerror!void);
-        tdc.add(*const fn (js_fn.Action, usize) anyerror!usize);
-        tdc.add(*const anyopaque);
-        tdc.scan(module);
-        break :result tdc.createDatabase();
-    };
     return struct {
         pub fn getStructureType(comptime T: type) StructureType {
-            return if (arg_struct.is(T))
-                switch (td.attrs.is_variadic) {
-                    false => .arg_struct,
-                    true => .variadic_struct,
-                }
+            return if (arg_struct.is(T, false))
+                .arg_struct
+            else if (arg_struct.is(T, true))
+                .variadic_struct
             else if (slice.is(T))
                 .slice
             else switch (@typeInfo(T)) {
@@ -105,7 +93,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             .type,
             .enum_literal,
             => StructureFlags.Primitive,
-            .@"struct" => if (arg_struct.is(T))
+            .@"struct" => if (arg_struct.is(T, null))
                 StructureFlags.ArgStruct
             else if (slice.is(T))
                 StructureFlags.Slice
@@ -145,7 +133,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     const has_slot = inline for (st.fields) |field| {
                         if (object.is(field.type) or comptime_only.is(field.type) or field.is_comptime) break true;
                     } else false;
-                    break :init if (comptime arg_struct.is(T)) .{
+                    break :init if (comptime arg_struct.is(T, null)) .{
                         .has_object = has_object,
                         .has_slot = has_slot,
                         .has_pointer = pointer.has(T),
@@ -276,7 +264,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             return switch (@typeInfo(T)) {
                 .array => |ar| ar.len,
                 .vector => |ve| ve.len,
-                .@"struct" => |st| switch (arg_struct.is(T)) {
+                .@"struct" => |st| switch (arg_struct.is(T, null)) {
                     true => comptime req_arg_count: {
                         var len = 0;
                         for (st.fields, 0..) |field, index| {
@@ -293,7 +281,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                         false => null,
                     },
                 },
-                .@"fn" => getStructureLength(tdb.get(arg_struct.ArgStruct(T))),
+                .@"fn" => getStructureLength(arg_struct.ArgStruct(T)),
                 else => null,
             };
         }
@@ -381,9 +369,8 @@ fn Factory(comptime host: type, comptime module: type) type {
         // NOTE: anyerror has to be used here since the function is called recursively
         // and https://github.com/ziglang/zig/issues/2971 has not been fully resolved yet
         fn getStructure(self: @This(), comptime T: type) anyerror!Value {
-            const td = tdb.get(T);
-            const slot = td.getSlot();
-            return host.getSlotValue(null, slot) catch result: {
+            const name = @typeName(T);
+            return host.getStructure(name) catch result: {
                 const instance = try createObject(.{});
                 const static = try createObject(.{});
                 const structure = try createObject(.{
@@ -392,26 +379,30 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .purpose = getStructurePurpose(T),
                     .flags = getStructureFlags(T),
                     .signature = signature.get(T),
-                    .length = getStructureLength(td),
+                    .length = getStructureLength(T),
                     .byteSize = byte_size.get(T),
                     .@"align" = alignment.get(T),
                     .instance = instance,
                     .static = static,
                 });
-                // place the structure its slot immediately so that recursive definition works correctly
-                try host.setSlotValue(null, slot, structure);
+                // set the structure immediately so that recursive definition works correctly
+                try host.setStructure(name, structure);
                 // define members and add template if applicable
                 try setProperties(instance, .{
-                    .members = try self.getMembers(td),
-                    .template = try self.getTemplate(td),
+                    .members = try self.getMembers(T),
+                    .template = try self.getTemplate(T),
                 });
                 // define the shape so that static members can be instances of the structure
                 try host.beginStructure(structure);
                 // add static variables and functions, excluding internal util and problematic namespaces
-                if (comptime !td.shouldIgnoreDecls()) {
+                const ignore = switch (T) {
+                    std.fs.File, std.fs.Dir => true,
+                    else => util.getInternalType(T) != null,
+                };
+                if (!ignore) {
                     try setProperties(static, .{
-                        .members = try self.getStaticMembers(td),
-                        .template = try self.getStaticTemplate(td),
+                        .members = try self.getStaticMembers(T),
+                        .template = try self.getStaticTemplate(T),
                     });
                 }
                 // indicate that structure is complete
@@ -500,40 +491,46 @@ fn Factory(comptime host: type, comptime module: type) type {
 
         fn addPointerMember(self: @This(), list: Value, comptime T: type) !void {
             const TT = target.get(T);
+            const target_structure = try self.getStructure(TT);
             try appendList(list, .{
                 .type = getMemberType(T, false),
                 .bitSize = bit_size.get(T),
                 .byteSize = byte_size.get(T),
                 .slot = 0,
-                .structure = try self.getStructure(TT),
+                .structure = target_structure,
             });
+            if (@typeInfo(TT) == .@"fn") {
+
+                // const can_be_string = comptime (as_ptr and index > 0) and canBeString(field.type);
+                // // first field is retval, hence the subtraction
+                // const is_string = comptime can_be_string and meta.call("isArgumentString", .{ FT, index - 1 });
+                // const can_be_clamped_array = comptime (as_ptr and index > 0) and !is_string and canBeClampedArray(field.type);
+                // const is_clamped_array = comptime can_be_clamped_array and meta.call("isArgumentClampedArray", .{ FT, index - 1 });
+                // const can_be_typed_array = comptime (as_ptr and index > 0) and !is_string and !is_clamped_array and canBeTypedArray(field.type);
+                // const is_typed_array = comptime can_be_typed_array and meta.call("isArgumentTypedArray", .{ FT, index - 1 });
+                // const can_be_plain = comptime (as_ptr and index > 0) and !is_string and !is_typed_array and !is_clamped_array and canBePlain(field.type);
+                // const is_plain = comptime can_be_plain and meta.call("isArgumentPlain", .{ FT, index - 1 });
+
+                // .@"fn" => {
+                //     // only export thunk controller when function pointer is in use
+                //     const FT = fn_transform.Uninlined(T);
+                //     const PT = *const FT;
+                //     if (comptime tdb.has(PT) and tdb.get(PT).isInUse() and !@typeInfo(T).@"fn".is_var_args) {
+                //         // store JS thunk controller as static template
+                //         const controller = comptime js_fn.createThunkController(host, FT);
+                //         memory = try self.exportPointerTarget(controller, false);
+                //     }
+                // },
+
+            }
         }
 
         fn addArgStructMembers(self: @This(), list: Value, comptime T: type) !void {
-            const FT = td.parent_type.?;
-            // check if FT is used as a function pointer
-            const PT = *const FT;
-            const as_ptr = comptime tdb.has(PT) and tdb.get(PT).isInUse() and !@typeInfo(FT).@"fn".is_var_args;
             inline for (std.meta.fields(T), 0..) |field, index| {
-                const can_be_string = comptime (as_ptr and index > 0) and canBeString(field.type);
-                // first field is retval, hence the subtraction
-                const is_string = comptime can_be_string and meta.call("isArgumentString", .{ FT, index - 1 });
-                const can_be_clamped_array = comptime (as_ptr and index > 0) and !is_string and canBeClampedArray(field.type);
-                const is_clamped_array = comptime can_be_clamped_array and meta.call("isArgumentClampedArray", .{ FT, index - 1 });
-                const can_be_typed_array = comptime (as_ptr and index > 0) and !is_string and !is_clamped_array and canBeTypedArray(field.type);
-                const is_typed_array = comptime can_be_typed_array and meta.call("isArgumentTypedArray", .{ FT, index - 1 });
-                const can_be_plain = comptime (as_ptr and index > 0) and !is_string and !is_typed_array and !is_clamped_array and canBePlain(field.type);
-                const is_plain = comptime can_be_plain and meta.call("isArgumentPlain", .{ FT, index - 1 });
                 try appendList(list, .{
                     .name = field.name,
                     .type = getMemberType(field.type, field.is_comptime),
-                    .flags = MemberFlags{
-                        .is_required = true,
-                        .is_string = is_string,
-                        .is_plain = is_plain,
-                        .is_typed_array = is_typed_array,
-                        .is_clamped_array = is_clamped_array,
-                    },
+                    .flags = MemberFlags{ .is_required = true },
                     .bitOffset = @bitOffsetOf(T, field.name),
                     .bitSize = bit_size.get(field.type),
                     .byteSize = byte_size.get(field.type),
@@ -698,7 +695,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     if (comptime sentinel.get(T)) |s| {
                         memory = try self.exportPointerTarget(&s.value, false);
                     }
-                } else if (!comptime arg_struct.is(T)) {
+                } else if (!comptime arg_struct.is(T, null)) {
                     if (@sizeOf(T) > 0) {
                         const default_values = comptime init: {
                             var values: T = undefined;
@@ -722,7 +719,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 const default_value_ptr: *const field.type = @ptrCast(@alignCast(opaque_ptr));
                                 const value_obj = try self.exportPointerTarget(default_value_ptr, true);
                                 if (slots == null) slots = try host.createObject();
-                                try host.setSlotValue(slots, index, value_obj);
+                                try host.setSlotValue(slots.?, index, value_obj);
                             }
                         }
                     }
@@ -753,7 +750,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             comptime var offset: usize = 0;
             const list = try createList(.{});
             switch (@typeInfo(T)) {
-                .@"struct", .@"union", .@"enum", .@"opaque" => if (comptime !arg_struct.is(T) and !slice.is(T)) {
+                .@"struct", .@"union", .@"enum", .@"opaque" => if (comptime !arg_struct.is(T, null) and !slice.is(T)) {
                     const DeclEnum = std.meta.DeclEnum(T);
                     inline for (comptime std.meta.declarations(T), 0..) |decl, index| {
                         if (comptime std.mem.startsWith(u8, decl.name, "meta(")) continue;
@@ -836,10 +833,9 @@ fn Factory(comptime host: type, comptime module: type) type {
 
         fn getStaticTemplate(self: @This(), comptime T: type) !?Value {
             comptime var offset: usize = 0;
-            var memory: ?Value = null;
             var slots: ?Value = null;
             switch (@typeInfo(T)) {
-                .@"struct", .@"union", .@"enum", .@"opaque" => if (comptime !arg_struct.is(T)) {
+                .@"struct", .@"union", .@"enum", .@"opaque" => if (comptime !arg_struct.is(T, null)) {
                     inline for (comptime std.meta.declarations(T), 0..) |decl, index| {
                         if (comptime std.mem.startsWith(u8, decl.name, "meta(")) continue;
                         const decl_ptr = &@field(T, decl.name);
@@ -885,25 +881,15 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .error_set => |es| if (es) |errors| {
                     inline for (errors, 0..) |err_rec, index| {
                         const err = @field(anyerror, err_rec.name);
-                        const value_obj = try self.exportError(err, td);
+                        const value_obj = try self.exportError(err, T);
                         if (slots == null) slots = try host.createObject();
                         try host.setSlotValue(slots.?, offset + index, value_obj);
                     }
                 },
-                .@"fn" => {
-                    // only export thunk controller where function pointer is in use
-                    const FT = fn_transform.Uninlined(T);
-                    const PT = *const FT;
-                    if (comptime tdb.has(PT) and tdb.get(PT).isInUse() and !@typeInfo(T).@"fn".is_var_args) {
-                        // store JS thunk controller as static template
-                        const controller = comptime js_fn.createThunkController(host, FT);
-                        memory = try self.exportPointerTarget(controller, false);
-                    }
-                },
                 else => {},
             }
-            if (memory == null and slots == null) return null;
-            return host.createTemplate(memory, slots);
+            if (slots == null) return null;
+            return host.createTemplate(null, slots);
         }
 
         fn checkStaticMember(comptime T: anytype) void {
@@ -1062,7 +1048,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             return switch (@typeInfo(@TypeOf(value))) {
                 .comptime_int => self.exportPointerTarget(&@as(util.IntFor(value), value), true),
                 .comptime_float => self.exportPointerTarget(&@as(f64, value), true),
-                .enum_literal => self.exportPointerTarget(util.removeSentinel(@tagName(value)), true),
+                .enum_literal => self.exportPointerTarget(sentinel.remove(@tagName(value)), true),
                 .type => self.getStructure(value),
                 else => return self.exportPointerTarget(&value, true),
             };
