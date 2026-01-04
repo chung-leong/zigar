@@ -20,7 +20,7 @@ fn check(comptime T: type, comptime checking: anytype) bool {
         .pointer => |pt| inline for (checking) |C| {
             if (pt.child == C) break false;
         } else check(pt.child, checking),
-        inline .array, .vector, .optional => |ar| check(ar.child),
+        inline .array, .vector, .optional => |ar| check(ar.child, checking),
         .@"struct" => |st| inline for (st.fields) |field| {
             if (!field.is_comptime) {
                 if (check(field.type, checking ++ .{T})) break true;

@@ -1,7 +1,7 @@
 const std = @import("std");
 const expectEqual = std.testing.expectEqual;
 
-const comptime_only = @import("./comptime-only");
+const comptime_only = @import("comptime-only.zig");
 
 pub fn is(comptime T: type) bool {
     return check(T, .{});
@@ -29,7 +29,7 @@ fn check(comptime T: type, comptime checking: anytype) bool {
         .pointer => |pt| inline for (checking) |C| {
             if (pt.child == C) break true;
         } else check(pt.child, checking),
-        inline .array, .vector, .optional => |ar| check(ar.child),
+        inline .array, .vector, .optional => |ar| check(ar.child, checking),
         .@"struct" => T != std.Options,
         .@"fn" => |f| inline for (f.params) |param| {
             if (param.is_generic) break false;

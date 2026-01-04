@@ -78,4 +78,9 @@ test "ArgStruct" {
     const ArgC = ArgStruct(@TypeOf(ns.C));
     const fieldsC = std.meta.fields(ArgC);
     try expectEqual(4, fieldsC.len);
+    std.debug.print("{s}\n", .{@typeName(ArgA)});
+}
+
+pub fn is(comptime T: type) bool {
+    return @hasField(T, "retval") and std.mem.containsAtLeast(u8, @typeName(T), 1, ".ArgStruct(");
 }
