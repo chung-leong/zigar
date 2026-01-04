@@ -37,6 +37,7 @@ pub fn Module(comptime Value: type) type {
             set_structure: *const fn (*Host, [*]const u8, usize, ?Value) callconv(.c) E,
             begin_structure: *const fn (*Host, Value) callconv(.c) E,
             finish_structure: *const fn (*Host, Value) callconv(.c) E,
+            enable_callback: *const fn (*Host, Value, Value, Value) callconv(.c) E,
             enable_multithread: *const fn (*Host) callconv(.c) E,
             disable_multithread: *const fn (*Host) callconv(.c) E,
             release_function: *const fn (*Host, usize) callconv(.c) E,

@@ -61,10 +61,9 @@ export default mixin({
     return constructor;
   },
   finalizeFunction(structure, staticDescriptors, descriptors) {
-    const {
-      static: { template },
-    } = structure;
-    staticDescriptors[CONTROLLER] = defineValue(template);
+    staticDescriptors[CONTROLLER] = {
+      get() { return structure.static?.template }
+    };
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
   },

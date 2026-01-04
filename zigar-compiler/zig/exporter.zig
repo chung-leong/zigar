@@ -500,28 +500,33 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .structure = target_structure,
             });
             if (@typeInfo(TT) == .@"fn") {
-
-                // const can_be_string = comptime (as_ptr and index > 0) and canBeString(field.type);
-                // // first field is retval, hence the subtraction
-                // const is_string = comptime can_be_string and meta.call("isArgumentString", .{ FT, index - 1 });
-                // const can_be_clamped_array = comptime (as_ptr and index > 0) and !is_string and canBeClampedArray(field.type);
-                // const is_clamped_array = comptime can_be_clamped_array and meta.call("isArgumentClampedArray", .{ FT, index - 1 });
-                // const can_be_typed_array = comptime (as_ptr and index > 0) and !is_string and !is_clamped_array and canBeTypedArray(field.type);
-                // const is_typed_array = comptime can_be_typed_array and meta.call("isArgumentTypedArray", .{ FT, index - 1 });
-                // const can_be_plain = comptime (as_ptr and index > 0) and !is_string and !is_typed_array and !is_clamped_array and canBePlain(field.type);
-                // const is_plain = comptime can_be_plain and meta.call("isArgumentPlain", .{ FT, index - 1 });
-
-                // .@"fn" => {
-                //     // only export thunk controller when function pointer is in use
-                //     const FT = fn_transform.Uninlined(T);
-                //     const PT = *const FT;
-                //     if (comptime tdb.has(PT) and tdb.get(PT).isInUse() and !@typeInfo(T).@"fn".is_var_args) {
-                //         // store JS thunk controller as static template
-                //         const controller = comptime js_fn.createThunkController(host, FT);
-                //         memory = try self.exportPointerTarget(controller, false);
-                //     }
-                // },
-
+                // add thunk controller to enable callback
+                const FT = TT;
+                const controller = comptime js_fn.createThunkController(host, FT);
+                const memory = try self.exportPointerTarget(controller, false);
+                const template = try host.createTemplate(memory, null);
+                const AT = arg_struct.ArgStruct(FT);
+                const member_flags = try createObject(.{});
+                inline for (std.meta.fields(AT), 0..) |field, index| {
+                    const can_be_string = comptime (index > 0) and canBeString(field.type);
+                    // first field is retval, hence the subtraction
+                    const is_string = comptime can_be_string and meta.call("isArgumentString", .{ FT, index - 1 });
+                    const can_be_clamped_array = comptime (index > 0) and !is_string and canBeClampedArray(field.type);
+                    const is_clamped_array = comptime can_be_clamped_array and meta.call("isArgumentClampedArray", .{ FT, index - 1 });
+                    const can_be_typed_array = comptime (index > 0) and !is_string and !is_clamped_array and canBeTypedArray(field.type);
+                    const is_typed_array = comptime can_be_typed_array and meta.call("isArgumentTypedArray", .{ FT, index - 1 });
+                    const can_be_plain = comptime (index > 0) and !is_string and !is_typed_array and !is_clamped_array and canBePlain(field.type);
+                    const is_plain = comptime can_be_plain and meta.call("isArgumentPlain", .{ FT, index - 1 });
+                    const flags = try host.createInteger(@bitCast(MemberFlags{
+                        .is_required = true,
+                        .is_string = is_string,
+                        .is_plain = is_plain,
+                        .is_typed_array = is_typed_array,
+                        .is_clamped_array = is_clamped_array,
+                    }), false);
+                    try host.setSlotValue(member_flags, index, flags);
+                }
+                try host.enableCallback(target_structure, template, member_flags);
             }
         }
 

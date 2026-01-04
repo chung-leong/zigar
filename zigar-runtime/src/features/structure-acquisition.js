@@ -127,6 +127,10 @@ export default mixin({
     this.structures.push(structure);
     this.finalizeStructure(structure);
   },
+  enableCallback(structure, template, memberFlags) {
+    structure.static.template = template;
+    this.updateArgStructMembers(structure.instance.members[0].structure, memberFlags);
+  },
   acquireStructures() {
     const attrs = this.getModuleAttributes();
     this.littleEndian = !!(attrs & ModuleAttribute.LittleEndian);
@@ -478,11 +482,12 @@ export default mixin({
       createObject: { argType: '', returnType: 'v' },
       getProperty: { argType: 'vii', returnType: 'v' },
       setProperty: { argType: 'viiv' },
-      getSlotValue: { argType: 'vi', returnType: 'v' },
-      setSlotValue: { argType: 'viv' },
+      getStructure: { argType: 'v', returnType: 'v' },
+      setStructure: { argType: 'vv' },
       appendList: { argType: 'vv' },
       beginStructure: { argType: 'v' },
       finishStructure: { argType: 'v' },
+      enableCallback: { argType: 'vvv' },
     },
     imports: {
       getFactoryThunk: { argType: '', returnType: 'i' },
@@ -532,6 +537,7 @@ export default mixin({
       setStructure: {},
       beginStructure: {},
       finishStructure: {},
+      enableCallback: {},
     },
     imports: {
       getFactoryThunk: {},

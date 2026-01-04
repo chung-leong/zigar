@@ -181,6 +181,12 @@ pub fn finishStructure(structure: Value) !void {
     }
 }
 
+pub fn enableCallback(structure: Value, template: Value, member_flags: Value) !void {
+    if (imports.enable_callback(instance, structure, template, member_flags) != .SUCCESS) {
+        return error.UnableToEnableCallback;
+    }
+}
+
 pub fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
     if (!initialized) @panic("Uninitialized thread");
     var call: Module.Jscall = .{

@@ -61,6 +61,7 @@ const ModuleHost = struct {
         set_structure: ?Ref = null,
         begin_structure: ?Ref = null,
         finish_structure: ?Ref = null,
+        enable_callback: ?Ref = null,
         handle_jscall: ?Ref = null,
         release_function: ?Ref = null,
 
@@ -983,6 +984,19 @@ const ModuleHost = struct {
             try env.getReferenceValue(self.js.finish_structure orelse return error.Unexpected),
             &.{
                 structure,
+            },
+        );
+    }
+
+    fn enableCallback(self: *@This(), structure: Value, template: Value, member_flags: Value) !void {
+        const env = self.env;
+        _ = try env.callFunction(
+            try env.getNull(),
+            try env.getReferenceValue(self.js.enable_callback orelse return error.Unexpected),
+            &.{
+                structure,
+                template,
+                member_flags,
             },
         );
     }
