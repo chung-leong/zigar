@@ -1683,10 +1683,6 @@ fn throwLastError(env: *Env) void {
     throwError(env, message, .{});
 }
 
-fn missing(comptime T: type) comptime_int {
-    return std.math.maxInt(T);
-}
-
 inline fn camelize(comptime name: []const u8) [:0]const u8 {
     var buffer: [name.len + 1]u8 = undefined;
     var len: usize = 0;

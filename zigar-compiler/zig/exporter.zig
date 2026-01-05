@@ -499,7 +499,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .slot = 0,
                 .structure = target_structure,
             });
-            if (@typeInfo(TT) == .@"fn") {
+            if (@typeInfo(TT) == .@"fn" and !@typeInfo(TT).@"fn".is_var_args) {
                 // add thunk controller to enable callback
                 const FT = TT;
                 const controller = comptime js_fn.createThunkController(host, FT);
