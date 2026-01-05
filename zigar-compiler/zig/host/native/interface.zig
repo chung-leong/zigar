@@ -5,11 +5,12 @@ const hooks = @import("hooks.zig");
 
 pub fn Module(comptime Value: type) type {
     return extern struct {
-        version: u32,
+        version: u32 = current_version,
         attributes: Attributes,
         imports: *Imports,
         exports: *const Exports,
 
+        pub const current_version = 7;
         pub const Attributes = packed struct(u32) {
             little_endian: bool,
             runtime_safety: bool,
@@ -30,10 +31,13 @@ pub fn Module(comptime Value: type) type {
             append_list: *const fn (*Host, Value, Value) callconv(.c) E,
             get_property: *const fn (*Host, Value, [*]const u8, usize, *Value) callconv(.c) E,
             set_property: *const fn (*Host, Value, [*]const u8, usize, ?Value) callconv(.c) E,
-            get_slot_value: *const fn (*Host, ?Value, usize, *Value) callconv(.c) E,
-            set_slot_value: *const fn (*Host, ?Value, usize, ?Value) callconv(.c) E,
+            get_slot_value: *const fn (*Host, Value, usize, *Value) callconv(.c) E,
+            set_slot_value: *const fn (*Host, Value, usize, ?Value) callconv(.c) E,
+            get_structure: *const fn (*Host, [*]const u8, usize, *Value) callconv(.c) E,
+            set_structure: *const fn (*Host, [*]const u8, usize, ?Value) callconv(.c) E,
             begin_structure: *const fn (*Host, Value) callconv(.c) E,
             finish_structure: *const fn (*Host, Value) callconv(.c) E,
+            enable_callback: *const fn (*Host, Value, Value, Value) callconv(.c) E,
             enable_multithread: *const fn (*Host) callconv(.c) E,
             disable_multithread: *const fn (*Host) callconv(.c) E,
             release_function: *const fn (*Host, usize) callconv(.c) E,

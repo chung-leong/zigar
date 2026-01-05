@@ -1,5 +1,4 @@
 const std = @import("std");
-const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const builtin = @import("builtin");
 
@@ -20,37 +19,6 @@ test "IntFor" {
     try expectEqual(i64, IntFor(-0xFFFFFFFF));
     try expectEqual(u8, IntFor(123));
     try expectEqual(i8, IntFor(-123));
-}
-
-pub fn FnPointerTarget(comptime T: type) type {
-    return switch (@typeInfo(T)) {
-        .pointer => |pt| switch (@typeInfo(pt.child)) {
-            .@"fn" => pt.child,
-            else => @compileError("Not a function pointer"),
-        },
-        else => @compileError("Not a function pointer"),
-    };
-}
-
-test "FnPointerTarget" {
-    const FT = FnPointerTarget(*const fn () void);
-    try expectEqual(fn () void, FT);
-}
-
-pub fn removeSentinel(comptime ptr: anytype) retval_type: {
-    const PT = @TypeOf(ptr);
-    const pt = @typeInfo(PT).pointer;
-    const ar = @typeInfo(pt.child).array;
-    const CT = [ar.len]ar.child;
-    break :retval_type @Pointer(pt.size, .{
-        .@"const" = pt.is_const,
-        .@"volatile" = pt.is_volatile,
-        .@"allowzero" = pt.is_allowzero,
-        .@"addrspace" = pt.address_space,
-        .@"align" = pt.alignment,
-    }, CT, null);
-} {
-    return @ptrCast(ptr);
 }
 
 pub fn ReturnValue(comptime arg: anytype) type {
@@ -209,12 +177,12 @@ pub fn IteratorReturnValue(comptime T: type) ?type {
 
 test "IteratorReturnValue" {
     const T1 = IteratorReturnValue(std.mem.SplitIterator(u8, .sequence));
-    try expect(T1 != null);
+    try expectEqual(false, T1 == null);
     try expectEqual([]const u8, IteratorPayload(T1.?));
     const T2 = IteratorReturnValue(error{Doh}!std.fs.path.ComponentIterator(.posix, u8));
-    try expect(T2 != null);
+    try expectEqual(false, T2 == null);
     const T3 = IteratorReturnValue(std.fs.path);
-    try expect(T3 == null);
+    try expectEqual(true, T3 == null);
 }
 
 pub fn isIteratorAllocating(comptime T: type) bool {

@@ -2,7 +2,7 @@ import { ArgStructFlag, StructureFlag } from '../constants.js';
 import { mixin } from '../environment.js';
 import { ArgumentCountMismatch } from '../errors.js';
 import { ALLOCATOR, FINALIZE, MEMORY, RETURN, SLOTS, THROWING, UPDATE, VISIT, VIVIFICATE } from '../symbols.js';
-import { defineValue } from '../utils.js';
+import { defineProperty, defineValue } from '../utils.js';
 
 export default mixin({
   defineArgStruct(structure, descriptors) {
@@ -68,5 +68,19 @@ export default mixin({
   finalizeArgStruct(structure, staticDescriptors) {
     const { flags } = structure;
     staticDescriptors[THROWING] = defineValue(!!(flags & ArgStructFlag.IsThrowing));
+  },
+  updateArgStructMembers(structure, memberFlags) {
+    const {
+      constructor: { prototype },
+      instance: { members },
+    } = structure;
+    for (const [ index, member ] of members.entries()) {
+      const newFlags = memberFlags[index];
+      if (newFlags !== member.flags) {
+        member.flags = newFlags;
+        const newDescriptor = this.defineMember(member);
+        defineProperty(prototype, member.name, newDescriptor);
+      }
+    }
   },
 });

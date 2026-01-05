@@ -18,6 +18,17 @@ pub const Error = error{ UnableToCreateThunk, UnableToFindThunk };
 
 pub const ThunkController = *const fn (Action, usize) anyerror!usize;
 
+pub fn createTargetController(comptime host: type, comptime FPT: type) ThunkController {
+    const FT = switch (@typeInfo(FPT)) {
+        .pointer => |pt| switch (@typeInfo(pt.child)) {
+            .@"fn" => pt.child,
+            else => @compileError("Not a function pointer"),
+        },
+        else => @compileError("Not a function pointer"),
+    };
+    return createThunkController(host, FT);
+}
+
 pub fn createThunkController(comptime host: type, comptime BFT: type) ThunkController {
     const tc_ns = switch (comptime builtin.target.cpu.arch.isWasm()) {
         false => struct {
