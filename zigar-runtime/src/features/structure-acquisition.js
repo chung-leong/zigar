@@ -480,8 +480,8 @@ export default mixin({
       createTemplate: { argType: 'vv', returnType: 'v' },
       createList: { argType: '', returnType: 'v' },
       createObject: { argType: '', returnType: 'v' },
-      getProperty: { argType: 'vii', returnType: 'v' },
-      setProperty: { argType: 'viiv' },
+      getProperty: { argType: 'vv', returnType: 'v' },
+      setProperty: { argType: 'vvv' },
       getStructure: { argType: 'v', returnType: 'v' },
       setStructure: { argType: 'vv' },
       appendList: { argType: 'vv' },
@@ -519,12 +519,10 @@ export default mixin({
     createObject() {
       return {};
     },
-    getProperty(object, address, len) {
-      const key = this.createString(address, len);
+    getProperty(object, key) {
       return object[key];
     },
-    setProperty(object, address, len, value) {
-      const key = this.createString(address, len);
+    setProperty(object, key, value) {
       object[key] = value;
     },
   } : process.env.TARGET === 'node' ? {

@@ -63,19 +63,23 @@ pub fn createObject() !Value {
 }
 
 pub fn getProperty(object: Value, key: []const u8) !Value {
-    return _getProperty(object, key.ptr, key.len) orelse error.UnableToGetProperty;
+    const keyValue = _createString(key.ptr, key.len);
+    return _getProperty(object, keyValue) orelse error.UnableToGetProperty;
 }
 
 pub fn setProperty(object: Value, key: []const u8, value: Value) !void {
-    return _setProperty(object, key.ptr, key.len, value);
+    const keyValue = _createString(key.ptr, key.len);
+    return _setProperty(object, keyValue, value);
 }
 
-pub fn getSlotValue(object: ?Value, slot: usize) !Value {
-    return _getSlotValue(object, slot) orelse error.UnableToGetSlotValue;
+pub fn getSlotValue(object: Value, slot: usize) !Value {
+    const keyValue = _createInteger(@bitCast(slot), true);
+    return _getProperty(object, keyValue) orelse error.UnableToGetSlotValue;
 }
 
-pub fn setSlotValue(object: ?Value, slot: usize, value: Value) !void {
-    return _setSlotValue(object, slot, value);
+pub fn setSlotValue(object: Value, slot: usize, value: ?Value) !void {
+    const keyValue = _createInteger(@bitCast(slot), true);
+    return _setProperty(object, keyValue, value);
 }
 
 pub fn appendList(list: Value, value: Value) !void {
@@ -87,12 +91,26 @@ pub fn getExportHandle(comptime _: anytype) @TypeOf(null) {
     return null;
 }
 
+pub fn getStructure(key: []const u8) !Value {
+    const keyValue = _createString(key.ptr, key.len);
+    return _getStructure(keyValue) orelse error.UnableToGetStructure;
+}
+
+pub fn setStructure(key: []const u8, value: ?Value) !void {
+    const keyValue = _createString(key.ptr, key.len);
+    return _setStructure(keyValue, value);
+}
+
 pub fn beginStructure(structure: Value) !void {
     return _beginStructure(structure);
 }
 
 pub fn finishStructure(structure: Value) !void {
     return _finishStructure(structure);
+}
+
+pub fn enableCallback(structure: Value, template: Value, member_flags: Value) !void {
+    return _enableCallback(structure, template, member_flags);
 }
 
 pub fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
@@ -341,13 +359,14 @@ extern "env" fn _createInstance(structure: Value, dv: Value, slots: ?Value) Valu
 extern "env" fn _createTemplate(dv: ?Value, slots: ?Value) Value;
 extern "env" fn _createList() Value;
 extern "env" fn _createObject() Value;
-extern "env" fn _getProperty(object: Value, key: [*]const u8, key_len: usize) ?Value;
-extern "env" fn _setProperty(object: Value, key: [*]const u8, key_len: usize, value: Value) void;
-extern "env" fn _getSlotValue(object: ?Value, slot: usize) ?Value;
-extern "env" fn _setSlotValue(object: ?Value, slot: usize, value: Value) void;
+extern "env" fn _getProperty(object: Value, key: Value) ?Value;
+extern "env" fn _setProperty(object: Value, key: Value, value: ?Value) void;
 extern "env" fn _appendList(list: Value, value: Value) void;
+extern "env" fn _getStructure(key: Value) ?Value;
+extern "env" fn _setStructure(key: Value, value: ?Value) void;
 extern "env" fn _beginStructure(structure: Value) void;
 extern "env" fn _finishStructure(structure: Value) void;
+extern "env" fn _enableCallback(structure: Value, template: Value, member_flags: Value) void;
 extern "env" fn _handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E;
 extern "env" fn _releaseFunction(fn_id: usize) void;
 extern "env" fn _allocateJsThunk(controller_address: usize, fn_id: usize) usize;
