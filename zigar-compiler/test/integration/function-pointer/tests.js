@@ -220,7 +220,7 @@ export function addTests(importModule, options) {
     })
     skip.if(platform() === 'win32' && arch() === 'x64').
     or(platform() === 'linux' && arch() === 'aarch64').
-    it('should throw when JavaScript is used as target of pointer to variadic function', async function() {
+    it('should throw when JavaScript function is used as target of pointer to variadic function', async function() {
       const { call, printI32 } = await importTest('variadic-function');
       const lines = await capture(() => call(printI32));
       expect(lines).to.eql([ '123', '456', '789' ]);

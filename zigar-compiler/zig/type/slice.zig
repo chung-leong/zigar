@@ -1,5 +1,6 @@
 const std = @import("std");
 const expect = std.testing.expect;
+const expectEqual = std.testing.expectEqual;
 
 pub fn Sentinel(comptime T: type) type {
     const ET = switch (@typeInfo(T)) {
@@ -32,4 +33,15 @@ test "Slice" {
     const C = Slice(u8, .{ .value = 0 });
     try expect(A == B);
     try expect(C != B);
+}
+
+pub fn is(comptime T: type) bool {
+    if (@typeInfo(T) != .@"struct") return false;
+    return @hasDecl(T, "ElementType") and @hasDecl(T, "sentinel") and @hasDecl(T, "is_opaque") and @hasField(T, "element");
+}
+
+test "is" {
+    try expectEqual(true, is(Slice(u8, null)));
+    try expectEqual(false, is(struct {}));
+    try expectEqual(false, is(enum {}));
 }

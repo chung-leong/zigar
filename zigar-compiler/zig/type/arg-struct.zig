@@ -3,6 +3,11 @@ const expectEqualSlices = std.testing.expectEqualSlices;
 const expectEqual = std.testing.expectEqual;
 
 pub fn ArgStruct(comptime T: type) type {
+    const fn_type = if (@typeInfo(T).@"fn".is_var_args) .variadic else .normal;
+    return Arg(fn_type, T);
+}
+
+pub fn Arg(comptime _: @TypeOf(.enum_literal), comptime T: type) type {
     const f = @typeInfo(T).@"fn";
     const count = get: {
         var count = 1;
@@ -78,4 +83,42 @@ test "ArgStruct" {
     const ArgC = ArgStruct(@TypeOf(ns.C));
     const fieldsC = std.meta.fields(ArgC);
     try expectEqual(4, fieldsC.len);
+}
+
+pub fn is(comptime T: type, variadic: ?bool) bool {
+    if (@typeInfo(T) == .@"struct") {
+        if (@hasField(T, "retval")) {
+            const name = @typeName(T);
+            if (std.mem.indexOf(u8, name, ".Arg(")) |index| {
+                if (variadic) |v| {
+                    if (v == (name[index + 6] == 'v')) {
+                        return true;
+                    }
+                } else return true;
+            }
+        }
+    }
+    return false;
+}
+
+test "is" {
+    const ns = struct {
+        fn foo(a: i32, b: bool) bool {
+            return if (a > 10 and b) true else false;
+        }
+
+        fn bar(a: i32, ...) callconv(.c) bool {
+            return if (a > 10) true else false;
+        }
+    };
+    const ArgFoo = ArgStruct(@TypeOf(ns.foo));
+    _ = is(ArgFoo, false);
+    try expectEqual(true, is(ArgFoo, false));
+    try expectEqual(false, is(ArgFoo, true));
+    try expectEqual(true, is(ArgFoo, null));
+    const ArgBar = ArgStruct(@TypeOf(ns.bar));
+    try expectEqual(false, is(ArgBar, false));
+    try expectEqual(true, is(ArgBar, true));
+    try expectEqual(true, is(ArgBar, null));
+    try expectEqual(false, is(enum { foo, bar }, false));
 }

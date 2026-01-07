@@ -126,7 +126,7 @@ pub fn setProperty(object: Value, key: []const u8, value: Value) !void {
     }
 }
 
-pub fn getSlotValue(object: ?Value, slot: usize) !Value {
+pub fn getSlotValue(object: Value, slot: usize) !Value {
     var value: Value = undefined;
     if (imports.get_slot_value(instance, object, slot, &value) != .SUCCESS) {
         return error.UnableToGetSlotValue;
@@ -134,7 +134,7 @@ pub fn getSlotValue(object: ?Value, slot: usize) !Value {
     return value;
 }
 
-pub fn setSlotValue(object: ?Value, slot: usize, value: Value) !void {
+pub fn setSlotValue(object: Value, slot: usize, value: ?Value) !void {
     if (imports.set_slot_value(instance, object, slot, value) != .SUCCESS) {
         return error.UnableToSetSlotValue;
     }
@@ -155,6 +155,20 @@ pub fn getExportHandle(comptime ptr: anytype) usize {
     return @intFromPtr(&ns.getAddress);
 }
 
+pub fn getStructure(name: []const u8) !Value {
+    var value: Value = undefined;
+    if (imports.get_structure(instance, name.ptr, name.len, &value) != .SUCCESS) {
+        return error.UnableToGetStructure;
+    }
+    return value;
+}
+
+pub fn setStructure(name: []const u8, value: ?Value) !void {
+    if (imports.set_structure(instance, name.ptr, name.len, value) != .SUCCESS) {
+        return error.UnableToSetStructure;
+    }
+}
+
 pub fn beginStructure(structure: Value) !void {
     if (imports.begin_structure(instance, structure) != .SUCCESS) {
         return error.UnableToDefineStructure;
@@ -164,6 +178,12 @@ pub fn beginStructure(structure: Value) !void {
 pub fn finishStructure(structure: Value) !void {
     if (imports.finish_structure(instance, structure) != .SUCCESS) {
         return error.UnableToDefineStructure;
+    }
+}
+
+pub fn enableCallback(structure: Value, template: Value, member_flags: Value) !void {
+    if (imports.enable_callback(instance, structure, template, member_flags) != .SUCCESS) {
+        return error.UnableToEnableCallback;
     }
 }
 
@@ -178,9 +198,8 @@ pub fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
 }
 
 pub fn releaseFunction(fn_ptr: anytype) void {
-    const FT = util.FnPointerTarget(@TypeOf(fn_ptr));
     const thunk_address = @intFromPtr(fn_ptr);
-    const control = js_fn.createThunkController(@This(), FT);
+    const control = js_fn.createTargetController(@This(), @TypeOf(fn_ptr));
     const fn_id = control(.identify, thunk_address) catch return;
     _ = imports.release_function(instance, fn_id);
 }
@@ -361,7 +380,6 @@ pub fn createModule(comptime module_ns: type) Module {
         }
     };
     return .{
-        .version = 6,
         .attributes = .{
             .little_endian = builtin.target.cpu.arch.endian() == .little,
             .runtime_safety = switch (builtin.mode) {

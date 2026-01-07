@@ -6938,7 +6938,7 @@ function workerMain() {
 var structureAcquisition = mixin({
   init() {
     this.comptime = false;
-    this.slots = {};
+    this.structureMap = new Map();
     this.structures = [];
     this.structureCounters = {
       struct: 0,
@@ -6983,13 +6983,11 @@ var structureAcquisition = mixin({
   appendList(list, element) {
     list.push(element);
   },
-  getSlotValue(slots, slot) {
-    if (!slots) slots = this.slots;
-    return slots[slot];
+  getStructure(name) {
+    return this.structureMap.get(name);
   },
-  setSlotValue(slots, slot, value) {
-    if (!slots) slots = this.slots;
-    slots[slot] = value;
+  setStructure(name, value) {
+    this.structureMap.set(name, value);
   },
   beginStructure(structure) {
     this.defineStructure(structure);
@@ -7000,6 +6998,10 @@ var structureAcquisition = mixin({
     }
     this.structures.push(structure);
     this.finalizeStructure(structure);
+  },
+  enableCallback(structure, template, memberFlags) {
+    structure.static.template = template;
+    this.updateArgStructMembers(structure.instance.members[0].structure, memberFlags);
   },
   acquireStructures() {
     const attrs = this.getModuleAttributes();
@@ -7347,13 +7349,14 @@ var structureAcquisition = mixin({
       createTemplate: { argType: 'vv', returnType: 'v' },
       createList: { argType: '', returnType: 'v' },
       createObject: { argType: '', returnType: 'v' },
-      getProperty: { argType: 'vii', returnType: 'v' },
-      setProperty: { argType: 'viiv' },
-      getSlotValue: { argType: 'vi', returnType: 'v' },
-      setSlotValue: { argType: 'viv' },
+      getProperty: { argType: 'vv', returnType: 'v' },
+      setProperty: { argType: 'vvv' },
+      getStructure: { argType: 'v', returnType: 'v' },
+      setStructure: { argType: 'vv' },
       appendList: { argType: 'vv' },
       beginStructure: { argType: 'v' },
       finishStructure: { argType: 'v' },
+      enableCallback: { argType: 'vvv' },
     },
     imports: {
       getFactoryThunk: { argType: '', returnType: 'i' },
@@ -7385,12 +7388,10 @@ var structureAcquisition = mixin({
     createObject() {
       return {};
     },
-    getProperty(object, address, len) {
-      const key = this.createString(address, len);
+    getProperty(object, key) {
       return object[key];
     },
-    setProperty(object, address, len, value) {
-      const key = this.createString(address, len);
+    setProperty(object, key, value) {
       object[key] = value;
     },
   } ),
@@ -9054,6 +9055,20 @@ var argStruct = mixin({
     const { flags } = structure;
     staticDescriptors[THROWING] = defineValue(!!(flags & ArgStructFlag.IsThrowing));
   },
+  updateArgStructMembers(structure, memberFlags) {
+    const {
+      constructor: { prototype },
+      instance: { members },
+    } = structure;
+    for (const [ index, member ] of members.entries()) {
+      const newFlags = memberFlags[index];
+      if (newFlags !== member.flags) {
+        member.flags = newFlags;
+        const newDescriptor = this.defineMember(member);
+        defineProperty(prototype, member.name, newDescriptor);
+      }
+    }
+  },
 });
 
 var arrayLike = mixin({
@@ -9628,10 +9643,9 @@ var _function = mixin({
     return constructor;
   },
   finalizeFunction(structure, staticDescriptors, descriptors) {
-    const {
-      static: { template },
-    } = structure;
-    staticDescriptors[CONTROLLER] = defineValue(template);
+    staticDescriptors[CONTROLLER] = {
+      get() { return structure.static?.template }
+    };
     // don't change the tag of functions
     descriptors[Symbol.toStringTag] = undefined;
   },
