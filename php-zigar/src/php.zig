@@ -6,8 +6,6 @@ const php_h = @cImport({
     @cInclude("php.h");
 });
 
-pub const c = php_h;
-
 pub const ArgInfo = php_h.zend_internal_arg_info;
 pub const ClassEntry = php_h.zend_class_entry;
 pub const CompilerGlobals = php_h.zend_compiler_globals;
@@ -61,17 +59,19 @@ pub const MAY_BE_OBJECT = php_h.MAY_BE_OBJECT;
 pub const INTERNAL_CLASS = php_h.ZEND_INTERNAL_CLASS;
 pub const USER_CLASS = php_h.ZEND_USER_CLASS;
 
+pub const NOT_SERIALIZABLE = php_h.ZEND_ACC_NOT_SERIALIZABLE;
+
 pub const use_tsrm = false;
 
 fn Globals(comptime name: []const u8) type {
-    return @TypeOf(@field(php_h, name));
+    return @TypeOf(&@field(php_h, name));
 }
 
 pub fn getGlobals(comptime name: []const u8) Globals(name) {
     if (use_tsrm) {
         @compileError("TODO");
     } else {
-        return @field(php_h, name);
+        return &@field(php_h, name);
     }
 }
 
@@ -79,7 +79,7 @@ pub fn getCompilerGlobals() *CompilerGlobals {
     return getGlobals("compiler_globals");
 }
 
-pub fn getExecutorGlobals(_: @This()) *ExecutorGlobals {
+pub fn getExecutorGlobals() *ExecutorGlobals {
     return getGlobals("executor_globals");
 }
 
@@ -201,7 +201,7 @@ pub fn exportFunction(comptime func: anytype, comptime name: []const u8) Export(
             const retval = @call(.auto, func, args);
             return switch (@typeInfo(RT)) {
                 .error_union => |eu| retval catch |err| report: {
-                    php_h.php_error(php_h.E_ERROR, "Zig error: %s", @as([*:0]const u8, @errorName(err)));
+                    php_h.php_error(php_h.E_ERROR, "Zig error: %s", @errorName(err).ptr);
                     break :report switch (eu.payload) {
                         bool => false,
                         void => {},
@@ -218,6 +218,12 @@ pub fn exportFunction(comptime func: anytype, comptime name: []const u8) Export(
 }
 
 pub const initializeClassData = php_h.zend_initialize_class_data;
+
+pub fn createNull() Value {
+    var result: Value = undefined;
+    result.u1.type_info = IS_NULL;
+    return result;
+}
 
 pub fn createBool(b: bool) Value {
     var result: Value = undefined;
@@ -259,6 +265,13 @@ pub fn createPersistentString(s: []const u8) Value {
     var result: Value = undefined;
     result.value.str = php_h.zend_string_init_interned.?(s.ptr, s.len, true);
     result.u1.type_info = IS_STRING;
+    return result;
+}
+
+pub fn createPointer(ptr: ?*anyopaque) Value {
+    var result: Value = undefined;
+    result.value.ptr = ptr;
+    result.u1.type_info = IS_PTR;
     return result;
 }
 

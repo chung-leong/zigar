@@ -6,17 +6,19 @@ const builtin = @import("builtin");
 const hooks = @import("module/native/hooks.zig");
 const interface = @import("module/native/interface.zig");
 const php = @import("php.zig");
+const zig_class_entry = @import("zig-class-entry.zig");
+const ZigClassEntry = zig_class_entry.ZigClassEntry;
 const fn_transform = @import("zigft/fn-transform.zig");
 
 const Value = *php.Value;
-
 pub const ModuleHost = struct {
     module: ?*Module = null,
     library: ?std.DynLib = null,
     base_address: usize = 0,
     structure_map: php.Value,
-    value_pool: std.ArrayList(php.Value) = .empty,
-    redirection_mask: hooks.Syscall.Mask = .{},
+    structure_list: std.ArrayList(php.Value),
+    value_pool: std.ArrayList(php.Value),
+    redirection_mask: hooks.Syscall.Mask,
 
     const Module = interface.Module(Value);
     const Jscall = Module.Jscall;
@@ -51,8 +53,15 @@ pub const ModuleHost = struct {
             }
         };
         self.structure_map = php.createArray();
+        self.structure_list = .empty;
+        self.value_pool = .empty;
+        self.redirection_mask = .{};
         _ = module.exports.set_host_instance(@ptrCast(self));
         try self.exportFunctionsToModule();
+        // retrieve a run factory thunk
+        var thunk_address: usize = 0;
+        _ = module.exports.get_factory_thunk(&thunk_address);
+        _ = module.exports.run_thunk(thunk_address, thunk_address, 0xaaaa_aaaa);
         return self;
     }
 
@@ -201,18 +210,20 @@ pub const ModuleHost = struct {
     }
 
     fn createInstance(self: *@This(), structure: Value, dv: Value, slots: ?Value) !Value {
-        _ = self;
         _ = structure;
         _ = dv;
         _ = slots;
-        unreachable;
+        const result = try self.allocateValue();
+        result.* = php.createNull();
+        return result;
     }
 
     fn createTemplate(self: *@This(), dv: ?Value, slots: ?Value) !Value {
-        _ = self;
-        _ = dv;
-        _ = slots;
-        unreachable;
+        const result = try self.allocateValue();
+        result.* = php.createArray();
+        if (dv) |v| try php.setProperty(result, "MEMORY", v);
+        if (slots) |v| try php.setProperty(result, "SLOTS", v);
+        return result;
     }
 
     fn createList(self: *@This()) !Value {
@@ -269,8 +280,9 @@ pub const ModuleHost = struct {
     }
 
     fn beginStructure(self: *@This(), structure: Value) !void {
-        _ = self;
-        _ = structure;
+        const class_name = try ZigClassEntry.register(self, structure);
+        // _ = class_name;
+        try self.structure_list.append(php.allocator, class_name);
     }
 
     fn finishStructure(self: *@This(), structure: Value) !void {

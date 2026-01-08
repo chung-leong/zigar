@@ -23,11 +23,12 @@ const functions = struct {
         };
 
         pub fn run(_: *ExecuteData, return_value: ?*Value) !void {
-            _ = return_value;
             var path_str: *String = undefined;
             try php.parseArguments("S", .{&path_str});
             const path = php.extractString(path_str);
-            _ = try ModuleHost.load(path);
+            const host = try ModuleHost.load(path);
+            _ = host;
+            _ = return_value;
         }
     };
 };
