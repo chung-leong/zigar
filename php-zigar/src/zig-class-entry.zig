@@ -4,27 +4,27 @@ const php = @import("php.zig");
 const Module = module_host.ModuleHost(php.Value);
 
 pub const ZigClassEntry = struct {
-    pub const ZigClassMember = struct {
-        type: Module.MemberType,
-        flags: Module.MemberFlags,
-    };
-
-    pub const ZigClassTemplate = struct {
-        bytes: []const u8,
-    };
-
     host: *module_host.ModuleHost,
     instance: struct {
-        members: []ZigClassMember,
-        template: ?*ZigClassTemplate,
+        members: *php.HashTable,
+        template: ?*php.HashTable,
     },
     static: struct {
-        members: []ZigClassMember,
-        template: ?*ZigClassTemplate,
+        members: *php.HashTable,
+        template: ?*php.HashTable,
     },
     php_class_entry: php.ClassEntry,
 
-    // pub fn create(host: *Module) !*@This() {
-    //     var self: *@This() =
-    // }
+    pub fn create(host: *Module, info: *php.HashTable, ctx: php.TsContext) !*@This() {
+        var self: *@This() = try php.allocator.create(@This());
+        self.host = host;
+        const ce = &self.php_class_entry;
+        ce.type = php.USER_CLASS;
+        // ce.name = name;
+        php.initializeClassData(ce, true);
+        const eg = ctx.getExecutorGlobals();
+        _ = eg;
+        _ = info;
+        return self;
+    }
 };

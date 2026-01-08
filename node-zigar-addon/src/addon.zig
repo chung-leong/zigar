@@ -1572,17 +1572,7 @@ const ModuleHost = struct {
                 const resource_name = try env.createStringUtf8("zigar");
                 inline for (fields) |field| {
                     const cb = @field(threadsafe_callback, field.name);
-                    @field(self.ts, field.name) = try env.createThreadsafeFunction(
-                        null,
-                        null,
-                        resource_name,
-                        0,
-                        1,
-                        null,
-                        null,
-                        @ptrCast(self),
-                        @ptrCast(&cb),
-                    );
+                    @field(self.ts, field.name) = try env.createThreadsafeFunction(null, null, resource_name, 0, 1, null, null, @ptrCast(self), @ptrCast(&cb));
                 }
             }
         } else {
