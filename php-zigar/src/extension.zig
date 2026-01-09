@@ -4,6 +4,7 @@ const module_host = @import("module-host.zig");
 const ModuleHost = module_host.ModuleHost;
 const php = @import("php.zig");
 const ArgInfo = php.ArgInfo;
+const FunctionInfo = php.FunctionInfo;
 const ExecuteData = php.ExecuteData;
 const FunctionEntry = php.FunctionEntry;
 const String = php.String;
@@ -21,14 +22,18 @@ const functions = struct {
                 },
             },
         };
+        pub const info = FunctionInfo{
+            .required_num_args = 1,
+        };
 
         pub fn run(_: *ExecuteData, return_value: ?*Value) !void {
+            _ = return_value;
             var path_str: *String = undefined;
             try php.parseArguments("S", .{&path_str});
-            const path = php.extractString(path_str);
+            const path = php.getStringContent(path_str);
+            std.debug.print("path = {s}\n", .{path});
             const host = try ModuleHost.load(path);
             _ = host;
-            _ = return_value;
         }
     };
 };
@@ -38,11 +43,19 @@ comptime {
     var entries: [decls.len + 1]FunctionEntry = undefined;
     for (decls, 0..) |decl, i| {
         const function = @field(functions, decl.name);
-        const handler = php.exportFunction(function.run, decl.name);
+        const handler = php.transform(function.run);
+        @export(&handler, .{ .name = decl.name });
+        const arg_info = init: {
+            var buf: [function.arg_info.len + 1]ArgInfo = undefined;
+            const info_ptr: *FunctionInfo = @ptrCast(&buf[0]);
+            info_ptr.* = function.info;
+            for (function.arg_info, 0..) |a, j| buf[j + 1] = a;
+            break :init buf;
+        };
         entries[i] = .{
             .fname = decl.name,
             .handler = &handler,
-            .arg_info = @ptrCast(&function.arg_info),
+            .arg_info = @ptrCast(&arg_info),
             .num_args = @truncate(function.arg_info.len),
             .flags = 0,
         };

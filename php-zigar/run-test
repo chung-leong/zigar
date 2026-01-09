@@ -1,2 +1,2 @@
 #!/bin/env bash
-rm -f php_zigar.la && zig build && make && php -d extension=./modules/php_zigar.so test.php
+rm -f php_zigar.la && zig build && make && ~/php-src/sapi/cli/php -d extension=./modules/php_zigar.so test.php

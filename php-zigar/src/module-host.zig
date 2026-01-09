@@ -130,7 +130,7 @@ pub const ModuleHost = struct {
             if (self.value_pool.addOneBounded()) |v|
                 return v
             else |_|
-                self.value_pool = try .initCapacity(php.allocator, 64);
+                self.value_pool = try .initCapacity(php.allocator, 256);
         }
     }
 
@@ -281,7 +281,6 @@ pub const ModuleHost = struct {
 
     fn beginStructure(self: *@This(), structure: Value) !void {
         const class_name = try ZigClassEntry.register(self, structure);
-        // _ = class_name;
         try self.structure_list.append(php.allocator, class_name);
     }
 

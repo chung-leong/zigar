@@ -23,7 +23,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: b718246654392ccb7418d4922e00773b36fe2a89 $ */
+/* $Id: 070229ec1d6aa866f9962ef442e2a9ffd30a999f $ */
 
 /* Temporary variables while this file is being refactored. */
 /** @var ?JUnit */
@@ -103,12 +103,12 @@ Options:
                 Do not delete 'all' files, 'php' test file, 'skip' or 'clean'
                 file.
 
-    --set-timeout [n]
-                Set timeout for individual tests, where [n] is the number of
+    --set-timeout <n>
+                Set timeout for individual tests, where <n> is the number of
                 seconds. The default value is 60 seconds, or 300 seconds when
                 testing for memory leaks.
 
-    --context [n]
+    --context <n>
                 Sets the number of lines of surrounding context to print for diffs.
                 The default value is 3.
 
@@ -119,8 +119,8 @@ Options:
                 'mem'. The result types get written independent of the log format,
                 however 'diff' only exists when a test fails.
 
-    --show-slow [n]
-                Show all tests that took longer than [n] milliseconds to run.
+    --show-slow <n>
+                Show all tests that took longer than <n> milliseconds to run.
 
     --no-clean  Do not execute clean section if any.
 
@@ -530,7 +530,11 @@ function main(): void
                     $just_save_results = true;
                     break;
                 case '--set-timeout':
-                    $environment['TEST_TIMEOUT'] = $argv[++$i];
+                    $timeout = $argv[++$i] ?? '';
+                    if (!preg_match('/^\d+$/', $timeout)) {
+                        error("'$timeout' is not a valid number of seconds, try e.g. --set-timeout 60 for 1 minute");
+                    }
+                    $environment['TEST_TIMEOUT'] = intval($timeout, 10);
                     break;
                 case '--context':
                     $context_line_count = $argv[++$i] ?? '';
@@ -545,7 +549,11 @@ function main(): void
                     }
                     break;
                 case '--show-slow':
-                    $slow_min_ms = $argv[++$i];
+                    $slow_min_ms = $argv[++$i] ?? '';
+                    if (!preg_match('/^\d+$/', $slow_min_ms)) {
+                        error("'$slow_min_ms' is not a valid number of milliseconds, try e.g. --show-slow 1000 for 1 second");
+                    }
+                    $slow_min_ms = intval($slow_min_ms, 10);
                     break;
                 case '--temp-source':
                     $temp_source = $argv[++$i];
@@ -574,9 +582,10 @@ function main(): void
                     $environment['SKIP_PERF_SENSITIVE'] = 1;
                     if ($switch === '--msan') {
                         $environment['SKIP_MSAN'] = 1;
+                        $environment['MSAN_OPTIONS'] = 'intercept_tls_get_addr=0';
                     }
 
-                    $lsanSuppressions = __DIR__ . '/azure/lsan-suppressions.txt';
+                    $lsanSuppressions = __DIR__ . '/.github/lsan-suppressions.txt';
                     if (file_exists($lsanSuppressions)) {
                         $environment['LSAN_OPTIONS'] = 'suppressions=' . $lsanSuppressions
                             . ':print_suppressions=0';
@@ -598,7 +607,7 @@ function main(): void
                     }
                     break;
                 case '--version':
-                    echo '$Id: b718246654392ccb7418d4922e00773b36fe2a89 $' . "\n";
+                    echo '$Id: 070229ec1d6aa866f9962ef442e2a9ffd30a999f $' . "\n";
                     exit(1);
 
                 default:
@@ -1275,6 +1284,10 @@ function system_with_timeout(
     }
 
     $timeout = $valgrind ? 300 : ($env['TEST_TIMEOUT'] ?? 60);
+    /* ASAN can cause a ~2-3x slowdown. */
+    if (isset($env['SKIP_ASAN'])) {
+        $timeout *= 3;
+    }
 
     while (true) {
         /* hide errors from interrupted syscalls */
@@ -1575,6 +1588,10 @@ escape:
                     kill_children($workerProcs);
                     error("Could not find worker stdout in array of worker stdouts, THIS SHOULD NOT HAPPEN.");
                 }
+                if (feof($workerSock)) {
+                    kill_children($workerProcs);
+                    error("Worker $i died unexpectedly");
+                }
                 while (false !== ($rawMessage = fgets($workerSock))) {
                     // work around fgets truncating things
                     if (($rawMessageBuffers[$i] ?? '') !== '') {
@@ -1873,6 +1890,9 @@ function run_test(string $php, $file, array $env): string
         $skipCache = new SkipCache($enableSkipCache, $cfg['keep']['skip']);
     }
 
+    $retried = false;
+retry:
+
     $temp_filenames = null;
     $org_file = $file;
     $orig_php = $php;
@@ -1917,8 +1937,10 @@ TEST $file
 
     $tested = $test->getName();
 
-    if ($num_repeats > 1 && $test->hasSection('FILE_EXTERNAL')) {
-        return skip_test($tested, $tested_file, $shortname, 'Test with FILE_EXTERNAL might not be repeatable');
+    if ($test->hasSection('FILE_EXTERNAL')) {
+        if ($num_repeats > 1) {
+            return skip_test($tested, $tested_file, $shortname, 'Test with FILE_EXTERNAL might not be repeatable');
+        }
     }
 
     if ($test->hasSection('CAPTURE_STDIO')) {
@@ -1966,15 +1988,11 @@ TEST $file
         }
     }
 
-    if ($num_repeats > 1) {
-        if ($test->hasSection('CLEAN')) {
-            return skip_test($tested, $tested_file, $shortname, 'Test with CLEAN might not be repeatable');
-        }
-        if ($test->hasSection('STDIN')) {
-            return skip_test($tested, $tested_file, $shortname, 'Test with STDIN might not be repeatable');
-        }
-        if ($test->hasSection('CAPTURE_STDIO')) {
-            return skip_test($tested, $tested_file, $shortname, 'Test with CAPTURE_STDIO might not be repeatable');
+    foreach (['CLEAN', 'STDIN', 'CAPTURE_STDIO'] as $section) {
+        if ($test->hasSection($section)) {
+            if ($num_repeats > 1) {
+                return skip_test($tested, $tested_file, $shortname, "Test with $section might not be repeatable");
+            }
         }
     }
 
@@ -2085,11 +2103,19 @@ TEST $file
     $ini_settings = $workerID ? ['opcache.cache_id' => "worker$workerID"] : [];
 
     // Additional required extensions
+    $extensions = [];
     if ($test->hasSection('EXTENSIONS')) {
+        $extensions = preg_split("/[\n\r]+/", trim($test->getSection('EXTENSIONS')));
+    }
+    if (is_array($IN_REDIRECT) && $IN_REDIRECT['EXTENSIONS'] != []) {
+        $extensions = array_merge($extensions, $IN_REDIRECT['EXTENSIONS']);
+    }
+
+    /* Load required extensions */
+    if ($extensions != []) {
         $ext_params = [];
         settings2array($ini_overwrites, $ext_params);
         $ext_params = settings2params($ext_params);
-        $extensions = preg_split("/[\n\r]+/", trim($test->getSection('EXTENSIONS')));
         [$ext_dir, $loaded] = $skipCache->getExtensions("$orig_php $pass_options $extra_options $ext_params $no_file_cache");
         $ext_prefix = IS_WINDOWS ? "php_" : "";
         $missing = [];
@@ -2145,8 +2171,10 @@ TEST $file
         $ini = preg_replace('/{MAIL:(\S+)}/', $replacement, $ini);
         settings2array(preg_split("/[\n\r]+/", $ini), $ini_settings);
 
-        if ($num_repeats > 1 && isset($ini_settings['opcache.opt_debug_level'])) {
-            return skip_test($tested, $tested_file, $shortname, 'opt_debug_level tests are not repeatable');
+        if (isset($ini_settings['opcache.opt_debug_level'])) {
+            if ($num_repeats > 1) {
+                return skip_test($tested, $tested_file, $shortname, 'opt_debug_level tests are not repeatable');
+            }
         }
     }
 
@@ -2212,6 +2240,9 @@ TEST $file
         } elseif (!strncasecmp('xfail', $output, 5)) {
             // Pretend we have an XFAIL section
             $test->setSection('XFAIL', ltrim(substr($output, 5)));
+        } elseif (!strncasecmp('flaky', $output, 5)) {
+            // Pretend we have a FLAKY section
+            $test->setSection('FLAKY', ltrim(substr($output, 5)));
         } elseif ($output !== '') {
             show_result("BORK", $output, $tested_file, 'reason: invalid output from SKIPIF', $temp_filenames);
             $PHP_FAILED_TESTS['BORKED'][] = [
@@ -2241,6 +2272,7 @@ TEST $file
         $IN_REDIRECT['via'] = "via [$shortname]\n\t";
         $IN_REDIRECT['dir'] = realpath(dirname($file));
         $IN_REDIRECT['prefix'] = $tested;
+        $IN_REDIRECT['EXTENSIONS'] = $extensions;
 
         if (!empty($IN_REDIRECT['TESTS'])) {
             if (is_array($org_file)) {
@@ -2671,6 +2703,9 @@ COMMAND $cmd
                 } elseif ($test->hasSection('XLEAK')) {
                     $warn = true;
                     $info = " (warn: XLEAK section but test passes)";
+                } elseif ($retried) {
+                    $warn = true;
+                    $info = " (warn: Test passed on retry attempt)";
                 } else {
                     show_result("PASS", $tested, $tested_file, '', $temp_filenames);
                     $junit->markTestAs('PASS', $shortname, $tested);
@@ -2700,6 +2735,9 @@ COMMAND $cmd
                 } elseif ($test->hasSection('XLEAK')) {
                     $warn = true;
                     $info = " (warn: XLEAK section but test passes)";
+                } elseif ($retried) {
+                    $warn = true;
+                    $info = " (warn: Test passed on retry attempt)";
                 } else {
                     show_result("PASS", $tested, $tested_file, '', $temp_filenames);
                     $junit->markTestAs('PASS', $shortname, $tested);
@@ -2709,6 +2747,10 @@ COMMAND $cmd
         }
 
         $wanted_re = null;
+    }
+    if (!$passed && !$retried && error_may_be_retried($test, $output)) {
+        $retried = true;
+        goto retry;
     }
 
     // Test failed so we need to report details.
@@ -2832,6 +2874,46 @@ SH;
     $junit->markTestAs($restype, $shortname, $tested, null, $info, $diff);
 
     return $restype[0] . 'ED';
+}
+
+function is_flaky(TestFile $test): bool
+{
+    if ($test->hasSection('FLAKY')) {
+        return true;
+    }
+    if (!$test->hasSection('FILE')) {
+        return false;
+    }
+    $file = $test->getSection('FILE');
+    $flaky_functions = [
+        'disk_free_space',
+        'hrtime',
+        'microtime',
+        'sleep',
+        'usleep',
+    ];
+    $regex = '(\b(' . implode('|', $flaky_functions) . ')\()i';
+    return preg_match($regex, $file) === 1;
+}
+
+function is_flaky_output(string $output): bool
+{
+    $messages = [
+        '404: page not found',
+        'address already in use',
+        'connection refused',
+        'deadlock',
+        'mailbox already exists',
+        'timed out',
+    ];
+    $regex = '(\b(' . implode('|', $messages) . ')\b)i';
+    return preg_match($regex, $output) === 1;
+}
+
+function error_may_be_retried(TestFile $test, string $output): bool
+{
+    return is_flaky_output($output)
+        || is_flaky($test);
 }
 
 /**
@@ -3395,6 +3477,9 @@ class JUnit
         'execution_time' => 0,
     ];
 
+    /**
+     * @throws Exception
+     */
     public function __construct(array $env, int $workerID)
     {
         // Check whether a junit log is wanted.
@@ -3612,6 +3697,9 @@ class JUnit
         $this->suites[$suite_name] = self::EMPTY_SUITE + ['name' => $suite_name];
     }
 
+    /**
+     * @throws Exception
+     */
     public function stopTimer(string $file_name): void
     {
         if (!$this->enabled) {
@@ -3809,8 +3897,12 @@ class TestFile
         'INI', 'ENV', 'EXTENSIONS',
         'SKIPIF', 'XFAIL', 'XLEAK', 'CLEAN',
         'CREDITS', 'DESCRIPTION', 'CONFLICTS', 'WHITESPACE_SENSITIVE',
+        'FLAKY',
     ];
 
+    /**
+     * @throws BorkageException
+     */
     public function __construct(string $fileName, bool $inRedirect)
     {
         $this->fileName = $fileName;
@@ -3851,6 +3943,9 @@ class TestFile
         return !empty($this->sections[$name]);
     }
 
+    /**
+     * @throws Exception
+     */
     public function getSection(string $name): string
     {
         if (!isset($this->sections[$name])) {
@@ -3866,7 +3961,7 @@ class TestFile
 
     public function isCGI(): bool
     {
-        return $this->sectionNotEmpty('CGI')
+        return $this->hasSection('CGI')
             || $this->sectionNotEmpty('GET')
             || $this->sectionNotEmpty('POST')
             || $this->sectionNotEmpty('GZIP_POST')
@@ -3887,6 +3982,7 @@ class TestFile
 
     /**
      * Load the sections of the test file
+     * @throws BorkageException
      */
     private function readFile(): void
     {
@@ -3949,6 +4045,9 @@ class TestFile
         fclose($fp);
     }
 
+    /**
+     * @throws BorkageException
+     */
     private function validateAndProcess(bool $inRedirect): void
     {
         // the redirect section allows a set of tests to be reused outside of

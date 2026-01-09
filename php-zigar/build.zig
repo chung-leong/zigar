@@ -8,6 +8,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/extension.zig"),
         .target = target,
         .optimize = optimize,
+        .single_threaded = true,
         .link_libc = true,
     });
     const lib = b.addLibrary(.{

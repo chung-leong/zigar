@@ -2,7 +2,7 @@ const std = @import("std");
 
 const fn_transform = @import("zigft/fn-transform.zig");
 
-const php_h = @cImport({
+pub const php_h = @cImport({
     @cInclude("php.h");
 });
 
@@ -16,12 +16,14 @@ pub const FunctionEntry = extern struct {
     // need to change it to *const anyopaque
     fname: [*c]const u8,
     handler: *const anyopaque,
-    arg_info: [*c]const php_h.struct__zend_internal_arg_info,
+    arg_info: [*c]const php_h.zend_internal_function_info,
     num_args: u32,
     flags: u32,
 };
+pub const FunctionInfo = php_h.zend_internal_function_info;
 pub const HashTable = php_h.HashTable;
 pub const Object = php_h.zend_object;
+pub const ObjectHandlers = php_h.zend_object_handlers;
 pub const String = php_h.zend_string;
 pub const Value = php_h.zval;
 
@@ -60,6 +62,9 @@ pub const INTERNAL_CLASS = php_h.ZEND_INTERNAL_CLASS;
 pub const USER_CLASS = php_h.ZEND_USER_CLASS;
 
 pub const NOT_SERIALIZABLE = php_h.ZEND_ACC_NOT_SERIALIZABLE;
+pub const LINKED = php_h.ZEND_ACC_LINKED;
+
+pub const std_object_handlers = &php_h.std_object_handlers;
 
 pub const use_tsrm = false;
 
@@ -139,7 +144,17 @@ pub fn parseArguments(comptime specs: [:0]const u8, arg_ptrs: anytype) !void {
     if (result != php_h.SUCCESS) return error.UnableToParseArgument;
 }
 
-fn Export(comptime func: anytype) type {
+fn TransformPointer(comptime T: type) type {
+    return switch (@typeInfo(T)) {
+        .pointer => |pt| switch (pt.child) {
+            anyopaque => if (pt.is_const) ?*const anyopaque else ?*anyopaque,
+            else => if (pt.is_const) [*c]const pt.child else [*c]pt.child,
+        },
+        else => T,
+    };
+}
+
+fn Transformed(comptime func: anytype) type {
     const func_info = @typeInfo(@TypeOf(func)).@"fn";
     const len = func_info.params.len;
     // var param_types: [len]type = undefined;
@@ -158,18 +173,15 @@ fn Export(comptime func: anytype) type {
     // });
     var params: [len]std.builtin.Type.Fn.Param = undefined;
     inline for (func_info.params, 0..) |param, i| {
-        const PT = param.type.?;
         params[i] = .{
-            .type = switch (@typeInfo(PT)) {
-                .pointer => |pt| if (pt.is_const) ?*const pt.child else ?*pt.child,
-                else => PT,
-            },
+            .type = TransformPointer(param.type.?),
             .is_generic = param.is_generic,
             .is_noalias = param.is_noalias,
         };
     }
     const RT = func_info.return_type.?;
-    const NewRT = switch (@typeInfo(RT)) {
+    // remove error
+    const RTNE = switch (@typeInfo(RT)) {
         .error_union => |eu| eu.payload,
         else => RT,
     };
@@ -179,13 +191,13 @@ fn Export(comptime func: anytype) type {
             .is_generic = false,
             .is_var_args = func_info.is_var_args,
             .params = &params,
-            .return_type = NewRT,
+            .return_type = TransformPointer(RTNE),
         },
     });
 }
 
-pub fn exportFunction(comptime func: anytype, comptime name: []const u8) Export(func) {
-    const PhpFnT = Export(func);
+pub fn transform(comptime func: anytype) Transformed(func) {
+    const PhpFnT = Transformed(func);
     const PhpArgs = std.meta.ArgsTuple(PhpFnT);
     const FnT = @TypeOf(func);
     const Args = std.meta.ArgsTuple(FnT);
@@ -199,54 +211,61 @@ pub fn exportFunction(comptime func: anytype, comptime name: []const u8) Export(
                 else => php_arg,
             };
             const retval = @call(.auto, func, args);
-            return switch (@typeInfo(RT)) {
-                .error_union => |eu| retval catch |err| report: {
-                    php_h.php_error(php_h.E_ERROR, "Zig error: %s", @errorName(err).ptr);
-                    break :report switch (eu.payload) {
-                        bool => false,
-                        void => {},
-                        else => @compileError("Unknown return type"),
-                    };
+            const retval_ne = switch (@typeInfo(RT)) {
+                .error_union => |eu| retval catch |err| {
+                    _ = eu;
+                    @panic(@errorName(err));
+                    // php_h.php_error(php_h.E_ERROR, "Zig error: %s", @errorName(err).ptr);
+                    // break :report switch (eu.payload) {
+                    //     bool => false,
+                    //     void => {},
+                    //     else => undefined,
+                    // };
                 },
                 else => retval,
             };
+            return switch (@typeInfo(@TypeOf(retval_ne))) {
+                .pointer => |pt| switch (pt.size) {
+                    .slice => retval_ne.ptr,
+                    else => retval_ne,
+                },
+                else => retval_ne,
+            };
         }
     };
-    const php_func = fn_transform.spreadArgs(ns.call, .c);
-    @export(&php_func, .{ .name = name });
-    return php_func;
+    return fn_transform.spreadArgs(ns.call, .c);
 }
 
 pub const initializeClassData = php_h.zend_initialize_class_data;
 
 pub fn createNull() Value {
-    var result: Value = undefined;
+    var result: Value = .{};
     result.u1.type_info = IS_NULL;
     return result;
 }
 
 pub fn createBool(b: bool) Value {
-    var result: Value = undefined;
+    var result: Value = .{};
     result.u1.type_info = if (b) IS_TRUE else IS_FALSE;
     return result;
 }
 
 pub fn createLong(l: i64) Value {
-    var result: Value = undefined;
+    var result: Value = .{};
     result.value.lval = l;
     result.u1.type_info = IS_LONG;
     return result;
 }
 
 pub fn createDouble(d: f64) Value {
-    var result: Value = undefined;
+    var result: Value = .{};
     result.value.dval = d;
     result.u1.type_info = IS_DOUBLE;
     return result;
 }
 
 pub fn createString(s: []const u8) Value {
-    var result: Value = undefined;
+    var result: Value = .{};
     result.value.str = if (s.len > 1) alloc: {
         const zs = php_h.zend_string_alloc(s.len, false);
         const ds: [*]u8 = @ptrCast(&zs.*.val[0]);
@@ -262,21 +281,21 @@ pub fn createString(s: []const u8) Value {
 }
 
 pub fn createPersistentString(s: []const u8) Value {
-    var result: Value = undefined;
+    var result: Value = .{};
     result.value.str = php_h.zend_string_init_interned.?(s.ptr, s.len, true);
     result.u1.type_info = IS_STRING;
     return result;
 }
 
 pub fn createPointer(ptr: ?*anyopaque) Value {
-    var result: Value = undefined;
+    var result: Value = .{};
     result.value.ptr = ptr;
     result.u1.type_info = IS_PTR;
     return result;
 }
 
 pub fn createArray() Value {
-    var result: Value = undefined;
+    var result: Value = .{};
     result.value.arr = php_h._zend_new_array_0();
     result.u1.type_info = IS_ARRAY;
     return result;
@@ -314,9 +333,16 @@ pub fn getValueDouble(value: *const Value) !u64 {
     };
 }
 
-pub fn getValueString(value: *const Value) ![]const u8 {
+pub fn getValueString(value: *const Value) !*String {
     return switch (value.u1.v.type) {
-        IS_STRING => extractString(value.value.str),
+        IS_STRING => value.value.str,
+        else => error.NotString,
+    };
+}
+
+pub fn getValueStringContent(value: *const Value) ![]const u8 {
+    return switch (value.u1.v.type) {
+        IS_STRING => getStringContent(value.value.str),
         else => error.NotString,
     };
 }
@@ -328,10 +354,18 @@ pub fn getValueHashTable(value: *const Value) !*HashTable {
     };
 }
 
-pub fn extractString(str: *String) []const u8 {
+pub fn getStringContent(str: *String) []const u8 {
     const s: [*]const u8 = @ptrCast(&str.*.val[0]);
     const len = str.*.len;
     return s[0..len];
+}
+
+pub fn addStringRef(str: *String) u32 {
+    return php_h.zend_string_addref(str);
+}
+
+pub fn releaseString(str: *String) void {
+    php_h.zend_string_release(str);
 }
 
 pub fn getProperty(object: *Value, key: anytype) !*Value {
@@ -349,7 +383,13 @@ pub fn deleteProperty(object: *Value, key: anytype) !void {
     try deleteHashTableEntry(ht, key);
 }
 
-fn isString(comptime T: type) bool {
+pub fn createHashTable() HashTable {
+    var result: HashTable = undefined;
+    php_h._zend_hash_init(&result, 8, null, false);
+    return result;
+}
+
+fn isStringContent(comptime T: type) bool {
     return switch (@typeInfo(T)) {
         .pointer => |pt| switch (pt.size) {
             .slice => pt.child == u8,
@@ -363,6 +403,13 @@ fn isString(comptime T: type) bool {
     };
 }
 
+fn isString(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .pointer => |pt| pt.child == String,
+        else => false,
+    };
+}
+
 fn isInt(comptime T: type) bool {
     return switch (@typeInfo(T)) {
         .int, .comptime_int => true,
@@ -372,32 +419,45 @@ fn isInt(comptime T: type) bool {
 
 pub fn getHashTableEntry(ht: *const HashTable, key: anytype) !*Value {
     const KT = @TypeOf(key);
-    return if (comptime isString(KT))
+    return if (comptime isStringContent(KT))
         php_h.zend_hash_str_find(ht, key.ptr, key.len) orelse error.Missing
+    else if (comptime isString(KT))
+        php_h.zend_hash_find(ht, key)
     else if (comptime isInt(KT))
         php_h.zend_hash_index_find(ht, @intCast(key)) orelse error.Missing
     else
-        @compileError("Invalid key");
+        @compileError("Invalid key: " ++ @typeName(KT));
 }
 
 pub fn setHashTableEntry(ht: *HashTable, key: anytype, value: *Value) !void {
     const KT = @TypeOf(key);
-    if (comptime isString(KT))
+    if (comptime isStringContent(KT))
         _ = php_h.zend_hash_str_add(ht, key.ptr, key.len, value)
+    else if (comptime isString(KT))
+        _ = php_h.zend_hash_add(ht, key, value)
     else if (comptime isInt(KT))
         _ = php_h.zend_hash_index_add(ht, @intCast(key), value)
     else
-        @compileError("Invalid key");
+        @compileError("Invalid key: " ++ @typeName(KT));
 }
 
 pub fn deleteHashTableEntry(ht: *HashTable, key: anytype) !void {
     const KT = @TypeOf(key);
-    if (comptime isString(KT))
+    if (comptime isStringContent(KT))
         _ = php_h.zend_hash_str_del(ht, key.ptr, key.len)
+    else if (comptime isString(KT))
+        _ = php_h.zend_hash_del(ht, key)
     else if (comptime isInt(KT))
         _ = php_h.zend_hash_index_del(ht, @intCast(key))
     else
-        @compileError("Invalid key");
+        @compileError("Invalid key: " ++ @typeName(KT));
+}
+
+pub const initializeStandardObject = php_h.zend_object_std_init;
+pub const initializeObjectProperties = php_h.object_properties_init;
+
+pub fn getObjectPropertySize(ce: *ClassEntry) isize {
+    return @bitCast(php_h.zend_object_properties_size(ce));
 }
 
 pub const allocator: std.mem.Allocator = .{
@@ -427,7 +487,7 @@ const allocator_impl = struct {
         // Overallocate to account for alignment padding and store the original pointer
         // returned by `malloc` before the aligned address.
         const padded_len = len + @sizeOf(usize) + alignment.toByteUnits() - 1;
-        const unaligned_ptr: [*]u8 = @ptrCast(php_h.emalloc(padded_len) orelse return null);
+        const unaligned_ptr: [*]u8 = @ptrCast(php_h._emalloc(padded_len) orelse return null);
         const unaligned_addr = @intFromPtr(unaligned_ptr);
         const aligned_addr = alignment.forward(unaligned_addr + @sizeOf(usize));
         const aligned_ptr = unaligned_ptr + (aligned_addr - unaligned_addr);
