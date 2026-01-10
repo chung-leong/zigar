@@ -67,6 +67,7 @@ pub const ModuleHost = struct {
         var thunk_address: usize = 0;
         _ = module.exports.get_factory_thunk(&thunk_address);
         _ = module.exports.run_thunk(thunk_address, thunk_address, 0xaaaa_aaaa);
+        // the last structure to get finalized is the root namespace
         const root = self.last_structure orelse return error.NoRoot;
         const class = try php.getProperty(root, "class");
         php.addValueRef(class);
