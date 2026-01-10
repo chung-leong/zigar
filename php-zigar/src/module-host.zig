@@ -6,6 +6,8 @@ const builtin = @import("builtin");
 const hooks = @import("module/native/hooks.zig");
 const interface = @import("module/native/interface.zig");
 const php = @import("php.zig");
+const HashTable = php.HashTable;
+const Value = php.Value;
 const zig_class = @import("zig-class.zig");
 const ZigClass = zig_class.ZigClass;
 const fn_transform = @import("zigft/fn-transform.zig");
@@ -15,17 +17,16 @@ pub const ModuleHost = struct {
     module: ?*Module = null,
     library: ?std.DynLib = null,
     base_address: usize = 0,
-    structure_map: php.HashTable = undefined,
-    value_list: php.HashTable = undefined,
+    structure_map: HashTable = undefined,
+    value_list: HashTable = undefined,
     redirection_mask: hooks.Syscall.Mask = .{},
-    last_structure: ?Value = null,
+    last_structure: ?*Value = null,
 
-    const Module = interface.Module(Value);
+    const Module = interface.Module(*Value);
     const Jscall = Module.Jscall;
     pub const Syscall = hooks.Syscall;
-    const Value = *php.Value;
 
-    pub fn load(path: []const u8) !Value {
+    pub fn load(path: []const u8) !*Value {
         var self: *@This() = try php.allocator.create(@This());
         self.* = .{};
         errdefer php.allocator.destroy(self);
@@ -147,17 +148,17 @@ pub const ModuleHost = struct {
         }
     }
 
-    fn allocateValue(self: *@This(), value: php.Value) Value {
+    fn allocateValue(self: *@This(), value: Value) *Value {
         return php.appendHashTableEntry(&self.value_list, @constCast(&value));
     }
 
-    fn createBool(self: *@This(), initializer: bool) !Value {
+    fn createBool(self: *@This(), initializer: bool) !*Value {
         const value = php.createValueBool(initializer);
         return self.allocateValue(value);
     }
 
-    fn createInteger(self: *@This(), initializer: i32, unsigned: bool) !Value {
-        var value: php.Value = undefined;
+    fn createInteger(self: *@This(), initializer: i32, unsigned: bool) !*Value {
+        var value: Value = undefined;
         switch (@bitSizeOf(c_long)) {
             64 => {
                 const long: c_long = if (unsigned) @as(u32, @bitCast(initializer)) else initializer;
@@ -176,8 +177,8 @@ pub const ModuleHost = struct {
         return self.allocateValue(value);
     }
 
-    fn createBigInteger(self: *@This(), initializer: i64, unsigned: bool) !Value {
-        var value: php.Value = undefined;
+    fn createBigInteger(self: *@This(), initializer: i64, unsigned: bool) !*Value {
+        var value: Value = undefined;
         switch (@bitSizeOf(c_long)) {
             64 => {
                 if (unsigned and initializer < 0) {
@@ -204,13 +205,13 @@ pub const ModuleHost = struct {
         return self.allocateValue(value);
     }
 
-    fn createString(self: *@This(), bytes: [*]const u8, len: usize) !Value {
+    fn createString(self: *@This(), bytes: [*]const u8, len: usize) !*Value {
         const value = php.createValueString(bytes[0..len]);
         return self.allocateValue(value);
     }
 
-    fn createView(self: *@This(), bytes: ?[*]const u8, len: usize, copying: bool, _: usize) !Value {
-        var value: php.Value = undefined;
+    fn createView(self: *@This(), bytes: ?[*]const u8, len: usize, copying: bool, _: usize) !*Value {
+        var value: Value = undefined;
         if (bytes) |b| {
             const slice = b[0..len];
             if (copying) {
@@ -224,7 +225,7 @@ pub const ModuleHost = struct {
         return self.allocateValue(value);
     }
 
-    fn createInstance(self: *@This(), structure: Value, dv: Value, slots: ?Value) !Value {
+    fn createInstance(self: *@This(), structure: *Value, dv: *Value, slots: ?*Value) !*Value {
         _ = structure;
         _ = dv;
         _ = slots;
@@ -232,8 +233,8 @@ pub const ModuleHost = struct {
         return self.allocateValue(value);
     }
 
-    fn createTemplate(self: *@This(), dv: ?Value, slots: ?Value) !Value {
-        var value: php.Value = undefined;
+    fn createTemplate(self: *@This(), dv: ?*Value, slots: ?*Value) !*Value {
+        var value: Value = undefined;
         value = php.createValueArray();
         if (dv) |v| {
             const key = php.createInternedString("MEMORY");
@@ -246,26 +247,26 @@ pub const ModuleHost = struct {
         return self.allocateValue(value);
     }
 
-    fn createList(self: *@This()) !Value {
+    fn createList(self: *@This()) !*Value {
         const value = php.createValueArray();
         return self.allocateValue(value);
     }
 
-    fn createObject(self: *@This()) !Value {
+    fn createObject(self: *@This()) !*Value {
         const value = php.createValueArray();
         return self.allocateValue(value);
     }
 
-    fn appendList(_: *@This(), list: Value, element: Value) !void {
+    fn appendList(_: *@This(), list: *Value, element: *Value) !void {
         try php.addElementRef(list, element);
     }
 
-    fn getProperty(_: *@This(), object: Value, key_bytes: [*]const u8, key_len: usize) !Value {
+    fn getProperty(_: *@This(), object: *Value, key_bytes: [*]const u8, key_len: usize) !*Value {
         const key = php.createInternedString(key_bytes[0..key_len]);
         return php.getProperty(object, key);
     }
 
-    fn setProperty(_: *@This(), object: Value, key_bytes: [*]const u8, key_len: usize, value: ?Value) !void {
+    fn setProperty(_: *@This(), object: *Value, key_bytes: [*]const u8, key_len: usize, value: ?*Value) !void {
         const key = php.createInternedString(key_bytes[0..key_len]);
         if (value) |v|
             try php.setPropertyRef(object, key, v)
@@ -273,23 +274,23 @@ pub const ModuleHost = struct {
             try php.deleteProperty(object, key);
     }
 
-    fn getSlotValue(_: *@This(), object: Value, slot: usize) !Value {
+    fn getSlotValue(_: *@This(), object: *Value, slot: usize) !*Value {
         return try php.getProperty(object, slot);
     }
 
-    fn setSlotValue(_: *@This(), object: Value, slot: usize, value: ?Value) !void {
+    fn setSlotValue(_: *@This(), object: *Value, slot: usize, value: ?*Value) !void {
         if (value) |v|
             try php.setPropertyRef(object, slot, v)
         else
             try php.deleteProperty(object, slot);
     }
 
-    fn getStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize) !Value {
+    fn getStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize) !*Value {
         const key = key_bytes[0..key_len];
         return try php.getHashTableEntry(&self.structure_map, key);
     }
 
-    fn setStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize, value: ?Value) !void {
+    fn setStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize, value: ?*Value) !void {
         const key = key_bytes[0..key_len];
         if (value) |v|
             try php.setHashTableEntryRef(&self.structure_map, key, v)
@@ -297,16 +298,16 @@ pub const ModuleHost = struct {
             try php.deleteHashTableEntry(&self.structure_map, key);
     }
 
-    fn beginStructure(self: *@This(), structure: Value) !void {
+    fn beginStructure(self: *@This(), structure: *Value) !void {
         try ZigClass.define(self, structure);
     }
 
-    fn finishStructure(self: *@This(), structure: Value) !void {
+    fn finishStructure(self: *@This(), structure: *Value) !void {
         try ZigClass.finalize(structure);
         self.last_structure = structure;
     }
 
-    fn enableCallback(self: *@This(), structure: Value, template: Value, member_flags: Value) !void {
+    fn enableCallback(self: *@This(), structure: *Value, template: *Value, member_flags: *Value) !void {
         _ = self;
         _ = structure;
         _ = template;

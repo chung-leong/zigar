@@ -4,6 +4,7 @@ const module_host = @import("module-host.zig");
 const Host = module_host.ModuleHost;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
+const String = php.String;
 const Value = php.Value;
 const ClassEntry = php.ClassEntry;
 const Object = php.Object;
@@ -63,6 +64,7 @@ pub const ZigClass = struct {
         ce.* = .{
             .type = php.USER_CLASS,
             .refcount = 1,
+            .name = php.createString("ZigClass"),
             .ce_flags = php.NOT_SERIALIZABLE | php.LINKED,
             .properties_info = php.createHashTable(.none),
             .constants_table = php.createHashTable(.none),
@@ -116,7 +118,7 @@ pub const ZigClass = struct {
         return zig_obj.object();
     }
 
-    fn readProperty(obj: *Object, name: *php.String, prop_type: c_int, cache_slot: *?*anyopaque, retval: *Value) !*Value {
+    fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: *?*anyopaque, retval: *Value) !*Value {
         _ = obj;
         _ = name;
         _ = prop_type;
