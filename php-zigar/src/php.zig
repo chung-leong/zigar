@@ -247,18 +247,26 @@ pub fn transform(comptime func: anytype) Transformed(func) {
 
 pub const initializeClassData = php_h.zend_initialize_class_data;
 
-pub fn addValueRef(value: *Value) u32 {
+pub fn incrementValueRef(value: *Value) u32 {
     return if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0)
         php_h.zval_addref_p(value)
     else
         std.math.minInt(u32);
 }
 
-pub fn releaseValue(value: *Value) u32 {
+pub fn decrementValueRef(value: *Value) u32 {
     return if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0)
         php_h.zval_delref_p(value)
     else
         std.math.maxInt(u32);
+}
+
+pub fn addValueRef(value: *Value) void {
+    _ = incrementValueRef(value);
+}
+
+pub fn releaseValue(value: *Value) u32 {
+    _ = decrementValueRef(value);
 }
 
 pub fn createValueNull() Value {
@@ -299,6 +307,13 @@ pub fn createValuePersistentString(s: []const u8) Value {
     var result: Value = .{};
     result.value.str = createPersistentString(s);
     result.u1.type_info = IS_STRING;
+    return result;
+}
+
+pub fn createValueObject(ce: *ClassEntry) Value {
+    var result: Value = .{};
+    result.value.obj = createObject(ce);
+    result.u1.type_info = IS_OBJECT_EX;
     return result;
 }
 
@@ -361,8 +376,16 @@ pub fn getValueArray(value: *const Value) !*Array {
 
 pub fn getValueHashTable(value: *const Value) !*HashTable {
     return switch (value.u1.v.type) {
-        IS_ARRAY, IS_OBJECT => value.value.arr,
+        IS_ARRAY => value.value.arr,
+        IS_OBJECT => value.value.obj.*.properties,
         else => error.NotArrayOrObject,
+    };
+}
+
+pub fn getValueObject(value: *const Value) !*Object {
+    return switch (value.u1.v.type) {
+        IS_OBJECT => value.value.obj,
+        else => error.NotObject,
     };
 }
 
@@ -378,7 +401,7 @@ pub fn setProperty(object: *Value, key: anytype, value: *Value) !void {
 
 pub fn setPropertyRef(object: *Value, key: anytype, value: *Value) !void {
     try setProperty(object, key, value);
-    _ = addValueRef(value);
+    addValueRef(value);
 }
 
 pub fn deleteProperty(object: *Value, key: anytype) !void {
@@ -393,7 +416,7 @@ pub fn addElement(array: *Value, element: *Value) !void {
 
 pub fn addElementRef(array: *Value, element: *Value) !void {
     try addElement(array, element);
-    _ = addValueRef(element);
+    addValueRef(element);
 }
 
 pub fn createString(s: []const u8) *String {
@@ -481,7 +504,7 @@ pub fn setHashTableEntry(ht: *HashTable, key: anytype, value: *Value) !void {
 
 pub fn setHashTableEntryRef(ht: *HashTable, key: anytype, value: *Value) !void {
     try setHashTableEntry(ht, key, value);
-    _ = addValueRef(value);
+    addValueRef(value);
 }
 
 pub fn appendHashTableEntry(ht: *HashTable, value: *Value) *Value {
@@ -500,6 +523,10 @@ pub fn deleteHashTableEntry(ht: *HashTable, key: anytype) !void {
         _ = php_h.zend_hash_index_del(ht, @intCast(key))
     else
         @compileError("Invalid key: " ++ @typeName(KT));
+}
+
+pub fn createObject(ce: *ClassEntry) *Object {
+    return php_h.zend_objects_new(ce);
 }
 
 pub const initializeStandardObject = php_h.zend_object_std_init;

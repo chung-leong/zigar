@@ -26,14 +26,14 @@ const functions = struct {
             .required_num_args = 1,
         };
 
-        pub fn run(_: *ExecuteData, return_value: ?*Value) !void {
-            _ = return_value;
+        pub fn run(_: *ExecuteData, return_value: *Value) !void {
             var path_str: *String = undefined;
             try php.parseArguments("S", .{&path_str});
             const path = php.getStringContent(path_str);
             std.debug.print("path = {s}\n", .{path});
-            const host = try ModuleHost.load(path);
-            _ = host;
+            const module = try ModuleHost.load(path);
+            _ = php.addValueRef(module);
+            return_value.* = module.*;
         }
     };
 };

@@ -1,8 +1,9 @@
 <?php
 
-debug_zval_dump(zigar_load_module(__DIR__ . "/test/hello.zigar/linux.x64.so"));
+$module = zigar_load_module(__DIR__ . "/test/hello.zigar/linux.x64.so");
+echo $module->world, "\n";
+// debug_zval_dump($module);
 
-$name = 'zigar_class_1';
-$obj = new $name;
+$obj = new $module;
 echo $obj->hello, "\n";
-debug_zval_dump($obj);
+// debug_zval_dump($obj);

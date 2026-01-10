@@ -10,9 +10,9 @@ const zig_class_entry = @import("zig-class.zig");
 const ZigClass = zig_class_entry.ZigClass;
 
 pub const ZigObject = struct {
-    bytes: ?*String,
-    slots: ?*HashTable,
-    php_object: php.Object,
+    bytes: ?*String = null,
+    slots: ?*HashTable = null,
+    php_object: php.Object = undefined,
 
     var object_handlers: ?php.ObjectHandlers = null;
 
@@ -29,9 +29,9 @@ pub const ZigObject = struct {
         const size: usize = @intCast(@sizeOf(@This()) + prop_size);
         const alignment = comptime std.mem.Alignment.fromByteUnits(@alignOf(@This()));
         const bytes = try php.allocator.alignedAlloc(u8, alignment, size);
+        errdefer php.allocator.free(bytes);
         const self: *@This() = @ptrCast(@alignCast(&bytes[0]));
-        self.bytes = null;
-        self.slots = null;
+        self.* = .{};
         const obj = self.object();
         obj.* = .{};
         php.initializeStandardObject(self.object(), class.entry());
@@ -39,17 +39,20 @@ pub const ZigObject = struct {
         if (object_handlers == null) {
             object_handlers = php.std_object_handlers.*;
             const handlers = &object_handlers.?;
-            handlers.free_obj = php.transform(freeObject);
+            handlers.dtor_obj = php.transform(destroyObject);
             handlers.read_property = php.transform(readProperty);
+            handlers.offset = @offsetOf(@This(), "php_object");
         }
         obj.handlers = &object_handlers.?;
         return self;
     }
 
-    fn freeObject(obj: *Object) void {
+    fn destroyObject(obj: *Object) void {
         const self = fromObject(obj);
         if (self.bytes) |s| php.releaseString(s);
-        php.allocator.destroy(self);
+        // if (self.slots) |s| php.releaseHashTable(s);
+        const class = ZigClass.fromEntry(obj.ce);
+        class.release();
     }
 
     fn readProperty(obj: *Object, name: *php.String, prop_type: c_int, cache_slot: *?*anyopaque, retval: *Value) !*Value {

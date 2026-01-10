@@ -11,20 +11,23 @@ const ZigClass = zig_class.ZigClass;
 const fn_transform = @import("zigft/fn-transform.zig");
 
 pub const ModuleHost = struct {
+    ref_count: isize = 1,
     module: ?*Module = null,
     library: ?std.DynLib = null,
     base_address: usize = 0,
-    structure_map: php.HashTable,
-    value_list: php.HashTable,
-    redirection_mask: hooks.Syscall.Mask,
+    structure_map: php.HashTable = undefined,
+    value_list: php.HashTable = undefined,
+    redirection_mask: hooks.Syscall.Mask = .{},
+    last_structure: ?Value = null,
 
     const Module = interface.Module(Value);
     const Jscall = Module.Jscall;
     pub const Syscall = hooks.Syscall;
     const Value = *php.Value;
 
-    pub fn load(path: []const u8) !*@This() {
+    pub fn load(path: []const u8) !Value {
         var self: *@This() = try php.allocator.create(@This());
+        self.* = .{};
         errdefer php.allocator.destroy(self);
         var lib = try std.DynLib.open(path);
         errdefer lib.close();
@@ -55,14 +58,33 @@ pub const ModuleHost = struct {
         defer php.destroyHashTable(&self.structure_map);
         self.value_list = php.createHashTable(.value);
         defer php.destroyHashTable(&self.value_list);
-        self.redirection_mask = .{};
         _ = module.exports.set_host_instance(@ptrCast(self));
         try self.exportFunctionsToModule();
-        // retrieve a run factory thunk
+        //
+        defer self.release();
+        // retrieve and run factory thunk
         var thunk_address: usize = 0;
         _ = module.exports.get_factory_thunk(&thunk_address);
         _ = module.exports.run_thunk(thunk_address, thunk_address, 0xaaaa_aaaa);
-        return self;
+        const root = self.last_structure orelse return error.NoRoot;
+        const class = try php.getProperty(root, "class");
+        php.addValueRef(class);
+        return class;
+    }
+
+    pub fn addRef(self: *@This()) void {
+        self.ref_count += 1;
+        // std.debug.print("reference host (ref = {d})\n", .{self.ref_count});
+    }
+
+    pub fn release(self: *@This()) void {
+        self.ref_count -= 1;
+        // std.debug.print("release host (ref = {d})\n", .{self.ref_count});
+        if (self.ref_count == 0) {
+            std.debug.print("freeing host\n", .{});
+            if (self.library) |*lib| lib.close();
+            php.allocator.destroy(self);
+        }
     }
 
     fn exportFunctionsToModule(self: *@This()) !void {
@@ -279,8 +301,9 @@ pub const ModuleHost = struct {
         try ZigClass.define(self, structure);
     }
 
-    fn finishStructure(_: *@This(), structure: Value) !void {
+    fn finishStructure(self: *@This(), structure: Value) !void {
         try ZigClass.finalize(structure);
+        self.last_structure = structure;
     }
 
     fn enableCallback(self: *@This(), structure: Value, template: Value, member_flags: Value) !void {

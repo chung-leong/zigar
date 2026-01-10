@@ -15,15 +15,14 @@ pub const ZigClass = struct {
     instance: struct {
         members: *Value,
         template: ?*Value,
-    },
+    } = undefined,
     static: struct {
         members: *Value,
         template: ?*Value,
-    },
-    php_class_entry: ClassEntry,
+    } = undefined,
+    php_class_entry: ClassEntry = undefined,
 
-    threadlocal var last_host: *Host = undefined;
-    threadlocal var next_class_id: usize = undefined;
+    var ref_object_handlers: ?php.ObjectHandlers = null;
 
     pub fn entry(self: *@This()) *ClassEntry {
         return &self.php_class_entry;
@@ -33,57 +32,96 @@ pub const ZigClass = struct {
         return @fieldParentPtr("php_class_entry", ce);
     }
 
+    pub fn addRef(self: *@This()) void {
+        self.php_class_entry.refcount += 1;
+        // std.debug.print("reference class (ref = {d})\n", .{self.php_class_entry.refcount});
+    }
+
+    pub fn release(self: *@This()) void {
+        self.php_class_entry.refcount -= 1;
+        // std.debug.print("release class (ref = {d})\n", .{self.php_class_entry.refcount});
+        if (self.php_class_entry.refcount == 0) {
+            // std.debug.print("freeing class\n", .{});
+            self.host.release();
+            // TODO: clear hash tables
+            php.allocator.destroy(self);
+        }
+    }
+
     pub fn define(host: *Host, info: *Value) !void {
         var self: *@This() = try php.allocator.create(@This());
         errdefer php.allocator.destroy(self);
-        self.host = host;
         const instance = try php.getProperty(info, "instance");
-        self.instance.members = try php.getProperty(instance, "members");
-        self.instance.template = php.getProperty(instance, "template") catch null;
+        self.* = .{
+            .host = host,
+            .instance = .{
+                .members = try php.getProperty(instance, "members"),
+                .template = php.getProperty(instance, "template") catch null,
+            },
+        };
         const ce = &self.php_class_entry;
-        ce.* = .{};
-        ce.type = php.USER_CLASS;
-        ce.refcount = 1;
-        ce.ce_flags = php.NOT_SERIALIZABLE | php.LINKED;
-        ce.properties_info = php.createHashTable(.none);
-        ce.constants_table = php.createHashTable(.none);
-        ce.function_table = php.createHashTable(.function);
-        ce.unnamed_1.create_object = php.transform(createObject);
-        var filename = php.createValueString("filename");
-        ce.info.user.filename = php.getValueString(&filename) catch unreachable;
-        var buffer: [64]u8 = undefined;
-        var name_buf: []const u8 = undefined;
-        if (last_host != host) {
-            last_host = host;
-            next_class_id = 1;
-        }
-        const eg = php.getExecutorGlobals();
-        while (true) {
-            name_buf = try std.fmt.bufPrint(&buffer, "zigar_class_{d}", .{next_class_id});
-            next_class_id += 1;
-            _ = php.getHashTableEntry(eg.class_table, name_buf) catch break;
-        }
-        var name = php.createValueString(name_buf);
-        ce.name = php.getValueString(&name) catch unreachable;
-        try php.setProperty(info, "class_name", &name);
-        var ce_ptr = php.createValuePointer(ce);
-        try php.setHashTableEntry(eg.class_table, ce.name, &ce_ptr);
+        ce.* = .{
+            .type = php.USER_CLASS,
+            .refcount = 1,
+            .ce_flags = php.NOT_SERIALIZABLE | php.LINKED,
+            .properties_info = php.createHashTable(.none),
+            .constants_table = php.createHashTable(.none),
+            .function_table = php.createHashTable(.function),
+            .info = .{
+                .user = .{
+                    .filename = php.createString("filename"),
+                },
+            },
+            .unnamed_1 = .{
+                .create_object = php.transform(createObject),
+            },
+        };
+        var ref = try createRef(ce);
+        try php.setProperty(info, "class", &ref);
+        host.addRef();
     }
 
     pub fn finalize(info: *Value) !void {
-        const name = try php.getProperty(info, "class_name");
-        const name_str = try php.getValueString(name);
-        const eg = php.getExecutorGlobals();
-        const ptr = try php.getHashTableEntry(eg.class_table, name_str);
-        const ce: *ClassEntry = @ptrCast(@alignCast(ptr.value.ptr.?));
-        const self = fromEntry(ce);
+        const ref = try php.getProperty(info, "class");
+        const obj = try php.getValueObject(ref);
+        const self = fromEntry(obj.ce);
         const static = try php.getProperty(info, "static");
         self.static.members = try php.getProperty(static, "members");
         self.static.template = php.getProperty(static, "template") catch null;
     }
 
+    fn createRef(ce: *ClassEntry) !Value {
+        const ref = php.createValueObject(ce);
+        const obj = php.getValueObject(&ref) catch unreachable;
+        if (ref_object_handlers == null) {
+            ref_object_handlers = php.std_object_handlers.*;
+            const handlers = &ref_object_handlers.?;
+            handlers.read_property = php.transform(readProperty);
+            handlers.dtor_obj = php.transform(destroyRef);
+        }
+        obj.handlers = &ref_object_handlers.?;
+        return ref;
+    }
+
+    fn destroyRef(obj: *Object) void {
+        // std.debug.print("freeing class ref\n", .{});
+        const self = fromEntry(obj.ce);
+        self.release();
+    }
+
     fn createObject(ce: *ClassEntry) !*Object {
-        const zo = try ZigObject.create(fromEntry(ce));
-        return zo.object();
+        const self = fromEntry(ce);
+        const zig_obj = try ZigObject.create(self);
+        self.addRef();
+        return zig_obj.object();
+    }
+
+    fn readProperty(obj: *Object, name: *php.String, prop_type: c_int, cache_slot: *?*anyopaque, retval: *Value) !*Value {
+        _ = obj;
+        _ = name;
+        _ = prop_type;
+        _ = cache_slot;
+        retval.* = php.createValueLong(456);
+        return retval;
     }
 };
