@@ -7,6 +7,7 @@ pub const php_h = @cImport({
 });
 
 pub const ArgInfo = php_h.zend_internal_arg_info;
+pub const Array = php_h.zend_array;
 pub const ClassEntry = php_h.zend_class_entry;
 pub const CompilerGlobals = php_h.zend_compiler_globals;
 pub const ExecutorGlobals = php_h.zend_executor_globals;
@@ -16,7 +17,7 @@ pub const FunctionEntry = extern struct {
     // need to change it to *const anyopaque
     fname: [*c]const u8,
     handler: *const anyopaque,
-    arg_info: [*c]const php_h.zend_internal_function_info,
+    arg_info: [*c]const php_h.zend_internal_arg_info,
     num_args: u32,
     flags: u32,
 };
@@ -24,6 +25,7 @@ pub const FunctionInfo = php_h.zend_internal_function_info;
 pub const HashTable = php_h.HashTable;
 pub const Object = php_h.zend_object;
 pub const ObjectHandlers = php_h.zend_object_handlers;
+pub const RefCounted = php_h.zend_refcounted;
 pub const String = php_h.zend_string;
 pub const Value = php_h.zval;
 
@@ -48,6 +50,13 @@ pub const IS_STRING = php_h.IS_STRING;
 pub const IS_TRUE = php_h.IS_TRUE;
 pub const IS_UNDEF = php_h.IS_UNDEF;
 pub const IS_VOID = php_h.IS_VOID;
+
+pub const IS_STRING_EX = php_h.IS_STRING_EX;
+pub const IS_ARRAY_EX = php_h.IS_ARRAY_EX;
+pub const IS_OBJECT_EX = php_h.IS_OBJECT_EX;
+pub const IS_RESOURCE_EX = php_h.IS_RESOURCE_EX;
+pub const IS_REFERENCE_EX = php_h.IS_REFERENCE_EX;
+pub const IS_CONSTANT_AST_EX = php_h.IS_CONSTANT_AST_EX;
 
 pub const MAY_BE_UNDEF = php_h.MAY_BE_UNDEF;
 pub const MAY_BE_NULL = php_h.MAY_BE_NULL;
@@ -238,77 +247,73 @@ pub fn transform(comptime func: anytype) Transformed(func) {
 
 pub const initializeClassData = php_h.zend_initialize_class_data;
 
-pub fn createNull() Value {
+pub fn addValueRef(value: *Value) u32 {
+    if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0) {
+        php_h.zval_addref_p(value);
+    }
+    return std.math.minInt(u32);
+}
+
+pub fn releaseValue(value: *Value) u32 {
+    if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0) {
+        php_h.zval_delref_p(value);
+    }
+    return std.math.maxInt(u32);
+}
+
+pub fn createValueNull() Value {
     var result: Value = .{};
     result.u1.type_info = IS_NULL;
     return result;
 }
 
-pub fn createBool(b: bool) Value {
+pub fn createValueBool(b: bool) Value {
     var result: Value = .{};
     result.u1.type_info = if (b) IS_TRUE else IS_FALSE;
     return result;
 }
 
-pub fn createLong(l: i64) Value {
+pub fn createValueLong(l: i64) Value {
     var result: Value = .{};
     result.value.lval = l;
     result.u1.type_info = IS_LONG;
     return result;
 }
 
-pub fn createDouble(d: f64) Value {
+pub fn createValueDouble(d: f64) Value {
     var result: Value = .{};
     result.value.dval = d;
     result.u1.type_info = IS_DOUBLE;
     return result;
 }
 
-pub fn createString(s: []const u8) Value {
+pub fn createValueString(s: []const u8) Value {
     var result: Value = .{};
-    result.value.str = if (s.len > 1) alloc: {
-        const zs = php_h.zend_string_alloc(s.len, false);
-        const ds: [*]u8 = @ptrCast(&zs.*.val[0]);
-        @memcpy(ds[0..s.len], s);
-        ds[s.len] = '\x00';
-        break :alloc zs;
-    } else if (s.len == 1)
-        php_h.zend_one_char_string[s[0]]
-    else
-        php_h.zend_empty_string;
+    const str = createString(s);
+    result.value.str = str;
+    result.u1.type_info = if (str.gc.u.type_info & php_h.Z_TYPE_FLAGS_MASK != 0) IS_STRING_EX else IS_STRING;
+    return result;
+}
+
+pub fn createValuePersistentString(s: []const u8) Value {
+    var result: Value = .{};
+    result.value.str = createPersistentString(s);
     result.u1.type_info = IS_STRING;
     return result;
 }
 
-pub fn createPersistentString(s: []const u8) Value {
-    var result: Value = .{};
-    result.value.str = php_h.zend_string_init_interned.?(s.ptr, s.len, true);
-    result.u1.type_info = IS_STRING;
-    return result;
-}
-
-pub fn createPointer(ptr: ?*anyopaque) Value {
+pub fn createValuePointer(ptr: ?*anyopaque) Value {
     var result: Value = .{};
     result.value.ptr = ptr;
     result.u1.type_info = IS_PTR;
     return result;
 }
 
-pub fn createArray() Value {
+pub fn createValueArray() Value {
     var result: Value = .{};
-    result.value.arr = php_h._zend_new_array_0();
-    result.u1.type_info = IS_ARRAY;
+    result.value.arr = createArray();
+    result.u1.type_info = IS_ARRAY_EX;
     return result;
-}
-
-pub fn appendArray(array: *Value, element: *Value) void {
-    switch (array.u1.v.type) {
-        IS_ARRAY => {
-            const ht = array.value.arr;
-            _ = php_h.zend_hash_next_index_insert(ht, element);
-        },
-        else => {},
-    }
 }
 
 pub fn getValueBool(value: *const Value) !bool {
@@ -347,25 +352,18 @@ pub fn getValueStringContent(value: *const Value) ![]const u8 {
     };
 }
 
+pub fn getValueArray(value: *const Value) !*Array {
+    return switch (value.u1.v.type) {
+        IS_ARRAY => value.value.arr,
+        else => error.NotArray,
+    };
+}
+
 pub fn getValueHashTable(value: *const Value) !*HashTable {
     return switch (value.u1.v.type) {
         IS_ARRAY, IS_OBJECT => value.value.arr,
         else => error.NotArrayOrObject,
     };
-}
-
-pub fn getStringContent(str: *String) []const u8 {
-    const s: [*]const u8 = @ptrCast(&str.*.val[0]);
-    const len = str.*.len;
-    return s[0..len];
-}
-
-pub fn addStringRef(str: *String) u32 {
-    return php_h.zend_string_addref(str);
-}
-
-pub fn releaseString(str: *String) void {
-    php_h.zend_string_release(str);
 }
 
 pub fn getProperty(object: *Value, key: anytype) !*Value {
@@ -383,38 +381,59 @@ pub fn deleteProperty(object: *Value, key: anytype) !void {
     try deleteHashTableEntry(ht, key);
 }
 
+pub fn append(array: *Value, element: *Value) !void {
+    const arr = try getValueArray(array);
+    appendArray(arr, element);
+}
+
+pub fn createString(s: []const u8) *String {
+    return switch (s.len) {
+        0 => php_h.zend_empty_string,
+        1 => php_h.zend_one_char_string[s[0]],
+        else => create: {
+            const zs = php_h.zend_string_alloc(s.len, false);
+            const ds: [*]u8 = @ptrCast(&zs.*.val[0]);
+            @memcpy(ds[0..s.len], s);
+            ds[s.len] = '\x00';
+            break :create zs;
+        },
+    };
+}
+
+pub fn createInternedString(s: []const u8) *String {
+    return php_h.zend_string_init_interned.?(s.ptr, s.len, false);
+}
+
+pub fn createPersistentString(s: []const u8) *String {
+    return php_h.zend_string_init_interned.?(s.ptr, s.len, true);
+}
+
+pub fn getStringContent(str: *String) []const u8 {
+    const s: [*]const u8 = @ptrCast(&str.*.val[0]);
+    const len = str.*.len;
+    return s[0..len];
+}
+
+pub fn addStringRef(str: *String) u32 {
+    return php_h.zend_string_addref(str);
+}
+
+pub fn releaseString(str: *String) void {
+    php_h.zend_string_release(str);
+}
+
+pub fn createArray() *Array {
+    return php_h._zend_new_array_0();
+}
+
+pub fn appendArray(arr: *Array, element: *Value) void {
+    _ = php_h.zend_hash_next_index_insert(arr, element);
+}
+
 pub fn createHashTable() HashTable {
     var result: HashTable = undefined;
     php_h._zend_hash_init(&result, 8, null, false);
     return result;
-}
-
-fn isStringContent(comptime T: type) bool {
-    return switch (@typeInfo(T)) {
-        .pointer => |pt| switch (pt.size) {
-            .slice => pt.child == u8,
-            .one => switch (@typeInfo(pt.child)) {
-                .array => |ar| ar.child == u8,
-                else => false,
-            },
-            else => false,
-        },
-        else => false,
-    };
-}
-
-fn isString(comptime T: type) bool {
-    return switch (@typeInfo(T)) {
-        .pointer => |pt| pt.child == String,
-        else => false,
-    };
-}
-
-fn isInt(comptime T: type) bool {
-    return switch (@typeInfo(T)) {
-        .int, .comptime_int => true,
-        else => false,
-    };
 }
 
 pub fn getHashTableEntry(ht: *const HashTable, key: anytype) !*Value {
@@ -433,10 +452,10 @@ pub fn setHashTableEntry(ht: *HashTable, key: anytype, value: *Value) !void {
     const KT = @TypeOf(key);
     if (comptime isStringContent(KT))
         _ = php_h.zend_hash_str_add(ht, key.ptr, key.len, value)
-    else if (comptime isString(KT))
-        _ = php_h.zend_hash_add(ht, key, value)
     else if (comptime isInt(KT))
         _ = php_h.zend_hash_index_add(ht, @intCast(key), value)
+    else if (comptime isString(KT))
+        _ = php_h.zend_hash_add(ht, key, value)
     else
         @compileError("Invalid key: " ++ @typeName(KT));
 }
@@ -536,3 +555,31 @@ const allocator_impl = struct {
         php_h._efree(manualAlignHeader(memory.ptr).*);
     }
 };
+
+fn isStringContent(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .pointer => |pt| switch (pt.size) {
+            .slice => pt.child == u8,
+            .one => switch (@typeInfo(pt.child)) {
+                .array => |ar| ar.child == u8,
+                else => false,
+            },
+            else => false,
+        },
+        else => false,
+    };
+}
+
+fn isString(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .pointer => |pt| pt.child == String,
+        else => false,
+    };
+}
+
+fn isInt(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .int, .comptime_int => true,
+        else => false,
+    };
+}

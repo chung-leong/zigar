@@ -6,8 +6,8 @@ const builtin = @import("builtin");
 const hooks = @import("module/native/hooks.zig");
 const interface = @import("module/native/interface.zig");
 const php = @import("php.zig");
-const zig_class_entry = @import("zig-class-entry.zig");
-const ZigClassEntry = zig_class_entry.ZigClassEntry;
+const zig_class = @import("zig-class.zig");
+const ZigClass = zig_class.ZigClass;
 const fn_transform = @import("zigft/fn-transform.zig");
 
 const Value = *php.Value;
@@ -16,7 +16,6 @@ pub const ModuleHost = struct {
     library: ?std.DynLib = null,
     base_address: usize = 0,
     structure_map: php.Value,
-    structure_list: std.ArrayList(php.Value),
     value_pool: std.ArrayList(php.Value),
     redirection_mask: hooks.Syscall.Mask,
 
@@ -52,8 +51,7 @@ pub const ModuleHost = struct {
                 },
             }
         };
-        self.structure_map = php.createArray();
-        self.structure_list = .empty;
+        self.structure_map = php.createValueArray();
         self.value_pool = .empty;
         self.redirection_mask = .{};
         _ = module.exports.set_host_instance(@ptrCast(self));
@@ -136,7 +134,7 @@ pub const ModuleHost = struct {
 
     fn createBool(self: *@This(), value: bool) !Value {
         const result = try self.allocateValue();
-        result.* = php.createBool(value);
+        result.* = php.createValueBool(value);
         return result;
     }
 
@@ -145,14 +143,14 @@ pub const ModuleHost = struct {
         switch (@bitSizeOf(c_long)) {
             64 => {
                 const long: c_long = if (unsigned) @as(u32, @bitCast(value)) else value;
-                result.* = php.createLong(long);
+                result.* = php.createValueLong(long);
             },
             32 => {
                 if (unsigned and value < 0) {
                     const unsigned_value: u32 = @bitCast(value);
-                    result.* = php.createDouble(@floatFromInt(unsigned_value));
+                    result.* = php.createValueDouble(@floatFromInt(unsigned_value));
                 } else {
-                    result.* = php.createLong(value);
+                    result.* = php.createValueLong(value);
                 }
             },
             else => unreachable,
@@ -166,20 +164,20 @@ pub const ModuleHost = struct {
             64 => {
                 if (unsigned and value < 0) {
                     const ulong: c_ulong = @bitCast(value);
-                    result.* = php.createDouble(@floatFromInt(ulong));
+                    result.* = php.createValueDouble(@floatFromInt(ulong));
                 } else {
-                    result.* = php.createLong(value);
+                    result.* = php.createValueLong(value);
                 }
             },
             32 => {
                 if (unsigned and value < 0) {
                     const unsigned_value: u64 = @bitCast(value);
-                    result.* = php.createDouble(@floatFromInt(unsigned_value));
+                    result.* = php.createValueDouble(@floatFromInt(unsigned_value));
                 } else {
                     if (std.math.minInt(c_long) <= value and value <= std.maxInt(c_long)) {
-                        result.* = php.createLong(@truncate(value));
+                        result.* = php.createValueLong(@truncate(value));
                     } else {
-                        result.* = php.createDouble(@floatFromInt(value));
+                        result.* = php.createValueDouble(@floatFromInt(value));
                     }
                 }
             },
@@ -190,7 +188,7 @@ pub const ModuleHost = struct {
 
     fn createString(self: *@This(), bytes: [*]const u8, len: usize) !Value {
         const result = try self.allocateValue();
-        result.* = php.createString(bytes[0..len]);
+        result.* = php.createValueString(bytes[0..len]);
         return result;
     }
 
@@ -199,12 +197,12 @@ pub const ModuleHost = struct {
         if (bytes) |b| {
             const slice = b[0..len];
             if (copying) {
-                result.* = php.createString(slice);
+                result.* = php.createValueString(slice);
             } else {
-                result.* = php.createPersistentString(slice);
+                result.* = php.createValuePersistentString(slice);
             }
         } else {
-            result.* = php.createString("");
+            result.* = php.createValueString("");
         }
         return result;
     }
@@ -214,41 +212,47 @@ pub const ModuleHost = struct {
         _ = dv;
         _ = slots;
         const result = try self.allocateValue();
-        result.* = php.createNull();
+        result.* = php.createValueNull();
         return result;
     }
 
     fn createTemplate(self: *@This(), dv: ?Value, slots: ?Value) !Value {
         const result = try self.allocateValue();
-        result.* = php.createArray();
-        if (dv) |v| try php.setProperty(result, "MEMORY", v);
-        if (slots) |v| try php.setProperty(result, "SLOTS", v);
+        result.* = php.createValueArray();
+        if (dv) |v| {
+            const key = php.createInternedString("MEMORY");
+            try php.setProperty(result, key, v);
+        }
+        if (slots) |v| {
+            const key = php.createInternedString("SLOTS");
+            try php.setProperty(result, key, v);
+        }
         return result;
     }
 
     fn createList(self: *@This()) !Value {
         const result = try self.allocateValue();
-        result.* = php.createArray();
+        result.* = php.createValueArray();
         return result;
     }
 
     fn createObject(self: *@This()) !Value {
         const result = try self.allocateValue();
-        result.* = php.createArray();
+        result.* = php.createValueArray();
         return result;
     }
 
     fn appendList(_: *@This(), list: Value, element: Value) !void {
-        php.appendArray(list, element);
+        try php.append(list, element);
     }
 
     fn getProperty(_: *@This(), object: Value, key_bytes: [*]const u8, key_len: usize) !Value {
-        const key = key_bytes[0..key_len];
+        const key = php.createInternedString(key_bytes[0..key_len]);
         return php.getProperty(object, key);
     }
 
     fn setProperty(_: *@This(), object: Value, key_bytes: [*]const u8, key_len: usize, value: ?Value) !void {
-        const key = key_bytes[0..key_len];
+        const key = php.createInternedString(key_bytes[0..key_len]);
         if (value) |v|
             try php.setProperty(object, key, v)
         else
@@ -280,13 +284,11 @@ pub const ModuleHost = struct {
     }
 
     fn beginStructure(self: *@This(), structure: Value) !void {
-        const class_name = try ZigClassEntry.register(self, structure);
-        try self.structure_list.append(php.allocator, class_name);
+        try ZigClass.define(self, structure);
     }
 
-    fn finishStructure(self: *@This(), structure: Value) !void {
-        _ = self;
-        _ = structure;
+    fn finishStructure(_: *@This(), structure: Value) !void {
+        try ZigClass.finalize(structure);
     }
 
     fn enableCallback(self: *@This(), structure: Value, template: Value, member_flags: Value) !void {

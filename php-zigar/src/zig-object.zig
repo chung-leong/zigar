@@ -6,8 +6,8 @@ const Value = php.Value;
 const Object = php.Object;
 const String = php.String;
 const HashTable = php.HashTable;
-const zig_class_entry = @import("zig-class-entry.zig");
-const ZigClassEntry = zig_class_entry.ZigClassEntry;
+const zig_class_entry = @import("zig-class.zig");
+const ZigClass = zig_class_entry.ZigClass;
 
 pub const ZigObject = struct {
     bytes: ?*String,
@@ -24,7 +24,7 @@ pub const ZigObject = struct {
         return @fieldParentPtr("php_object", obj);
     }
 
-    pub fn create(class: *ZigClassEntry) !*@This() {
+    pub fn create(class: *ZigClass) !*@This() {
         const prop_size = php.getObjectPropertySize(class.entry());
         const size: usize = @intCast(@sizeOf(@This()) + prop_size);
         const alignment = comptime std.mem.Alignment.fromByteUnits(@alignOf(@This()));
@@ -57,7 +57,7 @@ pub const ZigObject = struct {
         _ = name;
         _ = prop_type;
         _ = cache_slot;
-        retval.* = php.createLong(1234);
+        retval.* = php.createValueLong(1234);
         return retval;
     }
 };

@@ -10,7 +10,7 @@ const Object = php.Object;
 const zig_object = @import("zig-object.zig");
 const ZigObject = zig_object.ZigObject;
 
-pub const ZigClassEntry = struct {
+pub const ZigClass = struct {
     host: *Host,
     instance: struct {
         members: *Value,
@@ -33,7 +33,7 @@ pub const ZigClassEntry = struct {
         return @fieldParentPtr("php_class_entry", ce);
     }
 
-    pub fn register(host: *Host, info: *Value) !Value {
+    pub fn define(host: *Host, info: *Value) !void {
         var self: *@This() = try php.allocator.create(@This());
         errdefer php.allocator.destroy(self);
         self.host = host;
@@ -49,7 +49,7 @@ pub const ZigClassEntry = struct {
         ce.constants_table = php.createHashTable();
         ce.function_table = php.createHashTable();
         ce.unnamed_1.create_object = php.transform(createObject);
-        var filename = php.createString("filename");
+        var filename = php.createValueString("filename");
         ce.info.user.filename = php.getValueString(&filename) catch unreachable;
         var buffer: [64]u8 = undefined;
         var name_buf: []const u8 = undefined;
@@ -63,19 +63,19 @@ pub const ZigClassEntry = struct {
             next_class_id += 1;
             _ = php.getHashTableEntry(eg.class_table, name_buf) catch break;
         }
-        var name = php.createString(name_buf);
+        var name = php.createValueString(name_buf);
         ce.name = php.getValueString(&name) catch unreachable;
         try php.setProperty(info, "class_name", &name);
-        var ce_ptr = php.createPointer(ce);
+        var ce_ptr = php.createValuePointer(ce);
         try php.setHashTableEntry(eg.class_table, ce.name, &ce_ptr);
-        return name;
     }
 
     pub fn finalize(info: *Value) !void {
         const name = try php.getProperty(info, "class_name");
+        const name_str = try php.getValueString(name);
         const eg = php.getExecutorGlobals();
-        const ptr = try php.getHashTableEntry(eg.class_table, name);
-        const ce = ptr.value.ptr;
+        const ptr = try php.getHashTableEntry(eg.class_table, name_str);
+        const ce: *ClassEntry = @ptrCast(@alignCast(ptr.value.ptr.?));
         const self = fromEntry(ce);
         const static = try php.getProperty(info, "static");
         self.static.members = try php.getProperty(static, "members");
