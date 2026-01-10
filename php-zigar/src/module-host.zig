@@ -10,18 +10,18 @@ const zig_class = @import("zig-class.zig");
 const ZigClass = zig_class.ZigClass;
 const fn_transform = @import("zigft/fn-transform.zig");
 
-const Value = *php.Value;
 pub const ModuleHost = struct {
     module: ?*Module = null,
     library: ?std.DynLib = null,
     base_address: usize = 0,
-    structure_map: php.Value,
-    value_pool: std.ArrayList(php.Value),
+    structure_map: php.HashTable,
+    value_list: php.HashTable,
     redirection_mask: hooks.Syscall.Mask,
 
     const Module = interface.Module(Value);
     const Jscall = Module.Jscall;
     pub const Syscall = hooks.Syscall;
+    const Value = *php.Value;
 
     pub fn load(path: []const u8) !*@This() {
         var self: *@This() = try php.allocator.create(@This());
@@ -51,8 +51,10 @@ pub const ModuleHost = struct {
                 },
             }
         };
-        self.structure_map = php.createValueArray();
-        self.value_pool = .empty;
+        self.structure_map = php.createHashTable(.value);
+        defer php.destroyHashTable(&self.structure_map);
+        self.value_list = php.createHashTable(.value);
+        defer php.destroyHashTable(&self.value_list);
         self.redirection_mask = .{};
         _ = module.exports.set_host_instance(@ptrCast(self));
         try self.exportFunctionsToModule();
@@ -123,127 +125,117 @@ pub const ModuleHost = struct {
         }
     }
 
-    fn allocateValue(self: *@This()) !Value {
-        while (true) {
-            if (self.value_pool.addOneBounded()) |v|
-                return v
-            else |_|
-                self.value_pool = try .initCapacity(php.allocator, 256);
-        }
+    fn allocateValue(self: *@This(), value: php.Value) Value {
+        return php.appendHashTableEntry(&self.value_list, @constCast(&value));
     }
 
-    fn createBool(self: *@This(), value: bool) !Value {
-        const result = try self.allocateValue();
-        result.* = php.createValueBool(value);
-        return result;
+    fn createBool(self: *@This(), initializer: bool) !Value {
+        const value = php.createValueBool(initializer);
+        return self.allocateValue(value);
     }
 
-    fn createInteger(self: *@This(), value: i32, unsigned: bool) !Value {
-        const result = try self.allocateValue();
+    fn createInteger(self: *@This(), initializer: i32, unsigned: bool) !Value {
+        var value: php.Value = undefined;
         switch (@bitSizeOf(c_long)) {
             64 => {
-                const long: c_long = if (unsigned) @as(u32, @bitCast(value)) else value;
-                result.* = php.createValueLong(long);
+                const long: c_long = if (unsigned) @as(u32, @bitCast(initializer)) else initializer;
+                value = php.createValueLong(long);
             },
             32 => {
-                if (unsigned and value < 0) {
-                    const unsigned_value: u32 = @bitCast(value);
-                    result.* = php.createValueDouble(@floatFromInt(unsigned_value));
+                if (unsigned and initializer < 0) {
+                    const unsigned_value: u32 = @bitCast(initializer);
+                    value = php.createValueDouble(@floatFromInt(unsigned_value));
                 } else {
-                    result.* = php.createValueLong(value);
+                    value = php.createValueLong(initializer);
                 }
             },
             else => unreachable,
         }
-        return result;
+        return self.allocateValue(value);
     }
 
-    fn createBigInteger(self: *@This(), value: i64, unsigned: bool) !Value {
-        const result = try self.allocateValue();
+    fn createBigInteger(self: *@This(), initializer: i64, unsigned: bool) !Value {
+        var value: php.Value = undefined;
         switch (@bitSizeOf(c_long)) {
             64 => {
-                if (unsigned and value < 0) {
-                    const ulong: c_ulong = @bitCast(value);
-                    result.* = php.createValueDouble(@floatFromInt(ulong));
+                if (unsigned and initializer < 0) {
+                    const ulong: c_ulong = @bitCast(initializer);
+                    value = php.createValueDouble(@floatFromInt(ulong));
                 } else {
-                    result.* = php.createValueLong(value);
+                    value = php.createValueLong(initializer);
                 }
             },
             32 => {
-                if (unsigned and value < 0) {
-                    const unsigned_value: u64 = @bitCast(value);
-                    result.* = php.createValueDouble(@floatFromInt(unsigned_value));
+                if (unsigned and initializer < 0) {
+                    const unsigned_value: u64 = @bitCast(initializer);
+                    value = php.createValueDouble(@floatFromInt(unsigned_value));
                 } else {
-                    if (std.math.minInt(c_long) <= value and value <= std.maxInt(c_long)) {
-                        result.* = php.createValueLong(@truncate(value));
+                    if (std.math.minInt(c_long) <= initializer and initializer <= std.maxInt(c_long)) {
+                        value = php.createValueLong(@truncate(initializer));
                     } else {
-                        result.* = php.createValueDouble(@floatFromInt(value));
+                        value = php.createValueDouble(@floatFromInt(initializer));
                     }
                 }
             },
             else => unreachable,
         }
-        return result;
+        return self.allocateValue(value);
     }
 
     fn createString(self: *@This(), bytes: [*]const u8, len: usize) !Value {
-        const result = try self.allocateValue();
-        result.* = php.createValueString(bytes[0..len]);
-        return result;
+        const value = php.createValueString(bytes[0..len]);
+        return self.allocateValue(value);
     }
 
     fn createView(self: *@This(), bytes: ?[*]const u8, len: usize, copying: bool, _: usize) !Value {
-        const result = try self.allocateValue();
+        var value: php.Value = undefined;
         if (bytes) |b| {
             const slice = b[0..len];
             if (copying) {
-                result.* = php.createValueString(slice);
+                value = php.createValueString(slice);
             } else {
-                result.* = php.createValuePersistentString(slice);
+                value = php.createValuePersistentString(slice);
             }
         } else {
-            result.* = php.createValueString("");
+            value = php.createValueString("");
         }
-        return result;
+        return self.allocateValue(value);
     }
 
     fn createInstance(self: *@This(), structure: Value, dv: Value, slots: ?Value) !Value {
         _ = structure;
         _ = dv;
         _ = slots;
-        const result = try self.allocateValue();
-        result.* = php.createValueNull();
-        return result;
+        const value = php.createValueNull();
+        return self.allocateValue(value);
     }
 
     fn createTemplate(self: *@This(), dv: ?Value, slots: ?Value) !Value {
-        const result = try self.allocateValue();
-        result.* = php.createValueArray();
+        var value: php.Value = undefined;
+        value = php.createValueArray();
         if (dv) |v| {
             const key = php.createInternedString("MEMORY");
-            try php.setProperty(result, key, v);
+            try php.setPropertyRef(&value, key, v);
         }
         if (slots) |v| {
             const key = php.createInternedString("SLOTS");
-            try php.setProperty(result, key, v);
+            try php.setPropertyRef(&value, key, v);
         }
-        return result;
+        return self.allocateValue(value);
     }
 
     fn createList(self: *@This()) !Value {
-        const result = try self.allocateValue();
-        result.* = php.createValueArray();
-        return result;
+        const value = php.createValueArray();
+        return self.allocateValue(value);
     }
 
     fn createObject(self: *@This()) !Value {
-        const result = try self.allocateValue();
-        result.* = php.createValueArray();
-        return result;
+        const value = php.createValueArray();
+        return self.allocateValue(value);
     }
 
     fn appendList(_: *@This(), list: Value, element: Value) !void {
-        try php.append(list, element);
+        try php.addElementRef(list, element);
     }
 
     fn getProperty(_: *@This(), object: Value, key_bytes: [*]const u8, key_len: usize) !Value {
@@ -254,7 +246,7 @@ pub const ModuleHost = struct {
     fn setProperty(_: *@This(), object: Value, key_bytes: [*]const u8, key_len: usize, value: ?Value) !void {
         const key = php.createInternedString(key_bytes[0..key_len]);
         if (value) |v|
-            try php.setProperty(object, key, v)
+            try php.setPropertyRef(object, key, v)
         else
             try php.deleteProperty(object, key);
     }
@@ -265,22 +257,22 @@ pub const ModuleHost = struct {
 
     fn setSlotValue(_: *@This(), object: Value, slot: usize, value: ?Value) !void {
         if (value) |v|
-            try php.setProperty(object, slot, v)
+            try php.setPropertyRef(object, slot, v)
         else
             try php.deleteProperty(object, slot);
     }
 
     fn getStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize) !Value {
         const key = key_bytes[0..key_len];
-        return try php.getProperty(&self.structure_map, key);
+        return try php.getHashTableEntry(&self.structure_map, key);
     }
 
     fn setStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize, value: ?Value) !void {
         const key = key_bytes[0..key_len];
         if (value) |v|
-            try php.setProperty(&self.structure_map, key, v)
+            try php.setHashTableEntryRef(&self.structure_map, key, v)
         else
-            try php.deleteProperty(&self.structure_map, key);
+            try php.deleteHashTableEntry(&self.structure_map, key);
     }
 
     fn beginStructure(self: *@This(), structure: Value) !void {

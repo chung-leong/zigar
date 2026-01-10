@@ -248,17 +248,17 @@ pub fn transform(comptime func: anytype) Transformed(func) {
 pub const initializeClassData = php_h.zend_initialize_class_data;
 
 pub fn addValueRef(value: *Value) u32 {
-    if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0) {
-        php_h.zval_addref_p(value);
-    }
-    return std.math.minInt(u32);
+    return if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0)
+        php_h.zval_addref_p(value)
+    else
+        std.math.minInt(u32);
 }
 
 pub fn releaseValue(value: *Value) u32 {
-    if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0) {
-        php_h.zval_delref_p(value);
-    }
-    return std.math.maxInt(u32);
+    return if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0)
+        php_h.zval_delref_p(value)
+    else
+        std.math.maxInt(u32);
 }
 
 pub fn createValueNull() Value {
@@ -376,14 +376,24 @@ pub fn setProperty(object: *Value, key: anytype, value: *Value) !void {
     try setHashTableEntry(ht, key, value);
 }
 
+pub fn setPropertyRef(object: *Value, key: anytype, value: *Value) !void {
+    try setProperty(object, key, value);
+    _ = addValueRef(value);
+}
+
 pub fn deleteProperty(object: *Value, key: anytype) !void {
     const ht = try getValueHashTable(object);
     try deleteHashTableEntry(ht, key);
 }
 
-pub fn append(array: *Value, element: *Value) !void {
+pub fn addElement(array: *Value, element: *Value) !void {
     const arr = try getValueArray(array);
-    appendArray(arr, element);
+    _ = appendHashTableEntry(arr, element);
+}
+
+pub fn addElementRef(array: *Value, element: *Value) !void {
+    try addElement(array, element);
+    _ = addValueRef(element);
 }
 
 pub fn createString(s: []const u8) *String {
@@ -423,17 +433,25 @@ pub fn releaseString(str: *String) void {
 }
 
 pub fn createArray() *Array {
-    return php_h._zend_new_array_0();
+    const arr = php_h._zend_new_array_0();
+    return arr;
 }
 
-pub fn appendArray(arr: *Array, element: *Value) void {
-    _ = php_h.zend_hash_next_index_insert(arr, element);
-}
+const Deref = enum { none, value, function };
 
-pub fn createHashTable() HashTable {
+pub fn createHashTable(deref: Deref) HashTable {
     var result: HashTable = undefined;
-    php_h._zend_hash_init(&result, 8, null, false);
+    const dtor: php_h.dtor_func_t = switch (deref) {
+        .none => null,
+        .value => php_h.zval_ptr_dtor,
+        .function => php_h.zend_function_dtor,
+    };
+    php_h._zend_hash_init(&result, php_h.HT_MIN_SIZE, dtor, false);
     return result;
+}
+
+pub fn destroyHashTable(ht: *HashTable) void {
+    php_h.zend_hash_destroy(ht);
 }
 
 pub fn getHashTableEntry(ht: *const HashTable, key: anytype) !*Value {
@@ -450,6 +468,7 @@ pub fn getHashTableEntry(ht: *const HashTable, key: anytype) !*Value {
 
 pub fn setHashTableEntry(ht: *HashTable, key: anytype, value: *Value) !void {
     const KT = @TypeOf(key);
+    ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
     if (comptime isStringContent(KT))
         _ = php_h.zend_hash_str_add(ht, key.ptr, key.len, value)
     else if (comptime isInt(KT))
@@ -460,8 +479,19 @@ pub fn setHashTableEntry(ht: *HashTable, key: anytype, value: *Value) !void {
         @compileError("Invalid key: " ++ @typeName(KT));
 }
 
+pub fn setHashTableEntryRef(ht: *HashTable, key: anytype, value: *Value) !void {
+    try setHashTableEntry(ht, key, value);
+    _ = addValueRef(value);
+}
+
+pub fn appendHashTableEntry(ht: *HashTable, value: *Value) *Value {
+    ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
+    return php_h.zend_hash_next_index_insert(ht, value);
+}
+
 pub fn deleteHashTableEntry(ht: *HashTable, key: anytype) !void {
     const KT = @TypeOf(key);
+    ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
     if (comptime isStringContent(KT))
         _ = php_h.zend_hash_str_del(ht, key.ptr, key.len)
     else if (comptime isString(KT))
