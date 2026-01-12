@@ -7,9 +7,24 @@ const ArgInfo = php.ArgInfo;
 const FunctionInfo = php.FunctionInfo;
 const ExecuteData = php.ExecuteData;
 const FunctionEntry = php.FunctionEntry;
+const ModuleEntry = php.ModuleEntry;
 const String = php.String;
 const Value = php.Value;
 const fn_transform = @import("zigft/fn-transform.zig");
+
+export fn php_zigar_init(_: c_int, _: c_int) php.Result {
+    return php.SUCCESS;
+}
+
+export fn php_zigar_shutdown(_: c_int, _: c_int) php.Result {
+    return php.SUCCESS;
+}
+
+export fn php_zigar_info(_: *ModuleEntry) void {
+    // php_info_print_table_start();
+    // php_info_print_table_header(2, "PHP Zigar", "enabled");
+    // php_info_print_table_end();
+}
 
 const functions = struct {
     pub const zigar_load_module = struct {

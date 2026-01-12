@@ -3,10 +3,13 @@ const c_allocator = std.heap.c_allocator;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
+const byte_buffer = @import("byte-buffer.zig");
+const ByteBuffer = byte_buffer.ByteBuffer;
 const hooks = @import("module/native/hooks.zig");
 const interface = @import("module/native/interface.zig");
 const php = @import("php.zig");
 const HashTable = php.HashTable;
+const HashPosition = php.HashPosition;
 const Value = php.Value;
 const zig_class = @import("zig-class.zig");
 const ZigClass = zig_class.ZigClass;
@@ -58,15 +61,27 @@ pub const ModuleHost = struct {
         self.structure_map = php.createHashTable(.value);
         defer php.destroyHashTable(&self.structure_map);
         self.value_list = php.createHashTable(.value);
-        defer php.destroyHashTable(&self.value_list);
+        defer {
+            var pos: HashPosition = undefined;
+            php.initializeHashPosition(&self.value_list, &pos);
+            while (php.getHashPositionValue(&self.value_list, &pos)) |value| {
+                if (php.getValuePointer(value)) |ptr| {
+                    const buffer: *ByteBuffer = @ptrCast(@alignCast(ptr));
+                    buffer.release();
+                } else |_| {}
+                if (!php.moveHashPositionForward(&self.value_list, &pos)) break;
+            }
+            php.destroyHashTable(&self.value_list);
+        }
         _ = module.exports.set_host_instance(@ptrCast(self));
         try self.exportFunctionsToModule();
-        //
         defer self.release();
         // retrieve and run factory thunk
         var thunk_address: usize = 0;
-        _ = module.exports.get_factory_thunk(&thunk_address);
-        _ = module.exports.run_thunk(thunk_address, thunk_address, 0xaaaa_aaaa);
+        if (module.exports.get_factory_thunk(&thunk_address) != .SUCCESS)
+            return error.NoFactoryThunk;
+        if (module.exports.run_thunk(thunk_address, thunk_address, 0xaaaaaaaa) != .SUCCESS)
+            return error.StructureAcquisitionFailure;
         // the last structure to get finalized is the root namespace
         const root = self.last_structure orelse return error.NoRoot;
         const class = try php.getProperty(root, "class");
@@ -150,7 +165,7 @@ pub const ModuleHost = struct {
     }
 
     fn allocateValue(self: *@This(), value: Value) *Value {
-        return php.appendHashTableEntry(&self.value_list, @constCast(&value));
+        return php.appendHashEntry(&self.value_list, @constCast(&value));
     }
 
     fn createBool(self: *@This(), initializer: bool) !*Value {
@@ -212,17 +227,17 @@ pub const ModuleHost = struct {
     }
 
     fn createView(self: *@This(), bytes: ?[*]const u8, len: usize, copying: bool, _: usize) !*Value {
-        var value: Value = undefined;
+        var buffer: *ByteBuffer = undefined;
         if (bytes) |b| {
             const slice = b[0..len];
-            if (copying) {
-                value = php.createValueString(slice);
-            } else {
-                value = php.createValuePersistentString(slice);
-            }
+            if (copying)
+                buffer = try ByteBuffer.createCopy(slice, 1)
+            else
+                buffer = try ByteBuffer.createExternal(@constCast(slice));
         } else {
-            value = php.createValueString("");
+            buffer = try ByteBuffer.createExternal("");
         }
+        const value = php.createValuePointer(buffer);
         return self.allocateValue(value);
     }
 
@@ -264,7 +279,7 @@ pub const ModuleHost = struct {
 
     fn getProperty(_: *@This(), object: *Value, key_bytes: [*]const u8, key_len: usize) !*Value {
         const key = php.createInternedString(key_bytes[0..key_len]);
-        return php.getProperty(object, key);
+        return try php.getProperty(object, key);
     }
 
     fn setProperty(_: *@This(), object: *Value, key_bytes: [*]const u8, key_len: usize, value: ?*Value) !void {
@@ -288,15 +303,15 @@ pub const ModuleHost = struct {
 
     fn getStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize) !*Value {
         const key = key_bytes[0..key_len];
-        return try php.getHashTableEntry(&self.structure_map, key);
+        return try php.getHashEntry(&self.structure_map, key);
     }
 
     fn setStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize, value: ?*Value) !void {
         const key = key_bytes[0..key_len];
         if (value) |v|
-            try php.setHashTableEntryRef(&self.structure_map, key, v)
+            try php.setHashEntryRef(&self.structure_map, key, v)
         else
-            try php.deleteHashTableEntry(&self.structure_map, key);
+            try php.deleteHashEntry(&self.structure_map, key);
     }
 
     fn beginStructure(self: *@This(), structure: *Value) !void {

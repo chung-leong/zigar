@@ -1,0 +1,88 @@
+const std = @import("std");
+
+const php = @import("php.zig");
+const ClassEntry = php.ClassEntry;
+const Object = php.Object;
+const ObjectHandlers = php.ObjectHandlers;
+const String = php.String;
+const Value = php.Value;
+
+pub const ByteBuffer = struct {
+    bytes: []u8,
+    alignment: usize = 1,
+    ref_count: usize = 1,
+    is_owner: bool = false,
+    source: ?*String = null,
+    parent: ?*@This() = null,
+
+    pub fn createNew(len: usize, alignment: usize) !*@This() {
+        const self = try php.allocator.create(@This());
+        self.* = .{
+            .bytes = alloc(len, alignment),
+            .alignment = alignment,
+            .is_owner = true,
+        };
+        @memset(self.bytes, 0);
+        return self;
+    }
+
+    pub fn createCopy(bytes: []const u8, alignment: usize) !*@This() {
+        const self = try php.allocator.create(@This());
+        self.* = .{
+            .bytes = try alloc(bytes.len, alignment),
+            .alignment = alignment,
+            .is_owner = true,
+        };
+        @memcpy(self.bytes, bytes);
+        return self;
+    }
+
+    pub fn createStringRef(str: *String, alignment: usize) !*@This() {
+        const self = try php.allocator.create(@This());
+        php.addStringRef(str);
+        self.* = .{ .bytes = php.getStringContent(str), .alignment = alignment, .source = str };
+        return self;
+    }
+
+    pub fn createExternal(bytes: []u8) !*@This() {
+        const self = try php.allocator.create(@This());
+        self.* = .{
+            .bytes = bytes,
+        };
+        return self;
+    }
+
+    pub fn slice(self: *@This(), offset: usize, len: usize) !*@This() {
+        const new = try php.allocator.create(@This());
+        new.* = .{
+            .bytes = self.bytes[offset .. offset + len],
+            .parent = self,
+        };
+        self.addRef();
+        return new;
+    }
+
+    pub fn addRef(self: *@This()) void {
+        self.ref_count += 1;
+    }
+
+    pub fn release(self: *@This()) void {
+        self.ref_count -= 1;
+        if (self.ref_count == 0) {
+            if (self.is_owner) {
+                const alignment_enum = std.mem.Alignment.fromByteUnits(self.alignment);
+                php.allocator.rawFree(self.bytes, alignment_enum, 0);
+            } else if (self.source) |str| {
+                php.releaseString(str);
+            } else if (self.parent) |buf| {
+                buf.release();
+            }
+        }
+    }
+
+    fn alloc(len: usize, alignment: usize) ![]u8 {
+        const alignment_enum = std.mem.Alignment.fromByteUnits(alignment);
+        const ptr = php.allocator.rawAlloc(len, alignment_enum, 0) orelse return error.OutOfMemory;
+        return ptr[0..len];
+    }
+};

@@ -5,11 +5,11 @@
 #include "ext/standard/info.h"
 
 PHP_MINIT_FUNCTION(php_zigar) {
-    return SUCCESS;
+    return php_zigar_init(type, module_number);
 }
 
 PHP_MSHUTDOWN_FUNCTION(php_zigar) {
-    return SUCCESS;
+    return php_zigar_shutdown(type, module_number);
 }
 
 PHP_RINIT_FUNCTION(php_zigar) {
@@ -21,9 +21,7 @@ PHP_RSHUTDOWN_FUNCTION(php_zigar) {
 }
 
 PHP_MINFO_FUNCTION(php_zigar) {
-    php_info_print_table_start();
-    php_info_print_table_header(2, "PHP Zigar", "enabled");
-    php_info_print_table_end();
+    php_zigar_info(zend_module);
 }
 
 zend_module_entry php_zigar_module_entry = {

@@ -1,1 +1,1 @@
-../../../../zigar-compiler/zig/host/native/hooks.zig
+../../../zig/host/native/hooks.zig

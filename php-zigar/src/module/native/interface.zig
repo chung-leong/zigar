@@ -1,1 +1,1 @@
-../../../../zigar-compiler/zig/host/native/interface.zig
+../../../zig/host/native/interface.zig

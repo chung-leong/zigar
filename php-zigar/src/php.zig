@@ -22,12 +22,43 @@ pub const FunctionEntry = extern struct {
     flags: u32,
 };
 pub const FunctionInfo = php_h.zend_internal_function_info;
+pub const HashPosition = php_h.HashPosition;
 pub const HashTable = php_h.HashTable;
+pub const ModuleEntry = extern struct {
+    size: c_ushort,
+    zend_api: c_uint,
+    zend_debug: u8,
+    zts: u8,
+    ini_entry: [*c]const php_h.zend_ini_entry,
+    deps: [*c]const php_h.zend_module_dep,
+    name: [*c]const u8,
+    functions: [*c]const FunctionEntry,
+    module_startup_func: ?*const fn (c_int, c_int) callconv(.c) php_h.zend_result,
+    module_shutdown_func: ?*const fn (c_int, c_int) callconv(.c) php_h.zend_result,
+    request_startup_func: ?*const fn (c_int, c_int) callconv(.c) php_h.zend_result,
+    request_shutdown_func: ?*const fn (c_int, c_int) callconv(.c) php_h.zend_result,
+    info_func: ?*const fn ([*c]@This()) callconv(.c) void,
+    version: [*c]const u8,
+    globals_size: usize,
+    globals_ptr: ?*anyopaque,
+    globals_ctor: ?*const fn (?*anyopaque) callconv(.c) void,
+    globals_dtor: ?*const fn (?*anyopaque) callconv(.c) void,
+    post_deactivate_func: ?*const fn () callconv(.c) php_h.zend_result,
+    module_started: c_int,
+    type: u8,
+    handle: ?*anyopaque,
+    module_number: c_int,
+    build_id: [*c]const u8,
+};
 pub const Object = php_h.zend_object;
 pub const ObjectHandlers = php_h.zend_object_handlers;
 pub const RefCounted = php_h.zend_refcounted;
+pub const Result = php_h.zend_result;
 pub const String = php_h.zend_string;
 pub const Value = php_h.zval;
+
+pub const SUCCESS = php_h.SUCCESS;
+pub const FAILURE = php_h.FAILURE;
 
 pub const IS_ALIAS_PTR = php_h.IS_ALIAS_PTR;
 pub const IS_ARRAY = php_h.IS_ARRAY;
@@ -70,8 +101,11 @@ pub const MAY_BE_OBJECT = php_h.MAY_BE_OBJECT;
 pub const INTERNAL_CLASS = php_h.ZEND_INTERNAL_CLASS;
 pub const USER_CLASS = php_h.ZEND_USER_CLASS;
 
-pub const NOT_SERIALIZABLE = php_h.ZEND_ACC_NOT_SERIALIZABLE;
 pub const LINKED = php_h.ZEND_ACC_LINKED;
+pub const NO_DYNAMIC_PROPERTIES = php_h.ZEND_ACC_NO_DYNAMIC_PROPERTIES;
+pub const NOT_SERIALIZABLE = php_h.ZEND_ACC_NOT_SERIALIZABLE;
+pub const ANON_CLASS = php_h.ZEND_ACC_ANON_CLASS;
+pub const FINAL = php_h.ZEND_ACC_FINAL;
 
 pub const std_object_handlers = &php_h.std_object_handlers;
 
@@ -389,14 +423,26 @@ pub fn getValueObject(value: *const Value) !*Object {
     };
 }
 
+pub fn getValuePointer(value: *const Value) !*anyopaque {
+    return switch (value.u1.v.type) {
+        IS_PTR => value.value.ptr orelse error.NullPointer,
+        else => error.NotPointer,
+    };
+}
+
 pub fn getProperty(object: *Value, key: anytype) !*Value {
     const ht = try getValueHashTable(object);
-    return try getHashTableEntry(ht, key);
+    return try getHashEntry(ht, key);
+}
+
+pub fn getPropertyWithType(comptime T: type, object: *Value, key: anytype) !T {
+    const ht = try getValueHashTable(object);
+    return try getHashEntryWithType(T, ht, key);
 }
 
 pub fn setProperty(object: *Value, key: anytype, value: *Value) !void {
     const ht = try getValueHashTable(object);
-    try setHashTableEntry(ht, key, value);
+    try setHashEntry(ht, key, value);
 }
 
 pub fn setPropertyRef(object: *Value, key: anytype, value: *Value) !void {
@@ -406,12 +452,12 @@ pub fn setPropertyRef(object: *Value, key: anytype, value: *Value) !void {
 
 pub fn deleteProperty(object: *Value, key: anytype) !void {
     const ht = try getValueHashTable(object);
-    try deleteHashTableEntry(ht, key);
+    try deleteHashEntry(ht, key);
 }
 
 pub fn addElement(array: *Value, element: *Value) !void {
     const arr = try getValueArray(array);
-    _ = appendHashTableEntry(arr, element);
+    _ = appendHashEntry(arr, element);
 }
 
 pub fn addElementRef(array: *Value, element: *Value) !void {
@@ -477,7 +523,7 @@ pub fn destroyHashTable(ht: *HashTable) void {
     php_h.zend_hash_destroy(ht);
 }
 
-pub fn getHashTableEntry(ht: *const HashTable, key: anytype) !*Value {
+pub fn getHashEntry(ht: *const HashTable, key: anytype) !*Value {
     const KT = @TypeOf(key);
     return if (comptime isStringContent(KT))
         php_h.zend_hash_str_find(ht, key.ptr, key.len) orelse error.Missing
@@ -489,7 +535,50 @@ pub fn getHashTableEntry(ht: *const HashTable, key: anytype) !*Value {
         @compileError("Invalid key: " ++ @typeName(KT));
 }
 
-pub fn setHashTableEntry(ht: *HashTable, key: anytype, value: *Value) !void {
+pub fn getHashEntryWithType(comptime T: type, ht: *const HashTable, key: anytype) !T {
+    s: switch (@typeInfo(T)) {
+        .@"enum" => |en| {
+            const int = try getHashEntryWithType(en.tag_type, ht, key);
+            return @enumFromInt(int);
+        },
+        .int => {
+            const value = try getHashEntry(ht, key);
+            const long = try getValueLong(value);
+            return @intCast(long);
+        },
+        .optional => |op| {
+            return getHashEntryWithType(op.child, ht, key) catch |err|
+                if (err == error.Missing) null else err;
+        },
+        .@"struct" => |st| {
+            if (st.backing_integer) |BT| {
+                const int = try getHashEntryWithType(BT, ht, key);
+                return @bitCast(int);
+            } else break :s;
+        },
+        .@"union" => {
+            const int_type_maybe: ?type = inline for (comptime std.meta.fields(T)) |field| {
+                const FT = @FieldType(T, field.name);
+                const field_int_type_maybe = switch (@typeInfo(FT)) {
+                    .@"enum" => |en| en.tag_type,
+                    .int => FT,
+                    .@"struct" => |st| st.backing_integer,
+                    else => null,
+                };
+                if (field_int_type_maybe) |FIT| {
+                    break if (@sizeOf(FIT) == @sizeOf(T)) FIT else null;
+                }
+            } else null;
+            if (int_type_maybe) |IT| {
+                const int = try getHashEntryWithType(IT, ht, key);
+                return @bitCast(int);
+            }
+        },
+        else => @compileError("Function accepts only types that are represented by integers"),
+    }
+}
+
+pub fn setHashEntry(ht: *HashTable, key: anytype, value: *Value) !void {
     const KT = @TypeOf(key);
     ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
     if (comptime isStringContent(KT))
@@ -502,17 +591,17 @@ pub fn setHashTableEntry(ht: *HashTable, key: anytype, value: *Value) !void {
         @compileError("Invalid key: " ++ @typeName(KT));
 }
 
-pub fn setHashTableEntryRef(ht: *HashTable, key: anytype, value: *Value) !void {
-    try setHashTableEntry(ht, key, value);
+pub fn setHashEntryRef(ht: *HashTable, key: anytype, value: *Value) !void {
+    try setHashEntry(ht, key, value);
     addValueRef(value);
 }
 
-pub fn appendHashTableEntry(ht: *HashTable, value: *Value) *Value {
+pub fn appendHashEntry(ht: *HashTable, value: *Value) *Value {
     ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
     return php_h.zend_hash_next_index_insert(ht, value);
 }
 
-pub fn deleteHashTableEntry(ht: *HashTable, key: anytype) !void {
+pub fn deleteHashEntry(ht: *HashTable, key: anytype) !void {
     const KT = @TypeOf(key);
     ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
     if (comptime isStringContent(KT))
@@ -525,16 +614,58 @@ pub fn deleteHashTableEntry(ht: *HashTable, key: anytype) !void {
         @compileError("Invalid key: " ++ @typeName(KT));
 }
 
+pub fn initializeHashPosition(ht: *HashTable, pos: *HashPosition) void {
+    php_h.zend_hash_internal_pointer_reset_ex(ht, pos);
+}
+
+pub fn moveHashPositionForward(ht: *HashTable, pos: *HashPosition) bool {
+    const result = php_h.zend_hash_move_forward_ex(ht, pos);
+    return result != php_h.SUCCESS;
+}
+
+pub fn getHashPositionValue(ht: *HashTable, pos: *HashPosition) ?*Value {
+    return php_h.zend_hash_get_current_data_ex(ht, pos);
+}
+
+pub fn getHashPositionKey(ht: *HashTable, pos: *HashPosition) Value {
+    var key: Value = undefined;
+    php_h.zend_hash_get_current_key_zval_ex(ht, &key, pos);
+    return key;
+}
+
 pub fn createObject(ce: *ClassEntry) *Object {
     return php_h.zend_objects_new(ce);
 }
 
+pub const registerInternalClass = php_h.zend_register_internal_class;
 pub const initializeStandardObject = php_h.zend_object_std_init;
 pub const initializeObjectProperties = php_h.object_properties_init;
 
 pub fn getObjectPropertySize(ce: *ClassEntry) isize {
     return @bitCast(php_h.zend_object_properties_size(ce));
 }
+
+pub const object_handler_mapping = .{
+    .free_obj = "freeObject",
+    .dtor_obj = "destroyObject",
+    .clone_obj = "cloneObject",
+    .cast_object = "castObject",
+    .read_property = "readProperty",
+    .write_property = "writeProperty",
+    .unset_property = "unsetProperty",
+    .has_property = "hasProperty",
+    .get_properties = "getProperties",
+    .get_property_ptr_ptr = "getPropertyPointer",
+    .read_dimension = "readElement",
+    .write_dimension = "writeElement",
+    .unset_dimension = "unsetElement",
+    .has_dimension = "hasElement",
+    .count_elements = "countElements",
+    .get_constructor = "getConstructor",
+    .get_method = "getMethod",
+    .get_closure = "getClosure",
+    .compare = "compare",
+};
 
 pub const allocator: std.mem.Allocator = .{
     .ptr = undefined,
