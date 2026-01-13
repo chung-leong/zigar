@@ -47,7 +47,6 @@ const functions = struct {
             const path = php.getStringContent(path_str);
             std.debug.print("path = {s}\n", .{path});
             const module = try ModuleHost.load(path);
-            _ = php.addValueRef(module);
             return_value.* = module.*;
         }
     };

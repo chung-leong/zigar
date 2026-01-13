@@ -58,13 +58,17 @@ pub const ModuleHost = struct {
                 },
             }
         };
-        self.structure_map = php.createHashTable(.value);
+        self.structure_map = php.createHashTable(php.destructor.value);
         defer php.destroyHashTable(&self.structure_map);
-        self.value_list = php.createHashTable(.value);
+        self.value_list = php.createHashTable(php.destructor.value);
         defer {
+            // pointer objects aren't released automatically, so we have to do it manually
             var pos: HashPosition = undefined;
             php.initializeHashPosition(&self.value_list, &pos);
             while (php.getHashPositionValue(&self.value_list, &pos)) |value| {
+                // if (php.getValueString(value)) |str| {
+                //     std.debug.print("str => {x}, {d}\n", .{ @intFromPtr(str), str.*.gc.refcount });
+                // } else |_| {}
                 if (php.getValuePointer(value)) |ptr| {
                     const buffer: *ByteBuffer = @ptrCast(@alignCast(ptr));
                     buffer.release();
@@ -77,15 +81,12 @@ pub const ModuleHost = struct {
         try self.exportFunctionsToModule();
         defer self.release();
         // retrieve and run factory thunk
-        var thunk_address: usize = 0;
-        if (module.exports.get_factory_thunk(&thunk_address) != .SUCCESS)
-            return error.NoFactoryThunk;
-        if (module.exports.run_thunk(thunk_address, thunk_address, 0xaaaaaaaa) != .SUCCESS)
-            return error.StructureAcquisitionFailure;
+        const thunk_address: usize = try self.getFactoryThunk();
+        try self.runThunk(thunk_address, 0xDEADC0DE, 0xDEADC0DE);
         // the last structure to get finalized is the root namespace
         const root = self.last_structure orelse return error.NoRoot;
         const class = try php.getProperty(root, "class");
-        php.addValueRef(class);
+        php.addRef(class);
         return class;
     }
 
@@ -242,10 +243,7 @@ pub const ModuleHost = struct {
     }
 
     fn createInstance(self: *@This(), structure: *Value, dv: *Value, slots: ?*Value) !*Value {
-        _ = structure;
-        _ = dv;
-        _ = slots;
-        const value = php.createValueNull();
+        const value = try ZigClass.createInstance(structure, dv, slots);
         return self.allocateValue(value);
     }
 
@@ -253,11 +251,11 @@ pub const ModuleHost = struct {
         var value: Value = undefined;
         value = php.createValueArray();
         if (dv) |v| {
-            const key = php.createInternedString("MEMORY");
+            const key = php.createInternedString("memory");
             try php.setPropertyRef(&value, key, v);
         }
         if (slots) |v| {
-            const key = php.createInternedString("SLOTS");
+            const key = php.createInternedString("slots");
             try php.setPropertyRef(&value, key, v);
         }
         return self.allocateValue(value);
@@ -373,6 +371,18 @@ pub const ModuleHost = struct {
 
     pub fn deinitializeThread(self: *@This()) !void {
         _ = self;
+    }
+
+    fn getFactoryThunk(self: *@This()) !usize {
+        var thunk_address: usize = 0;
+        if (self.module.?.exports.get_factory_thunk(&thunk_address) != .SUCCESS)
+            return error.UnableToFindFactoryFunction;
+        return thunk_address;
+    }
+
+    pub fn runThunk(self: *@This(), thunk_address: usize, fn_address: usize, arg_address: usize) !void {
+        if (self.module.?.exports.run_thunk(thunk_address, fn_address, arg_address) != .SUCCESS)
+            return error.UnableToExecuteZigFunction;
     }
 };
 

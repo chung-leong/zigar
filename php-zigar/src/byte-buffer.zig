@@ -18,28 +18,29 @@ pub const ByteBuffer = struct {
     pub fn createNew(len: usize, alignment: usize) !*@This() {
         const self = try php.allocator.create(@This());
         self.* = .{
-            .bytes = alloc(len, alignment),
+            .bytes = if (len > 0) try alloc(len, alignment) else &.{},
             .alignment = alignment,
-            .is_owner = true,
+            .is_owner = len > 0,
         };
-        @memset(self.bytes, 0);
+        if (len > 0) @memset(self.bytes, 0);
         return self;
     }
 
     pub fn createCopy(bytes: []const u8, alignment: usize) !*@This() {
         const self = try php.allocator.create(@This());
+        const len = bytes.len;
         self.* = .{
-            .bytes = try alloc(bytes.len, alignment),
+            .bytes = if (len > 0) try alloc(len, alignment) else &.{},
             .alignment = alignment,
-            .is_owner = true,
+            .is_owner = len > 0,
         };
-        @memcpy(self.bytes, bytes);
+        if (len > 0) @memcpy(self.bytes, bytes);
         return self;
     }
 
     pub fn createStringRef(str: *String, alignment: usize) !*@This() {
         const self = try php.allocator.create(@This());
-        php.addStringRef(str);
+        php.addRef(str);
         self.* = .{ .bytes = php.getStringContent(str), .alignment = alignment, .source = str };
         return self;
     }
@@ -50,6 +51,10 @@ pub const ByteBuffer = struct {
             .bytes = bytes,
         };
         return self;
+    }
+
+    pub fn duplicate(self: *@This()) !*@This() {
+        return try createCopy(self.bytes, self.alignment);
     }
 
     pub fn slice(self: *@This(), offset: usize, len: usize) !*@This() {
@@ -73,10 +78,11 @@ pub const ByteBuffer = struct {
                 const alignment_enum = std.mem.Alignment.fromByteUnits(self.alignment);
                 php.allocator.rawFree(self.bytes, alignment_enum, 0);
             } else if (self.source) |str| {
-                php.releaseString(str);
+                php.release(str);
             } else if (self.parent) |buf| {
                 buf.release();
             }
+            php.allocator.destroy(self);
         }
     }
 

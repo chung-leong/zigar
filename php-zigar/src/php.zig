@@ -12,6 +12,22 @@ pub const ClassEntry = php_h.zend_class_entry;
 pub const CompilerGlobals = php_h.zend_compiler_globals;
 pub const ExecutorGlobals = php_h.zend_executor_globals;
 pub const ExecuteData = php_h.zend_execute_data;
+pub const Function = php_h.zend_function;
+// extern struct {
+//     type: php_h.zend_uchar,
+//     arg_flags: [3]php_h.zend_uchar,
+//     fn_flags: u32,
+//     function_name: [*c]php_h.zend_string,
+//     scope: [*c]php_h.zend_class_entry,
+//     prototype: [*c]Function,
+//     num_args: u32,
+//     required_num_args: u32,
+//     arg_info: [*c]php_h.zend_internal_arg_info,
+//     attributes: [*c]HashTable,
+//     handler: *const anyopaque,
+//     module: [*c]ModuleEntry,
+//     reserved: [6]?*anyopaque,
+// };
 pub const FunctionEntry = extern struct {
     // zig_handler for some reason causes a "dependency loop detected" error
     // need to change it to *const anyopaque
@@ -100,6 +116,8 @@ pub const MAY_BE_OBJECT = php_h.MAY_BE_OBJECT;
 
 pub const INTERNAL_CLASS = php_h.ZEND_INTERNAL_CLASS;
 pub const USER_CLASS = php_h.ZEND_USER_CLASS;
+pub const INTERNAL_FUNCTION = php_h.ZEND_INTERNAL_FUNCTION;
+pub const USER_FUNCTION = php_h.ZEND_USER_FUNCTION;
 
 pub const LINKED = php_h.ZEND_ACC_LINKED;
 pub const NO_DYNAMIC_PROPERTIES = php_h.ZEND_ACC_NO_DYNAMIC_PROPERTIES;
@@ -281,28 +299,6 @@ pub fn transform(comptime func: anytype) Transformed(func) {
 
 pub const initializeClassData = php_h.zend_initialize_class_data;
 
-pub fn incrementValueRef(value: *Value) u32 {
-    return if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0)
-        php_h.zval_addref_p(value)
-    else
-        std.math.minInt(u32);
-}
-
-pub fn decrementValueRef(value: *Value) u32 {
-    return if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0)
-        php_h.zval_delref_p(value)
-    else
-        std.math.maxInt(u32);
-}
-
-pub fn addValueRef(value: *Value) void {
-    _ = incrementValueRef(value);
-}
-
-pub fn releaseValue(value: *Value) u32 {
-    _ = decrementValueRef(value);
-}
-
 pub fn createValueNull() Value {
     var result: Value = .{};
     result.u1.type_info = IS_NULL;
@@ -333,7 +329,8 @@ pub fn createValueString(s: []const u8) Value {
     var result: Value = .{};
     const str = createString(s);
     result.value.str = str;
-    result.u1.type_info = if (str.gc.u.type_info & php_h.Z_TYPE_FLAGS_MASK != 0) IS_STRING_EX else IS_STRING;
+    // non-interned string need to be gc'ed
+    result.u1.type_info = if (str.gc.u.type_info & php_h.Z_TYPE_FLAGS_MASK == 0) IS_STRING_EX else IS_STRING;
     return result;
 }
 
@@ -344,9 +341,9 @@ pub fn createValuePersistentString(s: []const u8) Value {
     return result;
 }
 
-pub fn createValueObject(ce: *ClassEntry) Value {
+pub fn createValueObject(object: *Object) Value {
     var result: Value = .{};
-    result.value.obj = createObject(ce);
+    result.value.obj = object;
     result.u1.type_info = IS_OBJECT_EX;
     return result;
 }
@@ -380,7 +377,7 @@ pub fn getValueLong(value: *const Value) !c_long {
     };
 }
 
-pub fn getValueDouble(value: *const Value) !u64 {
+pub fn getValueDouble(value: *const Value) !f64 {
     return switch (value.u1.v.type) {
         IS_DOUBLE => value.value.dval,
         else => error.NotDouble,
@@ -447,7 +444,7 @@ pub fn setProperty(object: *Value, key: anytype, value: *Value) !void {
 
 pub fn setPropertyRef(object: *Value, key: anytype, value: *Value) !void {
     try setProperty(object, key, value);
-    addValueRef(value);
+    addRef(value);
 }
 
 pub fn deleteProperty(object: *Value, key: anytype) !void {
@@ -462,7 +459,7 @@ pub fn addElement(array: *Value, element: *Value) !void {
 
 pub fn addElementRef(array: *Value, element: *Value) !void {
     try addElement(array, element);
-    addValueRef(element);
+    addRef(element);
 }
 
 pub fn createString(s: []const u8) *String {
@@ -493,28 +490,18 @@ pub fn getStringContent(str: *String) []const u8 {
     return s[0..len];
 }
 
-pub fn addStringRef(str: *String) u32 {
-    return php_h.zend_string_addref(str);
-}
-
-pub fn releaseString(str: *String) void {
-    php_h.zend_string_release(str);
-}
-
 pub fn createArray() *Array {
     const arr = php_h._zend_new_array_0();
     return arr;
 }
 
-const Deref = enum { none, value, function };
+pub const destructor = struct {
+    pub const value = php_h.zval_ptr_dtor;
+    pub const function = php_h.zend_function_dtor;
+};
 
-pub fn createHashTable(deref: Deref) HashTable {
+pub fn createHashTable(dtor: php_h.dtor_func_t) HashTable {
     var result: HashTable = undefined;
-    const dtor: php_h.dtor_func_t = switch (deref) {
-        .none => null,
-        .value => php_h.zval_ptr_dtor,
-        .function => php_h.zend_function_dtor,
-    };
     php_h._zend_hash_init(&result, php_h.HT_MIN_SIZE, dtor, false);
     return result;
 }
@@ -593,7 +580,7 @@ pub fn setHashEntry(ht: *HashTable, key: anytype, value: *Value) !void {
 
 pub fn setHashEntryRef(ht: *HashTable, key: anytype, value: *Value) !void {
     try setHashEntry(ht, key, value);
-    addValueRef(value);
+    addRef(value);
 }
 
 pub fn appendHashEntry(ht: *HashTable, value: *Value) *Value {
@@ -620,7 +607,7 @@ pub fn initializeHashPosition(ht: *HashTable, pos: *HashPosition) void {
 
 pub fn moveHashPositionForward(ht: *HashTable, pos: *HashPosition) bool {
     const result = php_h.zend_hash_move_forward_ex(ht, pos);
-    return result != php_h.SUCCESS;
+    return result == php_h.SUCCESS;
 }
 
 pub fn getHashPositionValue(ht: *HashTable, pos: *HashPosition) ?*Value {
@@ -637,6 +624,43 @@ pub fn createObject(ce: *ClassEntry) *Object {
     return php_h.zend_objects_new(ce);
 }
 
+pub fn addRef(value: anytype) void {
+    const T = @TypeOf(value);
+    switch (T) {
+        *Value, [*c]Value => {
+            if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0)
+                _ = php_h.zval_addref_p(value);
+        },
+        *String, [*c]String => {
+            php_h.zend_string_addref(value);
+        },
+        *Object, [*c]Object, *HashTable, [*c]HashTable => {
+            _ = php_h.GC_ADDREF(value);
+        },
+        else => @compileError("Unexpected type: " ++ @typeName(T)),
+    }
+}
+
+pub fn release(value: anytype) void {
+    const T = @TypeOf(value);
+    switch (T) {
+        *Value, [*c]Value => {
+            if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0)
+                _ = php_h.zval_delref_p(value);
+        },
+        *String, [*c]String => {
+            php_h.zend_string_release(value);
+        },
+        *Object, [*c]Object => {
+            php_h.zend_object_release(value);
+        },
+        *HashTable, [*c]HashTable => {
+            php_h.zend_hash_release(value);
+        },
+        else => @compileError("Unexpected type: " ++ @typeName(T)),
+    }
+}
+
 pub const registerInternalClass = php_h.zend_register_internal_class;
 pub const initializeStandardObject = php_h.zend_object_std_init;
 pub const initializeObjectProperties = php_h.object_properties_init;
@@ -645,27 +669,8 @@ pub fn getObjectPropertySize(ce: *ClassEntry) isize {
     return @bitCast(php_h.zend_object_properties_size(ce));
 }
 
-pub const object_handler_mapping = .{
-    .free_obj = "freeObject",
-    .dtor_obj = "destroyObject",
-    .clone_obj = "cloneObject",
-    .cast_object = "castObject",
-    .read_property = "readProperty",
-    .write_property = "writeProperty",
-    .unset_property = "unsetProperty",
-    .has_property = "hasProperty",
-    .get_properties = "getProperties",
-    .get_property_ptr_ptr = "getPropertyPointer",
-    .read_dimension = "readElement",
-    .write_dimension = "writeElement",
-    .unset_dimension = "unsetElement",
-    .has_dimension = "hasElement",
-    .count_elements = "countElements",
-    .get_constructor = "getConstructor",
-    .get_method = "getMethod",
-    .get_closure = "getClosure",
-    .compare = "compare",
-};
+pub const emalloc = php_h._emalloc;
+pub const efree = php_h.efree;
 
 pub const allocator: std.mem.Allocator = .{
     .ptr = undefined,
@@ -694,11 +699,13 @@ const allocator_impl = struct {
         // Overallocate to account for alignment padding and store the original pointer
         // returned by `malloc` before the aligned address.
         const padded_len = len + @sizeOf(usize) + alignment.toByteUnits() - 1;
-        const unaligned_ptr: [*]u8 = @ptrCast(php_h._emalloc(padded_len) orelse return null);
+        const unaligned_ptr: [*]u8 = @ptrCast(emalloc(padded_len) orelse return null);
         const unaligned_addr = @intFromPtr(unaligned_ptr);
         const aligned_addr = alignment.forward(unaligned_addr + @sizeOf(usize));
         const aligned_ptr = unaligned_ptr + (aligned_addr - unaligned_addr);
         manualAlignHeader(aligned_ptr).* = unaligned_ptr;
+        allocation_count += 1;
+        allocated_bytes += @intCast(len);
         return aligned_ptr;
     }
 
@@ -740,9 +747,14 @@ const allocator_impl = struct {
     ) void {
         _ = alignment;
         _ = return_address;
-        php_h._efree(manualAlignHeader(memory.ptr).*);
+        efree(manualAlignHeader(memory.ptr).*);
+        allocation_count -= 1;
+        allocated_bytes -= @intCast(memory.len);
     }
 };
+
+pub var allocation_count: isize = 0;
+pub var allocated_bytes: isize = 0;
 
 fn isStringContent(comptime T: type) bool {
     return switch (@typeInfo(T)) {
