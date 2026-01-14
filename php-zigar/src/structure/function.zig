@@ -7,64 +7,37 @@ const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
 const HashTable = php.HashTable;
 const Object = php.Object;
-const String = php.String;
 const Value = php.Value;
-const zig_class_entry = @import("../zig-class.zig");
-const ZigClass = zig_class_entry.ZigClass;
+const structure = @import("../structure.zig");
+const zig_class = @import("../zig-class.zig");
+const ZigClass = zig_class.ZigClass;
 const zig_object = @import("../zig-object.zig");
 const ZigObject = zig_object.ZigObject;
-const All = @import("all.zig").All;
 
 pub const Function = struct {
-    closure: *ZigObject(Closure) = undefined,
+    address: usize = undefined,
+    function: php.Function = undefined,
 
-    const Parent = All(@This());
+    const Super = structure.Parent(@This());
 
     pub const Static = struct {
         thunk_address: usize = undefined,
         controller_address: usize = undefined,
 
         pub fn initialize(self: *@This(), class: *ZigClass) !void {
-            self.thunk_address = try getAddress(class, .instance);
-            self.controller_address = getAddress(class, .static) catch 0;
-            std.debug.print("thunk_address = {x}\n", .{self.thunk_address});
-            std.debug.print("controller_address = {x}\n", .{self.controller_address});
+            self.thunk_address = getAddress(class, .instance);
+            self.controller_address = getAddress(class, .static);
         }
 
-        fn getAddress(class: *ZigClass, comptime scope: ZigClass.ScopeType) !usize {
-            const tpl = try class.getTemplate(scope);
-            const buffer = tpl.bytes orelse return error.NoBuffer;
+        fn getAddress(class: *ZigClass, comptime scope: ZigClass.ScopeType) usize {
+            const buffer = @field(class, @tagName(scope)).template.bytes orelse return 0;
             return @intFromPtr(buffer.bytes.ptr);
         }
     };
 
     pub fn setStorage(self: *@This(), buffer: *ByteBuffer, _: ?*HashTable) !void {
-        const obj = ZigObject(@This()).fromStructure(self);
-        const class = ZigClass.fromEntry(obj.php_portion.ce);
-        self.closure = try ZigObject(Closure).create(class, buffer, undefined);
-    }
-
-    pub fn getValue(self: *@This()) !Value {
-        return php.createValueObject(self.closure.object());
-    }
-
-    pub fn freeObject(obj: *Object) void {
-        const self = Parent.fromObject(obj);
-        self.closure.release();
-        Parent.freeObject(obj);
-    }
-    pub const readProperty = Parent.readProperty;
-};
-
-pub const Closure = struct {
-    address: usize = undefined,
-    function: php.Function = undefined,
-
-    const Parent = All(@This());
-
-    pub fn setStorage(self: *@This(), buffer: *ByteBuffer, _: ?*HashTable) !void {
         self.address = @intFromPtr(buffer.bytes.ptr);
-        std.debug.print("address = {x}\n", .{self.address});
+        buffer.release(); // the buffer only existed to convey the function's address
         const class = ZigClass.fromStructure(self);
         self.function.internal_function = .{
             .type = php.INTERNAL_FUNCTION,
@@ -75,7 +48,7 @@ pub const Closure = struct {
     }
 
     pub fn getClosure(obj: *Object, ce: *[*c]ClassEntry, func: *[*c]php.Function, this: ?*[*c]Object, _: bool) c_int {
-        const self = Parent.fromObject(obj);
+        const self = Super.fromObject(obj);
         ce.* = obj.ce;
         func.* = &self.function;
         if (this) |ptr| ptr.* = null;
@@ -83,13 +56,13 @@ pub const Closure = struct {
     }
 
     pub fn freeObject(obj: *Object) void {
-        const self = Parent.fromObject(obj);
+        const self = Super.fromObject(obj);
         php.release(self.function.internal_function.function_name);
-        Parent.freeObject(obj);
+        Super.freeObject(obj);
     }
 
     fn run(ed: *ExecuteData, return_value: *Value) !void {
-        const self = fromFunction(ed.func);
+        const self: *@This() = @fieldParentPtr("function", @as(*php.Function, ed.func));
         const class = ZigClass.fromStructure(self);
         const static = class.getStaticData(Function);
         const arg_addr = 0xDEADBEEF;
@@ -97,7 +70,7 @@ pub const Closure = struct {
         _ = return_value;
     }
 
-    fn fromFunction(func: *php.Function) *@This() {
-        return @fieldParentPtr("function", func);
-    }
+    pub const fromObject = Super.fromObject;
+    pub const getValue = Super.getValue;
+    pub const readProperty = Super.readProperty;
 };

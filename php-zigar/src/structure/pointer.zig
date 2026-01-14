@@ -7,16 +7,16 @@ const Value = php.Value;
 const Object = php.Object;
 const String = php.String;
 const HashTable = php.HashTable;
-const All = @import("all.zig").All;
+const structure = @import("../structure.zig");
 
 pub const Pointer = struct {
     bytes: *ByteBuffer = undefined,
     slots: ?*HashTable = undefined,
 
-    const Parent = All(@This());
+    const Super = structure.Parent(@This());
 
-    pub const setStorage = Parent.setStorage;
-    pub const getValue = Parent.getValue;
-    pub const freeObject = Parent.freeObject;
-    pub const readProperty = Parent.readProperty;
+    pub const setStorage = Super.setStorage;
+    pub const getValue = Super.getValue;
+    pub const freeObject = Super.freeObject;
+    pub const readProperty = Super.readProperty;
 };

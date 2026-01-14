@@ -8,8 +8,8 @@ const Object = php.Object;
 const ObjectHandlers = php.ObjectHandlers;
 const String = php.String;
 const Value = php.Value;
-const zig_class_entry = @import("zig-class.zig");
-const ZigClass = zig_class_entry.ZigClass;
+const zig_class = @import("zig-class.zig");
+const ZigClass = zig_class.ZigClass;
 
 pub fn ZigObject(comptime S: type) type {
     const Result = struct {

@@ -69,10 +69,7 @@ pub const ModuleHost = struct {
                 // if (php.getValueString(value)) |str| {
                 //     std.debug.print("str => {x}, {d}\n", .{ @intFromPtr(str), str.*.gc.refcount });
                 // } else |_| {}
-                if (php.getValuePointer(value)) |ptr| {
-                    const buffer: *ByteBuffer = @ptrCast(@alignCast(ptr));
-                    buffer.release();
-                } else |_| {}
+                if (php.getValuePointer(*ByteBuffer, value)) |b| b.release() else |_| {}
                 if (!php.moveHashPositionForward(&self.value_list, &pos)) break;
             }
             php.destroyHashTable(&self.value_list);

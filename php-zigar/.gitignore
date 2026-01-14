@@ -21,3 +21,4 @@ zig-out
 *.lai
 *.o
 *.so
+*.node

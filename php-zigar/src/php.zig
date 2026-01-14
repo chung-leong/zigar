@@ -13,21 +13,6 @@ pub const CompilerGlobals = php_h.zend_compiler_globals;
 pub const ExecutorGlobals = php_h.zend_executor_globals;
 pub const ExecuteData = php_h.zend_execute_data;
 pub const Function = php_h.zend_function;
-// extern struct {
-//     type: php_h.zend_uchar,
-//     arg_flags: [3]php_h.zend_uchar,
-//     fn_flags: u32,
-//     function_name: [*c]php_h.zend_string,
-//     scope: [*c]php_h.zend_class_entry,
-//     prototype: [*c]Function,
-//     num_args: u32,
-//     required_num_args: u32,
-//     arg_info: [*c]php_h.zend_internal_arg_info,
-//     attributes: [*c]HashTable,
-//     handler: *const anyopaque,
-//     module: [*c]ModuleEntry,
-//     reserved: [6]?*anyopaque,
-// };
 pub const FunctionEntry = extern struct {
     // zig_handler for some reason causes a "dependency loop detected" error
     // need to change it to *const anyopaque
@@ -420,9 +405,9 @@ pub fn getValueObject(value: *const Value) !*Object {
     };
 }
 
-pub fn getValuePointer(value: *const Value) !*anyopaque {
+pub fn getValuePointer(comptime T: type, value: *const Value) !T {
     return switch (value.u1.v.type) {
-        IS_PTR => value.value.ptr orelse error.NullPointer,
+        IS_PTR => if (value.value.ptr) |p| @ptrCast(@alignCast(p)) else error.NullPointer,
         else => error.NotPointer,
     };
 }
@@ -515,7 +500,7 @@ pub fn getHashEntry(ht: *const HashTable, key: anytype) !*Value {
     return if (comptime isStringContent(KT))
         php_h.zend_hash_str_find(ht, key.ptr, key.len) orelse error.Missing
     else if (comptime isString(KT))
-        php_h.zend_hash_find(ht, key)
+        php_h.zend_hash_find(ht, key) orelse error.Missing
     else if (comptime isInt(KT))
         php_h.zend_hash_index_find(ht, @intCast(key)) orelse error.Missing
     else
@@ -612,6 +597,11 @@ pub fn moveHashPositionForward(ht: *HashTable, pos: *HashPosition) bool {
 
 pub fn getHashPositionValue(ht: *HashTable, pos: *HashPosition) ?*Value {
     return php_h.zend_hash_get_current_data_ex(ht, pos);
+}
+
+pub fn getHashPositionPointer(comptime T: type, ht: *HashTable, pos: *HashPosition) !?T {
+    const value = getHashPositionValue(ht, pos) orelse return null;
+    return try getValuePointer(T, value);
 }
 
 pub fn getHashPositionKey(ht: *HashTable, pos: *HashPosition) Value {
