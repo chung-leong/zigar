@@ -44,11 +44,19 @@ pub const Static = struct {
         }
     }
 
-    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: *?*anyopaque, retval: *Value) !*Value {
+    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
         _ = obj;
         _ = name;
         _ = prop_type;
-        _ = cache_slot;
+        // _ = cache_slot;
+        if (cache_slot) |slots| {
+            if (slots[0]) |ptr| {
+                std.debug.print("{any}\n", .{ptr});
+            } else {
+                std.debug.print("{any}\n", .{null});
+            }
+            slots[0] = @ptrFromInt(0x1234);
+        }
         retval.* = php.createValueLong(456);
         return retval;
     }

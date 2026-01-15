@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const accessor = @import("accessor.zig");
 const byte_buffer = @import("byte-buffer.zig");
 const ByteBuffer = byte_buffer.ByteBuffer;
 const enums = @import("enums.zig");
@@ -58,6 +59,13 @@ pub const ZigClass = struct {
         byte_size: ?usize,
         slot: ?usize,
         class: ?*ZigClass,
+        accessors: accessor.Any = undefined,
+
+        pub fn destructor(value: [*c]Value) callconv(.c) void {
+            const member = php.getValuePointer(*Member, value) catch unreachable;
+            if (member.class) |c| c.release();
+            php.allocator.destroy(member);
+        }
     };
     pub const Template = struct {
         bytes: ?*ByteBuffer = null,
@@ -195,6 +203,14 @@ pub const ZigClass = struct {
         // set fields of ref object
         const static = structure.Static.fromObject(obj);
         try static.setFields(&self.static.members, self.static.template.slots);
+        // attach accessors to instance members
+        const members = &self.instance.members;
+        var pos: php.HashPosition = undefined;
+        php.initializeHashPosition(members, &pos);
+        while (try php.getHashPositionPointer(*ZigClass.Member, members, &pos)) |member| {
+            member.accessors = getAccessors(member);
+            if (!php.moveHashPositionForward(members, &pos)) break;
+        }
         self.finalized = true;
     }
 
@@ -233,7 +249,7 @@ pub const ZigClass = struct {
     }
 
     fn extractMembers(self: *@This(), scope_info: *Value) !HashTable {
-        var result = php.createHashTable(member_destructor);
+        var result = php.createHashTable(Member.destructor);
         if (php.getProperty(scope_info, "members")) |member_list| {
             const member_list_ht = try php.getValueHashTable(member_list);
             var pos: HashPosition = undefined;
@@ -351,9 +367,46 @@ pub const ZigClass = struct {
         }
     }
 
-    fn member_destructor(value: [*c]Value) callconv(.c) void {
-        const member = php.getValuePointer(*Member, value) catch unreachable;
-        if (member.class) |c| c.release();
-        php.allocator.destroy(member);
+    fn getAccessors(member: *Member) accessor.Any {
+        @setEvalBranchQuota(2000000);
+        switch (member.type) {
+            .int, .uint => inline for (0..65) |bits| {
+                if (member.bit_size == bits) {
+                    inline for (.{ .signed, .unsigned }) |signedness| {
+                        if ((member.type == .int) == (signedness == .signed)) {
+                            if (member.bit_offset) |bit_offset| {
+                                // when byte_size is given, then field is byte-aligned
+                                const bit_offset_mod8: ?u3 = if (member.byte_size != null) null else @intCast(bit_offset % 8);
+                                inline for (.{ null, 0, 1, 2, 3, 4, 5, 6, 7 }) |offset| {
+                                    if (bit_offset_mod8 == offset) {
+                                        const primitive = accessor.int.get(.{
+                                            .signedness = signedness,
+                                            .bit_size = bits,
+                                            .bit_offset = offset,
+                                        });
+                                        return .{ .primitive = primitive };
+                                    }
+                                }
+                            } else {
+                                const T = @Type(.{
+                                    .int = .{
+                                        .signedness = signedness,
+                                        .bits = bits,
+                                    },
+                                });
+                                const vector = accessor.vector.get(.{
+                                    .child = T,
+                                    .is_packed = false,
+                                });
+                                return .{ .vector = vector };
+                            }
+                        }
+                    }
+                    break;
+                }
+            },
+            else => {},
+        }
+        return undefined;
     }
 };

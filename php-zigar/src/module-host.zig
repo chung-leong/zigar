@@ -172,50 +172,18 @@ pub const ModuleHost = struct {
     }
 
     fn createInteger(self: *@This(), initializer: i32, unsigned: bool) !*Value {
-        var value: Value = undefined;
-        switch (@bitSizeOf(c_long)) {
-            64 => {
-                const long: c_long = if (unsigned) @as(u32, @bitCast(initializer)) else initializer;
-                value = php.createValueLong(long);
-            },
-            32 => {
-                if (unsigned and initializer < 0) {
-                    const unsigned_value: u32 = @bitCast(initializer);
-                    value = php.createValueDouble(@floatFromInt(unsigned_value));
-                } else {
-                    value = php.createValueLong(initializer);
-                }
-            },
-            else => unreachable,
-        }
+        const value = if (unsigned)
+            php.createValueAnyInt(@as(u32, @bitCast(initializer)))
+        else
+            php.createValueAnyInt(initializer);
         return self.allocateValue(value);
     }
 
     fn createBigInteger(self: *@This(), initializer: i64, unsigned: bool) !*Value {
-        var value: Value = undefined;
-        switch (@bitSizeOf(c_long)) {
-            64 => {
-                if (unsigned and initializer < 0) {
-                    const ulong: c_ulong = @bitCast(initializer);
-                    value = php.createValueDouble(@floatFromInt(ulong));
-                } else {
-                    value = php.createValueLong(initializer);
-                }
-            },
-            32 => {
-                if (unsigned and initializer < 0) {
-                    const unsigned_value: u64 = @bitCast(initializer);
-                    value = php.createValueDouble(@floatFromInt(unsigned_value));
-                } else {
-                    if (std.math.minInt(c_long) <= initializer and initializer <= std.maxInt(c_long)) {
-                        value = php.createValueLong(@truncate(initializer));
-                    } else {
-                        value = php.createValueDouble(@floatFromInt(initializer));
-                    }
-                }
-            },
-            else => unreachable,
-        }
+        const value = if (unsigned)
+            php.createValueAnyInt(@as(u64, @bitCast(initializer)))
+        else
+            php.createValueAnyInt(initializer);
         return self.allocateValue(value);
     }
 

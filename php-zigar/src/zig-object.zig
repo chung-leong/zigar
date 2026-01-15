@@ -27,7 +27,7 @@ pub fn ZigObject(comptime S: type) type {
         }
 
         pub fn fromStructure(s: *S) *@This() {
-            return @fieldParentPtr("zig_portion", s);
+            return @alignCast(@fieldParentPtr("zig_portion", s));
         }
 
         pub fn addRef(self: *@This()) void {

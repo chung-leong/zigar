@@ -61,26 +61,24 @@ pub fn Parent(comptime S: type) type {
 
         pub fn getValue(self: *S) !Value {
             // by default just return the object itself
-            const obj = &ZigObject(S).fromStructure(self).php_portion;
-            return php.createValueObject(obj);
+            return php.createValueObject(object(self));
         }
 
         pub fn freeObject(obj: *Object) void {
-            const self = &ZigObject(S).fromObject(obj).zig_portion;
+            const self = fromObject(obj);
             const class = ZigClass.fromObject(obj);
             if (@hasField(S, "bytes")) self.bytes.release();
             if (@hasField(S, "slots")) if (self.slots) |ht| php.release(ht);
             class.release();
         }
 
-        pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: *?*anyopaque, retval: *Value) !*Value {
+        pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?*?*anyopaque, retval: *Value) !*Value {
             _ = prop_type;
             _ = cache_slot;
             const name_s = php.getStringContent(name);
-            std.debug.print("name = {s}\n", .{name_s});
             var value: Value = undefined;
             if (name_s.len == 1 and name_s[0] == '$') {
-                const self = &ZigObject(S).fromObject(obj).zig_portion;
+                const self = fromObject(obj);
                 value = try self.getValue();
             } else {
                 value = php.createValueNull();
@@ -92,6 +90,10 @@ pub fn Parent(comptime S: type) type {
 
         pub fn fromObject(obj: *Object) *S {
             return &ZigObject(S).fromObject(obj).zig_portion;
+        }
+
+        pub fn object(self: *S) *Object {
+            return &ZigObject(S).fromStructure(self).php_portion;
         }
     };
 }

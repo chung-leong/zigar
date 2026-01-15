@@ -303,6 +303,18 @@ pub fn createValueLong(l: i64) Value {
     return result;
 }
 
+pub fn createValueAnyInt(i: anytype) Value {
+    const max = std.math.maxInt(c_long);
+    const min = std.math.minInt(c_long);
+    if (min <= i and i <= max) {
+        const long: c_long = @intCast(i);
+        return createValueLong(long);
+    } else {
+        const double: f32 = @floatFromInt(i);
+        return createValueDouble(double);
+    }
+}
+
 pub fn createValueDouble(d: f64) Value {
     var result: Value = .{};
     result.value.dval = d;
