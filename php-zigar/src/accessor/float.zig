@@ -3,6 +3,8 @@ const std = @import("std");
 const accessor = @import("../accessor.zig");
 const Primitive = accessor.Primitive;
 const Error = accessor.Error;
+const byte_buffer = @import("../byte-buffer.zig");
+const ByteBuffer = byte_buffer.ByteBuffer;
 const php = @import("../php.zig");
 const Value = php.Value;
 
@@ -21,18 +23,18 @@ pub fn get(comptime attrs: Attributes) Primitive {
     const T = attrs.Type();
     _ = T;
     const ns = struct {
-        fn get(self: *const Primitive, bytes: []u8) Error!Value {
+        fn get(self: *const Primitive, buffer: *ByteBuffer) Error!Value {
             _ = self;
-            _ = bytes;
+            _ = buffer;
             unreachable;
         }
 
-        fn set(self: *const Primitive, bytes: []u8, value: *Value) Error!void {
+        fn set(self: *const Primitive, buffer: *ByteBuffer, value: *Value) Error!void {
             _ = self;
-            _ = bytes;
+            _ = buffer;
             _ = value;
             unreachable;
         }
     };
-    return .{ .get = &ns.get, .set = &ns.set };
+    return .{ .getter = &ns.get, .setter = &ns.set };
 }

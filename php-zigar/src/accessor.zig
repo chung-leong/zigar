@@ -4,6 +4,8 @@ pub const boolean = @import("accessor/boolean.zig");
 pub const float = @import("accessor/float.zig");
 pub const int = @import("accessor/int.zig");
 pub const vector = @import("accessor/vector.zig");
+const byte_buffer = @import("byte-buffer.zig");
+const ByteBuffer = byte_buffer.ByteBuffer;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
 const Value = php.Value;
@@ -21,36 +23,61 @@ pub const Error = error{
 
 pub const Primitive = struct {
     byte_offset: usize = undefined,
-    get: *const Getter,
-    set: *const Setter,
+    getter: *const Getter,
+    setter: *const Setter,
 
-    pub const Getter = fn (@This(), []u8) Error!Value;
-    pub const Setter = fn (@This(), []u8, *Value) Error!void;
+    pub const Getter = fn (*const @This(), *ByteBuffer) Error!Value;
+    pub const Setter = fn (*const @This(), *ByteBuffer, *Value) Error!void;
+
+    pub fn get(self: *const @This(), buffer: *ByteBuffer) Error!Value {
+        return try self.getter(self, buffer);
+    }
+
+    pub fn set(self: *const @This(), buffer: *ByteBuffer, value: *Value) Error!void {
+        return try self.setter(self, buffer, value);
+    }
 };
 
 pub const Vector = struct {
-    get: *const Getter,
-    set: *const Setter,
+    getter: *const Getter,
+    setter: *const Setter,
 
-    pub const Getter = fn (@This(), []u8, usize) Error!Value;
-    pub const Setter = fn (@This(), []u8, usize, *Value) Error!void;
+    pub const Getter = fn (*const @This(), *ByteBuffer, usize) Error!Value;
+    pub const Setter = fn (*const @This(), *ByteBuffer, usize, *Value) Error!void;
+
+    pub fn get(self: *const @This(), buffer: *ByteBuffer, index: usize) Error!Value {
+        return try self.getter(self, buffer, index);
+    }
+
+    pub fn set(self: *const @This(), buffer: *ByteBuffer, index: usize, value: *Value) Error!void {
+        return try self.setter(self, buffer, index, value);
+    }
 };
 
 pub const Object = struct {
     byte_size: usize,
     slot: usize,
     class: ZigClass,
-    get: *const Getter,
-    set: *const Setter,
+    getter: *const Getter,
+    setter: *const Setter,
 
-    pub const Getter = fn (@This(), []u8, *HashTable, **anyopaque) Error!Value;
-    pub const Setter = fn (@This(), []u8, *HashTable, **anyopaque, *Value) Error!void;
+    pub const Getter = fn (*const @This(), *ByteBuffer, *HashTable, ?**anyopaque) Error!Value;
+    pub const Setter = fn (*const @This(), *ByteBuffer, *HashTable, ?**anyopaque, *Value) Error!void;
+
+    pub fn get(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, cache_slot: ?**anyopaque) Error!Value {
+        return try self.getter(self, buffer, slots, cache_slot);
+    }
+
+    pub fn set(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, value: *Value, cache_slot: ?**anyopaque) Error!void {
+        return try self.setter(self, buffer, slots, value, cache_slot);
+    }
 };
 
 pub const Any = union(enum) {
     primitive: Primitive,
     object: Object,
     vector: Vector,
+    missing: void,
 };
 
 pub fn WithBitOffset(comptime T: type, comptime bit_offset: ?u3) type {

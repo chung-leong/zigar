@@ -4,6 +4,8 @@ const accessor = @import("../accessor.zig");
 const Primitive = accessor.Primitive;
 const Vector = accessor.Vector;
 const Error = accessor.Error;
+const byte_buffer = @import("../byte-buffer.zig");
+const ByteBuffer = byte_buffer.ByteBuffer;
 const php = @import("../php.zig");
 const Value = php.Value;
 
@@ -48,7 +50,7 @@ pub fn get(comptime attrs: Attributes) Vector {
     const T = attrs.child;
 
     const ns = struct {
-        fn get(_: Vector, bytes: []u8, index: usize) Error!Value {
+        fn get(_: *const Vector, buffer: *ByteBuffer, index: usize) Error!Value {
             if (comptime @bitSizeOf(T) == 0) return php.createValueLong(0);
             if (attrs.is_packed) {
                 const bit_index = index * @bitSizeOf(T);
@@ -56,16 +58,16 @@ pub fn get(comptime attrs: Attributes) Vector {
                 return inline for (comptime possibleRemainders(@bitSizeOf(T))) |possible_offset| {
                     if (bit_offset == possible_offset) {
                         var primitive = getPrimitiveAccessor(T, possible_offset, bit_index / 8);
-                        break try primitive.get(primitive, bytes);
+                        break try primitive.get(buffer);
                     }
                 } else unreachable;
             } else {
                 var primitive = getPrimitiveAccessor(T, null, index * @sizeOf(T));
-                return try primitive.get(primitive, bytes);
+                return try primitive.get(buffer);
             }
         }
 
-        fn set(_: Vector, bytes: []u8, index: usize, value: *Value) Error!void {
+        fn set(_: *const Vector, buffer: *ByteBuffer, index: usize, value: *Value) Error!void {
             if (comptime @bitSizeOf(T) == 0) return;
             if (attrs.is_packed) {
                 const bit_index = index * @bitSizeOf(T);
@@ -73,14 +75,14 @@ pub fn get(comptime attrs: Attributes) Vector {
                 return inline for (comptime possibleRemainders(@bitSizeOf(T))) |possible_offset| {
                     if (bit_offset == possible_offset) {
                         var primitive = getPrimitiveAccessor(T, possible_offset, bit_index / 8);
-                        break try primitive.set(primitive, bytes, value);
+                        break try primitive.set(buffer, value);
                     }
                 } else unreachable;
             } else {
                 var primitive = getPrimitiveAccessor(T, null, index * @sizeOf(T));
-                return try primitive.set(primitive, bytes, value);
+                return try primitive.set(buffer, value);
             }
         }
     };
-    return .{ .get = &ns.get, .set = &ns.set };
+    return .{ .getter = &ns.get, .setter = &ns.set };
 }

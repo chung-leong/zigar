@@ -189,17 +189,6 @@ pub const ZigClass = struct {
         errdefer self.instance.release();
         self.static = try self.extractScope(info, "static");
         errdefer self.static.release();
-        // initialize static data
-        switch (self.type) {
-            inline else => |t| {
-                const name = @tagName(t);
-                if (@FieldType(StaticData, name) != void) {
-                    self.static_data = @unionInit(StaticData, name, .{});
-                    const data = &@field(self.static_data, name);
-                    try data.initialize(self);
-                }
-            },
-        }
         // set fields of ref object
         const static = structure.Static.fromObject(obj);
         try static.setFields(&self.static.members, self.static.template.slots);
@@ -210,6 +199,17 @@ pub const ZigClass = struct {
         while (try php.getHashPositionPointer(*ZigClass.Member, members, &pos)) |member| {
             member.accessors = getAccessors(member);
             if (!php.moveHashPositionForward(members, &pos)) break;
+        }
+        // initialize static data
+        switch (self.type) {
+            inline else => |t| {
+                const name = @tagName(t);
+                if (@FieldType(StaticData, name) != void) {
+                    self.static_data = @unionInit(StaticData, name, .{});
+                    const data = &@field(self.static_data, name);
+                    try data.initialize(self);
+                }
+            },
         }
         self.finalized = true;
     }
@@ -233,8 +233,7 @@ pub const ZigClass = struct {
         switch (scope) {
             inline else => |s| {
                 const container = @field(self, @tagName(s));
-                const ht = container.members orelse return error.Missing;
-                const value = try php.getHashEntry(ht, key);
+                const value = try php.getHashEntry(&container.members, key);
                 return try php.getValuePointer(*Member, value);
             },
         }
@@ -407,6 +406,7 @@ pub const ZigClass = struct {
             },
             else => {},
         }
-        return undefined;
+        // std.debug.print("No accessor--holy shit!\n", .{});
+        return .{ .missing = {} };
     }
 };

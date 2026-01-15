@@ -3,6 +3,8 @@ const std = @import("std");
 const accessor = @import("../accessor.zig");
 const Primitive = accessor.Primitive;
 const Error = accessor.Error;
+const byte_buffer = @import("../byte-buffer.zig");
+const ByteBuffer = byte_buffer.ByteBuffer;
 const php = @import("../php.zig");
 const Value = php.Value;
 
@@ -23,16 +25,18 @@ pub fn get(comptime attrs: Attributes) Primitive {
     // use a packed struct to access the int when there's a bit offset
     const AT = accessor.WithBitOffset(T, attrs.bit_offset);
     const ns = struct {
-        fn get(self: Primitive, bytes: []u8) Error!Value {
+        fn get(self: *const Primitive, buffer: *ByteBuffer) Error!Value {
             if (comptime @bitSizeOf(T) == 0) return php.createValueLong(0);
+            const bytes: []u8 = buffer.bytes;
             if (self.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
             const ptr: *align(1) AT = @ptrCast(&bytes[self.byte_offset]);
             const int = if (comptime AT == T) ptr.* else ptr.value;
             return php.createValueAnyInt(int);
         }
 
-        fn set(self: Primitive, bytes: []u8, value: *Value) Error!void {
+        fn set(self: *const Primitive, buffer: *ByteBuffer, value: *Value) Error!void {
             if (comptime @bitSizeOf(T) == 0) return;
+            const bytes: []u8 = buffer.bytes;
             if (self.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
             const ptr: *align(1) AT = @ptrCast(&bytes[self.byte_offset]);
             const long = try php.getValueLong(value);
@@ -43,5 +47,5 @@ pub fn get(comptime attrs: Attributes) Primitive {
             if (comptime AT == T) ptr.* = int else ptr.value = int;
         }
     };
-    return .{ .get = &ns.get, .set = &ns.set };
+    return .{ .getter = &ns.get, .setter = &ns.set };
 }

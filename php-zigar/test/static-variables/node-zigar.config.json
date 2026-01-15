@@ -1,0 +1,11 @@
+{
+  "optimize": "Debug",
+  "modules": {
+    "lib/static.zigar": {
+      "source": "zig/static.zig"
+    }
+  },
+  "targets": [
+    { "platform": "linux", "arch": "x64" }
+  ]
+}

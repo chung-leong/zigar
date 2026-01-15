@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const module_host = @import("module-host.zig");
 const ModuleHost = module_host.ModuleHost;
@@ -42,12 +43,51 @@ const functions = struct {
         };
 
         pub fn run(_: *ExecuteData, return_value: *Value) !void {
-            var path_str: *String = undefined;
-            try php.parseArguments("S", .{&path_str});
-            const path = php.getStringContent(path_str);
-            std.debug.print("path = {s}\n", .{path});
-            const module = try ModuleHost.load(path);
+            var module_path: *String = undefined;
+            try php.parseArguments("S", .{&module_path});
+            const so_path = try std.fs.path.resolve(php.allocator, &.{
+                php.getStringContent(module_path),
+                getSharedLibraryName(),
+            });
+            std.debug.print("path = {s}\n", .{so_path});
+            const module = try ModuleHost.load(so_path);
             return_value.* = module.*;
+        }
+
+        fn getSharedLibraryName() []const u8 {
+            return comptime fmt: {
+                const arch = switch (builtin.target.cpu.arch) {
+                    .arm => "arm",
+                    .aarch64 => "arm64",
+                    .x86 => "ia32",
+                    .loongarch64 => "loong64",
+                    .mips => "mips",
+                    .mipsel => "mipsel",
+                    .powerpc => "ppc",
+                    .powerpc64 => "ppc64",
+                    .powerpc64le => "ppc64",
+                    .riscv64 => "riscv64",
+                    .s390x => "s390x",
+                    .x86_64 => "x64",
+                    else => |tag| @tagName(tag),
+                };
+                const platform = switch (builtin.target.os.tag) {
+                    .aix => "aix",
+                    .macos, .ios, .tvos, .visionos, .watchos => "darwin",
+                    .freebsd => "freebsd",
+                    .linux => "linux",
+                    .openbsd => "openbsd",
+                    .solaris => "sunos",
+                    .windows => "win32",
+                    else => |tag| @tagName(tag),
+                };
+                const ext = switch (builtin.target.os.tag) {
+                    .macos, .ios, .tvos, .visionos, .watchos => "dynlib",
+                    .windows => "dll",
+                    else => "so",
+                };
+                break :fmt platform ++ "." ++ arch ++ "." ++ ext;
+            };
         }
     };
 };

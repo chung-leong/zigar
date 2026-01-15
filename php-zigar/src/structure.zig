@@ -72,7 +72,7 @@ pub fn Parent(comptime S: type) type {
             class.release();
         }
 
-        pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?*?*anyopaque, retval: *Value) !*Value {
+        pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !?*Value {
             _ = prop_type;
             _ = cache_slot;
             const name_s = php.getStringContent(name);
@@ -86,6 +86,17 @@ pub fn Parent(comptime S: type) type {
             retval.* = value;
             php.addRef(retval);
             return retval;
+        }
+
+        pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !?*Value {
+            _ = cache_slot;
+            const name_s = php.getStringContent(name);
+            if (name_s.len == 1 and name_s[0] == '$') {
+                const self = fromObject(obj);
+                if (@hasDecl(S, "setValue"))
+                    try self.setValue(value);
+            }
+            return value;
         }
 
         pub fn fromObject(obj: *Object) *S {
