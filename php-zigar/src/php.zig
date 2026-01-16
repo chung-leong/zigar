@@ -507,8 +507,8 @@ pub fn createArray() *Array {
 }
 
 pub const destructor = struct {
-    pub const value = php_h.zval_ptr_dtor;
     pub const function = php_h.zend_function_dtor;
+    pub const value = php_h.zval_ptr_dtor;
 };
 
 pub fn createHashTable(dtor: php_h.dtor_func_t) HashTable {
@@ -576,17 +576,22 @@ pub fn getHashEntryWithType(comptime T: type, ht: *const HashTable, key: anytype
     }
 }
 
-pub fn setHashEntry(ht: *HashTable, key: anytype, value: *Value) !void {
+pub fn insertHashEntry(ht: *HashTable, key: anytype, value: *Value) !*Value {
     const KT = @TypeOf(key);
     ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
-    if (comptime isStringContent(KT))
-        _ = php_h.zend_hash_str_add(ht, key.ptr, key.len, value)
+    const result = if (comptime isStringContent(KT))
+        php_h.zend_hash_str_add(ht, key.ptr, key.len, value)
     else if (comptime isInt(KT))
-        _ = php_h.zend_hash_index_add(ht, @intCast(key), value)
+        php_h.zend_hash_index_add(ht, @intCast(key), value)
     else if (comptime isString(KT))
-        _ = php_h.zend_hash_add(ht, key, value)
+        php_h.zend_hash_add(ht, key, value)
     else
         @compileError("Invalid key: " ++ @typeName(KT));
+    return @ptrCast(result);
+}
+
+pub fn setHashEntry(ht: *HashTable, key: anytype, value: *Value) !void {
+    _ = try insertHashEntry(ht, key, value);
 }
 
 pub fn setHashEntryRef(ht: *HashTable, key: anytype, value: *Value) !void {
@@ -599,17 +604,22 @@ pub fn appendHashEntry(ht: *HashTable, value: *Value) *Value {
     return php_h.zend_hash_next_index_insert(ht, value);
 }
 
-pub fn deleteHashEntry(ht: *HashTable, key: anytype) !void {
+pub fn removeHashEntry(ht: *HashTable, key: anytype) !bool {
     const KT = @TypeOf(key);
     ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
-    if (comptime isStringContent(KT))
-        _ = php_h.zend_hash_str_del(ht, key.ptr, key.len)
+    const result = if (comptime isStringContent(KT))
+        php_h.zend_hash_str_del(ht, key.ptr, key.len)
     else if (comptime isString(KT))
-        _ = php_h.zend_hash_del(ht, key)
+        php_h.zend_hash_del(ht, key)
     else if (comptime isInt(KT))
-        _ = php_h.zend_hash_index_del(ht, @intCast(key))
+        php_h.zend_hash_index_del(ht, @intCast(key))
     else
         @compileError("Invalid key: " ++ @typeName(KT));
+    return result == SUCCESS;
+}
+
+pub fn deleteHashEntry(ht: *HashTable, key: anytype) !void {
+    _ = try removeHashEntry(ht, key);
 }
 
 pub fn initializeHashPosition(ht: *HashTable, pos: *HashPosition) void {

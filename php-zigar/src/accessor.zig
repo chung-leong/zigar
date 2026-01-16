@@ -3,17 +3,19 @@ const std = @import("std");
 pub const boolean = @import("accessor/boolean.zig");
 pub const float = @import("accessor/float.zig");
 pub const int = @import("accessor/int.zig");
+pub const object = @import("accessor/object.zig");
 pub const vector = @import("accessor/vector.zig");
 const byte_buffer = @import("byte-buffer.zig");
 const ByteBuffer = byte_buffer.ByteBuffer;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
 const Value = php.Value;
-const zig_class = @import("zig-class.zig");
-const ZigClass = zig_class.ZigClass;
+const ClassEntry = php.ClassEntry;
 
 pub const Error = error{
+    CannotCreateObject,
     OutOfBound,
+    OutOfMemory,
     MissingSlots,
     NotBoolean,
     NotInteger,
@@ -22,10 +24,13 @@ pub const Error = error{
 };
 
 pub const Primitive = struct {
-    byte_offset: usize = undefined,
+    params: Parameters,
     getter: *const Getter,
     setter: *const Setter,
 
+    pub const Parameters = struct {
+        byte_offset: usize = undefined,
+    };
     pub const Getter = fn (*const @This(), *ByteBuffer) Error!Value;
     pub const Setter = fn (*const @This(), *ByteBuffer, *Value) Error!void;
 
@@ -39,9 +44,11 @@ pub const Primitive = struct {
 };
 
 pub const Vector = struct {
+    params: Parameters,
     getter: *const Getter,
     setter: *const Setter,
 
+    pub const Parameters = struct {};
     pub const Getter = fn (*const @This(), *ByteBuffer, usize) Error!Value;
     pub const Setter = fn (*const @This(), *ByteBuffer, usize, *Value) Error!void;
 
@@ -55,20 +62,24 @@ pub const Vector = struct {
 };
 
 pub const Object = struct {
-    byte_size: usize,
-    slot: usize,
-    class: ZigClass,
+    params: Parameters,
     getter: *const Getter,
     setter: *const Setter,
 
-    pub const Getter = fn (*const @This(), *ByteBuffer, *HashTable, ?**anyopaque) Error!Value;
-    pub const Setter = fn (*const @This(), *ByteBuffer, *HashTable, ?**anyopaque, *Value) Error!void;
+    pub const Parameters = struct {
+        byte_offset: usize = undefined,
+        byte_size: usize,
+        slot: usize,
+        class_entry: *ClassEntry,
+    };
+    pub const Getter = fn (*const @This(), *ByteBuffer, *HashTable, ?*?*anyopaque) Error!Value;
+    pub const Setter = fn (*const @This(), *ByteBuffer, *HashTable, *Value, ?*?*anyopaque) Error!void;
 
-    pub fn get(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, cache_slot: ?**anyopaque) Error!Value {
+    pub fn get(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, cache_slot: ?*?*anyopaque) Error!Value {
         return try self.getter(self, buffer, slots, cache_slot);
     }
 
-    pub fn set(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, value: *Value, cache_slot: ?**anyopaque) Error!void {
+    pub fn set(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, value: *Value, cache_slot: ?*?*anyopaque) Error!void {
         return try self.setter(self, buffer, slots, value, cache_slot);
     }
 };

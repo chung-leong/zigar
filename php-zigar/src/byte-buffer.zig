@@ -59,6 +59,7 @@ pub const ByteBuffer = struct {
 
     pub fn slice(self: *@This(), offset: usize, len: usize) !*@This() {
         const new = try php.allocator.create(@This());
+        if (offset + len > self.bytes.len) return error.OutOfBound;
         new.* = .{
             .bytes = self.bytes[offset .. offset + len],
             .parent = self,

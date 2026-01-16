@@ -1,8 +1,6 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const Primitive = accessor.Primitive;
-const Vector = accessor.Vector;
 const Error = accessor.Error;
 const byte_buffer = @import("../byte-buffer.zig");
 const ByteBuffer = byte_buffer.ByteBuffer;
@@ -14,24 +12,23 @@ pub const Attributes = struct {
     is_packed: bool = false,
 };
 
-fn getPrimitiveAccessor(comptime T: type, comptime bit_offset: ?u3, byte_offset: usize) Primitive {
-    var accessors = switch (@typeInfo(T)) {
+fn getPrimitiveAccessor(comptime T: type, comptime bit_offset: ?u3, byte_offset: usize) accessor.Primitive {
+    const params: accessor.Primitive.Parameters = .{ .byte_offset = byte_offset };
+    return switch (@typeInfo(T)) {
         .bool => accessor.boolean.get(.{
             .bit_offset = bit_offset,
-        }),
+        }, params),
         .int => |int| accessor.int.get(.{
             .signedness = int.signedness,
             .bit_size = int.bits,
             .bit_offset = bit_offset,
-        }),
+        }, params),
         .float => |float| accessor.float.get(.{
             .bit_size = float.bits,
             .bit_offset = bit_offset,
-        }),
+        }, params),
         else => @compileError("Not a primitive type: " ++ @typeName(T)),
     };
-    accessors.byte_offset = byte_offset;
-    return accessors;
 }
 
 fn possibleRemainders(bit_size: usize) [8 / std.math.gcd(bit_size, 8)]u8 {
@@ -46,11 +43,11 @@ fn possibleRemainders(bit_size: usize) [8 / std.math.gcd(bit_size, 8)]u8 {
     return remainders;
 }
 
-pub fn get(comptime attrs: Attributes) Vector {
+pub fn get(comptime attrs: Attributes, params: accessor.Vector.Parameters) accessor.Vector {
     const T = attrs.child;
 
     const ns = struct {
-        fn get(_: *const Vector, buffer: *ByteBuffer, index: usize) Error!Value {
+        pub fn get(_: *const accessor.Vector, buffer: *ByteBuffer, index: usize) Error!Value {
             if (comptime @bitSizeOf(T) == 0) return php.createValueLong(0);
             if (attrs.is_packed) {
                 const bit_index = index * @bitSizeOf(T);
@@ -67,7 +64,7 @@ pub fn get(comptime attrs: Attributes) Vector {
             }
         }
 
-        fn set(_: *const Vector, buffer: *ByteBuffer, index: usize, value: *Value) Error!void {
+        pub fn set(_: *const accessor.Vector, buffer: *ByteBuffer, index: usize, value: *Value) Error!void {
             if (comptime @bitSizeOf(T) == 0) return;
             if (attrs.is_packed) {
                 const bit_index = index * @bitSizeOf(T);
@@ -84,5 +81,5 @@ pub fn get(comptime attrs: Attributes) Vector {
             }
         }
     };
-    return .{ .getter = &ns.get, .setter = &ns.set };
+    return .{ .getter = &ns.get, .setter = &ns.set, .params = params };
 }

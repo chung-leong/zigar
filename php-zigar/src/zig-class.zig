@@ -201,7 +201,7 @@ pub const ZigClass = struct {
         var pos: php.HashPosition = undefined;
         php.initializeHashPosition(members, &pos);
         while (try php.getHashPositionPointer(*ZigClass.Member, members, &pos)) |member| {
-            member.accessors = getAccessors(member);
+            member.accessors = try getAccessors(member);
             if (!php.moveHashPositionForward(members, &pos)) break;
         }
         // initialize static data
@@ -346,7 +346,7 @@ pub const ZigClass = struct {
         return php.createValueObject(zig_obj.object());
     }
 
-    fn createObject(ce: *ClassEntry) !*Object {
+    pub fn createObject(ce: *ClassEntry) !*Object {
         const self = fromEntry(ce);
         switch (self.type) {
             inline else => |t| {
@@ -372,7 +372,7 @@ pub const ZigClass = struct {
         }
     }
 
-    fn createObjectWith(ce: *ClassEntry, memory: *Value, objects: ?*Value) !*Object {
+    pub fn createObjectWith(ce: *ClassEntry, memory: *Value, objects: ?*Value) !*Object {
         const self = fromEntry(ce);
         switch (self.type) {
             inline else => |t| {
@@ -386,33 +386,34 @@ pub const ZigClass = struct {
         }
     }
 
-    fn getAccessors(member: *Member) accessor.Any {
+    fn getAccessors(member: *Member) !accessor.Any {
         @setEvalBranchQuota(2000000);
         // array accessors don't have an offset
         const for_scalar = member.bit_offset != null;
-        // when byte_size is given, then field is byte-aligned
-        const bit_offset_mod8: ?u3 = get: {
-            if (member.bit_offset) |bit_offset| {
-                if (member.byte_size != null)
-                    break :get @intCast(bit_offset % 8);
-            }
-            break :get null;
-        };
+        const byte_offset: usize = if (member.bit_offset) |bit_offset| bit_offset / 8 else 0;
+        const bit_offset_mod8: ?u3 = if (member.bit_offset) |bit_offset|
+            // when byte size is given the field is byte-aligned; there's no need to adjust for
+            // use a bit-shifting accrossor
+            if (member.byte_size != null) null else @intCast(bit_offset % 8)
+        else
+            null;
         switch (member.type) {
             .bool => {
                 if (for_scalar) {
+                    // iterate through all possible bit offsets
                     inline for (.{ null, 0, 1, 2, 3, 4, 5, 6, 7 }) |offset| {
                         if (bit_offset_mod8 == offset) {
-                            const primitive = accessor.boolean.get(.{ .bit_offset = offset });
+                            const primitive = accessor.boolean.get(.{
+                                .bit_offset = offset,
+                            }, .{
+                                .byte_offset = byte_offset,
+                            });
                             return .{ .primitive = primitive };
                         }
                     }
                 } else {
                     // TODO: deal with vectors inside packed struct
-                    const vector = accessor.vector.get(.{
-                        .child = bool,
-                        .is_packed = false,
-                    });
+                    const vector = accessor.vector.get(.{ .child = bool, .is_packed = false }, .{});
                     return .{ .vector = vector };
                 }
             },
@@ -427,6 +428,8 @@ pub const ZigClass = struct {
                                             .signedness = signedness,
                                             .bit_size = bits,
                                             .bit_offset = offset,
+                                        }, .{
+                                            .byte_offset = byte_offset,
                                         });
                                         return .{ .primitive = primitive };
                                     }
@@ -435,7 +438,7 @@ pub const ZigClass = struct {
                                 const T = @Type(.{
                                     .int = .{ .signedness = signedness, .bits = bits },
                                 });
-                                const vector = accessor.vector.get(.{ .child = T, .is_packed = false });
+                                const vector = accessor.vector.get(.{ .child = T, .is_packed = false }, .{});
                                 return .{ .vector = vector };
                             }
                         }
@@ -451,6 +454,8 @@ pub const ZigClass = struct {
                                 const primitive = accessor.float.get(.{
                                     .bit_size = bits,
                                     .bit_offset = offset,
+                                }, .{
+                                    .byte_offset = byte_offset,
                                 });
                                 return .{ .primitive = primitive };
                             }
@@ -459,10 +464,24 @@ pub const ZigClass = struct {
                         const T = @Type(.{
                             .float = .{ .bits = bits },
                         });
-                        const vector = accessor.vector.get(.{ .child = T, .is_packed = false });
+                        const vector = accessor.vector.get(.{ .child = T, .is_packed = false }, .{});
                         return .{ .vector = vector };
                     }
                 }
+            },
+            .object => if (member.slot) |slot| {
+                // the lack of a slot means the member isn't meant to be accessed directly
+                // only applicable to functions, I think
+                const byte_size = member.byte_size orelse return error.MissingStructureSize;
+                const class = member.class orelse return error.MissingClass;
+                const object = accessor.object.get(.{}, .{
+                    .class_entry = class.entry(),
+                    .byte_offset = byte_offset,
+                    .byte_size = byte_size,
+                    .slot = slot,
+                });
+                std.debug.print("slot = {?}\n", .{member.slot});
+                return .{ .object = object };
             },
             else => {},
         }

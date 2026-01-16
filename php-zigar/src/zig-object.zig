@@ -106,3 +106,13 @@ const object_handler_mapping = .{
     .compare = "compare",
     .do_operation = "doOperation",
 };
+
+pub const dollar_sign: [*c]String = @constCast(&String{
+    .gc = .{
+        .refcount = 1,
+        .u = .{ .type_info = php.IS_STRING },
+    },
+    .len = 1,
+    .val = .{'$'},
+    .h = 0,
+});

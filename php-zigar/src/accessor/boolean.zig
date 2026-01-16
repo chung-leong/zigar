@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const Primitive = accessor.Primitive;
 const Error = accessor.Error;
 const byte_buffer = @import("../byte-buffer.zig");
 const ByteBuffer = byte_buffer.ByteBuffer;
@@ -12,26 +11,26 @@ pub const Attributes = struct {
     bit_offset: ?u3,
 };
 
-pub fn get(comptime attrs: Attributes) Primitive {
+pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) accessor.Primitive {
     const T = bool;
     // use a packed struct to access the boolean when there's a bit offset
     const AT = accessor.WithBitOffset(T, attrs.bit_offset);
     const ns = struct {
-        fn get(self: *const Primitive, buffer: *ByteBuffer) Error!Value {
+        pub fn get(acc: *const accessor.Primitive, buffer: *ByteBuffer) Error!Value {
             const bytes: []u8 = buffer.bytes;
-            if (self.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
-            const ptr: *align(1) AT = @ptrCast(&bytes[self.byte_offset]);
+            if (acc.params.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
+            const ptr: *align(1) AT = @ptrCast(&bytes[acc.params.byte_offset]);
             const boolean = if (comptime AT == T) ptr.* else ptr.value;
             return php.createValueBool(boolean);
         }
 
-        fn set(self: *const Primitive, buffer: *ByteBuffer, value: *Value) Error!void {
+        pub fn set(acc: *const accessor.Primitive, buffer: *ByteBuffer, value: *Value) Error!void {
             const bytes: []u8 = buffer.bytes;
-            if (self.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
-            const ptr: *align(1) AT = @ptrCast(&bytes[self.byte_offset]);
+            if (acc.params.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
+            const ptr: *align(1) AT = @ptrCast(&bytes[acc.params.byte_offset]);
             const boolean = try php.getValueBool(value);
             if (comptime AT == T) ptr.* = boolean else ptr.value = boolean;
         }
     };
-    return .{ .getter = &ns.get, .setter = &ns.set };
+    return .{ .getter = &ns.get, .setter = &ns.set, .params = params };
 }
