@@ -1,11 +1,12 @@
 <?php
 
 $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar");
+
 $module->printX();
 $module->printY();
 
 $x = $module->x;
-echo $x->{'$'}, "\n";
+echo "x = ", $x->{'$'}, "\n";
 $x->{'$'} = 4567;
 echo $module->printX();
 echo $module->y[2], "\n";
@@ -19,3 +20,11 @@ echo "12345: ", isset($y[12345]), "\n";
 echo "cow: ", isset($y['cow']), "\n";
 echo "3: ", isset($y[3]), "\n";
 $module->printY();
+
+$boolean = $module->boolean;
+echo "boolean = ", $boolean->{'$'}, "\n";
+
+echo "z = ", $module->z->{'$'}, "\n";
+$z = $module->z;
+$z->{'$'} = .1234;
+$module->printZ();

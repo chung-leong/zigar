@@ -21,19 +21,23 @@ pub const Attributes = struct {
 
 pub fn get(comptime attrs: Attributes) Primitive {
     const T = attrs.Type();
-    _ = T;
+    // use a packed struct to access the float when there's a bit offset
+    const AT = accessor.WithBitOffset(T, attrs.bit_offset);
     const ns = struct {
         fn get(self: *const Primitive, buffer: *ByteBuffer) Error!Value {
-            _ = self;
-            _ = buffer;
-            unreachable;
+            const bytes: []u8 = buffer.bytes;
+            if (self.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
+            const ptr: *align(1) AT = @ptrCast(&bytes[self.byte_offset]);
+            const float = if (comptime AT == T) ptr.* else ptr.value;
+            return php.createValueDouble(@floatCast(float));
         }
 
         fn set(self: *const Primitive, buffer: *ByteBuffer, value: *Value) Error!void {
-            _ = self;
-            _ = buffer;
-            _ = value;
-            unreachable;
+            const bytes: []u8 = buffer.bytes;
+            if (self.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
+            const ptr: *align(1) AT = @ptrCast(&bytes[self.byte_offset]);
+            const double = try php.getValueDouble(value);
+            if (comptime AT == T) ptr.* = @floatCast(double) else ptr.value = @floatCast(double);
         }
     };
     return .{ .getter = &ns.get, .setter = &ns.set };

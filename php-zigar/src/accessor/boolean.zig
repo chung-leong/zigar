@@ -14,20 +14,23 @@ pub const Attributes = struct {
 
 pub fn get(comptime attrs: Attributes) Primitive {
     const T = bool;
-    _ = T;
-    _ = attrs;
+    // use a packed struct to access the boolean when there's a bit offset
+    const AT = accessor.WithBitOffset(T, attrs.bit_offset);
     const ns = struct {
         fn get(self: *const Primitive, buffer: *ByteBuffer) Error!Value {
-            _ = self;
-            _ = buffer;
-            unreachable;
+            const bytes: []u8 = buffer.bytes;
+            if (self.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
+            const ptr: *align(1) AT = @ptrCast(&bytes[self.byte_offset]);
+            const boolean = if (comptime AT == T) ptr.* else ptr.value;
+            return php.createValueBool(boolean);
         }
 
         fn set(self: *const Primitive, buffer: *ByteBuffer, value: *Value) Error!void {
-            _ = self;
-            _ = buffer;
-            _ = value;
-            unreachable;
+            const bytes: []u8 = buffer.bytes;
+            if (self.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
+            const ptr: *align(1) AT = @ptrCast(&bytes[self.byte_offset]);
+            const boolean = try php.getValueBool(value);
+            if (comptime AT == T) ptr.* = boolean else ptr.value = boolean;
         }
     };
     return .{ .getter = &ns.get, .setter = &ns.set };

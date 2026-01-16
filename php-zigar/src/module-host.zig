@@ -278,11 +278,17 @@ pub const ModuleHost = struct {
     }
 
     fn beginStructure(self: *@This(), structure: *Value) !void {
-        try ZigClass.define(self, structure);
+        ZigClass.define(self, structure) catch |err| {
+            std.debug.print("Error: {}\n", .{err});
+            return err;
+        };
     }
 
     fn finishStructure(self: *@This(), structure: *Value) !void {
-        try ZigClass.finalize(structure);
+        ZigClass.finalize(structure) catch |err| {
+            std.debug.print("Error: {}\n", .{err});
+            return err;
+        };
         self.last_structure = structure;
     }
 

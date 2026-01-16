@@ -160,7 +160,7 @@ pub const ZigClass = struct {
         const interfaces = try self.createInterfaceList();
         const ce = &self.php_portion;
         ce.* = .{
-            .type = php.INTERNAL_CLASS,
+            .type = php.USER_CLASS,
             .refcount = 1,
             .name = php.createString("ZigClass"),
             .ce_flags = php.LINKED | php.RESOLVED_INTERFACES,
@@ -388,14 +388,39 @@ pub const ZigClass = struct {
 
     fn getAccessors(member: *Member) accessor.Any {
         @setEvalBranchQuota(2000000);
+        // array accessors don't have an offset
+        const for_scalar = member.bit_offset != null;
+        // when byte_size is given, then field is byte-aligned
+        const bit_offset_mod8: ?u3 = get: {
+            if (member.bit_offset) |bit_offset| {
+                if (member.byte_size != null)
+                    break :get @intCast(bit_offset % 8);
+            }
+            break :get null;
+        };
         switch (member.type) {
+            .bool => {
+                if (for_scalar) {
+                    inline for (.{ null, 0, 1, 2, 3, 4, 5, 6, 7 }) |offset| {
+                        if (bit_offset_mod8 == offset) {
+                            const primitive = accessor.boolean.get(.{ .bit_offset = offset });
+                            return .{ .primitive = primitive };
+                        }
+                    }
+                } else {
+                    // TODO: deal with vectors inside packed struct
+                    const vector = accessor.vector.get(.{
+                        .child = bool,
+                        .is_packed = false,
+                    });
+                    return .{ .vector = vector };
+                }
+            },
             .int, .uint => inline for (0..65) |bits| {
                 if (member.bit_size == bits) {
                     inline for (.{ .signed, .unsigned }) |signedness| {
                         if ((member.type == .int) == (signedness == .signed)) {
-                            if (member.bit_offset) |bit_offset| {
-                                // when byte_size is given, then field is byte-aligned
-                                const bit_offset_mod8: ?u3 = if (member.byte_size != null) null else @intCast(bit_offset % 8);
+                            if (for_scalar) {
                                 inline for (.{ null, 0, 1, 2, 3, 4, 5, 6, 7 }) |offset| {
                                     if (bit_offset_mod8 == offset) {
                                         const primitive = accessor.int.get(.{
@@ -408,20 +433,35 @@ pub const ZigClass = struct {
                                 }
                             } else {
                                 const T = @Type(.{
-                                    .int = .{
-                                        .signedness = signedness,
-                                        .bits = bits,
-                                    },
+                                    .int = .{ .signedness = signedness, .bits = bits },
                                 });
-                                const vector = accessor.vector.get(.{
-                                    .child = T,
-                                    .is_packed = false,
-                                });
+                                const vector = accessor.vector.get(.{ .child = T, .is_packed = false });
                                 return .{ .vector = vector };
                             }
                         }
                     }
                     break;
+                }
+            },
+            .float => inline for (.{ 16, 32, 64, 80, 128 }) |bits| {
+                if (member.bit_size == bits) {
+                    if (for_scalar) {
+                        inline for (.{ null, 0, 1, 2, 3, 4, 5, 6, 7 }) |offset| {
+                            if (bit_offset_mod8 == offset) {
+                                const primitive = accessor.float.get(.{
+                                    .bit_size = bits,
+                                    .bit_offset = offset,
+                                });
+                                return .{ .primitive = primitive };
+                            }
+                        }
+                    } else {
+                        const T = @Type(.{
+                            .float = .{ .bits = bits },
+                        });
+                        const vector = accessor.vector.get(.{ .child = T, .is_packed = false });
+                        return .{ .vector = vector };
+                    }
                 }
             },
             else => {},

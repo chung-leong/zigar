@@ -1233,8 +1233,10 @@ pub fn getFactoryThunk(comptime host: type, comptime module: type) zig_fn.Thunk 
         fn exportStructures(_: *const anyopaque, _: *anyopaque) anyerror!void {
             @setEvalBranchQuota(options.eval_branch_quota);
             const factory: Factory(host, module) = .{};
-            _ = try factory.getStructure(module);
-            return;
+            _ = factory.getStructure(module) catch |err| {
+                std.debug.print("Error ecountered during export processs: {s}\n", .{@errorName(err)});
+                return err;
+            };
         }
     };
     return ns.exportStructures;

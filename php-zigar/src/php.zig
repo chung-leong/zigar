@@ -117,6 +117,7 @@ pub const NOT_SERIALIZABLE = php_h.ZEND_ACC_NOT_SERIALIZABLE;
 pub const RESOLVED_INTERFACES = php_h.ZEND_ACC_RESOLVED_INTERFACES;
 
 pub const std_object_handlers = &php_h.std_object_handlers;
+pub const empty_array = &php_h.zend_empty_array;
 
 pub const use_tsrm = false;
 
@@ -736,15 +737,17 @@ const allocator_impl = struct {
         std.debug.assert(len > 0);
         // Overallocate to account for alignment padding and store the original pointer
         // returned by `malloc` before the aligned address.
-        const padded_len = len + @sizeOf(usize) + alignment.toByteUnits() - 1;
-        const unaligned_ptr: [*]u8 = @ptrCast(emalloc(padded_len) orelse return null);
-        const unaligned_addr = @intFromPtr(unaligned_ptr);
-        const aligned_addr = alignment.forward(unaligned_addr + @sizeOf(usize));
-        const aligned_ptr = unaligned_ptr + (aligned_addr - unaligned_addr);
-        manualAlignHeader(aligned_ptr).* = unaligned_ptr;
-        allocation_count += 1;
-        allocated_bytes += @intCast(len);
-        return aligned_ptr;
+        _ = alignment;
+        return @ptrCast(emalloc(len));
+        // const padded_len = len + @sizeOf(usize) + alignment.toByteUnits() - 1;
+        // const unaligned_ptr: [*]u8 = @ptrCast(emalloc(padded_len) orelse return null);
+        // const unaligned_addr = @intFromPtr(unaligned_ptr);
+        // const aligned_addr = alignment.forward(unaligned_addr + @sizeOf(usize));
+        // const aligned_ptr = unaligned_ptr + (aligned_addr - unaligned_addr);
+        // manualAlignHeader(aligned_ptr).* = unaligned_ptr;
+        // allocation_count += 1;
+        // allocated_bytes += @intCast(len);
+        // return aligned_ptr;
     }
 
     fn resize(
@@ -785,9 +788,10 @@ const allocator_impl = struct {
     ) void {
         _ = alignment;
         _ = return_address;
-        efree(manualAlignHeader(memory.ptr).*);
-        allocation_count -= 1;
-        allocated_bytes -= @intCast(memory.len);
+        efree(memory.ptr);
+        // efree(manualAlignHeader(memory.ptr).*);
+        // allocation_count -= 1;
+        // allocated_bytes -= @intCast(memory.len);
     }
 };
 
