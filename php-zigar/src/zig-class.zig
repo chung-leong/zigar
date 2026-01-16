@@ -23,7 +23,6 @@ const ObjectHandlers = php.ObjectHandlers;
 const structure = @import("structure.zig");
 const zig_object = @import("zig-object.zig");
 const ZigObject = zig_object.ZigObject;
-const ZigObjectInit = zig_object.ZigObjectInit;
 
 pub const ZigClass = struct {
     host: *Host,
@@ -158,22 +157,27 @@ pub const ZigClass = struct {
                     return error.InvalidSignature;
             },
         };
+        const interfaces = try self.createInterfaceList();
         const ce = &self.php_portion;
         ce.* = .{
-            .type = php.USER_CLASS,
+            .type = php.INTERNAL_CLASS,
             .refcount = 1,
             .name = php.createString("ZigClass"),
-            .ce_flags = php.NOT_SERIALIZABLE | php.LINKED,
+            .ce_flags = php.LINKED | php.RESOLVED_INTERFACES,
             .properties_info = php.createHashTable(null),
             .constants_table = php.createHashTable(null),
             .function_table = php.createHashTable(php.destructor.function),
+            .num_interfaces = @intCast(interfaces.len),
+            .unnamed_1 = .{
+                .create_object = php.transform(createObject),
+            },
+            .unnamed_2 = .{
+                .interfaces = if (interfaces.len > 0) @ptrCast(interfaces.ptr) else null,
+            },
             .info = .{
                 .user = .{
                     .filename = php.createString("filename"),
                 },
-            },
-            .unnamed_1 = .{
-                .create_object = php.transform(createObject),
             },
         };
         var ref = try createRef(ce);
@@ -237,6 +241,22 @@ pub const ZigClass = struct {
                 return try php.getValuePointer(*Member, value);
             },
         }
+    }
+
+    pub fn createInterfaceList(self: *@This()) ![]*ClassEntry {
+        var buffer: [16]*ClassEntry = undefined;
+        var count: usize = 0;
+        switch (self.type) {
+            .array, .vector, .slice => {
+                buffer[count] = php.getInterface(.array_access);
+                count += 1;
+            },
+            else => {},
+        }
+        if (count == 0) return &.{};
+        const interfaces = try php.allocator.alloc(*ClassEntry, count);
+        @memcpy(interfaces, buffer[0..count]);
+        return interfaces;
     }
 
     fn extractScope(self: *@This(), info: *Value, name: []const u8) !Scope {

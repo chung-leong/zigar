@@ -5,6 +5,9 @@ const fn_transform = @import("zigft/fn-transform.zig");
 pub const php_h = @cImport({
     @cInclude("php.h");
 });
+pub const zend_interfaces_h = @cImport({
+    @cInclude("zend_interfaces.h");
+});
 
 pub const ArgInfo = php_h.zend_internal_arg_info;
 pub const Array = php_h.zend_array;
@@ -25,6 +28,7 @@ pub const FunctionEntry = extern struct {
 pub const FunctionInfo = php_h.zend_internal_function_info;
 pub const HashPosition = php_h.HashPosition;
 pub const HashTable = php_h.HashTable;
+pub const Long = php_h.zend_long;
 pub const ModuleEntry = extern struct {
     size: c_ushort,
     zend_api: c_uint,
@@ -56,6 +60,7 @@ pub const ObjectHandlers = php_h.zend_object_handlers;
 pub const RefCounted = php_h.zend_refcounted;
 pub const Result = php_h.zend_result;
 pub const String = php_h.zend_string;
+pub const Ulong = php_h.zend_ulong;
 pub const Value = php_h.zval;
 
 pub const SUCCESS = php_h.SUCCESS;
@@ -104,11 +109,12 @@ pub const USER_CLASS = php_h.ZEND_USER_CLASS;
 pub const INTERNAL_FUNCTION = php_h.ZEND_INTERNAL_FUNCTION;
 pub const USER_FUNCTION = php_h.ZEND_USER_FUNCTION;
 
+pub const ANON_CLASS = php_h.ZEND_ACC_ANON_CLASS;
+pub const FINAL = php_h.ZEND_ACC_FINAL;
 pub const LINKED = php_h.ZEND_ACC_LINKED;
 pub const NO_DYNAMIC_PROPERTIES = php_h.ZEND_ACC_NO_DYNAMIC_PROPERTIES;
 pub const NOT_SERIALIZABLE = php_h.ZEND_ACC_NOT_SERIALIZABLE;
-pub const ANON_CLASS = php_h.ZEND_ACC_ANON_CLASS;
-pub const FINAL = php_h.ZEND_ACC_FINAL;
+pub const RESOLVED_INTERFACES = php_h.ZEND_ACC_RESOLVED_INTERFACES;
 
 pub const std_object_handlers = &php_h.std_object_handlers;
 
@@ -258,15 +264,22 @@ pub fn transform(comptime func: anytype) Transformed(func) {
             };
             const retval = @call(.auto, func, args);
             const retval_ne = switch (@typeInfo(RT)) {
-                .error_union => |eu| retval catch |err| {
-                    _ = eu;
-                    @panic(@errorName(err));
-                    // php_h.php_error(php_h.E_ERROR, "Zig error: %s", @errorName(err).ptr);
-                    // break :report switch (eu.payload) {
-                    //     bool => false,
-                    //     void => {},
-                    //     else => undefined,
-                    // };
+                .error_union => |eu| retval catch |err| report: {
+                    const err_msg = getErrorMessage(eu.error_set, err);
+                    php_h.php_error(php_h.E_ERROR, "%s (zig)", err_msg.ptr);
+                    break :report switch (eu.payload) {
+                        bool => false,
+                        void => {},
+                        c_int => FAILURE,
+                        else => |T| switch (@typeInfo(T)) {
+                            .optional => null,
+                            .pointer => |pt| switch (pt.is_allowzero) {
+                                true => null,
+                                false => undefined,
+                            },
+                            else => undefined,
+                        },
+                    };
                 },
                 else => retval,
             };
@@ -671,6 +684,29 @@ pub fn getObjectPropertySize(ce: *ClassEntry) isize {
     return @bitCast(php_h.zend_object_properties_size(ce));
 }
 
+pub const InterfaceType = enum {
+    aggregate,
+    array_access,
+    countable,
+    iterator,
+    serializable,
+    stringable,
+    traversable,
+};
+
+pub fn getInterface(itype: InterfaceType) *ClassEntry {
+    const ptr = switch (itype) {
+        .aggregate => zend_interfaces_h.zend_ce_aggregate,
+        .array_access => zend_interfaces_h.zend_ce_arrayaccess,
+        .countable => zend_interfaces_h.zend_ce_countable,
+        .iterator => zend_interfaces_h.zend_ce_iterator,
+        .serializable => zend_interfaces_h.zend_ce_serializable,
+        .stringable => zend_interfaces_h.zend_ce_stringable,
+        .traversable => zend_interfaces_h.zend_ce_traversable,
+    };
+    return @ptrCast(ptr);
+}
+
 pub const emalloc = php_h._emalloc;
 pub const efree = php_h.efree;
 
@@ -783,5 +819,48 @@ fn isInt(comptime T: type) bool {
     return switch (@typeInfo(T)) {
         .int, .comptime_int => true,
         else => false,
+    };
+}
+
+fn getErrorMessage(comptime ES: type, err: ES) []const u8 {
+    @setEvalBranchQuota(2000000);
+    return switch (err) {
+        inline else => |possible_error| get: {
+            const msg = comptime decamelize: {
+                const name = @errorName(possible_error);
+                var buffer: [name.len * 2]u8 = undefined;
+                var len: usize = 0;
+                for (name, 0..) |c, i| {
+                    const conversion_needed = check: {
+                        var needed = false;
+                        if (i > 0 and std.ascii.isUpper(c)) {
+                            // previous letter is not uppercase
+                            if (!std.ascii.isUpper(name[i - 1])) {
+                                // next letter is not uppercase
+                                if (i == name.len - 1 or !std.ascii.isUpper(name[i - 1])) {
+                                    needed = true;
+                                }
+                            }
+                        }
+                        break :check needed;
+                    };
+                    if (conversion_needed) {
+                        buffer[len] = ' ';
+                        len += 1;
+                        buffer[len] = std.ascii.toLower(c);
+                        len += 1;
+                    } else {
+                        buffer[len] = c;
+                        len += 1;
+                    }
+                }
+                buffer[len] = 0;
+                len += 1;
+                var array: [len]u8 = undefined;
+                @memcpy(&array, buffer[0..len]);
+                break :decamelize array;
+            };
+            break :get &msg;
+        },
     };
 }
