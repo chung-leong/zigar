@@ -11,24 +11,25 @@ const zig_class = @import("../zig-class.zig");
 const ZigClass = zig_class.ZigClass;
 const zig_object = @import("../zig-object.zig");
 const ZigObject = zig_object.ZigObject;
+const prebaked = @import("prebaked.zig");
+const read = prebaked.read;
+const write = prebaked.write;
 
 pub const Attributes = struct {};
 
 pub fn get(comptime _: Attributes, params: accessor.Complex.Parameters) accessor.Complex {
     const ns = struct {
         pub fn get(acc: *const accessor.Complex, buffer: *ByteBuffer, slots: *HashTable) Error!Value {
-            const entry = try getSlotEntry(acc, buffer, slots);
-            return entry.*;
+            const entry = try vivicateSlot(acc, buffer, slots);
+            return read(entry, acc.params.transform);
         }
 
         pub fn set(acc: *const accessor.Complex, buffer: *ByteBuffer, slots: *HashTable, value: *Value) Error!void {
-            const entry = try getSlotEntry(acc, buffer, slots);
-            const obj = php.getValueObject(entry) catch unreachable;
-            const func_ptr = obj.handlers.*.write_property.?;
-            _ = func_ptr(obj, zig_object.dollar_sign, value, null);
+            const entry = try vivicateSlot(acc, buffer, slots);
+            try write(entry, value);
         }
 
-        fn getSlotEntry(acc: *const accessor.Complex, buffer: *ByteBuffer, slots: *HashTable) Error!*Value {
+        fn vivicateSlot(acc: *const accessor.Complex, buffer: *ByteBuffer, slots: *HashTable) Error!*Value {
             return php.getHashEntry(slots, acc.params.slot) catch vivicate: {
                 const slice = try buffer.slice(acc.params.byte_offset, acc.params.byte_size);
                 var memory = php.createValuePointer(slice);

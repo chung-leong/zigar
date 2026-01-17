@@ -3,7 +3,6 @@ const std = @import("std");
 const php = @import("php.zig");
 const ClassEntry = php.ClassEntry;
 const Object = php.Object;
-const ObjectHandlers = php.ObjectHandlers;
 const String = php.String;
 const Value = php.Value;
 

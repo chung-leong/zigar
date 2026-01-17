@@ -55,26 +55,7 @@ pub const ModuleEntry = extern struct {
     build_id: [*c]const u8,
 };
 pub const Object = php_h.zend_object;
-pub const ObjectHandlers = define: {
-    const php_handlers = php_h.zend_object_handlers;
-    const zig_handlers = struct {
-        read_self: ?*const fn ([*c]Object) callconv(.c) Value,
-        write_self: ?*const fn ([*c]Object, [*c]Value) callconv(.c) void,
-    };
-    const php_fields = std.meta.fields(php_handlers);
-    const zig_fields = std.meta.fields(zig_handlers);
-    var combined_fields: [php_fields.len + zig_fields.len]std.builtin.Type.StructField = undefined;
-    for (php_fields, 0..) |field, i| combined_fields[i] = field;
-    for (zig_fields, 0..) |field, i| combined_fields[php_fields.len + i] = field;
-    break :define @Type(.{
-        .@"struct" = .{
-            .layout = .@"extern",
-            .decls = &.{},
-            .fields = &combined_fields,
-            .is_tuple = false,
-        },
-    });
-};
+pub const ObjectHandlers = php_h.zend_object_handlers;
 pub const RefCounted = php_h.zend_refcounted;
 pub const Result = php_h.zend_result;
 pub const String = php_h.zend_string;

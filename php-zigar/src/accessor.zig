@@ -26,6 +26,8 @@ pub const Error = error{
     NotNull,
 };
 
+pub const Transform = enum { none, to_string, to_plain, to_value };
+
 pub const Null = struct {
     params: Parameters,
     getter: *const Getter,
@@ -92,6 +94,7 @@ pub const Complex = struct {
         byte_size: usize,
         slot: usize,
         class_entry: *ClassEntry,
+        transform: Transform,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer, *HashTable) Error!Value;
     pub const Setter = fn (*const @This(), *ByteBuffer, *HashTable, *Value) Error!void;
@@ -112,6 +115,7 @@ pub const Prebaked = struct {
 
     pub const Parameters = struct {
         slot: usize,
+        transform: Transform,
     };
     pub const Getter = fn (*const @This(), *HashTable) Error!Value;
     pub const Setter = fn (*const @This(), *HashTable, *Value) Error!void;

@@ -96,7 +96,7 @@ pub fn Parent(comptime S: type) type {
                 return try accessors.get(self);
             } else |err| {
                 if (@hasDecl(S, "readSelf")) {
-                    if (zig_object.isDollarSign(name)) return try S.readSelf(obj);
+                    if (isDollarSign(name)) return try S.readSelf(obj);
                 }
                 return err;
             }
@@ -115,7 +115,7 @@ pub fn Parent(comptime S: type) type {
                 return try accessors.set(self, value);
             } else |err| {
                 if (@hasDecl(S, "writeSelf")) {
-                    if (zig_object.isDollarSign(name)) return try S.writeSelf(obj, value);
+                    if (isDollarSign(name)) return try S.writeSelf(obj, value);
                 }
                 return err;
             }
@@ -133,6 +133,10 @@ pub fn Parent(comptime S: type) type {
                 cached.accessors = &member.accessors;
             }
             return &member.accessors;
+        }
+
+        fn isDollarSign(str: *String) bool {
+            return str.len == 1 and str.val[0] == '$';
         }
 
         fn throwFieldError(obj: *Object, name: *String, err: anytype) void {

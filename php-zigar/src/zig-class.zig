@@ -19,7 +19,6 @@ const HashTable = php.HashTable;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
-const ObjectHandlers = php.ObjectHandlers;
 const structure = @import("structure.zig");
 const zig_object = @import("zig-object.zig");
 const ZigObject = zig_object.ZigObject;
@@ -484,22 +483,35 @@ pub const ZigClass = struct {
             .object => if (member.slot) |slot| {
                 // the lack of a slot means the member isn't meant to be accessed directly
                 // only applicable to functions, I think
+                const transform: accessor.Transform = get: {
+                    if (member.flags.is_string) {
+                        break :get .to_string;
+                    } else if (member.flags.is_plain) {
+                        break :get .to_plain;
+                    } else if (member.class) |class| {
+                        if (class.flags.common.has_value or class.flags.common.has_proxy)
+                            break :get .to_value;
+                    }
+                    break :get .none;
+                };
                 if (member.byte_size) |byte_size| {
                     // compound types like structs and unions are represented by objects
                     // these are stored in slots of their parent objects and are created lazily
                     const class = member.class orelse return error.MissingClass;
-                    const object = accessor.complex.get(.{}, .{
+                    const complex = accessor.complex.get(.{}, .{
                         .class_entry = class.entry(),
                         .byte_offset = byte_offset,
                         .byte_size = byte_size,
                         .slot = slot,
+                        .transform = transform,
                     });
-                    return .{ .complex = object };
+                    return .{ .complex = complex };
                 } else {
                     // static members don't have a size since they're ready-made objects
                     // that sit in the template slots; this is applicable to comptime field as well
                     const prebaked = accessor.prebaked.get(.{}, .{
                         .slot = slot,
+                        .transform = transform,
                     });
                     return .{ .prebaked = prebaked };
                 }

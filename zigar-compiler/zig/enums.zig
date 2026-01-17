@@ -35,6 +35,7 @@ pub const StructurePurpose = enum(u32) {
 };
 
 pub const StructureFlags = packed union {
+    common: Common,
     primitive: Primitive,
     array: Array,
     @"struct": Struct,
@@ -51,6 +52,14 @@ pub const StructureFlags = packed union {
     variadic_struct: VariadicStruct,
     function: Function,
 
+    pub const Common = packed struct(u32) {
+        has_value: bool = true,
+        has_object: bool = false,
+        has_pointer: bool = false,
+        has_slot: bool = false,
+        has_proxy: bool = false,
+        _: u27 = 0,
+    };
     pub const Primitive = packed struct(u32) {
         has_value: bool = true,
         has_object: bool = false,

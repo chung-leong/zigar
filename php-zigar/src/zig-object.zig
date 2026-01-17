@@ -5,7 +5,6 @@ const ByteBuffer = byte_buffer.ByteBuffer;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
 const Object = php.Object;
-const ObjectHandlers = php.ObjectHandlers;
 const String = php.String;
 const Value = php.Value;
 const zig_class = @import("zig-class.zig");
@@ -82,6 +81,27 @@ pub fn ZigObject(comptime S: type) type {
     return Result;
 }
 
+pub const ObjectHandlers = define: {
+    const php_handlers = php.ObjectHandlers;
+    const zig_handlers = struct {
+        read_self: ?*const fn ([*c]Object) callconv(.c) Value,
+        write_self: ?*const fn ([*c]Object, [*c]Value) callconv(.c) void,
+    };
+    const php_fields = std.meta.fields(php_handlers);
+    const zig_fields = std.meta.fields(zig_handlers);
+    var combined_fields: [php_fields.len + zig_fields.len]std.builtin.Type.StructField = undefined;
+    for (php_fields, 0..) |field, i| combined_fields[i] = field;
+    for (zig_fields, 0..) |field, i| combined_fields[php_fields.len + i] = field;
+    break :define @Type(.{
+        .@"struct" = .{
+            .layout = .@"extern",
+            .decls = &.{},
+            .fields = &combined_fields,
+            .is_tuple = false,
+        },
+    });
+};
+
 const object_handler_mapping = .{
     .free_obj = "freeObject",
     .dtor_obj = "destroyObject",
@@ -111,17 +131,3 @@ const object_handler_mapping = .{
     .read_self = "readSelf",
     .write_self = "writeSelf",
 };
-
-pub const dollar_sign: [*c]String = @constCast(&String{
-    .gc = .{
-        .refcount = 1,
-        .u = .{ .type_info = php.IS_STRING },
-    },
-    .len = 1,
-    .val = .{'$'},
-    .h = 0,
-});
-
-pub fn isDollarSign(str: *String) bool {
-    return str.len == 1 and str.val[0] == '$';
-}
