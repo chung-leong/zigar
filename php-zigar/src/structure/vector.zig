@@ -17,35 +17,31 @@ pub const Vector = struct {
     const Super = structure.Parent(@This());
 
     pub const Static = struct {
-        vector: *accessor.Vector = undefined,
+        value_acc: *accessor.Vector = undefined,
 
         pub fn initialize(self: *@This(), class: *ZigClass) !void {
             // fetch the accessor in advance since we know it can only be a of the vector type
             const member = try class.getMember(.instance, 0);
-            if (member.accessors != .vector) {
-                // TODO: should return an error eventually
-                // return error.InvalidAccessor;
-                return;
-            }
-            self.vector = &member.accessors.vector;
+            if (member.accessors != .vector) return;
+            self.value_acc = &member.accessors.vector;
         }
     };
 
     pub fn readElement(obj: *Object, key: *Value, _: c_int, retval: *Value) !?*Value {
         const self = Super.fromObject(obj);
         const class = ZigClass.fromStructure(self);
-        const vector = class.getStaticData(@This()).vector;
+        const static = class.getStaticData(@This());
         const index = try getIndex(key);
-        retval.* = try vector.get(self.bytes, index);
+        retval.* = try static.value_acc.get(self.bytes, index);
         return retval;
     }
 
     pub fn writeElement(obj: *Object, key: *Value, value: *Value) !void {
         const self = Super.fromObject(obj);
         const class = ZigClass.fromStructure(self);
-        const vector = class.getStaticData(@This()).vector;
+        const static = class.getStaticData(@This());
         const index = try getIndex(key);
-        try vector.set(self.bytes, index, value);
+        try static.value_acc.set(self.bytes, index, value);
     }
 
     pub fn hasElement(obj: *Object, key: *Value, _: c_int) !c_int {

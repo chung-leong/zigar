@@ -26,3 +26,9 @@ const Point = struct {
 pub var point: Point = .{ .x = 123, .y = 456 };
 
 pub var optional: ?u32 = 1234;
+
+pub var array: [4]i32 = .{ 1, 2, 3, 4 };
+
+pub fn printArray() void {
+    std.debug.print("y = {any}\n", .{array});
+}

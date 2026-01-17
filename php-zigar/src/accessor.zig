@@ -181,6 +181,20 @@ pub const Any = union(enum) {
         return error.InvalidOperation;
     }
 
+    pub fn getElement(self: *const @This(), source: anytype, index: usize) !Value {
+        const S = @TypeOf(source.*);
+        switch (self.*) {
+            .vector => |acc| if (@hasField(S, "bytes")) {
+                return try acc.get(source.bytes, index);
+            },
+            .slot_array => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
+                if (source.slots) |slots| return try acc.get(source.bytes, slots, index);
+            },
+            else => {},
+        }
+        return error.InvalidOperation;
+    }
+
     pub fn set(self: *const @This(), source: anytype, value: *const Value) !void {
         const S = @TypeOf(source.*);
         switch (self.*) {
@@ -194,6 +208,20 @@ pub const Any = union(enum) {
                 if (source.slots) |slots| return try acc.set(slots, value);
             },
             .null => |acc| return try acc.set(value),
+            else => {},
+        }
+        return error.InvalidOperation;
+    }
+
+    pub fn setElement(self: *const @This(), source: anytype, index: usize, value: *const Value) !void {
+        const S = @TypeOf(source.*);
+        switch (self.*) {
+            .vector => |acc| if (@hasField(S, "bytes")) {
+                return try acc.set(source.bytes, index, value);
+            },
+            .slot_array => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
+                if (source.slots) |slots| return try acc.set(source.bytes, slots, index, value);
+            },
             else => {},
         }
         return error.InvalidOperation;

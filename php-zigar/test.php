@@ -4,6 +4,16 @@ declare(strict_types = 1);
 
 $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar");
 
+echo $module->array[2], "\n";
+foreach ($module->array as $a) {
+    echo "a = $a\n";
+}
+$module->array[2] = 1234;
+$module->printArray();
+$array = $module->array;
+$array[2] = 1234;
+$module->printArray();
+
 echo "optional = $module->optional\n";
 $module->optional = null;
 echo "optional = $module->optional\n";
