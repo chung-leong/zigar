@@ -47,7 +47,7 @@ pub fn ZigObject(comptime S: type) type {
             const self: *@This() = @ptrCast(@alignCast(mem));
             self.* = .{};
             const obj = self.object();
-            obj.handlers = getHandlers();
+            obj.handlers = @ptrCast(getHandlers());
             php.initializeStandardObject(self.object(), class.entry());
             php.initializeObjectProperties(self.object(), class.entry());
             if (@hasDecl(S, "setStorage")) {
@@ -66,8 +66,10 @@ pub fn ZigObject(comptime S: type) type {
                         const func_name = @field(object_handler_mapping, field.name);
                         @field(handlers, field.name) = if (@hasDecl(S, func_name))
                             php.transform(@field(S, func_name))
+                        else if (@hasField(@TypeOf(php.std_object_handlers.*), field.name))
+                            @field(php.std_object_handlers, field.name)
                         else
-                            @field(php.std_object_handlers, field.name);
+                            null;
                     }
                     break :init handlers;
                 };
@@ -105,6 +107,9 @@ const object_handler_mapping = .{
     .get_gc = "getReferencedObjects",
     .compare = "compare",
     .do_operation = "doOperation",
+    // zigar specific handlers
+    .read_self = "readSelf",
+    .write_self = "writeSelf",
 };
 
 pub const dollar_sign: [*c]String = @constCast(&String{

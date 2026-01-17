@@ -132,6 +132,42 @@ pub const Any = union(enum) {
     prebaked: Prebaked,
     null: Null,
     missing: void,
+
+    pub fn get(self: *const @This(), source: anytype) !Value {
+        const S = @TypeOf(source.*);
+        switch (self.*) {
+            .primitive => |acc| if (@hasField(S, "bytes")) {
+                return try acc.get(source.bytes);
+            },
+            .complex => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
+                if (source.slots) |slots| return try acc.get(source.bytes, slots);
+            },
+            .prebaked => |acc| if (@hasField(S, "slots")) {
+                if (source.slots) |slots| return try acc.get(slots);
+            },
+            .null => |acc| return try acc.get(),
+            else => {},
+        }
+        return error.InvalidOperation;
+    }
+
+    pub fn set(self: *const @This(), source: anytype, value: *Value) !void {
+        const S = @TypeOf(source.*);
+        switch (self.*) {
+            .primitive => |acc| if (@hasField(S, "bytes")) {
+                return try acc.set(source.bytes, value);
+            },
+            .complex => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
+                if (source.slots) |slots| return try acc.set(source.bytes, slots, value);
+            },
+            .prebaked => |acc| if (@hasField(S, "slots")) {
+                if (source.slots) |slots| return try acc.set(slots, value);
+            },
+            .null => |acc| return try acc.set(value),
+            else => {},
+        }
+        return error.InvalidOperation;
+    }
 };
 
 pub fn WithBitOffset(comptime T: type, comptime bit_offset: ?u3) type {

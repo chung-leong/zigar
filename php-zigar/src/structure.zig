@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const accessor = @import("accessor.zig");
 const byte_buffer = @import("byte-buffer.zig");
 const ByteBuffer = byte_buffer.ByteBuffer;
 const php = @import("php.zig");
@@ -55,15 +56,19 @@ pub fn enumName(comptime S: type) []const u8 {
 pub fn Parent(comptime S: type) type {
     return struct {
         const scope: ZigClass.ScopeType = if (@hasDecl(S, "scope")) S.scope else .instance;
+        const CacheEntry = extern struct {
+            class: ?*const ZigClass,
+            accessors: *const accessor.Any,
+        };
 
         pub fn setStorage(self: *S, bytes: *ByteBuffer, slots: ?*HashTable) !void {
             if (@hasField(S, "bytes")) self.bytes = bytes;
             if (@hasField(S, "slots")) self.slots = slots;
         }
 
-        pub fn getValue(self: *S) !Value {
+        pub fn readSelf(obj: *Object) !Value {
             // by default just return the object itself
-            return php.createValueObject(object(self));
+            return php.createValueObject(obj);
         }
 
         pub fn freeObject(obj: *Object) void {
@@ -76,7 +81,7 @@ pub fn Parent(comptime S: type) type {
 
         pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
             _ = prop_type;
-            if (tryReadProperty(obj, name, cache_slot)) |value| {
+            if (readMember(obj, name, cache_slot)) |value| {
                 retval.* = value;
                 php.addRef(retval);
             } else |err| {
@@ -85,84 +90,49 @@ pub fn Parent(comptime S: type) type {
             return retval;
         }
 
-        pub fn tryReadProperty(obj: *Object, name: *String, cache_slot: ?[*]?*anyopaque) !Value {
-            _ = cache_slot;
-            const self = fromObject(obj);
-            if (@hasDecl(S, "getValue")) {
-                // see if it's call from an accessor
-                if (name == zig_object.dollar_sign) return try self.getValue();
-            }
-            const class = ZigClass.fromObject(obj);
-            if (class.getMember(scope, name)) |member| {
-                switch (member.accessors) {
-                    .primitive => |acc| if (@hasField(S, "bytes"))
-                        return try acc.get(self.bytes),
-                    .complex => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
-                        if (self.slots) |slots| {
-                            // TODO switch to pointer
-                            const value = try acc.get(self.bytes, slots);
-                            return value;
-                        }
-                    },
-                    .prebaked => |acc| if (@hasField(S, "slots")) {
-                        if (self.slots) |slots| {
-                            const value = try acc.get(slots);
-                            return value;
-                        }
-                    },
-                    else => {},
-                }
-                return error.InvalidOperation;
+        pub fn readMember(obj: *Object, name: *String, cache_slot: ?[*]?*anyopaque) !Value {
+            if (findAccessors(obj, name, cache_slot)) |accessors| {
+                const self = fromObject(obj);
+                return try accessors.get(self);
             } else |err| {
-                if (@hasDecl(S, "getValue")) {
-                    // maybe end-user is accessing $
-                    if (zig_object.isDollarSign(name)) return try self.getValue();
+                if (@hasDecl(S, "readSelf")) {
+                    if (zig_object.isDollarSign(name)) return try S.readSelf(obj);
                 }
                 return err;
             }
         }
 
         pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) *Value {
-            tryWriteProperty(obj, name, value, cache_slot) catch |err| {
+            writeMember(obj, name, value, cache_slot) catch |err| {
                 throwFieldError(obj, name, err);
             };
             return value;
         }
 
-        pub fn tryWriteProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !void {
-            _ = cache_slot;
-            const self = fromObject(obj);
-            if (@hasDecl(S, "setValue")) {
-                // check for access from accessors
-                if (name == zig_object.dollar_sign)
-                    return try self.setValue(value);
-            }
-            // find member
-            const class = ZigClass.fromObject(obj);
-            if (class.getMember(scope, name)) |member| {
-                // write to bytes and/or slots using setter
-                switch (member.accessors) {
-                    .primitive => |acc| if (@hasField(S, "bytes"))
-                        return try acc.set(self.bytes, value),
-                    .complex => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
-                        if (self.slots) |slots|
-                            return try acc.set(self.bytes, slots, value);
-                    },
-                    .prebaked => |acc| if (@hasField(S, "slots")) {
-                        if (self.slots) |slots| {
-                            return try acc.set(slots, value);
-                        }
-                    },
-                    else => {},
-                }
-                return error.InvalidOperation;
+        pub fn writeMember(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !void {
+            if (findAccessors(obj, name, cache_slot)) |accessors| {
+                const self = fromObject(obj);
+                return try accessors.set(self, value);
             } else |err| {
-                if (@hasDecl(S, "setValue")) {
-                    // maybe end-user is accessing $
-                    if (zig_object.isDollarSign(name)) return try self.setValue(value);
+                if (@hasDecl(S, "writeSelf")) {
+                    if (zig_object.isDollarSign(name)) return try S.writeSelf(obj, value);
                 }
                 return err;
             }
+        }
+
+        fn findAccessors(obj: *Object, name: *String, cache_slot: ?[*]?*anyopaque) !*const accessor.Any {
+            const class = ZigClass.fromObject(obj);
+            const cache_entry: ?*CacheEntry = @ptrCast(cache_slot);
+            if (cache_entry) |cached| {
+                if (cached.class == class) return cached.accessors;
+            }
+            const member = try class.getMember(scope, name);
+            if (cache_entry) |cached| {
+                cached.class = class;
+                cached.accessors = &member.accessors;
+            }
+            return &member.accessors;
         }
 
         fn throwFieldError(obj: *Object, name: *String, err: anytype) void {

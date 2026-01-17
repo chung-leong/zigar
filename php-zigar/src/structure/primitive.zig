@@ -31,20 +31,22 @@ pub const Primitive = struct {
         }
     };
 
-    pub fn getValue(self: *@This()) !Value {
-        const class = ZigClass.fromStructure(self);
+    pub fn readSelf(obj: *Object) !Value {
+        const self = fromObject(obj);
+        const class = ZigClass.fromObject(obj);
         const primitive = class.getStaticData(@This()).primitive;
         return try primitive.get(self.bytes);
     }
 
-    pub fn setValue(self: *@This(), value: *Value) !void {
-        const class = ZigClass.fromStructure(self);
+    pub fn writeSelf(obj: *Object, value: *Value) !void {
+        const self = fromObject(obj);
+        const class = ZigClass.fromObject(obj);
         const primitive = class.getStaticData(@This()).primitive;
         return try primitive.set(self.bytes, value);
     }
 
+    pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
-    // pub const getValue = Super.getValue;
     pub const freeObject = Super.freeObject;
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;

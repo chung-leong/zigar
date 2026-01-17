@@ -16,7 +16,7 @@ pub const Array = struct {
     const Super = structure.Parent(@This());
 
     pub const setStorage = Super.setStorage;
-    pub const getValue = Super.getValue;
+    pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
     pub const readProperty = Super.readProperty;
 };
