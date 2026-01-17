@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types = 1);
+
 $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar");
 
 $module->printX();
@@ -28,3 +30,8 @@ echo "z = ", $module->z->{'$'}, "\n";
 $z = $module->z;
 $z->{'$'} = .1234;
 $module->printZ();
+
+$point = $module->point;
+echo "x = ", $point->x, "\n";
+echo "y = ", $point->y, "\n";
+echo "z = ", $point->z, "\n";

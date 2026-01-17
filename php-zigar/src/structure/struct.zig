@@ -6,11 +6,8 @@ const ByteBuffer = byte_buffer.ByteBuffer;
 const php = @import("../php.zig");
 const Value = php.Value;
 const Object = php.Object;
-const String = php.String;
 const HashTable = php.HashTable;
 const structure = @import("../structure.zig");
-const zig_class = @import("../zig-class.zig");
-const ZigClass = zig_class.ZigClass;
 
 pub const Struct = struct {
     bytes: *ByteBuffer = undefined,

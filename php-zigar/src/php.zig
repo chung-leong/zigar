@@ -4,8 +4,7 @@ const fn_transform = @import("zigft/fn-transform.zig");
 
 pub const php_h = @cImport({
     @cInclude("php.h");
-});
-pub const zend_interfaces_h = @cImport({
+    @cInclude("zend_exceptions.h");
     @cInclude("zend_interfaces.h");
 });
 
@@ -266,8 +265,7 @@ pub fn transform(comptime func: anytype) Transformed(func) {
             const retval = @call(.auto, func, args);
             const retval_ne = switch (@typeInfo(RT)) {
                 .error_union => |eu| retval catch |err| report: {
-                    const err_msg = getErrorMessage(eu.error_set, err);
-                    php_h.php_error(php_h.E_ERROR, "%s (zig)", err_msg.ptr);
+                    throwError(err);
                     break :report switch (eu.payload) {
                         bool => false,
                         void => {},
@@ -707,15 +705,30 @@ pub const InterfaceType = enum {
 
 pub fn getInterface(itype: InterfaceType) *ClassEntry {
     const ptr = switch (itype) {
-        .aggregate => zend_interfaces_h.zend_ce_aggregate,
-        .array_access => zend_interfaces_h.zend_ce_arrayaccess,
-        .countable => zend_interfaces_h.zend_ce_countable,
-        .iterator => zend_interfaces_h.zend_ce_iterator,
-        .serializable => zend_interfaces_h.zend_ce_serializable,
-        .stringable => zend_interfaces_h.zend_ce_stringable,
-        .traversable => zend_interfaces_h.zend_ce_traversable,
+        .aggregate => php_h.zend_ce_aggregate,
+        .array_access => php_h.zend_ce_arrayaccess,
+        .countable => php_h.zend_ce_countable,
+        .iterator => php_h.zend_ce_iterator,
+        .serializable => php_h.zend_ce_serializable,
+        .stringable => php_h.zend_ce_stringable,
+        .traversable => php_h.zend_ce_traversable,
     };
     return @ptrCast(ptr);
+}
+
+pub fn throwError(err: anytype) void {
+    const ES = @TypeOf(err);
+    const msg = getErrorMessage(ES, err);
+    _ = php_h.zend_throw_exception_ex(null, 0, "%s (zig)", msg.ptr);
+}
+
+pub fn throwExceptionFmt(comptime fmt: []const u8, params: anytype) void {
+    if (std.fmt.allocPrintSentinel(allocator, fmt, params, 0)) |msg| {
+        defer allocator.free(msg);
+        _ = php_h.zend_throw_exception(null, msg.ptr, 0);
+    } else |err| {
+        throwError(err);
+    }
 }
 
 pub const emalloc = php_h._emalloc;

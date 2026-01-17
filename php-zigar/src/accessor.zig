@@ -4,6 +4,7 @@ pub const boolean = @import("accessor/boolean.zig");
 pub const float = @import("accessor/float.zig");
 pub const int = @import("accessor/int.zig");
 pub const object = @import("accessor/object.zig");
+pub const prebaked = @import("accessor/prebaked.zig");
 pub const vector = @import("accessor/vector.zig");
 const byte_buffer = @import("byte-buffer.zig");
 const ByteBuffer = byte_buffer.ByteBuffer;
@@ -16,7 +17,7 @@ pub const Error = error{
     CannotCreateObject,
     OutOfBound,
     OutOfMemory,
-    MissingSlots,
+    Missing,
     NotBoolean,
     NotInteger,
     NotDouble,
@@ -72,15 +73,35 @@ pub const Object = struct {
         slot: usize,
         class_entry: *ClassEntry,
     };
-    pub const Getter = fn (*const @This(), *ByteBuffer, *HashTable, ?*?*anyopaque) Error!Value;
-    pub const Setter = fn (*const @This(), *ByteBuffer, *HashTable, *Value, ?*?*anyopaque) Error!void;
+    pub const Getter = fn (*const @This(), *ByteBuffer, *HashTable) Error!Value;
+    pub const Setter = fn (*const @This(), *ByteBuffer, *HashTable, *Value) Error!void;
 
-    pub fn get(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, cache_slot: ?*?*anyopaque) Error!Value {
-        return try self.getter(self, buffer, slots, cache_slot);
+    pub fn get(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable) Error!Value {
+        return try self.getter(self, buffer, slots);
     }
 
-    pub fn set(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, value: *Value, cache_slot: ?*?*anyopaque) Error!void {
-        return try self.setter(self, buffer, slots, value, cache_slot);
+    pub fn set(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, value: *Value) Error!void {
+        return try self.setter(self, buffer, slots, value);
+    }
+};
+
+pub const Prebaked = struct {
+    params: Parameters,
+    getter: *const Getter,
+    setter: *const Setter,
+
+    pub const Parameters = struct {
+        slot: usize,
+    };
+    pub const Getter = fn (*const @This(), *HashTable) Error!Value;
+    pub const Setter = fn (*const @This(), *HashTable, *Value) Error!void;
+
+    pub fn get(self: *const @This(), slots: *HashTable) Error!Value {
+        return try self.getter(self, slots);
+    }
+
+    pub fn set(self: *const @This(), slots: *HashTable, value: *Value) Error!void {
+        return try self.setter(self, slots, value);
     }
 };
 
@@ -88,6 +109,7 @@ pub const Any = union(enum) {
     primitive: Primitive,
     object: Object,
     vector: Vector,
+    prebaked: Prebaked,
     missing: void,
 };
 

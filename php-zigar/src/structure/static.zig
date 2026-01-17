@@ -18,47 +18,16 @@ const zig_object = @import("../zig-object.zig");
 const ZigObject = zig_object.ZigObject;
 
 pub const Static = struct {
-    fields: HashTable = undefined,
+    slots: ?*HashTable = undefined,
+
+    pub const scope: ZigClass.ScopeType = .static;
 
     const Super = structure.Parent(@This());
 
-    pub fn setStorage(self: *@This(), _: *ByteBuffer, _: ?*HashTable) !void {
-        // transfer values from static template slots into hash table
-        self.fields = php.createHashTable(php.destructor.value);
-    }
-
-    pub fn setFields(self: *@This(), members: *HashTable, slots: ?*HashTable) !void {
-        var pos: php.HashPosition = undefined;
-        php.initializeHashPosition(members, &pos);
-        while (try php.getHashPositionPointer(*ZigClass.Member, members, &pos)) |member| {
-            if (member.slot) |s| {
-                const key = php.getHashPositionKey(members, &pos);
-                const name = try php.getValueString(&key);
-                const ht = slots orelse return error.NoStaticSlots;
-                const value = try php.getHashEntry(ht, s);
-                try php.setHashEntry(&self.fields, name, value);
-                php.addRef(value);
-                php.release(name);
-            }
-            if (!php.moveHashPositionForward(members, &pos)) break;
-        }
-    }
-
-    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !?*Value {
-        _ = prop_type;
-        _ = cache_slot;
-        const self = Super.fromObject(obj);
-        const field = php.getHashEntry(&self.fields, name) catch return null;
-        const field_obj = php.getValueObject(field) catch return null;
-        retval.* = php.createValueObject(field_obj);
-        return retval;
-    }
-
     pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: *const Value) !?*Function {
         const obj = obj_ptr.*;
-        const self = Super.fromObject(obj);
-        const field = php.getHashEntry(&self.fields, name) catch return null;
-        const field_obj = php.getValueObject(field) catch return null;
+        const field = Super.tryReadProperty(obj, name, null) catch return null;
+        const field_obj = php.getValueObject(&field) catch return null;
         const field_class = ZigClass.fromObject(field_obj);
         if (field_class.type != .function) return null;
         const func = structure.Function.fromObject(field_obj);
@@ -67,11 +36,13 @@ pub const Static = struct {
 
     pub fn freeObject(obj: *Object) void {
         // std.debug.print("freeing class ref\n", .{});
-        const self = fromObject(obj);
-        php.destroyHashTable(&self.fields);
+        Super.freeObject(obj);
         const class = ZigClass.fromObject(obj);
         class.release();
     }
 
     pub const fromObject = Super.fromObject;
+    pub const setStorage = Super.setStorage;
+    pub const readProperty = Super.readProperty;
+    pub const writeProperty = Super.writeProperty;
 };

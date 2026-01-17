@@ -116,3 +116,7 @@ pub const dollar_sign: [*c]String = @constCast(&String{
     .val = .{'$'},
     .h = 0,
 });
+
+pub fn isDollarSign(str: *String) bool {
+    return str.len == 1 and str.val[0] == '$';
+}

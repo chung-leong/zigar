@@ -54,6 +54,8 @@ pub fn enumName(comptime S: type) []const u8 {
 
 pub fn Parent(comptime S: type) type {
     return struct {
+        const scope: ZigClass.ScopeType = if (@hasDecl(S, "scope")) S.scope else .instance;
+
         pub fn setStorage(self: *S, bytes: *ByteBuffer, slots: ?*HashTable) !void {
             if (@hasField(S, "bytes")) self.bytes = bytes;
             if (@hasField(S, "slots")) self.slots = slots;
@@ -72,31 +74,120 @@ pub fn Parent(comptime S: type) type {
             class.release();
         }
 
-        pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !?*Value {
+        pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
             _ = prop_type;
-            _ = cache_slot;
-            const name_s = php.getStringContent(name);
-            var value: Value = undefined;
-            if (name_s.len == 1 and name_s[0] == '$') {
-                const self = fromObject(obj);
-                value = try self.getValue();
-            } else {
-                value = php.createValueNull();
+            if (tryReadProperty(obj, name, cache_slot)) |value| {
+                retval.* = value;
+                php.addRef(retval);
+            } else |err| {
+                throwFieldError(obj, name, err);
             }
-            retval.* = value;
-            php.addRef(retval);
             return retval;
         }
 
-        pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !?*Value {
+        pub fn tryReadProperty(obj: *Object, name: *String, cache_slot: ?[*]?*anyopaque) !Value {
             _ = cache_slot;
-            const name_s = php.getStringContent(name);
-            if (name_s.len == 1 and name_s[0] == '$') {
-                const self = fromObject(obj);
-                if (@hasDecl(S, "setValue"))
-                    try self.setValue(value);
+            const self = fromObject(obj);
+            if (@hasDecl(S, "getValue")) {
+                // see if it's call from an accessor
+                if (name == zig_object.dollar_sign) return try self.getValue();
             }
+            const class = ZigClass.fromObject(obj);
+            if (class.getMember(scope, name)) |member| {
+                switch (member.accessors) {
+                    .primitive => |acc| if (@hasField(S, "bytes"))
+                        return try acc.get(self.bytes),
+                    .object => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
+                        if (self.slots) |slots| {
+                            // TODO switch to pointer
+                            const value = try acc.get(self.bytes, slots);
+                            return value;
+                        }
+                    },
+                    .prebaked => |acc| if (@hasField(S, "slots")) {
+                        if (self.slots) |slots| {
+                            const value = try acc.get(slots);
+                            return value;
+                        }
+                    },
+                    else => {},
+                }
+                return error.InvalidOperation;
+            } else |err| {
+                if (@hasDecl(S, "getValue")) {
+                    // maybe the end-user is accessing $ property
+                    if (zig_object.isDollarSign(name)) return try self.getValue();
+                }
+                return err;
+            }
+        }
+
+        pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) *Value {
+            tryWriteProperty(obj, name, value, cache_slot) catch |err| {
+                throwFieldError(obj, name, err);
+            };
             return value;
+        }
+
+        pub fn tryWriteProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !void {
+            _ = cache_slot;
+            const self = fromObject(obj);
+            if (@hasDecl(S, "setValue")) {
+                // check for access from accessors
+                if (name == zig_object.dollar_sign)
+                    return try self.setValue(value);
+            }
+            // find member
+            const class = ZigClass.fromObject(obj);
+            if (class.getMember(scope, name)) |member| {
+                // write to bytes and/or slots using setter
+                switch (member.accessors) {
+                    .primitive => |acc| if (@hasField(S, "bytes"))
+                        return try acc.set(self.bytes, value),
+                    .object => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
+                        if (self.slots) |slots|
+                            return try acc.set(self.bytes, slots, value);
+                    },
+                    .prebaked => |acc| if (@hasField(S, "slots")) {
+                        if (self.slots) |slots| {
+                            return try acc.set(slots, value);
+                        }
+                    },
+                    else => {},
+                }
+                return error.InvalidOperation;
+            } else |err| {
+                if (@hasDecl(S, "setValue")) {
+                    // maybe the end-user is accessing $ property
+                    if (zig_object.isDollarSign(name)) return try self.setValue(value);
+                }
+                return err;
+            }
+        }
+
+        fn throwFieldError(obj: *Object, name: *String, err: anytype) void {
+            switch (err) {
+                error.Missing => {
+                    const class = ZigClass.fromObject(obj);
+                    const class_name = class.getName();
+                    const field_name = php.getStringContent(name);
+                    const type_name = class.getStructureName();
+                    if (scope == .instance) {
+                        php.throwExceptionFmt("no field named '{s}' in {s} '{s}'", .{
+                            field_name,
+                            type_name,
+                            class_name,
+                        });
+                    } else {
+                        php.throwExceptionFmt("{s} '{s}' has no member named '{s}'", .{
+                            type_name,
+                            class_name,
+                            field_name,
+                        });
+                    }
+                },
+                else => php.throwError(err),
+            }
         }
 
         pub fn fromObject(obj: *Object) *S {

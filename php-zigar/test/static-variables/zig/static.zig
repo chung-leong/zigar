@@ -17,3 +17,10 @@ pub fn printY() void {
 pub fn printZ() void {
     std.debug.print("z = {d}\n", .{z});
 }
+
+const Point = struct {
+    x: usize,
+    y: usize,
+};
+
+pub var point: Point = .{ .x = 123, .y = 456 };

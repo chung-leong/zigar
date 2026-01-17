@@ -193,16 +193,18 @@ pub const ZigClass = struct {
         errdefer self.instance.release();
         self.static = try self.extractScope(info, "static");
         errdefer self.static.release();
-        // set fields of ref object
+        // set slots of ref object
         const static = structure.Static.fromObject(obj);
-        try static.setFields(&self.static.members, self.static.template.slots);
-        // attach accessors to instance members
-        const members = &self.instance.members;
-        var pos: php.HashPosition = undefined;
-        php.initializeHashPosition(members, &pos);
-        while (try php.getHashPositionPointer(*ZigClass.Member, members, &pos)) |member| {
-            member.accessors = try getAccessors(member);
-            if (!php.moveHashPositionForward(members, &pos)) break;
+        try static.setStorage(undefined, self.static.template.slots);
+        // attach accessors to members
+        inline for (.{ "static", "instance" }) |scope_name| {
+            const members = &@field(self, scope_name).members;
+            var pos: php.HashPosition = undefined;
+            php.initializeHashPosition(members, &pos);
+            while (try php.getHashPositionPointer(*ZigClass.Member, members, &pos)) |member| {
+                member.accessors = try getAccessors(member);
+                if (!php.moveHashPositionForward(members, &pos)) break;
+            }
         }
         // initialize static data
         switch (self.type) {
@@ -231,6 +233,16 @@ pub const ZigClass = struct {
 
     pub fn getStaticData(self: *@This(), comptime S: type) @FieldType(StaticData, structure.enumName(S)) {
         return @field(self.static_data, structure.enumName(S));
+    }
+
+    pub fn getStructureName(self: *@This()) []const u8 {
+        return switch (self.type) {
+            inline else => |e| @tagName(e),
+        };
+    }
+
+    pub fn getName(self: *@This()) []const u8 {
+        return php.getStringContent(self.php_portion.name);
     }
 
     pub fn getMember(self: *@This(), comptime scope: ScopeType, key: anytype) !*Member {
@@ -472,20 +484,29 @@ pub const ZigClass = struct {
             .object => if (member.slot) |slot| {
                 // the lack of a slot means the member isn't meant to be accessed directly
                 // only applicable to functions, I think
-                const byte_size = member.byte_size orelse return error.MissingStructureSize;
-                const class = member.class orelse return error.MissingClass;
-                const object = accessor.object.get(.{}, .{
-                    .class_entry = class.entry(),
-                    .byte_offset = byte_offset,
-                    .byte_size = byte_size,
-                    .slot = slot,
-                });
-                std.debug.print("slot = {?}\n", .{member.slot});
-                return .{ .object = object };
+                if (member.byte_size) |byte_size| {
+                    // compound types like structs and unions are represented by objects
+                    // these are stored in slots of their parent objects and are created lazily
+                    const class = member.class orelse return error.MissingClass;
+                    const object = accessor.object.get(.{}, .{
+                        .class_entry = class.entry(),
+                        .byte_offset = byte_offset,
+                        .byte_size = byte_size,
+                        .slot = slot,
+                    });
+                    return .{ .object = object };
+                } else {
+                    // static members don't have a size since they're ready-made objects
+                    // that sit in the template slots; this is applicable to comptime field as well
+                    const prebaked = accessor.prebaked.get(.{}, .{
+                        .slot = slot,
+                    });
+                    return .{ .prebaked = prebaked };
+                }
             },
             else => {},
         }
-        // std.debug.print("No accessor--holy shit!\n", .{});
+        std.debug.print("No accessor--holy shit!\n", .{});
         return .{ .missing = {} };
     }
 };
