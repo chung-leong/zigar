@@ -85,7 +85,7 @@ pub const ObjectHandlers = define: {
     const php_handlers = php.ObjectHandlers;
     const zig_handlers = struct {
         read_self: ?*const fn ([*c]Object) callconv(.c) Value,
-        write_self: ?*const fn ([*c]Object, [*c]Value) callconv(.c) void,
+        write_self: ?*const fn ([*c]Object, [*c]const Value) callconv(.c) void,
     };
     const php_fields = std.meta.fields(php_handlers);
     const zig_fields = std.meta.fields(zig_handlers);

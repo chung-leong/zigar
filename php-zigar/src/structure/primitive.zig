@@ -15,34 +15,29 @@ pub const Primitive = struct {
     bytes: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
-
     pub const Static = struct {
-        primitive: *accessor.Primitive = undefined,
+        value_acc: *accessor.Primitive = undefined,
 
         pub fn initialize(self: *@This(), class: *ZigClass) !void {
             // fetch the accessor in advance since we know it can only be a of the primitive type
             const member = try class.getMember(.instance, 0);
-            if (member.accessors != .primitive) {
-                // TODO: should return an error eventually
-                // return error.InvalidAccessor;
-                return;
-            }
-            self.primitive = &member.accessors.primitive;
+            if (member.accessors != .primitive) return error.InvalidAccessor;
+            self.value_acc = &member.accessors.primitive;
         }
     };
 
     pub fn readSelf(obj: *Object) !Value {
         const self = fromObject(obj);
         const class = ZigClass.fromObject(obj);
-        const primitive = class.getStaticData(@This()).primitive;
-        return try primitive.get(self.bytes);
+        const static = class.getStaticData(@This());
+        return try static.value_acc.get(self.bytes);
     }
 
-    pub fn writeSelf(obj: *Object, value: *Value) !void {
+    pub fn writeSelf(obj: *Object, value: *const Value) !void {
         const self = fromObject(obj);
         const class = ZigClass.fromObject(obj);
-        const primitive = class.getStaticData(@This()).primitive;
-        return try primitive.set(self.bytes, value);
+        const static = class.getStaticData(@This());
+        return try static.value_acc.set(self.bytes, value);
     }
 
     pub const fromObject = Super.fromObject;

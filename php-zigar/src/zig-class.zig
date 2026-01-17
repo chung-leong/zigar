@@ -480,6 +480,9 @@ pub const ZigClass = struct {
                     }
                 }
             },
+            .void => {
+                return .{ .primitive = accessor.void.get(.{}, .{}) };
+            },
             .object => if (member.slot) |slot| {
                 // the lack of a slot means the member isn't meant to be accessed directly
                 // only applicable to functions, I think
@@ -520,7 +523,7 @@ pub const ZigClass = struct {
                     return .{ .slot_prebaked = prebaked };
                 }
             },
-            .null, .void => {
+            .null => {
                 return .{ .null = accessor.null.get(.{}, .{}) };
             },
             else => {},

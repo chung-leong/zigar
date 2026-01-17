@@ -19,7 +19,6 @@ pub const Function = struct {
     function: php.Function = undefined,
 
     const Super = structure.Parent(@This());
-
     pub const Static = struct {
         thunk_address: usize = undefined,
         controller_address: usize = undefined,

@@ -4,6 +4,12 @@ declare(strict_types = 1);
 
 $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar");
 
+echo "optional = $module->optional\n";
+$module->optional = null;
+echo "optional = $module->optional\n";
+$module->optional = 4567;
+echo "optional = $module->optional\n";
+
 $module->printX();
 echo "x = ", $module->x, "\n";
 $module->x = 4567;

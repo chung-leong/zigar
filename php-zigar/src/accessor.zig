@@ -6,6 +6,7 @@ pub const int = @import("accessor/int.zig");
 pub const @"null" = @import("accessor/null.zig");
 pub const slot = @import("accessor/slot.zig");
 pub const vector = @import("accessor/vector.zig");
+pub const @"void" = @import("accessor/void.zig");
 const byte_buffer = @import("byte-buffer.zig");
 const ByteBuffer = byte_buffer.ByteBuffer;
 const php = @import("php.zig");
@@ -34,13 +35,13 @@ pub const Null = struct {
 
     pub const Parameters = struct {};
     pub const Getter = fn (*const @This()) Error!Value;
-    pub const Setter = fn (*const @This(), *Value) Error!void;
+    pub const Setter = fn (*const @This(), *const Value) Error!void;
 
     pub fn get(self: *const @This()) Error!Value {
         return try self.getter(self);
     }
 
-    pub fn set(self: *const @This(), value: *Value) Error!void {
+    pub fn set(self: *const @This(), value: *const Value) Error!void {
         return try self.setter(self, value);
     }
 };
@@ -54,13 +55,13 @@ pub const Primitive = struct {
         byte_offset: usize = undefined,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer) Error!Value;
-    pub const Setter = fn (*const @This(), *ByteBuffer, *Value) Error!void;
+    pub const Setter = fn (*const @This(), *ByteBuffer, *const Value) Error!void;
 
     pub fn get(self: *const @This(), buffer: *ByteBuffer) Error!Value {
         return try self.getter(self, buffer);
     }
 
-    pub fn set(self: *const @This(), buffer: *ByteBuffer, value: *Value) Error!void {
+    pub fn set(self: *const @This(), buffer: *ByteBuffer, value: *const Value) Error!void {
         return try self.setter(self, buffer, value);
     }
 };
@@ -72,13 +73,13 @@ pub const Vector = struct {
 
     pub const Parameters = struct {};
     pub const Getter = fn (*const @This(), *ByteBuffer, usize) Error!Value;
-    pub const Setter = fn (*const @This(), *ByteBuffer, usize, *Value) Error!void;
+    pub const Setter = fn (*const @This(), *ByteBuffer, usize, *const Value) Error!void;
 
     pub fn get(self: *const @This(), buffer: *ByteBuffer, index: usize) Error!Value {
         return try self.getter(self, buffer, index);
     }
 
-    pub fn set(self: *const @This(), buffer: *ByteBuffer, index: usize, value: *Value) Error!void {
+    pub fn set(self: *const @This(), buffer: *ByteBuffer, index: usize, value: *const Value) Error!void {
         return try self.setter(self, buffer, index, value);
     }
 };
@@ -98,13 +99,13 @@ pub const Slot = struct {
         transform: Transform,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer, *HashTable) Error!Value;
-    pub const Setter = fn (*const @This(), *ByteBuffer, *HashTable, *Value) Error!void;
+    pub const Setter = fn (*const @This(), *ByteBuffer, *HashTable, *const Value) Error!void;
 
     pub fn get(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable) Error!Value {
         return try self.getter(self, buffer, slots);
     }
 
-    pub fn set(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, value: *Value) Error!void {
+    pub fn set(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, value: *const Value) Error!void {
         return try self.setter(self, buffer, slots, value);
     }
 };
@@ -121,13 +122,13 @@ pub const SlotArray = struct {
         transform: Transform,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer, *HashTable, usize) Error!Value;
-    pub const Setter = fn (*const @This(), *ByteBuffer, *HashTable, usize, *Value) Error!void;
+    pub const Setter = fn (*const @This(), *ByteBuffer, *HashTable, usize, *const Value) Error!void;
 
     pub fn get(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, index: usize) Error!Value {
         return try self.getter(self, buffer, slots, index);
     }
 
-    pub fn set(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, index: usize, value: *Value) Error!void {
+    pub fn set(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, index: usize, value: *const Value) Error!void {
         return try self.setter(self, buffer, slots, index, value);
     }
 };
@@ -142,13 +143,13 @@ pub const SlotPrebaked = struct {
         transform: Transform,
     };
     pub const Getter = fn (*const @This(), *HashTable) Error!Value;
-    pub const Setter = fn (*const @This(), *HashTable, *Value) Error!void;
+    pub const Setter = fn (*const @This(), *HashTable, *const Value) Error!void;
 
     pub fn get(self: *const @This(), slots: *HashTable) Error!Value {
         return try self.getter(self, slots);
     }
 
-    pub fn set(self: *const @This(), slots: *HashTable, value: *Value) Error!void {
+    pub fn set(self: *const @This(), slots: *HashTable, value: *const Value) Error!void {
         return try self.setter(self, slots, value);
     }
 };
@@ -180,7 +181,7 @@ pub const Any = union(enum) {
         return error.InvalidOperation;
     }
 
-    pub fn set(self: *const @This(), source: anytype, value: *Value) !void {
+    pub fn set(self: *const @This(), source: anytype, value: *const Value) !void {
         const S = @TypeOf(source.*);
         switch (self.*) {
             .primitive => |acc| if (@hasField(S, "bytes")) {

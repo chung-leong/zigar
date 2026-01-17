@@ -47,17 +47,14 @@ const regular = struct {
         return read(entry, acc.params.transform);
     }
 
-    pub fn set(acc: *const accessor.Slot, buffer: *ByteBuffer, slots: *HashTable, value: *Value) Error!void {
+    pub fn set(acc: *const accessor.Slot, buffer: *ByteBuffer, slots: *HashTable, value: *const Value) Error!void {
         const entry = try vivicateSlot(acc, buffer, slots);
         try write(entry, value);
     }
 
     fn vivicateSlot(acc: *const accessor.Slot, buffer: *ByteBuffer, slots: *HashTable) Error!*Value {
         return php.getHashEntry(slots, acc.params.slot) catch vivicate: {
-            const slice = try buffer.slice(acc.params.byte_offset, acc.params.byte_size);
-            var memory = php.createValuePointer(slice);
-            const object = ZigClass.createObjectWith(acc.params.class_entry, &memory, null) catch return error.CannotCreateObject;
-            var new = php.createValueObject(object);
+            var new = try createObject(acc.params.class_entry, buffer, acc.params.byte_offset, acc.params.byte_size);
             break :vivicate try php.insertHashEntry(slots, acc.params.slot, &new);
         };
     }
@@ -69,21 +66,25 @@ const array = struct {
         return read(entry, acc.params.transform);
     }
 
-    pub fn set(acc: *const accessor.SlotArray, buffer: *ByteBuffer, slots: *HashTable, index: usize, value: *Value) Error!void {
+    pub fn set(acc: *const accessor.SlotArray, buffer: *ByteBuffer, slots: *HashTable, index: usize, value: *const Value) Error!void {
         const entry = try vivicateSlot(acc, buffer, slots, index);
         try write(entry, value);
     }
 
     fn vivicateSlot(acc: *const accessor.SlotArray, buffer: *ByteBuffer, slots: *HashTable, index: usize) Error!*Value {
         return php.getHashEntry(slots, acc.params.slot) catch vivicate: {
-            const slice = try buffer.slice(acc.params.byte_size * index, acc.params.byte_size);
-            var memory = php.createValuePointer(slice);
-            const object = ZigClass.createObjectWith(acc.params.class_entry, &memory, null) catch return error.CannotCreateObject;
-            var new = php.createValueObject(object);
+            var new = try createObject(acc.params.class_entry, buffer, acc.params.byte_size * index, acc.params.byte_size);
             break :vivicate try php.insertHashEntry(slots, acc.params.slot, &new);
         };
     }
 };
+
+fn createObject(ce: *php.ClassEntry, buffer: *ByteBuffer, offset: usize, len: usize) !Value {
+    const slice = try buffer.slice(offset, len);
+    var memory = php.createValuePointer(slice);
+    const object = ZigClass.createObjectWith(ce, &memory, null) catch return error.CannotCreateObject;
+    return php.createValueObject(object);
+}
 
 const prebaked = struct {
     pub fn get(acc: *const accessor.SlotPrebaked, slots: *HashTable) Error!Value {
@@ -91,7 +92,7 @@ const prebaked = struct {
         return read(entry, acc.params.transform);
     }
 
-    pub fn set(acc: *const accessor.SlotPrebaked, slots: *HashTable, value: *Value) Error!void {
+    pub fn set(acc: *const accessor.SlotPrebaked, slots: *HashTable, value: *const Value) Error!void {
         const entry = try php.getHashEntry(slots, acc.params.slot);
         try write(entry, value);
     }
@@ -111,7 +112,7 @@ pub fn read(entry: *Value, transform: accessor.Transform) Value {
     }
 }
 
-pub fn write(entry: *Value, value: *Value) Error!void {
+pub fn write(entry: *Value, value: *const Value) Error!void {
     const obj = php.getValueObject(entry) catch unreachable;
     const handlers: *const zig_object.ObjectHandlers = @ptrCast(obj.handlers);
     handlers.write_self.?(obj, value);

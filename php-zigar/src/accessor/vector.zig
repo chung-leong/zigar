@@ -64,7 +64,7 @@ pub fn get(comptime attrs: Attributes, params: accessor.Vector.Parameters) acces
             }
         }
 
-        pub fn set(_: *const accessor.Vector, buffer: *ByteBuffer, index: usize, value: *Value) Error!void {
+        pub fn set(_: *const accessor.Vector, buffer: *ByteBuffer, index: usize, value: *const Value) Error!void {
             if (comptime @bitSizeOf(T) == 0) return;
             if (attrs.is_packed) {
                 const bit_index = index * @bitSizeOf(T);

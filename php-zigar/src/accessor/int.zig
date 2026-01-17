@@ -33,7 +33,7 @@ pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) ac
             return php.createValueAnyInt(int);
         }
 
-        pub fn set(acc: *const accessor.Primitive, buffer: *ByteBuffer, value: *Value) Error!void {
+        pub fn set(acc: *const accessor.Primitive, buffer: *ByteBuffer, value: *const Value) Error!void {
             if (comptime @bitSizeOf(T) == 0) return;
             const bytes: []u8 = buffer.bytes;
             if (acc.params.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;

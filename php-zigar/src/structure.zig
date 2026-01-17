@@ -147,13 +147,13 @@ pub fn Parent(comptime S: type) type {
                     const field_name = php.getStringContent(name);
                     const type_name = class.getStructureName();
                     if (scope == .instance) {
-                        php.throwExceptionFmt("no field named '{s}' in {s} '{s}'", .{
+                        php.throwExceptionFmt("no field named '{s}' in {s} '{s}' (zig)", .{
                             field_name,
                             type_name,
                             class_name,
                         });
                     } else {
-                        php.throwExceptionFmt("{s} '{s}' has no member named '{s}'", .{
+                        php.throwExceptionFmt("{s} '{s}' has no member named '{s}' (zig)", .{
                             type_name,
                             class_name,
                             field_name,

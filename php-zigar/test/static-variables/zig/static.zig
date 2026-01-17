@@ -24,3 +24,5 @@ const Point = struct {
 };
 
 pub var point: Point = .{ .x = 123, .y = 456 };
+
+pub var optional: ?u32 = 1234;
