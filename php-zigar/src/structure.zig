@@ -97,7 +97,7 @@ pub fn Parent(comptime S: type) type {
                 switch (member.accessors) {
                     .primitive => |acc| if (@hasField(S, "bytes"))
                         return try acc.get(self.bytes),
-                    .object => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
+                    .complex => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
                         if (self.slots) |slots| {
                             // TODO switch to pointer
                             const value = try acc.get(self.bytes, slots);
@@ -115,7 +115,7 @@ pub fn Parent(comptime S: type) type {
                 return error.InvalidOperation;
             } else |err| {
                 if (@hasDecl(S, "getValue")) {
-                    // maybe the end-user is accessing $ property
+                    // maybe end-user is accessing $
                     if (zig_object.isDollarSign(name)) return try self.getValue();
                 }
                 return err;
@@ -144,7 +144,7 @@ pub fn Parent(comptime S: type) type {
                 switch (member.accessors) {
                     .primitive => |acc| if (@hasField(S, "bytes"))
                         return try acc.set(self.bytes, value),
-                    .object => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
+                    .complex => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
                         if (self.slots) |slots|
                             return try acc.set(self.bytes, slots, value);
                     },
@@ -158,7 +158,7 @@ pub fn Parent(comptime S: type) type {
                 return error.InvalidOperation;
             } else |err| {
                 if (@hasDecl(S, "setValue")) {
-                    // maybe the end-user is accessing $ property
+                    // maybe end-user is accessing $
                     if (zig_object.isDollarSign(name)) return try self.setValue(value);
                 }
                 return err;

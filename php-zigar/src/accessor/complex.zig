@@ -14,21 +14,21 @@ const ZigObject = zig_object.ZigObject;
 
 pub const Attributes = struct {};
 
-pub fn get(comptime _: Attributes, params: accessor.Object.Parameters) accessor.Object {
+pub fn get(comptime _: Attributes, params: accessor.Complex.Parameters) accessor.Complex {
     const ns = struct {
-        pub fn get(acc: *const accessor.Object, buffer: *ByteBuffer, slots: *HashTable) Error!Value {
+        pub fn get(acc: *const accessor.Complex, buffer: *ByteBuffer, slots: *HashTable) Error!Value {
             const entry = try getSlotEntry(acc, buffer, slots);
             return entry.*;
         }
 
-        pub fn set(acc: *const accessor.Object, buffer: *ByteBuffer, slots: *HashTable, value: *Value) Error!void {
+        pub fn set(acc: *const accessor.Complex, buffer: *ByteBuffer, slots: *HashTable, value: *Value) Error!void {
             const entry = try getSlotEntry(acc, buffer, slots);
             const obj = php.getValueObject(entry) catch unreachable;
             const func_ptr = obj.handlers.*.write_property.?;
             _ = func_ptr(obj, zig_object.dollar_sign, value, null);
         }
 
-        fn getSlotEntry(acc: *const accessor.Object, buffer: *ByteBuffer, slots: *HashTable) Error!*Value {
+        fn getSlotEntry(acc: *const accessor.Complex, buffer: *ByteBuffer, slots: *HashTable) Error!*Value {
             return php.getHashEntry(slots, acc.params.slot) catch vivicate: {
                 const slice = try buffer.slice(acc.params.byte_offset, acc.params.byte_size);
                 var memory = php.createValuePointer(slice);

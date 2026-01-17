@@ -1,9 +1,10 @@
 const std = @import("std");
 
 pub const boolean = @import("accessor/boolean.zig");
+pub const complex = @import("accessor/complex.zig");
 pub const float = @import("accessor/float.zig");
 pub const int = @import("accessor/int.zig");
-pub const object = @import("accessor/object.zig");
+pub const @"null" = @import("accessor/null.zig");
 pub const prebaked = @import("accessor/prebaked.zig");
 pub const vector = @import("accessor/vector.zig");
 const byte_buffer = @import("byte-buffer.zig");
@@ -22,6 +23,25 @@ pub const Error = error{
     NotInteger,
     NotDouble,
     NotString,
+    NotNull,
+};
+
+pub const Null = struct {
+    params: Parameters,
+    getter: *const Getter,
+    setter: *const Setter,
+
+    pub const Parameters = struct {};
+    pub const Getter = fn (*const @This()) Error!Value;
+    pub const Setter = fn (*const @This(), *Value) Error!void;
+
+    pub fn get(self: *const @This()) Error!Value {
+        return try self.getter(self);
+    }
+
+    pub fn set(self: *const @This(), value: *Value) Error!void {
+        return try self.setter(self, value);
+    }
 };
 
 pub const Primitive = struct {
@@ -62,7 +82,7 @@ pub const Vector = struct {
     }
 };
 
-pub const Object = struct {
+pub const Complex = struct {
     params: Parameters,
     getter: *const Getter,
     setter: *const Setter,
@@ -107,9 +127,10 @@ pub const Prebaked = struct {
 
 pub const Any = union(enum) {
     primitive: Primitive,
-    object: Object,
+    complex: Complex,
     vector: Vector,
     prebaked: Prebaked,
+    null: Null,
     missing: void,
 };
 

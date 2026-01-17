@@ -371,6 +371,13 @@ pub fn createValueArray() Value {
     return result;
 }
 
+pub fn getValueNull(value: *const Value) !void {
+    return switch (value.u1.v.type) {
+        IS_NULL => {},
+        else => error.NotNull,
+    };
+}
+
 pub fn getValueBool(value: *const Value) !bool {
     return switch (value.u1.v.type) {
         IS_TRUE => true,
