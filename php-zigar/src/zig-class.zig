@@ -498,22 +498,26 @@ pub const ZigClass = struct {
                     // compound types like structs and unions are represented by objects
                     // these are stored in slots of their parent objects and are created lazily
                     const class = member.class orelse return error.MissingClass;
-                    const complex = accessor.complex.get(.{}, .{
+                    const regular = accessor.slot.get(.{
+                        .type = .regular,
+                    }, .{
                         .class_entry = class.entry(),
                         .byte_offset = byte_offset,
                         .byte_size = byte_size,
                         .slot = slot,
                         .transform = transform,
                     });
-                    return .{ .complex = complex };
+                    return .{ .slot = regular };
                 } else {
                     // static members don't have a size since they're ready-made objects
                     // that sit in the template slots; this is applicable to comptime field as well
-                    const prebaked = accessor.prebaked.get(.{}, .{
+                    const prebaked = accessor.slot.get(.{
+                        .type = .prebaked,
+                    }, .{
                         .slot = slot,
                         .transform = transform,
                     });
-                    return .{ .prebaked = prebaked };
+                    return .{ .slot_prebaked = prebaked };
                 }
             },
             .null, .void => {

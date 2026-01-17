@@ -1,11 +1,10 @@
 const std = @import("std");
 
 pub const boolean = @import("accessor/boolean.zig");
-pub const complex = @import("accessor/complex.zig");
 pub const float = @import("accessor/float.zig");
 pub const int = @import("accessor/int.zig");
 pub const @"null" = @import("accessor/null.zig");
-pub const prebaked = @import("accessor/prebaked.zig");
+pub const slot = @import("accessor/slot.zig");
 pub const vector = @import("accessor/vector.zig");
 const byte_buffer = @import("byte-buffer.zig");
 const ByteBuffer = byte_buffer.ByteBuffer;
@@ -84,7 +83,9 @@ pub const Vector = struct {
     }
 };
 
-pub const Complex = struct {
+pub const SlotAccessorType = enum { regular, array, prebaked };
+
+pub const Slot = struct {
     params: Parameters,
     getter: *const Getter,
     setter: *const Setter,
@@ -108,7 +109,30 @@ pub const Complex = struct {
     }
 };
 
-pub const Prebaked = struct {
+pub const SlotArray = struct {
+    params: Parameters,
+    getter: *const Getter,
+    setter: *const Setter,
+
+    pub const Parameters = struct {
+        byte_size: usize,
+        slot: usize,
+        class_entry: *ClassEntry,
+        transform: Transform,
+    };
+    pub const Getter = fn (*const @This(), *ByteBuffer, *HashTable, usize) Error!Value;
+    pub const Setter = fn (*const @This(), *ByteBuffer, *HashTable, usize, *Value) Error!void;
+
+    pub fn get(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, index: usize) Error!Value {
+        return try self.getter(self, buffer, slots, index);
+    }
+
+    pub fn set(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, index: usize, value: *Value) Error!void {
+        return try self.setter(self, buffer, slots, index, value);
+    }
+};
+
+pub const SlotPrebaked = struct {
     params: Parameters,
     getter: *const Getter,
     setter: *const Setter,
@@ -131,9 +155,10 @@ pub const Prebaked = struct {
 
 pub const Any = union(enum) {
     primitive: Primitive,
-    complex: Complex,
     vector: Vector,
-    prebaked: Prebaked,
+    slot: Slot,
+    slot_array: SlotArray,
+    slot_prebaked: SlotPrebaked,
     null: Null,
     missing: void,
 
@@ -143,10 +168,10 @@ pub const Any = union(enum) {
             .primitive => |acc| if (@hasField(S, "bytes")) {
                 return try acc.get(source.bytes);
             },
-            .complex => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
+            .slot => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
                 if (source.slots) |slots| return try acc.get(source.bytes, slots);
             },
-            .prebaked => |acc| if (@hasField(S, "slots")) {
+            .slot_prebaked => |acc| if (@hasField(S, "slots")) {
                 if (source.slots) |slots| return try acc.get(slots);
             },
             .null => |acc| return try acc.get(),
@@ -161,10 +186,10 @@ pub const Any = union(enum) {
             .primitive => |acc| if (@hasField(S, "bytes")) {
                 return try acc.set(source.bytes, value);
             },
-            .complex => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
+            .slot => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
                 if (source.slots) |slots| return try acc.set(source.bytes, slots, value);
             },
-            .prebaked => |acc| if (@hasField(S, "slots")) {
+            .slot_prebaked => |acc| if (@hasField(S, "slots")) {
                 if (source.slots) |slots| return try acc.set(slots, value);
             },
             .null => |acc| return try acc.set(value),
