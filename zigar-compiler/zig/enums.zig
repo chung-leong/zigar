@@ -14,6 +14,7 @@ pub const StructureType = enum(u32) {
     arg_struct,
     variadic_struct,
     function,
+    @"comptime",
 };
 
 pub const StructurePurpose = enum(u32) {
@@ -51,6 +52,7 @@ pub const StructureFlags = packed union {
     arg_struct: ArgStruct,
     variadic_struct: VariadicStruct,
     function: Function,
+    @"comptime": Comptime,
 
     pub const Common = packed struct(u32) {
         has_value: bool = true,
@@ -106,14 +108,7 @@ pub const StructureFlags = packed union {
         is_packed: bool = false,
         _: u22 = 0,
     };
-    pub const ErrorUnion = packed struct(u32) {
-        has_value: bool = true,
-        has_object: bool = false,
-        has_pointer: bool = false,
-        has_slot: bool = false,
-        has_proxy: bool = false,
-        _: u27 = 0,
-    };
+    pub const ErrorUnion = Common;
     pub const ErrorSet = packed struct(u32) {
         has_value: bool = true,
         has_object: bool = false,
@@ -177,19 +172,12 @@ pub const StructureFlags = packed union {
         is_clamped_array: bool = false,
         _: u25 = 0,
     };
-    pub const Opaque = packed struct(u32) {
+    pub const Opaque = Common;
+    pub const ArgStruct = packed struct(u32) {
         has_value: bool = false,
         has_object: bool = false,
         has_pointer: bool = false,
         has_slot: bool = false,
-        has_proxy: bool = false,
-        _: u27 = 0,
-    };
-    pub const ArgStruct = packed struct(u32) {
-        has_value: bool = false,
-        has_object: bool = false,
-        has_pointer: bool = true,
-        has_slot: bool = true,
         has_proxy: bool = false,
         has_options: bool = false,
         is_throwing: bool = false,
@@ -199,22 +187,16 @@ pub const StructureFlags = packed union {
     pub const VariadicStruct = packed struct(u32) {
         has_value: bool = false,
         has_object: bool = false,
-        has_pointer: bool = true,
-        has_slot: bool = true,
+        has_pointer: bool = false,
+        has_slot: bool = false,
         has_proxy: bool = false,
         has_options: bool = false,
         is_throwing: bool = false,
         is_async: bool = false,
         _: u24 = 0,
     };
-    pub const Function = packed struct(u32) {
-        has_value: bool = false,
-        has_object: bool = false,
-        has_pointer: bool = false,
-        has_slot: bool = false,
-        has_proxy: bool = false,
-        _: u27 = 0,
-    };
+    pub const Function = Common;
+    pub const Comptime = Common;
 };
 
 pub const MemberType = enum(u32) {

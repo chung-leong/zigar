@@ -867,11 +867,11 @@ fn getErrorMessage(comptime ES: type, err: ES) []const u8 {
                 for (name, 0..) |c, i| {
                     const conversion_needed = check: {
                         var needed = false;
-                        if (i > 0 and std.ascii.isUpper(c)) {
+                        if (std.ascii.isUpper(c)) {
                             // previous letter is not uppercase
-                            if (!std.ascii.isUpper(name[i - 1])) {
+                            if (i == 0 or !std.ascii.isUpper(name[i - 1])) {
                                 // next letter is not uppercase
-                                if (i == name.len - 1 or !std.ascii.isUpper(name[i - 1])) {
+                                if (i == name.len - 1 or !std.ascii.isUpper(name[i + 1])) {
                                     needed = true;
                                 }
                             }

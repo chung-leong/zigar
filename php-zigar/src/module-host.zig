@@ -196,10 +196,12 @@ pub const ModuleHost = struct {
         var buffer: *ByteBuffer = undefined;
         if (bytes) |b| {
             const slice = b[0..len];
-            if (copying)
-                buffer = try ByteBuffer.createCopy(slice, 1)
-            else
+            if (copying) {
+                buffer = try ByteBuffer.createCopy(slice, 1);
+                buffer.protect();
+            } else {
                 buffer = try ByteBuffer.createExternal(@constCast(slice));
+            }
         } else {
             buffer = try ByteBuffer.createExternal("");
         }

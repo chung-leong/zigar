@@ -26,6 +26,7 @@ pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) ac
 
         pub fn set(acc: *const accessor.Primitive, buffer: *ByteBuffer, value: *const Value) Error!void {
             const bytes: []u8 = buffer.bytes;
+            if (buffer.is_read_only) return error.WriteProtected;
             if (acc.params.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
             const ptr: *align(1) AT = @ptrCast(&bytes[acc.params.byte_offset]);
             const boolean = try php.getValueBool(value);

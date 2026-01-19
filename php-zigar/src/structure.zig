@@ -10,6 +10,7 @@ const String = php.String;
 const HashTable = php.HashTable;
 pub const ArgStruct = @import("structure/arg-struct.zig").ArgStruct;
 pub const Array = @import("structure/array.zig").Array;
+pub const Comptime = @import("structure/comptime.zig").Comptime;
 pub const Enum = @import("structure/enum.zig").Enum;
 pub const ErrorSet = @import("structure/error-set.zig").ErrorSet;
 pub const ErrorUnion = @import("structure/error-union.zig").ErrorUnion;
@@ -45,6 +46,7 @@ pub const by_enum = .{
     .arg_struct = ArgStruct,
     .variadic_struct = VariadicStruct,
     .function = Function,
+    .@"comptime" = Comptime,
 };
 
 pub fn enumName(comptime S: type) []const u8 {

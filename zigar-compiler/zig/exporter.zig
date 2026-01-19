@@ -43,17 +43,8 @@ fn Factory(comptime host: type, comptime module: type) type {
             else if (slice.is(T))
                 .slice
             else switch (@typeInfo(T)) {
-                .bool,
-                .int,
-                .comptime_int,
-                .float,
-                .comptime_float,
-                .null,
-                .undefined,
-                .void,
-                .type,
-                .enum_literal,
-                => .primitive,
+                .bool, .int, .float, .void => .primitive,
+                .comptime_int, .comptime_float, .enum_literal, .type, .null, .undefined => .@"comptime",
                 .@"struct" => .@"struct",
                 .@"union" => .@"union",
                 .error_union => .error_union,
@@ -88,17 +79,8 @@ fn Factory(comptime host: type, comptime module: type) type {
         }
 
         pub fn getStructureFlags(comptime T: type) switch (@typeInfo(T)) {
-            .bool,
-            .int,
-            .comptime_int,
-            .float,
-            .comptime_float,
-            .null,
-            .undefined,
-            .void,
-            .type,
-            .enum_literal,
-            => StructureFlags.Primitive,
+            .bool, .int, .float, .void => StructureFlags.Primitive,
+            .comptime_int, .comptime_float, .enum_literal, .type, .null, .undefined => StructureFlags.Comptime,
             .@"struct" => if (arg_struct.is(T, null))
                 StructureFlags.ArgStruct
             else if (slice.is(T))
@@ -118,19 +100,11 @@ fn Factory(comptime host: type, comptime module: type) type {
             else => @compileError("Unknown structure: " ++ @typeName(T)),
         } {
             return switch (@typeInfo(T)) {
-                .bool,
-                .int,
-                .comptime_int,
-                .float,
-                .comptime_float,
-                .null,
-                .undefined,
-                .void,
-                .type,
-                .enum_literal,
-                => .{
-                    .has_slot = comptime_only.is(T),
+                .bool, .int, .float, .void => .{
                     .is_size = T == usize or T == isize,
+                },
+                .comptime_int, .comptime_float, .enum_literal, .type, .null, .undefined => .{
+                    .has_slot = true,
                 },
                 .@"struct" => |st| init: {
                     const has_object = inline for (st.fields) |field| {
@@ -249,6 +223,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     };
                 },
                 .pointer => |pt| .{
+                    .has_slot = true,
                     .has_length = pt.size == .slice,
                     .has_proxy = switch (@typeInfo(pt.child)) {
                         .pointer => pt.size != .one, // .one pointer doesn't need a proxy
@@ -431,6 +406,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .optional => try self.addOptionalMembers(list, T),
                 .vector => try self.addVectorMember(list, T),
                 .function => try self.addFunctionMember(list, T),
+                .@"comptime" => try self.addComptimeMember(list, T),
                 else => {},
             }
             return list;
@@ -442,7 +418,6 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .bitSize = bit_size.get(T),
                 .byteSize = byte_size.get(T),
                 .bitOffset = 0,
-                .slot = if (comptime_only.is(T)) @as(usize, 0) else null,
                 .structure = try self.getStructure(T),
             });
         }
@@ -692,9 +667,15 @@ fn Factory(comptime host: type, comptime module: type) type {
             const AT = arg_struct.ArgStruct(FT);
             try appendList(list, .{
                 .type = getMemberType(AT, false),
-                .bitSize = bit_size.get(AT),
-                .byteSize = byte_size.get(AT),
                 .structure = try self.getStructure(AT),
+            });
+        }
+
+        fn addComptimeMember(self: @This(), list: Value, comptime T: type) !void {
+            try appendList(list, .{
+                .type = getMemberType(T, false),
+                .slot = @as(usize, 0),
+                .structure = try self.getStructure(T),
             });
         }
 

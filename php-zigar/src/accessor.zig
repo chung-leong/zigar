@@ -18,6 +18,7 @@ pub const Error = error{
     CannotCreateObject,
     OutOfBound,
     OutOfMemory,
+    WriteProtected,
     Missing,
     NotBoolean,
     NotInteger,

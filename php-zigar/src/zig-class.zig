@@ -285,13 +285,34 @@ pub const ZigClass = struct {
             var pos: HashPosition = undefined;
             php.initializeHashPosition(member_list_ht, &pos);
             while (php.getHashPositionValue(member_list_ht, &pos)) |member_info| {
-                const member_ht = try php.getValueHashTable(member_info);
+                const key = php.getHashPositionKey(member_list_ht, &pos);
+                // if (php.getValueLong(&key)) |int| {
+                //     std.debug.print("key = {d}\n", .{int});
+                // } else |_| if (php.getValueStringContent(&key)) |str| {
+                //     std.debug.print("key = {s}\n", .{str});
+                // } else |_| {}
+                const member_ht = php.getValueHashTable(member_info) catch {
+                    if (member_info.u1.v.type == php.IS_LONG) {
+                        std.debug.print("{x} type = {d}, {d}\n", .{
+                            @intFromPtr(member_list_ht),
+                            member_info.u1.v.type,
+                            member_info.value.lval,
+                        });
+                    } else if (member_info.u1.v.type == php.IS_STRING) {
+                        std.debug.print("{x} type = {d}, {s}\n", .{
+                            @intFromPtr(member_list_ht),
+                            member_info.u1.v.type,
+                            try php.getValueStringContent(member_info),
+                        });
+                    }
+                    if (!php.moveHashPositionForward(member_list_ht, &pos)) break;
+                    continue;
+                };
                 var key_str: ?[]const u8 = null;
                 var key_int: usize = undefined;
                 if (php.getHashEntry(member_ht, "name")) |name| {
                     key_str = try php.getValueStringContent(name);
                 } else |_| {
-                    const key = php.getHashPositionKey(member_list_ht, &pos);
                     key_int = @intCast(try php.getValueLong(&key));
                 }
                 const member = try php.allocator.create(Member);
@@ -483,7 +504,7 @@ pub const ZigClass = struct {
             .void => {
                 return .{ .primitive = accessor.void.get(.{}, .{}) };
             },
-            .object => if (member.slot) |slot| {
+            .object, .type => if (member.slot) |slot| {
                 // the lack of a slot means the member isn't meant to be accessed directly
                 // only applicable to functions, I think
                 const transform: accessor.Transform = get: {
@@ -528,7 +549,7 @@ pub const ZigClass = struct {
             },
             else => {},
         }
-        // std.debug.print("No accessor: {}\n", .{member.type});
+        // std.debug.print("No accessor for {}\n", .{member.type});
         return .{ .missing = {} };
     }
 };

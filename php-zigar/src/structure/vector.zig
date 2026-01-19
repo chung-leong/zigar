@@ -22,7 +22,7 @@ pub const Vector = struct {
         pub fn initialize(self: *@This(), class: *ZigClass) !void {
             // fetch the accessor in advance since we know it can only be a of the vector type
             const member = try class.getMember(.instance, 0);
-            if (member.accessors != .vector) return;
+            if (member.accessors != .vector) return error.InvalidAccessor;
             self.value_acc = &member.accessors.vector;
         }
     };

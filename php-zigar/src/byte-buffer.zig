@@ -10,6 +10,7 @@ pub const ByteBuffer = struct {
     bytes: []u8,
     alignment: usize = 1,
     ref_count: usize = 1,
+    is_read_only: bool = false,
     is_owner: bool = false,
     source: ?*String = null,
     parent: ?*@This() = null,
@@ -62,9 +63,14 @@ pub const ByteBuffer = struct {
         new.* = .{
             .bytes = self.bytes[offset .. offset + len],
             .parent = self,
+            .is_read_only = self.is_read_only,
         };
         self.addRef();
         return new;
+    }
+
+    pub fn protect(self: *@This()) void {
+        self.is_read_only = true;
     }
 
     pub fn addRef(self: *@This()) void {
