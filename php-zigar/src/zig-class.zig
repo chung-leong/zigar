@@ -521,11 +521,11 @@ pub const ZigClass = struct {
             .void => {
                 return .{ .primitive = accessor.void.get(.{}, .{}) };
             },
-            .object, .type => if (member.slot) |slot| {
+            .object, .type, .literal => |t| if (member.slot) |slot| {
                 // the lack of a slot means the member isn't meant to be accessed directly
                 // only applicable to functions, I think
-                const transform: accessor.Transform = get: {
-                    if (member.flags.is_string) {
+                const transform: ?accessor.Transform = get: {
+                    if (member.flags.is_string or t == .literal) {
                         break :get .to_string;
                     } else if (member.flags.is_plain) {
                         break :get .to_plain;
@@ -533,7 +533,7 @@ pub const ZigClass = struct {
                         if (class.flags.common.has_value or class.flags.common.has_proxy)
                             break :get .to_value;
                     }
-                    break :get .none;
+                    break :get null;
                 };
                 if (member.byte_size) |byte_size| {
                     // compound types like structs and unions are represented by objects

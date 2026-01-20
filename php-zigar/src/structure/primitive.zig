@@ -38,6 +38,15 @@ pub const Primitive = struct {
         return try static.value_acc.set(self.bytes, value);
     }
 
+    pub fn getString(obj: *Object) !Value {
+        const self = fromObject(obj);
+        const class = ZigClass.fromObject(obj);
+        const static = class.getStaticData(@This());
+        return try static.value_acc.stringify(self.bytes);
+    }
+
+    pub const getPlain = readSelf;
+
     pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
     pub const freeObject = Super.freeObject;

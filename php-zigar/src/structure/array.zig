@@ -63,6 +63,27 @@ pub const Array = struct {
         return @intCast(key_long);
     }
 
+    pub fn writeSelf(obj: *Object, value: *const Value) !void {
+        const self = fromObject(obj);
+        _ = self;
+        _ = value;
+        unreachable;
+    }
+
+    pub fn getString(obj: *Object) !Value {
+        const self = fromObject(obj);
+        const class = ZigClass.fromObject(obj);
+        if (class.flags.array.is_string) {
+            if (class.byte_size == class.length) {
+                return php.createValueString(self.bytes.bytes);
+            } else if (class.byte_size == class.length) {
+                // TODO: convert to UTF-8
+            }
+        }
+        return error.Unsupported;
+    }
+
+    pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;

@@ -103,7 +103,6 @@ pub fn Parent(comptime S: type) type {
             _ = prop_type;
             if (readMember(obj, name, cache_slot)) |value| {
                 retval.* = value;
-                php.addRef(retval);
             } else |err| {
                 throwFieldError(obj, name, err);
             }

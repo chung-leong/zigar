@@ -46,6 +46,16 @@ pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) ac
             };
             if (comptime AT == T) ptr.* = int else ptr.value = int;
         }
+
+        pub fn stringify(acc: *const accessor.Primitive, buffer: *ByteBuffer) Error!Value {
+            const bytes: []u8 = buffer.bytes;
+            if (acc.params.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
+            const ptr: *align(1) AT = @ptrCast(&bytes[acc.params.byte_offset]);
+            const int = if (comptime AT == T) ptr.* else ptr.value;
+            var buf: [64]u8 = undefined;
+            const str = std.fmt.bufPrint(&buf, "{d}", .{int}) catch unreachable;
+            return php.createValueString(str);
+        }
     };
-    return .{ .getter = &ns.get, .setter = &ns.set, .params = params };
+    return .{ .getter = &ns.get, .setter = &ns.set, .stringifier = &ns.stringify, .params = params };
 }

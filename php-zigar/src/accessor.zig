@@ -28,7 +28,7 @@ pub const Error = error{
     NotArrayOrObject,
 };
 
-pub const Transform = enum { none, to_string, to_plain, to_value };
+pub const Transform = enum { to_string, to_plain, to_value };
 
 pub const Null = struct {
     params: Parameters,
@@ -52,12 +52,14 @@ pub const Primitive = struct {
     params: Parameters,
     getter: *const Getter,
     setter: *const Setter,
+    stringifier: *const Stringifier,
 
     pub const Parameters = struct {
         byte_offset: usize = undefined,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer) Error!Value;
     pub const Setter = fn (*const @This(), *ByteBuffer, *const Value) Error!void;
+    pub const Stringifier = fn (*const @This(), *ByteBuffer) Error!Value;
 
     pub fn get(self: *const @This(), buffer: *ByteBuffer) Error!Value {
         return try self.getter(self, buffer);
@@ -65,6 +67,10 @@ pub const Primitive = struct {
 
     pub fn set(self: *const @This(), buffer: *ByteBuffer, value: *const Value) Error!void {
         return try self.setter(self, buffer, value);
+    }
+
+    pub fn stringify(self: *const @This(), buffer: *ByteBuffer) Error!Value {
+        return try self.stringifier(self, buffer);
     }
 };
 
@@ -98,7 +104,7 @@ pub const MultiSlot = struct {
         byte_size: usize,
         slot: usize,
         class_entry: *ClassEntry,
-        transform: Transform,
+        transform: ?Transform,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer, *Value) Error!Value;
     pub const Setter = fn (*const @This(), *ByteBuffer, *Value, *const Value) Error!void;
@@ -121,7 +127,7 @@ pub const SingleSlot = struct {
         byte_offset: usize = undefined,
         byte_size: usize,
         class_entry: *ClassEntry,
-        transform: Transform,
+        transform: ?Transform,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer, *Value) Error!Value;
     pub const Setter = fn (*const @This(), *ByteBuffer, *Value, *const Value) Error!void;
@@ -144,7 +150,7 @@ pub const ArraySlot = struct {
         byte_size: usize,
         slot: usize,
         class_entry: *ClassEntry,
-        transform: Transform,
+        transform: ?Transform,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer, *Value, usize) Error!Value;
     pub const Setter = fn (*const @This(), *ByteBuffer, *Value, usize, *const Value) Error!void;
@@ -165,7 +171,7 @@ pub const MultiSlotPrebaked = struct {
 
     pub const Parameters = struct {
         slot: usize,
-        transform: Transform,
+        transform: ?Transform,
     };
     pub const Getter = fn (*const @This(), *Value) Error!Value;
     pub const Setter = fn (*const @This(), *Value, *const Value) Error!void;
@@ -185,7 +191,7 @@ pub const SingleSlotPrebaked = struct {
     setter: *const Setter,
 
     pub const Parameters = struct {
-        transform: Transform,
+        transform: ?Transform,
     };
     pub const Getter = fn (*const @This(), *Value) Error!Value;
     pub const Setter = fn (*const @This(), *Value, *const Value) Error!void;

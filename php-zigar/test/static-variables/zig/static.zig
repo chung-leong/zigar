@@ -37,5 +37,7 @@ const std = @import("std");
 pub const ci = 1234;
 pub const cf = 3.14;
 
+pub const enum_literal = .hello;
+
 // const Color = enum { red, blue, green };
 // pub var color: Color = .red;

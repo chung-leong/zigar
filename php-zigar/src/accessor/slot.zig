@@ -134,17 +134,18 @@ const single_slot_prebaked = struct {
     }
 };
 
-pub fn read(entry: *Value, transform: accessor.Transform) Value {
-    switch (transform) {
-        .none => return entry.*,
-        .to_string, .to_plain => {
-            unreachable; // TODO
-        },
-        .to_value => {
-            const obj = php.getValueObject(entry) catch unreachable;
-            const handlers: *const zig_object.ObjectHandlers = @ptrCast(obj.handlers);
-            return handlers.read_self.?(obj);
-        },
+pub fn read(entry: *Value, transform: ?accessor.Transform) Value {
+    if (transform) |t| {
+        const obj = php.getValueObject(entry) catch unreachable;
+        const handlers: *const zig_object.ObjectHandlers = @ptrCast(obj.handlers);
+        return switch (t) {
+            .to_string => handlers.get_string.?(obj),
+            .to_plain => handlers.get_plain.?(obj),
+            .to_value => handlers.read_self.?(obj),
+        };
+    } else {
+        php.addRef(entry);
+        return entry.*;
     }
 }
 
