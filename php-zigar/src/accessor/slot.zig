@@ -104,7 +104,7 @@ const array_slot = struct {
 
 fn createObject(ce: *php.ClassEntry, buffer: *ByteBuffer, offset: usize, len: usize) !Value {
     const slice = try buffer.slice(offset, len);
-    const object = ZigClass.createObjectWith(ce, slice, php.null_value) catch return error.CannotCreateObject;
+    const object = ZigClass.createObjectWith(ce, slice, null) catch return error.CannotCreateObject;
     return php.createValueObject(object);
 }
 

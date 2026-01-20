@@ -47,15 +47,15 @@ $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar")
 // $module->z = .1234;
 // $module->printZ();
 
-// $point = $module->point;
-// echo "x = ", $point->x, "\n";
-// echo "y = ", $point->y, "\n";
-// echo "z = ", $point->z, "\n";
+$point = $module->point;
+echo "x = ", $point->x, "\n";
+echo "y = ", $point->y, "\n";
+echo "z = ", $point->z, "\n";
 
 // echo "ci = $module->ci\n";
 // echo "cf = $module->cf\n";
 // echo "module_enum = $module->enum_literal\n";
 // echo "enum_literal = $module->enum_literal\n";
 
-echo "null_value = $module->null_value\n";
-echo "undefined_value = $module->undefined_value\n";
+// echo "null_value = $module->null_value\n";
+// echo "undefined_value = $module->undefined_value\n";

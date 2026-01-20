@@ -76,13 +76,9 @@ pub fn Parent(comptime S: type) type {
                     1 => get: {
                         // get the only element inside the hash table
                         const ht = try php.getValueHashTable(slots);
-                        if (ht.nNumOfElements > 0) {
-                            var pos: HashPosition = undefined;
-                            php.initializeHashPosition(ht, &pos);
-                            break :get php.getHashPositionValue(ht, &pos).?.*;
-                        } else {
-                            break :get php.createValueNull();
-                        }
+                        var pos: HashPosition = undefined;
+                        php.initializeHashPosition(ht, &pos);
+                        break :get php.getHashPositionValue(ht, &pos).?.*;
                     },
                     else => slots.*,
                 };

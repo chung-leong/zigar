@@ -200,7 +200,10 @@ pub const ZigClass = struct {
             // attach count the number of slots used
             php.initializeHashPosition(ht, &pos);
             while (try php.getHashPositionPointer(*ZigClass.Member, ht, &pos)) |member| {
-                if (member.slot != null) scope.slot_count += 1;
+                switch (member.type) {
+                    .object, .type, .literal => scope.slot_count += 1,
+                    else => {},
+                }
                 if (!php.moveHashPositionForward(ht, &pos)) break;
             }
             // attach accessors to members
@@ -227,11 +230,12 @@ pub const ZigClass = struct {
         self.finalized = true;
     }
 
-    pub fn createInstance(info: *const Value, memory: *const Value, slots: *const Value) !Value {
+    pub fn createInstance(info: *const Value, memory: *const Value, prefilled_slots: ?*const Value) !Value {
+        errdefer |err| std.debug.print("Error = {}\n", .{err});
         const ref = try php.getProperty(info, "class");
         const obj = try php.getValueObject(ref);
         const bytes = try php.getValuePointer(*ByteBuffer, memory);
-        const new = try createObjectWith(obj.ce, bytes, slots);
+        const new = try createObjectWith(obj.ce, bytes, prefilled_slots);
         return php.createValueObject(new);
     }
 
@@ -301,28 +305,7 @@ pub const ZigClass = struct {
             php.initializeHashPosition(member_list_ht, &pos);
             while (php.getHashPositionValue(member_list_ht, &pos)) |member_info| {
                 const key = php.getHashPositionKey(member_list_ht, &pos);
-                // if (php.getValueLong(&key)) |int| {
-                //     std.debug.print("key = {d}\n", .{int});
-                // } else |_| if (php.getValueStringContent(&key)) |str| {
-                //     std.debug.print("key = {s}\n", .{str});
-                // } else |_| {}
-                const member_ht = php.getValueHashTable(member_info) catch {
-                    if (member_info.u1.v.type == php.IS_LONG) {
-                        std.debug.print("{x} type = {d}, {d}\n", .{
-                            @intFromPtr(member_list_ht),
-                            member_info.u1.v.type,
-                            member_info.value.lval,
-                        });
-                    } else if (member_info.u1.v.type == php.IS_STRING) {
-                        std.debug.print("{x} type = {d}, {s}\n", .{
-                            @intFromPtr(member_list_ht),
-                            member_info.u1.v.type,
-                            try php.getValueStringContent(member_info),
-                        });
-                    }
-                    if (!php.moveHashPositionForward(member_list_ht, &pos)) break;
-                    continue;
-                };
+                const member_ht = try php.getValueHashTable(member_info);
                 var key_str: ?[]const u8 = null;
                 var key_int: usize = undefined;
                 if (php.getHashEntry(member_ht, "name")) |name| {
@@ -388,33 +371,9 @@ pub const ZigClass = struct {
         switch (self.type) {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
-                const flags = @field(self.flags, @tagName(t));
-                const bytes = create: {
-                    if (self.type != .variadic_struct) break :create null;
-                    const len = self.byte_size orelse break :create null;
-                    const new = try ByteBuffer.createNew(len, self.alignment);
-                    if (self.instance.template.bytes) |def| @memcpy(new.bytes, def.bytes);
-                    break :create new;
-                };
+                const bytes = try self.createBuffer();
                 defer if (bytes) |b| b.release();
-                var slots = create: {
-                    if (!flags.has_slot) break :create php.createValueNull();
-                    var new = php.createValueArray();
-                    errdefer php.release(&new);
-                    if (self.instance.template.slots) |def| {
-                        const ht = try php.getValueHashTable(def);
-                        const new_ht = try php.getValueHashTable(&new);
-                        var pos: HashPosition = undefined;
-                        php.initializeHashPosition(ht, &pos);
-                        while (php.getHashPositionValue(ht, &pos)) |value| {
-                            const key = php.getHashPositionKey(ht, &pos);
-                            const long = try php.getValueLong(&key);
-                            try php.setHashEntryRef(new_ht, long, value);
-                            if (php.moveHashPositionForward(ht, &pos)) break;
-                        }
-                    }
-                    break :create new;
-                };
+                var slots = try self.createSlots();
                 defer php.release(&slots);
                 const zig_obj = try ZigObject(S).create(self);
                 try zig_obj.setStorage(bytes orelse undefined, &slots);
@@ -423,13 +382,52 @@ pub const ZigClass = struct {
         }
     }
 
-    pub fn createObjectWith(ce: *ClassEntry, bytes: *ByteBuffer, slots: *const Value) !*Object {
+    fn createBuffer(self: *const @This()) !?*ByteBuffer {
+        if (self.type != .variadic_struct) return null;
+        const len = self.byte_size orelse return null;
+        const new = try ByteBuffer.createNew(len, self.alignment);
+        if (self.instance.template.bytes) |def| @memcpy(new.bytes, def.bytes);
+        return new;
+    }
+
+    fn createSlots(self: *const @This()) !Value {
+        if (!self.flags.common.has_slot) return php.createValueNull();
+        var new = php.createValueArray();
+        errdefer php.release(&new);
+        if (self.instance.template.slots) |def| {
+            const ht = try php.getValueHashTable(def);
+            const new_ht = try php.getValueHashTable(&new);
+            var pos: HashPosition = undefined;
+            php.initializeHashPosition(ht, &pos);
+            while (php.getHashPositionValue(ht, &pos)) |value| {
+                const key = php.getHashPositionKey(ht, &pos);
+                const long = try php.getValueLong(&key);
+                try php.setHashEntryRef(new_ht, long, value);
+                if (php.moveHashPositionForward(ht, &pos)) break;
+            }
+        }
+        return new;
+    }
+
+    pub fn createObjectWith(ce: *ClassEntry, bytes: *ByteBuffer, prefilled_slots: ?*const Value) !*Object {
         const self = fromEntry(ce);
         switch (self.type) {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
                 const zig_obj = try ZigObject(S).create(self);
-                try zig_obj.setStorage(bytes, slots);
+                var slots = try self.createSlots();
+                if (prefilled_slots) |objects| {
+                    var pos: HashPosition = undefined;
+                    const ht = try php.getValueHashTable(objects);
+                    php.initializeHashPosition(ht, &pos);
+                    while (php.getHashPositionValue(ht, &pos)) |value| {
+                        const key = php.getHashPositionKey(ht, &pos);
+                        const long = try php.getValueLong(&key);
+                        try php.setPropertyRef(&slots, long, value);
+                        if (php.moveHashPositionForward(ht, &pos)) break;
+                    }
+                }
+                try zig_obj.setStorage(bytes, &slots);
                 return zig_obj.object();
             },
         }
