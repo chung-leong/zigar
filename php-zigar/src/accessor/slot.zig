@@ -5,7 +5,6 @@ const Error = accessor.Error;
 const byte_buffer = @import("../byte-buffer.zig");
 const ByteBuffer = byte_buffer.ByteBuffer;
 const php = @import("../php.zig");
-const HashTable = php.HashTable;
 const Value = php.Value;
 const zig_class = @import("../zig-class.zig");
 const ZigClass = zig_class.ZigClass;
@@ -18,83 +17,120 @@ pub const Attributes = struct {
 
 fn Parameters(comptime attrs: Attributes) type {
     return switch (attrs.type) {
-        .regular => accessor.Slot.Parameters,
-        .array => accessor.SlotArray.Parameters,
-        .prebaked => accessor.SlotPrebaked.Parameters,
+        .multi_slot => accessor.MultiSlot.Parameters,
+        .single_slot => accessor.SingleSlot.Parameters,
+        .array_slot => accessor.ArraySlot.Parameters,
+        .multi_slot_prebaked => accessor.MultiSlotPrebaked.Parameters,
+        .single_slot_prebaked => accessor.SingleSlotPrebaked.Parameters,
     };
 }
 
 fn Accessors(comptime attrs: Attributes) type {
     return switch (attrs.type) {
-        .regular => accessor.Slot,
-        .array => accessor.SlotArray,
-        .prebaked => accessor.SlotPrebaked,
+        .multi_slot => accessor.MultiSlot,
+        .single_slot => accessor.SingleSlot,
+        .array_slot => accessor.ArraySlot,
+        .multi_slot_prebaked => accessor.MultiSlotPrebaked,
+        .single_slot_prebaked => accessor.SingleSlotPrebaked,
     };
 }
 
 pub fn get(comptime attrs: Attributes, params: Parameters(attrs)) Accessors(attrs) {
     const ns = switch (attrs.type) {
-        .regular => regular,
-        .array => array,
-        .prebaked => prebaked,
+        .multi_slot => multi_slot,
+        .single_slot => single_slot,
+        .array_slot => array_slot,
+        .multi_slot_prebaked => multi_slot_prebaked,
+        .single_slot_prebaked => single_slot_prebaked,
     };
     return .{ .getter = &ns.get, .setter = &ns.set, .params = params };
 }
 
-const regular = struct {
-    pub fn get(acc: *const accessor.Slot, buffer: *ByteBuffer, slots: *HashTable) Error!Value {
+const multi_slot = struct {
+    pub fn get(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, slots: *Value) Error!Value {
         const entry = try vivicateSlot(acc, buffer, slots);
         return read(entry, acc.params.transform);
     }
 
-    pub fn set(acc: *const accessor.Slot, buffer: *ByteBuffer, slots: *HashTable, value: *const Value) Error!void {
+    pub fn set(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, slots: *Value, value: *const Value) Error!void {
         const entry = try vivicateSlot(acc, buffer, slots);
         try write(entry, value);
     }
 
-    fn vivicateSlot(acc: *const accessor.Slot, buffer: *ByteBuffer, slots: *HashTable) Error!*Value {
-        return php.getHashEntry(slots, acc.params.slot) catch vivicate: {
+    fn vivicateSlot(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, slots: *Value) Error!*Value {
+        const ht = try php.getValueHashTable(slots);
+        return php.getHashEntry(ht, acc.params.slot) catch vivicate: {
             var new = try createObject(acc.params.class_entry, buffer, acc.params.byte_offset, acc.params.byte_size);
-            break :vivicate try php.insertHashEntry(slots, acc.params.slot, &new);
+            break :vivicate try php.insertHashEntry(ht, acc.params.slot, &new);
         };
     }
 };
 
-const array = struct {
-    pub fn get(acc: *const accessor.SlotArray, buffer: *ByteBuffer, slots: *HashTable, index: usize) Error!Value {
+const single_slot = struct {
+    pub fn get(acc: *const accessor.SingleSlot, buffer: *ByteBuffer, slot: *Value) Error!Value {
+        const entry = try vivicateSlot(acc, buffer, slot);
+        return read(entry, acc.params.transform);
+    }
+
+    pub fn set(acc: *const accessor.SingleSlot, buffer: *ByteBuffer, slot: *Value, value: *const Value) Error!void {
+        const entry = try vivicateSlot(acc, buffer, slot);
+        try write(entry, value);
+    }
+
+    fn vivicateSlot(acc: *const accessor.SingleSlot, buffer: *ByteBuffer, slot: *Value) Error!*Value {
+        if (php.isNull(slot))
+            slot.* = try createObject(acc.params.class_entry, buffer, acc.params.byte_offset, acc.params.byte_size);
+        return slot;
+    }
+};
+
+const array_slot = struct {
+    pub fn get(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize) Error!Value {
         const entry = try vivicateSlot(acc, buffer, slots, index);
         return read(entry, acc.params.transform);
     }
 
-    pub fn set(acc: *const accessor.SlotArray, buffer: *ByteBuffer, slots: *HashTable, index: usize, value: *const Value) Error!void {
+    pub fn set(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize, value: *const Value) Error!void {
         const entry = try vivicateSlot(acc, buffer, slots, index);
         try write(entry, value);
     }
 
-    fn vivicateSlot(acc: *const accessor.SlotArray, buffer: *ByteBuffer, slots: *HashTable, index: usize) Error!*Value {
-        return php.getHashEntry(slots, acc.params.slot) catch vivicate: {
+    fn vivicateSlot(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize) Error!*Value {
+        const ht = try php.getValueHashTable(slots);
+        return php.getHashEntry(ht, acc.params.slot) catch vivicate: {
             var new = try createObject(acc.params.class_entry, buffer, acc.params.byte_size * index, acc.params.byte_size);
-            break :vivicate try php.insertHashEntry(slots, acc.params.slot, &new);
+            break :vivicate try php.insertHashEntry(ht, acc.params.slot, &new);
         };
     }
 };
 
 fn createObject(ce: *php.ClassEntry, buffer: *ByteBuffer, offset: usize, len: usize) !Value {
     const slice = try buffer.slice(offset, len);
-    var memory = php.createValuePointer(slice);
-    const object = ZigClass.createObjectWith(ce, &memory, null) catch return error.CannotCreateObject;
+    const object = ZigClass.createObjectWith(ce, slice, php.null_value) catch return error.CannotCreateObject;
     return php.createValueObject(object);
 }
 
-const prebaked = struct {
-    pub fn get(acc: *const accessor.SlotPrebaked, slots: *HashTable) Error!Value {
-        const entry = try php.getHashEntry(slots, acc.params.slot);
+const multi_slot_prebaked = struct {
+    pub fn get(acc: *const accessor.MultiSlotPrebaked, slots: *Value) Error!Value {
+        const ht = try php.getValueHashTable(slots);
+        const entry = try php.getHashEntry(ht, acc.params.slot);
         return read(entry, acc.params.transform);
     }
 
-    pub fn set(acc: *const accessor.SlotPrebaked, slots: *HashTable, value: *const Value) Error!void {
-        const entry = try php.getHashEntry(slots, acc.params.slot);
+    pub fn set(acc: *const accessor.MultiSlotPrebaked, slots: *Value, value: *const Value) Error!void {
+        const ht = try php.getValueHashTable(slots);
+        const entry = try php.getHashEntry(ht, acc.params.slot);
         try write(entry, value);
+    }
+};
+
+const single_slot_prebaked = struct {
+    pub fn get(acc: *const accessor.SingleSlotPrebaked, slot: *Value) Error!Value {
+        return read(slot, acc.params.transform);
+    }
+
+    pub fn set(_: *const accessor.SingleSlotPrebaked, slot: *Value, value: *const Value) Error!void {
+        try write(slot, value);
     }
 };
 

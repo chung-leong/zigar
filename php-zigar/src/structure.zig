@@ -4,10 +4,11 @@ const accessor = @import("accessor.zig");
 const byte_buffer = @import("byte-buffer.zig");
 const ByteBuffer = byte_buffer.ByteBuffer;
 const php = @import("php.zig");
-const Value = php.Value;
+const HashTable = php.HashTable;
+const HashPosition = php.HashPosition;
 const Object = php.Object;
 const String = php.String;
-const HashTable = php.HashTable;
+const Value = php.Value;
 pub const ArgStruct = @import("structure/arg-struct.zig").ArgStruct;
 pub const Array = @import("structure/array.zig").Array;
 pub const Comptime = @import("structure/comptime.zig").Comptime;
@@ -63,9 +64,26 @@ pub fn Parent(comptime S: type) type {
             accessors: *const accessor.Any,
         };
 
-        pub fn setStorage(self: *S, bytes: *ByteBuffer, slots: ?*HashTable) !void {
-            if (@hasField(S, "bytes")) self.bytes = bytes;
-            if (@hasField(S, "slots")) self.slots = slots;
+        pub fn setStorage(self: *S, bytes: *ByteBuffer, slots: *const Value) !void {
+            if (@hasField(S, "bytes")) {
+                self.bytes = bytes;
+                self.bytes.addRef();
+            }
+            if (@hasField(S, "slots")) {
+                const class = ZigClass.fromStructure(self);
+                self.slots = switch (class.getSlotCount(scope)) {
+                    0 => php.createValueNull(),
+                    1 => get: {
+                        // get the only element inside the hash table
+                        const ht = try php.getValueHashTable(slots);
+                        var pos: HashPosition = undefined;
+                        php.initializeHashPosition(ht, &pos);
+                        break :get php.getHashPositionValue(ht, &pos).?.*;
+                    },
+                    else => slots.*,
+                };
+                php.addRef(&self.slots);
+            }
         }
 
         pub fn readSelf(obj: *Object) !Value {
@@ -77,7 +95,7 @@ pub fn Parent(comptime S: type) type {
             const self = fromObject(obj);
             const class = ZigClass.fromObject(obj);
             if (@hasField(S, "bytes")) self.bytes.release();
-            if (@hasField(S, "slots")) if (self.slots) |ht| php.release(ht);
+            if (@hasField(S, "slots")) php.release(&self.slots);
             class.release();
         }
 

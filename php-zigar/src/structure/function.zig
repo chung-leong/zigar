@@ -5,7 +5,6 @@ const ByteBuffer = byte_buffer.ByteBuffer;
 const php = @import("../php.zig");
 const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
-const HashTable = php.HashTable;
 const Object = php.Object;
 const Value = php.Value;
 const structure = @import("../structure.zig");
@@ -34,7 +33,7 @@ pub const Function = struct {
         }
     };
 
-    pub fn setStorage(self: *@This(), buffer: *ByteBuffer, _: ?*HashTable) !void {
+    pub fn setStorage(self: *@This(), buffer: *ByteBuffer, _: *const Value) !void {
         self.address = @intFromPtr(buffer.bytes.ptr);
         buffer.release(); // the buffer only existed to convey the function's address
         const class = ZigClass.fromStructure(self);

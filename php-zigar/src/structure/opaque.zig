@@ -4,9 +4,6 @@ const byte_buffer = @import("../byte-buffer.zig");
 const ByteBuffer = byte_buffer.ByteBuffer;
 const php = @import("../php.zig");
 const Value = php.Value;
-const Object = php.Object;
-const String = php.String;
-const HashTable = php.HashTable;
 const structure = @import("../structure.zig");
 
 pub const Opaque = struct {

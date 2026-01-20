@@ -55,4 +55,3 @@ $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar")
 echo "ci = $module->ci\n";
 echo "cf = $module->cf\n";
 
-$module->ci = 1;

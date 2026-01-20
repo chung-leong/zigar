@@ -210,7 +210,7 @@ pub const ModuleHost = struct {
     }
 
     fn createInstance(self: *@This(), structure: *Value, dv: *Value, slots: ?*Value) !*Value {
-        const value = try ZigClass.createInstance(structure, dv, slots);
+        const value = try ZigClass.createInstance(structure, dv, slots orelse php.null_value);
         return self.allocateValue(value);
     }
 

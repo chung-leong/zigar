@@ -37,7 +37,7 @@ pub fn ZigObject(comptime S: type) type {
             php.release(self.object());
         }
 
-        pub fn create(class: *ZigClass, bytes: *ByteBuffer, slots: ?*HashTable) !*@This() {
+        pub fn create(class: *ZigClass) !*@This() {
             const prop_size = php.getObjectPropertySize(class.entry());
             const size: usize = @intCast(@sizeOf(@This()) + prop_size);
             // we can't use the allocator here, since freeing is done by PHP itself
@@ -49,11 +49,12 @@ pub fn ZigObject(comptime S: type) type {
             obj.handlers = @ptrCast(getHandlers());
             php.initializeStandardObject(self.object(), class.entry());
             php.initializeObjectProperties(self.object(), class.entry());
-            if (@hasDecl(S, "setStorage")) {
-                try self.zig_portion.setStorage(bytes, slots);
-            }
             class.addRef();
             return self;
+        }
+
+        pub fn setStorage(self: *@This(), bytes: *ByteBuffer, slots: *const Value) !void {
+            return try self.zig_portion.setStorage(bytes, slots);
         }
 
         fn getHandlers() *ObjectHandlers {

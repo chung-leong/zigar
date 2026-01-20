@@ -4,17 +4,15 @@ const accessor = @import("../accessor.zig");
 const byte_buffer = @import("../byte-buffer.zig");
 const ByteBuffer = byte_buffer.ByteBuffer;
 const php = @import("../php.zig");
-const Value = php.Value;
 const Object = php.Object;
-const String = php.String;
-const HashTable = php.HashTable;
+const Value = php.Value;
 const structure = @import("../structure.zig");
 const zig_class = @import("../zig-class.zig");
 const ZigClass = zig_class.ZigClass;
 
 pub const Slice = struct {
     bytes: *ByteBuffer = undefined,
-    slots: ?*HashTable = undefined,
+    slots: Value = undefined,
 
     const Super = structure.Parent(@This());
     pub const Static = struct {

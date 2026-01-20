@@ -371,6 +371,13 @@ pub fn createValueArray() Value {
     return result;
 }
 
+pub fn isNull(value: *const Value) bool {
+    return switch (value.u1.v.type) {
+        IS_NULL => true,
+        else => false,
+    };
+}
+
 pub fn getValueNull(value: *const Value) !void {
     return switch (value.u1.v.type) {
         IS_NULL => {},
@@ -443,7 +450,7 @@ pub fn getValuePointer(comptime T: type, value: *const Value) !T {
     };
 }
 
-pub fn getProperty(object: *Value, key: anytype) !*Value {
+pub fn getProperty(object: *const Value, key: anytype) !*Value {
     const ht = try getValueHashTable(object);
     return try getHashEntry(ht, key);
 }
@@ -740,6 +747,11 @@ pub fn throwExceptionFmt(comptime fmt: []const u8, params: anytype) void {
 
 pub const emalloc = php_h._emalloc;
 pub const efree = php_h.efree;
+
+pub const null_value: *const Value = &.{
+    .value = .{ .lval = 0 },
+    .u1 = .{ .type_info = IS_NULL },
+};
 
 pub const allocator: std.mem.Allocator = .{
     .ptr = undefined,

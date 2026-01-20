@@ -25,6 +25,7 @@ pub const Error = error{
     NotDouble,
     NotString,
     NotNull,
+    NotArrayOrObject,
 };
 
 pub const Transform = enum { none, to_string, to_plain, to_value };
@@ -85,9 +86,9 @@ pub const Vector = struct {
     }
 };
 
-pub const SlotAccessorType = enum { regular, array, prebaked };
+pub const SlotAccessorType = enum { multi_slot, single_slot, multi_slot_prebaked, single_slot_prebaked, array_slot };
 
-pub const Slot = struct {
+pub const MultiSlot = struct {
     params: Parameters,
     getter: *const Getter,
     setter: *const Setter,
@@ -99,19 +100,42 @@ pub const Slot = struct {
         class_entry: *ClassEntry,
         transform: Transform,
     };
-    pub const Getter = fn (*const @This(), *ByteBuffer, *HashTable) Error!Value;
-    pub const Setter = fn (*const @This(), *ByteBuffer, *HashTable, *const Value) Error!void;
+    pub const Getter = fn (*const @This(), *ByteBuffer, *Value) Error!Value;
+    pub const Setter = fn (*const @This(), *ByteBuffer, *Value, *const Value) Error!void;
 
-    pub fn get(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable) Error!Value {
+    pub fn get(self: *const @This(), buffer: *ByteBuffer, slots: *Value) Error!Value {
         return try self.getter(self, buffer, slots);
     }
 
-    pub fn set(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, value: *const Value) Error!void {
+    pub fn set(self: *const @This(), buffer: *ByteBuffer, slots: *Value, value: *const Value) Error!void {
         return try self.setter(self, buffer, slots, value);
     }
 };
 
-pub const SlotArray = struct {
+pub const SingleSlot = struct {
+    params: Parameters,
+    getter: *const Getter,
+    setter: *const Setter,
+
+    pub const Parameters = struct {
+        byte_offset: usize = undefined,
+        byte_size: usize,
+        class_entry: *ClassEntry,
+        transform: Transform,
+    };
+    pub const Getter = fn (*const @This(), *ByteBuffer, *Value) Error!Value;
+    pub const Setter = fn (*const @This(), *ByteBuffer, *Value, *const Value) Error!void;
+
+    pub fn get(self: *const @This(), buffer: *ByteBuffer, slots: *Value) Error!Value {
+        return try self.getter(self, buffer, slots);
+    }
+
+    pub fn set(self: *const @This(), buffer: *ByteBuffer, slots: *Value, value: *const Value) Error!void {
+        return try self.setter(self, buffer, slots, value);
+    }
+};
+
+pub const ArraySlot = struct {
     params: Parameters,
     getter: *const Getter,
     setter: *const Setter,
@@ -122,19 +146,19 @@ pub const SlotArray = struct {
         class_entry: *ClassEntry,
         transform: Transform,
     };
-    pub const Getter = fn (*const @This(), *ByteBuffer, *HashTable, usize) Error!Value;
-    pub const Setter = fn (*const @This(), *ByteBuffer, *HashTable, usize, *const Value) Error!void;
+    pub const Getter = fn (*const @This(), *ByteBuffer, *Value, usize) Error!Value;
+    pub const Setter = fn (*const @This(), *ByteBuffer, *Value, usize, *const Value) Error!void;
 
-    pub fn get(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, index: usize) Error!Value {
+    pub fn get(self: *const @This(), buffer: *ByteBuffer, slots: *Value, index: usize) Error!Value {
         return try self.getter(self, buffer, slots, index);
     }
 
-    pub fn set(self: *const @This(), buffer: *ByteBuffer, slots: *HashTable, index: usize, value: *const Value) Error!void {
+    pub fn set(self: *const @This(), buffer: *ByteBuffer, slots: *Value, index: usize, value: *const Value) Error!void {
         return try self.setter(self, buffer, slots, index, value);
     }
 };
 
-pub const SlotPrebaked = struct {
+pub const MultiSlotPrebaked = struct {
     params: Parameters,
     getter: *const Getter,
     setter: *const Setter,
@@ -143,14 +167,34 @@ pub const SlotPrebaked = struct {
         slot: usize,
         transform: Transform,
     };
-    pub const Getter = fn (*const @This(), *HashTable) Error!Value;
-    pub const Setter = fn (*const @This(), *HashTable, *const Value) Error!void;
+    pub const Getter = fn (*const @This(), *Value) Error!Value;
+    pub const Setter = fn (*const @This(), *Value, *const Value) Error!void;
 
-    pub fn get(self: *const @This(), slots: *HashTable) Error!Value {
+    pub fn get(self: *const @This(), slots: *Value) Error!Value {
         return try self.getter(self, slots);
     }
 
-    pub fn set(self: *const @This(), slots: *HashTable, value: *const Value) Error!void {
+    pub fn set(self: *const @This(), slots: *Value, value: *const Value) Error!void {
+        return try self.setter(self, slots, value);
+    }
+};
+
+pub const SingleSlotPrebaked = struct {
+    params: Parameters,
+    getter: *const Getter,
+    setter: *const Setter,
+
+    pub const Parameters = struct {
+        transform: Transform,
+    };
+    pub const Getter = fn (*const @This(), *Value) Error!Value;
+    pub const Setter = fn (*const @This(), *Value, *const Value) Error!void;
+
+    pub fn get(self: *const @This(), slots: *Value) Error!Value {
+        return try self.getter(self, slots);
+    }
+
+    pub fn set(self: *const @This(), slots: *Value, value: *const Value) Error!void {
         return try self.setter(self, slots, value);
     }
 };
@@ -158,24 +202,23 @@ pub const SlotPrebaked = struct {
 pub const Any = union(enum) {
     primitive: Primitive,
     vector: Vector,
-    slot: Slot,
-    slot_array: SlotArray,
-    slot_prebaked: SlotPrebaked,
+    multi_slot: MultiSlot,
+    single_slot: SingleSlot,
+    array_slot: ArraySlot,
+    multi_slot_prebaked: MultiSlotPrebaked,
+    single_slot_prebaked: SingleSlotPrebaked,
     null: Null,
     missing: void,
 
     pub fn get(self: *const @This(), source: anytype) !Value {
         const S = @TypeOf(source.*);
         switch (self.*) {
-            .primitive => |acc| if (@hasField(S, "bytes")) {
-                return try acc.get(source.bytes);
-            },
-            .slot => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
-                if (source.slots) |slots| return try acc.get(source.bytes, slots);
-            },
-            .slot_prebaked => |acc| if (@hasField(S, "slots")) {
-                if (source.slots) |slots| return try acc.get(slots);
-            },
+            .primitive => |acc| if (@hasField(S, "bytes"))
+                return try acc.get(source.bytes),
+            inline .multi_slot, .single_slot => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots"))
+                return try acc.get(source.bytes, &source.slots),
+            inline .multi_slot_prebaked, .single_slot_prebaked => |acc| if (@hasField(S, "slots"))
+                return try acc.get(&source.slots),
             .null => |acc| return try acc.get(),
             else => {},
         }
@@ -185,12 +228,10 @@ pub const Any = union(enum) {
     pub fn getElement(self: *const @This(), source: anytype, index: usize) !Value {
         const S = @TypeOf(source.*);
         switch (self.*) {
-            .vector => |acc| if (@hasField(S, "bytes")) {
-                return try acc.get(source.bytes, index);
-            },
-            .slot_array => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
-                if (source.slots) |slots| return try acc.get(source.bytes, slots, index);
-            },
+            .vector => |acc| if (@hasField(S, "bytes"))
+                return try acc.get(source.bytes, index),
+            .array_slot => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots"))
+                return try acc.get(source.bytes, &source.slots, index),
             else => {},
         }
         return error.InvalidOperation;
@@ -199,15 +240,12 @@ pub const Any = union(enum) {
     pub fn set(self: *const @This(), source: anytype, value: *const Value) !void {
         const S = @TypeOf(source.*);
         switch (self.*) {
-            .primitive => |acc| if (@hasField(S, "bytes")) {
-                return try acc.set(source.bytes, value);
-            },
-            .slot => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
-                if (source.slots) |slots| return try acc.set(source.bytes, slots, value);
-            },
-            .slot_prebaked => |acc| if (@hasField(S, "slots")) {
-                if (source.slots) |slots| return try acc.set(slots, value);
-            },
+            .primitive => |acc| if (@hasField(S, "bytes"))
+                return try acc.set(source.bytes, value),
+            inline .multi_slot, .single_slot => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots"))
+                return try acc.set(source.bytes, &source.slots, value),
+            inline .multi_slot_prebaked, .single_slot_prebaked => |acc| if (@hasField(S, "slots"))
+                return try acc.set(&source.slots, value),
             .null => |acc| return try acc.set(value),
             else => {},
         }
@@ -217,12 +255,10 @@ pub const Any = union(enum) {
     pub fn setElement(self: *const @This(), source: anytype, index: usize, value: *const Value) !void {
         const S = @TypeOf(source.*);
         switch (self.*) {
-            .vector => |acc| if (@hasField(S, "bytes")) {
-                return try acc.set(source.bytes, index, value);
-            },
-            .slot_array => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots")) {
-                if (source.slots) |slots| return try acc.set(source.bytes, slots, index, value);
-            },
+            .vector => |acc| if (@hasField(S, "bytes"))
+                return try acc.set(source.bytes, index, value),
+            .array_slot => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots"))
+                return try acc.set(source.bytes, &source.slots, index, value),
             else => {},
         }
         return error.InvalidOperation;

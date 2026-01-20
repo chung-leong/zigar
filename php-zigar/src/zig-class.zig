@@ -43,6 +43,7 @@ pub const ZigClass = struct {
     const Scope = struct {
         members: HashTable = undefined,
         template: Template = undefined,
+        slot_count: usize = 0,
 
         fn release(self: *@This()) void {
             php.destroyHashTable(&self.members);
@@ -67,7 +68,7 @@ pub const ZigClass = struct {
     };
     pub const Template = struct {
         bytes: ?*ByteBuffer = null,
-        slots: ?*HashTable = null,
+        slots: ?*Value = null,
 
         fn release(self: *@This()) void {
             if (self.bytes) |b| b.release();
@@ -192,19 +193,26 @@ pub const ZigClass = struct {
         errdefer self.instance.release();
         self.static = try self.extractScope(info, "static");
         errdefer self.static.release();
-        // set slots of ref object
-        const static = structure.Static.fromObject(obj);
-        try static.setStorage(undefined, self.static.template.slots);
-        // attach accessors to members
         inline for (.{ "static", "instance" }) |scope_name| {
-            const members = &@field(self, scope_name).members;
+            const scope = &@field(self, scope_name);
+            const ht = &scope.members;
             var pos: php.HashPosition = undefined;
-            php.initializeHashPosition(members, &pos);
-            while (try php.getHashPositionPointer(*ZigClass.Member, members, &pos)) |member| {
-                member.accessors = try getAccessors(member);
-                if (!php.moveHashPositionForward(members, &pos)) break;
+            // attach count the number of slots used
+            php.initializeHashPosition(ht, &pos);
+            while (try php.getHashPositionPointer(*ZigClass.Member, ht, &pos)) |member| {
+                if (member.slot != null) scope.slot_count += 1;
+                if (!php.moveHashPositionForward(ht, &pos)) break;
+            }
+            // attach accessors to members
+            php.initializeHashPosition(ht, &pos);
+            while (try php.getHashPositionPointer(*ZigClass.Member, ht, &pos)) |member| {
+                member.accessors = try getAccessors(scope, member);
+                if (!php.moveHashPositionForward(ht, &pos)) break;
             }
         }
+        // set slots of ref object
+        const static = structure.Static.fromObject(obj);
+        try static.setStorage(undefined, self.static.template.slots orelse php.null_value);
         // initialize static data
         switch (self.type) {
             inline else => |t| {
@@ -219,10 +227,11 @@ pub const ZigClass = struct {
         self.finalized = true;
     }
 
-    pub fn createInstance(info: *Value, memory: *Value, slots: ?*Value) !Value {
+    pub fn createInstance(info: *const Value, memory: *const Value, slots: *const Value) !Value {
         const ref = try php.getProperty(info, "class");
         const obj = try php.getValueObject(ref);
-        const new = try createObjectWith(obj.ce, memory, slots);
+        const bytes = try php.getValuePointer(*ByteBuffer, memory);
+        const new = try createObjectWith(obj.ce, bytes, slots);
         return php.createValueObject(new);
     }
 
@@ -242,6 +251,12 @@ pub const ZigClass = struct {
 
     pub fn getName(self: *@This()) []const u8 {
         return php.getStringContent(self.php_portion.name);
+    }
+
+    pub fn getSlotCount(self: *@This(), comptime scope: ScopeType) usize {
+        return switch (scope) {
+            inline else => |s| @field(self, @tagName(s)).slot_count,
+        };
     }
 
     pub fn getMember(self: *@This(), comptime scope: ScopeType, key: anytype) !*Member {
@@ -346,34 +361,24 @@ pub const ZigClass = struct {
 
     fn extractTemplate(_: *@This(), scope_info: *Value) !Template {
         if (php.getProperty(scope_info, "template")) |template_info| {
-            const memory = php.getProperty(template_info, "memory") catch null;
-            const objects = php.getProperty(template_info, "slots") catch null;
-            const bytes = try extractBytes(memory);
-            errdefer if (bytes) |b| b.release();
-            const slots = try extractSlots(objects);
+            const bytes = if (php.getProperty(template_info, "memory")) |value| use: {
+                const buf = try php.getValuePointer(*ByteBuffer, value);
+                buf.addRef();
+                break :use buf;
+            } else |_| null;
+            const slots = if (php.getProperty(template_info, "slots")) |value| use: {
+                php.addRef(value);
+                break :use value;
+            } else |_| null;
             return .{ .bytes = bytes, .slots = slots };
         } else |_| {
             return .{ .bytes = null, .slots = null };
         }
     }
 
-    fn extractBytes(memory: ?*Value) !?*ByteBuffer {
-        const value = memory orelse return null;
-        const buf = try php.getValuePointer(*ByteBuffer, value);
-        buf.addRef();
-        return buf;
-    }
-
-    fn extractSlots(slots: ?*Value) !?*HashTable {
-        const value = slots orelse return null;
-        const ht = try php.getValueHashTable(value);
-        php.addRef(ht);
-        return ht;
-    }
-
     fn createRef(ce: *ClassEntry) !Value {
         const self = fromEntry(ce);
-        const zig_obj = try ZigObject(structure.Static).create(self, undefined, undefined);
+        const zig_obj = try ZigObject(structure.Static).create(self);
         self.release(); // remove initial refcount now that the ref object exists
         return php.createValueObject(zig_obj.object());
     }
@@ -385,40 +390,52 @@ pub const ZigClass = struct {
                 const S = @field(structure.by_enum, @tagName(t));
                 const flags = @field(self.flags, @tagName(t));
                 const bytes = create: {
-                    const byte_size = if (self.type != .variadic_struct) self.byte_size else null;
-                    const len = byte_size orelse break :create undefined;
-                    break :create if (self.instance.template.bytes) |buffer|
-                        try buffer.duplicate()
-                    else
-                        try ByteBuffer.createNew(len, self.alignment);
+                    if (self.type != .variadic_struct) break :create null;
+                    const len = self.byte_size orelse break :create null;
+                    const new = try ByteBuffer.createNew(len, self.alignment);
+                    if (self.instance.template.bytes) |def| @memcpy(new.bytes, def.bytes);
+                    break :create new;
                 };
-                errdefer bytes.release();
-                const slots = create: {
-                    if (!flags.has_slot) break :create null;
-                    const ht = php.createArray();
-                    break :create ht;
+                defer if (bytes) |b| b.release();
+                var slots = create: {
+                    if (!flags.has_slot) break :create php.createValueNull();
+                    var new = php.createValueArray();
+                    errdefer php.release(&new);
+                    if (self.instance.template.slots) |def| {
+                        const ht = try php.getValueHashTable(def);
+                        const new_ht = try php.getValueHashTable(&new);
+                        var pos: HashPosition = undefined;
+                        php.initializeHashPosition(ht, &pos);
+                        while (php.getHashPositionValue(ht, &pos)) |value| {
+                            const key = php.getHashPositionKey(ht, &pos);
+                            const long = try php.getValueLong(&key);
+                            try php.setHashEntryRef(new_ht, long, value);
+                            if (php.moveHashPositionForward(ht, &pos)) break;
+                        }
+                    }
+                    break :create new;
                 };
-                const zig_obj = try ZigObject(S).create(self, bytes, slots);
+                defer php.release(&slots);
+                const zig_obj = try ZigObject(S).create(self);
+                try zig_obj.setStorage(bytes orelse undefined, &slots);
                 return zig_obj.object();
             },
         }
     }
 
-    pub fn createObjectWith(ce: *ClassEntry, memory: *Value, objects: ?*Value) !*Object {
+    pub fn createObjectWith(ce: *ClassEntry, bytes: *ByteBuffer, slots: *const Value) !*Object {
         const self = fromEntry(ce);
         switch (self.type) {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
-                const bytes = try extractBytes(memory);
-                errdefer if (bytes) |b| b.release();
-                const slots = try extractSlots(objects);
-                const zig_obj = try ZigObject(S).create(self, bytes.?, slots);
+                const zig_obj = try ZigObject(S).create(self);
+                try zig_obj.setStorage(bytes, slots);
                 return zig_obj.object();
             },
         }
     }
 
-    fn getAccessors(member: *Member) !accessor.Any {
+    fn getAccessors(scope: *Scope, member: *Member) !accessor.Any {
         @setEvalBranchQuota(2000000);
         // array accessors don't have an offset
         const for_scalar = member.bit_offset != null;
@@ -522,26 +539,43 @@ pub const ZigClass = struct {
                     // compound types like structs and unions are represented by objects
                     // these are stored in slots of their parent objects and are created lazily
                     const class = member.class orelse return error.MissingClass;
-                    const regular = accessor.slot.get(.{
-                        .type = .regular,
-                    }, .{
-                        .class_entry = class.entry(),
-                        .byte_offset = byte_offset,
-                        .byte_size = byte_size,
-                        .slot = slot,
-                        .transform = transform,
-                    });
-                    return .{ .slot = regular };
+                    return if (scope.slot_count > 1) .{
+                        .multi_slot = accessor.slot.get(.{
+                            .type = .multi_slot,
+                        }, .{
+                            .class_entry = class.entry(),
+                            .byte_offset = byte_offset,
+                            .byte_size = byte_size,
+                            .slot = slot,
+                            .transform = transform,
+                        }),
+                    } else .{
+                        .single_slot = accessor.slot.get(.{
+                            .type = .single_slot,
+                        }, .{
+                            .class_entry = class.entry(),
+                            .byte_offset = byte_offset,
+                            .byte_size = byte_size,
+                            .transform = transform,
+                        }),
+                    };
                 } else {
                     // static members don't have a size since they're ready-made objects
                     // that sit in the template slots; this is applicable to comptime field as well
-                    const prebaked = accessor.slot.get(.{
-                        .type = .prebaked,
-                    }, .{
-                        .slot = slot,
-                        .transform = transform,
-                    });
-                    return .{ .slot_prebaked = prebaked };
+                    return if (scope.slot_count > 1) .{
+                        .multi_slot_prebaked = accessor.slot.get(.{
+                            .type = .multi_slot_prebaked,
+                        }, .{
+                            .slot = slot,
+                            .transform = transform,
+                        }),
+                    } else .{
+                        .single_slot_prebaked = accessor.slot.get(.{
+                            .type = .single_slot_prebaked,
+                        }, .{
+                            .transform = transform,
+                        }),
+                    };
                 }
             },
             .null => {

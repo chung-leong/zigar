@@ -7,7 +7,6 @@ const HashPosition = php.HashPosition;
 const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
 const Function = php.Function;
-const HashTable = php.HashTable;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
@@ -18,7 +17,7 @@ const zig_object = @import("../zig-object.zig");
 const ZigObject = zig_object.ZigObject;
 
 pub const Static = struct {
-    slots: ?*HashTable = undefined,
+    slots: Value = undefined,
 
     pub const scope: ZigClass.ScopeType = .static;
 

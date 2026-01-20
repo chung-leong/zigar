@@ -13,16 +13,16 @@ const zig_class = @import("../zig-class.zig");
 const ZigClass = zig_class.ZigClass;
 
 pub const Comptime = struct {
-    slots: ?*HashTable = undefined,
+    slots: Value = undefined,
 
     const Super = structure.Parent(@This());
     pub const Static = struct {
-        value_acc: *accessor.SlotPrebaked = undefined,
+        value_acc: *accessor.SingleSlotPrebaked = undefined,
 
         pub fn initialize(self: *@This(), class: *ZigClass) !void {
             const member = try class.getMember(.instance, 0);
-            if (member.accessors != .slot_prebaked) return error.InvalidAccessor;
-            self.value_acc = &member.accessors.slot_prebaked;
+            if (member.accessors != .single_slot_prebaked) return error.InvalidAccessor;
+            self.value_acc = &member.accessors.single_slot_prebaked;
         }
     };
 
@@ -30,14 +30,14 @@ pub const Comptime = struct {
         const self = fromObject(obj);
         const class = ZigClass.fromObject(obj);
         const static = class.getStaticData(@This());
-        return try static.value_acc.get(self.slots.?);
+        return try static.value_acc.get(&self.slots);
     }
 
     pub fn writeSelf(obj: *Object, value: *const Value) !void {
         const self = fromObject(obj);
         const class = ZigClass.fromObject(obj);
         const static = class.getStaticData(@This());
-        return try static.value_acc.set(self.slots.?, value);
+        return try static.value_acc.set(&self.slots, value);
     }
 
     pub const fromObject = Super.fromObject;
