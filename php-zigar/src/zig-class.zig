@@ -578,7 +578,7 @@ pub const ZigClass = struct {
                     };
                 }
             },
-            .null => {
+            .null, .undefined => {
                 return .{ .null = accessor.null.get(.{}, .{}) };
             },
             else => {},

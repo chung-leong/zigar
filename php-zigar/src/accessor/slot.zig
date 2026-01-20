@@ -8,8 +8,6 @@ const php = @import("../php.zig");
 const Value = php.Value;
 const zig_class = @import("../zig-class.zig");
 const ZigClass = zig_class.ZigClass;
-const zig_object = @import("../zig-object.zig");
-const ZigObject = zig_object.ZigObject;
 
 pub const Attributes = struct {
     type: accessor.SlotAccessorType,
@@ -49,12 +47,12 @@ pub fn get(comptime attrs: Attributes, params: Parameters(attrs)) Accessors(attr
 const multi_slot = struct {
     pub fn get(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, slots: *Value) Error!Value {
         const entry = try vivicateSlot(acc, buffer, slots);
-        return read(entry, acc.params.transform);
+        return accessor.read(entry, acc.params.transform);
     }
 
     pub fn set(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, slots: *Value, value: *const Value) Error!void {
         const entry = try vivicateSlot(acc, buffer, slots);
-        try write(entry, value);
+        try accessor.write(entry, value);
     }
 
     fn vivicateSlot(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, slots: *Value) Error!*Value {
@@ -69,12 +67,12 @@ const multi_slot = struct {
 const single_slot = struct {
     pub fn get(acc: *const accessor.SingleSlot, buffer: *ByteBuffer, slot: *Value) Error!Value {
         const entry = try vivicateSlot(acc, buffer, slot);
-        return read(entry, acc.params.transform);
+        return accessor.read(entry, acc.params.transform);
     }
 
     pub fn set(acc: *const accessor.SingleSlot, buffer: *ByteBuffer, slot: *Value, value: *const Value) Error!void {
         const entry = try vivicateSlot(acc, buffer, slot);
-        try write(entry, value);
+        try accessor.write(entry, value);
     }
 
     fn vivicateSlot(acc: *const accessor.SingleSlot, buffer: *ByteBuffer, slot: *Value) Error!*Value {
@@ -87,12 +85,12 @@ const single_slot = struct {
 const array_slot = struct {
     pub fn get(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize) Error!Value {
         const entry = try vivicateSlot(acc, buffer, slots, index);
-        return read(entry, acc.params.transform);
+        return accessor.read(entry, acc.params.transform);
     }
 
     pub fn set(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize, value: *const Value) Error!void {
         const entry = try vivicateSlot(acc, buffer, slots, index);
-        try write(entry, value);
+        try accessor.write(entry, value);
     }
 
     fn vivicateSlot(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize) Error!*Value {
@@ -114,43 +112,22 @@ const multi_slot_prebaked = struct {
     pub fn get(acc: *const accessor.MultiSlotPrebaked, slots: *Value) Error!Value {
         const ht = try php.getValueHashTable(slots);
         const entry = try php.getHashEntry(ht, acc.params.slot);
-        return read(entry, acc.params.transform);
+        return accessor.read(entry, acc.params.transform);
     }
 
     pub fn set(acc: *const accessor.MultiSlotPrebaked, slots: *Value, value: *const Value) Error!void {
         const ht = try php.getValueHashTable(slots);
         const entry = try php.getHashEntry(ht, acc.params.slot);
-        try write(entry, value);
+        try accessor.write(entry, value);
     }
 };
 
 const single_slot_prebaked = struct {
     pub fn get(acc: *const accessor.SingleSlotPrebaked, slot: *Value) Error!Value {
-        return read(slot, acc.params.transform);
+        return accessor.read(slot, acc.params.transform);
     }
 
     pub fn set(_: *const accessor.SingleSlotPrebaked, slot: *Value, value: *const Value) Error!void {
-        try write(slot, value);
+        try accessor.write(slot, value);
     }
 };
-
-pub fn read(entry: *Value, transform: ?accessor.Transform) Value {
-    if (transform) |t| {
-        const obj = php.getValueObject(entry) catch unreachable;
-        const handlers: *const zig_object.ObjectHandlers = @ptrCast(obj.handlers);
-        return switch (t) {
-            .to_string => handlers.get_string.?(obj),
-            .to_plain => handlers.get_plain.?(obj),
-            .to_value => handlers.read_self.?(obj),
-        };
-    } else {
-        php.addRef(entry);
-        return entry.*;
-    }
-}
-
-pub fn write(entry: *Value, value: *const Value) Error!void {
-    const obj = php.getValueObject(entry) catch unreachable;
-    const handlers: *const zig_object.ObjectHandlers = @ptrCast(obj.handlers);
-    handlers.write_self.?(obj, value);
-}

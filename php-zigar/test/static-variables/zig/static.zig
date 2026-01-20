@@ -34,10 +34,13 @@ const std = @import("std");
 //     std.debug.print("y = {any}\n", .{array});
 // }
 
-pub const ci = 1234;
-pub const cf = 3.14;
+// pub const ci = 1234;
+// pub const cf = 3.14;
 
-pub const enum_literal = .hello;
+// pub const enum_literal = .hello;
 
 // const Color = enum { red, blue, green };
 // pub var color: Color = .red;
+
+pub const null_value = null;
+pub const undefined_value = undefined;

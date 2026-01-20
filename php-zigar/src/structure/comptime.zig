@@ -17,12 +17,11 @@ pub const Comptime = struct {
 
     const Super = structure.Parent(@This());
     pub const Static = struct {
-        value_acc: *accessor.SingleSlotPrebaked = undefined,
+        value_acc: *accessor.Any = undefined,
 
         pub fn initialize(self: *@This(), class: *ZigClass) !void {
             const member = try class.getMember(.instance, 0);
-            if (member.accessors != .single_slot_prebaked) return error.InvalidAccessor;
-            self.value_acc = &member.accessors.single_slot_prebaked;
+            self.value_acc = &member.accessors;
         }
     };
 
@@ -30,14 +29,20 @@ pub const Comptime = struct {
         const self = fromObject(obj);
         const class = ZigClass.fromObject(obj);
         const static = class.getStaticData(@This());
-        return try static.value_acc.get(&self.slots);
+        return try static.value_acc.get(self);
     }
 
     pub fn writeSelf(obj: *Object, value: *const Value) !void {
         const self = fromObject(obj);
         const class = ZigClass.fromObject(obj);
         const static = class.getStaticData(@This());
-        return try static.value_acc.set(&self.slots, value);
+        return try static.value_acc.set(self, value);
+    }
+
+    pub fn getString(obj: *Object) !Value {
+        var value = try readSelf(obj);
+        php.convertValueToString(&value);
+        return value;
     }
 
     pub const fromObject = Super.fromObject;

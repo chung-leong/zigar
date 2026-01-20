@@ -54,5 +54,8 @@ $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar")
 
 // echo "ci = $module->ci\n";
 // echo "cf = $module->cf\n";
-echo "module_enum = $module->enum_literal\n";
+// echo "module_enum = $module->enum_literal\n";
 // echo "enum_literal = $module->enum_literal\n";
+
+echo "null_value = $module->null_value\n";
+echo "undefined_value = $module->undefined_value\n";

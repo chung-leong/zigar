@@ -371,6 +371,8 @@ pub fn createValueArray() Value {
     return result;
 }
 
+pub const convertValueToString = php_h._convert_to_string;
+
 pub fn isNull(value: *const Value) bool {
     return switch (value.u1.v.type) {
         IS_NULL => true,

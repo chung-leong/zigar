@@ -13,6 +13,8 @@ const php = @import("php.zig");
 const HashTable = php.HashTable;
 const Value = php.Value;
 const ClassEntry = php.ClassEntry;
+const zig_object = @import("zig-object.zig");
+const ObjectHandlers = zig_object.ObjectHandlers;
 
 pub const Error = error{
     CannotCreateObject,
@@ -300,4 +302,25 @@ pub fn WithBitOffset(comptime T: type, comptime bit_offset: ?u3) type {
             },
         });
     } else T;
+}
+
+pub fn read(entry: *Value, transform: ?Transform) Value {
+    if (transform) |t| {
+        const obj = php.getValueObject(entry) catch unreachable;
+        const handlers: *const ObjectHandlers = @ptrCast(obj.handlers);
+        return switch (t) {
+            .to_string => handlers.get_string.?(obj),
+            .to_plain => handlers.get_plain.?(obj),
+            .to_value => handlers.read_self.?(obj),
+        };
+    } else {
+        php.addRef(entry);
+        return entry.*;
+    }
+}
+
+pub fn write(entry: *Value, value: *const Value) Error!void {
+    const obj = php.getValueObject(entry) catch unreachable;
+    const handlers: *const ObjectHandlers = @ptrCast(obj.handlers);
+    handlers.write_self.?(obj, value);
 }
