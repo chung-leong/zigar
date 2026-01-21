@@ -483,6 +483,13 @@ pub fn createString(s: []const u8) *String {
     };
 }
 
+pub fn createStringWithLength(len: usize) *String {
+    return switch (len) {
+        0 => php_h.zend_empty_string,
+        else => php_h.zend_string_alloc(len, false),
+    };
+}
+
 pub fn createInternedString(s: []const u8) *String {
     return php_h.zend_string_init_interned.?(s.ptr, s.len, false);
 }
@@ -491,7 +498,7 @@ pub fn createPersistentString(s: []const u8) *String {
     return php_h.zend_string_init_interned.?(s.ptr, s.len, true);
 }
 
-pub fn getStringContent(str: *String) []const u8 {
+pub fn getStringContent(str: *const String) []const u8 {
     const s: [*]const u8 = @ptrCast(&str.*.val[0]);
     const len = str.*.len;
     return s[0..len];
@@ -576,13 +583,14 @@ pub fn insertHashEntry(ht: *HashTable, key: anytype, value: *Value) !*Value {
     const KT = @TypeOf(key);
     ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
     const result = if (comptime isStringContent(KT))
-        php_h.zend_hash_str_add(ht, key.ptr, key.len, value)
+        php_h.zend_hash_str_update(ht, key.ptr, key.len, value)
     else if (comptime isInt(KT))
-        php_h.zend_hash_index_add(ht, @intCast(key), value)
+        php_h.zend_hash_index_update(ht, @intCast(key), value)
     else if (comptime isString(KT))
-        php_h.zend_hash_add(ht, key, value)
+        php_h.zend_hash_update(ht, key, value)
     else
         @compileError("Invalid key: " ++ @typeName(KT));
+    if (result == null) return error.Failure;
     return @ptrCast(result);
 }
 
@@ -646,6 +654,12 @@ pub fn createObject(ce: *ClassEntry) *Object {
     return php_h.zend_objects_new(ce);
 }
 
+pub fn readObjectProperty(obj: *const Object, name: *const String) Value {
+    var value: Value = createValueNull();
+    _ = php_h.zend_read_property_ex(obj.ce, @constCast(obj), @constCast(name), true, &value);
+    return value;
+}
+
 pub fn addRef(value: anytype) void {
     const T = @TypeOf(value);
     switch (T) {
@@ -683,6 +697,7 @@ pub fn release(value: anytype) void {
     }
 }
 
+pub const instanceOf = php_h.instanceof_function;
 pub const registerInternalClass = php_h.zend_register_internal_class;
 pub const initializeStandardObject = php_h.zend_object_std_init;
 pub const initializeObjectProperties = php_h.object_properties_init;
@@ -699,6 +714,8 @@ pub const InterfaceType = enum {
     serializable,
     stringable,
     traversable,
+    throwable,
+    exception,
 };
 
 pub fn getInterface(itype: InterfaceType) *ClassEntry {
@@ -710,6 +727,8 @@ pub fn getInterface(itype: InterfaceType) *ClassEntry {
         .serializable => php_h.zend_ce_serializable,
         .stringable => php_h.zend_ce_stringable,
         .traversable => php_h.zend_ce_traversable,
+        .throwable => php_h.zend_ce_throwable,
+        .exception => php_h.zend_ce_exception,
     };
     return @ptrCast(ptr);
 }

@@ -62,11 +62,20 @@ $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar")
 
 // echo "{$module->number->float}\n";
 // debug_zval_dump($module->color);
-$Color = $module->Color;
-echo "red? ", $Color->red === $module->color, "\n";
-$module->color = 'blue';
-echo "blue? ", $Color->blue === $module->color, "\n";
-$module->color = 2;
-echo "green? ", $Color->green === $module->color, "\n";
-$module->color = $Color->red;
-echo "red? ", $Color->red === $module->color, "\n";
+// $Color = $module->Color;
+// echo "red? ", $Color->red === $module->color, "\n";
+// $module->color = 'blue';
+// echo "blue? ", $Color->blue === $module->color, "\n";
+// $module->color = 2;
+// echo "green? ", $Color->green === $module->color, "\n";
+// $module->color = $Color->red;
+// echo "red? ", $Color->red === $module->color, "\n";
+
+$ErrorSet = $module->ErrorSet;
+echo "pants on fire? ", $module->error_value === $ErrorSet->PantsOnFire, "\n";
+echo "hello world? ", $module->error_value === $ErrorSet->HelloWorld, "\n";
+$ex = new Exception("hello world");
+echo call_user_func([ $ex, 'getMessage' ]), "\n";
+echo (string) $ex, "\n";
+$module->error_value = $ex;
+echo "hello world? ", $module->error_value === $ErrorSet->HelloWorld, "\n";

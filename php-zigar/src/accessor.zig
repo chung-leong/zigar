@@ -22,6 +22,7 @@ pub const Error = error{
     OutOfMemory,
     WriteProtected,
     Missing,
+    Failure,
     NotBoolean,
     NotInteger,
     NotDouble,

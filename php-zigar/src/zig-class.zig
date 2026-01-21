@@ -124,6 +124,10 @@ pub const ZigClass = struct {
         return @fieldParentPtr("static_data", sd_ptr);
     }
 
+    pub fn hasInterface(self: *@This(), interface_ce: *const php.ClassEntry) bool {
+        return php.instanceOf(self.entry(), interface_ce);
+    }
+
     pub fn addRef(self: *@This()) void {
         self.php_portion.refcount += 1;
     }
@@ -252,8 +256,8 @@ pub const ZigClass = struct {
         return @field(self.flags, structure.enumName(S));
     }
 
-    pub fn getStaticData(self: *@This(), comptime S: type) @FieldType(StaticData, structure.enumName(S)) {
-        return @field(self.static_data, structure.enumName(S));
+    pub fn getStaticData(self: *@This(), comptime S: type) *@FieldType(StaticData, structure.enumName(S)) {
+        return &@field(self.static_data, structure.enumName(S));
     }
 
     pub fn getStructureName(self: *@This()) []const u8 {

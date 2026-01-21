@@ -21,6 +21,7 @@ pub const ModuleHost = struct {
     library: ?std.DynLib = null,
     base_address: usize = 0,
     structure_map: HashTable = undefined,
+    global_error_set: HashTable = undefined,
     value_list: HashTable = undefined,
     redirection_mask: hooks.Syscall.Mask = .{},
     last_structure: ?*Value = null,
@@ -58,6 +59,8 @@ pub const ModuleHost = struct {
                 },
             }
         };
+        self.global_error_set = php.createHashTable(php.destructor.value);
+        errdefer php.destroyHashTable(&self.global_error_set);
         self.structure_map = php.createHashTable(php.destructor.value);
         defer php.destroyHashTable(&self.structure_map);
         self.value_list = php.createHashTable(php.destructor.value);
@@ -98,6 +101,7 @@ pub const ModuleHost = struct {
         if (self.ref_count == 0) {
             std.debug.print("freeing host\n", .{});
             if (self.library) |*lib| lib.close();
+            php.release(&self.global_error_set);
             php.allocator.destroy(self);
         }
     }
@@ -280,17 +284,11 @@ pub const ModuleHost = struct {
     }
 
     fn beginStructure(self: *@This(), structure: *Value) !void {
-        ZigClass.define(self, structure) catch |err| {
-            std.debug.print("Error: {}\n", .{err});
-            return err;
-        };
+        try ZigClass.define(self, structure);
     }
 
     fn finishStructure(self: *@This(), structure: *Value) !void {
-        ZigClass.finalize(structure) catch |err| {
-            std.debug.print("Error: {}\n", .{err});
-            return err;
-        };
+        try ZigClass.finalize(structure);
         self.last_structure = structure;
     }
 

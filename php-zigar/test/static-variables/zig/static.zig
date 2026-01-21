@@ -37,10 +37,10 @@ const std = @import("std");
 // pub const ci = 1234;
 // pub const cf = 3.14;
 
-pub const enum_literal = .hello;
+// pub const enum_literal = .hello;
 
-pub const Color = enum { red, blue, green };
-pub var color: Color = .red;
+// pub const Color = enum { red, blue, green };
+// pub var color: Color = .red;
 
 // pub const null_value = null;
 // pub const undefined_value = undefined;
@@ -51,3 +51,6 @@ pub var color: Color = .red;
 // };
 
 // pub var number: Number = .{ .int = 1234 };
+
+pub const ErrorSet = error{ HelloWorld, PantsOnFire, OutOfMoney };
+pub var error_value: ErrorSet = error.PantsOnFire;
