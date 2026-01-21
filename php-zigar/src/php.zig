@@ -65,35 +65,6 @@ pub const Value = php_h.zval;
 pub const SUCCESS = php_h.SUCCESS;
 pub const FAILURE = php_h.FAILURE;
 
-pub const IS_ALIAS_PTR = php_h.IS_ALIAS_PTR;
-pub const IS_ARRAY = php_h.IS_ARRAY;
-pub const IS_CALLABLE = php_h.IS_CALLABLE;
-pub const IS_CONSTANT_AST = php_h.IS_CONSTANT_AST;
-pub const IS_DOUBLE = php_h.IS_DOUBLE;
-pub const IS_FALSE = php_h.IS_FALSE;
-pub const IS_INDIRECT = php_h.IS_INDIRECT;
-pub const IS_ITERABLE = php_h.IS_ITERABLE;
-pub const IS_LONG = php_h.IS_LONG;
-pub const IS_MIXED = php_h.IS_MIXED;
-pub const IS_NEVER = php_h.IS_NEVER;
-pub const IS_NULL = php_h.IS_NULL;
-pub const IS_OBJECT = php_h.IS_OBJECT;
-pub const IS_PTR = php_h.IS_PTR;
-pub const IS_REFERENCE = php_h.IS_REFERENCE;
-pub const IS_RESOURCE = php_h.IS_RESOURCE;
-pub const IS_STATIC = php_h.IS_STATIC;
-pub const IS_STRING = php_h.IS_STRING;
-pub const IS_TRUE = php_h.IS_TRUE;
-pub const IS_UNDEF = php_h.IS_UNDEF;
-pub const IS_VOID = php_h.IS_VOID;
-
-pub const IS_STRING_EX = php_h.IS_STRING_EX;
-pub const IS_ARRAY_EX = php_h.IS_ARRAY_EX;
-pub const IS_OBJECT_EX = php_h.IS_OBJECT_EX;
-pub const IS_RESOURCE_EX = php_h.IS_RESOURCE_EX;
-pub const IS_REFERENCE_EX = php_h.IS_REFERENCE_EX;
-pub const IS_CONSTANT_AST_EX = php_h.IS_CONSTANT_AST_EX;
-
 pub const MAY_BE_UNDEF = php_h.MAY_BE_UNDEF;
 pub const MAY_BE_NULL = php_h.MAY_BE_NULL;
 pub const MAY_BE_BOOL = php_h.MAY_BE_BOOL;
@@ -209,20 +180,6 @@ fn TransformPointer(comptime T: type) type {
 fn Transformed(comptime func: anytype) type {
     const func_info = @typeInfo(@TypeOf(func)).@"fn";
     const len = func_info.params.len;
-    // var param_types: [len]type = undefined;
-    // var param_attrs: [len]std.builtin.Type.Fn.Param.Attributes = undefined;
-    // inline for (func_info.params, 0..) |param, i| {
-    //     const PT = param.type.?;
-    //     param_types[i] = switch (@typeInfo(PT)) {
-    //         .pointer => ?PT,
-    //         else => PT,
-    //     };
-    //     param_attrs[i] = .{};
-    // }
-    // return @Fn(&param_types, &param_attrs, func_info.return_type, .{
-    //     .@"callconv" = .c,
-    //     .varargs = func_info.is_var_args,
-    // });
     var params: [len]std.builtin.Type.Fn.Param = undefined;
     inline for (func_info.params, 0..) |param, i| {
         params[i] = .{
@@ -296,22 +253,48 @@ pub fn transform(comptime func: anytype) Transformed(func) {
 
 pub const initializeClassData = php_h.zend_initialize_class_data;
 
+const Type = enum(u8) {
+    undefined = php_h.IS_UNDEF, // 0
+    null = php_h.IS_NULL, // 1
+    false = php_h.IS_FALSE, // 2
+    true = php_h.IS_TRUE, // 3
+    long = php_h.IS_LONG, // 4
+    double = php_h.IS_DOUBLE, // 5
+    string = php_h.IS_STRING, // 6
+    array = php_h.IS_ARRAY, // 7
+    object = php_h.IS_OBJECT, // 8
+    resource = php_h.IS_RESOURCE, // 9
+    reference = php_h.IS_REFERENCE, // 10
+
+    pub fn isBool(self: @This()) bool {
+        return self == .false or self == .true;
+    }
+
+    pub fn isNumber(self: @This()) bool {
+        return self == .long or self == .double;
+    }
+};
+
+pub fn getType(value: *const Value) Type {
+    return @enumFromInt(value.u1.v.type);
+}
+
 pub fn createValueNull() Value {
     var result: Value = .{};
-    result.u1.type_info = IS_NULL;
+    result.u1.type_info = php_h.IS_NULL;
     return result;
 }
 
 pub fn createValueBool(b: bool) Value {
     var result: Value = .{};
-    result.u1.type_info = if (b) IS_TRUE else IS_FALSE;
+    result.u1.type_info = if (b) php_h.IS_TRUE else php_h.IS_FALSE;
     return result;
 }
 
 pub fn createValueLong(l: i64) Value {
     var result: Value = .{};
     result.value.lval = l;
-    result.u1.type_info = IS_LONG;
+    result.u1.type_info = php_h.IS_LONG;
     return result;
 }
 
@@ -330,7 +313,7 @@ pub fn createValueAnyInt(i: anytype) Value {
 pub fn createValueDouble(d: f64) Value {
     var result: Value = .{};
     result.value.dval = d;
-    result.u1.type_info = IS_DOUBLE;
+    result.u1.type_info = php_h.IS_DOUBLE;
     return result;
 }
 
@@ -339,115 +322,114 @@ pub fn createValueString(s: []const u8) Value {
     const str = createString(s);
     result.value.str = str;
     // non-interned string need to be gc'ed
-    result.u1.type_info = if (str.gc.u.type_info & php_h.Z_TYPE_FLAGS_MASK == 0) IS_STRING_EX else IS_STRING;
+    result.u1.type_info = if (str.gc.u.type_info & php_h.Z_TYPE_FLAGS_MASK == 0)
+        php_h.IS_STRING_EX
+    else
+        php_h.IS_STRING;
     return result;
 }
 
 pub fn createValuePersistentString(s: []const u8) Value {
     var result: Value = .{};
     result.value.str = createPersistentString(s);
-    result.u1.type_info = IS_STRING;
+    result.u1.type_info = php_h.IS_STRING;
     return result;
 }
 
 pub fn createValueObject(object: *Object) Value {
     var result: Value = .{};
     result.value.obj = object;
-    result.u1.type_info = IS_OBJECT_EX;
+    result.u1.type_info = php_h.IS_OBJECT_EX;
     return result;
 }
 
 pub fn createValuePointer(ptr: ?*anyopaque) Value {
     var result: Value = .{};
     result.value.ptr = ptr;
-    result.u1.type_info = IS_PTR;
+    result.u1.type_info = php_h.IS_PTR;
     return result;
 }
 
 pub fn createValueArray() Value {
     var result: Value = .{};
     result.value.arr = createArray();
-    result.u1.type_info = IS_ARRAY_EX;
+    result.u1.type_info = php_h.IS_ARRAY_EX;
     return result;
 }
 
 pub const convertValueToString = php_h._convert_to_string;
 
-pub fn isNull(value: *const Value) bool {
-    return switch (value.u1.v.type) {
-        IS_NULL => true,
-        else => false,
-    };
-}
-
 pub fn getValueNull(value: *const Value) !void {
     return switch (value.u1.v.type) {
-        IS_NULL => {},
+        php_h.IS_NULL => {},
         else => error.NotNull,
     };
 }
 
 pub fn getValueBool(value: *const Value) !bool {
     return switch (value.u1.v.type) {
-        IS_TRUE => true,
-        IS_FALSE => false,
+        php_h.IS_TRUE => true,
+        php_h.IS_FALSE => false,
         else => error.NotBoolean,
     };
 }
 
 pub fn getValueLong(value: *const Value) !c_long {
     return switch (value.u1.v.type) {
-        IS_LONG => value.value.lval,
+        php_h.IS_LONG => value.value.lval,
         else => error.NotInteger,
     };
 }
 
 pub fn getValueDouble(value: *const Value) !f64 {
     return switch (value.u1.v.type) {
-        IS_DOUBLE => value.value.dval,
+        php_h.IS_DOUBLE => value.value.dval,
         else => error.NotDouble,
     };
 }
 
 pub fn getValueString(value: *const Value) !*String {
     return switch (value.u1.v.type) {
-        IS_STRING => value.value.str,
+        php_h.IS_STRING => value.value.str,
         else => error.NotString,
     };
 }
 
 pub fn getValueStringContent(value: *const Value) ![]const u8 {
     return switch (value.u1.v.type) {
-        IS_STRING => getStringContent(value.value.str),
+        php_h.IS_STRING => getStringContent(value.value.str),
         else => error.NotString,
     };
 }
 
 pub fn getValueArray(value: *const Value) !*Array {
     return switch (value.u1.v.type) {
-        IS_ARRAY => value.value.arr,
+        php_h.IS_ARRAY => value.value.arr,
         else => error.NotArray,
     };
 }
 
 pub fn getValueHashTable(value: *const Value) !*HashTable {
     return switch (value.u1.v.type) {
-        IS_ARRAY => value.value.arr,
-        IS_OBJECT => value.value.obj.*.properties,
+        php_h.IS_ARRAY => value.value.arr,
+        php_h.IS_OBJECT => value.value.obj.*.properties,
         else => error.NotArrayOrObject,
     };
 }
 
 pub fn getValueObject(value: *const Value) !*Object {
     return switch (value.u1.v.type) {
-        IS_OBJECT => value.value.obj,
+        php_h.IS_OBJECT => value.value.obj,
         else => error.NotObject,
     };
 }
 
 pub fn getValuePointer(comptime T: type, value: *const Value) !T {
     return switch (value.u1.v.type) {
-        IS_PTR => if (value.value.ptr) |p| @ptrCast(@alignCast(p)) else error.NullPointer,
+        php_h.IS_PTR => if (value.value.ptr) |p|
+            @ptrCast(@alignCast(p))
+        else
+            error.NullPointer,
         else => error.NotPointer,
     };
 }
@@ -672,7 +654,7 @@ pub fn addRef(value: anytype) void {
                 _ = php_h.zval_addref_p(value);
         },
         *String, [*c]String => {
-            php_h.zend_string_addref(value);
+            _ = php_h.zend_string_addref(value);
         },
         *Object, [*c]Object, *HashTable, [*c]HashTable => {
             _ = php_h.GC_ADDREF(value);
@@ -752,7 +734,7 @@ pub const efree = php_h.efree;
 
 pub const null_value: *const Value = &.{
     .value = .{ .lval = 0 },
-    .u1 = .{ .type_info = IS_NULL },
+    .u1 = .{ .type_info = php_h.IS_NULL },
 };
 
 pub const allocator: std.mem.Allocator = .{

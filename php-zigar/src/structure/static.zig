@@ -42,6 +42,7 @@ pub const Static = struct {
 
     pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
+    pub const readSelf = Super.readSelf;
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
 };

@@ -30,7 +30,7 @@ pub const Error = error{
     NotArrayOrObject,
 };
 
-pub const Transform = enum { to_string, to_plain, to_value };
+pub const Transform = enum { to_string, to_plain, to_value, to_class };
 
 pub const Null = struct {
     params: Parameters,
@@ -306,12 +306,24 @@ pub fn WithBitOffset(comptime T: type, comptime bit_offset: ?u3) type {
 
 pub fn read(entry: *Value, transform: ?Transform) Value {
     if (transform) |t| {
-        const obj = php.getValueObject(entry) catch unreachable;
+        const obj = php.getValueObject(entry) catch {
+            if (t == .to_class) {
+                // the type info array is stored in the slot initially; grab the class ref and
+                // use that instead from here on
+                if (php.getProperty(entry, "class")) |ref| {
+                    php.release(entry);
+                    entry.* = ref.*;
+                    return ref.*;
+                } else |_| {}
+            }
+            @panic("Unexpected entry");
+        };
         const handlers: *const ObjectHandlers = @ptrCast(obj.handlers);
         return switch (t) {
             .to_string => handlers.get_string.?(obj),
             .to_plain => handlers.get_plain.?(obj),
             .to_value => handlers.read_self.?(obj),
+            .to_class => php.createValueObject(obj),
         };
     } else {
         php.addRef(entry);

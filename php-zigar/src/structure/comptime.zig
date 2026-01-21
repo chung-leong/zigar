@@ -45,9 +45,15 @@ pub const Comptime = struct {
         return value;
     }
 
+    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
+        std.debug.print("comptime => {s}\n", .{php.getStringContent(name)});
+        return Super.readProperty(obj, name, prop_type, cache_slot, retval);
+    }
+
     pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
+    // pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
-    pub const readProperty = Super.readProperty;
+    // pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
 };

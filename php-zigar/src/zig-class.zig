@@ -115,6 +115,15 @@ pub const ZigClass = struct {
         return fromEntry(zig_obj.php_portion.ce);
     }
 
+    pub fn fromStatic(s: anytype) *@This() {
+        const S = @TypeOf(s.*);
+        const field_name = inline for (std.meta.fields(StaticData)) |field| {
+            if (field.type == S) break field.name;
+        } else @compileError("Not part of static data union " ++ @typeName(S));
+        const sd_ptr: *StaticData = @fieldParentPtr(field_name, s);
+        return @fieldParentPtr("static_data", sd_ptr);
+    }
+
     pub fn addRef(self: *@This()) void {
         self.php_portion.refcount += 1;
     }
@@ -403,7 +412,7 @@ pub const ZigClass = struct {
                 const key = php.getHashPositionKey(ht, &pos);
                 const long = try php.getValueLong(&key);
                 try php.setHashEntryRef(new_ht, long, value);
-                if (php.moveHashPositionForward(ht, &pos)) break;
+                if (!php.moveHashPositionForward(ht, &pos)) break;
             }
         }
         return new;
@@ -424,7 +433,7 @@ pub const ZigClass = struct {
                         const key = php.getHashPositionKey(ht, &pos);
                         const long = try php.getValueLong(&key);
                         try php.setPropertyRef(&slots, long, value);
-                        if (php.moveHashPositionForward(ht, &pos)) break;
+                        if (!php.moveHashPositionForward(ht, &pos)) break;
                     }
                 }
                 try zig_obj.setStorage(bytes, &slots);
@@ -519,7 +528,7 @@ pub const ZigClass = struct {
             .void => {
                 return .{ .primitive = accessor.void.get(.{}, .{}) };
             },
-            .object, .type, .literal => |t| if (member.slot) |slot| {
+            .object, .literal => |t| if (member.slot) |slot| {
                 // the lack of a slot means the member isn't meant to be accessed directly
                 // only applicable to functions, I think
                 const transform: ?accessor.Transform = get: {
@@ -575,6 +584,22 @@ pub const ZigClass = struct {
                         }),
                     };
                 }
+            },
+            .type => if (member.slot) |slot| {
+                return if (scope.slot_count > 1) .{
+                    .multi_slot_prebaked = accessor.slot.get(.{
+                        .type = .multi_slot_prebaked,
+                    }, .{
+                        .slot = slot,
+                        .transform = .to_class,
+                    }),
+                } else .{
+                    .single_slot_prebaked = accessor.slot.get(.{
+                        .type = .single_slot_prebaked,
+                    }, .{
+                        .transform = .to_class,
+                    }),
+                };
             },
             .null, .undefined => {
                 return .{ .null = accessor.null.get(.{}, .{}) };

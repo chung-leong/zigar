@@ -88,6 +88,7 @@ pub fn Parent(comptime S: type) type {
 
         pub fn readSelf(obj: *Object) !Value {
             // by default just return the object itself
+            php.addRef(obj);
             return php.createValueObject(obj);
         }
 
@@ -162,20 +163,17 @@ pub fn Parent(comptime S: type) type {
             switch (err) {
                 error.Missing => {
                     const class = ZigClass.fromObject(obj);
-                    const class_name = class.getName();
-                    const field_name = php.getStringContent(name);
-                    const type_name = class.getStructureName();
                     if (scope == .instance) {
                         php.throwExceptionFmt("no field named '{s}' in {s} '{s}' (zig)", .{
-                            field_name,
-                            type_name,
-                            class_name,
+                            php.getStringContent(name),
+                            class.getStructureName(),
+                            class.getName(),
                         });
                     } else {
                         php.throwExceptionFmt("{s} '{s}' has no member named '{s}' (zig)", .{
-                            type_name,
-                            class_name,
-                            field_name,
+                            class.getStructureName(),
+                            class.getName(),
+                            php.getStringContent(name),
                         });
                     }
                 },

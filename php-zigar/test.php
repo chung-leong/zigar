@@ -47,10 +47,10 @@ $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar")
 // $module->z = .1234;
 // $module->printZ();
 
-$point = $module->point;
-echo "x = ", $point->x, "\n";
-echo "y = ", $point->y, "\n";
-echo "z = ", $point->z, "\n";
+// $point = $module->point;
+// echo "x = ", $point->x, "\n";
+// echo "y = ", $point->y, "\n";
+// echo "z = ", $point->z, "\n";
 
 // echo "ci = $module->ci\n";
 // echo "cf = $module->cf\n";
@@ -59,3 +59,14 @@ echo "z = ", $point->z, "\n";
 
 // echo "null_value = $module->null_value\n";
 // echo "undefined_value = $module->undefined_value\n";
+
+// echo "{$module->number->float}\n";
+// debug_zval_dump($module->color);
+$Color = $module->Color;
+echo "red? ", $Color->red === $module->color, "\n";
+$module->color = 'blue';
+echo "blue? ", $Color->blue === $module->color, "\n";
+$module->color = 2;
+echo "green? ", $Color->green === $module->color, "\n";
+$module->color = $Color->red;
+echo "red? ", $Color->red === $module->color, "\n";

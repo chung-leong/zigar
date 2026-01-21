@@ -18,13 +18,13 @@ const std = @import("std");
 //     std.debug.print("z = {d}\n", .{z});
 // }
 
-const Point = struct {
-    x: usize,
-    y: usize,
-    comptime z: comptime_int = 1234,
-};
+// const Point = struct {
+//     x: usize,
+//     y: usize,
+//     comptime z: comptime_int = 1234,
+// };
 
-pub var point: Point = .{ .x = 123, .y = 456 };
+// pub var point: Point = .{ .x = 123, .y = 456 };
 
 // pub var optional: ?u32 = 1234;
 
@@ -37,10 +37,17 @@ pub var point: Point = .{ .x = 123, .y = 456 };
 // pub const ci = 1234;
 // pub const cf = 3.14;
 
-// pub const enum_literal = .hello;
+pub const enum_literal = .hello;
 
-// const Color = enum { red, blue, green };
-// pub var color: Color = .red;
+pub const Color = enum { red, blue, green };
+pub var color: Color = .red;
 
 // pub const null_value = null;
 // pub const undefined_value = undefined;
+
+// const Number = union(enum) {
+//     int: i64,
+//     float: f64,
+// };
+
+// pub var number: Number = .{ .int = 1234 };

@@ -76,7 +76,7 @@ const single_slot = struct {
     }
 
     fn vivicateSlot(acc: *const accessor.SingleSlot, buffer: *ByteBuffer, slot: *Value) Error!*Value {
-        if (php.isNull(slot))
+        if (php.getType(slot) == .null)
             slot.* = try createObject(acc.params.class_entry, buffer, acc.params.byte_offset, acc.params.byte_size);
         return slot;
     }
