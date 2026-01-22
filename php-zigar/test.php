@@ -75,7 +75,5 @@ $ErrorSet = $module->ErrorSet;
 echo "pants on fire? ", $module->error_value === $ErrorSet->PantsOnFire, "\n";
 echo "hello world? ", $module->error_value === $ErrorSet->HelloWorld, "\n";
 $ex = new Exception("hello world");
-echo call_user_func([ $ex, 'getMessage' ]), "\n";
-echo (string) $ex, "\n";
 $module->error_value = $ex;
 echo "hello world? ", $module->error_value === $ErrorSet->HelloWorld, "\n";

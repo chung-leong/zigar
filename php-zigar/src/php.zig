@@ -697,6 +697,33 @@ pub fn release(value: anytype) void {
     }
 }
 
+pub fn invokeMethod(obj: *Object, fn_name: []const u8, params: anytype) !Value {
+    var callable = createValueArray();
+    defer release(&callable);
+    var obj_value = createValueObject(obj);
+    var fn_name_value = createValueString(fn_name);
+    try setProperty(&callable, 0, &obj_value);
+    try setProperty(&callable, 1, &fn_name_value);
+    var args: [params.len]Value = undefined;
+    inline for (params, 0..) |param, i| {
+        args[i] = param;
+    }
+    var fci: php_h.zend_fcall_info = .{
+        .params = &args,
+        .param_count = args.len,
+    };
+    var fci_cache: php_h.zend_fcall_info_cache = undefined;
+    var error_str: [*c]u8 = null;
+    if (php_h.zend_fcall_info_init(&callable, 0, &fci, &fci_cache, null, &error_str) != php_h.SUCCESS)
+        return error.Failure;
+    defer if (error_str != null) efree(error_str);
+    var retval: Value = undefined;
+    fci.retval = &retval;
+    if (php_h.zend_call_function(&fci, &fci_cache) != php_h.SUCCESS)
+        return error.Failure;
+    return retval;
+}
+
 pub const instanceOf = php_h.instanceof_function;
 pub const registerInternalClass = php_h.zend_register_internal_class;
 pub const initializeStandardObject = php_h.zend_object_std_init;
@@ -706,7 +733,7 @@ pub fn getObjectPropertySize(ce: *ClassEntry) isize {
     return @bitCast(php_h.zend_object_properties_size(ce));
 }
 
-pub const InterfaceType = enum {
+pub const InterfaceName = enum {
     aggregate,
     array_access,
     countable,
@@ -715,10 +742,9 @@ pub const InterfaceType = enum {
     stringable,
     traversable,
     throwable,
-    exception,
 };
 
-pub fn getInterface(itype: InterfaceType) *ClassEntry {
+pub fn getInterface(itype: InterfaceName) *ClassEntry {
     const ptr = switch (itype) {
         .aggregate => php_h.zend_ce_aggregate,
         .array_access => php_h.zend_ce_arrayaccess,
@@ -728,6 +754,16 @@ pub fn getInterface(itype: InterfaceType) *ClassEntry {
         .stringable => php_h.zend_ce_stringable,
         .traversable => php_h.zend_ce_traversable,
         .throwable => php_h.zend_ce_throwable,
+    };
+    return @ptrCast(ptr);
+}
+
+pub const ClassEntryName = enum {
+    exception,
+};
+
+pub fn getClassEntry(ctype: ClassEntryName) *ClassEntry {
+    const ptr = switch (ctype) {
         .exception => php_h.zend_ce_exception,
     };
     return @ptrCast(ptr);
@@ -894,8 +930,10 @@ fn getErrorMessage(comptime ES: type, err: ES) []const u8 {
                         break :check needed;
                     };
                     if (conversion_needed) {
-                        buffer[len] = ' ';
-                        len += 1;
+                        if (i > 0) {
+                            buffer[len] = ' ';
+                            len += 1;
+                        }
                         buffer[len] = std.ascii.toLower(c);
                         len += 1;
                     } else {

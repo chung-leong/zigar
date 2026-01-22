@@ -39,6 +39,7 @@ pub const ZigClass = struct {
     php_portion: ClassEntry = undefined,
 
     pub const ScopeType = enum { instance, static };
+    pub var parent_entry: php.ClassEntry = .{};
 
     const Scope = struct {
         members: HashTable = undefined,
@@ -181,6 +182,9 @@ pub const ZigClass = struct {
             .constants_table = php.createHashTable(null),
             .function_table = php.createHashTable(php.destructor.function),
             .num_interfaces = @intCast(interfaces.len),
+            .unnamed_0 = .{
+                .parent = &parent_entry,
+            },
             .unnamed_1 = .{
                 .create_object = php.transform(createObject),
             },
@@ -292,6 +296,10 @@ pub const ZigClass = struct {
         switch (self.type) {
             .array, .vector, .slice => {
                 buffer[count] = php.getInterface(.array_access);
+                count += 1;
+            },
+            .error_set => {
+                buffer[count] = php.getInterface(.throwable);
                 count += 1;
             },
             else => {},

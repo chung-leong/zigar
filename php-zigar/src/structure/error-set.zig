@@ -89,29 +89,27 @@ pub const ErrorSet = struct {
         var static = class.getStaticData(@This());
         const err_value = find: {
             if (php.getValueObject(value)) |exception| {
-                if (exception.ce == class.entry()) {
-                    const err_struct = fromObject(exception);
-                    break :find try static.value_acc.get(err_struct.bytes);
-                } else if (php.instanceOf(exception.ce, php.getInterface(.exception))) {
-                    const prop_name = php.createString("message");
-                    defer php.release(prop_name);
-                    const msg_value = php.readObjectProperty(exception, prop_name);
-                    const message = try php.getValueStringContent(&msg_value);
-                    if (static.findErrorByMessage(message)) |err| {
-                        const err_obj = try php.getValueObject(err);
-                        const err_struct = fromObject(err_obj);
+                if (php.instanceOf(exception.ce, php.getInterface(.throwable))) {
+                    if (exception.ce.*.unnamed_0.parent == &ZigClass.parent_entry) {
+                        const err_struct = fromObject(exception);
                         break :find try static.value_acc.get(err_struct.bytes);
-                    } else |_| {
-                        php.throwExceptionFmt("'{s}' does not correspond to error in global set (zig)", .{
-                            message,
-                        });
-                        return;
+                    } else {
+                        const msg_value = try php.invokeMethod(exception, "getMessage", .{});
+                        const message = try php.getValueStringContent(&msg_value);
+                        if (static.findErrorByMessage(message)) |err| {
+                            const err_obj = try php.getValueObject(err);
+                            const err_struct = fromObject(err_obj);
+                            break :find try static.value_acc.get(err_struct.bytes);
+                        } else |_| {
+                            return php.throwExceptionFmt("'{s}' does not correspond to error in global set (zig)", .{
+                                message,
+                            });
+                        }
                     }
                 } else {
-                    php.throwExceptionFmt("'{s}' is not exception (zig)", .{
+                    return php.throwExceptionFmt("'{s}' does not implement throwable (zig)", .{
                         php.getStringContent(obj.ce.*.name),
                     });
-                    return;
                 }
             } else |_| if (php.getType(value) == .long) {
                 break :find value.*;
@@ -140,7 +138,7 @@ pub const ErrorSet = struct {
                 break :check needed;
             };
             if (conversion_needed) {
-                len_required += 2;
+                len_required += if (i > 0) 2 else 1;
             } else {
                 len_required += 1;
             }
@@ -161,8 +159,10 @@ pub const ErrorSet = struct {
                 break :check needed;
             };
             if (conversion_needed) {
-                buffer[len] = ' ';
-                len += 1;
+                if (i > 0) {
+                    buffer[len] = ' ';
+                    len += 1;
+                }
                 buffer[len] = std.ascii.toLower(c);
                 len += 1;
             } else {
