@@ -10,84 +10,91 @@ const interface = @import("module/native/interface.zig");
 const php = @import("php.zig");
 const HashTable = php.HashTable;
 const HashPosition = php.HashPosition;
+const String = php.String;
 const Value = php.Value;
 const zig_class = @import("zig-class.zig");
 const ZigClass = zig_class.ZigClass;
 const fn_transform = @import("zigft/fn-transform.zig");
 
 pub const ModuleHost = struct {
-    ref_count: isize = 1,
+    ref_count: isize = 0,
     module: ?*Module = null,
     library: ?std.DynLib = null,
-    base_address: usize = 0,
-    structure_map: HashTable = undefined,
-    global_error_set: HashTable = undefined,
-    value_list: HashTable = undefined,
     redirection_mask: hooks.Syscall.Mask = .{},
-    last_structure: ?*Value = null,
+    global_error_set: ?*HashTable = null,
+    load_ctx: *LoadContext = undefined,
 
+    pub const Syscall = hooks.Syscall;
     const Module = interface.Module(*Value);
     const Jscall = Module.Jscall;
-    pub const Syscall = hooks.Syscall;
+    const LoadContext = struct {
+        value_list: HashTable,
+        structure_map: HashTable,
+        instance_list: HashTable,
+        class_list: HashTable,
+        key_memory: *String,
+        key_slots: *String,
 
-    pub fn load(path: []const u8) !*Value {
-        var self: *@This() = try php.allocator.create(@This());
-        self.* = .{};
-        errdefer php.allocator.destroy(self);
-        var lib = try std.DynLib.open(path);
-        errdefer lib.close();
-        const module = lib.lookup(*Module, "zig_module") orelse return error.MissingSymbol;
-        if (module.version != Module.current_version) return error.IncorrectVersion;
-        self.module = module;
-        self.base_address = get: {
-            switch (builtin.target.os.tag) {
-                .windows => {
-                    const MBI = std.os.windows.MEMORY_BASIC_INFORMATION;
-                    var mbi: MBI = undefined;
-                    _ = try std.os.windows.VirtualQuery(module, &mbi, @sizeOf(MBI));
-                    break :get @intFromPtr(mbi.AllocationBase);
-                },
-                else => {
-                    const c = @cImport({
-                        @cDefine("_GNU_SOURCE", {});
-                        @cDefine("_BSD_SOURCE", {});
-                        @cInclude("dlfcn.h");
-                    });
-                    var dl_info: c.Dl_info = undefined;
-                    if (c.dladdr(module, &dl_info) == 0) return error.Unexpected;
-                    break :get @intFromPtr(dl_info.dli_fbase.?);
-                },
-            }
-        };
-        self.global_error_set = php.createHashTable(php.destructor.value);
-        errdefer php.destroyHashTable(&self.global_error_set);
-        self.structure_map = php.createHashTable(php.destructor.value);
-        defer php.destroyHashTable(&self.structure_map);
-        self.value_list = php.createHashTable(php.destructor.value);
-        defer {
+        pub fn init() !*@This() {
+            const self = try php.allocator.create(@This());
+            self.* = .{
+                .value_list = php.createHashTable(php.destructor.value),
+                .structure_map = php.createHashTable(php.destructor.value),
+                .instance_list = php.createHashTable(php.destructor.value),
+                .class_list = php.createHashTable(null),
+                .key_memory = php.createInternedString("memory"),
+                .key_slots = php.createInternedString("slots"),
+            };
+            return self;
+        }
+
+        pub fn deinit(self: *@This()) void {
             // pointer objects aren't released automatically, so we have to do it manually
             var pos: HashPosition = undefined;
             php.initializeHashPosition(&self.value_list, &pos);
             while (php.getHashPositionValue(&self.value_list, &pos)) |value| {
-                // if (php.getValueString(value)) |str| {
-                //     std.debug.print("str => {x}, {d}\n", .{ @intFromPtr(str), str.*.gc.refcount });
-                // } else |_| {}
                 if (php.getValuePointer(*ByteBuffer, value)) |b| b.release() else |_| {}
                 if (!php.moveHashPositionForward(&self.value_list, &pos)) break;
             }
             php.destroyHashTable(&self.value_list);
+            php.destroyHashTable(&self.structure_map);
+            php.destroyHashTable(&self.instance_list);
+            php.allocator.destroy(self);
         }
+    };
+
+    pub fn load(path: []const u8) !*Value {
+        var lib = try std.DynLib.open(path);
+        errdefer lib.close();
+        const module = lib.lookup(*Module, "zig_module") orelse return error.MissingSymbol;
+        if (module.version != Module.current_version) return error.IncorrectVersion;
+        var self: *@This() = try php.allocator.create(@This());
+        errdefer php.allocator.destroy(self);
+        self.* = .{
+            .load_ctx = try LoadContext.init(),
+            .module = module,
+        };
+        defer self.load_ctx.deinit();
         _ = module.exports.set_host_instance(@ptrCast(self));
         try self.exportFunctionsToModule();
-        defer self.release();
         // retrieve and run factory thunk
         const thunk_address: usize = try self.getFactoryThunk();
         try self.runThunk(thunk_address, 0xDEADC0DE, 0xDEADC0DE);
-        // the last structure to get finalized is the root namespace
-        const root = self.last_structure orelse return error.NoRoot;
-        const class = try php.getProperty(root, "class");
-        php.addRef(class);
-        return class;
+        // the last class to get finalized is the root namespace
+        var last: ?*Value = null;
+        var pos: HashPosition = undefined;
+        php.initializeHashPosition(&self.load_ctx.class_list, &pos);
+        while (php.getHashPositionValue(&self.load_ctx.class_list, &pos)) |value| {
+            // initially, the host holds references to ZigClass objects through the "class"
+            // property in the info hash tables; prior to destroying these we'll flip the
+            // relationship so that these objects own the host instead;
+            ZigClass.activate(value);
+            last = value;
+            if (!php.moveHashPositionForward(&self.load_ctx.class_list, &pos)) break;
+        }
+        const root = last orelse return error.NoRoot;
+        php.addRef(root);
+        return root;
     }
 
     pub fn addRef(self: *@This()) void {
@@ -101,7 +108,6 @@ pub const ModuleHost = struct {
         if (self.ref_count == 0) {
             std.debug.print("freeing host\n", .{});
             if (self.library) |*lib| lib.close();
-            php.release(&self.global_error_set);
             php.allocator.destroy(self);
         }
     }
@@ -167,7 +173,7 @@ pub const ModuleHost = struct {
     }
 
     fn allocateValue(self: *@This(), value: Value) *Value {
-        return php.appendHashEntry(&self.value_list, @constCast(&value));
+        return php.appendHashEntry(&self.load_ctx.value_list, @constCast(&value));
     }
 
     fn createBool(self: *@This(), initializer: bool) !*Value {
@@ -192,7 +198,7 @@ pub const ModuleHost = struct {
     }
 
     fn createString(self: *@This(), bytes: [*]const u8, len: usize) !*Value {
-        const value = php.createValueString(bytes[0..len]);
+        const value = php.createValueStringContent(bytes[0..len]);
         return self.allocateValue(value);
     }
 
@@ -214,21 +220,14 @@ pub const ModuleHost = struct {
     }
 
     fn createInstance(self: *@This(), structure: *Value, dv: *Value, prefilled_slots: ?*Value) !*Value {
-        const value = try ZigClass.createInstance(structure, dv, prefilled_slots);
-        return self.allocateValue(value);
+        var value = try ZigClass.createInstance(structure, dv, prefilled_slots);
+        return php.appendHashEntry(&self.load_ctx.instance_list, &value);
     }
 
     fn createTemplate(self: *@This(), dv: ?*Value, slots: ?*Value) !*Value {
-        var value: Value = undefined;
-        value = php.createValueArray();
-        if (dv) |v| {
-            const key = php.createInternedString("memory");
-            try php.setPropertyRef(&value, key, v);
-        }
-        if (slots) |v| {
-            const key = php.createInternedString("slots");
-            try php.setPropertyRef(&value, key, v);
-        }
+        var value: Value = php.createValueArray();
+        if (dv) |v| try php.setPropertyRef(&value, self.load_ctx.key_memory, v);
+        if (slots) |v| try php.setPropertyRef(&value, self.load_ctx.key_slots, v);
         return self.allocateValue(value);
     }
 
@@ -272,15 +271,15 @@ pub const ModuleHost = struct {
 
     fn getStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize) !*Value {
         const key = key_bytes[0..key_len];
-        return try php.getHashEntry(&self.structure_map, key);
+        return try php.getHashEntry(&self.load_ctx.structure_map, key);
     }
 
     fn setStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize, value: ?*Value) !void {
         const key = key_bytes[0..key_len];
         if (value) |v|
-            try php.setHashEntryRef(&self.structure_map, key, v)
+            try php.setHashEntryRef(&self.load_ctx.structure_map, key, v)
         else
-            try php.deleteHashEntry(&self.structure_map, key);
+            try php.deleteHashEntry(&self.load_ctx.structure_map, key);
     }
 
     fn beginStructure(self: *@This(), structure: *Value) !void {
@@ -288,8 +287,8 @@ pub const ModuleHost = struct {
     }
 
     fn finishStructure(self: *@This(), structure: *Value) !void {
-        try ZigClass.finalize(structure);
-        self.last_structure = structure;
+        const class = try ZigClass.finalize(structure);
+        _ = php.appendHashEntry(&self.load_ctx.class_list, class);
     }
 
     fn enableCallback(self: *@This(), structure: *Value, template: *Value, member_flags: *Value) !void {

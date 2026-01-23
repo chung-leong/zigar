@@ -52,5 +52,5 @@ const std = @import("std");
 
 // pub var number: Number = .{ .int = 1234 };
 
-pub const ErrorSet = error{ HelloWorld, PantsOnFire, OutOfMoney };
+pub const ErrorSet = error{ HelloWorld, PantsOnFire, OutOfMoney, ChickenDied };
 pub var error_value: ErrorSet = error.PantsOnFire;

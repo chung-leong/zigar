@@ -226,5 +226,6 @@ pub const MemberFlags = packed struct(u32) {
     is_plain: bool = false,
     is_typed_array: bool = false,
     is_clamped_array: bool = false,
-    _: u20 = 0,
+    _: u19 = 0,
+    is_self_referencing: bool = false,
 };

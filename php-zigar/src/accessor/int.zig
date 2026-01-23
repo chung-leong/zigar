@@ -54,7 +54,7 @@ pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) ac
             const int = if (comptime AT == T) ptr.* else ptr.value;
             var buf: [64]u8 = undefined;
             const str = std.fmt.bufPrint(&buf, "{d}", .{int}) catch unreachable;
-            return php.createValueString(str);
+            return php.createValueStringContent(str);
         }
     };
     return .{ .getter = &ns.get, .setter = &ns.set, .stringifier = &ns.stringify, .params = params };

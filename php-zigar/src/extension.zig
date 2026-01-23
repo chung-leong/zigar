@@ -49,6 +49,7 @@ const functions = struct {
                 php.getStringContent(module_path),
                 getSharedLibraryName(),
             });
+            defer php.allocator.free(so_path);
             std.debug.print("path = {s}\n", .{so_path});
             const module = try ModuleHost.load(so_path);
             return_value.* = module.*;

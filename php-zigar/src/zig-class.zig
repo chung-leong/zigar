@@ -34,7 +34,10 @@ pub const ZigClass = struct {
     byte_size: ?usize,
     instance: Scope = .{},
     static: Scope = .{},
-    finalized: bool = false,
+    status: packed struct {
+        finalized: bool = false,
+        activated: bool = false,
+    } = .{},
     static_data: StaticData = undefined,
     php_portion: ClassEntry = undefined,
 
@@ -58,12 +61,14 @@ pub const ZigClass = struct {
         bit_size: usize,
         byte_size: ?usize,
         slot: ?usize,
-        class: ?*ZigClass,
+        class: ?*ZigClass = null,
         accessors: accessor.Any = undefined,
 
         pub fn destructor(value: [*c]Value) callconv(.c) void {
             const member = php.getValuePointer(*Member, value) catch unreachable;
-            if (member.class) |c| c.release();
+            if (!member.flags.is_self_referencing) {
+                if (member.class) |c| c.release();
+            }
             php.allocator.destroy(member);
         }
     };
@@ -135,18 +140,38 @@ pub const ZigClass = struct {
 
     pub fn release(self: *@This()) void {
         self.php_portion.refcount -= 1;
-        // std.debug.print("release class {x} (ref = {d})\n", .{ @intFromPtr(self), self.php_portion.refcount });
         if (self.php_portion.refcount == 0) {
             // std.debug.print("freeing class\n", .{});
-            self.host.release();
-            if (self.finalized) {
+            if (self.status.activated) {
+                self.host.release();
+            }
+            if (self.status.finalized) {
                 self.static.release();
                 self.instance.release();
+                // free static data
+                switch (self.type) {
+                    inline else => |t| {
+                        const name = @tagName(t);
+                        if (@FieldType(StaticData, name) != void) {
+                            self.static_data = @unionInit(StaticData, name, .{});
+                            const data = &@field(self.static_data, name);
+                            const Data = @TypeOf(data.*);
+                            if (Data != void and @hasDecl(Data, "deinit")) data.deinit();
+                        }
+                    },
+                }
             }
-            const ce = self.entry();
-            php.release(ce.name);
-            php.release(ce.info.user.filename);
+            freeEntry(self.entry());
             php.allocator.destroy(self);
+        }
+    }
+
+    fn freeEntry(ce: *ClassEntry) void {
+        if (ce.name) |n| php.release(n);
+        if (ce.info.user.filename) |f| php.release(f);
+        if (ce.unnamed_2.interfaces) |ptr| {
+            const list = ptr[0..@as(usize, ce.num_interfaces)];
+            php.allocator.free(list);
         }
     }
 
@@ -197,12 +222,13 @@ pub const ZigClass = struct {
                 },
             },
         };
+        errdefer freeEntry(ce);
         var ref = try createRef(ce);
+        errdefer php.release(&ref);
         try php.setProperty(info, "class", &ref);
-        host.addRef();
     }
 
-    pub fn finalize(info: *Value) !void {
+    pub fn finalize(info: *Value) !*Value {
         const ref = try php.getProperty(info, "class");
         const obj = try php.getValueObject(ref);
         const self = fromEntry(obj.ce);
@@ -240,15 +266,23 @@ pub const ZigClass = struct {
                 if (@FieldType(StaticData, name) != void) {
                     self.static_data = @unionInit(StaticData, name, .{});
                     const data = &@field(self.static_data, name);
-                    try data.initialize(self);
+                    try data.init(self);
                 }
             },
         }
-        self.finalized = true;
+        self.status.finalized = true;
+        return ref;
+    }
+
+    pub fn activate(ref: *Value) void {
+        // this method is called when the host is about to release the structure map
+        const obj = php.getValueObject(ref) catch unreachable;
+        const self = fromEntry(obj.ce);
+        self.host.addRef();
+        self.status.activated = true;
     }
 
     pub fn createInstance(info: *const Value, memory: *const Value, prefilled_slots: ?*const Value) !Value {
-        errdefer |err| std.debug.print("Error = {}\n", .{err});
         const ref = try php.getProperty(info, "class");
         const obj = try php.getValueObject(ref);
         const bytes = try php.getValuePointer(*ByteBuffer, memory);
@@ -325,7 +359,8 @@ pub const ZigClass = struct {
             var pos: HashPosition = undefined;
             php.initializeHashPosition(member_list_ht, &pos);
             while (php.getHashPositionValue(member_list_ht, &pos)) |member_info| {
-                const key = php.getHashPositionKey(member_list_ht, &pos);
+                var key = php.getHashPositionKey(member_list_ht, &pos);
+                defer php.release(&key);
                 const member_ht = try php.getValueHashTable(member_info);
                 var key_str: ?[]const u8 = null;
                 var key_int: usize = undefined;
@@ -343,15 +378,15 @@ pub const ZigClass = struct {
                     .bit_size = try php.getHashEntryWithType(?usize, member_ht, "bitSize") orelse 0,
                     .byte_size = try php.getHashEntryWithType(?usize, member_ht, "byteSize"),
                     .slot = try php.getHashEntryWithType(?usize, member_ht, "slot"),
-                    .class = get: {
-                        const struct_info = php.getHashEntry(member_ht, "structure") catch break :get null;
-                        const ref = try php.getProperty(struct_info, "class");
-                        const obj = try php.getValueObject(ref);
-                        const class = fromEntry(obj.ce);
-                        if (class != self) class.addRef();
-                        break :get class;
-                    },
                 };
+                if (php.getHashEntry(member_ht, "structure")) |struct_info| {
+                    const ref = try php.getProperty(struct_info, "class");
+                    const obj = try php.getValueObject(ref);
+                    const class = fromEntry(obj.ce);
+                    member.class = class;
+                    member.flags.is_self_referencing = class == self;
+                    if (class != self) class.addRef();
+                } else |_| {}
                 var member_ptr = php.createValuePointer(member);
                 if (key_str) |str|
                     try php.setHashEntry(&result, str, &member_ptr)
@@ -421,7 +456,8 @@ pub const ZigClass = struct {
             var pos: HashPosition = undefined;
             php.initializeHashPosition(ht, &pos);
             while (php.getHashPositionValue(ht, &pos)) |value| {
-                const key = php.getHashPositionKey(ht, &pos);
+                var key = php.getHashPositionKey(ht, &pos);
+                defer php.release(&key);
                 const long = try php.getValueLong(&key);
                 try php.setHashEntryRef(new_ht, long, value);
                 if (!php.moveHashPositionForward(ht, &pos)) break;
@@ -442,7 +478,8 @@ pub const ZigClass = struct {
                     const ht = try php.getValueHashTable(objects);
                     php.initializeHashPosition(ht, &pos);
                     while (php.getHashPositionValue(ht, &pos)) |value| {
-                        const key = php.getHashPositionKey(ht, &pos);
+                        var key = php.getHashPositionKey(ht, &pos);
+                        php.release(&key);
                         const long = try php.getValueLong(&key);
                         try php.setPropertyRef(&slots, long, value);
                         if (!php.moveHashPositionForward(ht, &pos)) break;

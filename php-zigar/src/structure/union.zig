@@ -23,7 +23,7 @@ pub const Union = struct {
             class: ?*ZigClass,
         } = null,
 
-        pub fn initialize(self: *@This(), class: *ZigClass) !void {
+        pub fn init(self: *@This(), class: *ZigClass) !void {
             const member = find: {
                 var pos: HashPosition = undefined;
                 const ht = &class.instance.members;

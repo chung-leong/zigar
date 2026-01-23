@@ -22,7 +22,7 @@ pub const Function = struct {
         thunk_address: usize = undefined,
         controller_address: usize = undefined,
 
-        pub fn initialize(self: *@This(), class: *ZigClass) !void {
+        pub fn init(self: *@This(), class: *ZigClass) !void {
             self.thunk_address = getAddress(class, .instance);
             self.controller_address = getAddress(class, .static);
         }
@@ -37,12 +37,7 @@ pub const Function = struct {
         self.address = @intFromPtr(buffer.bytes.ptr);
         buffer.release(); // the buffer only existed to convey the function's address
         const class = ZigClass.fromStructure(self);
-        self.function.internal_function = .{
-            .type = php.INTERNAL_FUNCTION,
-            .function_name = php.createString("fn"),
-            .scope = class.entry(),
-            .handler = &php.transform(run),
-        };
+        self.function = php.createFunction(run, "run", class.entry());
     }
 
     pub fn getClosure(obj: *Object, ce: *[*c]ClassEntry, func: *[*c]php.Function, this: ?*[*c]Object, _: bool) c_int {
@@ -55,11 +50,11 @@ pub const Function = struct {
 
     pub fn freeObject(obj: *Object) void {
         const self = Super.fromObject(obj);
-        php.release(self.function.internal_function.function_name);
+        php.destroyFunction(&self.function);
         Super.freeObject(obj);
     }
 
-    fn run(ed: *ExecuteData, return_value: *Value) !void {
+    pub fn run(ed: *ExecuteData, return_value: *Value) !void {
         const self: *@This() = @fieldParentPtr("function", @as(*php.Function, ed.func));
         const class = ZigClass.fromStructure(self);
         const static = class.getStaticData(Function);

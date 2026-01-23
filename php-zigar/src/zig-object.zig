@@ -29,14 +29,6 @@ pub fn ZigObject(comptime S: type) type {
             return @alignCast(@fieldParentPtr("zig_portion", s));
         }
 
-        pub fn addRef(self: *@This()) void {
-            php.addRef(self.object());
-        }
-
-        pub fn release(self: *@This()) void {
-            php.release(self.object());
-        }
-
         pub fn create(class: *ZigClass) !*@This() {
             const prop_size = php.getObjectPropertySize(class.entry());
             const size: usize = @intCast(@sizeOf(@This()) + prop_size);
@@ -51,6 +43,11 @@ pub fn ZigObject(comptime S: type) type {
             php.initializeObjectProperties(self.object(), class.entry());
             class.addRef();
             return self;
+        }
+
+        pub fn releaseClass(obj: *Object) void {
+            const class = ZigClass.fromObject(obj);
+            class.release();
         }
 
         pub fn setStorage(self: *@This(), bytes: *ByteBuffer, slots: *const Value) !void {

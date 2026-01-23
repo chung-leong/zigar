@@ -4,6 +4,7 @@ const accessor = @import("accessor.zig");
 const byte_buffer = @import("byte-buffer.zig");
 const ByteBuffer = byte_buffer.ByteBuffer;
 const php = @import("php.zig");
+const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
 const HashPosition = php.HashPosition;
 const Object = php.Object;
@@ -48,6 +49,10 @@ pub const by_enum = .{
     .variadic_struct = VariadicStruct,
     .function = Function,
     .@"comptime" = Comptime,
+};
+pub const RefStatus = packed struct {
+    checked: bool = false,
+    broken: bool = false,
 };
 
 pub fn enumName(comptime S: type) []const u8 {
@@ -94,10 +99,11 @@ pub fn Parent(comptime S: type) type {
 
         pub fn freeObject(obj: *Object) void {
             const self = fromObject(obj);
-            const class = ZigClass.fromObject(obj);
             if (@hasField(S, "bytes")) self.bytes.release();
             if (@hasField(S, "slots")) php.release(&self.slots);
-            class.release();
+            if (!@hasField(S, "circular_ref") or !self.circular_ref) {
+                ZigObject(S).releaseClass(obj);
+            }
         }
 
         pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {

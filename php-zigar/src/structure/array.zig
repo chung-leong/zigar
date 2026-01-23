@@ -19,7 +19,7 @@ pub const Array = struct {
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
 
-        pub fn initialize(self: *@This(), class: *ZigClass) !void {
+        pub fn init(self: *@This(), class: *ZigClass) !void {
             const member = try class.getMember(.instance, 0);
             self.value_acc = &member.accessors;
         }
@@ -75,7 +75,7 @@ pub const Array = struct {
         const class = ZigClass.fromObject(obj);
         if (class.flags.array.is_string) {
             if (class.byte_size == class.length) {
-                return php.createValueString(self.bytes.bytes);
+                return php.createValueStringContent(self.bytes.bytes);
             } else if (class.byte_size == class.length) {
                 // TODO: convert to UTF-8
             }

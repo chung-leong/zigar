@@ -16,13 +16,14 @@ const ZigClass = zig_class.ZigClass;
 pub const Enum = struct {
     bytes: *ByteBuffer = undefined,
     name: ?*String = null,
+    circular_ref: bool = false,
 
     const Super = structure.Parent(@This());
     pub const Static = struct {
         value_acc: *accessor.Primitive = undefined,
         available_tags: HashTable = undefined,
 
-        pub fn initialize(self: *@This(), class: *ZigClass) !void {
+        pub fn init(self: *@This(), class: *ZigClass) !void {
             const member = try class.getMember(.instance, 0);
             if (member.accessors != .primitive) return error.InvalidAccessor;
             self.value_acc = &member.accessors.primitive;
@@ -39,12 +40,16 @@ pub const Enum = struct {
                     const tag = try php.getProperty(static_slots, slot);
                     const tag_obj = try php.getValueObject(tag);
                     const tag_struct = fromObject(tag_obj);
-                    const tag_value = try self.value_acc.get(tag_struct.bytes);
+                    // decrement ref count on class
+                    class.release();
+                    tag_struct.circular_ref = true;
                     // reference tag by integer value
+                    const tag_value = try self.value_acc.get(tag_struct.bytes);
                     const long = try php.getValueLong(&tag_value);
                     try php.setHashEntryRef(&self.available_tags, long, tag);
                     // reference tag by name
-                    const name_key = php.getHashPositionKey(member_ht, &pos);
+                    var name_key = php.getHashPositionKey(member_ht, &pos);
+                    defer php.release(&name_key);
                     const name = try php.getValueString(&name_key);
                     try php.setHashEntryRef(&self.available_tags, name, tag);
                     // attach name to tag
@@ -53,6 +58,10 @@ pub const Enum = struct {
                     if (!php.moveHashPositionForward(member_ht, &pos)) break;
                 }
             }
+        }
+
+        pub fn deinit(self: *@This()) void {
+            php.destroyHashTable(&self.available_tags);
         }
 
         fn findTagByValue(self: *Static, long: c_long) !*Value {
@@ -67,21 +76,6 @@ pub const Enum = struct {
 
         fn findTagByName(self: *Static, name: []const u8) !*Value {
             return php.getHashEntry(&self.available_tags, name);
-        }
-
-        fn findTagValue(self: *Static, obj: *Object) !Value {
-            var pos: HashPosition = undefined;
-            const ht = &self.available_tags;
-            php.initializeHashPosition(ht, &pos);
-            while (php.getHashPositionValue(ht, &pos)) |tag| {
-                const key = php.getHashPositionKey(ht, &pos);
-                if (php.getType(&key) == .long) {
-                    const tag_obj = try php.getValueObject(tag);
-                    if (tag_obj == obj) return key;
-                }
-                if (!php.moveHashPositionForward(ht, &pos)) break;
-            }
-            return error.Missing;
         }
     };
 
@@ -109,10 +103,11 @@ pub const Enum = struct {
         var static = class.getStaticData(@This());
         const tag_value = find: {
             if (php.getValueObject(value)) |tag_obj| {
-                if (static.findTagValue(tag_obj)) |tv| {
-                    break :find tv;
-                } else |_| {
-                    php.throwExceptionFmt("object of '{s}' is not a tag of enum '{s}' (zig)", .{
+                if (tag_obj.ce == class.entry()) {
+                    const tag_struct = fromObject(tag_obj);
+                    break :find try static.value_acc.get(tag_struct.bytes);
+                } else {
+                    php.throwExceptionFmt("'{s}' is not a tag of enum '{s}' (zig)", .{
                         php.getStringContent(obj.ce.*.name),
                         class.getName(),
                     });
@@ -131,7 +126,8 @@ pub const Enum = struct {
             } else |_| if (php.getValueStringContent(value)) |name| {
                 if (static.findTagByName(name)) |tag| {
                     const tag_obj = try php.getValueObject(tag);
-                    break :find try static.findTagValue(tag_obj);
+                    const tag_struct = fromObject(tag_obj);
+                    break :find try static.value_acc.get(tag_struct.bytes);
                 } else |_| {
                     php.throwExceptionFmt("enum '{s}' has no tag named '{s}' (zig)", .{
                         class.getName(),

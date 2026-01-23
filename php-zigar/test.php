@@ -72,8 +72,12 @@ $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar")
 // echo "red? ", $Color->red === $module->color, "\n";
 
 $ErrorSet = $module->ErrorSet;
+echo $ErrorSet->PantsOnFire->getMessage(), "\n";
+echo $ErrorSet->PantsOnFire->getCode(), "\n";
+
 echo "pants on fire? ", $module->error_value === $ErrorSet->PantsOnFire, "\n";
 echo "hello world? ", $module->error_value === $ErrorSet->HelloWorld, "\n";
 $ex = new Exception("hello world");
 $module->error_value = $ex;
+echo $module->error_value->getMessage(), "\n";
 echo "hello world? ", $module->error_value === $ErrorSet->HelloWorld, "\n";

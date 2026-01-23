@@ -317,7 +317,7 @@ pub fn createValueDouble(d: f64) Value {
     return result;
 }
 
-pub fn createValueString(s: []const u8) Value {
+pub fn createValueStringContent(s: []const u8) Value {
     var result: Value = .{};
     const str = createString(s);
     result.value.str = str;
@@ -326,6 +326,13 @@ pub fn createValueString(s: []const u8) Value {
         php_h.IS_STRING_EX
     else
         php_h.IS_STRING;
+    return result;
+}
+
+pub fn createValueString(s: *String) Value {
+    var result: Value = .{};
+    result.value.str = s;
+    result.u1.type_info = php_h.IS_STRING_EX;
     return result;
 }
 
@@ -475,6 +482,7 @@ pub fn createString(s: []const u8) *String {
         1 => php_h.zend_one_char_string[s[0]],
         else => create: {
             const zs = php_h.zend_string_alloc(s.len, false);
+            if (@intFromPtr(zs) == 0x00007f8beb601c40) @breakpoint();
             const ds: [*]u8 = @ptrCast(&zs.*.val[0]);
             @memcpy(ds[0..s.len], s);
             ds[s.len] = '\x00';
@@ -484,10 +492,12 @@ pub fn createString(s: []const u8) *String {
 }
 
 pub fn createStringWithLength(len: usize) *String {
-    return switch (len) {
+    const zs = switch (len) {
         0 => php_h.zend_empty_string,
         else => php_h.zend_string_alloc(len, false),
     };
+    if (@intFromPtr(zs) == 0x00007f8beb601c40) @breakpoint();
+    return zs;
 }
 
 pub fn createInternedString(s: []const u8) *String {
@@ -505,8 +515,7 @@ pub fn getStringContent(str: *const String) []const u8 {
 }
 
 pub fn createArray() *Array {
-    const arr = php_h._zend_new_array_0();
-    return arr;
+    return php_h._zend_new_array_0();
 }
 
 pub const destructor = struct {
@@ -630,8 +639,17 @@ pub fn initializeHashPosition(ht: *HashTable, pos: *HashPosition) void {
     php_h.zend_hash_internal_pointer_reset_ex(ht, pos);
 }
 
+pub fn initializeHashPositionToEnd(ht: *HashTable, pos: *HashPosition) void {
+    php_h.zend_hash_internal_pointer_end_ex(ht, pos);
+}
+
 pub fn moveHashPositionForward(ht: *HashTable, pos: *HashPosition) bool {
     const result = php_h.zend_hash_move_forward_ex(ht, pos);
+    return result == php_h.SUCCESS;
+}
+
+pub fn moveHashPositionBackward(ht: *HashTable, pos: *HashPosition) bool {
+    const result = php_h.zend_hash_move_backwards_ex(ht, pos);
     return result == php_h.SUCCESS;
 }
 
@@ -680,19 +698,10 @@ pub fn addRef(value: anytype) void {
 pub fn release(value: anytype) void {
     const T = @TypeOf(value);
     switch (T) {
-        *Value, [*c]Value => {
-            if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0)
-                _ = php_h.zval_delref_p(value);
-        },
-        *String, [*c]String => {
-            php_h.zend_string_release(value);
-        },
-        *Object, [*c]Object => {
-            php_h.zend_object_release(value);
-        },
-        *HashTable, [*c]HashTable => {
-            php_h.zend_hash_release(value);
-        },
+        *Value, [*c]Value => php_h.zval_ptr_dtor(value),
+        *String, [*c]String => php_h.zend_string_release(value),
+        *Object, [*c]Object => php_h.zend_object_release(value),
+        *HashTable, [*c]HashTable => php_h.zend_hash_release(value),
         else => @compileError("Unexpected type: " ++ @typeName(T)),
     }
 }
@@ -701,7 +710,7 @@ pub fn invokeMethod(obj: *Object, fn_name: []const u8, params: anytype) !Value {
     var callable = createValueArray();
     defer release(&callable);
     var obj_value = createValueObject(obj);
-    var fn_name_value = createValueString(fn_name);
+    var fn_name_value = createValueStringContent(fn_name);
     try setProperty(&callable, 0, &obj_value);
     try setProperty(&callable, 1, &fn_name_value);
     var args: [params.len]Value = undefined;
@@ -722,6 +731,21 @@ pub fn invokeMethod(obj: *Object, fn_name: []const u8, params: anytype) !Value {
     if (php_h.zend_call_function(&fci, &fci_cache) != php_h.SUCCESS)
         return error.Failure;
     return retval;
+}
+
+pub fn createFunction(comptime func: anytype, name: []const u8, ce: *ClassEntry) Function {
+    return .{
+        .internal_function = .{
+            .type = php_h.ZEND_INTERNAL_FUNCTION,
+            .function_name = createString(name),
+            .scope = ce,
+            .handler = &transform(func),
+        },
+    };
+}
+
+pub fn destroyFunction(func: *Function) void {
+    release(func.internal_function.function_name);
 }
 
 pub const instanceOf = php_h.instanceof_function;

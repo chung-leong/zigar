@@ -17,7 +17,8 @@ const zig_object = @import("../zig-object.zig");
 const ZigObject = zig_object.ZigObject;
 
 pub const Static = struct {
-    slots: Value = undefined,
+    // this needs to be initialized, since setStorage() isn't called immediately
+    slots: Value = .{},
 
     pub const scope: ZigClass.ScopeType = .static;
 
@@ -33,14 +34,8 @@ pub const Static = struct {
         return &func.function;
     }
 
-    pub fn freeObject(obj: *Object) void {
-        // std.debug.print("freeing class ref\n", .{});
-        Super.freeObject(obj);
-        const class = ZigClass.fromObject(obj);
-        class.release();
-    }
-
     pub const fromObject = Super.fromObject;
+    pub const freeObject = Super.freeObject;
     pub const setStorage = Super.setStorage;
     pub const readSelf = Super.readSelf;
     pub const readProperty = Super.readProperty;

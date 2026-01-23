@@ -14,12 +14,13 @@ const ZigClass = zig_class.ZigClass;
 
 pub const Comptime = struct {
     slots: Value = undefined,
+    circular_ref: bool = false,
 
     const Super = structure.Parent(@This());
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
 
-        pub fn initialize(self: *@This(), class: *ZigClass) !void {
+        pub fn init(self: *@This(), class: *ZigClass) !void {
             const member = try class.getMember(.instance, 0);
             self.value_acc = &member.accessors;
         }
@@ -45,15 +46,9 @@ pub const Comptime = struct {
         return value;
     }
 
-    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
-        std.debug.print("comptime => {s}\n", .{php.getStringContent(name)});
-        return Super.readProperty(obj, name, prop_type, cache_slot, retval);
-    }
-
     pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
-    // pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
-    // pub const readProperty = Super.readProperty;
+    pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
 };

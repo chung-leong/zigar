@@ -19,7 +19,7 @@ pub const Optional = struct {
         payload_acc: *accessor.Any = undefined,
         present_acc: *accessor.Primitive = undefined,
 
-        pub fn initialize(self: *@This(), class: *ZigClass) !void {
+        pub fn init(self: *@This(), class: *ZigClass) !void {
             const member0 = try class.getMember(.instance, 0);
             self.payload_acc = &member0.accessors;
             const member1 = try class.getMember(.instance, 1);
