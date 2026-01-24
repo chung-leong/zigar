@@ -13,6 +13,7 @@ const module_host = @import("module-host.zig");
 const Host = module_host.ModuleHost;
 const php = @import("php.zig");
 const ClassEntry = php.ClassEntry;
+const ExecuteData = php.ExecuteData;
 const Function = php.Function;
 const HashPosition = php.HashPosition;
 const HashTable = php.HashTable;
@@ -21,6 +22,7 @@ const String = php.String;
 const Value = php.Value;
 const structure = @import("structure.zig");
 const zig_object = @import("zig-object.zig");
+const callHandler = zig_object.callHandler;
 const ZigObject = zig_object.ZigObject;
 
 pub const ZigClass = struct {
@@ -40,10 +42,13 @@ pub const ZigClass = struct {
     } = .{},
     static_data: StaticData = undefined,
     php_portion: ClassEntry = undefined,
+    methods: Methods,
 
     pub const ScopeType = enum { instance, static };
-    pub var parent_entry: php.ClassEntry = .{};
 
+    const Methods = struct {
+        toString: Function,
+    };
     const Scope = struct {
         members: HashTable = undefined,
         template: Template = undefined,
@@ -195,7 +200,11 @@ pub const ZigClass = struct {
                 else |_|
                     return error.InvalidSignature;
             },
+            .methods = .{
+                .toString = php.createFunction(toString, "__toString"),
+            },
         };
+
         const interfaces = try self.createInterfaceList();
         const ce = &self.php_portion;
         ce.* = .{
@@ -208,7 +217,7 @@ pub const ZigClass = struct {
             .function_table = php.createHashTable(php.destructor.function),
             .num_interfaces = @intCast(interfaces.len),
             .unnamed_0 = .{
-                .parent = &parent_entry,
+                .parent = self.getParentClass(),
             },
             .unnamed_1 = .{
                 .create_object = php.transform(createObject),
@@ -221,6 +230,7 @@ pub const ZigClass = struct {
                     .filename = php.createString("filename"),
                 },
             },
+            .__tostring = &self.methods.toString,
         };
         errdefer freeEntry(ce);
         var ref = try createRef(ce);
@@ -322,6 +332,13 @@ pub const ZigClass = struct {
                 return try php.getValuePointer(*Member, value);
             },
         }
+    }
+
+    pub fn getParentClass(self: *@This()) *ClassEntry {
+        return switch (self.type) {
+            .error_set => error_class,
+            else => global_class,
+        };
     }
 
     pub fn createInterfaceList(self: *@This()) ![]*ClassEntry {
@@ -448,7 +465,7 @@ pub const ZigClass = struct {
 
     fn createSlots(self: *const @This()) !Value {
         if (!self.flags.common.has_slot) return php.createValueNull();
-        var new = php.createValueArray();
+        var new = php.createValueArray(null);
         errdefer php.release(&new);
         if (self.instance.template.slots) |def| {
             const ht = try php.getValueHashTable(def);
@@ -489,6 +506,11 @@ pub const ZigClass = struct {
                 return zig_obj.object();
             },
         }
+    }
+
+    pub fn toString(ed: *ExecuteData, return_value: *Value) !void {
+        const obj = try php.getValueObject(&ed.This);
+        return_value.* = try callHandler(obj, "stringify", .{});
     }
 
     fn getAccessors(scope: *Scope, member: *Member) !accessor.Any {
@@ -659,3 +681,21 @@ pub const ZigClass = struct {
         return .{ .missing = {} };
     }
 };
+
+pub var global_class: *ClassEntry = undefined;
+pub var error_class: *ClassEntry = undefined;
+
+pub fn registerGlobalClasses() !void {
+    var ce: ClassEntry = .{
+        .name = php.createPersistentString("ZigObject"),
+    };
+    const parent_ce = php.getClassEntry(.standard);
+    global_class = php.registerInternalClass(&ce, parent_ce) orelse
+        return error.ClassRegistrationFailure;
+    var error_ce: ClassEntry = .{
+        .name = php.createPersistentString("ZigError"),
+    };
+    const error_parent_ce = php.getClassEntry(.exception);
+    error_class = php.registerInternalClass(&error_ce, error_parent_ce) orelse
+        return error.ClassRegistrationFailure;
+}

@@ -47,7 +47,7 @@ pub fn get(comptime attrs: Attributes, params: Parameters(attrs)) Accessors(attr
 const multi_slot = struct {
     pub fn get(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, slots: *Value) Error!Value {
         const entry = try vivicateSlot(acc, buffer, slots);
-        return accessor.read(entry, acc.params.transform);
+        return try accessor.read(entry, acc.params.transform);
     }
 
     pub fn set(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, slots: *Value, value: *const Value) Error!void {
@@ -67,7 +67,7 @@ const multi_slot = struct {
 const single_slot = struct {
     pub fn get(acc: *const accessor.SingleSlot, buffer: *ByteBuffer, slot: *Value) Error!Value {
         const entry = try vivicateSlot(acc, buffer, slot);
-        return accessor.read(entry, acc.params.transform);
+        return try accessor.read(entry, acc.params.transform);
     }
 
     pub fn set(acc: *const accessor.SingleSlot, buffer: *ByteBuffer, slot: *Value, value: *const Value) Error!void {
@@ -85,7 +85,7 @@ const single_slot = struct {
 const array_slot = struct {
     pub fn get(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize) Error!Value {
         const entry = try vivicateSlot(acc, buffer, slots, index);
-        return accessor.read(entry, acc.params.transform);
+        return try accessor.read(entry, acc.params.transform);
     }
 
     pub fn set(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize, value: *const Value) Error!void {
@@ -112,7 +112,7 @@ const multi_slot_prebaked = struct {
     pub fn get(acc: *const accessor.MultiSlotPrebaked, slots: *Value) Error!Value {
         const ht = try php.getValueHashTable(slots);
         const entry = try php.getHashEntry(ht, acc.params.slot);
-        return accessor.read(entry, acc.params.transform);
+        return try accessor.read(entry, acc.params.transform);
     }
 
     pub fn set(acc: *const accessor.MultiSlotPrebaked, slots: *Value, value: *const Value) Error!void {
@@ -124,7 +124,7 @@ const multi_slot_prebaked = struct {
 
 const single_slot_prebaked = struct {
     pub fn get(acc: *const accessor.SingleSlotPrebaked, slot: *Value) Error!Value {
-        return accessor.read(slot, acc.params.transform);
+        return try accessor.read(slot, acc.params.transform);
     }
 
     pub fn set(_: *const accessor.SingleSlotPrebaked, slot: *Value, value: *const Value) Error!void {

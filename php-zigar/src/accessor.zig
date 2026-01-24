@@ -14,13 +14,14 @@ const HashTable = php.HashTable;
 const Value = php.Value;
 const ClassEntry = php.ClassEntry;
 const zig_object = @import("zig-object.zig");
-const ObjectHandlers = zig_object.ObjectHandlers;
+const callHandler = zig_object.callHandler;
 
 pub const Error = error{
     CannotCreateObject,
     OutOfBound,
     OutOfMemory,
     WriteProtected,
+    Unexpected,
     Missing,
     Failure,
     NotBoolean,
@@ -305,7 +306,7 @@ pub fn WithBitOffset(comptime T: type, comptime bit_offset: ?u3) type {
     } else T;
 }
 
-pub fn read(entry: *Value, transform: ?Transform) Value {
+pub fn read(entry: *Value, transform: ?Transform) !Value {
     if (transform) |t| {
         const obj = php.getValueObject(entry) catch {
             if (t == .to_class) {
@@ -319,11 +320,10 @@ pub fn read(entry: *Value, transform: ?Transform) Value {
             }
             @panic("Unexpected entry");
         };
-        const handlers: *const ObjectHandlers = @ptrCast(obj.handlers);
         return switch (t) {
-            .to_string => handlers.get_string.?(obj),
-            .to_plain => handlers.get_plain.?(obj),
-            .to_value => handlers.read_self.?(obj),
+            .to_string => try callHandler(obj, "get_string", .{}),
+            .to_plain => try callHandler(obj, "get_plain", .{}),
+            .to_value => try callHandler(obj, "read_self", .{}),
             .to_class => php.createValueObject(obj),
         };
     } else {
@@ -334,6 +334,5 @@ pub fn read(entry: *Value, transform: ?Transform) Value {
 
 pub fn write(entry: *Value, value: *const Value) Error!void {
     const obj = php.getValueObject(entry) catch unreachable;
-    const handlers: *const ObjectHandlers = @ptrCast(obj.handlers);
-    handlers.write_self.?(obj, value);
+    try callHandler(obj, "write_self", .{value});
 }

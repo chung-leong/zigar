@@ -225,19 +225,19 @@ pub const ModuleHost = struct {
     }
 
     fn createTemplate(self: *@This(), dv: ?*Value, slots: ?*Value) !*Value {
-        var value: Value = php.createValueArray();
+        var value: Value = php.createValueArray(null);
         if (dv) |v| try php.setPropertyRef(&value, self.load_ctx.key_memory, v);
         if (slots) |v| try php.setPropertyRef(&value, self.load_ctx.key_slots, v);
         return self.allocateValue(value);
     }
 
     fn createList(self: *@This()) !*Value {
-        const value = php.createValueArray();
+        const value = php.createValueArray(null);
         return self.allocateValue(value);
     }
 
     fn createObject(self: *@This()) !*Value {
-        const value = php.createValueArray();
+        const value = php.createValueArray(null);
         return self.allocateValue(value);
     }
 

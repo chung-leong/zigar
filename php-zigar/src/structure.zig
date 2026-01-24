@@ -58,7 +58,7 @@ pub const RefStatus = packed struct {
 pub fn enumName(comptime S: type) []const u8 {
     return inline for (comptime std.meta.fields(@TypeOf(by_enum))) |field| {
         if (@field(by_enum, field.name) == S) break field.name;
-    } else @compileError("Recognized structure type: " ++ @typeName(S));
+    } else @compileError("Unrecognized structure type: " ++ @typeName(S));
 }
 
 pub fn Parent(comptime S: type) type {
@@ -101,9 +101,8 @@ pub fn Parent(comptime S: type) type {
             const self = fromObject(obj);
             if (@hasField(S, "bytes")) self.bytes.release();
             if (@hasField(S, "slots")) php.release(&self.slots);
-            if (!@hasField(S, "circular_ref") or !self.circular_ref) {
-                ZigObject(S).releaseClass(obj);
-            }
+            const class = ZigClass.fromObject(obj);
+            class.release();
         }
 
         pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {

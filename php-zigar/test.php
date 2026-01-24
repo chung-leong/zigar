@@ -71,13 +71,30 @@ $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar")
 // $module->color = $Color->red;
 // echo "red? ", $Color->red === $module->color, "\n";
 
-$ErrorSet = $module->ErrorSet;
-echo $ErrorSet->PantsOnFire->getMessage(), "\n";
-echo $ErrorSet->PantsOnFire->getCode(), "\n";
+// $ErrorSet = $module->ErrorSet;
+// echo $ErrorSet->PantsOnFire->getMessage(), "\n";
+// echo $ErrorSet->PantsOnFire->getCode(), "\n";
 
-echo "pants on fire? ", $module->error_value === $ErrorSet->PantsOnFire, "\n";
-echo "hello world? ", $module->error_value === $ErrorSet->HelloWorld, "\n";
-$ex = new Exception("hello world");
-$module->error_value = $ex;
-echo $module->error_value->getMessage(), "\n";
-echo "hello world? ", $module->error_value === $ErrorSet->HelloWorld, "\n";
+// echo "pants on fire? ", $module->error_value === $ErrorSet->PantsOnFire, "\n";
+// echo "hello world? ", $module->error_value === $ErrorSet->HelloWorld, "\n";
+// $ex = new Exception("hello world");
+// $module->error_value = $ex;
+// echo $module->error_value->getMessage(), "\n";
+// echo "hello world? ", $module->error_value === $ErrorSet->HelloWorld, "\n";
+
+// try {
+//     echo $module->problematic1, "\n";
+// } catch (ZigError $e) {
+//     switch ($e) {
+//         case $module->ErrorSet->PantsOnFire: 
+//             echo "Pants on fire!\n";
+//     }
+//     echo $e, "\n";
+// }
+
+// $module->fail();
+
+echo $module->problematic2, "\n";
+$module->problematic2 = $module->ErrorSet->HelloWorld;
+echo $module->problematic2, "\n";
+

@@ -45,11 +45,6 @@ pub fn ZigObject(comptime S: type) type {
             return self;
         }
 
-        pub fn releaseClass(obj: *Object) void {
-            const class = ZigClass.fromObject(obj);
-            class.release();
-        }
-
         pub fn setStorage(self: *@This(), bytes: *ByteBuffer, slots: *const Value) !void {
             return try self.zig_portion.setStorage(bytes, slots);
         }
@@ -79,6 +74,17 @@ pub fn ZigObject(comptime S: type) type {
     return Result;
 }
 
+pub fn callHandler(obj: *Object, comptime name: []const u8, args: anytype) !RT: {
+    const Optional = @FieldType(ObjectHandlers, name);
+    const Pointer = @typeInfo(Optional).optional.child;
+    const Handler = @typeInfo(Pointer).pointer.child;
+    break :RT @typeInfo(Handler).@"fn".return_type.?;
+} {
+    const handlers: *const ObjectHandlers = @ptrCast(obj.handlers);
+    const handler = @field(handlers, name) orelse return error.Unexpected;
+    return @call(.auto, handler, .{obj} ++ args);
+}
+
 pub const ObjectHandlers = define: {
     const php_handlers = php.ObjectHandlers;
     const zig_handlers = struct {
@@ -86,6 +92,7 @@ pub const ObjectHandlers = define: {
         write_self: ?*const fn ([*c]Object, [*c]const Value) callconv(.c) void,
         get_string: ?*const fn ([*c]Object) callconv(.c) Value,
         get_plain: ?*const fn ([*c]Object) callconv(.c) Value,
+        stringify: ?*const fn ([*c]Object) callconv(.c) Value,
     };
     const php_fields = std.meta.fields(php_handlers);
     const zig_fields = std.meta.fields(zig_handlers);
@@ -132,4 +139,5 @@ const object_handler_mapping = .{
     .write_self = "writeSelf",
     .get_string = "getString",
     .get_plain = "getPlain",
+    .stringify = "stringify",
 };

@@ -11,9 +11,10 @@ const FunctionEntry = php.FunctionEntry;
 const ModuleEntry = php.ModuleEntry;
 const String = php.String;
 const Value = php.Value;
-const fn_transform = @import("zigft/fn-transform.zig");
+const zig_class = @import("zig-class.zig");
 
 export fn php_zigar_init(_: c_int, _: c_int) php.Result {
+    zig_class.registerGlobalClasses() catch return php.FAILURE;
     return php.SUCCESS;
 }
 
@@ -22,9 +23,9 @@ export fn php_zigar_shutdown(_: c_int, _: c_int) php.Result {
 }
 
 export fn php_zigar_info(_: *ModuleEntry) void {
-    // php_info_print_table_start();
-    // php_info_print_table_header(2, "PHP Zigar", "enabled");
-    // php_info_print_table_end();
+    php.infoTableStart();
+    php.infoTableHeader(2, "PHP Zigar", "enabled");
+    php.infoTableEnd();
 }
 
 const functions = struct {

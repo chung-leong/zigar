@@ -54,3 +54,31 @@ const std = @import("std");
 
 pub const ErrorSet = error{ HelloWorld, PantsOnFire, OutOfMoney, ChickenDied };
 pub var error_value: ErrorSet = error.PantsOnFire;
+
+pub var problematic1: ErrorSet!i32 = error.PantsOnFire;
+pub var problematic2: ErrorSet!i32 = 1234;
+
+const Error = error{some_error};
+
+pub fn fail() void {
+    @call(.never_inline, a, .{}) catch {
+        const trace = @errorReturnTrace() orelse return;
+        std.debug.dumpStackTrace(trace.*);
+    };
+}
+
+fn a() !void {
+    try @call(.never_inline, b, .{});
+}
+
+fn b() !void {
+    try @call(.never_inline, c, .{});
+}
+
+fn c() !void {
+    try @call(.never_inline, d, .{});
+}
+
+fn d() !void {
+    return error.HomerSimpson;
+}

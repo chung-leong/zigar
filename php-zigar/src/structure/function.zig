@@ -36,8 +36,7 @@ pub const Function = struct {
     pub fn setStorage(self: *@This(), buffer: *ByteBuffer, _: *const Value) !void {
         self.address = @intFromPtr(buffer.bytes.ptr);
         buffer.release(); // the buffer only existed to convey the function's address
-        const class = ZigClass.fromStructure(self);
-        self.function = php.createFunction(run, "run", class.entry());
+        self.function = php.createFunction(run, "run");
     }
 
     pub fn getClosure(obj: *Object, ce: *[*c]ClassEntry, func: *[*c]php.Function, this: ?*[*c]Object, _: bool) c_int {
