@@ -632,9 +632,10 @@ pub fn setHashEntryRef(ht: *HashTable, key: anytype, value: *Value) !void {
     addRef(value);
 }
 
-pub fn appendHashEntry(ht: *HashTable, value: *Value) *Value {
+pub fn appendHashEntry(ht: *HashTable, value: *Value) usize {
     ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
-    return php_h.zend_hash_next_index_insert(ht, value);
+    _ = php_h.zend_hash_next_index_insert(ht, value);
+    return php_h.zend_hash_num_elements(ht);
 }
 
 pub fn removeHashEntry(ht: *HashTable, key: anytype) !bool {

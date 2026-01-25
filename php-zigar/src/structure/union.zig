@@ -62,7 +62,8 @@ pub const Union = struct {
         if (static.selector) |selector| {
             const value = try selector.accessors.get(self.bytes);
             if (php.getValueLong(&value)) |long| {
-                std.debug.print("long = {d}\n", .{long});
+                _ = long;
+                // std.debug.print("long = {d}\n", .{long});
             } else |_| {}
         }
     }

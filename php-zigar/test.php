@@ -98,4 +98,7 @@ $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar")
 // $module->problematic2 = $module->ErrorSet->HelloWorld;
 // echo $module->problematic2, "\n";
 
-echo $module->extern_union->integer, "\n";
+// echo "$module->number\n";
+
+// echo "int = ", $module->extern_union->integer, "\n";
+
