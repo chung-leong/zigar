@@ -684,7 +684,7 @@ pub const ZigClass = struct {
     fn inferName(self: *@This()) !*String {
         var sfb = std.heap.stackFallback(10240, php.allocator);
         const allocator = sfb.get();
-        const counters = &self.host.load_ctx.counters;
+        const counters = &self.host.importer.counters;
         const type_name: []const u8 = switch (self.type) {
             .primitive, .@"comptime" => get: {
                 const member_value = try php.getHashEntry(&self.instance.members, 0);

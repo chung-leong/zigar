@@ -2,6 +2,15 @@ const std = @import("std");
 const E = std.os.wasi.errno_t;
 
 const hooks = @import("hooks.zig");
+pub const Syscall = hooks.Syscall;
+pub const HookEntry = hooks.Entry;
+
+pub const Jscall = extern struct {
+    fn_id: usize,
+    arg_address: usize,
+    arg_size: usize,
+    futex_handle: usize = 0,
+};
 
 pub fn Module(comptime Value: type) type {
     return extern struct {
@@ -43,7 +52,7 @@ pub fn Module(comptime Value: type) type {
             release_function: *const fn (*Host, usize) callconv(.c) E,
             handle_jscall: *const fn (*Host, *Jscall) callconv(.c) E,
             handle_syscall: *const fn (*Host, *Syscall) callconv(.c) E,
-            get_syscall_mask: *const fn (*Host, *hooks.Syscall.Mask) callconv(.c) E,
+            get_syscall_mask: *const fn (*Host, *Syscall.Mask) callconv(.c) E,
             initialize_thread: *const fn (*Host) callconv(.c) E,
             deinitialize_thread: *const fn (*Host) callconv(.c) E,
             redirect_syscalls: *const fn (*Host, *const anyopaque) callconv(.c) E,
@@ -59,13 +68,5 @@ pub fn Module(comptime Value: type) type {
             get_syscall_hook: *const fn ([*:0]const u8, *HookEntry) callconv(.c) E,
         };
         pub const Host = opaque {};
-        pub const HookEntry = hooks.Entry;
-        pub const Syscall = hooks.Syscall;
-        pub const Jscall = extern struct {
-            fn_id: usize,
-            arg_address: usize,
-            arg_size: usize,
-            futex_handle: usize = 0,
-        };
     };
 }

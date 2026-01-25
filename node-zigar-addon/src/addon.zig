@@ -10,7 +10,7 @@ const Env = napi.Env;
 const Value = napi.Value;
 const Ref = napi.Ref;
 const ThreadsafeFunction = napi.ThreadsafeFunction;
-const redirect = @import("redirect.zig");
+const redirection = @import("redirection.zig");
 const fn_transform = @import("zigft/fn-transform.zig");
 
 comptime {
@@ -30,7 +30,7 @@ const ModuleHost = struct {
     };
     pub const Syscall = hooks.Syscall;
     pub const HandlerVTable = hooks.HandlerVTable;
-    const redirection_controller = redirect.Controller(@This());
+    const redirection_controller = redirection.Controller(@This());
 
     env: Env,
     ref_count: isize = 1,
