@@ -204,13 +204,12 @@ pub const ZigClass = struct {
                 .toString = php.createFunction(toString, "__toString"),
             },
         };
-
         const interfaces = try self.createInterfaceList();
         const ce = &self.php_portion;
         ce.* = .{
             .type = php.USER_CLASS,
             .refcount = 1,
-            .name = php.createString("ZigClass"),
+            .name = php.createString(""), // use an empty string for now
             .ce_flags = php.LINKED | php.RESOLVED_INTERFACES,
             .properties_info = php.createHashTable(null),
             .constants_table = php.createHashTable(null),
@@ -266,6 +265,16 @@ pub const ZigClass = struct {
                 if (!php.moveHashPositionForward(ht, &pos)) break;
             }
         }
+        // set the class name
+        self.php_portion.name = get: {
+            if (php.getProperty(info, "name")) |value| {
+                const str = try php.getValueString(value);
+                php.addRef(str);
+                break :get str;
+            } else |_| {
+                break :get try self.inferName();
+            }
+        };
         // set slots of ref object
         const static = structure.Static.fromObject(obj);
         try static.setStorage(undefined, self.static.template.slots orelse php.null_value);
@@ -679,6 +688,150 @@ pub const ZigClass = struct {
         }
         // std.debug.print("No accessor for {}\n", .{member.type});
         return .{ .missing = {} };
+    }
+
+    fn inferName(self: *@This()) !*String {
+        var sfb = std.heap.stackFallback(10240, php.allocator);
+        const allocator = sfb.get();
+        const counters = &self.host.load_ctx.counters;
+        const type_name: []const u8 = switch (self.type) {
+            .primitive, .@"comptime" => get: {
+                const member_value = try php.getHashEntry(&self.instance.members, 0);
+                const member = try php.getValuePointer(*Member, member_value);
+                break :get switch (member.type) {
+                    .bool => "bool",
+                    .int => switch (self.flags.primitive.is_size) {
+                        true => "isize",
+                        false => try std.fmt.allocPrint(allocator, "i{d}", .{member.bit_size}),
+                    },
+                    .uint => switch (self.flags.primitive.is_size) {
+                        true => "isize",
+                        false => try std.fmt.allocPrint(allocator, "u{d}", .{member.bit_size}),
+                    },
+                    .float => try std.fmt.allocPrint(allocator, "u{d}", .{member.bit_size}),
+                    .void => "void",
+                    .literal => "enum_literal",
+                    .null => "null",
+                    .undefined => "undefined",
+                    .type => "type",
+                    else => "unknown",
+                };
+            },
+            .array => get: {
+                const member_value = try php.getHashEntry(&self.instance.members, 0);
+                const member = try php.getValuePointer(*Member, member_value);
+                const class = member.class orelse return error.MissingClass;
+                const len = self.length orelse return error.MissingLength;
+                break :get try std.fmt.allocPrint(allocator, "[{d}]{s}", .{ len, class.getName() });
+            },
+            .@"struct" => switch (self.purpose) {
+                .promise => "Promise",
+                .generator => "Generator",
+                .abort_signal => "AbortSignal",
+                .allocator => "Allocator",
+                .iterator => "Iterator",
+                .file => "File",
+                .directory => "Directory",
+                else => get: {
+                    defer counters.@"struct" += 1;
+                    break :get try std.fmt.allocPrint(allocator, "S{d}", .{counters.@"struct"});
+                },
+            },
+            .@"union" => try std.fmt.allocPrint(allocator, "U{d}", .{counters.@"union"}),
+            .error_union => get: {
+                const member0_value = try php.getHashEntry(&self.instance.members, 0);
+                const member0 = try php.getValuePointer(*Member, member0_value);
+                const member1_value = try php.getHashEntry(&self.instance.members, 1);
+                const member1 = try php.getValuePointer(*Member, member1_value);
+                const payload_class = member0.class orelse return error.MissingClass;
+                const err_class = member1.class orelse return error.MissingClass;
+                break :get try std.fmt.allocPrint(allocator, "{s}!{s}", .{
+                    err_class.getName(),
+                    payload_class.getName(),
+                });
+            },
+            .error_set => switch (self.flags.error_set.is_global) {
+                false => get: {
+                    defer counters.error_set += 1;
+                    break :get try std.fmt.allocPrint(allocator, "ES{d}", .{counters.@"union"});
+                },
+                true => "anyerror",
+            },
+            .@"enum" => get: {
+                defer counters.@"enum" += 1;
+                break :get try std.fmt.allocPrint(allocator, "EN{d}", .{counters.@"enum"});
+            },
+            .optional => get: {
+                const member_value = try php.getHashEntry(&self.instance.members, 0);
+                const member = try php.getValuePointer(*Member, member_value);
+                const class = member.class orelse return error.MissingClass;
+                break :get try std.fmt.allocPrint(allocator, "?{s}", .{class.getName()});
+            },
+            .pointer => get: {
+                const member_value = try php.getHashEntry(&self.instance.members, 0);
+                const member = try php.getValuePointer(*Member, member_value);
+                const class = member.class orelse return error.MissingClass;
+                var prefix: []const u8 = switch (self.flags.pointer.is_multiple) {
+                    false => "*",
+                    true => if (self.flags.pointer.has_length)
+                        "[]"
+                    else if (self.flags.pointer.is_single)
+                        "[*c]"
+                    else
+                        "[*]",
+                };
+                // TODO: deal with sentinel
+                if (self.flags.pointer.is_const)
+                    prefix = try std.fmt.allocPrint(allocator, "{s}const ", .{prefix});
+                break :get try std.fmt.allocPrint(allocator, "{s}{s}", .{ prefix, class.getName() });
+            },
+            .slice => get: {
+                const member_value = try php.getHashEntry(&self.instance.members, 0);
+                const member = try php.getValuePointer(*Member, member_value);
+                const class = member.class orelse return error.MissingClass;
+                break :get switch (self.flags.slice.is_opaque) {
+                    false => try std.fmt.allocPrint(allocator, "[_]{s}", .{class.getName()}),
+                    true => "anyopaque",
+                };
+            },
+            .vector => get: {
+                const member_value = try php.getHashEntry(&self.instance.members, 0);
+                const member = try php.getValuePointer(*Member, member_value);
+                const class = member.class orelse return error.MissingClass;
+                const len = self.length orelse return error.MissingLength;
+                break :get try std.fmt.allocPrint(allocator, "@Vector({d}, {s})", .{ len, class.getName() });
+            },
+            .@"opaque" => get: {
+                defer counters.@"opaque" += 1;
+                break :get try std.fmt.allocPrint(allocator, "O{d}", .{counters.@"opaque"});
+            },
+            .arg_struct => get: {
+                const retval_value = try php.getHashEntry(&self.instance.members, "retval");
+                const retval = try php.getValuePointer(*Member, retval_value);
+                const retval_class = retval.class orelse return error.MissingClass;
+                const len = self.length orelse return error.MissingLength;
+                const arg_names = try allocator.alloc([]const u8, len);
+                for (0..len) |i| {
+                    const arg_value = try php.getHashEntry(&self.instance.members, i + 1);
+                    const arg = try php.getValuePointer(*Member, arg_value);
+                    const arg_class = arg.class orelse return error.MissingClass;
+                    arg_names[i] = arg_class.getName();
+                }
+                break :get try std.fmt.allocPrint(allocator, "Arg(fn ({s}) {s})", .{
+                    try std.mem.join(allocator, ", ", arg_names),
+                    retval_class.getName(),
+                });
+            },
+            .function => get: {
+                const member_value = try php.getHashEntry(&self.instance.members, 0);
+                const member = try php.getValuePointer(*Member, member_value);
+                const class = member.class orelse return error.MissingClass;
+                const arg_name = class.getName();
+                break :get arg_name[4 .. arg_name.len - 1];
+            },
+            else => return error.InvalidType,
+        };
+        return php.createString(type_name);
     }
 };
 

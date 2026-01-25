@@ -34,6 +34,13 @@ pub const ModuleHost = struct {
         class_list: HashTable,
         key_memory: *String,
         key_slots: *String,
+        counters: struct {
+            @"struct": usize = 0,
+            @"union": usize = 0,
+            error_set: usize = 0,
+            @"enum": usize = 0,
+            @"opaque": usize = 0,
+        } = .{},
 
         pub fn init() !*@This() {
             const self = try php.allocator.create(@This());
