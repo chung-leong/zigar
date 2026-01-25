@@ -1,14 +1,12 @@
 const std = @import("std");
 
-const byte_buffer = @import("byte-buffer.zig");
-const ByteBuffer = byte_buffer.ByteBuffer;
+const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
-const zig_class = @import("zig-class.zig");
-const ZigClass = zig_class.ZigClass;
+const ZigClass = @import("class.zig").ZigClass;
 
 pub fn ZigObject(comptime S: type) type {
     const Result = struct {
@@ -74,7 +72,7 @@ pub fn ZigObject(comptime S: type) type {
     return Result;
 }
 
-pub fn callHandler(obj: *Object, comptime name: []const u8, args: anytype) !RT: {
+pub fn invokeHandler(obj: *Object, comptime name: []const u8, args: anytype) !RT: {
     const Optional = @FieldType(ObjectHandlers, name);
     const Pointer = @typeInfo(Optional).optional.child;
     const Handler = @typeInfo(Pointer).pointer.child;

@@ -1,8 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const module_host = @import("module-host.zig");
-const ModuleHost = module_host.ModuleHost;
+const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
 const ArgInfo = php.ArgInfo;
 const FunctionInfo = php.FunctionInfo;
@@ -11,10 +10,10 @@ const FunctionEntry = php.FunctionEntry;
 const ModuleEntry = php.ModuleEntry;
 const String = php.String;
 const Value = php.Value;
-const zig_class = @import("zig-class.zig");
+const ZigClass = @import("class.zig").ZigClass;
 
 export fn php_zigar_init(_: c_int, _: c_int) php.Result {
-    zig_class.registerGlobalClasses() catch return php.FAILURE;
+    ZigClass.registerGlobalClasses() catch return php.FAILURE;
     return php.SUCCESS;
 }
 

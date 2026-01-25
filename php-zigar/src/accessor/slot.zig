@@ -2,12 +2,10 @@ const std = @import("std");
 
 const accessor = @import("../accessor.zig");
 const Error = accessor.Error;
-const byte_buffer = @import("../byte-buffer.zig");
-const ByteBuffer = byte_buffer.ByteBuffer;
+const ByteBuffer = @import("../buffer.zig").ByteBuffer;
+const ZigClass = @import("../class.zig").ZigClass;
 const php = @import("../php.zig");
 const Value = php.Value;
-const zig_class = @import("../zig-class.zig");
-const ZigClass = zig_class.ZigClass;
 
 pub const Attributes = struct {
     type: accessor.SlotAccessorType,

@@ -1,8 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("accessor.zig");
-const byte_buffer = @import("byte-buffer.zig");
-const ByteBuffer = byte_buffer.ByteBuffer;
+const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const php = @import("php.zig");
 const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
@@ -27,10 +26,8 @@ pub const Struct = @import("structure/struct.zig").Struct;
 pub const Union = @import("structure/union.zig").Union;
 pub const VariadicStruct = @import("structure/variadic-struct.zig").VariadicStruct;
 pub const Vector = @import("structure/vector.zig").Vector;
-const zig_class = @import("zig-class.zig");
-const ZigClass = zig_class.ZigClass;
-const zig_object = @import("zig-object.zig");
-const ZigObject = zig_object.ZigObject;
+const ZigClass = @import("class.zig").ZigClass;
+const ZigObject = @import("object.zig").ZigObject;
 
 pub const by_enum = .{
     .primitive = Primitive,

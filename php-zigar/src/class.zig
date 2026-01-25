@@ -1,16 +1,15 @@
 const std = @import("std");
 
 const accessor = @import("accessor.zig");
-const byte_buffer = @import("byte-buffer.zig");
-const ByteBuffer = byte_buffer.ByteBuffer;
+const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const enums = @import("enums.zig");
 const MemberFlags = enums.MemberFlags;
 const MemberType = enums.MemberType;
 const StructureFlags = enums.StructureFlags;
 const StructurePurpose = enums.StructurePurpose;
 const StructureType = enums.StructureType;
-const module_host = @import("module-host.zig");
-const Host = module_host.ModuleHost;
+const Host = @import("host.zig").ModuleHost;
+const invokeHandler = @import("object.zig").invokeHandler;
 const php = @import("php.zig");
 const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
@@ -21,9 +20,7 @@ const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("structure.zig");
-const zig_object = @import("zig-object.zig");
-const callHandler = zig_object.callHandler;
-const ZigObject = zig_object.ZigObject;
+const ZigObject = @import("object.zig").ZigObject;
 
 pub const ZigClass = struct {
     host: *Host,
@@ -238,6 +235,7 @@ pub const ZigClass = struct {
     }
 
     pub fn finalize(info: *Value) !*Value {
+        errdefer |err| std.debug.print("error = {}\n", .{err});
         const ref = try php.getProperty(info, "class");
         const obj = try php.getValueObject(ref);
         const self = fromEntry(obj.ce);
@@ -341,13 +339,6 @@ pub const ZigClass = struct {
                 return try php.getValuePointer(*Member, value);
             },
         }
-    }
-
-    pub fn getParentClass(self: *@This()) *ClassEntry {
-        return switch (self.type) {
-            .error_set => error_class,
-            else => global_class,
-        };
     }
 
     pub fn createInterfaceList(self: *@This()) ![]*ClassEntry {
@@ -519,7 +510,7 @@ pub const ZigClass = struct {
 
     pub fn toString(ed: *ExecuteData, return_value: *Value) !void {
         const obj = try php.getValueObject(&ed.This);
-        return_value.* = try callHandler(obj, "stringify", .{});
+        return_value.* = try invokeHandler(obj, "stringify", .{});
     }
 
     fn getAccessors(scope: *Scope, member: *Member) !accessor.Any {
@@ -833,22 +824,37 @@ pub const ZigClass = struct {
         };
         return php.createString(type_name);
     }
+
+    pub var global_class: *ClassEntry = undefined;
+    pub var global_error_class: *ClassEntry = undefined;
+
+    pub fn registerGlobalClasses() !void {
+        var ce: ClassEntry = .{
+            .name = php.createPersistentString("ZigObject"),
+        };
+        const parent_ce = php.getClassEntry(.standard);
+        global_class = php.registerInternalClass(&ce, parent_ce) orelse
+            return error.ClassRegistrationFailure;
+        var error_ce: ClassEntry = .{
+            .name = php.createPersistentString("ZigError"),
+        };
+        const error_parent_ce = php.getClassEntry(.exception);
+        global_error_class = php.registerInternalClass(&error_ce, error_parent_ce) orelse
+            return error.ClassRegistrationFailure;
+    }
+
+    pub fn isZig(ce: *ClassEntry) bool {
+        return ce.*.unnamed_0.parent == global_class;
+    }
+
+    pub fn isZigError(ce: *ClassEntry) bool {
+        return ce.*.unnamed_0.parent == global_error_class;
+    }
+
+    pub fn getParentClass(self: *@This()) *ClassEntry {
+        return switch (self.type) {
+            .error_set => global_error_class,
+            else => global_class,
+        };
+    }
 };
-
-pub var global_class: *ClassEntry = undefined;
-pub var error_class: *ClassEntry = undefined;
-
-pub fn registerGlobalClasses() !void {
-    var ce: ClassEntry = .{
-        .name = php.createPersistentString("ZigObject"),
-    };
-    const parent_ce = php.getClassEntry(.standard);
-    global_class = php.registerInternalClass(&ce, parent_ce) orelse
-        return error.ClassRegistrationFailure;
-    var error_ce: ClassEntry = .{
-        .name = php.createPersistentString("ZigError"),
-    };
-    const error_parent_ce = php.getClassEntry(.exception);
-    error_class = php.registerInternalClass(&error_ce, error_parent_ce) orelse
-        return error.ClassRegistrationFailure;
-}

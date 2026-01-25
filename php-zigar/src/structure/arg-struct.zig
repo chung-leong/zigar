@@ -1,7 +1,6 @@
 const std = @import("std");
 
-const byte_buffer = @import("../byte-buffer.zig");
-const ByteBuffer = byte_buffer.ByteBuffer;
+const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const php = @import("../php.zig");
 const String = php.String;
 const Object = php.Object;

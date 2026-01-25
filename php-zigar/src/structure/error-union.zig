@@ -1,15 +1,13 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const byte_buffer = @import("../byte-buffer.zig");
-const ByteBuffer = byte_buffer.ByteBuffer;
+const ByteBuffer = @import("../buffer.zig").ByteBuffer;
+const ZigClass = @import("../class.zig").ZigClass;
 const php = @import("../php.zig");
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("../structure.zig");
-const zig_class = @import("../zig-class.zig");
-const ZigClass = zig_class.ZigClass;
 const error_set = @import("error-set.zig");
 const ErrorSet = error_set.ErrorSet;
 
@@ -63,7 +61,7 @@ pub const ErrorUnion = struct {
                 break :find null;
             // look up the error number
             const error_set_static = static.error_class.getStaticData(ErrorSet);
-            if (exception.ce.*.unnamed_0.parent == zig_class.error_class) {
+            if (ZigClass.isZigError(exception.ce)) {
                 break :find try error_set_static.readErrorValue(exception);
             } else {
                 const msg_value = try php.invokeMethod(exception, "getMessage", .{});

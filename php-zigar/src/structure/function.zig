@@ -1,17 +1,14 @@
 const std = @import("std");
 
-const byte_buffer = @import("../byte-buffer.zig");
-const ByteBuffer = byte_buffer.ByteBuffer;
+const ByteBuffer = @import("../buffer.zig").ByteBuffer;
+const ZigClass = @import("../class.zig").ZigClass;
+const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
 const Object = php.Object;
 const Value = php.Value;
 const structure = @import("../structure.zig");
-const zig_class = @import("../zig-class.zig");
-const ZigClass = zig_class.ZigClass;
-const zig_object = @import("../zig-object.zig");
-const ZigObject = zig_object.ZigObject;
 
 pub const Function = struct {
     address: usize = undefined,

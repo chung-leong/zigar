@@ -7,14 +7,12 @@ pub const @"null" = @import("accessor/null.zig");
 pub const slot = @import("accessor/slot.zig");
 pub const vector = @import("accessor/vector.zig");
 pub const @"void" = @import("accessor/void.zig");
-const byte_buffer = @import("byte-buffer.zig");
-const ByteBuffer = byte_buffer.ByteBuffer;
+const ByteBuffer = @import("buffer.zig").ByteBuffer;
+const invokeHandler = @import("object.zig").invokeHandler;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
 const Value = php.Value;
 const ClassEntry = php.ClassEntry;
-const zig_object = @import("zig-object.zig");
-const callHandler = zig_object.callHandler;
 
 pub const Error = error{
     CannotCreateObject,
@@ -321,9 +319,9 @@ pub fn read(entry: *Value, transform: ?Transform) !Value {
             @panic("Unexpected entry");
         };
         return switch (t) {
-            .to_string => try callHandler(obj, "get_string", .{}),
-            .to_plain => try callHandler(obj, "get_plain", .{}),
-            .to_value => try callHandler(obj, "read_self", .{}),
+            .to_string => try invokeHandler(obj, "get_string", .{}),
+            .to_plain => try invokeHandler(obj, "get_plain", .{}),
+            .to_value => try invokeHandler(obj, "read_self", .{}),
             .to_class => php.createValueObject(obj),
         };
     } else {
@@ -334,5 +332,5 @@ pub fn read(entry: *Value, transform: ?Transform) !Value {
 
 pub fn write(entry: *Value, value: *const Value) Error!void {
     const obj = php.getValueObject(entry) catch unreachable;
-    try callHandler(obj, "write_self", .{value});
+    try invokeHandler(obj, "write_self", .{value});
 }

@@ -1,8 +1,8 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const byte_buffer = @import("../byte-buffer.zig");
-const ByteBuffer = byte_buffer.ByteBuffer;
+const ByteBuffer = @import("../buffer.zig").ByteBuffer;
+const ZigClass = @import("../class.zig").ZigClass;
 const php = @import("../php.zig");
 const HashPosition = php.HashPosition;
 const HashTable = php.HashTable;
@@ -10,8 +10,6 @@ const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("../structure.zig");
-const zig_class = @import("../zig-class.zig");
-const ZigClass = zig_class.ZigClass;
 
 pub const Enum = struct {
     bytes: *ByteBuffer = undefined,

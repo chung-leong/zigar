@@ -3,17 +3,15 @@ const c_allocator = std.heap.c_allocator;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
-const byte_buffer = @import("byte-buffer.zig");
-const ByteBuffer = byte_buffer.ByteBuffer;
+const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const hooks = @import("module/native/hooks.zig");
-const interface = @import("module/native/interface.zig");
+const ModuleGeneric = @import("module/native/interface.zig").Module;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
 const HashPosition = php.HashPosition;
 const String = php.String;
 const Value = php.Value;
-const zig_class = @import("zig-class.zig");
-const ZigClass = zig_class.ZigClass;
+const ZigClass = @import("class.zig").ZigClass;
 const fn_transform = @import("zigft/fn-transform.zig");
 
 pub const ModuleHost = struct {
@@ -26,7 +24,7 @@ pub const ModuleHost = struct {
 
     pub const Syscall = hooks.Syscall;
     const Handle = *opaque {};
-    const Module = interface.Module(Handle);
+    const Module = ModuleGeneric(Handle);
     const Jscall = Module.Jscall;
     const LoadContext = struct {
         value_list: std.ArrayList(Value),

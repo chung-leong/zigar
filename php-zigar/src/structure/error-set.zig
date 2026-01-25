@@ -1,8 +1,9 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const byte_buffer = @import("../byte-buffer.zig");
-const ByteBuffer = byte_buffer.ByteBuffer;
+const ByteBuffer = @import("../buffer.zig").ByteBuffer;
+const ZigClass = @import("../class.zig").ZigClass;
+const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const Array = php.Array;
 const ClassEntry = php.ClassEntry;
@@ -14,10 +15,6 @@ const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("../structure.zig");
-const zig_class = @import("../zig-class.zig");
-const ZigClass = zig_class.ZigClass;
-const ZigObject = zig_class.ZigObject;
-const zig_object = @import("../zig-object.zig");
 
 pub const ErrorSet = struct {
     bytes: *ByteBuffer = undefined,
@@ -220,7 +217,7 @@ pub const ErrorSet = struct {
         const err_value = find: {
             if (php.getValueObject(value)) |exception| {
                 if (php.instanceOf(exception.ce, php.getInterface(.throwable))) {
-                    if (exception.ce.*.unnamed_0.parent == zig_class.error_class) {
+                    if (ZigClass.isZigError(exception.ce)) {
                         break :find try static.readErrorValue(exception);
                     } else {
                         const msg_value = try php.invokeMethod(exception, "getMessage", .{});
