@@ -60,6 +60,7 @@ pub const Object = php_h.zend_object;
 pub const ObjectHandlers = php_h.zend_object_handlers;
 pub const RefCounted = php_h.zend_refcounted;
 pub const Result = php_h.zend_result;
+pub const Stream = php_h.php_stream;
 pub const String = php_h.zend_string;
 pub const Ulong = php_h.zend_ulong;
 pub const Value = php_h.zval;
@@ -366,6 +367,45 @@ pub fn createValueArray(arr: ?*Array) Value {
     return result;
 }
 
+extern fn set_zval_stream(*Value, *Stream) void;
+
+pub fn createValueStream(strm: *Stream) Value {
+    var result: Value = .{};
+    // const strm_impl: *extern struct {
+    //     ops: *const php_h.php_stream_ops,
+    //     abstract: *anyopaque,
+    //     readfilters: php_h.php_stream_filter,
+    //     writefilters: php_h.php_stream_filter,
+    //     wrapper: *php_h.php_stream_wrapper,
+    //     wrapperthis: *anyopaque,
+    //     wrapperdata: Value,
+    //     status: packed struct {
+    //         is_persistent: u1,
+    //         in_free: u2,
+    //         eof: u1,
+    //         __exposed: u1,
+    //         fclose_stdiocast: u2,
+    //     },
+    //     mode: []u8,
+    //     flags: u32,
+    //     res: *php_h.zend_resource,
+    //     stdiocast: *php_h.FILE,
+    //     orig_path: [*]u8,
+    //     ctx: *php_h.zend_resource,
+    //     position: php_h.zend_off_t,
+    //     readbuf: [*]u8,
+    //     readbuflen: usize,
+    //     readpos: php_h.zend_off_t,
+    //     writepos: php_h.zend_off_t,
+    //     chunk_size: usize,
+    // } = @ptrCast(@alignCast(strm));
+    // strm_impl.status.__exposed = 1;
+    // result.value.res = strm_impl.res;
+    // result.u1.type_info = php_h.IS_RESOURCE_EX;
+    set_zval_stream(&result, strm);
+    return result;
+}
+
 pub const convertValueToString = php_h._convert_to_string;
 
 pub fn getValueNull(value: *const Value) !void {
@@ -416,6 +456,19 @@ pub fn getValueArray(value: *const Value) !*Array {
         php_h.IS_ARRAY => value.value.arr,
         else => error.NotArray,
     };
+}
+
+pub fn getValueStream(value: *const Value) !*Stream {
+    if (value.u1.v.type == php_h.IS_RESOURCE) {
+        const res_ptr = php_h.zend_fetch_resource2_ex(
+            @constCast(value),
+            "stream",
+            php_h.php_file_le_stream(),
+            php_h.php_file_le_pstream(),
+        );
+        if (res_ptr) |ptr| return @ptrCast(@alignCast(ptr));
+    }
+    return error.NotStream;
 }
 
 pub fn getValueHashTable(value: *const Value) !*HashTable {
@@ -1025,6 +1078,22 @@ fn getErrorMessage(comptime ES: type, err: ES) []const u8 {
         },
     };
 }
+
+pub const open = php_h._php_stream_open_wrapper_ex;
+pub const close = php_h.php_stream_close;
+pub const read = php_h._php_stream_read;
+pub const write = php_h._php_stream_write;
+pub const seek = php_h._php_stream_seek;
+pub const tell = php_h._php_stream_tell;
+pub const rewind = php_h.php_stream_rewind;
+pub const mkdir = php_h._php_stream_mkdir;
+pub const rmdir = php_h._php_stream_rmdir;
+pub const opendir = php_h._php_stream_opendir;
+pub const readdir = php_h._php_stream_readdir;
+pub const closedir = php_h.php_stream_closedir;
+pub const rewinddir = php_h.php_stream_rewinddir;
+pub const setOption = php_h._php_stream_set_option;
+pub const truncate = php_h._php_stream_truncate_set_size;
 
 pub const infoTableStart = php_h.php_info_print_table_start;
 pub const infoTableHeader = php_h.php_info_print_table_header;

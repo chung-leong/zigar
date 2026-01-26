@@ -37,3 +37,8 @@ zend_module_entry php_zigar_module_entry = {
 };
 
 ZEND_GET_MODULE(php_zigar)
+
+/* php_stream_to_zval() cannot be imported into Zig due to the presence of bit fields in php_stream */
+void set_zval_stream(zval* zv, php_stream* strm) {
+    php_stream_to_zval(strm, zv);
+}

@@ -43,8 +43,12 @@ pub const ModuleHost = struct {
         // retrieve and run factory thunk
         const thunk_address: usize = try self.getFactoryThunk();
         try self.runThunk(thunk_address, 0xDEADC0DE, 0xDEADC0DE);
-        // activate acquired structures and return the root
-        return try self.importer.activateStructures();
+        // activate acquired structures and get the root
+        const root = try self.importer.activateStructures();
+        errdefer php.release(root);
+        // install hooks
+        try self.dispatcher.installHooks(&lib, path, module.attributes.io_redirection);
+        return root;
     }
 
     pub fn addRef(self: *@This()) void {

@@ -4,6 +4,7 @@ const E = std.os.wasi.errno_t;
 const hooks = @import("hooks.zig");
 pub const Syscall = hooks.Syscall;
 pub const HookEntry = hooks.Entry;
+pub const HandlerVTable = hooks.HandlerVTable;
 
 pub const Jscall = extern struct {
     fn_id: usize,

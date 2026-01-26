@@ -1,6 +1,4 @@
 const std = @import("std");
-const E = std.os.wasi.errno_t;
-const builtin = @import("builtin");
 
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const hooks = @import("module/native/hooks.zig");

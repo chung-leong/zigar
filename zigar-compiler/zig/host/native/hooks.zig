@@ -29,9 +29,16 @@ const os = switch (builtin.target.os.tag) {
     else => .unknown,
 };
 
-pub const Entry = extern struct {
+pub const Entry = struct {
     handler: *const anyopaque,
     original: **const anyopaque,
+    deferred: ?*Deferred = null,
+
+    pub const Deferred = struct {
+        address: usize = 0,
+        read_only: bool = false,
+        installed: bool = false,
+    };
 };
 pub const Syscall = extern struct {
     cmd: Command,
@@ -5088,7 +5095,7 @@ const Wtf8Converter = struct {
     }
 };
 
-pub const HandlerVTable = init: {
+pub const HandlerVTable: type = init: {
     const redirector = SyscallRedirector(void);
     const len = count: {
         var count: usize = 0;
