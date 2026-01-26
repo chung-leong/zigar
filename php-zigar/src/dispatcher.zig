@@ -85,7 +85,6 @@ pub const CallDispatcher = struct {
     }
 
     pub fn handleSyscall(self: *@This(), call: *Syscall) !E {
-        std.debug.print("{}\n", .{call.cmd});
         return switch (call.cmd) {
             .open => try self.handleOpen(&call.u.open),
             .close => try self.handleClose(&call.u.close),
@@ -167,7 +166,7 @@ pub const CallDispatcher = struct {
                 1, 2 => .{ "php://output", "w" },
                 else => return err,
             };
-            const strm = php.open(path, mode, 0, null, null) orelse return error.Unexpected;
+            const strm = php.open(path, mode, 0) orelse return error.Unexpected;
             var strm_value = php.createValueStream(strm);
             errdefer php.release(&strm_value);
             try php.setHashEntry(&self.stream_map, fd, &strm_value);

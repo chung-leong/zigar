@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const debug = @import("debug.zig");
 const fn_transform = @import("zigft/fn-transform.zig");
 
 pub const php_h = @cImport({
@@ -811,7 +812,7 @@ pub fn createFunction(comptime func: anytype, name: []const u8) Function {
     return .{
         .internal_function = .{
             .type = php_h.ZEND_INTERNAL_FUNCTION,
-            .function_name = createString(name),
+            .function_name = createInternedString(name),
             .handler = &transform(func),
         },
     };
@@ -911,8 +912,41 @@ pub fn getBacktrace() !*Array {
     return try getValueArray(&trace);
 }
 
-pub const emalloc = php_h._emalloc;
-pub const efree = php_h.efree;
+fn debugAlloc(size: usize, call_depth: usize) ?*anyopaque {
+    if (php_h.ZEND_DEBUG == 1) {
+        var buffer: [4096]u8 = undefined;
+        var fba: std.heap.FixedBufferAllocator = .{ .buffer = &buffer, .end_index = 0 };
+        if (debug.getCaller(fba.allocator(), call_depth)) |caller| {
+            return php_h._emalloc(size, caller.file, caller.line, null, 0);
+        } else {
+            return php_h._emalloc(size, "unknown", 0, null, 0);
+        }
+    } else {
+        return php_h._emalloc(size);
+    }
+}
+
+fn debugFree(ptr: ?*anyopaque, call_depth: usize) void {
+    if (php_h.ZEND_DEBUG == 1) {
+        var buffer: [4096]u8 = undefined;
+        var fba: std.heap.FixedBufferAllocator = .{ .buffer = &buffer, .end_index = 0 };
+        if (debug.getCaller(fba.allocator(), call_depth)) |caller| {
+            return php_h._efree(ptr, caller.file, caller.line, null, 0);
+        } else {
+            return php_h._efree(ptr, "unknown", 0, null, 0);
+        }
+    } else {
+        php_h.efree(ptr);
+    }
+}
+
+pub fn emalloc(size: usize) ?*anyopaque {
+    return debugAlloc(size, 1);
+}
+
+pub fn efree(ptr: ?*anyopaque) void {
+    return debugFree(ptr, 1);
+}
 
 pub const null_value: *const Value = &.{
     .value = .{ .lval = 0 },
@@ -942,20 +976,9 @@ const allocator_impl = struct {
         return_address: usize,
     ) ?[*]u8 {
         _ = return_address;
-        std.debug.assert(len > 0);
-        // Overallocate to account for alignment padding and store the original pointer
-        // returned by `malloc` before the aligned address.
         _ = alignment;
-        return @ptrCast(emalloc(len));
-        // const padded_len = len + @sizeOf(usize) + alignment.toByteUnits() - 1;
-        // const unaligned_ptr: [*]u8 = @ptrCast(emalloc(padded_len) orelse return null);
-        // const unaligned_addr = @intFromPtr(unaligned_ptr);
-        // const aligned_addr = alignment.forward(unaligned_addr + @sizeOf(usize));
-        // const aligned_ptr = unaligned_ptr + (aligned_addr - unaligned_addr);
-        // manualAlignHeader(aligned_ptr).* = unaligned_ptr;
-        // allocation_count += 1;
-        // allocated_bytes += @intCast(len);
-        // return aligned_ptr;
+        std.debug.assert(len > 0);
+        return @ptrCast(debugAlloc(len, 2));
     }
 
     fn resize(
@@ -996,10 +1019,7 @@ const allocator_impl = struct {
     ) void {
         _ = alignment;
         _ = return_address;
-        efree(memory.ptr);
-        // efree(manualAlignHeader(memory.ptr).*);
-        // allocation_count -= 1;
-        // allocated_bytes -= @intCast(memory.len);
+        debugFree(memory.ptr, 2);
     }
 };
 
@@ -1079,7 +1099,26 @@ fn getErrorMessage(comptime ES: type, err: ES) []const u8 {
     };
 }
 
-pub const open = php_h._php_stream_open_wrapper_ex;
+pub fn open(path: [*c]const u8, mode: [*c]const u8, options: c_int) ?*Stream {
+    if (php_h.ZEND_DEBUG == 1) {
+        const src = @src();
+        return php_h._php_stream_open_wrapper_ex(
+            path,
+            mode,
+            options,
+            null,
+            null,
+            1,
+            src.file,
+            src.line,
+            src.file,
+            src.line,
+        );
+    } else {
+        return php_h._php_stream_open_wrapper_ex(path, mode, options, null, null);
+    }
+}
+
 pub const close = php_h.php_stream_close;
 pub const read = php_h._php_stream_read;
 pub const write = php_h._php_stream_write;

@@ -177,7 +177,7 @@ pub const ZigClass = struct {
         }
     }
 
-    pub fn define(host: *Host, info: *Value) !void {
+    pub fn define(host: *Host, info: *Value) !*Object {
         var self: *@This() = try php.allocator.create(@This());
         errdefer php.allocator.destroy(self);
         self.* = .{
@@ -229,15 +229,10 @@ pub const ZigClass = struct {
             .__tostring = &self.methods.toString,
         };
         errdefer freeEntry(ce);
-        var ref = try createRef(ce);
-        errdefer php.release(&ref);
-        try php.setProperty(info, "class", &ref);
+        return try createRef(ce);
     }
 
-    pub fn finalize(info: *Value) !*Value {
-        errdefer |err| std.debug.print("error = {}\n", .{err});
-        const ref = try php.getProperty(info, "class");
-        const obj = try php.getValueObject(ref);
+    pub fn finalize(obj: *Object, info: *Value) !void {
         const self = fromEntry(obj.ce);
         self.instance = try self.extractScope(info, "instance");
         errdefer self.instance.release();
@@ -288,23 +283,13 @@ pub const ZigClass = struct {
             },
         }
         self.status.finalized = true;
-        return ref;
     }
 
-    pub fn activate(ref: *Value) void {
+    pub fn activate(obj: *Object) void {
         // this method is called when the host is about to release the structure map
-        const obj = php.getValueObject(ref) catch unreachable;
         const self = fromEntry(obj.ce);
         self.host.addRef();
         self.status.activated = true;
-    }
-
-    pub fn createInstance(info: *const Value, memory: *const Value, prefilled_slots: ?*const Value) !Value {
-        const ref = try php.getProperty(info, "class");
-        const obj = try php.getValueObject(ref);
-        const bytes = try php.getValuePointer(*ByteBuffer, memory);
-        const new = try createObjectWith(obj.ce, bytes, prefilled_slots);
-        return php.createValueObject(new);
     }
 
     pub fn getFlags(self: *@This(), comptime S: type) @FieldType(StructureFlags, structure.enumName(S)) {
@@ -432,11 +417,11 @@ pub const ZigClass = struct {
         }
     }
 
-    fn createRef(ce: *ClassEntry) !Value {
+    fn createRef(ce: *ClassEntry) !*Object {
         const self = fromEntry(ce);
         const zig_obj = try ZigObject(structure.Static).create(self);
         self.release(); // remove initial refcount now that the ref object exists
-        return php.createValueObject(zig_obj.object());
+        return zig_obj.object();
     }
 
     pub fn createObject(ce: *ClassEntry) !*Object {

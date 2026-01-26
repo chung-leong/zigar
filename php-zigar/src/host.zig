@@ -24,7 +24,7 @@ pub const ModuleHost = struct {
 
     const Module = ModuleGeneric(StructureImporter.Handle);
 
-    pub fn load(path: []const u8) !*Value {
+    pub fn load(path: []const u8) !Value {
         var lib = try std.DynLib.open(path);
         errdefer lib.close();
         const module = lib.lookup(*Module, "zig_module") orelse return error.MissingSymbol;
@@ -44,11 +44,11 @@ pub const ModuleHost = struct {
         const thunk_address: usize = try self.getFactoryThunk();
         try self.runThunk(thunk_address, 0xDEADC0DE, 0xDEADC0DE);
         // activate acquired structures and get the root
-        const root = try self.importer.activateStructures();
-        errdefer php.release(root);
+        const root_class_obj = try self.importer.activateStructures();
+        errdefer php.release(root_class_obj);
         // install hooks
         try self.dispatcher.installHooks(&lib, path, module.attributes.io_redirection);
-        return root;
+        return php.createValueObject(root_class_obj);
     }
 
     pub fn addRef(self: *@This()) void {
