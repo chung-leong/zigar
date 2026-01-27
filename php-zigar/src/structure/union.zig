@@ -5,6 +5,7 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClass = @import("../class.zig").ZigClass;
 const php = @import("../php.zig");
 const HashPosition = php.HashPosition;
+const HashTable = php.HashTable;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
@@ -19,29 +20,77 @@ pub const Union = struct {
         selector: ?struct {
             accessors: *accessor.Primitive,
             class: *ZigClass,
+            possible_names: HashTable,
         } = null,
 
         pub fn init(self: *@This(), class: *ZigClass) !void {
-            const member = find: {
-                if (true) break :find null;
-                var pos: HashPosition = undefined;
-                const ht = &class.instance.members;
-                php.initializeHashPosition(ht, &pos);
-                while (php.getHashPositionValue(ht, &pos)) |value| {
+            var pos: HashPosition = undefined;
+            const member_ht = &class.instance.members;
+            const selector_member = find: {
+                php.initializeHashPosition(member_ht, &pos);
+                while (php.getHashPositionValue(member_ht, &pos)) |value| {
                     const member = try php.getValuePointer(*ZigClass.Member, value);
                     if (member.flags.is_selector) break :find member;
-                    if (!php.moveHashPositionForward(ht, &pos)) break;
+                    if (!php.moveHashPositionForward(member_ht, &pos)) break;
                 }
                 break :find null;
             };
-            if (member) |m| {
-                if (m.accessors != .primitive) return error.InvalidAccessor;
-                const selector_class = m.class orelse return error.MissingClass;
+            if (selector_member) |sm| {
+                if (sm.accessors != .primitive) return error.InvalidAccessor;
+                const selector_class = sm.class orelse return error.MissingClass;
+                var name_ht = php.createHashTable(php.destructor.value);
+                php.initializeHashPosition(&name_ht, &pos);
+                var index: c_long = 0;
+                // go through the list of members again and get the possible selector values
+                while (php.getHashPositionValue(member_ht, &pos)) |value| {
+                    defer index += 1;
+                    const member = try php.getValuePointer(*ZigClass.Member, value);
+                    if (!member.flags.is_selector) {
+                        var name_value = php.getHashPositionKey(member_ht, &pos);
+                        defer php.release(&name_value);
+                        const name = try php.getValueString(&name_value);
+                        const selector_code = switch (selector_class.type) {
+                            .@"enum" => find: {
+                                const enum_static = selector_class.getStaticData(structure.Enum);
+                                const tag = try enum_static.findTag(name);
+                                const tag_value = try enum_static.readTagValue(tag);
+                                break :find try php.getValueLong(&tag_value);
+                            },
+                            else => index,
+                        };
+                        try php.setHashEntryRef(&name_ht, selector_code, &name_value);
+                    }
+                    if (!php.moveHashPositionForward(member_ht, &pos)) break;
+                }
                 self.selector = .{
-                    .accessors = &m.accessors.primitive,
+                    .accessors = &sm.accessors.primitive,
                     .class = selector_class,
+                    .possible_names = name_ht,
                 };
+                selector_class.addRef();
             }
+        }
+
+        pub fn deinit(self: *@This()) void {
+            if (self.selector) |*selector| {
+                php.destroyHashTable(&selector.possible_names);
+                selector.class.release();
+            }
+        }
+
+        pub fn readSelectorValue(self: *@This(), obj: *Object) !?Value {
+            const selector = self.selector orelse return null;
+            const union_struct = fromObject(obj);
+            return try selector.accessors.get(union_struct.bytes);
+        }
+
+        pub fn getActiveField(self: *@This(), obj: *Object) !?*String {
+            const selector_value = try self.readSelectorValue(obj) orelse return null;
+            const selector_code = try php.getValueLong(&selector_value);
+            const selector = self.selector.?;
+            const current_name = php.getHashEntry(&selector.possible_names, selector_code) catch
+                return error.InvalidEnumValid;
+            return try php.getValueString(current_name);
         }
     };
 
@@ -49,22 +98,43 @@ pub const Union = struct {
         if (checkSelector(obj, name)) {
             return Super.readProperty(obj, name, prop_type, cache_slot, retval);
         } else |err| {
-            php.throwError(err);
+            throwFieldError(obj, name, err);
+            retval.* = php.createValueNull();
             return retval;
         }
     }
 
+    pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) *Value {
+        if (checkSelector(obj, name)) {
+            return Super.writeProperty(obj, name, value, cache_slot);
+        } else |err| {
+            throwFieldError(obj, name, err);
+            return value;
+        }
+    }
+
     fn checkSelector(obj: *Object, name: *String) !void {
-        _ = name;
-        const self = fromObject(obj);
         const class = ZigClass.fromObject(obj);
         const static = class.getStaticData(@This());
-        if (static.selector) |selector| {
-            const value = try selector.accessors.get(self.bytes);
-            if (php.getValueLong(&value)) |long| {
-                _ = long;
-                // std.debug.print("long = {d}\n", .{long});
-            } else |_| {}
+        const active = try static.getActiveField(obj) orelse return;
+        const active_c = php.getStringContent(active);
+        const name_c = php.getStringContent(name);
+        if (!std.mem.eql(u8, name_c, active_c)) return error.InactiveField;
+    }
+
+    fn throwFieldError(obj: *Object, name: *String, err: anytype) void {
+        const accessors = Super.findAccessors(obj, name, null) catch null;
+        if (accessors != null and err == error.InactiveField) {
+            const class = ZigClass.fromObject(obj);
+            const static = class.getStaticData(@This());
+            const active = (static.getActiveField(obj) catch unreachable).?;
+            php.throwExceptionFmt("access of {s} field '{s}' while field '{s}' is active", .{
+                class.getStructureName(),
+                php.getStringContent(name),
+                php.getStringContent(active),
+            });
+        } else {
+            Super.throwFieldError(obj, name, err);
         }
     }
 

@@ -97,6 +97,7 @@ pub fn Parent(comptime S: type) type {
                 retval.* = value;
             } else |err| {
                 throwFieldError(obj, name, err);
+                retval.* = php.createValueNull();
             }
             return retval;
         }
@@ -132,7 +133,7 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
-        fn findAccessors(obj: *Object, name: *String, cache_slot: ?[*]?*anyopaque) !*const accessor.Any {
+        pub fn findAccessors(obj: *Object, name: *String, cache_slot: ?[*]?*anyopaque) !*const accessor.Any {
             const class = ZigClass.fromObject(obj);
             const cache_entry: ?*CacheEntry = @ptrCast(cache_slot);
             if (cache_entry) |cached| {
@@ -150,7 +151,7 @@ pub fn Parent(comptime S: type) type {
             return str.len == 1 and str.val[0] == '$';
         }
 
-        fn throwFieldError(obj: *Object, name: *String, err: anytype) void {
+        pub fn throwFieldError(obj: *Object, name: *String, err: anytype) void {
             switch (err) {
                 error.Missing => {
                     const class = ZigClass.fromObject(obj);

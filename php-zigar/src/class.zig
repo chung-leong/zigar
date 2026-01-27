@@ -301,6 +301,8 @@ pub const ZigClass = struct {
 
     pub fn getStructureName(self: *@This()) []const u8 {
         return switch (self.type) {
+            .error_union => "error union",
+            .error_set => "error set",
             inline else => |e| @tagName(e),
         };
     }

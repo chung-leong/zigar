@@ -105,3 +105,6 @@ $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar")
 echo "bare_union->integer = ", $module->bare_union->integer, "\n";
 echo "tagged_union->integer = ", $module->tagged_union->float, "\n";
 echo "extern_union->integer = ", $module->extern_union->integer, "\n";
+$e = $module->extern_union;
+$e->float = 3.14;
+
