@@ -72,18 +72,7 @@ pub fn Parent(comptime S: type) type {
                 self.bytes.addRef();
             }
             if (@hasField(S, "slots")) {
-                const class = ZigClass.fromStructure(self);
-                self.slots = switch (class.getSlotCount(scope)) {
-                    0 => php.createValueNull(),
-                    1 => get: {
-                        // get the only element inside the hash table
-                        const ht = try php.getValueHashTable(slots);
-                        var pos: HashPosition = undefined;
-                        php.initializeHashPosition(ht, &pos);
-                        break :get php.getHashPositionValue(ht, &pos).?.*;
-                    },
-                    else => slots.*,
-                };
+                self.slots = slots.*;
                 php.addRef(&self.slots);
             }
         }

@@ -18,11 +18,12 @@ pub const Union = struct {
     pub const Static = struct {
         selector: ?struct {
             accessors: *accessor.Primitive,
-            class: ?*ZigClass,
+            class: *ZigClass,
         } = null,
 
         pub fn init(self: *@This(), class: *ZigClass) !void {
             const member = find: {
+                if (true) break :find null;
                 var pos: HashPosition = undefined;
                 const ht = &class.instance.members;
                 php.initializeHashPosition(ht, &pos);
@@ -35,9 +36,10 @@ pub const Union = struct {
             };
             if (member) |m| {
                 if (m.accessors != .primitive) return error.InvalidAccessor;
+                const selector_class = m.class orelse return error.MissingClass;
                 self.selector = .{
                     .accessors = &m.accessors.primitive,
-                    .class = m.class,
+                    .class = selector_class,
                 };
             }
         }

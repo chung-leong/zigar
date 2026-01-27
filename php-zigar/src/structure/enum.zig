@@ -13,8 +13,17 @@ const structure = @import("../structure.zig");
 
 pub const Enum = struct {
     bytes: *ByteBuffer = undefined,
-    name: ?*String = null,
-    circular_ref: bool = false,
+    canonical: ?*Canonical = null,
+
+    const Canonical = struct {
+        name: *String,
+        unknown: bool = false,
+
+        pub fn release(self: *@This()) void {
+            php.release(self.name);
+            php.allocator.destroy(self);
+        }
+    };
 
     const Super = structure.Parent(@This());
     pub const Static = struct {
@@ -27,7 +36,7 @@ pub const Enum = struct {
             self.value_acc = &member.accessors.primitive;
             // loop through static members and add them to a hash table, keyed by
             // their integer values and names
-            self.available_tags = php.createHashTable(null);
+            self.available_tags = php.createHashTable(php.destructor.value);
             var pos: HashPosition = undefined;
             const member_ht = &class.static.members;
             const static_slots = class.static.template.slots orelse return error.MissingSlots;
@@ -38,21 +47,22 @@ pub const Enum = struct {
                     const tag = try php.getProperty(static_slots, slot);
                     const tag_obj = try php.getValueObject(tag);
                     const tag_struct = fromObject(tag_obj);
-                    // decrement ref count on class
-                    class.release();
-                    tag_struct.circular_ref = true;
                     // reference tag by integer value
                     const tag_value = try self.value_acc.get(tag_struct.bytes);
-                    const long = try php.getValueLong(&tag_value);
-                    try php.setHashEntryRef(&self.available_tags, long, tag);
+                    const tag_code = try php.getValueLong(&tag_value);
+                    try php.setHashEntryRef(&self.available_tags, tag_code, tag);
                     // reference tag by name
                     var name_key = php.getHashPositionKey(member_ht, &pos);
                     defer php.release(&name_key);
                     const name = try php.getValueString(&name_key);
                     try php.setHashEntryRef(&self.available_tags, name, tag);
-                    // attach name to tag
-                    tag_struct.name = name;
+                    // attach canonical info to tag
+                    const props = try php.allocator.create(Canonical);
+                    props.* = .{ .name = name };
                     php.addRef(name);
+                    tag_struct.canonical = props;
+                    // decrement ref count on class (since the class holds a ref on the tag)
+                    class.release();
                     if (!php.moveHashPositionForward(member_ht, &pos)) break;
                 }
             }
@@ -62,37 +72,60 @@ pub const Enum = struct {
             php.destroyHashTable(&self.available_tags);
         }
 
-        fn findTagByValue(self: *Static, long: c_long) !*Value {
-            return php.getHashEntry(&self.available_tags, long) catch |err| add: {
-                const class = ZigClass.fromStatic(self);
-                if (class.flags.@"enum".is_open_ended) {
-                    // add new item
-                }
-                break :add err;
-            };
+        pub fn readTagValue(self: *@This(), err_obj: *Object) !Value {
+            const err_struct = fromObject(err_obj);
+            return try self.value_acc.get(err_struct.bytes);
         }
 
-        fn findTagByName(self: *Static, name: []const u8) !*Value {
-            return php.getHashEntry(&self.available_tags, name);
+        pub fn findTag(self: *Static, key: anytype) !*Object {
+            const tag = try php.getHashEntry(&self.available_tags, key);
+            return try php.getValueObject(tag);
         }
     };
 
-    pub fn readSelf(obj: *Object) !Value {
+    pub fn freeObject(obj: *Object) void {
         const self = fromObject(obj);
-        const class = ZigClass.fromObject(obj);
-        var static = class.getStaticData(@This());
-        const value = try static.value_acc.get(self.bytes);
-        const long = try php.getValueLong(&value);
-        if (static.findTagByValue(long)) |tag| {
-            php.addRef(tag);
-            return tag.*;
-        } else |_| {
-            php.throwExceptionFmt("enum '{s}' has no tag with value {d} (zig)", .{
-                class.getName(),
-                long,
-            });
-            return php.createValueNull();
+        self.bytes.release();
+        if (self.canonical == null or self.canonical.?.unknown) {
+            const class = ZigClass.fromObject(obj);
+            class.release();
         }
+        if (self.canonical) |props| {
+            props.release();
+        }
+    }
+
+    pub fn readSelf(obj: *Object) !Value {
+        const tag_obj = try getCanonical(obj);
+        php.addRef(tag_obj);
+        return php.createValueObject(tag_obj);
+    }
+
+    fn getCanonical(obj: *Object) !*Object {
+        const self = fromObject(obj);
+        if (self.canonical != null) return obj;
+        const class = ZigClass.fromObject(obj);
+        const static = class.getStaticData(@This());
+        const tag_value = try static.value_acc.get(self.bytes);
+        const tag_code = try php.getValueLong(&tag_value);
+        return static.findTag(tag_code) catch new: {
+            // unknown tag number--see if enum is open-ended
+            if (!class.flags.@"enum".is_open_ended) {
+                // attach a canonical struct
+                var buffer: [32]u8 = undefined;
+                const text = std.fmt.bufPrint(&buffer, "@enumFromInt({d})", .{tag_code}) catch unreachable;
+                const name = php.createString(text);
+                const props = try php.allocator.create(Canonical);
+                props.* = .{ .name = name, .unknown = true };
+                self.canonical = props;
+            } else {
+                php.throwExceptionFmt("enum '{s}' has no tag with value {d} (zig)", .{
+                    class.getName(),
+                    tag_code,
+                });
+            }
+            break :new obj;
+        };
     }
 
     pub fn writeSelf(obj: *Object, value: *const Value) !void {
@@ -111,21 +144,23 @@ pub const Enum = struct {
                     });
                     return;
                 }
-            } else |_| if (php.getValueLong(value)) |long| {
-                if (static.findTagByValue(long)) |_| {
+            } else |_| if (php.getValueLong(value)) |tag_code| {
+                if (static.findTag(tag_code)) |_| {
                     break :find value.*;
                 } else |_| {
-                    php.throwExceptionFmt("enum '{s}' has no tag with value {d} (zig)", .{
-                        class.getName(),
-                        long,
-                    });
-                    return;
+                    if (class.flags.@"enum".is_open_ended) {
+                        break :find value.*;
+                    } else {
+                        php.throwExceptionFmt("enum '{s}' has no tag with value {d} (zig)", .{
+                            class.getName(),
+                            tag_code,
+                        });
+                        return;
+                    }
                 }
             } else |_| if (php.getValueStringContent(value)) |name| {
-                if (static.findTagByName(name)) |tag| {
-                    const tag_obj = try php.getValueObject(tag);
-                    const tag_struct = fromObject(tag_obj);
-                    break :find try static.value_acc.get(tag_struct.bytes);
+                if (static.findTag(name)) |tag_obj| {
+                    break :find try static.readTagValue(tag_obj);
                 } else |_| {
                     php.throwExceptionFmt("enum '{s}' has no tag named '{s}' (zig)", .{
                         class.getName(),
@@ -142,7 +177,6 @@ pub const Enum = struct {
 
     pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
-    pub const freeObject = Super.freeObject;
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
 };

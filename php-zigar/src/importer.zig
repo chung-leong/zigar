@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
+const Comptime = @import("structure.zig").Comptime;
 const hooks = @import("module/native/hooks.zig");
 const ModuleGeneric = @import("module/native/interface.zig").Module;
 const ModuleHost = @import("host.zig").ModuleHost;
@@ -76,6 +77,24 @@ pub const StructureImporter = struct {
         // property in the structure arrays; prior to destroying these we need to flip the
         // relationship so that these objects own the host instead
         for (self.class_list.items) |class_obj| ZigClass.activate(class_obj);
+        // the exporter uses structure arrays to refer to types, since their class object
+        // (i.e. their constructor) would have been created yet when a struct has a pointer
+        // to its own kind; we're going to fix that here
+        for (self.instance_list.items) |instance_obj| {
+            const class = ZigClass.fromObject(instance_obj);
+            if (class.type == .@"comptime") {
+                const ct_struct = Comptime.fromObject(instance_obj);
+                // comptime only uses one slot; so if slots is an array, it's a structure array
+                const arr = php.getValueArray(&ct_struct.slots) catch continue;
+                // replace the array with the class ref and release it
+                const class_value = try php.getHashEntry(arr, self.keys.class);
+                ct_struct.slots = class_value.*;
+                php.addRef(class_value);
+                php.release(arr);
+                // TODO: find out why there's an extra reference on the array
+                php.release(arr);
+            }
+        }
         // the last class to get finalized is the root namespace
         if (self.class_list.items.len == 0) return error.NoRoot;
         const root = self.class_list.items[0];

@@ -83,25 +83,20 @@ const std = @import("std");
 //     return error.HomerSimpson;
 // }
 
-// const BareUnion = union {
-//     integer: i64,
-//     float: f64,
-// };
+pub const BareUnion = union {
+    integer: i64,
+    float: f64,
+};
+pub var bare_union: BareUnion = .{ .integer = 1234 };
 
-// pub var bare_union: BareUnion = .{ .integer = 1234 };
+pub const TaggedUnion = union(enum) {
+    integer: i64,
+    float: f64,
+};
+pub var tagged_union: TaggedUnion = .{ .float = 1.234 };
 
-// const TaggedUnion = union(enum) {
-//     integer: i64,
-//     float: f64,
-// };
-
-// pub var tagged_union: BareUnion = .{ .float = 1.234 };
-
-// const ExternUnion = union {
-//     integer: i64,
-//     float: f64,
-// };
-
-// pub var extern_union: ExternUnion = .{ .integer = 1234 };
-
-// pub const number: i64 = 1234;
+pub const ExternUnion = union {
+    integer: i64,
+    float: f64,
+};
+pub var extern_union: ExternUnion = .{ .integer = 1234 };

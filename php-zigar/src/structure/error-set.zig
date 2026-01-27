@@ -34,6 +34,7 @@ pub const ErrorSet = struct {
             if (self.string) |s| php.release(s);
             if (self.file) |s| php.release(s);
             if (self.trace) |a| php.release(a);
+            php.allocator.destroy(self);
         }
     };
     pub const Static = struct {

@@ -155,7 +155,6 @@ pub const ZigClass = struct {
                     inline else => |t| {
                         const name = @tagName(t);
                         if (@FieldType(StaticData, name) != void) {
-                            self.static_data = @unionInit(StaticData, name, .{});
                             const data = &@field(self.static_data, name);
                             const Data = @TypeOf(data.*);
                             if (Data != void and @hasDecl(Data, "deinit")) data.deinit();
@@ -431,7 +430,7 @@ pub const ZigClass = struct {
                 const S = @field(structure.by_enum, @tagName(t));
                 const bytes = try self.createBuffer();
                 defer if (bytes) |b| b.release();
-                var slots = try self.createSlots();
+                var slots = try self.createSlots(null);
                 defer php.release(&slots);
                 const zig_obj = try ZigObject(S).create(self);
                 try zig_obj.setStorage(bytes orelse undefined, &slots);
@@ -448,24 +447,44 @@ pub const ZigClass = struct {
         return new;
     }
 
-    fn createSlots(self: *const @This()) !Value {
-        if (!self.flags.common.has_slot) return php.createValueNull();
-        var new = php.createValueArray(null);
-        errdefer php.release(&new);
-        if (self.instance.template.slots) |def| {
-            const ht = try php.getValueHashTable(def);
-            const new_ht = try php.getValueHashTable(&new);
-            var pos: HashPosition = undefined;
-            php.initializeHashPosition(ht, &pos);
-            while (php.getHashPositionValue(ht, &pos)) |value| {
-                var key = php.getHashPositionKey(ht, &pos);
-                defer php.release(&key);
-                const long = try php.getValueLong(&key);
-                try php.setHashEntryRef(new_ht, long, value);
-                if (!php.moveHashPositionForward(ht, &pos)) break;
+    fn createSlots(self: *const @This(), prefilled_slots: ?*const Value) !Value {
+        const slot_count = self.instance.slot_count;
+        if (slot_count == 0) return php.createValueNull();
+        const sources: [2]?*const Value = .{ self.instance.template.slots, prefilled_slots };
+        var new_slots: Value = undefined;
+        if (slot_count == 1) {
+            // type only uses one slot; we don't need a hash table--a zval will do
+            new_slots = php.createValueNull();
+            for (sources) |src| {
+                const src_slots = src orelse continue;
+                const src_ht = try php.getValueHashTable(src_slots);
+                var pos: HashPosition = undefined;
+                php.initializeHashPosition(src_ht, &pos);
+                if (php.getHashPositionValue(src_ht, &pos)) |value| {
+                    if (php.getType(&new_slots) != .null) php.release(&new_slots);
+                    new_slots = value.*;
+                    php.addRef(value);
+                }
+            }
+        } else {
+            new_slots = php.createValueArray(null);
+            const new_ht = try php.getValueHashTable(&new_slots);
+            errdefer php.release(&new_slots);
+            for (sources) |src| {
+                const src_slots = src orelse continue;
+                const src_ht = try php.getValueHashTable(src_slots);
+                var pos: HashPosition = undefined;
+                php.initializeHashPosition(src_ht, &pos);
+                while (php.getHashPositionValue(src_ht, &pos)) |value| {
+                    var key = php.getHashPositionKey(src_ht, &pos);
+                    defer php.release(&key);
+                    const long = try php.getValueLong(&key);
+                    try php.setHashEntryRef(new_ht, long, value);
+                    if (!php.moveHashPositionForward(src_ht, &pos)) break;
+                }
             }
         }
-        return new;
+        return new_slots;
     }
 
     pub fn createObjectWith(ce: *ClassEntry, bytes: *ByteBuffer, prefilled_slots: ?*const Value) !*Object {
@@ -474,19 +493,7 @@ pub const ZigClass = struct {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
                 const zig_obj = try ZigObject(S).create(self);
-                var slots = try self.createSlots();
-                if (prefilled_slots) |objects| {
-                    var pos: HashPosition = undefined;
-                    const ht = try php.getValueHashTable(objects);
-                    php.initializeHashPosition(ht, &pos);
-                    while (php.getHashPositionValue(ht, &pos)) |value| {
-                        var key = php.getHashPositionKey(ht, &pos);
-                        php.release(&key);
-                        const long = try php.getValueLong(&key);
-                        try php.setPropertyRef(&slots, long, value);
-                        if (!php.moveHashPositionForward(ht, &pos)) break;
-                    }
-                }
+                var slots = try self.createSlots(prefilled_slots);
                 try zig_obj.setStorage(bytes, &slots);
                 return zig_obj.object();
             },
@@ -647,14 +654,11 @@ pub const ZigClass = struct {
                         .type = .multi_slot_prebaked,
                     }, .{
                         .slot = slot,
-                        .transform = .to_class,
                     }),
                 } else .{
                     .single_slot_prebaked = accessor.slot.get(.{
                         .type = .single_slot_prebaked,
-                    }, .{
-                        .transform = .to_class,
-                    }),
+                    }, .{}),
                 };
             },
             .null, .undefined => {

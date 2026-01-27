@@ -102,7 +102,6 @@ $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar")
 // $module->problematic2 = $module->ErrorSet->HelloWorld;
 // echo $module->problematic2, "\n";
 
-// echo "$module->number\n";
-
-// echo "int = ", $module->extern_union->integer, "\n";
-
+echo "bare_union->integer = ", $module->bare_union->integer, "\n";
+echo "tagged_union->integer = ", $module->tagged_union->float, "\n";
+echo "extern_union->integer = ", $module->extern_union->integer, "\n";
