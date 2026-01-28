@@ -44,5 +44,6 @@ pub const Primitive = struct {
 
     pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
+    pub const copyArguments = Super.copyArguments;
     pub const freeObject = Super.freeObject;
 };

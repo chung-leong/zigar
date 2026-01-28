@@ -1,10 +1,12 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
+const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClass = @import("../class.zig").ZigClass;
 const php = @import("../php.zig");
 const HashTable = php.HashTable;
+const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
@@ -62,72 +64,96 @@ pub const Union = struct {
                 php.destroyHashTable(&selector.possible_names);
             }
         }
-
-        pub fn readSelectorValue(self: *@This(), union_struct: *Union) !?Value {
-            const selector = self.selector orelse return null;
-            return try selector.accessors.get(union_struct.bytes);
-        }
-
-        pub fn getActiveField(self: *@This(), union_struct: *Union) !?*String {
-            const selector_value = try self.readSelectorValue(union_struct) orelse return null;
-            const selector_code = try php.getValueLong(&selector_value);
-            const selector = self.selector.?;
-            const current_name = php.getHashEntry(&selector.possible_names, selector_code) catch
-                return error.InvalidEnumValid;
-            return try php.getValueString(current_name);
-        }
     };
+    pub const constructor_args = "an array as argument or one named argument";
 
-    fn checkSelector(self: *@This(), name: *String) !void {
+    pub fn writeSelf(self: *@This(), value: *const Value) Error!void {
+        const ht = try php.getValueHashTable(value);
+        var iter: HashTableIterator = .init(ht, .{});
+        if (iter.len != 1) {
+            php.throwExceptionFmt("union can only have 1 active field, received {d} initializers", .{
+                iter.len,
+            });
+            return error.ExceptionThrown;
+        }
+        while (iter.next()) |field_value| {
+            const name = iter.currentName() orelse return error.NotStringKey;
+            self.writeMember(name, field_value, null) catch |err| {
+                self.throwFieldError(name, err);
+                return error.ExceptionThrown;
+            };
+            try self.setActiveField(name);
+        }
+    }
+
+    pub fn getActiveField(self: *@This()) !?*String {
         const class = ZigClass.fromStructure(self);
         const static = class.getStaticData(@This());
-        const active = try static.getActiveField(self) orelse return;
-        const active_c = php.getStringContent(active);
-        const name_c = php.getStringContent(name);
-        if (!std.mem.eql(u8, name_c, active_c)) return error.InactiveField;
+        const selector = static.selector orelse return null;
+        const selector_value = try selector.accessors.get(self.bytes);
+        const selector_code = try php.getValueLong(&selector_value);
+        const current_name = php.getHashEntry(&selector.possible_names, selector_code) catch
+            return error.InvalidEnumValid;
+        return try php.getValueString(current_name);
+    }
+
+    pub fn setActiveField(self: *@This(), name: *String) !void {
+        const class = ZigClass.fromStructure(self);
+        const static = class.getStaticData(@This());
+        const selector = &(static.selector orelse return);
+        var iter: HashTableIterator = .init(&selector.possible_names, .{});
+        const selector_code = while (iter.next()) |other_name_value| {
+            const other_name = try php.getValueString(other_name_value);
+            if (php.compareStrings(name, other_name)) {
+                break iter.currentIndex().?;
+            }
+        } else unreachable;
+        const selector_value = php.createValueLong(selector_code);
+        return selector.accessors.set(self.bytes, &selector_value);
+    }
+
+    fn checkSelector(self: *@This(), name: *String) !void {
+        const active = try self.getActiveField() orelse return;
+        if (!php.compareStrings(active, name)) return error.InactiveField;
     }
 
     fn throwFieldError(self: *@This(), name: *String, err: anytype) void {
         const accessors = self.findAccessors(name, null) catch null;
         if (accessors != null and err == error.InactiveField) {
-            const class = ZigClass.fromStructure(self);
-            const static = class.getStaticData(@This());
-            const active = (static.getActiveField(self) catch unreachable).?;
-            php.throwExceptionFmt("access of {s} field '{s}' while field '{s}' is active", .{
-                class.getStructureName(),
+            const active = (self.getActiveField() catch unreachable).?;
+            php.throwExceptionFmt("access of union field '{s}' while field '{s}' is active", .{
                 php.getStringContent(name),
                 php.getStringContent(active),
             });
         } else {
-            self.throwFieldError(name, err);
+            Super.throwFieldError(self, name, err);
         }
     }
 
-    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
+    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
         const self = fromObject(obj);
-        if (self.checkSelector(name)) {
-            return Super.readProperty(obj, name, prop_type, cache_slot, retval);
-        } else |err| {
+        self.checkSelector(name) catch |err| {
             self.throwFieldError(name, err);
-            retval.* = php.createValueNull();
             return retval;
-        }
+        };
+        return Super.readProperty(obj, name, prop_type, cache_slot, retval);
     }
 
-    pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) *Value {
+    pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
         const self = fromObject(obj);
-        if (self.checkSelector(name)) {
-            return Super.writeProperty(obj, name, value, cache_slot);
-        } else |err| {
+        self.checkSelector(name) catch |err| {
             self.throwFieldError(name, err);
-            return value;
-        }
+            return error.ExceptionThrown;
+        };
+        return Super.writeProperty(obj, name, value, cache_slot);
     }
 
     pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
+    pub const copyArguments = Super.copyArguments;
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
     pub const getPropertyPointer = Super.getPropertyPointer;
+    const writeMember = Super.writeMember;
     const findAccessors = Super.findAccessors;
 };

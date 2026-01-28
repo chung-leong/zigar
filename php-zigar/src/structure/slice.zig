@@ -22,6 +22,12 @@ pub const Slice = struct {
         }
     };
 
+    pub fn writeSelf(self: *@This(), value: *const Value) !void {
+        _ = self;
+        _ = value;
+        unreachable;
+    }
+
     pub fn readElement(obj: *Object, key: *Value, _: c_int, retval: *Value) !?*Value {
         const self = Super.fromObject(obj);
         const class = ZigClass.fromStructure(self);
@@ -61,6 +67,7 @@ pub const Slice = struct {
     }
 
     pub const setStorage = Super.setStorage;
+    pub const copyArguments = Super.copyArguments;
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
 };

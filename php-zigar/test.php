@@ -50,14 +50,14 @@ $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar")
 // $module->z = .1234;
 // $module->printZ();
 
-$point = $module->point;
-echo "x = ", $point->x, "\n";
-echo "y = ", $point->y, "\n";
-echo "z = ", $point->z, "\n";
+// $point = $module->point;
+// echo "x = ", $point->x, "\n";
+// echo "y = ", $point->y, "\n";
+// echo "z = ", $point->z, "\n";
 
-$new_point = new $module->Point(x: 120, y: 456);
-echo "x = ", $new_point->x, "\n";
-echo "y = ", $new_point->y, "\n";
+// $new_point = new $module->Point(x: 1234, y: 4567);
+// echo "x = ", $new_point->x, "\n";
+// echo "y = ", $new_point->y, "\n";
 
 // echo "ci = $module->ci\n";
 // echo "cf = $module->cf\n";
@@ -108,6 +108,14 @@ echo "y = ", $new_point->y, "\n";
 // echo "bare_union->integer = ", $module->bare_union->integer, "\n";
 // echo "tagged_union->integer = ", $module->tagged_union->float, "\n";
 // echo "extern_union->integer = ", $module->extern_union->integer, "\n";
-// $module->extern_union->integer = 3;
-// echo "extern_union->integer = ", $module->extern_union->integer, "\n";
+// $module->extern_union = [ "float" => 3.123 ];
+// echo "extern_union->float = ", $module->extern_union->float, "\n";
 
+// $union = new $module->ExternUnion();
+
+// echo $union->float, "\n";
+
+$s = new $module->NoRequired(a: 999);
+echo $s->a, "\n";
+echo $s->b, "\n";
+echo $s->c, "\n";

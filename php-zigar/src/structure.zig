@@ -62,6 +62,7 @@ pub fn enumName(comptime S: type) []const u8 {
 pub fn Parent(comptime S: type) type {
     return struct {
         const scope: ZigClass.ScopeType = if (@hasDecl(S, "scope")) S.scope else .instance;
+
         const CacheEntry = extern struct {
             class: ?*const ZigClass,
             accessors: *const accessor.Any,
@@ -84,6 +85,22 @@ pub fn Parent(comptime S: type) type {
                 self.slots = slots.*;
                 php.addRef(&self.slots);
             }
+        }
+
+        pub fn copyArguments(self: *S, arg_iter: *php.ArgumentIterator) !void {
+            if (arg_iter.len != 1) {
+                const arg_desc = switch (@hasDecl(S, "constructor_args")) {
+                    true => @field(S, "constructor_args"),
+                    false => "one argument",
+                };
+                const class = ZigClass.fromStructure(self);
+                php.throwExceptionFmt("{s} constructor expects " ++ arg_desc, .{
+                    class.getStructureName(),
+                });
+                return error.ExceptionThrown;
+            }
+            const arg = arg_iter.next() orelse unreachable;
+            return S.writeSelf(self, arg);
         }
 
         pub fn readSelf(self: *S) !Value {
@@ -159,22 +176,23 @@ pub fn Parent(comptime S: type) type {
             class.release();
         }
 
-        pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
+        pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
             _ = prop_type;
             const self = fromObject(obj);
-            if (readMember(self, name, cache_slot)) |value| {
-                retval.* = value;
-            } else |err| {
+            const value = readMember(self, name, cache_slot) catch |err| {
                 throwFieldError(self, name, err);
-                retval.* = php.createValueNull();
-            }
+                // PHP expects us to return a valid pointer
+                return retval;
+            };
+            retval.* = value;
             return retval;
         }
 
-        pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) *Value {
+        pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
             const self = fromObject(obj);
             writeMember(self, name, value, cache_slot) catch |err| {
                 throwFieldError(self, name, err);
+                return error.ExceptionThrown;
             };
             return value;
         }

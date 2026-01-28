@@ -269,7 +269,7 @@ pub fn transform(comptime func: anytype) Transformed(func) {
             const retval = @call(.auto, func, args);
             const retval_ne = switch (@typeInfo(RT)) {
                 .error_union => |eu| retval catch |err| report: {
-                    throwError(err);
+                    if (err != error.ExceptionThrown) throwError(err);
                     break :report switch (eu.payload) {
                         bool => false,
                         void => {},
@@ -611,6 +611,12 @@ pub fn getStringContent(str: *const String) []const u8 {
     const s: [*]const u8 = @ptrCast(&str.*.val[0]);
     const len = str.*.len;
     return s[0..len];
+}
+
+pub fn compareStrings(s1: *String, s2: *String) bool {
+    const sc1 = getStringContent(s1);
+    const sc2 = getStringContent(s2);
+    return std.mem.eql(u8, sc1, sc2);
 }
 
 pub fn useString(str: ?*String, def: []const u8) *String {

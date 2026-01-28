@@ -17,6 +17,7 @@ const ZigClass = @import("class.zig").ZigClass;
 
 pub const Error = error{
     CannotCreateObject,
+    ExceptionThrown,
     Failure,
     InvalidOperation,
     InvalidType,

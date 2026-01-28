@@ -331,6 +331,7 @@ pub const ErrorSet = struct {
 
     pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
+    pub const copyArguments = Super.copyArguments;
 };
 
 fn createDecamelizedMessage(name_obj: *const String) *String {

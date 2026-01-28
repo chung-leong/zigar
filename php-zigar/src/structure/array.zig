@@ -23,6 +23,24 @@ pub const Array = struct {
         }
     };
 
+    pub fn writeSelf(self: *@This(), value: *const Value) !void {
+        _ = self;
+        _ = value;
+        unreachable;
+    }
+
+    pub fn getString(self: *@This()) !Value {
+        const class = ZigClass.fromStructure(self);
+        if (class.flags.array.is_string) {
+            if (class.byte_size == class.length) {
+                return php.createValueStringContent(self.bytes.bytes);
+            } else if (class.byte_size == class.length) {
+                // TODO: convert to UTF-8
+            }
+        }
+        return error.Unsupported;
+    }
+
     pub fn readElement(obj: *Object, key: *Value, _: c_int, retval: *Value) !?*Value {
         const self = Super.fromObject(obj);
         const class = ZigClass.fromStructure(self);
@@ -61,26 +79,9 @@ pub const Array = struct {
         return @intCast(key_long);
     }
 
-    pub fn writeSelf(self: *@This(), value: *const Value) !void {
-        _ = self;
-        _ = value;
-        unreachable;
-    }
-
-    pub fn getString(self: *@This()) !Value {
-        const class = ZigClass.fromStructure(self);
-        if (class.flags.array.is_string) {
-            if (class.byte_size == class.length) {
-                return php.createValueStringContent(self.bytes.bytes);
-            } else if (class.byte_size == class.length) {
-                // TODO: convert to UTF-8
-            }
-        }
-        return error.Unsupported;
-    }
-
     pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
+    pub const copyArguments = Super.copyArguments;
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
 };

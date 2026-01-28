@@ -18,13 +18,13 @@ const std = @import("std");
 //     std.debug.print("z = {d}\n", .{z});
 // }
 
-pub const Point = struct {
-    x: usize,
-    y: usize,
-    comptime z: comptime_int = 1234,
-};
+// pub const Point = struct {
+//     x: usize,
+//     y: usize,
+//     comptime z: comptime_int = 1234,
+// };
 
-pub var point: Point = .{ .x = 123, .y = 456 };
+// pub var point: Point = .{ .x = 123, .y = 456 };
 
 // pub var optional: ?u32 = 1234;
 
@@ -100,3 +100,9 @@ pub var point: Point = .{ .x = 123, .y = 456 };
 //     float: f64,
 // };
 // pub var extern_union: ExternUnion = .{ .integer = 1234 };
+
+pub const NoRequired = struct {
+    a: i32 = 1234,
+    b: i32 = 4567,
+    c: i32 = -777,
+};
