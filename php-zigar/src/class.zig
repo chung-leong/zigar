@@ -9,8 +9,8 @@ const StructureFlags = enums.StructureFlags;
 const StructurePurpose = enums.StructurePurpose;
 const StructureType = enums.StructureType;
 const Host = @import("host.zig").ModuleHost;
-const invokeHandler = @import("object.zig").invokeHandler;
 const php = @import("php.zig");
+const ArgumentIterator = php.ArgumentIterator;
 const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
 const Function = php.Function;
@@ -21,6 +21,7 @@ const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("structure.zig");
+const invokeFunction = structure.invokeFunction;
 const ZigObject = @import("object.zig").ZigObject;
 
 pub const ZigClass = struct {
@@ -45,6 +46,7 @@ pub const ZigClass = struct {
     pub const ScopeType = enum { instance, static };
 
     const Methods = struct {
+        constructor: Function,
         toString: Function,
     };
     const Scope = struct {
@@ -199,13 +201,14 @@ pub const ZigClass = struct {
                     return error.InvalidSignature;
             },
             .methods = .{
+                .constructor = php.createFunction(constructor, "constructor", null),
                 .toString = php.createFunction(toString, "__toString", null),
             },
         };
         const interfaces = try self.createInterfaceList();
         const ce = &self.php_portion;
         ce.* = .{
-            .type = php.USER_CLASS,
+            .type = php.INTERNAL_CLASS,
             .refcount = 1,
             .name = php.createString(""), // use an empty string for now
             .ce_flags = php.LINKED | php.RESOLVED_INTERFACES,
@@ -227,6 +230,7 @@ pub const ZigClass = struct {
                     .filename = php.createString("filename"),
                 },
             },
+            .constructor = &self.methods.constructor,
             .__tostring = &self.methods.toString,
         };
         errdefer freeEntry(ce);
@@ -503,7 +507,14 @@ pub const ZigClass = struct {
 
     pub fn toString(ed: *ExecuteData, return_value: *Value) !void {
         const obj = try php.getValueObject(&ed.This);
-        return_value.* = try invokeHandler(obj, "stringify", .{});
+        return_value.* = try invokeFunction(obj, "stringify", .{});
+    }
+
+    pub fn constructor(ed: *ExecuteData, return_value: *Value) !void {
+        _ = return_value;
+        const obj = try php.getValueObject(&ed.This);
+        var arg_iter: ArgumentIterator = .init(ed, false);
+        try invokeFunction(obj, "copyArguments", .{&arg_iter});
     }
 
     fn getAccessors(scope: *Scope, member: *Member) !accessor.Any {

@@ -3,6 +3,7 @@ const std = @import("std");
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClass = @import("../class.zig").ZigClass;
+const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const HashTable = php.HashTable;
 const Object = php.Object;
@@ -87,20 +88,22 @@ pub const Enum = struct {
         }
     }
 
-    pub fn readSelf(obj: *Object) !Value {
-        const tag_obj = try getCanonical(obj);
+    pub fn readSelf(self: *@This()) !Value {
+        const tag_struct = try self.getCanonical();
+        const tag_obj = ZigObject(@This()).fromStructure(tag_struct).object();
         php.addRef(tag_obj);
         return php.createValueObject(tag_obj);
     }
 
-    fn getCanonical(obj: *Object) !*Object {
-        const self = fromObject(obj);
-        if (self.canonical != null) return obj;
-        const class = ZigClass.fromObject(obj);
+    fn getCanonical(self: *@This()) !*@This() {
+        if (self.canonical != null) return self;
+        const class = ZigClass.fromStructure(self);
         const static = class.getStaticData(@This());
         const tag_value = try static.value_acc.get(self.bytes);
         const tag_code = try php.getValueLong(&tag_value);
-        return static.findTag(tag_code) catch new: {
+        if (static.findTag(tag_code)) |tag_obj| {
+            return fromObject(tag_obj);
+        } else |_| {
             // unknown tag number--see if enum is open-ended
             if (!class.flags.@"enum".is_open_ended) {
                 // attach a canonical struct
@@ -116,13 +119,12 @@ pub const Enum = struct {
                     tag_code,
                 });
             }
-            break :new obj;
-        };
+            return self;
+        }
     }
 
-    pub fn writeSelf(obj: *Object, value: *const Value) !void {
-        const self = fromObject(obj);
-        const class = ZigClass.fromObject(obj);
+    pub fn writeSelf(self: *@This(), value: *const Value) !void {
+        const class = ZigClass.fromStructure(self);
         var static = class.getStaticData(@This());
         const tag_value = find: {
             if (php.getValueObject(value)) |tag_obj| {
@@ -131,7 +133,7 @@ pub const Enum = struct {
                     break :find try static.value_acc.get(tag_struct.bytes);
                 } else {
                     php.throwExceptionFmt("'{s}' is not a tag of enum '{s}' (zig)", .{
-                        php.getStringContent(obj.ce.*.name),
+                        php.getStringContent(tag_obj.ce.*.name),
                         class.getName(),
                     });
                     return;

@@ -31,9 +31,8 @@ pub const ErrorUnion = struct {
         }
     };
 
-    pub fn readSelf(obj: *Object) !Value {
-        const self = fromObject(obj);
-        const class = ZigClass.fromObject(obj);
+    pub fn readSelf(self: *@This()) !Value {
+        const class = ZigClass.fromStructure(self);
         const static = class.getStaticData(@This());
         const err_value = try static.error_acc.get(self.bytes);
         const err_code = try php.getValueLong(&err_value);
@@ -49,9 +48,8 @@ pub const ErrorUnion = struct {
         }
     }
 
-    pub fn writeSelf(obj: *Object, value: *const Value) !void {
-        const self = fromObject(obj);
-        const class = ZigClass.fromObject(obj);
+    pub fn writeSelf(self: *@This(), value: *const Value) !void {
+        const class = ZigClass.fromStructure(self);
         var static = class.getStaticData(@This());
         const err_value = find: {
             // see if value is an Throwable

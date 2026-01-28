@@ -61,16 +61,14 @@ pub const Array = struct {
         return @intCast(key_long);
     }
 
-    pub fn writeSelf(obj: *Object, value: *const Value) !void {
-        const self = fromObject(obj);
+    pub fn writeSelf(self: *@This(), value: *const Value) !void {
         _ = self;
         _ = value;
         unreachable;
     }
 
-    pub fn getString(obj: *Object) !Value {
-        const self = fromObject(obj);
-        const class = ZigClass.fromObject(obj);
+    pub fn getString(self: *@This()) !Value {
+        const class = ZigClass.fromStructure(self);
         if (class.flags.array.is_string) {
             if (class.byte_size == class.length) {
                 return php.createValueStringContent(self.bytes.bytes);

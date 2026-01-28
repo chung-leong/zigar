@@ -26,9 +26,8 @@ pub const Optional = struct {
         }
     };
 
-    pub fn readSelf(obj: *Object) !Value {
-        const self = fromObject(obj);
-        const class = ZigClass.fromObject(obj);
+    pub fn readSelf(self: *@This()) !Value {
+        const class = ZigClass.fromStructure(self);
         const static = class.getStaticData(@This());
         const present = try static.present_acc.get(self.bytes);
         const is_present = try php.getValueLong(&present) != 0;
@@ -39,9 +38,8 @@ pub const Optional = struct {
         }
     }
 
-    pub fn writeSelf(obj: *Object, value: *const Value) !void {
-        const self = fromObject(obj);
-        const class = ZigClass.fromObject(obj);
+    pub fn writeSelf(self: *@This(), value: *const Value) !void {
+        const class = ZigClass.fromStructure(self);
         const static = class.getStaticData(@This());
         const is_present = if (php.getValueNull(value)) false else |_| true;
         if (is_present) {

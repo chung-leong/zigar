@@ -172,8 +172,9 @@ pub fn parseArguments(comptime specs: [:0]const u8, arg_ptrs: anytype) !void {
 }
 
 pub const ArgumentIterator = struct {
-    param_ptr: [*]Value,
+    arg_ptr: [*]Value,
     this_ptr: ?*Value,
+    named_params: ?Value,
     len: usize,
     index: usize = 0,
 
@@ -181,25 +182,32 @@ pub const ArgumentIterator = struct {
     extern fn get_argument_count(*ExecuteData) usize;
 
     pub fn init(ed: *ExecuteData, include_this: bool) @This() {
+        const extra = ed.extra_named_params orelse null;
+        var len = get_argument_count(ed);
+        if (include_this) len += 1;
+        if (extra != null) len += 1;
         return .{
-            .param_ptr = get_argument_ptr(ed),
-            .len = get_argument_count(ed),
+            .arg_ptr = get_argument_ptr(ed),
+            .len = len,
             .this_ptr = if (include_this) &ed.This else null,
+            .named_params = if (extra) |a| createValueArray(a) else null,
         };
     }
 
     pub fn next(self: *@This()) ?*Value {
-        const param_index = if (self.this_ptr) |ptr| get: {
-            if (self.index == 0) {
-                self.index += 1;
-                return ptr;
-            } else {
-                break :get self.index - 1;
+        if (self.index < self.len) {
+            defer self.index += 1;
+            var index = self.index;
+            // return named parameters as last argument
+            if (index == self.len - 1) {
+                if (self.named_params) |*p| return p;
             }
-        } else self.index;
-        if (param_index < self.len) {
-            self.index += 1;
-            return &self.param_ptr[param_index];
+            // return this pointer as first argument
+            if (self.this_ptr) |ptr| {
+                if (index > 0) index -= 1 else return ptr;
+            }
+            // return regular argument
+            return &self.arg_ptr[index];
         } else {
             return null;
         }

@@ -2,6 +2,8 @@ const std = @import("std");
 
 const accessor = @import("accessor.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
+const enums = @import("enums.zig");
+const StructureType = enums.StructureType;
 const php = @import("php.zig");
 const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
@@ -65,6 +67,14 @@ pub fn Parent(comptime S: type) type {
             accessors: *const accessor.Any,
         };
 
+        pub fn fromObject(obj: *Object) *S {
+            return &ZigObject(S).fromObject(obj).zig_portion;
+        }
+
+        pub fn object(self: *S) *Object {
+            return &ZigObject(S).fromStructure(self).php_portion;
+        }
+
         pub fn setStorage(self: *S, bytes: *ByteBuffer, slots: *const Value) !void {
             if (@hasField(S, "bytes")) {
                 self.bytes = bytes;
@@ -76,72 +86,37 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
-        pub fn readSelf(obj: *Object) !Value {
+        pub fn readSelf(self: *S) !Value {
             // by default just return the object itself
+            const obj = ZigObject(S).fromStructure(self).object();
             php.addRef(obj);
             return php.createValueObject(obj);
         }
 
-        pub fn freeObject(obj: *Object) void {
-            const self = fromObject(obj);
-            if (@hasField(S, "bytes")) self.bytes.release();
-            if (@hasField(S, "slots")) php.release(&self.slots);
-            const class = ZigClass.fromObject(obj);
-            class.release();
-        }
-
-        pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
-            _ = prop_type;
-            if (readMember(obj, name, cache_slot)) |value| {
-                retval.* = value;
-            } else |err| {
-                throwFieldError(obj, name, err);
-                retval.* = php.createValueNull();
-            }
-            return retval;
-        }
-
-        pub fn readMember(obj: *Object, name: *String, cache_slot: ?[*]?*anyopaque) !Value {
-            if (findAccessors(obj, name, cache_slot)) |accessors| {
-                const self = fromObject(obj);
+        pub fn readMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !Value {
+            if (findAccessors(self, name, cache_slot)) |accessors| {
                 return try accessors.get(self);
             } else |err| {
                 if (@hasDecl(S, "readSelf")) {
-                    if (isDollarSign(name)) return try S.readSelf(obj);
+                    if (isDollarSign(name)) return try self.readSelf();
                 }
                 return err;
             }
         }
 
-        pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) *Value {
-            writeMember(obj, name, value, cache_slot) catch |err| {
-                throwFieldError(obj, name, err);
-            };
-            return value;
-        }
-
-        pub fn writeMember(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !void {
-            if (findAccessors(obj, name, cache_slot)) |accessors| {
-                const self = fromObject(obj);
+        pub fn writeMember(self: *S, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !void {
+            if (findAccessors(self, name, cache_slot)) |accessors| {
                 return try accessors.set(self, value);
             } else |err| {
                 if (@hasDecl(S, "writeSelf")) {
-                    if (isDollarSign(name)) return try S.writeSelf(obj, value);
+                    if (isDollarSign(name)) return try self.writeSelf(value);
                 }
                 return err;
             }
         }
 
-        pub fn getPropertyPointer(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) ?*Value {
-            _ = obj;
-            _ = name;
-            _ = prop_type;
-            _ = cache_slot;
-            return null;
-        }
-
-        pub fn findAccessors(obj: *Object, name: *String, cache_slot: ?[*]?*anyopaque) !*const accessor.Any {
-            const class = ZigClass.fromObject(obj);
+        pub fn findAccessors(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !*const accessor.Any {
+            const class = ZigClass.fromStructure(self);
             const cache_entry: ?*CacheEntry = @ptrCast(cache_slot);
             if (cache_entry) |cached| {
                 if (cached.class == class) return cached.accessors;
@@ -154,14 +129,10 @@ pub fn Parent(comptime S: type) type {
             return &member.accessors;
         }
 
-        fn isDollarSign(str: *String) bool {
-            return str.len == 1 and str.val[0] == '$';
-        }
-
-        pub fn throwFieldError(obj: *Object, name: *String, err: anytype) void {
+        pub fn throwFieldError(self: *S, name: *String, err: anytype) void {
             switch (err) {
                 error.Missing => {
-                    const class = ZigClass.fromObject(obj);
+                    const class = ZigClass.fromStructure(self);
                     if (scope == .instance) {
                         php.throwExceptionFmt("no field named '{s}' in {s} '{s}' (zig)", .{
                             php.getStringContent(name),
@@ -180,12 +151,101 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
-        pub fn fromObject(obj: *Object) *S {
-            return &ZigObject(S).fromObject(obj).zig_portion;
+        pub fn freeObject(obj: *Object) void {
+            const self = fromObject(obj);
+            if (@hasField(S, "bytes")) self.bytes.release();
+            if (@hasField(S, "slots")) php.release(&self.slots);
+            const class = ZigClass.fromObject(obj);
+            class.release();
         }
 
-        pub fn object(self: *S) *Object {
-            return &ZigObject(S).fromStructure(self).php_portion;
+        pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
+            _ = prop_type;
+            const self = fromObject(obj);
+            if (readMember(self, name, cache_slot)) |value| {
+                retval.* = value;
+            } else |err| {
+                throwFieldError(self, name, err);
+                retval.* = php.createValueNull();
+            }
+            return retval;
+        }
+
+        pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) *Value {
+            const self = fromObject(obj);
+            writeMember(self, name, value, cache_slot) catch |err| {
+                throwFieldError(self, name, err);
+            };
+            return value;
+        }
+
+        pub fn getPropertyPointer(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) ?*Value {
+            _ = obj;
+            _ = name;
+            _ = prop_type;
+            _ = cache_slot;
+            return null;
         }
     };
+}
+
+pub fn invokeFunction(obj: *Object, comptime name: []const u8, args: anytype) RT: {
+    var error_set = error{};
+    var payload: ?type = null;
+    for (std.meta.fields(@TypeOf(by_enum))) |field| {
+        const S = @field(by_enum, field.name);
+        if (@hasDecl(S, name)) {
+            const RT = ReturnType(S, name);
+            if (Error(RT)) |ES| {
+                error_set = error_set || ES;
+            }
+            if (payload) |PL| {
+                const PL2 = Payload(RT);
+                if (PL != PL2)
+                    @compileError(@typeName(S) ++ "." ++ name ++ "() returns " ++ @typeName(PL2) ++ " instead of " ++ @typeName(PL));
+            } else {
+                payload = Payload(RT);
+            }
+        }
+    }
+    if (payload == null) @compileError("No matching function: " ++ name);
+    break :RT @Type(.{ .error_union = .{ .error_set = error_set, .payload = payload.? } });
+} {
+    const class = ZigClass.fromObject(obj);
+    switch (class.type) {
+        inline else => |t| {
+            const s_name = @tagName(t);
+            const S = @field(by_enum, s_name);
+            if (comptime @hasDecl(S, name)) {
+                const func = @field(S, name);
+                const self = Parent(S).fromObject(obj);
+                const RT = ReturnType(S, name);
+                const result = @call(.auto, func, .{self} ++ args);
+                return if (Error(RT) != null) try result else result;
+            } else @panic(@typeName(S) ++ "has not implementation for " ++ name ++ "()");
+        },
+    }
+}
+
+fn ReturnType(comptime S: type, comptime name: []const u8) type {
+    const FT = @TypeOf(@field(S, name));
+    return @typeInfo(FT).@"fn".return_type.?;
+}
+
+fn Error(comptime RT: type) ?type {
+    return switch (@typeInfo(RT)) {
+        .error_union => |eu| eu.error_set,
+        else => null,
+    };
+}
+
+fn Payload(comptime RT: type) type {
+    return switch (@typeInfo(RT)) {
+        .error_union => |eu| eu.payload,
+        else => RT,
+    };
+}
+
+fn isDollarSign(str: *String) bool {
+    return str.len == 1 and str.val[0] == '$';
 }

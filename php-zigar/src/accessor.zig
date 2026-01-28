@@ -8,7 +8,7 @@ pub const slot = @import("accessor/slot.zig");
 pub const vector = @import("accessor/vector.zig");
 pub const @"void" = @import("accessor/void.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
-const invokeHandler = @import("object.zig").invokeHandler;
+const invokeFunction = @import("structure.zig").invokeFunction;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
 const Value = php.Value;
@@ -17,19 +17,24 @@ const ZigClass = @import("class.zig").ZigClass;
 
 pub const Error = error{
     CannotCreateObject,
-    OutOfBound,
-    OutOfMemory,
-    WriteProtected,
-    Unexpected,
-    Missing,
     Failure,
+    InvalidOperation,
+    InvalidType,
+    Missing,
+    NotArray,
+    NotArrayOrObject,
     NotBoolean,
-    NotInteger,
     NotDouble,
-    NotString,
+    NotInteger,
     NotNull,
     NotObject,
-    NotArrayOrObject,
+    NotString,
+    NotStringKey,
+    OutOfBound,
+    OutOfMemory,
+    Unexpected,
+    Unsupported,
+    WriteProtected,
 };
 
 pub const Transform = enum { to_string, to_plain, to_value };
@@ -310,9 +315,9 @@ pub fn read(entry: *Value, transform: ?Transform) !Value {
     if (transform) |t| {
         const obj = try php.getValueObject(entry);
         return switch (t) {
-            .to_string => try invokeHandler(obj, "get_string", .{}),
-            .to_plain => try invokeHandler(obj, "get_plain", .{}),
-            .to_value => try invokeHandler(obj, "read_self", .{}),
+            .to_string => try invokeFunction(obj, "getString", .{}),
+            .to_plain => try invokeFunction(obj, "getPlain", .{}),
+            .to_value => try invokeFunction(obj, "readSelf", .{}),
         };
     } else {
         php.addRef(entry);
@@ -322,5 +327,5 @@ pub fn read(entry: *Value, transform: ?Transform) !Value {
 
 pub fn write(entry: *Value, value: *const Value) Error!void {
     const obj = php.getValueObject(entry) catch unreachable;
-    try invokeHandler(obj, "write_self", .{value});
+    try invokeFunction(obj, "writeSelf", .{value});
 }

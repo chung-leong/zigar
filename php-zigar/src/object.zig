@@ -3,6 +3,7 @@ const std = @import("std");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
+const ObjectHandlers = php.ObjectHandlers;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
@@ -72,41 +73,6 @@ pub fn ZigObject(comptime S: type) type {
     return Result;
 }
 
-pub fn invokeHandler(obj: *Object, comptime name: []const u8, args: anytype) !RT: {
-    const Optional = @FieldType(ObjectHandlers, name);
-    const Pointer = @typeInfo(Optional).optional.child;
-    const Handler = @typeInfo(Pointer).pointer.child;
-    break :RT @typeInfo(Handler).@"fn".return_type.?;
-} {
-    const handlers: *const ObjectHandlers = @ptrCast(obj.handlers);
-    const handler = @field(handlers, name) orelse return error.Unexpected;
-    return @call(.auto, handler, .{obj} ++ args);
-}
-
-pub const ObjectHandlers = define: {
-    const php_handlers = php.ObjectHandlers;
-    const zig_handlers = struct {
-        read_self: ?*const fn ([*c]Object) callconv(.c) Value,
-        write_self: ?*const fn ([*c]Object, [*c]const Value) callconv(.c) void,
-        get_string: ?*const fn ([*c]Object) callconv(.c) Value,
-        get_plain: ?*const fn ([*c]Object) callconv(.c) Value,
-        stringify: ?*const fn ([*c]Object) callconv(.c) Value,
-    };
-    const php_fields = std.meta.fields(php_handlers);
-    const zig_fields = std.meta.fields(zig_handlers);
-    var combined_fields: [php_fields.len + zig_fields.len]std.builtin.Type.StructField = undefined;
-    for (php_fields, 0..) |field, i| combined_fields[i] = field;
-    for (zig_fields, 0..) |field, i| combined_fields[php_fields.len + i] = field;
-    break :define @Type(.{
-        .@"struct" = .{
-            .layout = .@"extern",
-            .decls = &.{},
-            .fields = &combined_fields,
-            .is_tuple = false,
-        },
-    });
-};
-
 const object_handler_mapping = .{
     .free_obj = "freeObject",
     .dtor_obj = "destroyObject",
@@ -132,10 +98,4 @@ const object_handler_mapping = .{
     .get_gc = "getReferencedObjects",
     .compare = "compare",
     .do_operation = "doOperation",
-    // zigar specific handlers
-    .read_self = "readSelf",
-    .write_self = "writeSelf",
-    .get_string = "getString",
-    .get_plain = "getPlain",
-    .stringify = "stringify",
 };

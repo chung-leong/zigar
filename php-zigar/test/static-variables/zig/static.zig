@@ -18,13 +18,13 @@ const std = @import("std");
 //     std.debug.print("z = {d}\n", .{z});
 // }
 
-// const Point = struct {
-//     x: usize,
-//     y: usize,
-//     comptime z: comptime_int = 1234,
-// };
+pub const Point = struct {
+    x: usize,
+    y: usize,
+    comptime z: comptime_int = 1234,
+};
 
-// pub var point: Point = .{ .x = 123, .y = 456 };
+pub var point: Point = .{ .x = 123, .y = 456 };
 
 // pub var optional: ?u32 = 1234;
 
@@ -83,20 +83,20 @@ const std = @import("std");
 //     return error.HomerSimpson;
 // }
 
-pub const BareUnion = union {
-    integer: i64,
-    float: f64,
-};
-pub var bare_union: BareUnion = .{ .integer = 1234 };
+// pub const BareUnion = union {
+//     integer: i64,
+//     float: f64,
+// };
+// pub var bare_union: BareUnion = .{ .integer = 1234 };
 
-pub const TaggedUnion = union(enum) {
-    integer: i64,
-    float: f64,
-};
-pub var tagged_union: TaggedUnion = .{ .float = 1.234 };
+// pub const TaggedUnion = union(enum) {
+//     integer: i64,
+//     float: f64,
+// };
+// pub var tagged_union: TaggedUnion = .{ .float = 1.234 };
 
-pub const ExternUnion = union {
-    integer: i64,
-    float: f64,
-};
-pub var extern_union: ExternUnion = .{ .integer = 1234 };
+// pub const ExternUnion = union {
+//     integer: i64,
+//     float: f64,
+// };
+// pub var extern_union: ExternUnion = .{ .integer = 1234 };

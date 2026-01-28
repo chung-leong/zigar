@@ -13,23 +13,19 @@ pub const Pointer = struct {
 
     const Super = structure.Parent(@This());
 
-    pub fn readSelf(obj: *Object) !Value {
-        const self = fromObject(obj);
+    pub fn readSelf(self: *@This()) !Value {
         _ = self;
         unreachable;
     }
 
-    pub fn writeSelf(obj: *Object, value: *const Value) !void {
-        const self = fromObject(obj);
+    pub fn writeSelf(self: *@This(), value: *const Value) !void {
         _ = self;
         _ = value;
         unreachable;
     }
 
-    pub fn getString(obj: *Object) !Value {
-        const self = fromObject(obj);
-        const class = ZigClass.fromObject(obj);
-        _ = self;
+    pub fn getString(self: *@This()) !Value {
+        const class = ZigClass.fromStructure(self);
         _ = class;
         std.debug.print("getString\n", .{});
         unreachable;

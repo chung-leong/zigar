@@ -115,8 +115,7 @@ pub const ErrorSet = struct {
         }
 
         pub fn acquireError(self: *@This(), err_code: c_long) !*Object {
-            const obj = try self.findError(err_code);
-            const err_obj = try getCanonical(obj);
+            const err_obj = try self.findError(err_code);
             const err_struct = fromObject(err_obj);
             const props = err_struct.canonical.?;
             if (props.trace) |a| php.release(a);
@@ -144,8 +143,8 @@ pub const ErrorSet = struct {
     pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
         _ = prop_type;
         _ = cache_slot;
-        const err_obj = try getCanonical(obj);
-        const err_struct = fromObject(err_obj);
+        const self = fromObject(obj);
+        const err_struct = try self.getCanonical();
         const props = err_struct.canonical.?;
         const name_c = php.getStringContent(name);
         if (std.mem.eql(u8, name_c, "string")) {
@@ -165,8 +164,8 @@ pub const ErrorSet = struct {
 
     pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
         _ = cache_slot;
-        const err_obj = try getCanonical(obj);
-        const err_struct = fromObject(err_obj);
+        const self = fromObject(obj);
+        const err_struct = try self.getCanonical();
         const props = err_struct.canonical.?;
         const name_c = php.getStringContent(name);
         if (std.mem.eql(u8, name_c, "string")) {
@@ -178,20 +177,22 @@ pub const ErrorSet = struct {
         return value;
     }
 
-    pub fn readSelf(obj: *Object) !Value {
-        const err_obj = try getCanonical(obj);
+    pub fn readSelf(self: *@This()) !Value {
+        const err_struct = try self.getCanonical();
+        const err_obj = ZigObject(@This()).fromStructure(err_struct).object();
         php.addRef(err_obj);
         return php.createValueObject(err_obj);
     }
 
-    fn getCanonical(obj: *Object) !*Object {
-        const self = fromObject(obj);
-        if (self.canonical != null) return obj;
-        const class = ZigClass.fromObject(obj);
+    fn getCanonical(self: *@This()) !*@This() {
+        if (self.canonical != null) return self;
+        const class = ZigClass.fromStructure(self);
         const static = class.getStaticData(@This());
         const err_value = try static.value_acc.get(self.bytes);
         const err_code = try php.getValueLong(&err_value);
-        return static.findError(err_code) catch new: {
+        if (static.findError(err_code)) |err_obj| {
+            return fromObject(err_obj);
+        } else |_| {
             // unknown error number--attach a canonical struct
             var buffer: [32]u8 = undefined;
             const text = std.fmt.bufPrint(&buffer, "Unknown error #{d}", .{err_code}) catch unreachable;
@@ -199,13 +200,12 @@ pub const ErrorSet = struct {
             const props = try php.allocator.create(Canonical);
             props.* = .{ .message = message, .unknown = true };
             self.canonical = props;
-            break :new obj;
-        };
+            return self;
+        }
     }
 
-    pub fn writeSelf(obj: *Object, value: *const Value) !void {
-        const self = fromObject(obj);
-        const class = ZigClass.fromObject(obj);
+    pub fn writeSelf(self: *@This(), value: *const Value) !void {
+        const class = ZigClass.fromStructure(self);
         const static = class.getStaticData(@This());
         const err_value = find: {
             if (php.getValueObject(value)) |exception| {
@@ -225,21 +225,20 @@ pub const ErrorSet = struct {
                     }
                 } else {
                     return php.throwExceptionFmt("'{s}' does not implement throwable (zig)", .{
-                        php.getStringContent(obj.ce.*.name),
+                        php.getStringContent(exception.ce.*.name),
                     });
                 }
             } else |_| if (php.getType(value) == .long) {
                 break :find value.*;
             } else {
-                return error.InvalidTypeForErrorSet;
+                return error.InvalidType;
             }
         };
         try static.value_acc.set(self.bytes, &err_value);
     }
 
-    pub fn stringify(obj: *Object) !Value {
-        const err_obj = try getCanonical(obj);
-        const err_struct = fromObject(err_obj);
+    pub fn stringify(self: *@This()) !Value {
+        const err_struct = try self.getCanonical();
         const props = err_struct.canonical.?;
         const message = php.useString(props.message, "");
         defer php.release(message);
@@ -280,8 +279,8 @@ pub const ErrorSet = struct {
 
     pub fn getMessage(ed: *ExecuteData, return_value: *Value) !void {
         const obj = try php.getValueObject(&ed.This);
-        const err_obj = try getCanonical(obj);
-        const err_struct = fromObject(err_obj);
+        const self = fromObject(obj);
+        const err_struct = try self.getCanonical();
         const message = php.useString(err_struct.canonical.?.message, "");
         return_value.* = php.createValueString(message);
     }
@@ -296,31 +295,31 @@ pub const ErrorSet = struct {
 
     pub fn getFile(ed: *ExecuteData, return_value: *Value) !void {
         const obj = try php.getValueObject(&ed.This);
-        const err_obj = try getCanonical(obj);
-        const err_struct = fromObject(err_obj);
+        const self = fromObject(obj);
+        const err_struct = try self.getCanonical();
         const file = php.useString(err_struct.canonical.?.file, "(unknown)");
         return_value.* = php.createValueString(file);
     }
 
     pub fn getLine(ed: *ExecuteData, return_value: *Value) !void {
         const obj = try php.getValueObject(&ed.This);
-        const err_obj = try getCanonical(obj);
-        const err_struct = fromObject(err_obj);
+        const self = fromObject(obj);
+        const err_struct = try self.getCanonical();
         return_value.* = php.createValueLong(@intCast(err_struct.canonical.?.lineno));
     }
 
     pub fn getTrace(ed: *ExecuteData, return_value: *Value) !void {
         const obj = try php.getValueObject(&ed.This);
-        const err_obj = try getCanonical(obj);
-        const err_struct = fromObject(err_obj);
+        const self = fromObject(obj);
+        const err_struct = try self.getCanonical();
         const trace = php.useArray(err_struct.canonical.?.trace);
         return_value.* = php.createValueArray(trace);
     }
 
     pub fn getTraceAsString(ed: *ExecuteData, return_value: *Value) !void {
         const obj = try php.getValueObject(&ed.This);
-        const err_obj = try getCanonical(obj);
-        const err_struct = fromObject(err_obj);
+        const self = fromObject(obj);
+        const err_struct = try self.getCanonical();
         const trace = php.useArray(err_struct.canonical.?.trace);
         const trace_str = php.traceToString(trace, true);
         return_value.* = php.createValueString(trace_str);

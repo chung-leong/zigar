@@ -63,14 +63,13 @@ pub const Union = struct {
             }
         }
 
-        pub fn readSelectorValue(self: *@This(), obj: *Object) !?Value {
+        pub fn readSelectorValue(self: *@This(), union_struct: *Union) !?Value {
             const selector = self.selector orelse return null;
-            const union_struct = fromObject(obj);
             return try selector.accessors.get(union_struct.bytes);
         }
 
-        pub fn getActiveField(self: *@This(), obj: *Object) !?*String {
-            const selector_value = try self.readSelectorValue(obj) orelse return null;
+        pub fn getActiveField(self: *@This(), union_struct: *Union) !?*String {
+            const selector_value = try self.readSelectorValue(union_struct) orelse return null;
             const selector_code = try php.getValueLong(&selector_value);
             const selector = self.selector.?;
             const current_name = php.getHashEntry(&selector.possible_names, selector_code) catch
@@ -79,47 +78,49 @@ pub const Union = struct {
         }
     };
 
-    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
-        if (checkSelector(obj, name)) {
-            return Super.readProperty(obj, name, prop_type, cache_slot, retval);
-        } else |err| {
-            throwFieldError(obj, name, err);
-            retval.* = php.createValueNull();
-            return retval;
-        }
-    }
-
-    pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) *Value {
-        if (checkSelector(obj, name)) {
-            return Super.writeProperty(obj, name, value, cache_slot);
-        } else |err| {
-            throwFieldError(obj, name, err);
-            return value;
-        }
-    }
-
-    fn checkSelector(obj: *Object, name: *String) !void {
-        const class = ZigClass.fromObject(obj);
+    fn checkSelector(self: *@This(), name: *String) !void {
+        const class = ZigClass.fromStructure(self);
         const static = class.getStaticData(@This());
-        const active = try static.getActiveField(obj) orelse return;
+        const active = try static.getActiveField(self) orelse return;
         const active_c = php.getStringContent(active);
         const name_c = php.getStringContent(name);
         if (!std.mem.eql(u8, name_c, active_c)) return error.InactiveField;
     }
 
-    fn throwFieldError(obj: *Object, name: *String, err: anytype) void {
-        const accessors = Super.findAccessors(obj, name, null) catch null;
+    fn throwFieldError(self: *@This(), name: *String, err: anytype) void {
+        const accessors = self.findAccessors(name, null) catch null;
         if (accessors != null and err == error.InactiveField) {
-            const class = ZigClass.fromObject(obj);
+            const class = ZigClass.fromStructure(self);
             const static = class.getStaticData(@This());
-            const active = (static.getActiveField(obj) catch unreachable).?;
+            const active = (static.getActiveField(self) catch unreachable).?;
             php.throwExceptionFmt("access of {s} field '{s}' while field '{s}' is active", .{
                 class.getStructureName(),
                 php.getStringContent(name),
                 php.getStringContent(active),
             });
         } else {
-            Super.throwFieldError(obj, name, err);
+            self.throwFieldError(name, err);
+        }
+    }
+
+    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
+        const self = fromObject(obj);
+        if (self.checkSelector(name)) {
+            return Super.readProperty(obj, name, prop_type, cache_slot, retval);
+        } else |err| {
+            self.throwFieldError(name, err);
+            retval.* = php.createValueNull();
+            return retval;
+        }
+    }
+
+    pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) *Value {
+        const self = fromObject(obj);
+        if (self.checkSelector(name)) {
+            return Super.writeProperty(obj, name, value, cache_slot);
+        } else |err| {
+            self.throwFieldError(name, err);
+            return value;
         }
     }
 
@@ -128,4 +129,5 @@ pub const Union = struct {
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
     pub const getPropertyPointer = Super.getPropertyPointer;
+    const findAccessors = Super.findAccessors;
 };

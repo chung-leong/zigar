@@ -22,7 +22,8 @@ pub const Static = struct {
 
     pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: *const Value) !?*Function {
         const obj = obj_ptr.*;
-        const field = Super.readMember(obj, name, null) catch return null;
+        const self = fromObject(obj);
+        const field = self.readMember(name, null) catch return null;
         defer php.release(&field);
         const field_obj = php.getValueObject(&field) catch return null;
         const field_class = ZigClass.fromObject(field_obj);
@@ -38,4 +39,5 @@ pub const Static = struct {
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
     pub const getPropertyPointer = Super.getPropertyPointer;
+    const readMember = Super.readMember;
 };
