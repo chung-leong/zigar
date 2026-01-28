@@ -199,7 +199,7 @@ pub const ZigClass = struct {
                     return error.InvalidSignature;
             },
             .methods = .{
-                .toString = php.createFunction(toString, "__toString"),
+                .toString = php.createFunction(toString, "__toString", null),
             },
         };
         const interfaces = try self.createInterfaceList();
@@ -269,6 +269,7 @@ pub const ZigClass = struct {
         // set slots of ref object
         const static = structure.Static.fromObject(obj);
         const slots = try self.createSlots(.static, null);
+        defer php.release(&slots);
         try static.setStorage(undefined, &slots);
         // initialize static data
         switch (self.type) {
@@ -476,6 +477,7 @@ pub const ZigClass = struct {
                     if (scope.slot_count == 1) {
                         new_slots = value.*;
                         php.addRef(value);
+                        break;
                     } else {
                         php.setHashEntryRef(new_ht, iter.currentIndex().?, value);
                     }
@@ -492,6 +494,7 @@ pub const ZigClass = struct {
                 const S = @field(structure.by_enum, @tagName(t));
                 const zig_obj = try ZigObject(S).create(self);
                 const slots = try self.createSlots(.instance, prefilled_slots);
+                defer php.release(&slots);
                 try zig_obj.setStorage(bytes, &slots);
                 return zig_obj.object();
             },

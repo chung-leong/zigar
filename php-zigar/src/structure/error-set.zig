@@ -92,7 +92,7 @@ pub const ErrorSet = struct {
             self.methods = try php.allocator.create(Methods);
             inline for (std.meta.fields(Methods)) |field| {
                 const handler = @field(ErrorSet, field.name);
-                @field(self.methods, field.name) = php.createFunction(handler, field.name);
+                @field(self.methods, field.name) = php.createFunction(handler, field.name, 0);
             }
         }
 

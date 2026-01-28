@@ -3,7 +3,7 @@
 declare(strict_types = 1);
 
 $module = zigar_load_module(__DIR__ . "/test/hello/lib/hello.zigar");
-$module->hello(123, 456);
+echo $module->hello(123, 456), "\n";
 
 // $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar");
 

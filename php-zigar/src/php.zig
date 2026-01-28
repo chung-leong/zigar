@@ -906,12 +906,14 @@ pub fn invokeMethod(obj: *Object, fn_name: []const u8, params: anytype) !Value {
     return retval;
 }
 
-pub fn createFunction(comptime func: anytype, name: []const u8) Function {
+pub fn createFunction(comptime func: anytype, name: []const u8, arg_count: ?usize) Function {
     return .{
         .internal_function = .{
             .type = php_h.ZEND_INTERNAL_FUNCTION,
             .function_name = createInternedString(name),
             .handler = &transform(func),
+            .num_args = @intCast(arg_count orelse 0),
+            .fn_flags = if (arg_count == null) php_h.ZEND_ACC_VARIADIC else 0,
         },
     };
 }

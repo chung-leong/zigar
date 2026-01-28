@@ -23,6 +23,7 @@ pub const Static = struct {
     pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: *const Value) !?*Function {
         const obj = obj_ptr.*;
         const field = Super.readMember(obj, name, null) catch return null;
+        defer php.release(&field);
         const field_obj = php.getValueObject(&field) catch return null;
         const field_class = ZigClass.fromObject(field_obj);
         if (field_class.type != .function) return null;
