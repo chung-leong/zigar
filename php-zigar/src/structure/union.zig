@@ -47,7 +47,6 @@ pub const Union = struct {
                         else => index,
                     };
                     php.setHashEntryRef(&name_ht, selector_code, iter.currentKey());
-                    php.addRef(name);
                     index += 1;
                 }
                 self.selector = .{
@@ -128,4 +127,5 @@ pub const Union = struct {
     pub const setStorage = Super.setStorage;
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
+    pub const getPropertyPointer = Super.getPropertyPointer;
 };

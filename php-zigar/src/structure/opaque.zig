@@ -13,6 +13,4 @@ pub const Opaque = struct {
     pub const setStorage = Super.setStorage;
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
-    pub const readProperty = Super.readProperty;
-    pub const writeProperty = Super.writeProperty;
 };

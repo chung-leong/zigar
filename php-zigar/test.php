@@ -2,10 +2,10 @@
 
 declare(strict_types = 1);
 
-$module = zigar_load_module(__DIR__ . "/test/hello/lib/hello.zigar");
-echo $module->hello(123, 456), "\n";
+// $module = zigar_load_module(__DIR__ . "/test/hello/lib/hello.zigar");
+// echo $module->hello(123, 456), "\n";
 
-// $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar");
+$module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar");
 
 // echo $module->array[2], "\n";
 // foreach ($module->array as $a) {
@@ -101,9 +101,9 @@ echo $module->hello(123, 456), "\n";
 // $module->problematic2 = $module->ErrorSet->HelloWorld;
 // echo $module->problematic2, "\n";
 
-// echo "bare_union->integer = ", $module->bare_union->integer, "\n";
-// echo "tagged_union->integer = ", $module->tagged_union->float, "\n";
-// echo "extern_union->integer = ", $module->extern_union->integer, "\n";
-// $e = $module->extern_union;
-// $e->float = 3.14;
+echo "bare_union->integer = ", $module->bare_union->integer, "\n";
+echo "tagged_union->integer = ", $module->tagged_union->float, "\n";
+echo "extern_union->integer = ", $module->extern_union->integer, "\n";
+$module->extern_union->integer = 3;
+echo "extern_union->integer = ", $module->extern_union->integer, "\n";
 

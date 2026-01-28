@@ -97,5 +97,4 @@ pub const Function = struct {
 
     pub const fromObject = Super.fromObject;
     pub const readSelf = Super.readSelf;
-    pub const readProperty = Super.readProperty;
 };

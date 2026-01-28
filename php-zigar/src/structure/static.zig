@@ -37,4 +37,5 @@ pub const Static = struct {
     pub const readSelf = Super.readSelf;
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
+    pub const getPropertyPointer = Super.getPropertyPointer;
 };

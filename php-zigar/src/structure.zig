@@ -132,6 +132,14 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
+        pub fn getPropertyPointer(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) ?*Value {
+            _ = obj;
+            _ = name;
+            _ = prop_type;
+            _ = cache_slot;
+            return null;
+        }
+
         pub fn findAccessors(obj: *Object, name: *String, cache_slot: ?[*]?*anyopaque) !*const accessor.Any {
             const class = ZigClass.fromObject(obj);
             const cache_entry: ?*CacheEntry = @ptrCast(cache_slot);

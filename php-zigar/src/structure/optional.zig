@@ -54,6 +54,4 @@ pub const Optional = struct {
     pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
     pub const freeObject = Super.freeObject;
-    pub const readProperty = Super.readProperty;
-    pub const writeProperty = Super.writeProperty;
 };

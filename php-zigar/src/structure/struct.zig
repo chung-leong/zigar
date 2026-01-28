@@ -16,4 +16,5 @@ pub const Struct = struct {
     pub const freeObject = Super.freeObject;
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
+    pub const getPropertyPointer = Super.getPropertyPointer;
 };
