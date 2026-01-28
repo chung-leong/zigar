@@ -4,7 +4,6 @@ const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClass = @import("../class.zig").ZigClass;
 const php = @import("../php.zig");
-const HashPosition = php.HashPosition;
 const HashTable = php.HashTable;
 const Object = php.Object;
 const String = php.String;
@@ -24,57 +23,44 @@ pub const Union = struct {
         } = null,
 
         pub fn init(self: *@This(), class: *ZigClass) !void {
-            var pos: HashPosition = undefined;
-            const member_ht = &class.instance.members;
-            const selector_member = find: {
-                php.initializeHashPosition(member_ht, &pos);
-                while (php.getHashPositionValue(member_ht, &pos)) |value| {
-                    const member = try php.getValuePointer(*ZigClass.Member, value);
-                    if (member.flags.is_selector) break :find member;
-                    if (!php.moveHashPositionForward(member_ht, &pos)) break;
-                }
-                break :find null;
-            };
+            var iter = class.getMemberIterator(.instance);
+            const selector_member = while (iter.next()) |member| {
+                if (member.flags.is_selector) break member;
+            } else null;
             if (selector_member) |sm| {
                 if (sm.accessors != .primitive) return error.InvalidAccessor;
                 const selector_class = sm.class orelse return error.MissingClass;
-                var name_ht = php.createHashTable(php.destructor.value);
-                php.initializeHashPosition(&name_ht, &pos);
-                var index: c_long = 0;
                 // go through the list of members again and get the possible selector values
-                while (php.getHashPositionValue(member_ht, &pos)) |value| {
-                    defer index += 1;
-                    const member = try php.getValuePointer(*ZigClass.Member, value);
-                    if (!member.flags.is_selector) {
-                        var name_value = php.getHashPositionKey(member_ht, &pos);
-                        defer php.release(&name_value);
-                        const name = try php.getValueString(&name_value);
-                        const selector_code = switch (selector_class.type) {
-                            .@"enum" => find: {
-                                const enum_static = selector_class.getStaticData(structure.Enum);
-                                const tag = try enum_static.findTag(name);
-                                const tag_value = try enum_static.readTagValue(tag);
-                                break :find try php.getValueLong(&tag_value);
-                            },
-                            else => index,
-                        };
-                        try php.setHashEntryRef(&name_ht, selector_code, &name_value);
-                    }
-                    if (!php.moveHashPositionForward(member_ht, &pos)) break;
+                var name_ht = php.createHashTable(php.destructor.value);
+                var index: c_long = 0;
+                iter.reset();
+                while (iter.next()) |member| {
+                    if (member.flags.is_selector) continue;
+                    const name = iter.currentName() orelse return error.MissingName;
+                    const selector_code = switch (selector_class.type) {
+                        .@"enum" => find: {
+                            const enum_static = selector_class.getStaticData(structure.Enum);
+                            const tag = try enum_static.findTag(name);
+                            const tag_value = try enum_static.readTagValue(tag);
+                            break :find try php.getValueLong(&tag_value);
+                        },
+                        else => index,
+                    };
+                    php.setHashEntryRef(&name_ht, selector_code, iter.currentKey());
+                    php.addRef(name);
+                    index += 1;
                 }
                 self.selector = .{
                     .accessors = &sm.accessors.primitive,
                     .class = selector_class,
                     .possible_names = name_ht,
                 };
-                selector_class.addRef();
             }
         }
 
         pub fn deinit(self: *@This()) void {
             if (self.selector) |*selector| {
                 php.destroyHashTable(&selector.possible_names);
-                selector.class.release();
             }
         }
 

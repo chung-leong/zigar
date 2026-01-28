@@ -7,7 +7,6 @@ const ModuleGeneric = @import("module/native/interface.zig").Module;
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
-const HashPosition = php.HashPosition;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
@@ -248,7 +247,7 @@ pub const StructureImporter = struct {
         const key = key_bytes[0..key_len];
         if (value_h) |vh| {
             const value = self.dereference(vh);
-            try php.setHashEntryRef(&self.structure_map, key, value);
+            php.setHashEntryRef(&self.structure_map, key, value);
         } else {
             try php.deleteHashEntry(&self.structure_map, key);
         }

@@ -5,7 +5,6 @@ const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const php = @import("php.zig");
 const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
-const HashPosition = php.HashPosition;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;

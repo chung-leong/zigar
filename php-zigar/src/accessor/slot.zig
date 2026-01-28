@@ -57,7 +57,7 @@ const multi_slot = struct {
         const ht = try php.getValueHashTable(slots);
         return php.getHashEntry(ht, acc.params.slot) catch vivicate: {
             var new = try createObject(acc.params.class_entry, buffer, acc.params.byte_offset, acc.params.byte_size);
-            break :vivicate try php.insertHashEntry(ht, acc.params.slot, &new);
+            break :vivicate php.insertHashEntry(ht, acc.params.slot, &new);
         };
     }
 };
@@ -95,7 +95,7 @@ const array_slot = struct {
         const ht = try php.getValueHashTable(slots);
         return php.getHashEntry(ht, acc.params.slot) catch vivicate: {
             var new = try createObject(acc.params.class_entry, buffer, acc.params.byte_size * index, acc.params.byte_size);
-            break :vivicate try php.insertHashEntry(ht, acc.params.slot, &new);
+            break :vivicate php.insertHashEntry(ht, acc.params.slot, &new);
         };
     }
 };

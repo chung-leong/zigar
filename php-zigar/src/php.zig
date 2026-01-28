@@ -171,6 +171,41 @@ pub fn parseArguments(comptime specs: [:0]const u8, arg_ptrs: anytype) !void {
     if (result != php_h.SUCCESS) return error.UnableToParseArgument;
 }
 
+pub const ArgumentIterator = struct {
+    param_ptr: [*]Value,
+    this_ptr: ?*Value,
+    len: usize,
+    index: usize = 0,
+
+    extern fn get_argument_ptr(*ExecuteData) [*]Value;
+    extern fn get_argument_count(*ExecuteData) usize;
+
+    pub fn init(ed: *ExecuteData, include_this: bool) @This() {
+        return .{
+            .param_ptr = get_argument_ptr(ed),
+            .len = get_argument_count(ed),
+            .this_ptr = if (include_this) &ed.This else null,
+        };
+    }
+
+    pub fn next(self: *@This()) ?*Value {
+        const param_index = if (self.this_ptr) |ptr| get: {
+            if (self.index == 0) {
+                self.index += 1;
+                return ptr;
+            } else {
+                break :get self.index - 1;
+            }
+        } else self.index;
+        if (param_index < self.len) {
+            self.index += 1;
+            return &self.param_ptr[param_index];
+        } else {
+            return null;
+        }
+    }
+};
+
 fn TransformPointer(comptime T: type) type {
     return switch (@typeInfo(T)) {
         .pointer => |pt| switch (pt.child) {
@@ -509,7 +544,7 @@ pub fn getPropertyWithType(comptime T: type, object: *Value, key: anytype) !T {
 
 pub fn setProperty(object: *Value, key: anytype, value: *Value) !void {
     const ht = try getValueHashTable(object);
-    try setHashEntry(ht, key, value);
+    setHashEntry(ht, key, value);
 }
 
 pub fn setPropertyRef(object: *Value, key: anytype, value: *Value) !void {
@@ -662,7 +697,7 @@ pub fn getHashEntryWithType(comptime T: type, ht: *const HashTable, key: anytype
     }
 }
 
-pub fn insertHashEntry(ht: *HashTable, key: anytype, value: *Value) !*Value {
+pub fn insertHashEntry(ht: *HashTable, key: anytype, value: *Value) *Value {
     const KT = @TypeOf(key);
     ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
     const result = if (comptime isStringContent(KT))
@@ -673,16 +708,15 @@ pub fn insertHashEntry(ht: *HashTable, key: anytype, value: *Value) !*Value {
         php_h.zend_hash_update(ht, key, value)
     else
         @compileError("Invalid key: " ++ @typeName(KT));
-    if (result == null) return error.Failure;
     return @ptrCast(result);
 }
 
-pub fn setHashEntry(ht: *HashTable, key: anytype, value: *Value) !void {
-    _ = try insertHashEntry(ht, key, value);
+pub fn setHashEntry(ht: *HashTable, key: anytype, value: *Value) void {
+    _ = insertHashEntry(ht, key, value);
 }
 
-pub fn setHashEntryRef(ht: *HashTable, key: anytype, value: *Value) !void {
-    try setHashEntry(ht, key, value);
+pub fn setHashEntryRef(ht: *HashTable, key: anytype, value: *Value) void {
+    setHashEntry(ht, key, value);
     addRef(value);
 }
 
@@ -710,37 +744,101 @@ pub fn deleteHashEntry(ht: *HashTable, key: anytype) !void {
     _ = try removeHashEntry(ht, key);
 }
 
-pub fn initializeHashPosition(ht: *HashTable, pos: *HashPosition) void {
-    php_h.zend_hash_internal_pointer_reset_ex(ht, pos);
-}
+pub const HashTableIterator = struct {
+    ht: *HashTable,
+    pos: HashPosition,
+    dir: Direction,
+    len: usize,
+    key: ?Value = undefined,
+    returned: bool = false,
 
-pub fn initializeHashPositionToEnd(ht: *HashTable, pos: *HashPosition) void {
-    php_h.zend_hash_internal_pointer_end_ex(ht, pos);
-}
+    pub const Direction = enum { forward, backward };
+    pub const Options = struct {
+        dir: Direction = .forward,
+    };
 
-pub fn moveHashPositionForward(ht: *HashTable, pos: *HashPosition) bool {
-    const result = php_h.zend_hash_move_forward_ex(ht, pos);
-    return result == php_h.SUCCESS;
-}
+    pub fn init(ht: *HashTable, options: Options) @This() {
+        var pos: HashPosition = undefined;
+        switch (options.dir) {
+            .forward => php_h.zend_hash_internal_pointer_reset_ex(ht, &pos),
+            .backward => php_h.zend_hash_internal_pointer_end_ex(ht, &pos),
+        }
+        return .{ .ht = ht, .pos = pos, .len = ht.nNumOfElements, .dir = options.dir };
+    }
 
-pub fn moveHashPositionBackward(ht: *HashTable, pos: *HashPosition) bool {
-    const result = php_h.zend_hash_move_backwards_ex(ht, pos);
-    return result == php_h.SUCCESS;
-}
+    pub fn reset(self: *@This()) void {
+        switch (self.dir) {
+            .forward => php_h.zend_hash_internal_pointer_reset_ex(self.ht, &self.pos),
+            .backward => php_h.zend_hash_internal_pointer_end_ex(self.ht, &self.pos),
+        }
+        self.returned = false;
+    }
 
-pub fn getHashPositionValue(ht: *HashTable, pos: *HashPosition) ?*Value {
-    return php_h.zend_hash_get_current_data_ex(ht, pos);
-}
+    pub fn next(self: *@This()) ?*Value {
+        defer self.returned = true;
+        if (self.returned) {
+            switch (self.dir) {
+                .forward => _ = php_h.zend_hash_move_forward_ex(self.ht, &self.pos),
+                .backward => _ = php_h.zend_hash_move_backwards_ex(self.ht, &self.pos),
+            }
+        }
+        self.key = null;
+        return php_h.zend_hash_get_current_data_ex(self.ht, &self.pos);
+    }
 
-pub fn getHashPositionPointer(comptime T: type, ht: *HashTable, pos: *HashPosition) !?T {
-    const value = getHashPositionValue(ht, pos) orelse return null;
-    return try getValuePointer(T, value);
-}
+    pub fn currentKey(self: *@This()) *Value {
+        if (self.key == null) {
+            var key: Value = undefined;
+            php_h.zend_hash_get_current_key_zval_ex(self.ht, &key, &self.pos);
+            self.key = key;
+            // don't increment the key's refcount
+            if (getType(&key) == .string) release(&key);
+        }
+        return &self.key.?;
+    }
 
-pub fn getHashPositionKey(ht: *HashTable, pos: *HashPosition) Value {
-    var key: Value = undefined;
-    php_h.zend_hash_get_current_key_zval_ex(ht, &key, pos);
-    return key;
+    pub fn currentIndex(self: *@This()) ?c_long {
+        const key = self.currentKey();
+        return getValueLong(key) catch null;
+    }
+
+    pub fn currentName(self: *@This()) ?*String {
+        const key = self.currentKey();
+        return getValueString(key) catch null;
+    }
+};
+
+pub fn HashTableObjectIterator(comptime T: type) type {
+    return struct {
+        iter: HashTableIterator,
+        len: usize = undefined,
+
+        pub fn init(ht: *HashTable, options: HashTableIterator.Options) @This() {
+            const iter: HashTableIterator = .init(ht, options);
+            return .{ .iter = iter, .len = iter.len };
+        }
+
+        pub fn reset(self: *@This()) void {
+            self.iter.reset();
+        }
+
+        pub fn next(self: *@This()) ?T {
+            const value = self.iter.next() orelse return null;
+            return getValuePointer(T, value) catch @panic("Not object");
+        }
+
+        pub fn currentKey(self: *@This()) *Value {
+            return self.iter.currentKey();
+        }
+
+        pub fn currentIndex(self: *@This()) ?c_long {
+            return self.iter.currentIndex();
+        }
+
+        pub fn currentName(self: *@This()) ?*String {
+            return self.iter.currentName();
+        }
+    };
 }
 
 pub fn createObject(ce: *ClassEntry) *Object {
@@ -773,7 +871,7 @@ pub fn addRef(value: anytype) void {
 pub fn release(value: anytype) void {
     const T = @TypeOf(value);
     switch (T) {
-        *Value, [*c]Value => php_h.zval_ptr_dtor(value),
+        *Value, *const Value, [*c]Value => php_h.zval_ptr_dtor(@constCast(value)),
         *String, [*c]String => php_h.zend_string_release(value),
         *Object, [*c]Object => php_h.zend_object_release(value),
         *HashTable, [*c]HashTable => php_h.zend_hash_release(value),
@@ -786,8 +884,8 @@ pub fn invokeMethod(obj: *Object, fn_name: []const u8, params: anytype) !Value {
     defer release(&callable);
     var obj_value = createValueObject(obj);
     var fn_name_value = createValueStringContent(fn_name);
-    try setProperty(&callable, 0, &obj_value);
-    try setProperty(&callable, 1, &fn_name_value);
+    setProperty(&callable, 0, &obj_value) catch unreachable;
+    setProperty(&callable, 1, &fn_name_value) catch unreachable;
     var args: [params.len]Value = undefined;
     inline for (params, 0..) |param, i| {
         args[i] = param;
@@ -947,11 +1045,6 @@ pub fn emalloc(size: usize) ?*anyopaque {
 pub fn efree(ptr: ?*anyopaque) void {
     return debugFree(ptr, 1);
 }
-
-pub const null_value: *const Value = &.{
-    .value = .{ .lval = 0 },
-    .u1 = .{ .type_info = php_h.IS_NULL },
-};
 
 pub const allocator: std.mem.Allocator = .{
     .ptr = undefined,
@@ -1133,6 +1226,8 @@ pub const closedir = php_h.php_stream_closedir;
 pub const rewinddir = php_h.php_stream_rewinddir;
 pub const setOption = php_h._php_stream_set_option;
 pub const truncate = php_h._php_stream_truncate_set_size;
+
+pub const reportWrongParamCount = php_h.zend_wrong_param_count;
 
 pub const infoTableStart = php_h.php_info_print_table_start;
 pub const infoTableHeader = php_h.php_info_print_table_header;

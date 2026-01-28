@@ -10,7 +10,19 @@ pub const VariadicStruct = struct {
     slots: Value = undefined,
 
     const Super = structure.Parent(@This());
+    pub const Static = structure.ArgStruct.Static;
 
+    pub fn copyArguments(self: *@This(), iter: *php.ArgumentIterator) !void {
+        _ = self;
+        _ = iter;
+        return error.NotImplemented;
+    }
+
+    pub fn getReturnValue(self: *@This()) !Value {
+        _ = self;
+    }
+
+    pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;

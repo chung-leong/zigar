@@ -7,7 +7,6 @@ const CallDispatcher = @import("dispatcher.zig").CallDispatcher;
 const ModuleGeneric = @import("module/native/interface.zig").Module;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
-const HashPosition = php.HashPosition;
 const String = php.String;
 const Value = php.Value;
 const StructureImporter = @import("importer.zig").StructureImporter;

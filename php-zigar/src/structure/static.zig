@@ -4,7 +4,6 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClass = @import("../class.zig").ZigClass;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
-const HashPosition = php.HashPosition;
 const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
 const Function = php.Function;

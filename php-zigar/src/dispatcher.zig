@@ -168,8 +168,7 @@ pub const CallDispatcher = struct {
             };
             const strm = php.open(path, mode, 0) orelse return error.Unexpected;
             var strm_value = php.createValueStream(strm);
-            errdefer php.release(&strm_value);
-            try php.setHashEntry(&self.stream_map, fd, &strm_value);
+            php.setHashEntry(&self.stream_map, fd, &strm_value);
             return strm;
         }
     }

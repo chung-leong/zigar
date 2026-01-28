@@ -4,7 +4,6 @@ const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClass = @import("../class.zig").ZigClass;
 const php = @import("../php.zig");
-const HashPosition = php.HashPosition;
 const HashTable = php.HashTable;
 const Object = php.Object;
 const String = php.String;
@@ -37,34 +36,27 @@ pub const Enum = struct {
             // loop through static members and add them to a hash table, keyed by
             // their integer values and names
             self.available_tags = php.createHashTable(php.destructor.value);
-            var pos: HashPosition = undefined;
-            const member_ht = &class.static.members;
             const static_slots = class.static.template.slots orelse return error.MissingSlots;
-            php.initializeHashPosition(member_ht, &pos);
-            while (php.getHashPositionValue(member_ht, &pos)) |member_value| {
-                const static_member = try php.getValuePointer(*ZigClass.Member, member_value);
-                if (static_member.slot) |slot| {
-                    const tag = try php.getProperty(static_slots, slot);
-                    const tag_obj = try php.getValueObject(tag);
-                    const tag_struct = fromObject(tag_obj);
-                    // reference tag by integer value
-                    const tag_value = try self.value_acc.get(tag_struct.bytes);
-                    const tag_code = try php.getValueLong(&tag_value);
-                    try php.setHashEntryRef(&self.available_tags, tag_code, tag);
-                    // reference tag by name
-                    var name_key = php.getHashPositionKey(member_ht, &pos);
-                    defer php.release(&name_key);
-                    const name = try php.getValueString(&name_key);
-                    try php.setHashEntryRef(&self.available_tags, name, tag);
-                    // attach canonical info to tag
-                    const props = try php.allocator.create(Canonical);
-                    props.* = .{ .name = name };
-                    php.addRef(name);
-                    tag_struct.canonical = props;
-                    // decrement ref count on class (since the class holds a ref on the tag)
-                    class.release();
-                    if (!php.moveHashPositionForward(member_ht, &pos)) break;
-                }
+            var iter = class.getMemberIterator(.static);
+            while (iter.next()) |static_member| {
+                const slot = static_member.slot orelse continue;
+                const tag = try php.getProperty(static_slots, slot);
+                const tag_obj = try php.getValueObject(tag);
+                const tag_struct = fromObject(tag_obj);
+                // reference tag by integer value
+                const tag_value = try self.value_acc.get(tag_struct.bytes);
+                const tag_code = try php.getValueLong(&tag_value);
+                php.setHashEntryRef(&self.available_tags, tag_code, tag);
+                // reference tag by name
+                const name = iter.currentName() orelse return error.MissingName;
+                php.setHashEntryRef(&self.available_tags, name, tag);
+                // attach canonical info to tag
+                const props = try php.allocator.create(Canonical);
+                props.* = .{ .name = name };
+                php.addRef(name);
+                tag_struct.canonical = props;
+                // decrement ref count on class (since the class holds a ref on the tag)
+                class.release();
             }
         }
 

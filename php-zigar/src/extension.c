@@ -42,3 +42,11 @@ ZEND_GET_MODULE(php_zigar)
 void set_zval_stream(zval* zv, php_stream* strm) {
     php_stream_to_zval(strm, zv);
 }
+
+zval* get_argument_ptr(zend_execute_data* ed) {
+    return ZEND_CALL_ARG(ed, 1);
+}
+
+size_t get_argument_count(zend_execute_data* ed) {
+    return ZEND_CALL_NUM_ARGS(ed);
+}

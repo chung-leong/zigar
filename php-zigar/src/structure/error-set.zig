@@ -9,7 +9,6 @@ const Array = php.Array;
 const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
 const Function = php.Function;
-const HashPosition = php.HashPosition;
 const HashTable = php.HashTable;
 const Object = php.Object;
 const String = php.String;
@@ -67,35 +66,28 @@ pub const ErrorSet = struct {
                     break :get ht;
                 }
             };
-            var pos: HashPosition = undefined;
-            const member_ht = &class.static.members;
             const static_slots = class.static.template.slots orelse return error.MissingSlots;
-            php.initializeHashPosition(member_ht, &pos);
-            while (php.getHashPositionValue(member_ht, &pos)) |member_value| {
-                const static_member = try php.getValuePointer(*ZigClass.Member, member_value);
-                if (static_member.slot) |slot| {
-                    const err = try php.getProperty(static_slots, slot);
-                    const err_obj = try php.getValueObject(err);
-                    const err_struct = fromObject(err_obj);
-                    const err_value = try self.value_acc.get(err_struct.bytes);
-                    // reference err by integer value
-                    const long = try php.getValueLong(&err_value);
-                    try php.setHashEntryRef(global_err_ht, long, err);
-                    // reference err by name
-                    var name_key = php.getHashPositionKey(member_ht, &pos);
-                    defer php.release(&name_key);
-                    const name = try php.getValueString(&name_key);
-                    try php.setHashEntryRef(global_err_ht, name, err);
-                    const message = createDecamelizedMessage(name);
-                    try php.setHashEntryRef(global_err_ht, message, err);
-                    // attach canonical info to err
-                    const props = try php.allocator.create(Canonical);
-                    props.* = .{ .message = message };
-                    err_struct.canonical = props;
-                    // decrement ref count on class (since the class holds a ref on the error)
-                    class.release();
-                    if (!php.moveHashPositionForward(member_ht, &pos)) break;
-                }
+            var iter = class.getMemberIterator(.static);
+            while (iter.next()) |static_member| {
+                const slot = static_member.slot orelse continue;
+                const err = try php.getProperty(static_slots, slot);
+                const err_obj = try php.getValueObject(err);
+                const err_struct = fromObject(err_obj);
+                const err_value = try self.value_acc.get(err_struct.bytes);
+                // reference err by integer value
+                const long = try php.getValueLong(&err_value);
+                php.setHashEntryRef(global_err_ht, long, err);
+                // reference err by name
+                const name = iter.currentName() orelse return error.MissingName;
+                php.setHashEntryRef(global_err_ht, name, err);
+                const message = createDecamelizedMessage(name);
+                php.setHashEntryRef(global_err_ht, message, err);
+                // attach canonical info to err
+                const props = try php.allocator.create(Canonical);
+                props.* = .{ .message = message };
+                err_struct.canonical = props;
+                // decrement ref count on class (since the class holds a ref on the error)
+                class.release();
             }
             self.methods = try php.allocator.create(Methods);
             inline for (std.meta.fields(Methods)) |field| {

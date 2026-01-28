@@ -14,8 +14,9 @@ const php = @import("php.zig");
 const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
 const Function = php.Function;
-const HashPosition = php.HashPosition;
 const HashTable = php.HashTable;
+const HashTableIterator = php.HashTableIterator;
+const HashTableObjectIterator = php.HashTableObjectIterator;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
@@ -177,6 +178,7 @@ pub const ZigClass = struct {
     }
 
     pub fn define(host: *Host, info: *Value) !*Object {
+        errdefer |err| std.debug.print("define => {}\n", .{err});
         var self: *@This() = try php.allocator.create(@This());
         errdefer php.allocator.destroy(self);
         self.* = .{
@@ -232,29 +234,26 @@ pub const ZigClass = struct {
     }
 
     pub fn finalize(obj: *Object, info: *Value) !void {
+        errdefer |err| std.debug.print("finalize => {}\n", .{err});
         const self = fromEntry(obj.ce);
         self.instance = try self.extractScope(info, "instance");
         errdefer self.instance.release();
         self.static = try self.extractScope(info, "static");
         errdefer self.static.release();
-        inline for (.{ "static", "instance" }) |scope_name| {
-            const scope = &@field(self, scope_name);
-            const ht = &scope.members;
-            var pos: php.HashPosition = undefined;
+        inline for (.{ .static, .instance }) |scope_type| {
+            const scope = &@field(self, @tagName(scope_type));
             // attach count the number of slots used
-            php.initializeHashPosition(ht, &pos);
-            while (try php.getHashPositionPointer(*ZigClass.Member, ht, &pos)) |member| {
+            var iter = self.getMemberIterator(scope_type);
+            while (iter.next()) |member| {
                 switch (member.type) {
                     .object, .type, .literal => scope.slot_count += 1,
                     else => {},
                 }
-                if (!php.moveHashPositionForward(ht, &pos)) break;
             }
             // attach accessors to members
-            php.initializeHashPosition(ht, &pos);
-            while (try php.getHashPositionPointer(*ZigClass.Member, ht, &pos)) |member| {
+            iter.reset();
+            while (iter.next()) |member| {
                 member.accessors = try getAccessors(scope, member);
-                if (!php.moveHashPositionForward(ht, &pos)) break;
             }
         }
         // set the class name
@@ -269,12 +268,14 @@ pub const ZigClass = struct {
         };
         // set slots of ref object
         const static = structure.Static.fromObject(obj);
-        try static.setStorage(undefined, self.static.template.slots orelse php.null_value);
+        const slots = try self.createSlots(.static, null);
+        try static.setStorage(undefined, &slots);
         // initialize static data
         switch (self.type) {
             inline else => |t| {
                 const name = @tagName(t);
                 if (@FieldType(StaticData, name) != void) {
+                    errdefer std.debug.print("Unable to initialize: {}\n", .{@FieldType(StaticData, name)});
                     self.static_data = @unionInit(StaticData, name, .{});
                     const data = &@field(self.static_data, name);
                     try data.init(self);
@@ -320,9 +321,18 @@ pub const ZigClass = struct {
     pub fn getMember(self: *@This(), comptime scope: ScopeType, key: anytype) !*Member {
         switch (scope) {
             inline else => |s| {
-                const container = @field(self, @tagName(s));
+                const container = &@field(self, @tagName(s));
                 const value = try php.getHashEntry(&container.members, key);
-                return try php.getValuePointer(*Member, value);
+                return php.getValuePointer(*Member, value) catch unreachable;
+            },
+        }
+    }
+
+    pub fn getMemberIterator(self: *@This(), comptime scope: ScopeType) HashTableObjectIterator(*Member) {
+        switch (scope) {
+            inline else => |s| {
+                const container = &@field(self, @tagName(s));
+                return .init(&container.members, .{});
             },
         }
     }
@@ -357,47 +367,38 @@ pub const ZigClass = struct {
 
     fn extractMembers(self: *@This(), scope_info: *Value) !HashTable {
         var result = php.createHashTable(Member.destructor);
-        if (php.getProperty(scope_info, "members")) |member_list| {
-            const member_list_ht = try php.getValueHashTable(member_list);
-            var pos: HashPosition = undefined;
-            php.initializeHashPosition(member_list_ht, &pos);
-            while (php.getHashPositionValue(member_list_ht, &pos)) |member_info| {
-                var key = php.getHashPositionKey(member_list_ht, &pos);
-                defer php.release(&key);
-                const member_ht = try php.getValueHashTable(member_info);
-                var key_str: ?[]const u8 = null;
-                var key_int: usize = undefined;
-                if (php.getHashEntry(member_ht, "name")) |name| {
-                    key_str = try php.getValueStringContent(name);
-                } else |_| {
-                    key_int = @intCast(try php.getValueLong(&key));
-                }
-                const member = try php.allocator.create(Member);
-                errdefer php.allocator.destroy(member);
-                member.* = .{
-                    .type = try php.getHashEntryWithType(MemberType, member_ht, "type"),
-                    .flags = try php.getHashEntryWithType(?MemberFlags, member_ht, "flags") orelse .{},
-                    .bit_offset = try php.getHashEntryWithType(?usize, member_ht, "bitOffset"),
-                    .bit_size = try php.getHashEntryWithType(?usize, member_ht, "bitSize") orelse 0,
-                    .byte_size = try php.getHashEntryWithType(?usize, member_ht, "byteSize"),
-                    .slot = try php.getHashEntryWithType(?usize, member_ht, "slot"),
-                };
-                if (php.getHashEntry(member_ht, "structure")) |struct_info| {
-                    const ref = try php.getProperty(struct_info, "class");
-                    const obj = try php.getValueObject(ref);
-                    const class = fromEntry(obj.ce);
-                    member.class = class;
-                    member.flags.is_self_referencing = class == self;
-                    if (class != self) class.addRef();
-                } else |_| {}
-                var member_ptr = php.createValuePointer(member);
-                if (key_str) |str|
-                    try php.setHashEntry(&result, str, &member_ptr)
-                else
-                    try php.setHashEntry(&result, key_int, &member_ptr);
-                if (!php.moveHashPositionForward(member_list_ht, &pos)) break;
+        const member_list = php.getProperty(scope_info, "members") catch return result;
+        const member_list_ht = try php.getValueHashTable(member_list);
+        var iter: HashTableIterator = .init(member_list_ht, .{});
+        while (iter.next()) |member_info| {
+            const member_ht = try php.getValueHashTable(member_info);
+            const name = php.getHashEntry(member_ht, "name") catch null;
+            const member = try php.allocator.create(Member);
+            errdefer php.allocator.destroy(member);
+            member.* = .{
+                .type = try php.getHashEntryWithType(MemberType, member_ht, "type"),
+                .flags = try php.getHashEntryWithType(?MemberFlags, member_ht, "flags") orelse .{},
+                .bit_offset = try php.getHashEntryWithType(?usize, member_ht, "bitOffset"),
+                .bit_size = try php.getHashEntryWithType(?usize, member_ht, "bitSize") orelse 0,
+                .byte_size = try php.getHashEntryWithType(?usize, member_ht, "byteSize"),
+                .slot = try php.getHashEntryWithType(?usize, member_ht, "slot"),
+            };
+            if (php.getHashEntry(member_ht, "structure")) |struct_info| {
+                const ref = try php.getProperty(struct_info, "class");
+                const obj = try php.getValueObject(ref);
+                const class = fromEntry(obj.ce);
+                member.class = class;
+                member.flags.is_self_referencing = class == self;
+                if (class != self) class.addRef();
+            } else |_| {}
+            var member_ptr = php.createValuePointer(member);
+            if (name) |n| {
+                const key = try php.getValueString(n);
+                php.setHashEntry(&result, key, &member_ptr);
+            } else {
+                php.setHashEntry(&result, iter.currentIndex().?, &member_ptr);
             }
-        } else |_| {}
+        }
         return result;
     }
 
@@ -430,9 +431,14 @@ pub const ZigClass = struct {
         switch (self.type) {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
-                const bytes = try self.createBuffer();
+                const bytes = switch (self.type) {
+                    // argument struct for variadic function will allocate its own memory
+                    // based on the arguments given
+                    .variadic_struct => null,
+                    else => try self.createBuffer(),
+                };
                 defer if (bytes) |b| b.release();
-                var slots = try self.createSlots(null);
+                const slots = try self.createSlots(.instance, null);
                 defer php.release(&slots);
                 const zig_obj = try ZigObject(S).create(self);
                 try zig_obj.setStorage(bytes orelse undefined, &slots);
@@ -441,48 +447,38 @@ pub const ZigClass = struct {
         }
     }
 
-    fn createBuffer(self: *const @This()) !?*ByteBuffer {
-        if (self.type != .variadic_struct) return null;
-        const len = self.byte_size orelse return null;
-        const new = try ByteBuffer.createNew(len, self.alignment);
-        if (self.instance.template.bytes) |def| @memcpy(new.bytes, def.bytes);
-        return new;
+    fn createBuffer(self: *const @This()) !*ByteBuffer {
+        const len = self.byte_size orelse return error.MissingLength;
+        return if (self.instance.template.bytes) |def|
+            try ByteBuffer.createCopy(def.bytes, self.alignment)
+        else
+            try ByteBuffer.createNew(len, self.alignment);
     }
 
-    fn createSlots(self: *const @This(), prefilled_slots: ?*const Value) !Value {
-        const slot_count = self.instance.slot_count;
-        if (slot_count == 0) return php.createValueNull();
-        const sources: [2]?*const Value = .{ self.instance.template.slots, prefilled_slots };
-        var new_slots: Value = undefined;
-        if (slot_count == 1) {
-            // type only uses one slot; we don't need a hash table--a zval will do
-            new_slots = php.createValueNull();
+    fn createSlots(self: *const @This(), comptime scope_type: ScopeType, prefilled_slots: ?*const Value) !Value {
+        const scope = &@field(self, @tagName(scope_type));
+        var new_slots: Value = switch (scope.slot_count) {
+            // if type only uses one slot, we don't need a hash table--a zval will do
+            0, 1 => php.createValueNull(),
+            else => php.createValueArray(null),
+        };
+        if (scope.slot_count > 0) {
+            const sources: [2]?*const Value = .{ scope.template.slots, prefilled_slots };
+            const new_ht = switch (scope.slot_count) {
+                1 => undefined,
+                else => php.getValueHashTable(&new_slots) catch unreachable,
+            };
             for (sources) |src| {
                 const src_slots = src orelse continue;
                 const src_ht = try php.getValueHashTable(src_slots);
-                var pos: HashPosition = undefined;
-                php.initializeHashPosition(src_ht, &pos);
-                if (php.getHashPositionValue(src_ht, &pos)) |value| {
-                    if (php.getType(&new_slots) != .null) php.release(&new_slots);
-                    new_slots = value.*;
-                    php.addRef(value);
-                }
-            }
-        } else {
-            new_slots = php.createValueArray(null);
-            const new_ht = try php.getValueHashTable(&new_slots);
-            errdefer php.release(&new_slots);
-            for (sources) |src| {
-                const src_slots = src orelse continue;
-                const src_ht = try php.getValueHashTable(src_slots);
-                var pos: HashPosition = undefined;
-                php.initializeHashPosition(src_ht, &pos);
-                while (php.getHashPositionValue(src_ht, &pos)) |value| {
-                    var key = php.getHashPositionKey(src_ht, &pos);
-                    defer php.release(&key);
-                    const long = try php.getValueLong(&key);
-                    try php.setHashEntryRef(new_ht, long, value);
-                    if (!php.moveHashPositionForward(src_ht, &pos)) break;
+                var iter: HashTableIterator = .init(src_ht, .{});
+                while (iter.next()) |value| {
+                    if (scope.slot_count == 1) {
+                        new_slots = value.*;
+                        php.addRef(value);
+                    } else {
+                        php.setHashEntryRef(new_ht, iter.currentIndex().?, value);
+                    }
                 }
             }
         }
@@ -495,7 +491,7 @@ pub const ZigClass = struct {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
                 const zig_obj = try ZigObject(S).create(self);
-                var slots = try self.createSlots(prefilled_slots);
+                const slots = try self.createSlots(.instance, prefilled_slots);
                 try zig_obj.setStorage(bytes, &slots);
                 return zig_obj.object();
             },
@@ -673,6 +669,7 @@ pub const ZigClass = struct {
     }
 
     fn inferName(self: *@This()) !*String {
+        errdefer |err| std.debug.print("inferName => {}\n", .{err});
         var sfb = std.heap.stackFallback(10240, php.allocator);
         const allocator = sfb.get();
         const counters = &self.host.importer.counters;
@@ -787,21 +784,21 @@ pub const ZigClass = struct {
                 defer counters.@"opaque" += 1;
                 break :get try std.fmt.allocPrint(allocator, "O{d}", .{counters.@"opaque"});
             },
-            .arg_struct => get: {
-                const retval_value = try php.getHashEntry(&self.instance.members, "retval");
-                const retval = try php.getValuePointer(*Member, retval_value);
-                const retval_class = retval.class orelse return error.MissingClass;
-                const len = self.length orelse return error.MissingLength;
-                const arg_names = try allocator.alloc([]const u8, len);
-                for (0..len) |i| {
-                    const arg_value = try php.getHashEntry(&self.instance.members, i + 1);
-                    const arg = try php.getValuePointer(*Member, arg_value);
-                    const arg_class = arg.class orelse return error.MissingClass;
-                    arg_names[i] = arg_class.getName();
+            .arg_struct, .variadic_struct => |t| get: {
+                var index: usize = 0;
+                var iter = self.getMemberIterator(.instance);
+                if (iter.len == 0) return error.InvalidType;
+                const names = try allocator.alloc([]const u8, iter.len);
+                defer allocator.free(names);
+                while (iter.next()) |member| {
+                    const class = member.class orelse return error.MissingClass;
+                    names[index] = class.getName();
+                    index += 1;
                 }
-                break :get try std.fmt.allocPrint(allocator, "Arg(fn ({s}) {s})", .{
-                    try std.mem.join(allocator, ", ", arg_names),
-                    retval_class.getName(),
+                break :get try std.fmt.allocPrint(allocator, "Arg(fn ({s}{s}) {s})", .{
+                    try std.mem.join(allocator, ", ", names[1..]),
+                    if (t == .variadic_struct) ", ..." else "",
+                    names[0],
                 });
             },
             .function => get: {
@@ -811,7 +808,6 @@ pub const ZigClass = struct {
                 const arg_name = class.getName();
                 break :get arg_name[4 .. arg_name.len - 1];
             },
-            else => return error.InvalidType,
         };
         return php.createString(type_name);
     }
