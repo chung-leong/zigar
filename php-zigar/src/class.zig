@@ -146,7 +146,10 @@ pub const ZigClass = struct {
     pub fn release(self: *@This()) void {
         self.php_portion.refcount -= 1;
         if (self.php_portion.refcount == 0) {
-            // std.debug.print("freeing class\n", .{});
+            // std.debug.print("freeing class {s} ({s})\n", .{
+            //     self.getName(),
+            //     self.getStructureName(),
+            // });
             if (self.status.activated) {
                 self.host.release();
             }
@@ -201,8 +204,8 @@ pub const ZigClass = struct {
                     return error.InvalidSignature;
             },
             .methods = .{
-                .constructor = php.createFunction(constructor, "constructor", null),
-                .toString = php.createFunction(toString, "__toString", null),
+                .constructor = php.createFunction(constructor, "constructor"),
+                .toString = php.createFunction(toString, "__toString"),
             },
         };
         const interfaces = try self.createInterfaceList();
@@ -305,7 +308,7 @@ pub const ZigClass = struct {
         return &@field(self.static_data, structure.enumName(S));
     }
 
-    pub fn getStructureName(self: *@This()) []const u8 {
+    pub fn getStructureName(self: *const @This()) []const u8 {
         return switch (self.type) {
             .error_union => "error union",
             .error_set => "error set",
@@ -313,7 +316,7 @@ pub const ZigClass = struct {
         };
     }
 
-    pub fn getName(self: *@This()) []const u8 {
+    pub fn getName(self: *const @This()) []const u8 {
         return php.getStringContent(self.php_portion.name);
     }
 
@@ -457,6 +460,7 @@ pub const ZigClass = struct {
                 var iter: HashTableIterator = .init(src_ht, .{});
                 while (iter.next()) |value| {
                     if (scope.slot_count == 1) {
+                        php.release(&new_slots);
                         new_slots = value.*;
                         php.addRef(value);
                         break;
@@ -484,11 +488,13 @@ pub const ZigClass = struct {
 
     pub fn createObjectFromSlice(self: *@This(), bytes: *ByteBuffer, offset: usize, len: usize) !*Object {
         const new_buffer = try bytes.slice(offset, len);
+        defer new_buffer.release();
         return try self.createObjectFromBuffer(new_buffer, null);
     }
 
     pub fn createObjectFromString(self: *@This(), str: *String) !*Object {
         const new_buffer = try ByteBuffer.createStringRef(str, self.alignment);
+        defer new_buffer.release();
         return try self.createObjectFromBuffer(new_buffer, null);
     }
 
@@ -521,7 +527,7 @@ pub const ZigClass = struct {
     pub fn constructor(ed: *ExecuteData, return_value: *Value) !void {
         _ = return_value;
         const obj = try php.getValueObject(&ed.This);
-        var arg_iter: ArgumentIterator = .init(ed, false);
+        var arg_iter: ArgumentIterator = .init(ed, .{});
         try invokeFunction(obj, "copyArguments", .{&arg_iter});
     }
 

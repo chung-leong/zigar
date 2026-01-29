@@ -43,10 +43,14 @@ void set_zval_stream(zval* zv, php_stream* strm) {
     php_stream_to_zval(strm, zv);
 }
 
-zval* get_argument_ptr(zend_execute_data* ed) {
-    return ZEND_CALL_ARG(ed, 1);
-}
+typedef struct {
+    zval* ptr;
+    size_t len;
+    bool extra;
+} arg_info;
 
-size_t get_argument_count(zend_execute_data* ed) {
-    return ZEND_CALL_NUM_ARGS(ed);
+void get_argument_info(zend_execute_data* ed, arg_info* info) {
+    info->ptr = ZEND_CALL_ARG(ed, 1);
+    info->len = ZEND_CALL_NUM_ARGS(ed);
+    info->extra = !!(ZEND_CALL_INFO(ed) & ZEND_CALL_HAS_EXTRA_NAMED_PARAMS);
 }

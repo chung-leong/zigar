@@ -40,11 +40,8 @@ pub const Function = struct {
     };
 
     pub fn setStorage(self: *@This(), buffer: *ByteBuffer, _: *const Value) !void {
-        const class = ZigClass.fromStructure(self);
         self.address = @intFromPtr(buffer.bytes.ptr);
-        const this_count: usize = if (self.is_method) 1 else 0;
-        const arg_count = if (class.length) |l| l + this_count else null;
-        self.function = php.createFunction(run, "run", arg_count);
+        self.function = php.createFunction(run, "run");
     }
 
     pub fn invokeThunk(self: *@This(), arg_iter: *ArgumentIterator) !Value {
@@ -84,7 +81,7 @@ pub const Function = struct {
 
     pub fn run(ed: *ExecuteData, return_value: *Value) void {
         const self: *@This() = @fieldParentPtr("function", @as(*php.Function, ed.func));
-        var arg_iter: ArgumentIterator = .init(ed, self.is_method);
+        var arg_iter: ArgumentIterator = .init(ed, .{ .use_this = self.is_method });
         if (self.invokeThunk(&arg_iter)) |result| {
             return_value.* = result;
         } else |err| {

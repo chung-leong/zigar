@@ -7,6 +7,7 @@ const ModuleGeneric = @import("module/native/interface.zig").Module;
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
+const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;

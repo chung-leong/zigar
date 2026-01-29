@@ -14,7 +14,7 @@ const Value = php.Value;
 const structure = @import("../structure.zig");
 
 pub const Static = struct {
-    // this needs to be initialized, since setStorage() isn't called immediately
+    // these needs to be initialized, since setStorage() isn't called immediately
     slots: Value = .{},
     function: Function = undefined,
 
@@ -24,7 +24,13 @@ pub const Static = struct {
 
     pub fn setStorage(self: *@This(), bytes: *ByteBuffer, slots: *const Value) !void {
         try Super.setStorage(self, bytes, slots);
-        self.function = php.createFunction(cast, "cast", 1);
+        self.function = php.createFunction(cast, "cast");
+    }
+
+    pub fn freeObject(obj: *Object) void {
+        const self = fromObject(obj);
+        php.destroyFunction(&self.function);
+        Super.freeObject(obj);
     }
 
     pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: *const Value) !?*Function {
@@ -37,35 +43,29 @@ pub const Static = struct {
         if (field_class.type == .function) {
             const func = structure.Function.fromObject(field_obj);
             return &func.function;
-        } else if (field_obj.handlers.*.get_closure) |get| {
+        } else if (field_obj.handlers.*.get_closure) |_| {
             // aside from Function, only Static implements getClosure()
-            // so we're calling the function below
-            var func: [*c]Function = undefined;
-            if (get(field_obj, null, &func, null, false) == php.SUCCESS) {
-                return func;
-            }
+            const static = fromObject(field_obj);
+            return &static.function;
         }
         return null;
     }
 
-    pub fn getClosure(obj: *Object, ce_ptr: *[*c]ClassEntry, fn_ptr: *[*c]Function, obj_ptr: *[*c]Object, _: bool) c_int {
+    pub fn getClosure(obj: *Object, _: *[*c]ClassEntry, fn_ptr: *[*c]Function, _: *[*c]Object, _: bool) c_int {
         const self = fromObject(obj);
         fn_ptr.* = &self.function;
-        ce_ptr.* = obj.ce;
-        obj_ptr.* = obj;
         return php.SUCCESS;
     }
 
     pub fn cast(ed: *ExecuteData, return_value: *Value) !void {
         const self: *@This() = @fieldParentPtr("function", @as(*php.Function, ed.func));
-        var arg_iter: ArgumentIterator = .init(ed, false);
+        var arg_iter: ArgumentIterator = .init(ed, .{});
         const obj = self.object();
         const class = ZigClass.fromObject(obj);
         const byte_size = class.byte_size orelse return error.InvalidType;
-        std.debug.print("cast {d}\n", .{arg_iter.len});
         if (arg_iter.len != 1) {
             php.throwExceptionFmt("casting operation expects 1 argument, received {d}", .{
-                arg_iter.len,
+                arg_iter.total,
             });
             return error.ExceptionThrown;
         }
@@ -90,7 +90,6 @@ pub const Static = struct {
     }
 
     pub const fromObject = Super.fromObject;
-    pub const freeObject = Super.freeObject;
     pub const readSelf = Super.readSelf;
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;

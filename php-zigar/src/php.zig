@@ -176,21 +176,49 @@ pub const ArgumentIterator = struct {
     this_ptr: ?*Value,
     named_params: ?Value,
     len: usize,
+    total: usize,
     index: usize = 0,
 
-    extern fn get_argument_ptr(*ExecuteData) [*]Value;
-    extern fn get_argument_count(*ExecuteData) usize;
+    const Options = struct {
+        use_this: bool = false,
+    };
+    const ArgPtrCountExtra = extern struct {
+        ptr: [*]Value,
+        len: usize,
+        extra: bool,
+    };
 
-    pub fn init(ed: *ExecuteData, include_this: bool) @This() {
-        const extra = ed.extra_named_params orelse null;
-        var len = get_argument_count(ed);
-        if (include_this) len += 1;
-        if (extra != null) len += 1;
+    extern fn get_argument_info(*ExecuteData, *ArgPtrCountExtra) void;
+
+    pub fn init(ed: *ExecuteData, options: Options) @This() {
+        var info: ArgPtrCountExtra = undefined;
+        get_argument_info(ed, &info);
+        var len = info.len;
+        var total = len;
+        const this = get: {
+            if (options.use_this) {
+                len += 1;
+                break :get &ed.This;
+            }
+            break :get null;
+        };
+        const named = get: {
+            if (info.extra) {
+                // extra_named_params contains bogus values when it's not used
+                if (ed.extra_named_params) |arr| {
+                    len += 1;
+                    total += arr.*.nNumOfElements;
+                    break :get createValueArray(arr);
+                }
+            }
+            break :get null;
+        };
         return .{
-            .arg_ptr = get_argument_ptr(ed),
+            .arg_ptr = info.ptr,
             .len = len,
-            .this_ptr = if (include_this) &ed.This else null,
-            .named_params = if (extra) |a| createValueArray(a) else null,
+            .total = total,
+            .this_ptr = this,
+            .named_params = named,
         };
     }
 
@@ -920,14 +948,14 @@ pub fn invokeMethod(obj: *Object, fn_name: []const u8, params: anytype) !Value {
     return retval;
 }
 
-pub fn createFunction(comptime func: anytype, name: []const u8, arg_count: ?usize) Function {
+pub fn createFunction(comptime func: anytype, name: []const u8) Function {
     return .{
         .internal_function = .{
             .type = php_h.ZEND_INTERNAL_FUNCTION,
             .function_name = createInternedString(name),
             .handler = &transform(func),
-            .num_args = @intCast(arg_count orelse 0),
-            .fn_flags = if (arg_count == null) php_h.ZEND_ACC_VARIADIC else 0,
+            .num_args = 0,
+            .fn_flags = php_h.ZEND_ACC_VARIADIC,
         },
     };
 }
