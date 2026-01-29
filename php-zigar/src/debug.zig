@@ -15,10 +15,7 @@ pub const Caller = struct {
 
 pub fn getCaller(allocator: std.mem.Allocator, depth: usize) ?*Caller {
     const start_addr: ?usize = null;
-    const debug_info = std.debug.getSelfDebugInfo() catch {
-        std.debug.print("No debug info!\n", .{});
-        return null;
-    };
+    const debug_info = std.debug.getSelfDebugInfo() catch return null;
     var context: std.debug.ThreadContext = undefined;
     const has_context = std.debug.getContext(&context);
     var it = retry: switch (has_context) {

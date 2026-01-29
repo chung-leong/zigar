@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const lib = b.addLibrary(.{
-        .linkage = .static,
+        .linkage = .dynamic,
         .name = "php_zigar",
         .root_module = mod,
         .version = .{ .major = 1, .minor = 0, .patch = 1 },
@@ -25,6 +25,14 @@ pub fn build(b: *std.Build) void {
     lib.addIncludePath(.{ .cwd_relative = php_path ++ "/main" });
     lib.addIncludePath(.{ .cwd_relative = php_path ++ "/TSRM" });
     lib.addIncludePath(.{ .cwd_relative = php_path ++ "/Zend" });
+    lib.addCSourceFile(.{ .file = b.path("src/extension.c") });
+
+    const wf = b.addUpdateSourceFiles();
+    wf.addCopyFileToSource(lib.getEmittedBin(), "modules/php_zigar.so");
+    if (target.result.os.tag == .windows and optimize == .Debug)
+        wf.addCopyFileToSource(lib.getEmittedPdb(), "modules/php_zigar.pdb");
+    wf.step.dependOn(&lib.step);
+    b.getInstallStep().dependOn(&wf.step);
 
     b.installArtifact(lib);
 }
