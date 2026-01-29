@@ -22,3 +22,5 @@ zig-out
 *.o
 *.so
 *.node
+
+vendor

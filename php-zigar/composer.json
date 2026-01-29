@@ -1,0 +1,13 @@
+{
+    "require-dev": {
+        "phpunit/phpunit": "^10"
+    },
+    "autoload": {
+        "classmap": [
+            "tests/"
+        ]
+    },
+    "scripts": {
+        "test": "php -d extension=./modules/php_zigar.so ./vendor/bin/phpunit --testdox tests"
+    }
+}

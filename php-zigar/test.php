@@ -2,10 +2,10 @@
 
 declare(strict_types = 1);
 
-// $module = zigar_load_module(__DIR__ . "/test/hello/lib/hello.zigar");
+// $module = zigar_load_module(__DIR__ . "/test/early/hello/lib/hello.zigar");
 // echo $module->hello(123, 456), "\n";
 
-$module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar");
+$module = zigar_load_module(__DIR__ . "/tests/early/static-variables/lib/static.zigar");
 
 // echo $module->array[2], "\n";
 // foreach ($module->array as $a) {
