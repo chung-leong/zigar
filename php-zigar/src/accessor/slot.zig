@@ -56,8 +56,11 @@ const multi_slot = struct {
     fn vivicateSlot(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, slots: *Value) Error!*Value {
         const ht = try php.getValueHashTable(slots);
         return php.getHashEntry(ht, acc.params.slot) catch vivicate: {
-            var new = try createObject(acc.params.class_entry, buffer, acc.params.byte_offset, acc.params.byte_size);
-            break :vivicate php.insertHashEntry(ht, acc.params.slot, &new);
+            const offset = acc.params.byte_offset;
+            const len = acc.params.byte_size;
+            const new_obj = try acc.params.class.createObjectFromSlice(buffer, offset, len);
+            var new_value = php.createValueObject(new_obj);
+            break :vivicate php.insertHashEntry(ht, acc.params.slot, &new_value);
         };
     }
 };
@@ -74,8 +77,12 @@ const single_slot = struct {
     }
 
     fn vivicateSlot(acc: *const accessor.SingleSlot, buffer: *ByteBuffer, slot: *Value) Error!*Value {
-        if (php.getType(slot) == .null)
-            slot.* = try createObject(acc.params.class_entry, buffer, acc.params.byte_offset, acc.params.byte_size);
+        if (php.getType(slot) == .null) {
+            const offset = acc.params.byte_offset;
+            const len = acc.params.byte_size;
+            const new_obj = try acc.params.class.createObjectFromSlice(buffer, offset, len);
+            slot.* = php.createValueObject(new_obj);
+        }
         return slot;
     }
 };
@@ -94,17 +101,14 @@ const array_slot = struct {
     fn vivicateSlot(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize) Error!*Value {
         const ht = try php.getValueHashTable(slots);
         return php.getHashEntry(ht, acc.params.slot) catch vivicate: {
-            var new = try createObject(acc.params.class_entry, buffer, acc.params.byte_size * index, acc.params.byte_size);
-            break :vivicate php.insertHashEntry(ht, acc.params.slot, &new);
+            const offset = acc.params.byte_size * index;
+            const len = acc.params.byte_size;
+            const new_obj = try acc.params.class.createObjectFromSlice(buffer, offset, len);
+            const new_value = php.createValueObject(new_obj);
+            break :vivicate php.insertHashEntry(ht, acc.params.slot, &new_value);
         };
     }
 };
-
-fn createObject(ce: *php.ClassEntry, buffer: *ByteBuffer, offset: usize, len: usize) !Value {
-    const slice = try buffer.slice(offset, len);
-    const object = ZigClass.createObjectWith(ce, slice, null) catch return error.CannotCreateObject;
-    return php.createValueObject(object);
-}
 
 const multi_slot_prebaked = struct {
     pub fn get(acc: *const accessor.MultiSlotPrebaked, slots: *Value) Error!Value {

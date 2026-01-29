@@ -165,10 +165,11 @@ pub const StructureImporter = struct {
         const structure = self.dereference(structure_h);
         const class_value = try php.getProperty(structure, self.keys.class);
         const class_obj = try php.getValueObject(class_value);
+        const class = ZigClass.fromObject(class_obj);
         const memory = self.dereference(dv_h);
         const bytes = try php.getValuePointer(*ByteBuffer, memory);
         const prefilled_slots = if (prefilled_slots_h) |vh| self.dereference(vh) else null;
-        const instance = try ZigClass.createObjectWith(class_obj.ce, bytes, prefilled_slots);
+        const instance = try class.createObjectFromBuffer(bytes, prefilled_slots);
         try self.instance_list.append(php.allocator, instance);
         const value = php.createValueObject(instance);
         return self.allocateValue(value);

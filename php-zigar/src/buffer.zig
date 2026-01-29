@@ -41,7 +41,8 @@ pub const ByteBuffer = struct {
     pub fn createStringRef(str: *String, alignment: usize) !*@This() {
         const self = try php.allocator.create(@This());
         php.addRef(str);
-        self.* = .{ .bytes = php.getStringContent(str), .alignment = alignment, .source = str };
+        const bytes: []u8 = @constCast(php.getStringContent(str));
+        self.* = .{ .bytes = bytes, .alignment = alignment, .source = str };
         return self;
     }
 

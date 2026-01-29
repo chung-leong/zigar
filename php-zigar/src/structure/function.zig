@@ -4,6 +4,7 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClass = @import("../class.zig").ZigClass;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
+const ArgumentIterator = php.ArgumentIterator;
 const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
 const Object = php.Object;
@@ -46,6 +47,27 @@ pub const Function = struct {
         self.function = php.createFunction(run, "run", arg_count);
     }
 
+    pub fn invokeThunk(self: *@This(), arg_iter: *ArgumentIterator) !Value {
+        const class = ZigClass.fromStructure(self);
+        const static = class.getStaticData(Function);
+        const arg = try ZigClass.createObject(static.argument_class.entry());
+        defer php.release(arg);
+        switch (static.argument_class.type) {
+            .arg_struct => {
+                const arg_struct = structure.ArgStruct.fromObject(arg);
+                const arg_addr = @intFromPtr(arg_struct.bytes.bytes.ptr);
+                try arg_struct.copyArguments(arg_iter);
+                try class.host.runThunk(static.thunk_address, self.address, arg_addr);
+                return try arg_struct.getReturnValue();
+            },
+            .variadic_struct => {
+                // TODO
+                unreachable;
+            },
+            else => unreachable,
+        }
+    }
+
     pub fn getClosure(obj: *Object, ce: *[*c]ClassEntry, func: *[*c]php.Function, this: ?*[*c]Object, _: bool) c_int {
         const self = Super.fromObject(obj);
         ce.* = obj.ce;
@@ -61,7 +83,9 @@ pub const Function = struct {
     }
 
     pub fn run(ed: *ExecuteData, return_value: *Value) void {
-        if (invokeThunk(ed)) |result| {
+        const self: *@This() = @fieldParentPtr("function", @as(*php.Function, ed.func));
+        var arg_iter: ArgumentIterator = .init(ed, self.is_method);
+        if (self.invokeThunk(&arg_iter)) |result| {
             return_value.* = result;
         } else |err| {
             switch (err) {
@@ -69,29 +93,6 @@ pub const Function = struct {
                 else => php.throwError(err),
             }
             return_value.* = php.createValueNull();
-        }
-    }
-
-    pub fn invokeThunk(ed: *ExecuteData) !Value {
-        const self: *@This() = @fieldParentPtr("function", @as(*php.Function, ed.func));
-        const class = ZigClass.fromStructure(self);
-        const static = class.getStaticData(Function);
-        const arg = try ZigClass.createObject(static.argument_class.entry());
-        defer php.release(arg);
-        var arg_iter: php.ArgumentIterator = .init(ed, self.is_method);
-        switch (static.argument_class.type) {
-            .arg_struct => {
-                const arg_struct = structure.ArgStruct.fromObject(arg);
-                const arg_addr = @intFromPtr(arg_struct.bytes.bytes.ptr);
-                try arg_struct.copyArguments(&arg_iter);
-                try class.host.runThunk(static.thunk_address, self.address, arg_addr);
-                return try arg_struct.getReturnValue();
-            },
-            .variadic_struct => {
-                // TODO
-                unreachable;
-            },
-            else => unreachable,
         }
     }
 

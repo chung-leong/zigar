@@ -234,7 +234,7 @@ pub const ZigClass = struct {
             .__tostring = &self.methods.toString,
         };
         errdefer freeEntry(ce);
-        return try createRef(ce);
+        return try self.createRef();
     }
 
     pub fn finalize(obj: *Object, info: *Value) !void {
@@ -424,32 +424,10 @@ pub const ZigClass = struct {
         }
     }
 
-    fn createRef(ce: *ClassEntry) !*Object {
-        const self = fromEntry(ce);
+    fn createRef(self: *@This()) !*Object {
         const zig_obj = try ZigObject(structure.Static).create(self);
         self.release(); // remove initial refcount now that the ref object exists
         return zig_obj.object();
-    }
-
-    pub fn createObject(ce: *ClassEntry) !*Object {
-        const self = fromEntry(ce);
-        switch (self.type) {
-            inline else => |t| {
-                const S = @field(structure.by_enum, @tagName(t));
-                const bytes = switch (self.type) {
-                    // argument struct for variadic function will allocate its own memory
-                    // based on the arguments given
-                    .variadic_struct => null,
-                    else => try self.createBuffer(),
-                };
-                defer if (bytes) |b| b.release();
-                const slots = try self.createSlots(.instance, null);
-                defer php.release(&slots);
-                const zig_obj = try ZigObject(S).create(self);
-                try zig_obj.setStorage(bytes orelse undefined, &slots);
-                return zig_obj.object();
-            },
-        }
     }
 
     fn createBuffer(self: *const @This()) !*ByteBuffer {
@@ -491,8 +469,7 @@ pub const ZigClass = struct {
         return new_slots;
     }
 
-    pub fn createObjectWith(ce: *ClassEntry, bytes: *ByteBuffer, prefilled_slots: ?*const Value) !*Object {
-        const self = fromEntry(ce);
+    pub fn createObjectFromBuffer(self: *@This(), bytes: *ByteBuffer, prefilled_slots: ?*const Value) !*Object {
         switch (self.type) {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
@@ -500,6 +477,37 @@ pub const ZigClass = struct {
                 const slots = try self.createSlots(.instance, prefilled_slots);
                 defer php.release(&slots);
                 try zig_obj.setStorage(bytes, &slots);
+                return zig_obj.object();
+            },
+        }
+    }
+
+    pub fn createObjectFromSlice(self: *@This(), bytes: *ByteBuffer, offset: usize, len: usize) !*Object {
+        const new_buffer = try bytes.slice(offset, len);
+        return try self.createObjectFromBuffer(new_buffer, null);
+    }
+
+    pub fn createObjectFromString(self: *@This(), str: *String) !*Object {
+        const new_buffer = try ByteBuffer.createStringRef(str, self.alignment);
+        return try self.createObjectFromBuffer(new_buffer, null);
+    }
+
+    pub fn createObject(ce: *ClassEntry) !*Object {
+        const self = fromEntry(ce);
+        switch (self.type) {
+            inline else => |t| {
+                const S = @field(structure.by_enum, @tagName(t));
+                const bytes = switch (self.type) {
+                    // argument struct for variadic function will allocate its own memory
+                    // based on the arguments given
+                    .variadic_struct => null,
+                    else => try self.createBuffer(),
+                };
+                defer if (bytes) |b| b.release();
+                const slots = try self.createSlots(.instance, null);
+                defer php.release(&slots);
+                const zig_obj = try ZigObject(S).create(self);
+                try zig_obj.setStorage(bytes orelse undefined, &slots);
                 return zig_obj.object();
             },
         }
@@ -625,7 +633,7 @@ pub const ZigClass = struct {
                         .multi_slot = accessor.slot.get(.{
                             .type = .multi_slot,
                         }, .{
-                            .class_entry = class.entry(),
+                            .class = class,
                             .byte_offset = byte_offset,
                             .byte_size = byte_size,
                             .slot = slot,
@@ -635,7 +643,7 @@ pub const ZigClass = struct {
                         .single_slot = accessor.slot.get(.{
                             .type = .single_slot,
                         }, .{
-                            .class_entry = class.entry(),
+                            .class = class,
                             .byte_offset = byte_offset,
                             .byte_size = byte_size,
                             .transform = transform,

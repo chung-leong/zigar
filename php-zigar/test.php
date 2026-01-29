@@ -115,7 +115,14 @@ $module = zigar_load_module(__DIR__ . "/test/static-variables/lib/static.zigar")
 
 // echo $union->float, "\n";
 
-$s = new $module->NoRequired(a: 999);
-echo $s->a, "\n";
-echo $s->b, "\n";
-echo $s->c, "\n";
+$NoRequired = $module->NoRequired;
+$s = "000000000000";
+$a = $NoRequired($s);
+debug_zval_dump($a);
+// $s = $module->NoRequired();
+echo $a->a, "\n";
+echo $a->b, "\n";
+echo $a->c, "\n";
+$a->a += 4;
+$a->b += 22;
+echo $s, "\n";

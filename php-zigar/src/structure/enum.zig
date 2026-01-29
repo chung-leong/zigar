@@ -90,7 +90,7 @@ pub const Enum = struct {
 
     pub fn readSelf(self: *@This()) !Value {
         const tag_struct = try self.getCanonical();
-        const tag_obj = ZigObject(@This()).fromStructure(tag_struct).object();
+        const tag_obj = tag_struct.object();
         php.addRef(tag_obj);
         return php.createValueObject(tag_obj);
     }
@@ -172,4 +172,5 @@ pub const Enum = struct {
     pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
     pub const copyArguments = Super.copyArguments;
+    const object = Super.object;
 };

@@ -179,7 +179,7 @@ pub const ErrorSet = struct {
 
     pub fn readSelf(self: *@This()) !Value {
         const err_struct = try self.getCanonical();
-        const err_obj = ZigObject(@This()).fromStructure(err_struct).object();
+        const err_obj = err_struct.object();
         php.addRef(err_obj);
         return php.createValueObject(err_obj);
     }
@@ -332,6 +332,7 @@ pub const ErrorSet = struct {
     pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
     pub const copyArguments = Super.copyArguments;
+    const object = Super.object;
 };
 
 fn createDecamelizedMessage(name_obj: *const String) *String {
