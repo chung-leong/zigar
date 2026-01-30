@@ -3,13 +3,13 @@ const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
-const CallDispatcher = @import("dispatcher.zig").CallDispatcher;
+const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const ModuleGeneric = @import("module/native/interface.zig").Module;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
 const String = php.String;
 const Value = php.Value;
-const StructureImporter = @import("importer.zig").StructureImporter;
+const StructureImporter = @import("import.zig").StructureImporter;
 const ZigClass = @import("class.zig").ZigClass;
 const fn_transform = @import("zigft/fn-transform.zig");
 

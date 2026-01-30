@@ -265,7 +265,6 @@ pub const CallDispatcher = struct {
     }
 
     fn handleWrite(self: *@This(), args: anytype) !E {
-        std.debug.print("{}\n", .{args});
         const strm = self.getStream(args.fd) catch return .BADF;
         const w = php.write(strm, args.bytes, args.len);
         if (w < 0) return .BADF;
@@ -274,7 +273,6 @@ pub const CallDispatcher = struct {
     }
 
     fn handleWriteStderr(self: *@This(), args: anytype) !E {
-        std.debug.print("{}\n", .{args});
         const strm = self.getStream(2) catch return .BADF;
         const w = php.write(strm, args.bytes, args.len);
         if (w < 0) return .BADF;

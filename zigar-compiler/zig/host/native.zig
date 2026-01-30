@@ -3,7 +3,7 @@ const expectEqual = std.testing.expectEqual;
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
-const exporter = @import("../exporter.zig");
+const exporter = @import("../export.zig");
 const Value = exporter.Value;
 const js_fn = @import("../thunk/js-fn.zig");
 const zig_fn = @import("../thunk/zig-fn.zig");

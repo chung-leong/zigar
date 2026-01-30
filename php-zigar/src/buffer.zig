@@ -72,12 +72,10 @@ pub const ByteBuffer = struct {
 
     pub fn addRef(self: *@This()) void {
         self.ref_count += 1;
-        // std.debug.print("#{x}.addRef {d}\n", .{ @intFromPtr(self), self.ref_count });
     }
 
     pub fn release(self: *@This()) void {
         self.ref_count -= 1;
-        // std.debug.print("#{x}.release {d}\n", .{ @intFromPtr(self), self.ref_count });
         if (self.ref_count == 0) {
             if (self.is_owner) {
                 const alignment_enum = std.mem.Alignment.fromByteUnits(self.alignment);

@@ -11,7 +11,7 @@ const ModuleEntry = php.ModuleEntry;
 const String = php.String;
 const Value = php.Value;
 const ZigClass = @import("class.zig").ZigClass;
-const ZigCompiler = @import("compiler.zig").ZigCompiler;
+const ZigCompiler = @import("compilation.zig").ZigCompiler;
 
 export fn php_zigar_init(_: c_int, _: c_int) php.Result {
     ZigClass.registerGlobalClasses() catch return php.FAILURE;
@@ -51,7 +51,6 @@ const functions = struct {
                 getSharedLibraryName(),
             });
             defer php.allocator.free(so_path);
-            std.debug.print("path = {s}\n", .{so_path});
             return_value.* = try ModuleHost.load(so_path);
         }
     };
@@ -80,7 +79,10 @@ const functions = struct {
             var source_path: *String = undefined;
             var module_path: *String = undefined;
             try php.parseArguments("SS", .{ &source_path, &module_path });
-            std.debug.print("{s} => {s}\n", .{ source_path, module_path });
+            std.debug.print("{s} => {s}\n", .{
+                php.getStringContent(source_path),
+                php.getStringContent(module_path),
+            });
             return_value.* = php.createValueNull();
         }
     };
