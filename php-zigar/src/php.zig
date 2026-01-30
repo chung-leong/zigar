@@ -502,6 +502,12 @@ pub fn getValueLong(value: *const Value) !c_long {
     };
 }
 
+pub fn getValueUlong(value: *const Value) !c_ulong {
+    const long = try getValueLong(value);
+    if (long < 0) return error.NegativeValue;
+    return @intCast(long);
+}
+
 pub fn getValueDouble(value: *const Value) !f64 {
     return switch (value.u1.v.type) {
         php_h.IS_DOUBLE => value.value.dval,

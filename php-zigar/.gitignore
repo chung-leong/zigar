@@ -22,5 +22,6 @@ zig-out
 *.o
 *.so
 *.node
+*.zstd
 
 vendor

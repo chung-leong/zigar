@@ -194,7 +194,6 @@ export function getPlatform() {
           for (let i = 0; i < sectionCount; i++, position += Usize(Shdr.size)) {
             shdrs.push(read(position, Shdr.size));
           }
-          const decoder = new TextDecoder();
           for (const shdr of shdrs) {
             const sectionType = shdr.getUint32(Shdr.sh_type, le)
             if (sectionType == SHT_DYNAMIC) {

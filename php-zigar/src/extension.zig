@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+const getSharedLibraryName = @import("compilation.zig").getSharedLibraryName;
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
 const ArgInfo = php.ArgInfo;
@@ -44,13 +45,14 @@ const functions = struct {
         };
 
         pub fn run(_: *ExecuteData, return_value: *Value) !void {
-            var module_path: *String = undefined;
-            try php.parseArguments("S", .{&module_path});
-            const so_path = try std.fs.path.resolve(php.allocator, &.{
-                php.getStringContent(module_path),
-                getSharedLibraryName(),
-            });
-            defer php.allocator.free(so_path);
+            const al = php.allocator;
+            var module_path_value: *String = undefined;
+            try php.parseArguments("S", .{&module_path_value});
+            const module_path = php.getStringContent(module_path_value);
+            const so_name = try getSharedLibraryName(al, .this, .this);
+            defer al.free(so_name);
+            const so_path = try std.fs.path.resolve(al, &.{ module_path, so_name });
+            defer al.free(so_path);
             return_value.* = try ModuleHost.load(so_path);
         }
     };
@@ -86,42 +88,6 @@ const functions = struct {
             return_value.* = php.createValueNull();
         }
     };
-
-    fn getSharedLibraryName() []const u8 {
-        return comptime fmt: {
-            const arch = switch (builtin.target.cpu.arch) {
-                .arm => "arm",
-                .aarch64 => "arm64",
-                .x86 => "ia32",
-                .loongarch64 => "loong64",
-                .mips => "mips",
-                .mipsel => "mipsel",
-                .powerpc => "ppc",
-                .powerpc64 => "ppc64",
-                .powerpc64le => "ppc64",
-                .riscv64 => "riscv64",
-                .s390x => "s390x",
-                .x86_64 => "x64",
-                else => |tag| @tagName(tag),
-            };
-            const platform = switch (builtin.target.os.tag) {
-                .aix => "aix",
-                .macos, .ios, .tvos, .visionos, .watchos => "darwin",
-                .freebsd => "freebsd",
-                .linux => "linux",
-                .openbsd => "openbsd",
-                .solaris => "sunos",
-                .windows => "win32",
-                else => |tag| @tagName(tag),
-            };
-            const ext = switch (builtin.target.os.tag) {
-                .macos, .ios, .tvos, .visionos, .watchos => "dynlib",
-                .windows => "dll",
-                else => "so",
-            };
-            break :fmt platform ++ "." ++ arch ++ "." ++ ext;
-        };
-    }
 };
 
 comptime {
