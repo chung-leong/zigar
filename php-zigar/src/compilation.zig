@@ -157,31 +157,31 @@ pub const Optimize = enum {
 
 pub const ZigCompiler = struct {
     arena: std.heap.ArenaAllocator,
-
-    const Config = struct {
-        options: Options,
-        module_name: []const u8,
-        module_path: []const u8,
-        module_dir: []const u8,
-        module_build_dir: []const u8,
-        zigar_src_path: []const u8,
-        build_file_path: []const u8,
-        package_config_path: ?[]const u8,
-        extra_file_path: ?[]const u8,
-        output_path: []const u8,
-        pdb_path: ?[]const u8,
-        zig_args: [][]const u8,
-    };
+    options: Options,
+    module_name: []const u8,
+    module_path: []const u8,
+    module_dir: []const u8,
+    module_dir_wo_sep: []const u8,
+    module_build_dir: []const u8,
+    zigar_src_path: []const u8,
+    zigar_src_path_wo_sep: []const u8,
+    build_file_path: []const u8,
+    package_config_path: ?[]const u8,
+    extra_file_path: ?[]const u8,
+    output_path: []const u8,
+    pdb_path: ?[]const u8,
+    compiler_args: [][]const u8,
 
     pub fn compile(src_path: []const u8, mod_path: []const u8, options: ?*Value) !void {
-        var self: @This() = .{ .arena = .init(php.allocator) };
+        var self: @This() = undefined;
+        self.arena = .init(php.allocator);
         defer self.arena.deinit();
-        const cfg = try self.createConfig(src_path, mod_path, options);
-        try self.createProject(cfg);
-        try self.createZigarLib(cfg);
+        try self.acquireConfig(src_path, mod_path, options);
+        try self.writeProject();
+        try self.runCompiler();
     }
 
-    fn reset(self: *@This()) void {
+    pub fn reset(self: *@This()) void {
         self.arena.reset();
     }
 
@@ -189,47 +189,55 @@ pub const ZigCompiler = struct {
         return self.arena.allocator();
     }
 
-    fn createConfig(self: *@This(), src_path: []const u8, mod_path: ?[]const u8, options: ?*Value) !Config {
+    fn acquireConfig(self: *@This(), src_path: []const u8, mod_path: ?[]const u8, options: ?*Value) !void {
+        errdefer |err| std.debug.print("acquireConfig => {}\n", .{err});
         const al = self.allocator();
-        var cfg: Config = undefined;
-        cfg.options = try .init(options);
-        const mod_name = std.fs.path.basename(mod_path orelse src_path);
-        cfg.module_name = std.mem.sliceTo(mod_name, '.');
-        cfg.module_path = src_path;
-        const src_dir_path = std.fs.path.dirname(src_path) orelse return error.InvalidPath;
-        cfg.module_dir = try std.fmt.allocPrint(al, "{s}{c}", .{ src_dir_path, std.fs.path.sep });
+        self.options = try .init(options);
+        const mod_name = std.mem.sliceTo(std.fs.path.basename(mod_path orelse src_path), '.');
+        self.module_name = mod_name;
+        self.module_path = src_path;
+        self.module_dir_wo_sep = std.fs.path.dirname(src_path) orelse return error.InvalidPath;
+        self.module_dir = try std.fmt.allocPrint(al, "{s}{c}", .{
+            self.module_dir_wo_sep,
+            std.fs.path.sep,
+        });
         // use module path to generate unique suffix
         var mod_hash: [std.crypto.hash.Sha1.digest_length]u8 = undefined;
-        std.crypto.hash.Sha1.hash(cfg.module_dir, &mod_hash, .{});
+        std.crypto.hash.Sha1.hash(self.module_dir, &mod_hash, .{});
+        const mod_sig = std.fmt.bytesToHex(mod_hash, .lower);
         const build_dir_name = try std.fmt.allocPrint(al, "{s}-{s}", .{
-            if (mod_name.len > 8) mod_name[0..8] else mod_name,
-            &mod_hash,
+            if (self.module_name.len > 8) self.module_name[0..8] else self.module_name,
+            mod_sig[0..8],
         });
-        const build_dir_parent = cfg.options.build_dir orelse try std.fs.path.resolve(al, &.{
+        const build_dir_parent = self.options.build_dir orelse try std.fs.path.resolve(al, &.{
             try getTempDir(al),
             "zigar-build",
         });
-        cfg.module_build_dir = try std.fs.path.resolve(al, &.{ build_dir_parent, build_dir_name });
-        cfg.zigar_src_path = try std.fs.path.resolve(al, &.{ build_dir_parent, "zigar" });
-        cfg.output_path = if (mod_path) |dest_path| try std.fs.path.resolve(al, &.{
+        self.module_build_dir = try std.fs.path.resolve(al, &.{ build_dir_parent, build_dir_name });
+        self.zigar_src_path_wo_sep = try std.fs.path.resolve(al, &.{ self.module_build_dir, "zigar" });
+        self.zigar_src_path = try std.fmt.allocPrint(al, "{s}{c}", .{
+            self.zigar_src_path_wo_sep,
+            std.fs.path.sep,
+        });
+        self.output_path = if (mod_path) |dest_path| try std.fs.path.resolve(al, &.{
             dest_path,
-            try getSharedLibraryName(al, cfg.options.platform, cfg.options.arch),
+            try getSharedLibraryName(al, self.options.platform, self.options.arch),
         }) else try std.fs.path.resolve(al, &.{
             // save output in build folder; it'll be moved or deleted by caller
-            cfg.module_build_dir,
-            cfg.options.optimize.name(),
+            self.module_build_dir,
+            self.options.optimize.name(),
             try std.fmt.allocPrint(al, "{s}.wasm", .{mod_name}),
         });
-        cfg.pdb_path = if (cfg.options.platform == .win32) try std.fs.path.resolve(al, &.{
-            cfg.output_path,
-            try std.fmt.allocPrint(al, "{s}.{s}.pdb", .{ cfg.options.platform.name(), cfg.options.arch.name() }),
+        self.pdb_path = if (self.options.platform == .win32) try std.fs.path.resolve(al, &.{
+            self.output_path,
+            try std.fmt.allocPrint(al, "{s}.{s}.pdb", .{ self.options.platform.name(), self.options.arch.name() }),
         }) else null;
         // parse user-supplied argument list
         var need_build_cmd = true;
         var need_optimize = true;
         var need_target = true;
         var arg_list: std.ArrayList([]const u8) = .empty;
-        if (cfg.options.zig_args) |args| {
+        if (self.options.zig_args) |args| {
             var splitter = std.mem.splitScalar(u8, args, ' ');
             while (splitter.next()) |arg| {
                 if (arg.len == 0) continue;
@@ -245,53 +253,59 @@ pub const ZigCompiler = struct {
         }
         if (need_build_cmd) try arg_list.insert(al, 0, "build");
         if (need_optimize) try arg_list.append(al, try std.fmt.allocPrint(al, "-Doptimize={s}", .{
-            cfg.options.optimize.name(),
+            self.options.optimize.name(),
         }));
         if (need_target) try arg_list.append(al, try std.fmt.allocPrint(al, "-Dtarget={s}-{s}", .{
-            cfg.options.arch.zigName(),
-            cfg.options.platform.zigName(),
+            self.options.arch.zigName(),
+            self.options.platform.zigName(),
         }));
-        try arg_list.insert(al, 0, cfg.options.zig_path);
+        try arg_list.insert(al, 0, self.options.zig_path);
+        self.compiler_args = arg_list.items;
         // use custom build file if it exists; otherwise use Zigar's own build file
-        cfg.build_file_path = try findFile(al, src_dir_path, "build.zig") orelse try std.fs.path.resolve(al, &.{
-            cfg.zigar_src_path,
+        self.build_file_path = try findFile(al, self.module_dir_wo_sep, "build.zig") orelse try std.fs.path.resolve(al, &.{
+            self.zigar_src_path_wo_sep,
             "build.zig",
         });
-        cfg.extra_file_path = try findFile(al, src_dir_path, "build.extra.zig");
-        cfg.package_config_path = try findFile(al, src_dir_path, "build.zig.zon");
-        return cfg;
+        self.extra_file_path = try findFile(al, self.module_dir_wo_sep, "build.extra.zig");
+        self.package_config_path = try findFile(al, self.module_dir_wo_sep, "build.zig.zon");
     }
 
-    fn createProject(self: *@This(), cfg: Config) !void {
+    fn writeProject(self: *@This()) !void {
+        errdefer |err| std.debug.print("writeProject => {}\n", .{err});
         const al = self.allocator();
-        try makeDirectory(cfg.module_build_dir);
-        try self.createZigarLib(cfg);
-        try self.createBuildConfigFile(cfg);
+        std.fs.deleteTreeAbsolute(self.module_build_dir) catch {};
+        try makeDirectory(self.module_build_dir);
+        try self.writeZigarLib();
+        try self.writeBuildConfigFile();
         const build_file_path = try std.fs.path.resolve(al, &.{
-            cfg.module_build_dir,
+            self.module_build_dir,
             "build.zig",
         });
-        try std.fs.copyFileAbsolute(cfg.build_file_path, build_file_path, .{});
-        if (cfg.extra_file_path) |path| {
-            const build_extra_file_path = try std.fs.path.resolve(al, &.{
-                cfg.module_build_dir,
-                "build.extra.zig",
-            });
+        try std.fs.copyFileAbsolute(self.build_file_path, build_file_path, .{});
+        const build_extra_file_path = try std.fs.path.resolve(al, &.{
+            self.module_build_dir,
+            "build.extra.zig",
+        });
+        if (self.extra_file_path) |path| {
             try std.fs.copyFileAbsolute(path, build_extra_file_path, .{});
+        } else {
+            var file = try std.fs.createFileAbsolute(build_extra_file_path, .{});
+            defer file.close();
         }
-        if (cfg.package_config_path) |path| {
+        if (self.package_config_path) |path| {
             const package_config_path = try std.fs.path.resolve(al, &.{
-                cfg.module_build_dir,
+                self.module_build_dir,
                 "build.zig.zon",
             });
             try std.fs.copyFileAbsolute(path, package_config_path, .{});
         }
     }
 
-    fn createBuildConfigFile(self: *@This(), cfg: Config) !void {
+    fn writeBuildConfigFile(self: *@This()) !void {
+        errdefer |err| std.debug.print("writeBuildConfigFile => {}\n", .{err});
         const al = self.allocator();
         const config_path = try std.fs.path.resolve(al, &.{
-            cfg.module_build_dir,
+            self.module_build_dir,
             "build.cfg.zig",
         });
         var file = try std.fs.createFileAbsolute(config_path, .{});
@@ -321,30 +335,78 @@ pub const ZigCompiler = struct {
         inline for (cfg_fields) |field_tag| {
             const name = @tagName(field_tag);
             const field_value = switch (@hasField(Options, name)) {
-                true => @field(cfg.options, name),
-                false => @field(cfg, name),
+                true => @field(self.options, name),
+                false => @field(self, name),
             };
             try wi.print("pub const {s} = ", .{name});
-            try std.zon.stringify.serialize(field_value, .{
-                .emit_strings_as_containers = true,
-            }, wi);
+            try std.zon.stringify.serialize(field_value, .{}, wi);
             try wi.print(";\n", .{});
         }
+        try wi.flush();
     }
 
-    fn createZigarLib(_: *@This(), cfg: Config) !void {
+    fn writeZigarLib(self: *@This()) !void {
+        try makeDirectory(self.zigar_src_path);
         var input: std.Io.Reader = .fixed(@embedFile("./zig.tar.zstd"));
-        var buffer: [std.compress.zstd.default_window_len]u8 = undefined;
+        var buffer: [1024 * 1024]u8 = undefined;
         var decompressor: std.compress.zstd.Decompress = .init(&input, &buffer, .{});
-        var dir = try std.fs.openDirAbsolute(cfg.zigar_src_path, .{});
+        var dir = try std.fs.openDirAbsolute(self.zigar_src_path, .{});
         defer dir.close();
         try std.tar.pipeToFileSystem(dir, &decompressor.reader, .{});
     }
 
-    fn runCompiler(_: *@This(), cfg: Config) !void {
-        for (cfg.zig_args) |arg| {
-            std.debug.print("{s}\n", .{arg});
+    fn runCompiler(self: *@This()) !void {
+        const al = self.allocator();
+        // var buffer: [1024]u8 = undefined;
+        // var stdout = std.fs.File.stderr().writer(&buffer);
+        // const si = &stdout.interface;
+        // const info = .{
+        //     .options = self.options,
+        //     .module_name = self.module_name,
+        //     .module_path = self.module_path,
+        //     .module_dir = self.module_dir,
+        //     .module_build_dir = self.module_build_dir,
+        //     .zigar_src_path = self.zigar_src_path,
+        //     .build_file_path = self.build_file_path,
+        //     .package_config_path = self.package_config_path,
+        //     .extra_file_path = self.extra_file_path,
+        //     .output_path = self.output_path,
+        //     .pdb_path = self.pdb_path,
+        //     .compiler_args = self.compiler_args,
+        // };
+        // try std.zon.stringify.serialize(info, .{}, si);
+        // try si.print("\n", .{});
+        // try si.flush();
+        var child: std.process.Child = .init(self.compiler_args, al);
+        var env_map: std.process.EnvMap = .init(al);
+        const names: []const [:0]const u8 = &.{
+            "HOME",
+            "PATH",
+            "USER",
+            "LD_LIBRARY_PATH",
+            "DEBUGINFOD_CACHE_PATH",
+            "XDG_CACHE_HOME",
+            "C_INCLUDE_PATH",
+            "CPLUS_INCLUDE_PATH",
+            "LIBRARY_PATH",
+        };
+        for (names) |name| {
+            if (std.c.getenv(name.ptr)) |value|
+                try env_map.put(name, value[0..std.mem.len(value)]);
         }
+        child.cwd = self.module_build_dir;
+        child.env_map = &env_map;
+        child.stderr_behavior = .Pipe;
+        child.stdout_behavior = .Pipe;
+        try child.spawn();
+        try child.waitForSpawn();
+        var stdout: std.ArrayList(u8) = try .initCapacity(al, 1024 * 1024);
+        var stderr: std.ArrayList(u8) = try .initCapacity(al, 1024 * 1024);
+        try child.collectOutput(al, &stdout, &stderr, 1024 * 1024);
+        const term = try child.wait();
+        std.debug.print("term = {}\n", .{term});
+        std.debug.print("{s}\n", .{stdout.items});
+        std.debug.print("{s}\n", .{stderr.items});
     }
 };
 
@@ -403,7 +465,7 @@ pub const Options = struct {
                             });
                         },
                         error.NoMatching => if (@typeInfo(T) == .@"enum") {
-                            php.throwExceptionFmt("'{s}' is not a valid option for '{s}', which should be one of the following: {s}", .{
+                            php.throwExceptionFmt("'{s}' is not a valid option for '{s}'; it should be one of the following: {s}", .{
                                 php.getValueStringContent(value) catch unreachable,
                                 field.name,
                                 T.names(),
@@ -434,7 +496,8 @@ pub const Options = struct {
             .@"enum" => |en| get: {
                 const s = try php.getValueStringContent(value);
                 break :get inline for (comptime en.fields) |field| {
-                    if (std.mem.eql(u8, s, field.name)) break @field(T, field.name);
+                    const item = @field(T, field.name);
+                    if (std.mem.eql(u8, s, item.name())) break @field(T, field.name);
                 } else error.NoMatching;
             },
             else => unreachable,
@@ -467,9 +530,10 @@ fn getTempDir(allocator: std.mem.Allocator) ![]const u8 {
             return try allocator.dupe(u8, buffer[0..len]);
         },
         else => {
-            const names: []const []const u8 = &.{ "TMPDIR", "TMP", "TEMP", "TEMPDIR" };
+            const names: []const [:0]const u8 = &.{ "TMPDIR", "TMP", "TEMP", "TEMPDIR" };
             const tmpdir = for (names) |name| {
-                if (std.posix.getenv(name)) |value| break value;
+                // std.posix.getenv() crashes for some reason
+                if (std.posix.getenvZ(name)) |value| break value;
             } else "/tmp";
             return try allocator.dupe(u8, tmpdir);
         },
@@ -480,7 +544,10 @@ fn makeDirectory(path: []const u8) !void {
     std.fs.makeDirAbsolute(path) catch |err| {
         return switch (err) {
             error.PathAlreadyExists => {},
-            error.NotDir => makeDirectory(std.fs.path.dirname(path) orelse return err),
+            error.FileNotFound => {
+                try makeDirectory(std.fs.path.dirname(path) orelse return err);
+                try std.fs.makeDirAbsolute(path);
+            },
             else => err,
         };
     };

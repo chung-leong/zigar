@@ -144,6 +144,7 @@ pub fn parseArguments(comptime specs: [:0]const u8, arg_ptrs: anytype) !void {
         .is_comptime = false,
         .alignment = @alignOf([*c]const u8),
     };
+    var required: u32 = 0;
     inline for (fields, 0..) |field, i| {
         new_fields[i + 2] = .{
             .name = std.fmt.comptimePrint("{d}", .{i + 2}),
@@ -152,6 +153,8 @@ pub fn parseArguments(comptime specs: [:0]const u8, arg_ptrs: anytype) !void {
             .is_comptime = false,
             .alignment = @alignOf(field.type),
         };
+        const T = @typeInfo(field.type).pointer.child;
+        if (@typeInfo(T) != .optional) required += 1;
     }
     const NewAT = @Type(.{
         .@"struct" = .{
@@ -162,7 +165,7 @@ pub fn parseArguments(comptime specs: [:0]const u8, arg_ptrs: anytype) !void {
         },
     });
     var new_args: NewAT = undefined;
-    new_args[0] = fields.len;
+    new_args[0] = required;
     new_args[1] = specs.ptr;
     inline for (arg_ptrs, 0..) |arg, i| {
         new_args[2 + i] = arg;

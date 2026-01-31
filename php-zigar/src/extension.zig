@@ -77,32 +77,37 @@ const functions = struct {
                     .ptr = null,
                 },
             },
+            .{
+                .name = "options",
+                .type = .{
+                    .type_mask = php.MAY_BE_ARRAY,
+                    .ptr = null,
+                },
+            },
         };
         pub const info = FunctionInfo{
             .required_num_args = 2,
         };
 
-        pub fn run(_: *ExecuteData, return_value: *Value) !void {
+        pub fn run(_: *ExecuteData, _: *Value) !void {
             const al = php.allocator;
             var source_path: *String = undefined;
             var module_path: *String = undefined;
-            try php.parseArguments("SS", .{ &source_path, &module_path });
-            std.debug.print("{s} => {s}\n", .{
-                php.getStringContent(source_path),
-                php.getStringContent(module_path),
-            });
+            var options: ?*Value = null;
+            try php.parseArguments("PP|A", .{ &source_path, &module_path, &options });
             const cwd_path = try std.process.getCwdAlloc(al);
             defer php.allocator.free(cwd_path);
             const source_path_resolved = try std.fs.path.resolve(al, &.{
                 cwd_path,
                 php.getStringContent(source_path),
             });
+            defer php.allocator.free(source_path_resolved);
             const module_path_resolved = try std.fs.path.resolve(al, &.{
                 cwd_path,
                 php.getStringContent(module_path),
             });
-            try ZigCompiler.compile(source_path_resolved, module_path_resolved, null);
-            return_value.* = php.createValueNull();
+            defer php.allocator.free(module_path_resolved);
+            try ZigCompiler.compile(source_path_resolved, module_path_resolved, options);
         }
     };
 };

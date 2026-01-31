@@ -2,14 +2,15 @@
 
 declare(strict_types = 1);
 
-// $module = zigar_load_module(__DIR__ . "/test/early/hello/lib/hello.zigar");
-// echo $module->hello(123, 456), "\n";
-
 zigar_compile_module(
-    __DIR__ . "/tests/early/static-variables/static.zig", 
-    __DIR__ . "/tests/early/static-variables/lib/static.zigar",
+    "tests//early/hello/zig/hello.zig", 
+    "tests/early/hello/lib/hello.zigar",
 );
-$module = zigar_load_module(__DIR__ . "/tests/early/static-variables/lib/static.zigar");
+
+$module = zigar_load_module("tests/early/hello/lib/hello.zigar");
+echo $module->hello(123, 456), "\n";
+
+// $module = zigar_load_module(__DIR__ . "/tests/early/static-variables/lib/static.zigar");
 
 // echo $module->array[2], "\n";
 // foreach ($module->array as $a) {
@@ -119,10 +120,10 @@ $module = zigar_load_module(__DIR__ . "/tests/early/static-variables/lib/static.
 
 // echo $union->float, "\n";
 
-$NoRequired = $module->NoRequired;
-$s = "000000001000";
-$a = $module->NoRequired($s);
-echo $a->a, "\n";
-echo $a->b, "\n";
-echo $a->c, "\n";
+// $NoRequired = $module->NoRequired;
+// $s = "000000001000";
+// $a = $module->NoRequired($s);
+// echo $a->a, "\n";
+// echo $a->b, "\n";
+// echo $a->c, "\n";
 // debug_zval_dump($a);
