@@ -273,7 +273,7 @@ pub const ZigCompiler = struct {
     fn writeProject(self: *@This()) !void {
         errdefer |err| std.debug.print("writeProject => {}\n", .{err});
         const al = self.allocator();
-        std.fs.deleteTreeAbsolute(self.module_build_dir) catch {};
+        // std.fs.deleteTreeAbsolute(self.module_build_dir) catch {};
         try makeDirectory(self.module_build_dir);
         try self.writeZigarLib();
         try self.writeBuildConfigFile();
@@ -346,6 +346,7 @@ pub const ZigCompiler = struct {
     }
 
     fn writeZigarLib(self: *@This()) !void {
+        if (dirExists(self.zigar_src_path)) return;
         try makeDirectory(self.zigar_src_path);
         var input: std.Io.Reader = .fixed(@embedFile("./zig.tar.zstd"));
         var buffer: [1024 * 1024]u8 = undefined;
@@ -556,4 +557,10 @@ fn findFile(allocator: std.mem.Allocator, parent_path: []const u8, file_name: []
     const stat = dir.statFile(file_name) catch return null;
     if (stat.kind != .file) return null;
     return try std.fs.path.resolve(allocator, &.{ parent_path, file_name });
+}
+
+fn dirExists(dir_path: []const u8) bool {
+    var dir = std.fs.openDirAbsolute(dir_path, .{}) catch return false;
+    defer dir.close();
+    return true;
 }

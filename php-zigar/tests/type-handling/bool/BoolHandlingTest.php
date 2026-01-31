@@ -24,9 +24,13 @@ final class BoolHandlingTest extends TestCase
     public function testPrintBoolArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->expectOutputString("no\nyes\n");
+        $this->expectOutputString(<<<OUTPUT
+        no
+        yes
+
+        OUTPUT);
         $m->print(false);
-        $m->print(true);
+        $m->print(true);       
     }
 
     public function testReturnBool(): void
@@ -39,7 +43,23 @@ final class BoolHandlingTest extends TestCase
     public function testHandleBoolInArray(): void
     {
         $m = ZigImporter::load(__DIR__ . '/array-of.zig');
-        $this->assertSame("B", "B");
+        $this->assertSame(false, $m->array[1]);
+        $this->assertSame(true, $m->array[3]);
+
+        $this->expectOutputString(<<<OUTPUT
+        { true, false, false, true }
+        { false, false, false, true }
+        { false, false, true, true }
+
+        OUTPUT);
+        $m->print();
+        $m->array[0] = false;
+        $m->print();
+        $m->array[2] = true;
+        $m->print();
+
+        $this->expectExceptionMessage("write protected (zig)");
+        $m->array_const[2] = false;
     }
 
     public function testHandleBoolInStruct(): void
@@ -69,13 +89,19 @@ final class BoolHandlingTest extends TestCase
     public function testHandleBoolInTaggedUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-tagged-union.zig');
+        echo 
         $this->assertSame("B", "B");
     }
 
     public function testHandleBoolInOptional(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
-        $this->assertSame("B", "B");
+        $this->expectOutputString("true\nnull\nfalse\n");
+        $m->print();
+        $m->optional = null;
+        $m->print();
+        $m->optional = false;
+        $m->print();
     }
 
     public function testHandleBoolInErrorUnion(): void
@@ -87,7 +113,23 @@ final class BoolHandlingTest extends TestCase
     public function testHandleBoolInVector(): void
     {
         $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
-        $this->assertSame("B", "B");
+        $this->assertSame(false, $m->vector[1]);
+        $this->assertSame(true, $m->vector[3]);
+
+        $this->expectOutputString(<<<OUTPUT
+        { true, false, false, true }
+        { false, false, false, true }
+        { false, false, true, true }
+
+        OUTPUT);
+        $m->print();
+        $m->vector[0] = false;
+        $m->print();
+        $m->vector[2] = true;
+        $m->print();
+
+        $this->expectExceptionMessage("write protected (zig)");
+        $m->vector_const[2] = false;
     }   
 }
 
