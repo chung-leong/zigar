@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
 
@@ -37,4 +37,19 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&wf.step);
 
     b.installArtifact(lib);
+
+    // create tarball of the zig directory
+    _ = try std.process.Child.run(.{
+        .allocator = b.allocator,
+        .argv = &.{
+            "tar",
+            "-h", // follow symlink
+            "-I zstd -19", // use zstd, max compression level
+            "-cf", // create archive, specifying filename
+            "./src/zig.tar.zstd",
+            "-C", // change to directory first
+            "./zig",
+            ".",
+        },
+    });
 }

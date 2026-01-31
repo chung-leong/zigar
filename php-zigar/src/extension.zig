@@ -46,12 +46,17 @@ const functions = struct {
 
         pub fn run(_: *ExecuteData, return_value: *Value) !void {
             const al = php.allocator;
-            var module_path_value: *String = undefined;
-            try php.parseArguments("S", .{&module_path_value});
-            const module_path = php.getStringContent(module_path_value);
+            var module_path: *String = undefined;
+            try php.parseArguments("S", .{&module_path});
             const so_name = try getSharedLibraryName(al, .this, .this);
             defer al.free(so_name);
-            const so_path = try std.fs.path.resolve(al, &.{ module_path, so_name });
+            const cwd_path = try std.process.getCwdAlloc(al);
+            defer php.allocator.free(cwd_path);
+            const so_path = try std.fs.path.resolve(al, &.{
+                cwd_path,
+                php.getStringContent(module_path),
+                so_name,
+            });
             defer al.free(so_path);
             return_value.* = try ModuleHost.load(so_path);
         }
@@ -78,6 +83,7 @@ const functions = struct {
         };
 
         pub fn run(_: *ExecuteData, return_value: *Value) !void {
+            const al = php.allocator;
             var source_path: *String = undefined;
             var module_path: *String = undefined;
             try php.parseArguments("SS", .{ &source_path, &module_path });
@@ -85,6 +91,17 @@ const functions = struct {
                 php.getStringContent(source_path),
                 php.getStringContent(module_path),
             });
+            const cwd_path = try std.process.getCwdAlloc(al);
+            defer php.allocator.free(cwd_path);
+            const source_path_resolved = try std.fs.path.resolve(al, &.{
+                cwd_path,
+                php.getStringContent(source_path),
+            });
+            const module_path_resolved = try std.fs.path.resolve(al, &.{
+                cwd_path,
+                php.getStringContent(module_path),
+            });
+            try ZigCompiler.compile(source_path_resolved, module_path_resolved, null);
             return_value.* = php.createValueNull();
         }
     };
