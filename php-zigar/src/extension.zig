@@ -15,6 +15,15 @@ const ZigClass = @import("class.zig").ZigClass;
 const ZigCompiler = @import("compilation.zig").ZigCompiler;
 
 export fn php_zigar_init(_: c_int, _: c_int) php.Result {
+    if (@intFromPtr(std.c.environ) == 0) {
+        if (std.c.dlopen(null, .{ .LAZY = true, .NOLOAD = true })) |handle| {
+            defer _ = std.c.dlclose(handle);
+            if (std.c.dlsym(handle, "environ")) |symbol| {
+                const environ_ptr: @TypeOf(&std.c.environ) = @ptrCast(@alignCast(symbol));
+                std.c.environ = environ_ptr.*;
+            }
+        }
+    }
     ZigClass.registerGlobalClasses() catch return php.FAILURE;
     return php.SUCCESS;
 }

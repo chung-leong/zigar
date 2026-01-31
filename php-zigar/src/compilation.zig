@@ -378,24 +378,7 @@ pub const ZigCompiler = struct {
         // try si.print("\n", .{});
         // try si.flush();
         var child: std.process.Child = .init(self.compiler_args, al);
-        var env_map: std.process.EnvMap = .init(al);
-        const names: []const [:0]const u8 = &.{
-            "HOME",
-            "PATH",
-            "USER",
-            "LD_LIBRARY_PATH",
-            "DEBUGINFOD_CACHE_PATH",
-            "XDG_CACHE_HOME",
-            "C_INCLUDE_PATH",
-            "CPLUS_INCLUDE_PATH",
-            "LIBRARY_PATH",
-        };
-        for (names) |name| {
-            if (std.c.getenv(name.ptr)) |value|
-                try env_map.put(name, value[0..std.mem.len(value)]);
-        }
         child.cwd = self.module_build_dir;
-        child.env_map = &env_map;
         child.stderr_behavior = .Pipe;
         child.stdout_behavior = .Pipe;
         try child.spawn();
@@ -404,10 +387,24 @@ pub const ZigCompiler = struct {
         var stderr: std.ArrayList(u8) = try .initCapacity(al, 1024 * 1024);
         try child.collectOutput(al, &stdout, &stderr, 1024 * 1024);
         const term = try child.wait();
-        std.debug.print("term = {}\n", .{term});
-        std.debug.print("{s}\n", .{stdout.items});
-        std.debug.print("{s}\n", .{stderr.items});
+        return switch (term) {
+            .Exited => |exit_code| switch (exit_code) {
+                0 => {},
+                else => throw: {
+                    php.throwExceptionFmt("unable to create module '{s}':\n\n{s}", .{
+                        self.module_name,
+                        stderr.items,
+                    });
+                    break :throw error.ExceptionThrown;
+                },
+            },
+            .Stopped => error.CompilerStopped,
+            .Signal => error.CompilerInterrupted,
+            .Unknown => error.UnknownError,
+        };
     }
+
+    pub extern "c" var __environ: [*:null]?[*:0]u8;
 };
 
 pub fn getSharedLibraryName(allocator: std.mem.Allocator, platform: Platform, arch: Arch) ![]const u8 {
