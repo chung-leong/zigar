@@ -40,8 +40,8 @@ pub const ZigClass = struct {
         activated: bool = false,
     } = .{},
     static_data: StaticData = undefined,
-    php_portion: ClassEntry = undefined,
     methods: Methods,
+    php_portion: ClassEntry = undefined,
 
     pub const ScopeType = enum { instance, static };
 
@@ -83,7 +83,10 @@ pub const ZigClass = struct {
 
         fn release(self: *@This()) void {
             if (self.bytes) |b| b.release();
-            if (self.slots) |s| php.release(s);
+            if (self.slots) |s| {
+                php.release(s);
+                php.allocator.destroy(s);
+            }
         }
     };
     const StaticData = define: {
@@ -418,8 +421,12 @@ pub const ZigClass = struct {
                 break :use buf;
             } else |_| null;
             const slots = if (php.getProperty(template_info, "slots")) |value| use: {
-                php.addRef(value);
-                break :use value;
+                // we need to create a new Value, since the one from the importer get freed
+                // the import process is complete
+                const new_value = try php.allocator.create(Value);
+                new_value.* = value.*;
+                php.addRef(new_value);
+                break :use new_value;
             } else |_| null;
             return .{ .bytes = bytes, .slots = slots };
         } else |_| {

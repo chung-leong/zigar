@@ -1111,10 +1111,6 @@ const allocator_impl = struct {
         .free = free,
     };
 
-    fn manualAlignHeader(aligned_ptr: [*]u8) *[*]u8 {
-        return @ptrCast(@alignCast(aligned_ptr - @sizeOf(usize)));
-    }
-
     fn alloc(
         _: *anyopaque,
         len: usize,
