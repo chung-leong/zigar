@@ -8,6 +8,7 @@
         ]
     },
     "scripts": {
-        "test": "php -d extension=./modules/php_zigar.so ./vendor/bin/phpunit --testdox tests"
+        "test": "php -d extension=./modules/php_zigar.so ./vendor/bin/phpunit --testdox tests",
+        "debug": "lldb php -- -d extension=./modules/php_zigar.so ./vendor/bin/phpunit tests"
     }
 }

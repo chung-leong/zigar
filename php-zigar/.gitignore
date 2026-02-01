@@ -23,5 +23,6 @@ zig-out
 *.so
 *.node
 *.zstd
+*.bak
 
 vendor

@@ -26,7 +26,7 @@ pub fn getInt64() i64 {
 }
 
 pub fn getUint64() u64 {
-    return 0xFFFF_FFFF_FFFF_FFFF;
+    return 0x7FFF_FFFF_FFFF_FFFF;
 }
 
 pub fn getIsize() isize {
