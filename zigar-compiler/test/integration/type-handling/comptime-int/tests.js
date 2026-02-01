@@ -68,7 +68,6 @@ export function addTests(importModule, options) {
     it('should handle comptime int in optional', async function() {
       const { default: module } = await importTest('in-optional');
       expect(module.optional1).to.equal(1234);
-      module.optional2
       expect(module.optional2).to.be.null;
     })
     it('should handle comptime int in error union', async function() {
