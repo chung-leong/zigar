@@ -20,9 +20,6 @@ final class IntHandlingTest extends TestCase
 
         // TODO: test big int implementation
 
-        $this->expectExceptionMessage("write protected (zig)");
-        $m->int16 = -123;
-
         $this->assertSame(false, isset($m->private));
 
         $this->expectOutputString(<<<OUTPUT
@@ -36,6 +33,9 @@ final class IntHandlingTest extends TestCase
         $m->print();
         $module->uint16 = 88;
         $m->print();
+
+        $this->expectExceptionMessage("write protected (zig)");
+        $m->int16 = -123;
     }
 
     public function testPrintIntArguments(): void
