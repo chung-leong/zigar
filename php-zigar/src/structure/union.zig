@@ -3,7 +3,7 @@ const std = @import("std");
 const accessor = @import("../accessor.zig");
 const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const ZigClass = @import("../class.zig").ZigClass;
+const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
 const HashTable = php.HashTable;
 const HashTableIterator = php.HashTableIterator;
@@ -20,11 +20,11 @@ pub const Union = struct {
     pub const Static = struct {
         selector: ?struct {
             accessors: *accessor.Primitive,
-            class: *ZigClass,
+            class: *ZigClassEntry,
             possible_names: HashTable,
         } = null,
 
-        pub fn init(self: *@This(), class: *ZigClass) !void {
+        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
             var iter = class.getMemberIterator(.instance);
             const selector_member = while (iter.next()) |member| {
                 if (member.flags.is_selector) break member;
@@ -87,7 +87,7 @@ pub const Union = struct {
     }
 
     pub fn getActiveField(self: *@This()) !?*String {
-        const class = ZigClass.fromStructure(self);
+        const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const selector = static.selector orelse return null;
         const selector_value = try selector.accessors.get(self.bytes);
@@ -98,7 +98,7 @@ pub const Union = struct {
     }
 
     pub fn setActiveField(self: *@This(), name: *String) !void {
-        const class = ZigClass.fromStructure(self);
+        const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const selector = &(static.selector orelse return);
         var iter: HashTableIterator = .init(&selector.possible_names, .{});

@@ -2,7 +2,7 @@ const std = @import("std");
 
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const ZigClass = @import("../class.zig").ZigClass;
+const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
 const Object = php.Object;
 const String = php.String;
@@ -18,7 +18,7 @@ pub const ArgStruct = struct {
         arg_accessors: []*accessor.Any = undefined,
         retval_accessors: *accessor.Any = undefined,
 
-        pub fn init(self: *@This(), class: *ZigClass) !void {
+        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
             var iter = class.getMemberIterator(.instance);
             if (iter.len == 0) return error.Unexpected;
             self.arg_accessors = try php.allocator.alloc(*accessor.Any, iter.len - 1);
@@ -38,7 +38,7 @@ pub const ArgStruct = struct {
     };
 
     pub fn copyArguments(self: *@This(), arg_iter: *php.ArgumentIterator) !void {
-        const class = ZigClass.fromStructure(self);
+        const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         if (arg_iter.len != static.arg_accessors.len) return error.IncorrectArgumentCount;
         // use accessors to write into the argument struct
@@ -50,7 +50,7 @@ pub const ArgStruct = struct {
     }
 
     pub fn getReturnValue(self: *@This()) !Value {
-        const class = ZigClass.fromStructure(self);
+        const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         return static.retval_accessors.get(self);
     }

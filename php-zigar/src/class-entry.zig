@@ -2,6 +2,7 @@ const std = @import("std");
 
 const accessor = @import("accessor.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
+const Closure = @import("closure.zig").Closure;
 const enums = @import("enums.zig");
 const MemberFlags = enums.MemberFlags;
 const MemberType = enums.MemberType;
@@ -21,10 +22,9 @@ const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("structure.zig");
-const invokeFunction = structure.invokeFunction;
 const ZigObject = @import("object.zig").ZigObject;
 
-pub const ZigClass = struct {
+pub const ZigClassEntry = struct {
     host: *Host,
     type: StructureType,
     purpose: StructurePurpose,
@@ -40,15 +40,10 @@ pub const ZigClass = struct {
         activated: bool = false,
     } = .{},
     static_data: StaticData = undefined,
-    methods: Methods,
     php_portion: ClassEntry = undefined,
 
     pub const ScopeType = enum { instance, static };
 
-    const Methods = struct {
-        constructor: Function,
-        toString: Function,
-    };
     const Scope = struct {
         members: HashTable = undefined,
         template: Template = undefined,
@@ -66,7 +61,7 @@ pub const ZigClass = struct {
         bit_size: usize,
         byte_size: ?usize,
         slot: ?usize,
-        class: ?*ZigClass = null,
+        class: ?*ZigClassEntry = null,
         accessors: accessor.Any = undefined,
 
         pub fn destructor(value: [*c]Value) callconv(.c) void {
@@ -206,11 +201,19 @@ pub const ZigClass = struct {
                 else |_|
                     return error.InvalidSignature;
             },
-            .methods = .{
-                .constructor = php.createFunction(constructor, "constructor"),
-                .toString = php.createFunction(toString, "__toString"),
+        };
+        // create the class object,
+        // it's structure-specific
+        const class_obj, const class_closures = switch (self.type) {
+            inline else => |t| create: {
+                const S = @field(structure.by_enum, @tagName(t));
+                const C = structure.Class(S);
+                const class_zobj = try ZigObject(C).create(self);
+                // obtain its closure table
+                break :create .{ class_zobj.object(), class_zobj.zig_portion.closures };
             },
         };
+        errdefer php.release(class_obj);
         const interfaces = try self.createInterfaceList();
         const ce = &self.php_portion;
         ce.* = .{
@@ -236,16 +239,16 @@ pub const ZigClass = struct {
                     .filename = php.createString("filename"),
                 },
             },
-            .constructor = &self.methods.constructor,
-            .__tostring = &self.methods.toString,
+            .constructor = class_closures.construct.function(),
+            .__tostring = class_closures.stringify.function(),
         };
-        errdefer freeEntry(ce);
-        return try self.createRef();
+        self.release();
+        return class_obj;
     }
 
-    pub fn finalize(obj: *Object, info: *Value) !void {
+    pub fn finalize(class_obj: *Object, info: *Value) !void {
         errdefer |err| std.debug.print("finalize => {}\n", .{err});
-        const self = fromEntry(obj.ce);
+        const self = fromObject(class_obj);
         self.instance = try self.extractScope(info, "instance");
         errdefer self.instance.release();
         self.static = try self.extractScope(info, "static");
@@ -276,11 +279,17 @@ pub const ZigClass = struct {
                 break :get try self.inferName();
             }
         };
-        // set slots of ref object
-        const static = structure.Static.fromObject(obj);
+        // set slots of class object
         const slots = try self.createSlots(.static, null);
         defer php.release(&slots);
-        try static.setStorage(undefined, &slots);
+        switch (self.type) {
+            inline else => |t| {
+                const S = @field(structure.by_enum, @tagName(t));
+                const C = structure.Class(S);
+                const class_zobj = ZigObject(C).fromObject(class_obj);
+                try class_zobj.zig_portion.setStorage(undefined, &slots);
+            },
+        }
         // initialize static data
         switch (self.type) {
             inline else => |t| {
@@ -434,12 +443,6 @@ pub const ZigClass = struct {
         }
     }
 
-    fn createRef(self: *@This()) !*Object {
-        const zig_obj = try ZigObject(structure.Static).create(self);
-        self.release(); // remove initial refcount now that the ref object exists
-        return zig_obj.object();
-    }
-
     fn createBuffer(self: *const @This()) !*ByteBuffer {
         const len = self.byte_size orelse return error.MissingLength;
         return if (self.instance.template.bytes) |def|
@@ -524,18 +527,6 @@ pub const ZigClass = struct {
                 return zig_obj.object();
             },
         }
-    }
-
-    pub fn toString(ed: *ExecuteData, return_value: *Value) !void {
-        const obj = try php.getValueObject(&ed.This);
-        return_value.* = try invokeFunction(obj, "stringify", .{});
-    }
-
-    pub fn constructor(ed: *ExecuteData, return_value: *Value) !void {
-        _ = return_value;
-        const obj = try php.getValueObject(&ed.This);
-        var arg_iter: ArgumentIterator = .init(ed, .{});
-        try invokeFunction(obj, "copyArguments", .{&arg_iter});
     }
 
     fn getAccessors(scope: *Scope, member: *Member) !accessor.Any {

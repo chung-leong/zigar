@@ -2,10 +2,12 @@ const std = @import("std");
 
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const ZigClass = @import("../class.zig").ZigClass;
+const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const Closure = @import("../closure.zig").Closure;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const Array = php.Array;
+const ArgumentIterator = php.ArgumentIterator;
 const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
 const Function = php.Function;
@@ -38,19 +40,17 @@ pub const ErrorSet = struct {
     };
     pub const Static = struct {
         value_acc: *accessor.Primitive = undefined,
-        methods: *Methods = undefined,
+        closures: struct {
+            getMessage: *Closure,
+            getCode: *Closure,
+            getFile: *Closure,
+            getLine: *Closure,
+            getTrace: *Closure,
+            getTraceAsString: *Closure,
+            getPrevious: *Closure,
+        } = undefined,
 
-        const Methods = struct {
-            getMessage: Function,
-            getCode: Function,
-            getFile: Function,
-            getLine: Function,
-            getTrace: Function,
-            getTraceAsString: Function,
-            getPrevious: Function,
-        };
-
-        pub fn init(self: *@This(), class: *ZigClass) !void {
+        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
             const member = try class.getMember(.instance, 0);
             if (member.accessors != .primitive) return error.InvalidAccessor;
             self.value_acc = &member.accessors.primitive;
@@ -89,17 +89,19 @@ pub const ErrorSet = struct {
                 // decrement ref count on class (since the class holds a ref on the error)
                 class.release();
             }
-            self.methods = try php.allocator.create(Methods);
-            inline for (std.meta.fields(Methods)) |field| {
+            inline for (std.meta.fields(@TypeOf(self.closures))) |field| {
                 const handler = @field(ErrorSet, field.name);
-                @field(self.methods, field.name) = php.createFunction(handler, field.name);
+                @field(self.closures, field.name) = try Closure.create(self, handler, field.name);
             }
         }
 
         pub fn deinit(self: *@This()) void {
-            const class = ZigClass.fromStatic(self);
+            const class = ZigClassEntry.fromStatic(self);
             php.release(class.host.global_error_set.?);
-            php.allocator.destroy(self.methods);
+            inline for (std.meta.fields(@TypeOf(self.closures))) |field| {
+                const closure = @field(self.closures, field.name);
+                closure.release();
+            }
         }
 
         pub fn readErrorValue(self: *@This(), err_obj: *Object) !Value {
@@ -108,7 +110,7 @@ pub const ErrorSet = struct {
         }
 
         pub fn findError(self: *@This(), key: anytype) !*Object {
-            const class = ZigClass.fromStatic(self);
+            const class = ZigClassEntry.fromStatic(self);
             const global_err_ht = class.host.global_error_set.?;
             const err_value = try php.getHashEntry(global_err_ht, key);
             return try php.getValueObject(err_value);
@@ -132,7 +134,7 @@ pub const ErrorSet = struct {
         const self = fromObject(obj);
         self.bytes.release();
         if (self.canonical == null or self.canonical.?.unknown) {
-            const class = ZigClass.fromObject(obj);
+            const class = ZigClassEntry.fromObject(obj);
             class.release();
         }
         if (self.canonical) |props| {
@@ -186,7 +188,7 @@ pub const ErrorSet = struct {
 
     fn getCanonical(self: *@This()) !*@This() {
         if (self.canonical != null) return self;
-        const class = ZigClass.fromStructure(self);
+        const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const err_value = try static.value_acc.get(self.bytes);
         const err_code = try php.getValueLong(&err_value);
@@ -205,12 +207,12 @@ pub const ErrorSet = struct {
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
-        const class = ZigClass.fromStructure(self);
+        const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const err_value = find: {
             if (php.getValueObject(value)) |exception| {
                 if (php.instanceOf(exception.ce, php.getInterface(.throwable))) {
-                    if (ZigClass.isZigError(exception.ce)) {
+                    if (ZigClassEntry.isZigError(exception.ce)) {
                         break :find try static.readErrorValue(exception);
                     } else {
                         const msg_value = try php.invokeMethod(exception, "getMessage", .{});
@@ -267,66 +269,64 @@ pub const ErrorSet = struct {
 
     pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: *const Value) !?*Function {
         const obj = obj_ptr.*;
-        const class = ZigClass.fromObject(obj);
+        const class = ZigClassEntry.fromObject(obj);
         const static = class.getStaticData(@This());
         const name_s = php.getStringContent(name);
-        inline for (std.meta.fields(Static.Methods)) |field| {
+        inline for (std.meta.fields(@FieldType(Static, "closures"))) |field| {
             if (std.mem.eql(u8, name_s, field.name))
-                return &@field(static.methods, field.name);
+                return @field(static.closures, field.name).function();
         }
         return null;
     }
 
-    pub fn getMessage(ed: *ExecuteData, return_value: *Value) !void {
-        const obj = try php.getValueObject(&ed.This);
+    pub fn getMessage(_: *Static, arg_iter: *ArgumentIterator) !?Value {
+        const obj = try php.getValueObject(arg_iter.this);
         const self = fromObject(obj);
         const err_struct = try self.getCanonical();
         const message = php.useString(err_struct.canonical.?.message, "");
-        return_value.* = php.createValueString(message);
+        return php.createValueString(message);
     }
 
-    pub fn getCode(ed: *ExecuteData, return_value: *Value) !void {
-        const obj = try php.getValueObject(&ed.This);
+    pub fn getCode(static: *Static, arg_iter: *ArgumentIterator) !?Value {
+        const obj = try php.getValueObject(arg_iter.this);
         const self = fromObject(obj);
-        const class = ZigClass.fromObject(obj);
-        const static = class.getStaticData(@This());
-        return_value.* = try static.value_acc.get(self.bytes);
+        return try static.value_acc.get(self.bytes);
     }
 
-    pub fn getFile(ed: *ExecuteData, return_value: *Value) !void {
-        const obj = try php.getValueObject(&ed.This);
+    pub fn getFile(_: *Static, arg_iter: *ArgumentIterator) !?Value {
+        const obj = try php.getValueObject(arg_iter.this);
         const self = fromObject(obj);
         const err_struct = try self.getCanonical();
         const file = php.useString(err_struct.canonical.?.file, "(unknown)");
-        return_value.* = php.createValueString(file);
+        return php.createValueString(file);
     }
 
-    pub fn getLine(ed: *ExecuteData, return_value: *Value) !void {
-        const obj = try php.getValueObject(&ed.This);
+    pub fn getLine(_: *Static, arg_iter: *ArgumentIterator) !?Value {
+        const obj = try php.getValueObject(arg_iter.this);
         const self = fromObject(obj);
         const err_struct = try self.getCanonical();
-        return_value.* = php.createValueLong(@intCast(err_struct.canonical.?.lineno));
+        return php.createValueLong(@intCast(err_struct.canonical.?.lineno));
     }
 
-    pub fn getTrace(ed: *ExecuteData, return_value: *Value) !void {
-        const obj = try php.getValueObject(&ed.This);
+    pub fn getTrace(_: *Static, arg_iter: *ArgumentIterator) !?Value {
+        const obj = try php.getValueObject(arg_iter.this);
         const self = fromObject(obj);
         const err_struct = try self.getCanonical();
         const trace = php.useArray(err_struct.canonical.?.trace);
-        return_value.* = php.createValueArray(trace);
+        return php.createValueArray(trace);
     }
 
-    pub fn getTraceAsString(ed: *ExecuteData, return_value: *Value) !void {
-        const obj = try php.getValueObject(&ed.This);
+    pub fn getTraceAsString(_: *Static, arg_iter: *ArgumentIterator) !?Value {
+        const obj = try php.getValueObject(arg_iter.this);
         const self = fromObject(obj);
         const err_struct = try self.getCanonical();
         const trace = php.useArray(err_struct.canonical.?.trace);
         const trace_str = php.traceToString(trace, true);
-        return_value.* = php.createValueString(trace_str);
+        return php.createValueString(trace_str);
     }
 
-    pub fn getPrevious(_: *ExecuteData, return_value: *Value) !void {
-        return_value.* = php.createValueNull();
+    pub fn getPrevious(_: *Static, _: *ArgumentIterator) !?Value {
+        return php.createValueNull();
     }
 
     pub const fromObject = Super.fromObject;

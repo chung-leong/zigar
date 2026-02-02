@@ -10,7 +10,7 @@ const HashTable = php.HashTable;
 const String = php.String;
 const Value = php.Value;
 const StructureImporter = @import("import.zig").StructureImporter;
-const ZigClass = @import("class.zig").ZigClass;
+const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const fn_transform = @import("zigft/fn-transform.zig");
 
 pub const ModuleHost = struct {

@@ -176,15 +176,13 @@ pub fn parseArguments(comptime specs: [:0]const u8, arg_ptrs: anytype) !void {
 
 pub const ArgumentIterator = struct {
     arg_ptr: [*]Value,
-    this_ptr: ?*Value,
+    this: *Value,
+    use_this_first: bool = false,
     named_params: ?Value,
     len: usize,
     total: usize,
     index: usize = 0,
 
-    const Options = struct {
-        use_this: bool = false,
-    };
     const ArgPtrCountExtra = extern struct {
         ptr: [*]Value,
         len: usize,
@@ -193,18 +191,11 @@ pub const ArgumentIterator = struct {
 
     extern fn get_argument_info(*ExecuteData, *ArgPtrCountExtra) void;
 
-    pub fn init(ed: *ExecuteData, options: Options) @This() {
+    pub fn init(ed: *ExecuteData) @This() {
         var info: ArgPtrCountExtra = undefined;
         get_argument_info(ed, &info);
         var len = info.len;
         var total = len;
-        const this = get: {
-            if (options.use_this) {
-                len += 1;
-                break :get &ed.This;
-            }
-            break :get null;
-        };
         const named = get: {
             if (info.extra) {
                 // extra_named_params contains bogus values when it's not used
@@ -220,7 +211,7 @@ pub const ArgumentIterator = struct {
             .arg_ptr = info.ptr,
             .len = len,
             .total = total,
-            .this_ptr = this,
+            .this = &ed.This,
             .named_params = named,
         };
     }
@@ -234,13 +225,20 @@ pub const ArgumentIterator = struct {
                 if (self.named_params) |*p| return p;
             }
             // return this pointer as first argument
-            if (self.this_ptr) |ptr| {
-                if (index > 0) index -= 1 else return ptr;
+            if (self.use_this_first) {
+                if (index > 0) index -= 1 else return self.this;
             }
             // return regular argument
             return &self.arg_ptr[index];
         } else {
             return null;
+        }
+    }
+
+    pub fn makeThisFirst(self: *@This()) void {
+        if (!self.use_this_first) {
+            self.use_this_first = true;
+            self.len += 1;
         }
     }
 };
@@ -288,7 +286,6 @@ pub fn transform(comptime func: anytype) Transformed(func) {
     const PhpArgs = std.meta.ArgsTuple(PhpFnT);
     const FnT = @TypeOf(func);
     const Args = std.meta.ArgsTuple(FnT);
-    const RT = @typeInfo(FnT).@"fn".return_type.?;
     const PhpRT = @typeInfo(PhpFnT).@"fn".return_type.?;
     const ns = struct {
         fn call(php_args: PhpArgs) PhpRT {
@@ -298,35 +295,42 @@ pub fn transform(comptime func: anytype) Transformed(func) {
                 else => php_arg,
             };
             const retval = @call(.auto, func, args);
-            const retval_ne = switch (@typeInfo(RT)) {
-                .error_union => |eu| retval catch |err| report: {
-                    if (err != error.ExceptionThrown) throwError(err);
-                    break :report switch (eu.payload) {
-                        bool => false,
-                        void => {},
-                        c_int => FAILURE,
-                        else => |T| switch (@typeInfo(T)) {
-                            .optional => null,
-                            .pointer => |pt| switch (pt.is_allowzero) {
-                                true => null,
-                                false => undefined,
-                            },
-                            else => undefined,
-                        },
-                    };
-                },
-                else => retval,
-            };
-            return switch (@typeInfo(@TypeOf(retval_ne))) {
-                .pointer => |pt| switch (pt.size) {
-                    .slice => retval_ne.ptr,
-                    else => retval_ne,
-                },
-                else => retval_ne,
-            };
+            return removeError(retval);
         }
     };
     return fn_transform.spreadArgs(ns.call, .c);
+}
+
+pub fn removeError(retval: anytype) switch (@typeInfo(@TypeOf(retval))) {
+    .error_union => |eu| eu.payload,
+    else => @TypeOf(retval),
+} {
+    const retval_ne = switch (@typeInfo(@TypeOf(retval))) {
+        .error_union => |eu| retval catch |err| report: {
+            if (err != error.ExceptionThrown) throwError(err);
+            break :report switch (eu.payload) {
+                bool => false,
+                void => {},
+                c_int => FAILURE,
+                else => |T| switch (@typeInfo(T)) {
+                    .optional => null,
+                    .pointer => |pt| switch (pt.is_allowzero) {
+                        true => null,
+                        false => undefined,
+                    },
+                    else => undefined,
+                },
+            };
+        },
+        else => retval,
+    };
+    return switch (@typeInfo(@TypeOf(retval_ne))) {
+        .pointer => |pt| switch (pt.size) {
+            .slice => retval_ne.ptr,
+            else => retval_ne,
+        },
+        else => retval_ne,
+    };
 }
 
 pub const initializeClassData = php_h.zend_initialize_class_data;
@@ -957,12 +961,12 @@ pub fn invokeMethod(obj: *Object, fn_name: []const u8, params: anytype) !Value {
     return retval;
 }
 
-pub fn createFunction(comptime func: anytype, name: []const u8) Function {
+pub fn createFunction(func_ptr: php_h.zif_handler, name: ?[]const u8) Function {
     return .{
         .internal_function = .{
             .type = php_h.ZEND_INTERNAL_FUNCTION,
-            .function_name = createInternedString(name),
-            .handler = &transform(func),
+            .function_name = if (name) |n| createInternedString(n) else null,
+            .handler = func_ptr,
             .num_args = 0,
             .fn_flags = php_h.ZEND_ACC_VARIADIC,
         },
@@ -970,7 +974,7 @@ pub fn createFunction(comptime func: anytype, name: []const u8) Function {
 }
 
 pub fn destroyFunction(func: *Function) void {
-    release(func.internal_function.function_name);
+    if (func.internal_function.function_name) |n| release(n);
 }
 
 pub const instanceOf = php_h.instanceof_function;

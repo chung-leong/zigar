@@ -7,7 +7,7 @@ const ObjectHandlers = php.ObjectHandlers;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
-const ZigClass = @import("class.zig").ZigClass;
+const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
 pub fn ZigObject(comptime S: type) type {
     const Result = struct {
@@ -28,7 +28,7 @@ pub fn ZigObject(comptime S: type) type {
             return @alignCast(@fieldParentPtr("zig_portion", s));
         }
 
-        pub fn create(class: *ZigClass) !*@This() {
+        pub fn create(class: *ZigClassEntry) !*@This() {
             const prop_size = php.getObjectPropertySize(class.entry());
             const size: usize = @intCast(@sizeOf(@This()) + prop_size);
             // we can't use the allocator here, since freeing is done by PHP itself

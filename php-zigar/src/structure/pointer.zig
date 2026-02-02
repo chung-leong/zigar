@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const ZigClass = @import("../class.zig").ZigClass;
+const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
 const Object = php.Object;
 const Value = php.Value;
@@ -25,7 +25,7 @@ pub const Pointer = struct {
     }
 
     pub fn getString(self: *@This()) !Value {
-        const class = ZigClass.fromStructure(self);
+        const class = ZigClassEntry.fromStructure(self);
         _ = class;
         std.debug.print("getString\n", .{});
         unreachable;

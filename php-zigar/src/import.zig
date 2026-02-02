@@ -11,7 +11,7 @@ const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
-const ZigClass = @import("class.zig").ZigClass;
+const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
 pub const StructureImporter = struct {
     value_list: std.ArrayList(Value),
@@ -73,15 +73,15 @@ pub const StructureImporter = struct {
     }
 
     pub fn activateStructures(self: *@This()) !*Object {
-        // initially, the host holds references to ZigClass objects through the "class"
+        // initially, the host holds references to ZigClassEntry objects through the "class"
         // property in the structure arrays; prior to destroying these we need to flip the
         // relationship so that these objects own the host instead
-        for (self.class_list.items) |class_obj| ZigClass.activate(class_obj);
+        for (self.class_list.items) |class_obj| ZigClassEntry.activate(class_obj);
         // the exporter uses structure arrays to refer to types, since their class object
         // (i.e. their constructor) would have been created yet when a struct has a pointer
         // to its own kind; we're going to fix that here
         for (self.instance_list.items) |instance_obj| {
-            const class = ZigClass.fromObject(instance_obj);
+            const class = ZigClassEntry.fromObject(instance_obj);
             if (class.type == .@"comptime") {
                 const ct_struct = Comptime.fromObject(instance_obj);
                 // comptime only uses one slot; so if slots is an array, it's a structure array
@@ -166,7 +166,7 @@ pub const StructureImporter = struct {
         const structure = self.dereference(structure_h);
         const class_value = try php.getProperty(structure, self.keys.class);
         const class_obj = try php.getValueObject(class_value);
-        const class = ZigClass.fromObject(class_obj);
+        const class = ZigClassEntry.fromObject(class_obj);
         const memory = self.dereference(dv_h);
         const bytes = try php.getValuePointer(*ByteBuffer, memory);
         const prefilled_slots = if (prefilled_slots_h) |vh| self.dereference(vh) else null;
@@ -257,7 +257,7 @@ pub const StructureImporter = struct {
 
     pub fn beginStructure(self: *@This(), structure_h: Handle) !void {
         const structure = self.dereference(structure_h);
-        const class_obj = try ZigClass.define(self.host, structure);
+        const class_obj = try ZigClassEntry.define(self.host, structure);
         var class_value = php.createValueObject(class_obj);
         try php.setProperty(structure, self.keys.class, &class_value);
         try self.class_list.append(php.allocator, class_obj);
@@ -267,7 +267,7 @@ pub const StructureImporter = struct {
         const structure = self.dereference(structure_h);
         const class_value = try php.getProperty(structure, self.keys.class);
         const class_obj = try php.getValueObject(class_value);
-        try ZigClass.finalize(class_obj, structure);
+        try ZigClassEntry.finalize(class_obj, structure);
     }
 
     pub fn enableCallback(self: *@This(), structure_h: Handle, template_h: Handle, member_flags_h: Handle) !void {

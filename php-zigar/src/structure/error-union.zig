@@ -2,7 +2,7 @@ const std = @import("std");
 
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const ZigClass = @import("../class.zig").ZigClass;
+const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
 const Object = php.Object;
 const String = php.String;
@@ -19,9 +19,9 @@ pub const ErrorUnion = struct {
     pub const Static = struct {
         payload_acc: *accessor.Any = undefined,
         error_acc: *accessor.Primitive = undefined,
-        error_class: *ZigClass = undefined,
+        error_class: *ZigClassEntry = undefined,
 
-        pub fn init(self: *@This(), class: *ZigClass) !void {
+        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
             const member0 = try class.getMember(.instance, 0);
             self.payload_acc = &member0.accessors;
             const member1 = try class.getMember(.instance, 1);
@@ -32,7 +32,7 @@ pub const ErrorUnion = struct {
     };
 
     pub fn readSelf(self: *@This()) !Value {
-        const class = ZigClass.fromStructure(self);
+        const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const err_value = try static.error_acc.get(self.bytes);
         const err_code = try php.getValueLong(&err_value);
@@ -49,7 +49,7 @@ pub const ErrorUnion = struct {
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
-        const class = ZigClass.fromStructure(self);
+        const class = ZigClassEntry.fromStructure(self);
         var static = class.getStaticData(@This());
         const err_value = find: {
             // see if value is an Throwable
@@ -59,7 +59,7 @@ pub const ErrorUnion = struct {
                 break :find null;
             // look up the error number
             const error_set_static = static.error_class.getStaticData(ErrorSet);
-            if (ZigClass.isZigError(exception.ce)) {
+            if (ZigClassEntry.isZigError(exception.ce)) {
                 break :find try error_set_static.readErrorValue(exception);
             } else {
                 const msg_value = try php.invokeMethod(exception, "getMessage", .{});

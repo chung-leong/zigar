@@ -2,7 +2,7 @@ const std = @import("std");
 
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const ZigClass = @import("../class.zig").ZigClass;
+const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
 const Object = php.Object;
 const Value = php.Value;
@@ -17,7 +17,7 @@ pub const Optional = struct {
         payload_acc: *accessor.Any = undefined,
         present_acc: *accessor.Primitive = undefined,
 
-        pub fn init(self: *@This(), class: *ZigClass) !void {
+        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
             const member0 = try class.getMember(.instance, 0);
             self.payload_acc = &member0.accessors;
             const member1 = try class.getMember(.instance, 1);
@@ -27,7 +27,7 @@ pub const Optional = struct {
     };
 
     pub fn readSelf(self: *@This()) !Value {
-        const class = ZigClass.fromStructure(self);
+        const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const present = try static.present_acc.get(self.bytes);
         const is_present = try php.getValueLong(&present) != 0;
@@ -39,7 +39,7 @@ pub const Optional = struct {
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
-        const class = ZigClass.fromStructure(self);
+        const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const is_present = if (php.getValueNull(value)) false else |_| true;
         if (is_present) {

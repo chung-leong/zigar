@@ -2,7 +2,7 @@ const std = @import("std");
 
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const ZigClass = @import("../class.zig").ZigClass;
+const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const HashTable = php.HashTable;
@@ -30,7 +30,7 @@ pub const Enum = struct {
         value_acc: *accessor.Primitive = undefined,
         available_tags: HashTable = undefined,
 
-        pub fn init(self: *@This(), class: *ZigClass) !void {
+        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
             const member = try class.getMember(.instance, 0);
             if (member.accessors != .primitive) return error.InvalidAccessor;
             self.value_acc = &member.accessors.primitive;
@@ -80,7 +80,7 @@ pub const Enum = struct {
         const self = fromObject(obj);
         self.bytes.release();
         if (self.canonical == null or self.canonical.?.unknown) {
-            const class = ZigClass.fromObject(obj);
+            const class = ZigClassEntry.fromObject(obj);
             class.release();
         }
         if (self.canonical) |props| {
@@ -97,7 +97,7 @@ pub const Enum = struct {
 
     fn getCanonical(self: *@This()) !*@This() {
         if (self.canonical != null) return self;
-        const class = ZigClass.fromStructure(self);
+        const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const tag_value = try static.value_acc.get(self.bytes);
         const tag_code = try php.getValueLong(&tag_value);
@@ -124,7 +124,7 @@ pub const Enum = struct {
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
-        const class = ZigClass.fromStructure(self);
+        const class = ZigClassEntry.fromStructure(self);
         var static = class.getStaticData(@This());
         const tag_value = find: {
             if (php.getValueObject(value)) |tag_obj| {

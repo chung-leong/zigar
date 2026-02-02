@@ -2,7 +2,7 @@ const std = @import("std");
 
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const ZigClass = @import("../class.zig").ZigClass;
+const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
 const HashTable = php.HashTable;
 const Value = php.Value;
@@ -17,20 +17,20 @@ pub const Comptime = struct {
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
 
-        pub fn init(self: *@This(), class: *ZigClass) !void {
+        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
             const member = try class.getMember(.instance, 0);
             self.value_acc = &member.accessors;
         }
     };
 
     pub fn readSelf(self: *@This()) !Value {
-        const class = ZigClass.fromStructure(self);
+        const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         return try static.value_acc.get(self);
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
-        const class = ZigClass.fromStructure(self);
+        const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         return try static.value_acc.set(self, value);
     }

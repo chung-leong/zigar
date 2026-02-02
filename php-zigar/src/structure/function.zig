@@ -1,7 +1,8 @@
 const std = @import("std");
 
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const ZigClass = @import("../class.zig").ZigClass;
+const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const Closure = @import("../closure.zig").Closure;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const ArgumentIterator = php.ArgumentIterator;
@@ -13,16 +14,15 @@ const structure = @import("../structure.zig");
 
 pub const Function = struct {
     address: usize = undefined,
-    function: php.Function = undefined,
-    is_method: bool = false,
+    closure: *Closure = undefined,
 
     const Super = structure.Parent(@This());
     pub const Static = struct {
         thunk_address: usize = undefined,
         controller_address: usize = undefined,
-        argument_class: *ZigClass = undefined,
+        argument_class: *ZigClassEntry = undefined,
 
-        pub fn init(self: *@This(), class: *ZigClass) !void {
+        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
             self.thunk_address = getAddress(class, .instance);
             self.controller_address = getAddress(class, .static);
             const member = try class.getMember(.instance, 0);
@@ -33,7 +33,7 @@ pub const Function = struct {
             }
         }
 
-        fn getAddress(class: *ZigClass, comptime scope: ZigClass.ScopeType) usize {
+        fn getAddress(class: *ZigClassEntry, comptime scope: ZigClassEntry.ScopeType) usize {
             const buffer = @field(class, @tagName(scope)).template.bytes orelse return 0;
             return @intFromPtr(buffer.bytes.ptr);
         }
@@ -41,56 +41,48 @@ pub const Function = struct {
 
     pub fn setStorage(self: *@This(), buffer: *ByteBuffer, _: *const Value) !void {
         self.address = @intFromPtr(buffer.bytes.ptr);
-        self.function = php.createFunction(run, "run");
+        self.closure = try Closure.create(self, invokeThunk, null);
     }
 
-    pub fn invokeThunk(self: *@This(), arg_iter: *ArgumentIterator) !Value {
-        const class = ZigClass.fromStructure(self);
-        const static = class.getStaticData(Function);
-        const arg = try ZigClass.createObject(static.argument_class.entry());
-        defer php.release(arg);
-        switch (static.argument_class.type) {
-            .arg_struct => {
-                const arg_struct = structure.ArgStruct.fromObject(arg);
-                const arg_addr = @intFromPtr(arg_struct.bytes.bytes.ptr);
-                try arg_struct.copyArguments(arg_iter);
-                try class.host.runThunk(static.thunk_address, self.address, arg_addr);
-                return try arg_struct.getReturnValue();
-            },
-            .variadic_struct => {
-                // TODO
-                unreachable;
-            },
-            else => unreachable,
+    pub fn invokeThunk(self: *@This(), arg_iter: *ArgumentIterator) !?Value {
+        if (self.address != 0) {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(Function);
+            const arg = try ZigClassEntry.createObject(static.argument_class.entry());
+            defer php.release(arg);
+            switch (static.argument_class.type) {
+                .arg_struct => {
+                    const arg_struct = structure.ArgStruct.fromObject(arg);
+                    const arg_addr = @intFromPtr(arg_struct.bytes.bytes.ptr);
+                    const is_method_call = false;
+                    if (is_method_call) arg_iter.makeThisFirst();
+                    try arg_struct.copyArguments(arg_iter);
+                    try class.host.runThunk(static.thunk_address, self.address, arg_addr);
+                    return try arg_struct.getReturnValue();
+                },
+                .variadic_struct => {
+                    // TODO
+                    @panic("TODO");
+                },
+                else => unreachable,
+            }
+        } else {
+            @panic("TODO");
         }
     }
 
     pub fn getClosure(obj: *Object, ce: *[*c]ClassEntry, func: *[*c]php.Function, this: ?*[*c]Object, _: bool) c_int {
         const self = Super.fromObject(obj);
+        func.* = self.closure.function();
         ce.* = obj.ce;
-        func.* = &self.function;
         if (this) |ptr| ptr.* = null;
         return php.SUCCESS;
     }
 
     pub fn freeObject(obj: *Object) void {
         const self = Super.fromObject(obj);
-        php.destroyFunction(&self.function);
+        self.closure.release();
         Super.freeObject(obj);
-    }
-
-    pub fn run(ed: *ExecuteData, return_value: *Value) void {
-        const self: *@This() = @fieldParentPtr("function", @as(*php.Function, ed.func));
-        var arg_iter: ArgumentIterator = .init(ed, .{ .use_this = self.is_method });
-        if (self.invokeThunk(&arg_iter)) |result| {
-            return_value.* = result;
-        } else |err| {
-            switch (err) {
-                error.IncorrectArgumentCount => php.reportWrongParamCount(),
-                else => php.throwError(err),
-            }
-            return_value.* = php.createValueNull();
-        }
     }
 
     pub const fromObject = Super.fromObject;

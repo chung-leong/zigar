@@ -12,7 +12,7 @@ const HashTable = php.HashTable;
 const Stream = php.Stream;
 const Value = php.Value;
 const redirection = @import("redirection.zig");
-const ZigClass = @import("class.zig").ZigClass;
+const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
 pub const CallDispatcher = struct {
     redirection_mask: Syscall.Mask = .{},

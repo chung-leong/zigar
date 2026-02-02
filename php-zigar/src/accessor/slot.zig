@@ -3,7 +3,7 @@ const std = @import("std");
 const accessor = @import("../accessor.zig");
 const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const ZigClass = @import("../class.zig").ZigClass;
+const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
 const Value = php.Value;
 

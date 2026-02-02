@@ -3,7 +3,7 @@ const std = @import("std");
 const accessor = @import("../accessor.zig");
 const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
-const ZigClass = @import("../class.zig").ZigClass;
+const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
 const HashTableIterator = php.HashTableIterator;
 const Value = php.Value;
@@ -17,7 +17,7 @@ pub const Struct = struct {
     pub const Static = struct {
         required_field_count: usize = 0,
 
-        pub fn init(self: *@This(), class: *ZigClass) !void {
+        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
             var iter = class.getMemberIterator(.instance);
             while (iter.next()) |member| {
                 if (member.flags.is_required) self.required_field_count += 1;
@@ -31,7 +31,7 @@ pub const Struct = struct {
     pub fn copyArguments(self: *@This(), arg_iter: *php.ArgumentIterator) !void {
         if (arg_iter.len == 0) {
             // check if the struct has default values for all fields
-            const class = ZigClass.fromStructure(self);
+            const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
             if (static.required_field_count == 0) return;
             // let the default implementation throw an exception

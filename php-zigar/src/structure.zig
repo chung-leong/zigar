@@ -12,6 +12,7 @@ const String = php.String;
 const Value = php.Value;
 pub const ArgStruct = @import("structure/arg-struct.zig").ArgStruct;
 pub const Array = @import("structure/array.zig").Array;
+pub const Class = @import("structure/class.zig").Class;
 pub const Comptime = @import("structure/comptime.zig").Comptime;
 pub const Enum = @import("structure/enum.zig").Enum;
 pub const ErrorSet = @import("structure/error-set.zig").ErrorSet;
@@ -22,12 +23,11 @@ pub const Optional = @import("structure/optional.zig").Optional;
 pub const Pointer = @import("structure/pointer.zig").Pointer;
 pub const Primitive = @import("structure/primitive.zig").Primitive;
 pub const Slice = @import("structure/slice.zig").Slice;
-pub const Static = @import("structure/static.zig").Static;
 pub const Struct = @import("structure/struct.zig").Struct;
 pub const Union = @import("structure/union.zig").Union;
 pub const VariadicStruct = @import("structure/variadic-struct.zig").VariadicStruct;
 pub const Vector = @import("structure/vector.zig").Vector;
-const ZigClass = @import("class.zig").ZigClass;
+const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigObject = @import("object.zig").ZigObject;
 
 pub const by_enum = .{
@@ -61,10 +61,10 @@ pub fn enumName(comptime S: type) []const u8 {
 
 pub fn Parent(comptime S: type) type {
     return struct {
-        const scope: ZigClass.ScopeType = if (@hasDecl(S, "scope")) S.scope else .instance;
+        const scope: ZigClassEntry.ScopeType = if (@hasDecl(S, "scope")) S.scope else .instance;
 
         const CacheEntry = extern struct {
-            class: ?*const ZigClass,
+            class: ?*const ZigClassEntry,
             accessors: *const accessor.Any,
         };
 
@@ -93,7 +93,7 @@ pub fn Parent(comptime S: type) type {
                     true => @field(S, "constructor_args"),
                     false => "one argument",
                 };
-                const class = ZigClass.fromStructure(self);
+                const class = ZigClassEntry.fromStructure(self);
                 php.throwExceptionFmt("{s} constructor expects " ++ arg_desc, .{
                     class.getStructureName(),
                 });
@@ -133,7 +133,7 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn findAccessors(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !*const accessor.Any {
-            const class = ZigClass.fromStructure(self);
+            const class = ZigClassEntry.fromStructure(self);
             const cache_entry: ?*CacheEntry = @ptrCast(cache_slot);
             if (cache_entry) |cached| {
                 if (cached.class == class) return cached.accessors;
@@ -149,7 +149,7 @@ pub fn Parent(comptime S: type) type {
         pub fn throwFieldError(self: *S, name: *String, err: anytype) void {
             switch (err) {
                 error.Missing => {
-                    const class = ZigClass.fromStructure(self);
+                    const class = ZigClassEntry.fromStructure(self);
                     if (scope == .instance) {
                         php.throwExceptionFmt("no field named '{s}' in {s} '{s}' (zig)", .{
                             php.getStringContent(name),
@@ -172,7 +172,7 @@ pub fn Parent(comptime S: type) type {
             const self = fromObject(obj);
             if (@hasField(S, "bytes")) self.bytes.release();
             if (@hasField(S, "slots")) php.release(&self.slots);
-            const class = ZigClass.fromObject(obj);
+            const class = ZigClassEntry.fromObject(obj);
             class.release();
         }
 
@@ -229,7 +229,7 @@ pub fn invokeFunction(obj: *Object, comptime name: []const u8, args: anytype) RT
     if (payload == null) @compileError("No matching function: " ++ name);
     break :RT @Type(.{ .error_union = .{ .error_set = error_set, .payload = payload.? } });
 } {
-    const class = ZigClass.fromObject(obj);
+    const class = ZigClassEntry.fromObject(obj);
     switch (class.type) {
         inline else => |t| {
             const s_name = @tagName(t);

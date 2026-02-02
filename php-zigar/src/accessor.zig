@@ -12,7 +12,7 @@ const invokeFunction = @import("structure.zig").invokeFunction;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
 const Value = php.Value;
-const ZigClass = @import("class.zig").ZigClass;
+const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
 pub const Error = error{
     CannotCreateObject,
@@ -112,7 +112,7 @@ pub const MultiSlot = struct {
         byte_offset: usize = undefined,
         byte_size: usize,
         slot: usize,
-        class: *ZigClass,
+        class: *ZigClassEntry,
         transform: ?Transform = null,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer, *Value) Error!Value;
@@ -135,7 +135,7 @@ pub const SingleSlot = struct {
     pub const Parameters = struct {
         byte_offset: usize = undefined,
         byte_size: usize,
-        class: *ZigClass,
+        class: *ZigClassEntry,
         transform: ?Transform = null,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer, *Value) Error!Value;
@@ -158,7 +158,7 @@ pub const ArraySlot = struct {
     pub const Parameters = struct {
         byte_size: usize,
         slot: usize,
-        class: *ZigClass,
+        class: *ZigClassEntry,
         transform: ?Transform = null,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer, *Value, usize) Error!Value;

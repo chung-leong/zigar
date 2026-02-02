@@ -11,7 +11,7 @@ const FunctionEntry = php.FunctionEntry;
 const ModuleEntry = php.ModuleEntry;
 const String = php.String;
 const Value = php.Value;
-const ZigClass = @import("class.zig").ZigClass;
+const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigCompiler = @import("compilation.zig").ZigCompiler;
 
 export fn php_zigar_init(_: c_int, _: c_int) php.Result {
@@ -24,7 +24,7 @@ export fn php_zigar_init(_: c_int, _: c_int) php.Result {
             }
         }
     }
-    ZigClass.registerGlobalClasses() catch return php.FAILURE;
+    ZigClassEntry.registerGlobalClasses() catch return php.FAILURE;
     return php.SUCCESS;
 }
 
