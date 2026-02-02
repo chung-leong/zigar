@@ -59,6 +59,8 @@ pub const ModuleEntry = extern struct {
 };
 pub const Object = php_h.zend_object;
 pub const ObjectHandlers = php_h.zend_object_handlers;
+pub const ObjectIterator = php_h.zend_object_iterator;
+pub const ObjectIteratorFunctions = php_h.zend_object_iterator_funcs;
 pub const RefCounted = php_h.zend_refcounted;
 pub const Result = php_h.zend_result;
 pub const Stream = php_h.php_stream;

@@ -3,8 +3,11 @@ const std = @import("std");
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const Iterator = @import("../iterator.zig").Iterator;
 const php = @import("../php.zig");
+const ClassEntry = php.ClassEntry;
 const Object = php.Object;
+const ObjectIterator = php.ObjectIterator;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("../structure.zig");
@@ -71,6 +74,11 @@ pub const Array = struct {
         if (len > std.math.maxInt(php.Long)) return error.TooLarge;
         count.* = @intCast(len);
         return php.SUCCESS;
+    }
+
+    pub fn getIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
+        const obj = try php.getValueObject(this);
+        return try Iterator(@This()).create(obj);
     }
 
     fn getIndex(key: *Value) !usize {

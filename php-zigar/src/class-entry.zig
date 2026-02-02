@@ -202,18 +202,6 @@ pub const ZigClassEntry = struct {
                     return error.InvalidSignature;
             },
         };
-        // create the class object,
-        // it's structure-specific
-        const class_obj, const class_closures = switch (self.type) {
-            inline else => |t| create: {
-                const S = @field(structure.by_enum, @tagName(t));
-                const C = structure.Class(S);
-                const class_zobj = try ZigObject(C).create(self);
-                // obtain its closure table
-                break :create .{ class_zobj.object(), class_zobj.zig_portion.closures };
-            },
-        };
-        errdefer php.release(class_obj);
         const interfaces = try self.createInterfaceList();
         const ce = &self.php_portion;
         ce.* = .{
@@ -239,9 +227,33 @@ pub const ZigClassEntry = struct {
                     .filename = php.createString("filename"),
                 },
             },
-            .constructor = class_closures.construct.function(),
-            .__tostring = class_closures.stringify.function(),
         };
+        // create the class object
+        const class_obj, const class_closures = switch (self.type) {
+            inline else => |t| create: {
+                const S = @field(structure.by_enum, @tagName(t));
+                const C = structure.Class(S);
+                const class_zobj = try ZigObject(C).create(self);
+                if (@hasDecl(S, "getIterator"))
+                    ce.get_iterator = php.transform(S.getIterator);
+                // obtain its closure table
+                break :create .{ class_zobj.object(), &class_zobj.zig_portion.closures };
+            },
+        };
+        // set methods that are implemented as function objects
+        inline for (comptime std.meta.fields(@TypeOf(class_closures.*))) |field| {
+            if (@hasField(ClassEntry, field.name)) {
+                if (@field(class_closures, field.name)) |closure|
+                    @field(ce, field.name) = closure.function();
+            }
+        }
+        // set methods that are use direct callbacks
+        switch (self.type) {
+            inline else => |t| {
+                const S = @field(structure.by_enum, @tagName(t));
+                if (@hasDecl(S, "getIterator")) ce.get_iterator = php.transform(S.getIterator);
+            },
+        }
         self.release();
         return class_obj;
     }
@@ -363,6 +375,8 @@ pub const ZigClassEntry = struct {
         switch (self.type) {
             .array, .vector, .slice => {
                 buffer[count] = php.getInterface(.array_access);
+                count += 1;
+                buffer[count] = php.getInterface(.traversable);
                 count += 1;
             },
             .error_set => {

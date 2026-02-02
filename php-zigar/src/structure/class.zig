@@ -10,19 +10,22 @@ const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
 const Function = php.Function;
 const Object = php.Object;
+const ObjectIterator = php.ObjectIterator;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("../structure.zig");
+
+const Closures = struct {
+    constructor: ?*Closure = null,
+    cast: ?*Closure = null,
+    __tostring: ?*Closure = null,
+};
 
 pub fn Class(comptime S: type) type {
     return struct {
         // these needs to be initialized, since setStorage() isn't called immediately
         slots: Value = .{},
-        closures: struct {
-            construct: *Closure,
-            cast: *Closure,
-            stringify: *Closure,
-        } = undefined,
+        closures: Closures = .{},
 
         pub const scope: ZigClassEntry.ScopeType = .static;
 
@@ -30,16 +33,16 @@ pub fn Class(comptime S: type) type {
 
         pub fn setStorage(self: *@This(), bytes: *ByteBuffer, slots: *const Value) !void {
             try Super.setStorage(self, bytes, slots);
-            self.closures.construct = try Closure.create(self, construct, "construct");
+            self.closures.constructor = try Closure.create(self, construct, "constructor");
             self.closures.cast = try Closure.create(self, cast, "cast");
-            self.closures.stringify = try Closure.create(self, stringify, "stringify");
+            if (@hasDecl(S, "stringify"))
+                self.closures.__tostring = try Closure.create(self, stringify, "stringify");
         }
 
         pub fn freeObject(obj: *Object) void {
             const self = fromObject(obj);
             inline for (comptime std.meta.fields(@TypeOf(self.closures))) |field| {
-                const c = @field(self.closures, field.name);
-                c.release();
+                if (@field(self.closures, field.name)) |c| c.release();
             }
             Super.freeObject(obj);
         }
@@ -57,7 +60,7 @@ pub fn Class(comptime S: type) type {
             } else if (field_obj.handlers.*.get_closure) |_| {
                 // aside from Function, only Class implements getClosure()
                 const class_struct = fromObject(field_obj);
-                return class_struct.closures.cast.function();
+                if (class_struct.closures.cast) |c| return c.function();
             }
             return null;
         }
@@ -65,8 +68,12 @@ pub fn Class(comptime S: type) type {
         pub fn getClosure(obj: *Object, _: *[*c]ClassEntry, fn_ptr: *[*c]Function, _: *[*c]Object, _: bool) c_int {
             // the class reference object functions as a casting operator when called
             const self = fromObject(obj);
-            fn_ptr.* = self.closures.cast.function();
-            return php.SUCCESS;
+            if (self.closures.cast) |c| {
+                fn_ptr.* = c.function();
+                return php.SUCCESS;
+            } else {
+                return php.FAILURE;
+            }
         }
 
         pub fn construct(_: *@This(), arg_iter: *ArgumentIterator) !void {
@@ -109,11 +116,7 @@ pub fn Class(comptime S: type) type {
 
         pub fn stringify(_: *@This(), arg_iter: *ArgumentIterator) !?Value {
             const this_struct = try getThis(arg_iter);
-            if (@hasDecl(S, "stringify")) {
-                return try this_struct.stringify();
-            } else {
-                @panic("stringify() is not implemented: " ++ @typeName(S));
-            }
+            return try this_struct.stringify();
         }
 
         fn getThis(arg_iter: *ArgumentIterator) !*S {
