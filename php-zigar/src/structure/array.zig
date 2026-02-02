@@ -6,6 +6,7 @@ const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const Iterator = @import("../iterator.zig").Iterator;
 const php = @import("../php.zig");
 const ClassEntry = php.ClassEntry;
+const HashTable = php.HashTable;
 const Object = php.Object;
 const ObjectIterator = php.ObjectIterator;
 const String = php.String;
@@ -91,5 +92,6 @@ pub const Array = struct {
     pub const setStorage = Super.setStorage;
     pub const copyArguments = Super.copyArguments;
     pub const readSelf = Super.readSelf;
+    pub const getProperties = Iterator(@This()).getProperties;
     pub const freeObject = Super.freeObject;
 };

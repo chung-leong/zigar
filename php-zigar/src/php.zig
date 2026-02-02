@@ -80,6 +80,13 @@ pub const MAY_BE_STRING = php_h.MAY_BE_STRING;
 pub const MAY_BE_ARRAY = php_h.MAY_BE_ARRAY;
 pub const MAY_BE_OBJECT = php_h.MAY_BE_OBJECT;
 
+pub const PURPOSE_DEBUG = 0;
+pub const PURPOSE_ARRAY_CAST = 1;
+pub const PURPOSE_SERIALIZE = 2;
+pub const PURPOSE_VAR_EXPORT = 3;
+pub const PURPOSE_JSON = 4;
+pub const PURPOSE_NON_EXHAUSTIVE_ENUM = 5;
+
 pub const INTERNAL_CLASS = php_h.ZEND_INTERNAL_CLASS;
 pub const USER_CLASS = php_h.ZEND_USER_CLASS;
 pub const INTERNAL_FUNCTION = php_h.ZEND_INTERNAL_FUNCTION;

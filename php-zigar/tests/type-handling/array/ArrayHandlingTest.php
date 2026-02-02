@@ -6,6 +6,18 @@ final class ArrayHandlingTest extends TestCase
     public function testImportArrayAsStaticVariables(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
+        $this->assertSame([ ...$m->int32_array4 ], [ 1, 2, 3, 4 ]);
+        // invalid operation error
+        // $this->assertSame([ ...$m->float64_array4x4[3] ], [ 4.1, 4.2, 4.3, 4.4 ]);
+        for ($i = 0; $i < count($m->int32_array4); $i++) {
+            $m->int32_array4[$i] *= 4;
+        }
+
+        $this->expectOutputString(<<<OUTPUT
+        { 4, 8, 12, 16 }
+
+        OUTPUT);
+        $m->print();
     }
 
     public function testPrintArrayArguments(): void

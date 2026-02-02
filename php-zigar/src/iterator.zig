@@ -2,6 +2,7 @@ const std = @import("std");
 
 const php = @import("php.zig");
 const ClassEntry = php.ClassEntry;
+const HashTable = php.HashTable;
 const Object = php.Object;
 const ObjectIterator = php.ObjectIterator;
 const ObjectIteratorFunctions = php.ObjectIteratorFunctions;
@@ -71,6 +72,22 @@ pub fn Iterator(comptime S: type) type {
 
         pub fn rewind(iter: *ObjectIterator) void {
             iter.index = 0;
+        }
+
+        pub fn getProperties(obj: *Object) !*HashTable {
+            const ht = php.createArray();
+            var count: c_long = undefined;
+            _ = try S.countElements(obj, &count);
+            var i: c_long = 0;
+            while (i < count) : (i += 1) {
+                var key = php.createValueLong(i);
+                var value: Value = undefined;
+                _ = try S.readElement(obj, &key, 0, &value);
+                _ = php.appendHashEntry(ht, &value);
+            }
+            // caller seem to expect a hash table with zero refcount
+            ht.gc.refcount = 0;
+            return ht;
         }
 
         const functions: ObjectIteratorFunctions = .{
