@@ -344,7 +344,7 @@ pub fn removeError(retval: anytype) switch (@typeInfo(@TypeOf(retval))) {
 
 pub const initializeClassData = php_h.zend_initialize_class_data;
 
-const Type = enum(u8) {
+pub const Type = enum(u8) {
     undefined = php_h.IS_UNDEF, // 0
     null = php_h.IS_NULL, // 1
     false = php_h.IS_FALSE, // 2
@@ -356,6 +356,10 @@ const Type = enum(u8) {
     object = php_h.IS_OBJECT, // 8
     resource = php_h.IS_RESOURCE, // 9
     reference = php_h.IS_REFERENCE, // 10
+
+    pub fn fromNumber(n: c_int) !@This() {
+        return std.meta.intToEnum(@This(), n);
+    }
 
     pub fn isBool(self: @This()) bool {
         return self == .false or self == .true;

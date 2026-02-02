@@ -35,7 +35,7 @@ pub const Comptime = struct {
         return try static.value_acc.set(self, value);
     }
 
-    pub fn getString(self: *@This()) !Value {
+    pub fn stringify(self: *@This()) !Value {
         var value = try self.readSelf();
         php.convertValueToString(&value);
         return value;

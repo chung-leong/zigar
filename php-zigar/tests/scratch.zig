@@ -1,8 +1,12 @@
 const std = @import("std");
 
-pub const StructA = struct {
-    number1: i32 = 123,
-    number2: i64 = 456,
-};
+pub var string: [5]u8 = .{ 'H', 'e', 'l', 'l', 'o' };
 
-pub var struct_a: StructA = .{ .number1 = -5, .number2 = -444 };
+pub var plain_array: [5]u8 = .{ 'H', 'e', 'l', 'l', 'o' };
+
+const ns = @This();
+pub const @"meta(zigar)" = struct {
+    pub fn isDeclString(comptime T: type, comptime decl: std.meta.DeclEnum(T)) bool {
+        return T == ns and decl == .string;
+    }
+};

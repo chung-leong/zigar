@@ -34,13 +34,13 @@ pub const Primitive = struct {
         return try static.value_acc.set(self.bytes, value);
     }
 
-    pub fn getString(self: *@This()) !Value {
+    pub fn stringify(self: *@This()) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         return try static.value_acc.stringify(self.bytes);
     }
 
-    pub const getPlain = readSelf;
+    pub const plainify = readSelf;
 
     pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;

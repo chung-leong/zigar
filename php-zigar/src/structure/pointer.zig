@@ -24,10 +24,10 @@ pub const Pointer = struct {
         unreachable;
     }
 
-    pub fn getString(self: *@This()) !Value {
+    pub fn stringify(self: *@This()) !Value {
         const class = ZigClassEntry.fromStructure(self);
         _ = class;
-        std.debug.print("getString\n", .{});
+        std.debug.print("stringify\n", .{});
         unreachable;
     }
 

@@ -315,8 +315,8 @@ pub fn read(entry: *Value, transform: ?Transform) !Value {
     if (transform) |t| {
         const obj = try php.getValueObject(entry);
         return switch (t) {
-            .to_string => try invokeFunction(obj, "getString", .{}),
-            .to_plain => try invokeFunction(obj, "getPlain", .{}),
+            .to_string => try invokeFunction(obj, "stringify", .{}),
+            .to_plain => try invokeFunction(obj, "plainify", .{}),
             .to_value => try invokeFunction(obj, "readSelf", .{}),
         };
     } else {

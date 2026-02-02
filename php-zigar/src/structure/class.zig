@@ -35,7 +35,8 @@ pub fn Class(comptime S: type) type {
             try Super.setStorage(self, bytes, slots);
             self.closures.constructor = try Closure.create(self, construct, "constructor");
             self.closures.cast = try Closure.create(self, cast, "cast");
-            if (@hasDecl(S, "stringify"))
+            const class = ZigClassEntry.fromStructure(self);
+            if (@hasDecl(S, "stringify") and class.flags.array.is_string)
                 self.closures.__tostring = try Closure.create(self, stringify, "stringify");
         }
 

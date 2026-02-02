@@ -33,7 +33,7 @@ pub const Array = struct {
         unreachable;
     }
 
-    pub fn getString(self: *@This()) !Value {
+    pub fn stringify(self: *@This()) !Value {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.array.is_string) {
             if (class.byte_size == class.length) {
@@ -75,6 +75,17 @@ pub const Array = struct {
         if (len > std.math.maxInt(php.Long)) return error.TooLarge;
         count.* = @intCast(len);
         return php.SUCCESS;
+    }
+
+    pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
+        const value_type = php.Type.fromNumber(type_id) catch return php.FAILURE;
+        if (value_type == .string) {
+            const self = Super.fromObject(obj);
+            const value = self.stringify() catch return php.FAILURE;
+            retval.* = value;
+            return php.SUCCESS;
+        }
+        return php.FAILURE;
     }
 
     pub fn getIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
