@@ -3,6 +3,6 @@
 zigar_compile_module(__DIR__ . "/scratch.zig", "/tmp/scratch.zigar");
 $m = zigar_load_module("/tmp/scratch.zigar");
 
-$b = [ ...$m->vector, 5 ];
+$b = array($m->struct_a);
 
 print_r($b);

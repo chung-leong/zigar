@@ -5,7 +5,9 @@ const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
+const HashTable = php.HashTable;
 const HashTableIterator = php.HashTableIterator;
+const Object = php.Object;
 const Value = php.Value;
 const structure = @import("../structure.zig");
 
@@ -52,6 +54,23 @@ pub const Struct = struct {
         }
     }
 
+    pub fn getProperties(obj: *Object) !*HashTable {
+        const self = fromObject(obj);
+        const class = ZigClassEntry.fromObject(obj);
+        const ht = php.createArray();
+        var iter = class.getMemberIterator(.instance);
+        while (iter.next()) |member| {
+            if (iter.currentName()) |name| {
+                var value = try member.accessors.get(self);
+                php.setHashEntry(ht, name, &value);
+            }
+        }
+        // caller seem to expect a hash table with zero refcount
+        ht.gc.refcount = 0;
+        return ht;
+    }
+
+    pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
