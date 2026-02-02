@@ -349,8 +349,9 @@ pub const ZigCompiler = struct {
         if (dirExists(self.zigar_src_path)) return;
         try makeDirectory(self.zigar_src_path);
         var input: std.Io.Reader = .fixed(@embedFile("./zig.tar.zstd"));
-        var buffer: [1024 * 1024]u8 = undefined;
-        var decompressor: std.compress.zstd.Decompress = .init(&input, &buffer, .{});
+        const buffer: []u8 = try php.allocator.alloc(u8, std.compress.zstd.default_window_len);
+        defer php.allocator.free(buffer);
+        var decompressor: std.compress.zstd.Decompress = .init(&input, buffer, .{});
         var dir = try std.fs.openDirAbsolute(self.zigar_src_path, .{});
         defer dir.close();
         try std.tar.pipeToFileSystem(dir, &decompressor.reader, .{});

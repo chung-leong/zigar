@@ -90,12 +90,11 @@ final class IntHandlingTest extends TestCase
     public function testHandleIntInStruct(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
-
+        $m->print();
         $this->expectOutputString(<<<OUTPUT
         .{ .number1 = -5, .number2 = -444 }
 
         OUTPUT);
-        $m->print();
     }
 
     public function testHandleIntInPackedStruct(): void
@@ -144,7 +143,22 @@ final class IntHandlingTest extends TestCase
     public function testHandleIntInErrorUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
-        $this->assertSame("B", "B");
+        $this->assertSame(3000, $m->error_union);
+
+        $this->expectOutputString(<<<OUTPUT
+        3000
+        GoldfishDied
+        4000
+
+        OUTPUT);
+        $m->print();
+        $m->error_union = $m->Error->GoldfishDied;
+        $m->print();
+        $m->error_union = 4000;
+        $m->print();
+
+        $this->expectException(ZigError);
+        $m->error_union;
     }
 
     public function testHandleIntInVector(): void

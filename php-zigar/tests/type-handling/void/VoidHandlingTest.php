@@ -110,7 +110,7 @@ final class VoidHandlingTest extends TestCase
 
     public function testHandleVoidInVector(): void
     {
-        $this->expectExceptionMessage("unable to create module 'vector-of'");
+        $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
     }
 }

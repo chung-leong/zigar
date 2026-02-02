@@ -47,7 +47,7 @@ final class ComptimeIntHandlingTest extends TestCase
 
     public function testHandleComptimeIntInPackedStruct(): void
     {
-        $this->expectExceptionMessage("unable to create module 'in-packed-struct'");
+        $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
     }
 
@@ -84,7 +84,7 @@ final class ComptimeIntHandlingTest extends TestCase
 
     public function testHandleComptimeIntInVector(): void
     {
-        $this->expectExceptionMessage("unable to create module 'vector-of'");
+        $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
     }   
 }

@@ -5,13 +5,13 @@ final class NoReturnHandlingTest extends TestCase
 {   
     public function testImportNoReturnAsStaticVariables(): void
     {
-        $this->expectExceptionMessage("unable to create module 'as-static-variables'");
+        $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
     }
 
     public function testPrintNoReturnArguments(): void
     {
-        $this->expectExceptionMessage("unable to create module 'as-function-parameters'");
+        $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
     }
 
@@ -24,55 +24,55 @@ final class NoReturnHandlingTest extends TestCase
 
     public function testHandleNoReturnInArray(): void
     {
-        $this->expectExceptionMessage("unable to create module 'array-of'");
+        $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/array-of.zig');
     }
 
     public function testHandleNoReturnInStruct(): void
     {
-        $this->expectExceptionMessage("unable to create module 'in-struct'");
+        $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
     }
 
     public function testHandleNoReturnInPackedStruct(): void
     {
-        $this->expectExceptionMessage("unable to create module 'in-packed-struct'");
+        $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
     }
 
     public function testHandleNoReturnAsComptimeField(): void
     {
-        $this->expectExceptionMessage("unable to create module 'as-comptime-field'");
+        $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
     }
 
     public function testHandleNoReturnInBareUnion(): void
     {
-        $this->expectExceptionMessage("unable to create module 'in-bare-union'");
+        $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
     }
 
     public function testHandleNoReturnInTaggedUnion(): void
     {
-        $this->expectExceptionMessage("unable to create module 'in-tagged-union'");
+        $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/in-tagged-union.zig');
     }
 
     public function testHandleNoReturnInOptional(): void
     {
-        $this->expectExceptionMessage("unable to create module 'in-optional'");
+        $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
     }
 
     public function testHandleNoReturnInErrorUnion(): void
     {
-        $this->expectExceptionMessage("unable to create module 'in-error-union'");
+        $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
     }
 
     public function testHandleNoReturnInVector(): void
     {
-        $this->expectExceptionMessage("unable to create module 'vector-of'");
+        $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
     }
 }

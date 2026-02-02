@@ -59,7 +59,7 @@ pub const ModuleHost = struct {
         self.ref_count -= 1;
         // std.debug.print("release host (ref = {d})\n", .{self.ref_count});
         if (self.ref_count == 0) {
-            std.debug.print("freeing host\n", .{});
+            // std.debug.print("freeing host\n", .{});
             self.dispatcher.deinit();
             if (self.library) |*lib| lib.close();
             php.allocator.destroy(self);

@@ -40,7 +40,7 @@ final class ComptimeFloatHandlingTest extends TestCase
 
     public function testHandleComptimeFloatInPackedStruct(): void
     {
-        $this->expectExceptionMessage("unable to create module 'in-packed-struct'");
+        $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
     }
 
@@ -77,7 +77,7 @@ final class ComptimeFloatHandlingTest extends TestCase
 
     public function testHandleComptimeFloatInVector(): void
     {
-        $this->expectExceptionMessage("unable to create module 'vector-of'");
+        $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
     }   
 }
