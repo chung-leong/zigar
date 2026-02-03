@@ -49,8 +49,8 @@ pub const Optional = struct {
         try static.present_acc.set(self.bytes, &present_flag);
     }
 
-    pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
     pub const copyArguments = Super.copyArguments;
     pub const freeObject = Super.freeObject;
+    const fromObject = Super.fromObject;
 };

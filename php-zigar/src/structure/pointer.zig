@@ -31,9 +31,8 @@ pub const Pointer = struct {
         unreachable;
     }
 
-    pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
     pub const copyArguments = Super.copyArguments;
     pub const freeObject = Super.freeObject;
-    pub const readProperty = Super.readProperty;
+    const fromObject = Super.fromObject;
 };

@@ -22,9 +22,8 @@ pub const VariadicStruct = struct {
         _ = self;
     }
 
-    pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
-    pub const readProperty = Super.readProperty;
+    const fromObject = Super.fromObject;
 };

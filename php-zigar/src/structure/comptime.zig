@@ -41,7 +41,7 @@ pub const Comptime = struct {
         return value;
     }
 
-    pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
     pub const freeObject = Super.freeObject;
+    const fromObject = Super.fromObject;
 };

@@ -132,7 +132,6 @@ pub const ErrorSet = struct {
 
     pub fn freeObject(obj: *Object) void {
         const self = fromObject(obj);
-        self.bytes.release();
         if (self.canonical == null or self.canonical.?.unknown) {
             const class = ZigClassEntry.fromObject(obj);
             class.release();
@@ -140,6 +139,7 @@ pub const ErrorSet = struct {
         if (self.canonical) |props| {
             props.release();
         }
+        Super.freeObject(obj);
     }
 
     pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
@@ -184,26 +184,6 @@ pub const ErrorSet = struct {
         const err_obj = err_struct.object();
         php.addRef(err_obj);
         return php.createValueObject(err_obj);
-    }
-
-    fn getCanonical(self: *@This()) !*@This() {
-        if (self.canonical != null) return self;
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        const err_value = try static.value_acc.get(self.bytes);
-        const err_code = try php.getValueLong(&err_value);
-        if (static.findError(err_code)) |err_obj| {
-            return fromObject(err_obj);
-        } else |_| {
-            // unknown error number--attach a canonical struct
-            var buffer: [32]u8 = undefined;
-            const text = std.fmt.bufPrint(&buffer, "Unknown error #{d}", .{err_code}) catch unreachable;
-            const message = php.createString(text);
-            const props = try php.allocator.create(Canonical);
-            props.* = .{ .message = message, .unknown = true };
-            self.canonical = props;
-            return self;
-        }
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
@@ -329,9 +309,29 @@ pub const ErrorSet = struct {
         return php.createValueNull();
     }
 
-    pub const fromObject = Super.fromObject;
+    fn getCanonical(self: *@This()) !*@This() {
+        if (self.canonical != null) return self;
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        const err_value = try static.value_acc.get(self.bytes);
+        const err_code = try php.getValueLong(&err_value);
+        if (static.findError(err_code)) |err_obj| {
+            return fromObject(err_obj);
+        } else |_| {
+            // unknown error number--attach a canonical struct
+            var buffer: [32]u8 = undefined;
+            const text = std.fmt.bufPrint(&buffer, "Unknown error #{d}", .{err_code}) catch unreachable;
+            const message = php.createString(text);
+            const props = try php.allocator.create(Canonical);
+            props.* = .{ .message = message, .unknown = true };
+            self.canonical = props;
+            return self;
+        }
+    }
+
     pub const setStorage = Super.setStorage;
     pub const copyArguments = Super.copyArguments;
+    const fromObject = Super.fromObject;
     const object = Super.object;
 };
 

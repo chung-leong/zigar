@@ -36,47 +36,20 @@ pub const Struct = struct {
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
             if (static.required_field_count == 0) return;
-            // let the default implementation throw an exception
+            // let the parent implementation throw an exception
         }
         return try Super.copyArguments(self, arg_iter);
     }
 
-    pub fn writeSelf(self: *@This(), value: *const Value) Error!void {
-        const ht = try php.getValueHashTable(value);
-        var iter: HashTableIterator = .init(ht, .{});
-
-        while (iter.next()) |field_value| {
-            const name = iter.currentName() orelse return error.NotStringKey;
-            self.writeMember(name, field_value, null) catch |err| {
-                self.throwFieldError(name, err);
-                return error.ExceptionThrown;
-            };
-        }
-    }
-
-    pub fn getProperties(obj: *Object) !*HashTable {
-        const self = fromObject(obj);
-        const class = ZigClassEntry.fromObject(obj);
-        const ht = php.createArray();
-        var iter = class.getMemberIterator(.instance);
-        while (iter.next()) |member| {
-            if (iter.currentName()) |name| {
-                var value = try member.accessors.get(self);
-                php.setHashEntry(ht, name, &value);
-            }
-        }
-        // caller seem to expect a hash table with zero refcount
-        ht.gc.refcount = 0;
-        return ht;
-    }
-
-    pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
+    pub const writeSelf = Super.writeContainer;
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
-    pub const readProperty = Super.readProperty;
-    pub const writeProperty = Super.writeProperty;
+    pub const readProperty = Super.readContainerProperty;
+    pub const writeProperty = Super.writeContainerProperty;
+    pub const getProperties = Super.getContainerProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
+    const fromObject = Super.fromObject;
     const writeMember = Super.writeMember;
     const throwFieldError = Super.throwFieldError;
 };

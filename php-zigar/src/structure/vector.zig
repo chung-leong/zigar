@@ -50,35 +50,13 @@ pub const Vector = struct {
         try static.value_acc.set(self.bytes, index, value);
     }
 
-    pub fn hasElement(obj: *Object, key: *Value, _: c_int) !c_int {
-        const class = ZigClassEntry.fromObject(obj);
-        const index = getIndex(key) catch return 0;
-        const len = class.length orelse return error.MissingLength;
-        return if (index < len) 1 else 0;
-    }
-
-    pub fn countElements(obj: *Object, count: *php.Long) !c_int {
-        const class = ZigClassEntry.fromObject(obj);
-        const len = class.length orelse return error.MissingLength;
-        if (len > std.math.maxInt(php.Long)) return error.TooLarge;
-        count.* = @intCast(len);
-        return php.SUCCESS;
-    }
-
-    pub fn getIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
-        const obj = try php.getValueObject(this);
-        return try Iterator(@This()).create(obj);
-    }
-
-    fn getIndex(key: *Value) !usize {
-        const key_long = try php.getValueLong(key);
-        if (key_long < 0) return error.NegativeIndex;
-        return @intCast(key_long);
-    }
-
     pub const setStorage = Super.setStorage;
     pub const copyArguments = Super.copyArguments;
     pub const readSelf = Super.readSelf;
-    pub const getProperties = Iterator(@This()).getProperties;
+    pub const hasElement = Super.hasVectorElement;
+    pub const countElements = Super.countVectorElements;
+    pub const getProperties = Super.getVectorProperties;
     pub const freeObject = Super.freeObject;
+    pub const getIterator = Super.getVectorIterator;
+    const getIndex = Super.getIndex;
 };

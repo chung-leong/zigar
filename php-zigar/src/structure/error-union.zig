@@ -79,8 +79,8 @@ pub const ErrorUnion = struct {
             try static.payload_acc.set(self, value);
     }
 
-    pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
     pub const copyArguments = Super.copyArguments;
     pub const freeObject = Super.freeObject;
+    const fromObject = Super.fromObject;
 };

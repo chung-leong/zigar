@@ -52,7 +52,7 @@ pub const Function = struct {
             defer php.release(arg);
             switch (static.argument_class.type) {
                 .arg_struct => {
-                    const arg_struct = structure.ArgStruct.fromObject(arg);
+                    const arg_struct = ZigObject(structure.ArgStruct).fromObject(arg).structure();
                     const arg_addr = @intFromPtr(arg_struct.bytes.bytes.ptr);
                     const is_method_call = false;
                     if (is_method_call) arg_iter.makeThisFirst();
@@ -85,6 +85,6 @@ pub const Function = struct {
         Super.freeObject(obj);
     }
 
-    pub const fromObject = Super.fromObject;
     pub const readSelf = Super.readSelf;
+    const fromObject = Super.fromObject;
 };

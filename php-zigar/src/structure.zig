@@ -4,10 +4,13 @@ const accessor = @import("accessor.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const enums = @import("enums.zig");
 const StructureType = enums.StructureType;
+const Iterator = @import("iterator.zig").Iterator;
 const php = @import("php.zig");
 const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
+const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
+const ObjectIterator = php.ObjectIterator;
 const String = php.String;
 const Value = php.Value;
 pub const ArgStruct = @import("structure/arg-struct.zig").ArgStruct;
@@ -103,6 +106,19 @@ pub fn Parent(comptime S: type) type {
             return S.writeSelf(self, arg);
         }
 
+        // error set cannot be inferred due to recursion
+        pub fn writeContainer(self: *S, value: *const Value) accessor.Error!void {
+            const ht = try php.getValueHashTable(value);
+            var iter: HashTableIterator = .init(ht, .{});
+            while (iter.next()) |field_value| {
+                const name = iter.currentName() orelse return error.NotStringKey;
+                writeMember(self, name, field_value, null) catch |err| {
+                    throwFieldError(self, name, err);
+                    return error.ExceptionThrown;
+                };
+            }
+        }
+
         pub fn readSelf(self: *S) !Value {
             // by default just return the object itself
             const obj = ZigObject(S).fromStructure(self).object();
@@ -176,7 +192,7 @@ pub fn Parent(comptime S: type) type {
             class.release();
         }
 
-        pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
+        pub fn readContainerProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
             _ = prop_type;
             const self = fromObject(obj);
             const value = readMember(self, name, cache_slot) catch |err| {
@@ -188,7 +204,7 @@ pub fn Parent(comptime S: type) type {
             return retval;
         }
 
-        pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
+        pub fn writeContainerProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
             const self = fromObject(obj);
             writeMember(self, name, value, cache_slot) catch |err| {
                 throwFieldError(self, name, err);
@@ -197,12 +213,70 @@ pub fn Parent(comptime S: type) type {
             return value;
         }
 
+        pub fn hasVectorElement(obj: *Object, key: *Value, _: c_int) !c_int {
+            const class = ZigClassEntry.fromObject(obj);
+            const index = getIndex(key) catch return 0;
+            const len = class.length orelse return error.MissingLength;
+            return if (index < len) 1 else 0;
+        }
+
+        pub fn countVectorElements(obj: *Object, count: *php.Long) !c_int {
+            const class = ZigClassEntry.fromObject(obj);
+            const len = class.length orelse return error.MissingLength;
+            if (len > std.math.maxInt(php.Long)) return error.TooLarge;
+            count.* = @intCast(len);
+            return php.SUCCESS;
+        }
+
+        pub fn getIndex(key: *Value) !usize {
+            const key_long = try php.getValueLong(key);
+            if (key_long < 0) return error.NegativeIndex;
+            return @intCast(key_long);
+        }
+
         pub fn getPropertyPointer(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) ?*Value {
             _ = obj;
             _ = name;
             _ = prop_type;
             _ = cache_slot;
             return null;
+        }
+
+        pub fn getContainerProperties(obj: *Object) !*HashTable {
+            const self = fromObject(obj);
+            const class = ZigClassEntry.fromObject(obj);
+            const ht = php.createArray();
+            var iter = class.getMemberIterator(.instance);
+            while (iter.next()) |member| {
+                if (iter.currentName()) |name| {
+                    var value = try member.accessors.get(self);
+                    php.setHashEntry(ht, name, &value);
+                }
+            }
+            // caller seem to expect a hash table with zero refcount
+            ht.gc.refcount = 0;
+            return ht;
+        }
+
+        pub fn getVectorProperties(obj: *Object) !*HashTable {
+            const ht = php.createArray();
+            var count: c_long = undefined;
+            _ = try S.countElements(obj, &count);
+            var i: c_long = 0;
+            while (i < count) : (i += 1) {
+                var key = php.createValueLong(i);
+                var value: Value = undefined;
+                _ = try S.readElement(obj, &key, 0, &value);
+                _ = php.appendHashEntry(ht, &value);
+            }
+            // same as above
+            ht.gc.refcount = 0;
+            return ht;
+        }
+
+        pub fn getVectorIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
+            const obj = try php.getValueObject(this);
+            return try Iterator(S).create(obj);
         }
     };
 }
@@ -214,7 +288,7 @@ pub fn invokeFunction(obj: *Object, comptime name: []const u8, args: anytype) RT
         const S = @field(by_enum, field.name);
         if (@hasDecl(S, name)) {
             const RT = ReturnType(S, name);
-            if (Error(RT)) |ES| {
+            if (ErrorType(RT)) |ES| {
                 error_set = error_set || ES;
             }
             if (payload) |PL| {
@@ -239,7 +313,7 @@ pub fn invokeFunction(obj: *Object, comptime name: []const u8, args: anytype) RT
                 const self = Parent(S).fromObject(obj);
                 const RT = ReturnType(S, name);
                 const result = @call(.auto, func, .{self} ++ args);
-                return if (Error(RT) != null) try result else result;
+                return if (ErrorType(RT) != null) try result else result;
             } else @panic(@typeName(S) ++ "has not implementation for " ++ name ++ "()");
         },
     }
@@ -250,7 +324,7 @@ fn ReturnType(comptime S: type, comptime name: []const u8) type {
     return @typeInfo(FT).@"fn".return_type.?;
 }
 
-fn Error(comptime RT: type) ?type {
+fn ErrorType(comptime RT: type) ?type {
     return switch (@typeInfo(RT)) {
         .error_union => |eu| eu.error_set,
         else => null,

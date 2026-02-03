@@ -90,7 +90,8 @@ final class IntHandlingTest extends TestCase
     public function testHandleIntInStruct(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
-        $m->print();
+        print_r($m->struct_a);
+        $m->print();        
         $this->expectOutputString(<<<OUTPUT
         .{ .number1 = -5, .number2 = -444 }
 

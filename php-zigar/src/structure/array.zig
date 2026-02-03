@@ -3,12 +3,10 @@ const std = @import("std");
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
-const Iterator = @import("../iterator.zig").Iterator;
 const php = @import("../php.zig");
 const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
 const Object = php.Object;
-const ObjectIterator = php.ObjectIterator;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("../structure.zig");
@@ -62,21 +60,6 @@ pub const Array = struct {
         try static.value_acc.setElement(self, index, value);
     }
 
-    pub fn hasElement(obj: *Object, key: *Value, _: c_int) !c_int {
-        const class = ZigClassEntry.fromObject(obj);
-        const index = getIndex(key) catch return 0;
-        const len = class.length orelse return error.MissingLength;
-        return if (index < len) 1 else 0;
-    }
-
-    pub fn countElements(obj: *Object, count: *php.Long) !c_int {
-        const class = ZigClassEntry.fromObject(obj);
-        const len = class.length orelse return error.MissingLength;
-        if (len > std.math.maxInt(php.Long)) return error.TooLarge;
-        count.* = @intCast(len);
-        return php.SUCCESS;
-    }
-
     pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
         const value_type = php.Type.fromNumber(type_id) catch return php.FAILURE;
         if (value_type == .string) {
@@ -88,21 +71,14 @@ pub const Array = struct {
         return php.FAILURE;
     }
 
-    pub fn getIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
-        const obj = try php.getValueObject(this);
-        return try Iterator(@This()).create(obj);
-    }
-
-    fn getIndex(key: *Value) !usize {
-        const key_long = try php.getValueLong(key);
-        if (key_long < 0) return error.NegativeIndex;
-        return @intCast(key_long);
-    }
-
-    pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
     pub const copyArguments = Super.copyArguments;
     pub const readSelf = Super.readSelf;
-    pub const getProperties = Iterator(@This()).getProperties;
+    pub const hasElement = Super.hasVectorElement;
+    pub const countElements = Super.countVectorElements;
+    pub const getProperties = Super.getVectorProperties;
     pub const freeObject = Super.freeObject;
+    pub const getIterator = Super.getVectorIterator;
+    const fromObject = Super.fromObject;
+    const getIndex = Super.getIndex;
 };

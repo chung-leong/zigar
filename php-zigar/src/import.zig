@@ -12,6 +12,7 @@ const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
+const ZigObject = @import("object.zig").ZigObject;
 
 pub const StructureImporter = struct {
     value_list: std.ArrayList(Value),
@@ -83,7 +84,7 @@ pub const StructureImporter = struct {
         for (self.instance_list.items) |instance_obj| {
             const class = ZigClassEntry.fromObject(instance_obj);
             if (class.type == .@"comptime") {
-                const ct_struct = Comptime.fromObject(instance_obj);
+                const ct_struct = ZigObject(Comptime).fromObject(instance_obj).structure();
                 // comptime only uses one slot; so if slots is an array, it's a structure array
                 const arr = php.getValueArray(&ct_struct.slots) catch continue;
                 // replace the array with the class ref and release it

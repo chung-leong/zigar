@@ -136,7 +136,7 @@ pub const Union = struct {
             self.throwFieldError(name, err);
             return retval;
         };
-        return Super.readProperty(obj, name, prop_type, cache_slot, retval);
+        return Super.readContainerProperty(obj, name, prop_type, cache_slot, retval);
     }
 
     pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
@@ -145,15 +145,15 @@ pub const Union = struct {
             self.throwFieldError(name, err);
             return error.ExceptionThrown;
         };
-        return Super.writeProperty(obj, name, value, cache_slot);
+        return Super.writeContainerProperty(obj, name, value, cache_slot);
     }
 
-    pub const fromObject = Super.fromObject;
     pub const setStorage = Super.setStorage;
     pub const copyArguments = Super.copyArguments;
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
     pub const getPropertyPointer = Super.getPropertyPointer;
+    const fromObject = Super.fromObject;
     const writeMember = Super.writeMember;
     const findAccessors = Super.findAccessors;
 };

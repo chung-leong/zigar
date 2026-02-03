@@ -20,6 +20,10 @@ pub fn ZigObject(comptime S: type) type {
             return &self.php_portion;
         }
 
+        pub fn structure(self: *@This()) *S {
+            return &self.zig_portion;
+        }
+
         pub fn fromObject(obj: *Object) *@This() {
             return @fieldParentPtr("php_portion", obj);
         }

@@ -56,7 +56,7 @@ pub fn Class(comptime S: type) type {
             const field_obj = php.getValueObject(&field) catch return null;
             const field_class = ZigClassEntry.fromObject(field_obj);
             if (field_class.type == .function) {
-                const func = structure.Function.fromObject(field_obj);
+                const func = ZigObject(structure.Function).fromObject(field_obj).structure();
                 return func.closure.function();
             } else if (field_obj.handlers.*.get_closure) |_| {
                 // aside from Function, only Class implements getClosure()
@@ -125,11 +125,11 @@ pub fn Class(comptime S: type) type {
             return &ZigObject(S).fromObject(obj).zig_portion;
         }
 
-        pub const fromObject = Super.fromObject;
         pub const readSelf = Super.readSelf;
-        pub const readProperty = Super.readProperty;
-        pub const writeProperty = Super.writeProperty;
+        pub const readProperty = Super.readContainerProperty;
+        pub const writeProperty = Super.writeContainerProperty;
         pub const getPropertyPointer = Super.getPropertyPointer;
+        const fromObject = Super.fromObject;
         const object = Super.object;
         const readMember = Super.readMember;
     };

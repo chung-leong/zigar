@@ -95,34 +95,6 @@ pub const Enum = struct {
         return php.createValueObject(tag_obj);
     }
 
-    fn getCanonical(self: *@This()) !*@This() {
-        if (self.canonical != null) return self;
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        const tag_value = try static.value_acc.get(self.bytes);
-        const tag_code = try php.getValueLong(&tag_value);
-        if (static.findTag(tag_code)) |tag_obj| {
-            return fromObject(tag_obj);
-        } else |_| {
-            // unknown tag number--see if enum is open-ended
-            if (!class.flags.@"enum".is_open_ended) {
-                // attach a canonical struct
-                var buffer: [32]u8 = undefined;
-                const text = std.fmt.bufPrint(&buffer, "@enumFromInt({d})", .{tag_code}) catch unreachable;
-                const name = php.createString(text);
-                const props = try php.allocator.create(Canonical);
-                props.* = .{ .name = name, .unknown = true };
-                self.canonical = props;
-            } else {
-                php.throwExceptionFmt("enum '{s}' has no tag with value {d} (zig)", .{
-                    class.getName(),
-                    tag_code,
-                });
-            }
-            return self;
-        }
-    }
-
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
         const class = ZigClassEntry.fromStructure(self);
         var static = class.getStaticData(@This());
@@ -169,8 +141,36 @@ pub const Enum = struct {
         try static.value_acc.set(self.bytes, &tag_value);
     }
 
-    pub const fromObject = Super.fromObject;
+    fn getCanonical(self: *@This()) !*@This() {
+        if (self.canonical != null) return self;
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        const tag_value = try static.value_acc.get(self.bytes);
+        const tag_code = try php.getValueLong(&tag_value);
+        if (static.findTag(tag_code)) |tag_obj| {
+            return fromObject(tag_obj);
+        } else |_| {
+            // unknown tag number--see if enum is open-ended
+            if (!class.flags.@"enum".is_open_ended) {
+                // attach a canonical struct
+                var buffer: [32]u8 = undefined;
+                const text = std.fmt.bufPrint(&buffer, "@enumFromInt({d})", .{tag_code}) catch unreachable;
+                const name = php.createString(text);
+                const props = try php.allocator.create(Canonical);
+                props.* = .{ .name = name, .unknown = true };
+                self.canonical = props;
+            } else {
+                php.throwExceptionFmt("enum '{s}' has no tag with value {d} (zig)", .{
+                    class.getName(),
+                    tag_code,
+                });
+            }
+            return self;
+        }
+    }
+
     pub const setStorage = Super.setStorage;
     pub const copyArguments = Super.copyArguments;
+    const fromObject = Super.fromObject;
     const object = Super.object;
 };
