@@ -43,6 +43,8 @@ pub const Enum = struct {
                 const slot = static_member.slot orelse continue;
                 const tag = try php.getProperty(static_slots, slot);
                 const tag_obj = try php.getValueObject(tag);
+                // enums can have methods, so we need to check the structure type
+                if (ZigClassEntry.fromObject(tag_obj).type != .@"enum") continue;
                 const tag_struct = fromObject(tag_obj);
                 // reference tag by integer value
                 const tag_value = try self.value_acc.get(tag_struct.bytes);
@@ -171,6 +173,7 @@ pub const Enum = struct {
 
     pub const setStorage = Super.setStorage;
     pub const copyArguments = Super.copyArguments;
+    pub const getMethod = Super.getMethod;
     const fromObject = Super.fromObject;
     const object = Super.object;
 };

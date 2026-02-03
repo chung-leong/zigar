@@ -21,14 +21,22 @@ pub const Function = struct {
         thunk_address: usize = undefined,
         controller_address: usize = undefined,
         argument_class: *ZigClassEntry = undefined,
+        first_arg_ce: ?*ClassEntry = null,
 
         pub fn init(self: *@This(), class: *ZigClassEntry) !void {
             self.thunk_address = getAddress(class, .instance);
             self.controller_address = getAddress(class, .static);
             const member = try class.getMember(.instance, 0);
             const arg_class = member.class orelse return error.MissingClass;
+            const arg_count = arg_class.length orelse return error.MissingLength;
             switch (arg_class.type) {
-                .arg_struct, .variadic_struct => self.argument_class = arg_class,
+                .arg_struct, .variadic_struct => {
+                    self.argument_class = arg_class;
+                    if (arg_count > 0) {
+                        const arg = try arg_class.getMember(.instance, "0");
+                        if (arg.class) |c| self.first_arg_ce = c.entry();
+                    }
+                },
                 else => return error.Unexpected,
             }
         }
@@ -54,7 +62,14 @@ pub const Function = struct {
                 .arg_struct => {
                     const arg_struct = ZigObject(structure.ArgStruct).fromObject(arg).structure();
                     const arg_addr = @intFromPtr(arg_struct.bytes.bytes.ptr);
-                    const is_method_call = false;
+                    const is_method_call = init: {
+                        if (static.first_arg_ce) |ce| {
+                            if (php.getValueObject(arg_iter.this)) |obj| {
+                                break :init obj.ce == ce;
+                            } else |_| {}
+                        }
+                        break :init false;
+                    };
                     if (is_method_call) arg_iter.makeThisFirst();
                     try arg_struct.copyArguments(arg_iter);
                     try class.host.runThunk(static.thunk_address, self.address, arg_addr);

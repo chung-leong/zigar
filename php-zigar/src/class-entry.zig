@@ -39,6 +39,7 @@ pub const ZigClassEntry = struct {
         finalized: bool = false,
         activated: bool = false,
     } = .{},
+    object: *Object = undefined,
     static_data: StaticData = undefined,
     php_portion: ClassEntry = undefined,
 
@@ -240,6 +241,8 @@ pub const ZigClassEntry = struct {
                 break :create .{ class_zobj.object(), &class_zobj.zig_portion.closures };
             },
         };
+        // make it accessible through the class entry
+        self.object = class_obj;
         // set methods that are implemented as function objects
         inline for (comptime std.meta.fields(@TypeOf(class_closures.*))) |field| {
             if (@hasField(ClassEntry, field.name)) {
@@ -629,9 +632,7 @@ pub const ZigClassEntry = struct {
             .void => {
                 return .{ .primitive = accessor.void.get(.{}, .{}) };
             },
-            .object, .literal => |t| if (member.slot) |slot| {
-                // the lack of a slot means the member isn't meant to be accessed directly
-                // only applicable to functions, I think
+            .object, .literal => |t| {
                 const transform: ?accessor.Transform = get: {
                     if (member.flags.is_string or t == .literal) {
                         break :get .to_string;
@@ -654,7 +655,7 @@ pub const ZigClassEntry = struct {
                             .class = class,
                             .byte_offset = byte_offset,
                             .byte_size = byte_size,
-                            .slot = slot,
+                            .slot = member.slot orelse return error.MissingSlot,
                             .transform = transform,
                         }),
                     } else .{
@@ -674,7 +675,7 @@ pub const ZigClassEntry = struct {
                         .multi_slot_prebaked = accessor.slot.get(.{
                             .type = .multi_slot_prebaked,
                         }, .{
-                            .slot = slot,
+                            .slot = member.slot orelse return error.MissingSlot,
                             .transform = transform,
                         }),
                     } else .{
@@ -686,12 +687,12 @@ pub const ZigClassEntry = struct {
                     };
                 }
             },
-            .type => if (member.slot) |slot| {
+            .type => {
                 return if (scope.slot_count > 1) .{
                     .multi_slot_prebaked = accessor.slot.get(.{
                         .type = .multi_slot_prebaked,
                     }, .{
-                        .slot = slot,
+                        .slot = member.slot orelse return error.MissingSlot,
                     }),
                 } else .{
                     .single_slot_prebaked = accessor.slot.get(.{
@@ -704,7 +705,7 @@ pub const ZigClassEntry = struct {
             },
             else => {},
         }
-        // std.debug.print("No accessor for {}\n", .{member.type});
+        std.debug.print("No accessor for {}\n", .{member.type});
         return .{ .missing = {} };
     }
 

@@ -72,6 +72,7 @@ pub const ErrorSet = struct {
                 const slot = static_member.slot orelse continue;
                 const err = try php.getProperty(static_slots, slot);
                 const err_obj = try php.getValueObject(err);
+                if (ZigClassEntry.fromObject(err_obj).type != .error_set) continue;
                 const err_struct = fromObject(err_obj);
                 const err_value = try self.value_acc.get(err_struct.bytes);
                 // reference err by integer value

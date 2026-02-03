@@ -162,6 +162,21 @@ pub fn Parent(comptime S: type) type {
             return &member.accessors;
         }
 
+        pub fn findMethod(self: *S, name: *String) !?*php.Function {
+            // methods are actually static functions with self as the first argument
+            const class = ZigClassEntry.fromStructure(self);
+            const member = try class.getMember(.static, name);
+            if (!member.flags.is_method) return null;
+            const class_struct = ZigObject(Class(S)).fromObject(class.object).structure();
+            var field = try member.accessors.get(class_struct);
+            defer php.release(&field);
+            const field_obj = php.getValueObject(&field) catch return null;
+            const field_class = ZigClassEntry.fromObject(field_obj);
+            if (field_class.type != .function) return null;
+            const func = ZigObject(Function).fromObject(field_obj).structure();
+            return func.closure.function();
+        }
+
         pub fn throwFieldError(self: *S, name: *String, err: anytype) void {
             switch (err) {
                 error.Missing => {
@@ -277,6 +292,12 @@ pub fn Parent(comptime S: type) type {
         pub fn getVectorIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
             const obj = try php.getValueObject(this);
             return try Iterator(S).create(obj);
+        }
+
+        pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: *const Value) !?*php.Function {
+            const obj = obj_ptr.*;
+            const self = fromObject(obj);
+            return try findMethod(self, name);
         }
     };
 }

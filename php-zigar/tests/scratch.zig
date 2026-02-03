@@ -1,12 +1,16 @@
 const std = @import("std");
 
-pub var string: [5]u8 = .{ 'H', 'e', 'l', 'l', 'o' };
+pub const Enum = enum {
+    hello,
+    world,
 
-pub var plain_array: [5]u8 = .{ 'H', 'e', 'l', 'l', 'o' };
-
-const ns = @This();
-pub const @"meta(zigar)" = struct {
-    pub fn isDeclString(comptime T: type, comptime decl: std.meta.DeclEnum(T)) bool {
-        return T == ns and decl == .string;
+    pub fn print(self: @This()) void {
+        std.debug.print("{}\n", .{self});
     }
 };
+
+pub var value: Enum = .hello;
+
+pub fn print() void {
+    std.debug.print("test\n", .{});
+}
