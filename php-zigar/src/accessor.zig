@@ -8,10 +8,11 @@ pub const slot = @import("accessor/slot.zig");
 pub const vector = @import("accessor/vector.zig");
 pub const @"void" = @import("accessor/void.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
-const invokeFunction = @import("structure.zig").invokeFunction;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
 const Value = php.Value;
+const structure = @import("structure.zig");
+const invokeFunction = structure.invokeFunction;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
 pub const Error = error{
@@ -29,15 +30,13 @@ pub const Error = error{
     NotNull,
     NotObject,
     NotString,
-    NotStringKey,
+    KeyIsNotString,
     OutOfBound,
     OutOfMemory,
     Unexpected,
     Unsupported,
     WriteProtected,
 };
-
-pub const Transform = enum { to_string, to_plain, to_value };
 
 pub const Null = struct {
     params: Parameters,
@@ -57,18 +56,41 @@ pub const Null = struct {
     }
 };
 
+pub const PrimitiveTransform = struct {
+    class: *ZigClassEntry,
+
+    pub fn toValue(self: *const @This(), value: *const Value) Error!Value {
+        inline for (.{ .@"enum", .error_set }) |t| {
+            if (self.class.type == t) {
+                const S = @field(structure.by_enum, @tagName(t));
+                const static = self.class.getStaticData(S);
+                return static.findCanonical(value);
+            }
+        } else unreachable;
+    }
+
+    pub fn fromValue(self: *const @This(), value: *const Value) Error!*ByteBuffer {
+        inline for (.{ .@"enum", .error_set }) |t| {
+            if (self.class.type == t) {
+                const S = @field(structure.by_enum, @tagName(t));
+                const static = self.class.getStaticData(S);
+                return static.findCanonicalBytes(value);
+            }
+        } else unreachable;
+    }
+};
+
 pub const Primitive = struct {
     params: Parameters,
     getter: *const Getter,
     setter: *const Setter,
-    stringifier: *const Stringifier,
 
     pub const Parameters = struct {
-        byte_offset: usize = undefined,
+        byte_offset: usize,
+        transform: ?PrimitiveTransform = null,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer) Error!Value;
     pub const Setter = fn (*const @This(), *ByteBuffer, *const Value) Error!void;
-    pub const Stringifier = fn (*const @This(), *ByteBuffer) Error!Value;
 
     pub fn get(self: *const @This(), buffer: *ByteBuffer) Error!Value {
         return try self.getter(self, buffer);
@@ -76,10 +98,6 @@ pub const Primitive = struct {
 
     pub fn set(self: *const @This(), buffer: *ByteBuffer, value: *const Value) Error!void {
         return try self.setter(self, buffer, value);
-    }
-
-    pub fn stringify(self: *const @This(), buffer: *ByteBuffer) Error!Value {
-        return try self.stringifier(self, buffer);
     }
 };
 
@@ -103,6 +121,8 @@ pub const Vector = struct {
 
 pub const SlotAccessorType = enum { multi_slot, single_slot, multi_slot_prebaked, single_slot_prebaked, array_slot };
 
+pub const ObjectTransform = enum { to_string, to_plain, to_value };
+
 pub const MultiSlot = struct {
     params: Parameters,
     getter: *const Getter,
@@ -113,7 +133,7 @@ pub const MultiSlot = struct {
         byte_size: usize,
         slot: usize,
         class: *ZigClassEntry,
-        transform: ?Transform = null,
+        transform: ?ObjectTransform = null,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer, *Value) Error!Value;
     pub const Setter = fn (*const @This(), *ByteBuffer, *Value, *const Value) Error!void;
@@ -136,7 +156,7 @@ pub const SingleSlot = struct {
         byte_offset: usize = undefined,
         byte_size: usize,
         class: *ZigClassEntry,
-        transform: ?Transform = null,
+        transform: ?ObjectTransform = null,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer, *Value) Error!Value;
     pub const Setter = fn (*const @This(), *ByteBuffer, *Value, *const Value) Error!void;
@@ -159,7 +179,7 @@ pub const ArraySlot = struct {
         byte_size: usize,
         slot: usize,
         class: *ZigClassEntry,
-        transform: ?Transform = null,
+        transform: ?ObjectTransform = null,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer, *Value, usize) Error!Value;
     pub const Setter = fn (*const @This(), *ByteBuffer, *Value, usize, *const Value) Error!void;
@@ -180,7 +200,7 @@ pub const MultiSlotPrebaked = struct {
 
     pub const Parameters = struct {
         slot: usize,
-        transform: ?Transform = null,
+        transform: ?ObjectTransform = null,
     };
     pub const Getter = fn (*const @This(), *Value) Error!Value;
     pub const Setter = fn (*const @This(), *Value, *const Value) Error!void;
@@ -200,7 +220,7 @@ pub const SingleSlotPrebaked = struct {
     setter: *const Setter,
 
     pub const Parameters = struct {
-        transform: ?Transform = null,
+        transform: ?ObjectTransform = null,
     };
     pub const Getter = fn (*const @This(), *Value) Error!Value;
     pub const Setter = fn (*const @This(), *Value, *const Value) Error!void;
@@ -311,7 +331,7 @@ pub fn WithBitOffset(comptime T: type, comptime bit_offset: ?u3) type {
     } else T;
 }
 
-pub fn read(entry: *Value, transform: ?Transform) !Value {
+pub fn read(entry: *Value, transform: ?ObjectTransform) !Value {
     if (transform) |t| {
         const obj = try php.getValueObject(entry);
         return switch (t) {

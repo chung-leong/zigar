@@ -29,7 +29,8 @@ pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) ac
             if (acc.params.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
             const ptr: *align(1) AT = @ptrCast(&bytes[acc.params.byte_offset]);
             const int = if (comptime AT == T) ptr.* else ptr.value;
-            return php.createValueAnyInt(int);
+            const value = php.createValueAnyInt(int);
+            return if (acc.params.transform) |t| try t.toValue(&value) else value;
         }
 
         pub fn set(acc: *const accessor.Primitive, buffer: *ByteBuffer, value: *const Value) Error!void {
@@ -38,23 +39,23 @@ pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) ac
             if (buffer.is_read_only) return error.WriteProtected;
             if (acc.params.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
             const ptr: *align(1) AT = @ptrCast(&bytes[acc.params.byte_offset]);
-            const long = try php.getValueLong(value);
+            const int_value = if (acc.params.transform) |t| get: {
+                const int_bytes = try t.fromValue(value);
+                const int_acc: accessor.Primitive = .{
+                    .params = .{ .byte_offset = 0 },
+                    .getter = undefined,
+                    .setter = undefined,
+                };
+                const transformed_value = try @This().get(&int_acc, int_bytes);
+                break :get &transformed_value;
+            } else value;
+            const long = try php.getValueLong(int_value);
             const int: T = switch (attrs.signedness) {
                 .signed => @truncate(long),
                 .unsigned => @truncate(@as(c_ulong, @bitCast(long))),
             };
             if (comptime AT == T) ptr.* = int else ptr.value = int;
         }
-
-        pub fn stringify(acc: *const accessor.Primitive, buffer: *ByteBuffer) Error!Value {
-            const bytes: []u8 = buffer.bytes;
-            if (acc.params.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
-            const ptr: *align(1) AT = @ptrCast(&bytes[acc.params.byte_offset]);
-            const int = if (comptime AT == T) ptr.* else ptr.value;
-            var buf: [64]u8 = undefined;
-            const str = std.fmt.bufPrint(&buf, "{d}", .{int}) catch unreachable;
-            return php.createValueStringContent(str);
-        }
     };
-    return .{ .getter = &ns.get, .setter = &ns.set, .stringifier = &ns.stringify, .params = params };
+    return .{ .getter = &ns.get, .setter = &ns.set, .params = params };
 }

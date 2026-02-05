@@ -97,13 +97,12 @@ pub fn Parent(comptime S: type) type {
                     false => "one argument",
                 };
                 const class = ZigClassEntry.fromStructure(self);
-                php.throwExceptionFmt("{s} constructor expects " ++ arg_desc, .{
+                return php.throwExceptionFmt("{s} constructor expects " ++ arg_desc, .{
                     class.getStructureName(),
                 });
-                return error.ExceptionThrown;
             }
             const arg = arg_iter.next() orelse unreachable;
-            return S.writeSelf(self, arg);
+            return try S.writeSelf(self, arg);
         }
 
         // error set cannot be inferred due to recursion
@@ -111,10 +110,9 @@ pub fn Parent(comptime S: type) type {
             const ht = try php.getValueHashTable(value);
             var iter: HashTableIterator = .init(ht, .{});
             while (iter.next()) |field_value| {
-                const name = iter.currentName() orelse return error.NotStringKey;
+                const name = iter.currentName() orelse return error.KeyIsNotString;
                 writeMember(self, name, field_value, null) catch |err| {
-                    throwFieldError(self, name, err);
-                    return error.ExceptionThrown;
+                    return throwFieldError(self, name, err);
                 };
             }
         }
@@ -177,26 +175,23 @@ pub fn Parent(comptime S: type) type {
             return func.closure.function();
         }
 
-        pub fn throwFieldError(self: *S, name: *String, err: anytype) void {
-            switch (err) {
-                error.Missing => {
-                    const class = ZigClassEntry.fromStructure(self);
-                    if (scope == .instance) {
-                        php.throwExceptionFmt("no field named '{s}' in {s} '{s}' (zig)", .{
-                            php.getStringContent(name),
-                            class.getStructureName(),
-                            class.getName(),
-                        });
-                    } else {
-                        php.throwExceptionFmt("{s} '{s}' has no member named '{s}' (zig)", .{
-                            class.getStructureName(),
-                            class.getName(),
-                            php.getStringContent(name),
-                        });
-                    }
+        pub fn throwFieldError(self: *S, name: *String, err: anytype) error{ExceptionThrown} {
+            const class = ZigClassEntry.fromStructure(self);
+            return switch (err) {
+                error.Missing => switch (scope) {
+                    .instance => php.throwExceptionFmt("no field named '{s}' in {s} '{s}' (zig)", .{
+                        php.getStringContent(name),
+                        class.getStructureName(),
+                        class.getName(),
+                    }),
+                    .static => php.throwExceptionFmt("{s} '{s}' has no member named '{s}' (zig)", .{
+                        class.getStructureName(),
+                        class.getName(),
+                        php.getStringContent(name),
+                    }),
                 },
                 else => php.throwError(err),
-            }
+            };
         }
 
         pub fn freeObject(obj: *Object) void {
@@ -211,7 +206,7 @@ pub fn Parent(comptime S: type) type {
             _ = prop_type;
             const self = fromObject(obj);
             const value = readMember(self, name, cache_slot) catch |err| {
-                throwFieldError(self, name, err);
+                _ = &throwFieldError(self, name, err);
                 // PHP expects us to return a valid pointer
                 return retval;
             };
@@ -222,8 +217,7 @@ pub fn Parent(comptime S: type) type {
         pub fn writeContainerProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
             const self = fromObject(obj);
             writeMember(self, name, value, cache_slot) catch |err| {
-                throwFieldError(self, name, err);
-                return error.ExceptionThrown;
+                return throwFieldError(self, name, err);
             };
             return value;
         }

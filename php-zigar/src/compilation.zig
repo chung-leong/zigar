@@ -392,13 +392,10 @@ pub const ZigCompiler = struct {
         return switch (term) {
             .Exited => |exit_code| switch (exit_code) {
                 0 => {},
-                else => throw: {
-                    php.throwExceptionFmt("unable to create module '{s}':\n\n{s}", .{
-                        self.module_name,
-                        stderr.items,
-                    });
-                    break :throw error.ExceptionThrown;
-                },
+                else => php.throwExceptionFmt("unable to create module '{s}':\n\n{s}", .{
+                    self.module_name,
+                    stderr.items,
+                }),
             },
             .Stopped => error.CompilerStopped,
             .Signal => error.CompilerInterrupted,
@@ -447,31 +444,20 @@ pub const Options = struct {
                 const T = @FieldType(@This(), field.name);
                 @field(self, field.name) = extract(T, value) catch |err| {
                     const vt = php.getType(value);
-                    switch (err) {
-                        error.NotBoolean => {
-                            php.throwExceptionFmt("option '{s}' is a boolean, received {}", .{ field.name, vt });
-                        },
-                        error.NotInteger => {
-                            php.throwExceptionFmt("option '{s}' is an integer, received {}", .{ field.name, vt });
-                        },
-                        error.NotString => {
-                            php.throwExceptionFmt("option '{s}' is a string, received {}", .{ field.name, vt });
-                        },
-                        error.NegativeValue => {
-                            php.throwExceptionFmt("option '{s}' is a positive integer, received {}", .{
-                                field.name,
-                                php.getValueLong(value) catch unreachable,
-                            });
-                        },
-                        error.NoMatching => if (@typeInfo(T) == .@"enum") {
-                            php.throwExceptionFmt("'{s}' is not a valid option for '{s}'; it should be one of the following: {s}", .{
-                                php.getValueStringContent(value) catch unreachable,
-                                field.name,
-                                T.names(),
-                            });
-                        },
-                    }
-                    return error.ExceptionThrown;
+                    return switch (err) {
+                        error.NotBoolean => php.throwExceptionFmt("option '{s}' is a boolean, received {}", .{ field.name, vt }),
+                        error.NotInteger => php.throwExceptionFmt("option '{s}' is an integer, received {}", .{ field.name, vt }),
+                        error.NotString => php.throwExceptionFmt("option '{s}' is a string, received {}", .{ field.name, vt }),
+                        error.NegativeValue => php.throwExceptionFmt("option '{s}' is a positive integer, received {}", .{
+                            field.name,
+                            php.getValueLong(value) catch unreachable,
+                        }),
+                        error.NoMatching => php.throwExceptionFmt("'{s}' is not a valid option for '{s}'; it should be one of the following: {s}", .{
+                            php.getValueStringContent(value) catch unreachable,
+                            field.name,
+                            if (@typeInfo(T) == .@"enum") T.names() else unreachable,
+                        }),
+                    };
                 };
             } else |_| {}
         }

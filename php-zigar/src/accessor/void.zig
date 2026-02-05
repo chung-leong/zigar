@@ -18,10 +18,6 @@ pub fn get(comptime _: Attributes, params: accessor.Primitive.Parameters) access
             if (buffer.is_read_only) return error.WriteProtected;
             try php.getValueNull(value);
         }
-
-        pub fn stringify(_: *const accessor.Primitive, _: *ByteBuffer) Error!Value {
-            return php.createValueStringContent("");
-        }
     };
-    return .{ .getter = &ns.get, .setter = &ns.set, .stringifier = &ns.stringify, .params = params };
+    return .{ .getter = &ns.get, .setter = &ns.set, .params = params };
 }

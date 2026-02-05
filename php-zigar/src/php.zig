@@ -316,7 +316,7 @@ pub fn removeError(retval: anytype) switch (@typeInfo(@TypeOf(retval))) {
 } {
     const retval_ne = switch (@typeInfo(@TypeOf(retval))) {
         .error_union => |eu| retval catch |err| report: {
-            if (err != error.ExceptionThrown) throwError(err);
+            if (err != error.ExceptionThrown) _ = &throwError(err);
             break :report switch (eu.payload) {
                 bool => false,
                 void => {},
@@ -712,6 +712,13 @@ pub fn destroyHashTable(ht: *HashTable) void {
 
 pub fn getHashEntry(ht: *const HashTable, key: anytype) !*Value {
     const KT = @TypeOf(key);
+    if (KT == *Value or KT == *const Value) {
+        return switch (getType(key)) {
+            .long => getHashEntry(ht, key.value.lval),
+            .string => getHashEntry(ht, key.value.str),
+            else => @panic("Invalid key"),
+        };
+    }
     return if (comptime isStringContent(KT))
         php_h.zend_hash_str_find(ht, key.ptr, key.len) orelse error.Missing
     else if (comptime isString(KT))
@@ -767,6 +774,13 @@ pub fn getHashEntryWithType(comptime T: type, ht: *const HashTable, key: anytype
 
 pub fn insertHashEntry(ht: *HashTable, key: anytype, value: *Value) *Value {
     const KT = @TypeOf(key);
+    if (KT == *Value or KT == *const Value) {
+        return switch (getType(key)) {
+            .long => insertHashEntry(ht, key.value.lval, value),
+            .string => insertHashEntry(ht, key.value.str, value),
+            else => @panic("Invalid key"),
+        };
+    }
     ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
     const result = if (comptime isStringContent(KT))
         php_h.zend_hash_str_update(ht, key.ptr, key.len, value)
@@ -825,13 +839,19 @@ pub const HashTableIterator = struct {
         dir: Direction = .forward,
     };
 
-    pub fn init(ht: *HashTable, options: Options) @This() {
+    pub fn init(ht: *const HashTable, options: Options) @This() {
         var pos: HashPosition = undefined;
+        const nc_ht = @constCast(ht);
         switch (options.dir) {
-            .forward => php_h.zend_hash_internal_pointer_reset_ex(ht, &pos),
-            .backward => php_h.zend_hash_internal_pointer_end_ex(ht, &pos),
+            .forward => php_h.zend_hash_internal_pointer_reset_ex(nc_ht, &pos),
+            .backward => php_h.zend_hash_internal_pointer_end_ex(nc_ht, &pos),
         }
-        return .{ .ht = ht, .pos = pos, .len = ht.nNumOfElements, .dir = options.dir };
+        return .{
+            .ht = nc_ht,
+            .pos = pos,
+            .len = ht.nNumOfElements,
+            .dir = options.dir,
+        };
     }
 
     pub fn reset(self: *@This()) void {
@@ -1038,24 +1058,27 @@ pub fn getClassEntry(ctype: ClassEntryName) *ClassEntry {
     return @ptrCast(ptr);
 }
 
-pub fn throwError(err: anytype) void {
+pub fn throwError(err: anytype) error{ExceptionThrown} {
     const ES = @TypeOf(err);
     const msg = getErrorMessage(ES, err);
     _ = php_h.zend_throw_exception_ex(null, 0, "%s (zig)", msg.ptr);
+    return error.ExceptionThrown;
 }
 
-pub fn throwExceptionFmt(comptime fmt: []const u8, params: anytype) void {
+pub fn throwExceptionFmt(comptime fmt: []const u8, params: anytype) error{ExceptionThrown} {
     if (std.fmt.allocPrintSentinel(allocator, fmt, params, 0)) |msg| {
         defer allocator.free(msg);
         _ = php_h.zend_throw_exception(null, msg.ptr, 0);
+        return error.ExceptionThrown;
     } else |err| {
-        throwError(err);
+        return throwError(err);
     }
 }
 
-pub fn throwExceptionObject(obj: *Object) void {
+pub fn throwExceptionObject(obj: *Object) error{ExceptionThrown} {
     var value = createValueObject(obj);
     php_h.zend_throw_exception_object(&value);
+    return error.ExceptionThrown;
 }
 
 pub fn getCurrentLine() u32 {

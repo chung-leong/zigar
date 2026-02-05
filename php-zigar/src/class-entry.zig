@@ -72,6 +72,26 @@ pub const ZigClassEntry = struct {
             }
             php.allocator.destroy(member);
         }
+
+        pub fn objectTransform(self: *const @This()) ?accessor.ObjectTransform {
+            if (self.flags.is_string or self.type == .literal) {
+                return .to_string;
+            } else if (self.flags.is_plain) {
+                return .to_plain;
+            } else if (self.class) |class| {
+                if (class.flags.common.has_value or class.flags.common.has_proxy)
+                    return .to_value;
+            }
+            return null;
+        }
+
+        pub fn primitiveTransform(self: *@This()) ?accessor.PrimitiveTransform {
+            const class = self.class orelse return null;
+            return switch (class.type) {
+                inline .@"enum", .error_set => .{ .class = class },
+                else => null,
+            };
+        }
     };
     pub const Template = struct {
         bytes: ?*ByteBuffer = null,
@@ -376,6 +396,10 @@ pub const ZigClassEntry = struct {
         var buffer: [16]*ClassEntry = undefined;
         var count: usize = 0;
         switch (self.type) {
+            .@"enum" => {
+                buffer[count] = php.getInterface(.stringable);
+                count += 1;
+            },
             .array, .vector, .slice => {
                 buffer[count] = php.getInterface(.array_access);
                 count += 1;
@@ -590,6 +614,7 @@ pub const ZigClassEntry = struct {
                                             .bit_offset = offset,
                                         }, .{
                                             .byte_offset = byte_offset,
+                                            .transform = member.primitiveTransform(),
                                         });
                                         return .{ .primitive = primitive };
                                     }
@@ -630,20 +655,12 @@ pub const ZigClassEntry = struct {
                 }
             },
             .void => {
-                return .{ .primitive = accessor.void.get(.{}, .{}) };
+                const primitive = accessor.void.get(.{}, .{
+                    .byte_offset = byte_offset,
+                });
+                return .{ .primitive = primitive };
             },
-            .object, .literal => |t| {
-                const transform: ?accessor.Transform = get: {
-                    if (member.flags.is_string or t == .literal) {
-                        break :get .to_string;
-                    } else if (member.flags.is_plain) {
-                        break :get .to_plain;
-                    } else if (member.class) |class| {
-                        if (class.flags.common.has_value or class.flags.common.has_proxy)
-                            break :get .to_value;
-                    }
-                    break :get null;
-                };
+            .object, .literal => {
                 if (member.byte_size) |byte_size| {
                     // compound types like structs and unions are represented by objects
                     // these are stored in slots of their parent objects and are created lazily
@@ -656,7 +673,7 @@ pub const ZigClassEntry = struct {
                             .byte_offset = byte_offset,
                             .byte_size = byte_size,
                             .slot = member.slot orelse return error.MissingSlot,
-                            .transform = transform,
+                            .transform = member.objectTransform(),
                         }),
                     } else .{
                         .single_slot = accessor.slot.get(.{
@@ -665,7 +682,7 @@ pub const ZigClassEntry = struct {
                             .class = class,
                             .byte_offset = byte_offset,
                             .byte_size = byte_size,
-                            .transform = transform,
+                            .transform = member.objectTransform(),
                         }),
                     };
                 } else {
@@ -676,13 +693,13 @@ pub const ZigClassEntry = struct {
                             .type = .multi_slot_prebaked,
                         }, .{
                             .slot = member.slot orelse return error.MissingSlot,
-                            .transform = transform,
+                            .transform = member.objectTransform(),
                         }),
                     } else .{
                         .single_slot_prebaked = accessor.slot.get(.{
                             .type = .single_slot_prebaked,
                         }, .{
-                            .transform = transform,
+                            .transform = member.objectTransform(),
                         }),
                     };
                 }

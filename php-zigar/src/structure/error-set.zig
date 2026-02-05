@@ -40,6 +40,7 @@ pub const ErrorSet = struct {
     };
     pub const Static = struct {
         value_acc: *accessor.Primitive = undefined,
+        global_error_set: *HashTable = undefined,
         closures: struct {
             getMessage: *Closure,
             getCode: *Closure,
@@ -56,7 +57,7 @@ pub const ErrorSet = struct {
             self.value_acc = &member.accessors.primitive;
             // loop through static members and add errors to global error set, keyed by value,
             // name, and error message
-            const global_err_ht = get: {
+            self.global_error_set = get: {
                 if (class.host.global_error_set) |ht| {
                     php.addRef(ht);
                     break :get ht;
@@ -73,20 +74,8 @@ pub const ErrorSet = struct {
                 const err = try php.getProperty(static_slots, slot);
                 const err_obj = try php.getValueObject(err);
                 if (ZigClassEntry.fromObject(err_obj).type != .error_set) continue;
-                const err_struct = fromObject(err_obj);
-                const err_value = try self.value_acc.get(err_struct.bytes);
-                // reference err by integer value
-                const long = try php.getValueLong(&err_value);
-                php.setHashEntryRef(global_err_ht, long, err);
-                // reference err by name
                 const name = iter.currentName() orelse return error.MissingName;
-                php.setHashEntryRef(global_err_ht, name, err);
-                const message = createDecamelizedMessage(name);
-                php.setHashEntryRef(global_err_ht, message, err);
-                // attach canonical info to err
-                const props = try php.allocator.create(Canonical);
-                props.* = .{ .message = message };
-                err_struct.canonical = props;
+                try self.addCanonical(name, err_obj);
                 // decrement ref count on class (since the class holds a ref on the error)
                 class.release();
             }
@@ -97,131 +86,102 @@ pub const ErrorSet = struct {
         }
 
         pub fn deinit(self: *@This()) void {
-            const class = ZigClassEntry.fromStatic(self);
-            php.release(class.host.global_error_set.?);
+            php.release(self.global_error_set);
             inline for (std.meta.fields(@TypeOf(self.closures))) |field| {
                 const closure = @field(self.closures, field.name);
                 closure.release();
             }
         }
 
-        pub fn readErrorValue(self: *@This(), err_obj: *Object) !Value {
-            const err_struct = fromObject(err_obj);
-            return try self.value_acc.get(err_struct.bytes);
+        pub fn findCanonical(self: *@This(), value: *const Value) !Value {
+            if (php.getType(value) == .long) {
+                const err_code = php.getValueLong(value) catch unreachable;
+                if (err_code == 0) return php.createValueNull();
+            }
+            if (php.getHashEntry(self.global_error_set, value)) |err| {
+                php.addRef(err);
+                return err.*;
+            } else |_| {
+                const class = ZigClassEntry.fromStatic(self);
+                return switch (php.getType(value)) {
+                    .long => create: {
+                        // create new error
+                        const bytes = try ByteBuffer.createNew(class.byte_size.?, class.alignment);
+                        try self.value_acc.set(bytes, value);
+                        const err_code = php.getValueLong(value) catch unreachable;
+                        const err_obj = try class.createObjectFromBuffer(bytes, null);
+                        var buffer: [64]u8 = undefined;
+                        const text = std.fmt.bufPrint(&buffer, "UnknownError #{d}", .{err_code}) catch unreachable;
+                        const name = php.createString(text);
+                        try self.addCanonical(name, err_obj);
+                        // err_obj has refcount = 2 at this point, which is correct
+                        break :create php.createValueObject(err_obj);
+                    },
+                    .object => find: {
+                        const err_obj = php.getValueObject(value) catch unreachable;
+                        if (php.instanceOf(err_obj.ce, php.getInterface(.throwable))) {
+                            if (ZigClassEntry.isZigError(err_obj.ce)) {
+                                break :find value.*;
+                            } else {
+                                const message = try php.invokeMethod(err_obj, "getMessage", .{});
+                                break :find self.findCanonical(&message) catch
+                                    php.throwExceptionFmt("'{s}' does not correspond to an entry in global error set (zig)", .{
+                                        try php.getValueStringContent(&message),
+                                    });
+                            }
+                        } else {
+                            break :find php.throwExceptionFmt("'{s}' does not implement throwable (zig)", .{
+                                php.getStringContent(err_obj.ce.*.name),
+                            });
+                        }
+                    },
+                    else => error.InvalidType,
+                };
+            }
         }
 
-        pub fn findError(self: *@This(), key: anytype) !*Object {
-            const class = ZigClassEntry.fromStatic(self);
-            const global_err_ht = class.host.global_error_set.?;
-            const err_value = try php.getHashEntry(global_err_ht, key);
-            return try php.getValueObject(err_value);
+        pub fn findCanonicalBytes(self: *@This(), value: *const Value) !*ByteBuffer {
+            const err = try self.findCanonical(value);
+            const err_obj = try php.getValueObject(&err);
+            const err_struct = fromObject(err_obj);
+            return err_struct.bytes;
         }
 
-        pub fn acquireError(self: *@This(), err_code: c_long) !*Object {
-            const err_obj = try self.findError(err_code);
+        fn addCanonical(self: *@This(), name: *String, err_obj: *Object) !void {
             const err_struct = fromObject(err_obj);
-            const props = err_struct.canonical.?;
-            if (props.trace) |a| php.release(a);
-            errdefer props.trace = null;
-            props.trace = try php.getBacktrace();
-            if (props.file) |s| php.release(s);
-            props.file = php.getCurrentFile();
-            props.lineno = php.getCurrentLine();
-            return err_obj;
+            const err_value = try self.value_acc.get(err_struct.bytes);
+            // reference err by integer value
+            const long = try php.getValueLong(&err_value);
+            var err = php.createValueObject(err_obj);
+            php.setHashEntryRef(self.global_error_set, long, &err);
+            // reference err by name
+            php.setHashEntryRef(self.global_error_set, name, &err);
+            // reference err by message
+            const message = createDecamelizedMessage(name);
+            php.setHashEntryRef(self.global_error_set, message, &err);
+            // attach canonical info to err
+            const props = try php.allocator.create(Canonical);
+            props.* = .{ .message = message };
+            err_struct.canonical = props;
         }
     };
 
-    pub fn freeObject(obj: *Object) void {
-        const self = fromObject(obj);
-        if (self.canonical == null or self.canonical.?.unknown) {
-            const class = ZigClassEntry.fromObject(obj);
-            class.release();
-        }
-        if (self.canonical) |props| {
-            props.release();
-        }
-        Super.freeObject(obj);
-    }
-
-    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
-        _ = prop_type;
-        _ = cache_slot;
-        const self = fromObject(obj);
-        const err_struct = try self.getCanonical();
-        const props = err_struct.canonical.?;
-        const name_c = php.getStringContent(name);
-        if (std.mem.eql(u8, name_c, "string")) {
-            const string = php.useString(props.string, "");
-            retval.* = php.createValueString(string);
-        } else if (std.mem.eql(u8, name_c, "file")) {
-            const file = php.useString(props.file, "(unknown)");
-            retval.* = php.createValueString(file);
-        } else if (std.mem.eql(u8, name_c, "line")) {
-            retval.* = php.createValueLong(@intCast(props.lineno));
-        } else {
-            std.debug.print("readProperty {s}\n", .{name_c});
-            retval.* = php.createValueNull();
-        }
-        return retval;
-    }
-
-    pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
-        _ = cache_slot;
-        const self = fromObject(obj);
-        const err_struct = try self.getCanonical();
-        const props = err_struct.canonical.?;
-        const name_c = php.getStringContent(name);
-        if (std.mem.eql(u8, name_c, "string")) {
-            const new_str = try php.getValueString(value);
-            if (props.string) |s| php.release(s);
-            props.string = new_str;
-            php.addRef(new_str);
-        }
-        return value;
-    }
-
     pub fn readSelf(self: *@This()) !Value {
-        const err_struct = try self.getCanonical();
-        const err_obj = err_struct.object();
-        php.addRef(err_obj);
-        return php.createValueObject(err_obj);
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        return try static.value_acc.get(self.bytes);
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        const err_value = find: {
-            if (php.getValueObject(value)) |exception| {
-                if (php.instanceOf(exception.ce, php.getInterface(.throwable))) {
-                    if (ZigClassEntry.isZigError(exception.ce)) {
-                        break :find try static.readErrorValue(exception);
-                    } else {
-                        const msg_value = try php.invokeMethod(exception, "getMessage", .{});
-                        const message = try php.getValueStringContent(&msg_value);
-                        if (static.findError(message)) |err_obj| {
-                            break :find try static.readErrorValue(err_obj);
-                        } else |_| {
-                            return php.throwExceptionFmt("'{s}' does not correspond to error in global set (zig)", .{
-                                message,
-                            });
-                        }
-                    }
-                } else {
-                    return php.throwExceptionFmt("'{s}' does not implement throwable (zig)", .{
-                        php.getStringContent(exception.ce.*.name),
-                    });
-                }
-            } else |_| if (php.getType(value) == .long) {
-                break :find value.*;
-            } else {
-                return error.InvalidType;
-            }
-        };
-        try static.value_acc.set(self.bytes, &err_value);
+        try static.value_acc.set(self.bytes, value);
     }
 
     pub fn stringify(self: *@This()) !Value {
-        const err_struct = try self.getCanonical();
+        const err_value = try self.readSelf();
+        const err_obj = try php.getValueObject(&err_value);
+        const err_struct = fromObject(err_obj);
         const props = err_struct.canonical.?;
         const message = php.useString(props.message, "");
         defer php.release(message);
@@ -248,6 +208,69 @@ pub const ErrorSet = struct {
         return php.createValueStringContent(text);
     }
 
+    pub fn acquireDebugInfo(self: *@This()) !void {
+        const props = self.canonical orelse return error.Unexpected;
+        if (props.trace) |a| php.release(a);
+        errdefer props.trace = null;
+        props.trace = try php.getBacktrace();
+        if (props.file) |s| php.release(s);
+        props.file = php.getCurrentFile();
+        props.lineno = php.getCurrentLine();
+    }
+
+    pub fn freeObject(obj: *Object) void {
+        const self = fromObject(obj);
+        if (self.canonical == null or self.canonical.?.unknown) {
+            const class = ZigClassEntry.fromObject(obj);
+            class.release();
+        }
+        if (self.canonical) |props| {
+            props.release();
+        }
+        Super.freeObject(obj);
+    }
+
+    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
+        _ = prop_type;
+        _ = cache_slot;
+        const self = fromObject(obj);
+        const err_value = try self.readSelf();
+        const err_obj = try php.getValueObject(&err_value);
+        const err_struct = fromObject(err_obj);
+        const props = err_struct.canonical.?;
+        const name_c = php.getStringContent(name);
+        if (std.mem.eql(u8, name_c, "string")) {
+            const string = php.useString(props.string, "");
+            retval.* = php.createValueString(string);
+        } else if (std.mem.eql(u8, name_c, "file")) {
+            const file = php.useString(props.file, "(unknown)");
+            retval.* = php.createValueString(file);
+        } else if (std.mem.eql(u8, name_c, "line")) {
+            retval.* = php.createValueLong(@intCast(props.lineno));
+        } else {
+            std.debug.print("readProperty {s}\n", .{name_c});
+            retval.* = php.createValueNull();
+        }
+        return retval;
+    }
+
+    pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
+        _ = cache_slot;
+        const self = fromObject(obj);
+        const err_value = try self.readSelf();
+        const err_obj = try php.getValueObject(&err_value);
+        const err_struct = fromObject(err_obj);
+        const props = err_struct.canonical.?;
+        const name_c = php.getStringContent(name);
+        if (std.mem.eql(u8, name_c, "string")) {
+            const new_str = try php.getValueString(value);
+            if (props.string) |s| php.release(s);
+            props.string = new_str;
+            php.addRef(new_str);
+        }
+        return value;
+    }
+
     pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: *const Value) !?*Function {
         const obj = obj_ptr.*;
         const class = ZigClassEntry.fromObject(obj);
@@ -261,10 +284,8 @@ pub const ErrorSet = struct {
     }
 
     pub fn getMessage(_: *Static, arg_iter: *ArgumentIterator) !?Value {
-        const obj = try php.getValueObject(arg_iter.this);
-        const self = fromObject(obj);
-        const err_struct = try self.getCanonical();
-        const message = php.useString(err_struct.canonical.?.message, "");
+        const props = try getProperites(arg_iter.this);
+        const message = php.useString(props.message, "");
         return php.createValueString(message);
     }
 
@@ -275,33 +296,25 @@ pub const ErrorSet = struct {
     }
 
     pub fn getFile(_: *Static, arg_iter: *ArgumentIterator) !?Value {
-        const obj = try php.getValueObject(arg_iter.this);
-        const self = fromObject(obj);
-        const err_struct = try self.getCanonical();
-        const file = php.useString(err_struct.canonical.?.file, "(unknown)");
+        const props = try getProperites(arg_iter.this);
+        const file = php.useString(props.file, "(unknown)");
         return php.createValueString(file);
     }
 
     pub fn getLine(_: *Static, arg_iter: *ArgumentIterator) !?Value {
-        const obj = try php.getValueObject(arg_iter.this);
-        const self = fromObject(obj);
-        const err_struct = try self.getCanonical();
-        return php.createValueLong(@intCast(err_struct.canonical.?.lineno));
+        const props = try getProperites(arg_iter.this);
+        return php.createValueLong(@intCast(props.lineno));
     }
 
     pub fn getTrace(_: *Static, arg_iter: *ArgumentIterator) !?Value {
-        const obj = try php.getValueObject(arg_iter.this);
-        const self = fromObject(obj);
-        const err_struct = try self.getCanonical();
-        const trace = php.useArray(err_struct.canonical.?.trace);
+        const props = try getProperites(arg_iter.this);
+        const trace = php.useArray(props.trace);
         return php.createValueArray(trace);
     }
 
     pub fn getTraceAsString(_: *Static, arg_iter: *ArgumentIterator) !?Value {
-        const obj = try php.getValueObject(arg_iter.this);
-        const self = fromObject(obj);
-        const err_struct = try self.getCanonical();
-        const trace = php.useArray(err_struct.canonical.?.trace);
+        const props = try getProperites(arg_iter.this);
+        const trace = php.useArray(props.trace);
         const trace_str = php.traceToString(trace, true);
         return php.createValueString(trace_str);
     }
@@ -310,24 +323,10 @@ pub const ErrorSet = struct {
         return php.createValueNull();
     }
 
-    fn getCanonical(self: *@This()) !*@This() {
-        if (self.canonical != null) return self;
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        const err_value = try static.value_acc.get(self.bytes);
-        const err_code = try php.getValueLong(&err_value);
-        if (static.findError(err_code)) |err_obj| {
-            return fromObject(err_obj);
-        } else |_| {
-            // unknown error number--attach a canonical struct
-            var buffer: [32]u8 = undefined;
-            const text = std.fmt.bufPrint(&buffer, "Unknown error #{d}", .{err_code}) catch unreachable;
-            const message = php.createString(text);
-            const props = try php.allocator.create(Canonical);
-            props.* = .{ .message = message, .unknown = true };
-            self.canonical = props;
-            return self;
-        }
+    fn getProperites(err: *Value) !*Canonical {
+        const obj = try php.getValueObject(err);
+        const self = fromObject(obj);
+        return self.canonical.?;
     }
 
     pub const setStorage = Super.setStorage;

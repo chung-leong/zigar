@@ -89,27 +89,22 @@ pub fn Class(comptime S: type) type {
         pub fn cast(self: *@This(), arg_iter: *ArgumentIterator) !?Value {
             const class = ZigClassEntry.fromStructure(self);
             const byte_size = class.byte_size orelse return error.InvalidType;
-            if (arg_iter.len != 1) {
-                php.throwExceptionFmt("casting operation expects 1 argument, received {d}", .{
+            if (arg_iter.len != 1)
+                return php.throwExceptionFmt("casting operation expects 1 argument, received {d}", .{
                     arg_iter.total,
                 });
-                return error.ExceptionThrown;
-            }
             const arg = arg_iter.next().?;
-            const str = php.getValueString(arg) catch {
-                php.throwExceptionFmt("casting operation expects a string as argument, received {s}", .{
+            const str = php.getValueString(arg) catch
+                return php.throwExceptionFmt("casting operation expects a string as argument, received {s}", .{
                     @tagName(php.getType(arg)),
                 });
-                return error.ExceptionThrown;
-            };
             if (str.len != byte_size) {
-                php.throwExceptionFmt("{s} '{s}' expects {d} bytes, received a string with {d} bytes", .{
+                return php.throwExceptionFmt("{s} '{s}' expects {d} bytes, received a string with {d} bytes", .{
                     class.getStructureName(),
                     class.getName(),
                     byte_size,
                     str.len,
                 });
-                return error.ExceptionThrown;
             }
             const new_obj = try class.createObjectFromString(str);
             return php.createValueObject(new_obj);
