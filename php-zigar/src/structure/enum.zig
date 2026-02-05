@@ -57,14 +57,15 @@ pub const Enum = struct {
         }
 
         pub fn findCanonical(self: *@This(), key: *const Value) !Value {
-            if (php.getHashEntry(&self.available_tags, key)) |tag| {
-                php.addRef(tag);
-                return tag.*;
-            } else |_| {
-                const class = ZigClassEntry.fromStatic(self);
-                return switch (php.getType(key)) {
-                    .long => switch (class.flags.@"enum".is_open_ended) {
-                        true => create: {
+            const class = ZigClassEntry.fromStatic(self);
+            switch (php.getType(key)) {
+                .long => {
+                    const enum_code = php.getValueLong(key) catch unreachable;
+                    if (php.getHashEntry(&self.available_tags, enum_code)) |tag| {
+                        php.addRef(tag);
+                        return tag.*;
+                    } else |_| {
+                        if (class.flags.@"enum".is_open_ended) {
                             // create new item
                             const bytes = try ByteBuffer.createNew(class.byte_size.?, class.alignment);
                             var acc = self.value_acc.*;
@@ -78,29 +79,39 @@ pub const Enum = struct {
                             defer php.release(name);
                             try self.addCanonical(name, tag_obj);
                             // tag_obj has refcount = 2 at this point, which is correct
-                            break :create php.createValueObject(tag_obj);
-                        },
-                        false => php.throwExceptionFmt("enum '{s}' has no tag with value {d} (zig)", .{
-                            class.getName(),
-                            php.getValueLong(key) catch unreachable,
-                        }),
-                    },
-                    .string => php.throwExceptionFmt("enum '{s}' has no tag named '{s}' (zig)", .{
-                        class.getName(),
-                        php.getValueStringContent(key) catch unreachable,
-                    }),
-                    .object => check: {
-                        const tag_obj = php.getValueObject(key) catch unreachable;
-                        break :check if (tag_obj.ce == class.entry())
-                            key.*
-                        else
-                            php.throwExceptionFmt("'{s}' is not a tag of enum '{s}' (zig)", .{
-                                php.getStringContent(tag_obj.ce.*.name),
+                            return php.createValueObject(tag_obj);
+                        } else {
+                            return php.throwExceptionFmt("enum '{s}' has no tag with value {d} (zig)", .{
                                 class.getName(),
+                                enum_code,
                             });
-                    },
-                    else => error.InvalidType,
-                };
+                        }
+                    }
+                },
+                .string => {
+                    const name = php.getValueStringContent(key) catch unreachable;
+                    if (php.getHashEntry(&self.available_tags, name)) |tag| {
+                        php.addRef(tag);
+                        return tag.*;
+                    } else |_| {
+                        return php.throwExceptionFmt("enum '{s}' has no tag named '{s}' (zig)", .{
+                            class.getName(),
+                            name,
+                        });
+                    }
+                },
+                .object => {
+                    const tag_obj = php.getValueObject(key) catch unreachable;
+                    if (tag_obj.ce == class.entry()) {
+                        return key.*;
+                    } else {
+                        return php.throwExceptionFmt("'{s}' is not a tag of enum '{s}' (zig)", .{
+                            php.getStringContent(tag_obj.ce.*.name),
+                            class.getName(),
+                        });
+                    }
+                },
+                else => return error.InvalidType,
             }
         }
 

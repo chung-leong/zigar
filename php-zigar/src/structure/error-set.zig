@@ -94,50 +94,54 @@ pub const ErrorSet = struct {
         }
 
         pub fn findCanonical(self: *@This(), value: *const Value) !Value {
-            if (php.getType(value) == .long) {
-                const err_code = php.getValueLong(value) catch unreachable;
-                if (err_code == 0) return php.createValueNull();
-            }
-            if (php.getHashEntry(self.global_error_set, value)) |err| {
-                php.addRef(err);
-                return err.*;
-            } else |_| {
-                const class = ZigClassEntry.fromStatic(self);
-                return switch (php.getType(value)) {
-                    .long => create: {
+            const class = ZigClassEntry.fromStatic(self);
+            return switch (php.getType(value)) {
+                .long => {
+                    const err_code = php.getValueLong(value) catch unreachable;
+                    if (err_code == 0) return php.createValueNull();
+                    if (php.getHashEntry(self.global_error_set, err_code)) |err| {
+                        php.addRef(err);
+                        return err.*;
+                    } else |_| {
                         // create new error
                         const bytes = try ByteBuffer.createNew(class.byte_size.?, class.alignment);
-                        try self.value_acc.set(bytes, value);
-                        const err_code = php.getValueLong(value) catch unreachable;
+                        var acc = self.value_acc.*;
+                        acc.params.transform = null;
+                        try acc.set(bytes, value);
                         const err_obj = try class.createObjectFromBuffer(bytes, null);
                         var buffer: [64]u8 = undefined;
                         const text = std.fmt.bufPrint(&buffer, "UnknownError #{d}", .{err_code}) catch unreachable;
                         const name = php.createString(text);
                         try self.addCanonical(name, err_obj);
                         // err_obj has refcount = 2 at this point, which is correct
-                        break :create php.createValueObject(err_obj);
-                    },
-                    .object => find: {
-                        const err_obj = php.getValueObject(value) catch unreachable;
-                        if (php.instanceOf(err_obj.ce, php.getInterface(.throwable))) {
-                            if (ZigClassEntry.isZigError(err_obj.ce)) {
-                                break :find value.*;
-                            } else {
-                                const message = try php.invokeMethod(err_obj, "getMessage", .{});
-                                break :find self.findCanonical(&message) catch
-                                    php.throwExceptionFmt("'{s}' does not correspond to an entry in global error set (zig)", .{
-                                        try php.getValueStringContent(&message),
-                                    });
-                            }
+                        return php.createValueObject(err_obj);
+                    }
+                },
+                .object => {
+                    const err_obj = php.getValueObject(value) catch unreachable;
+                    if (err_obj.ce == class.entry()) return value.*;
+                    if (php.instanceOf(err_obj.ce, php.getInterface(.throwable))) {
+                        if (ZigClassEntry.isZigError(err_obj.ce)) {
+                            return value.*;
                         } else {
-                            break :find php.throwExceptionFmt("'{s}' does not implement throwable (zig)", .{
-                                php.getStringContent(err_obj.ce.*.name),
-                            });
+                            const message = try php.invokeMethod(err_obj, "getMessage", .{});
+                            if (php.getHashEntry(self.global_error_set, &message)) |err| {
+                                php.addRef(err);
+                                return err.*;
+                            } else |_| {
+                                return php.throwExceptionFmt("'{s}' does not correspond to an entry in global error set (zig)", .{
+                                    try php.getValueStringContent(&message),
+                                });
+                            }
                         }
-                    },
-                    else => error.InvalidType,
-                };
-            }
+                    } else {
+                        return php.throwExceptionFmt("'{s}' does not implement throwable (zig)", .{
+                            php.getStringContent(err_obj.ce.*.name),
+                        });
+                    }
+                },
+                else => return error.InvalidType,
+            };
         }
 
         pub fn findCanonicalBytes(self: *@This(), value: *const Value) !*ByteBuffer {
@@ -149,7 +153,9 @@ pub const ErrorSet = struct {
 
         fn addCanonical(self: *@This(), name: *String, err_obj: *Object) !void {
             const err_struct = fromObject(err_obj);
-            const err_value = try self.value_acc.get(err_struct.bytes);
+            var acc = self.value_acc.*;
+            acc.params.transform = null;
+            const err_value = try acc.get(err_struct.bytes);
             // reference err by integer value
             const long = try php.getValueLong(&err_value);
             var err = php.createValueObject(err_obj);

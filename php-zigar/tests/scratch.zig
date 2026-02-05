@@ -11,6 +11,7 @@ pub const Enum = enum {
 
 pub var value: Enum = .hello;
 
-pub fn print() void {
-    std.debug.print("test\n", .{});
+pub fn print() !void {
+    return error.PantsOnFire;
+    // std.debug.print("test\n", .{});
 }

@@ -250,33 +250,17 @@ pub const ZigClassEntry = struct {
             },
         };
         // create the class object
-        const class_obj, const class_closures = switch (self.type) {
+        const class_obj = switch (self.type) {
             inline else => |t| create: {
                 const S = @field(structure.by_enum, @tagName(t));
                 const C = structure.Class(S);
                 const class_zobj = try ZigObject(C).create(self);
-                if (@hasDecl(S, "getIterator"))
-                    ce.get_iterator = php.transform(S.getIterator);
-                // obtain its closure table
-                break :create .{ class_zobj.object(), &class_zobj.zig_portion.closures };
+                break :create class_zobj.object();
             },
         };
         // make it accessible through the class entry
         self.object = class_obj;
-        // set methods that are implemented as function objects
-        inline for (comptime std.meta.fields(@TypeOf(class_closures.*))) |field| {
-            if (@hasField(ClassEntry, field.name)) {
-                if (@field(class_closures, field.name)) |closure|
-                    @field(ce, field.name) = closure.function();
-            }
-        }
-        // set methods that are use direct callbacks
-        switch (self.type) {
-            inline else => |t| {
-                const S = @field(structure.by_enum, @tagName(t));
-                if (@hasDecl(S, "getIterator")) ce.get_iterator = php.transform(S.getIterator);
-            },
-        }
+        // removing the initial refcount now that class_obj is holding a ref to this
         self.release();
         return class_obj;
     }
@@ -335,6 +319,25 @@ pub const ZigClassEntry = struct {
                     const data = &@field(self.static_data, name);
                     try data.init(self);
                 }
+            },
+        }
+        // attach class methods
+        const ce = self.entry();
+        switch (self.type) {
+            inline else => |t| {
+                const S = @field(structure.by_enum, @tagName(t));
+                const C = structure.Class(S);
+                const class_struct = ZigObject(C).fromObject(self.object).structure();
+                const closures = class_struct.closures;
+                // set methods that are implemented as function objects
+                inline for (comptime std.meta.fields(@TypeOf(closures))) |field| {
+                    if (@hasField(ClassEntry, field.name)) {
+                        if (@field(closures, field.name)) |closure|
+                            @field(ce, field.name) = closure.function();
+                    }
+                }
+                // set methods that are use direct callbacks
+                if (@hasDecl(S, "getIterator")) ce.get_iterator = php.transform(S.getIterator);
             },
         }
         self.status.finalized = true;
