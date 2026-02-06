@@ -333,12 +333,15 @@ pub fn WithBitOffset(comptime T: type, comptime bit_offset: ?u3) type {
 
 pub fn read(entry: *Value, transform: ?ObjectTransform) !Value {
     if (transform) |t| {
-        const obj = try php.getValueObject(entry);
-        return switch (t) {
-            .to_string => try invokeFunction(obj, "stringify", .{}),
-            .to_plain => try invokeFunction(obj, "plainify", .{}),
-            .to_value => try invokeFunction(obj, "readSelf", .{}),
-        };
+        if (php.getValueObject(entry)) |obj| {
+            return switch (t) {
+                .to_string => try invokeFunction(obj, "stringify", .{}),
+                .to_plain => try invokeFunction(obj, "plainify", .{}),
+                .to_value => try invokeFunction(obj, "readSelf", .{}),
+            };
+        } else |_| {
+            return php.createValueNull();
+        }
     } else {
         php.addRef(entry);
         return entry.*;
@@ -346,6 +349,9 @@ pub fn read(entry: *Value, transform: ?ObjectTransform) !Value {
 }
 
 pub fn write(entry: *Value, value: *const Value) Error!void {
-    const obj = php.getValueObject(entry) catch unreachable;
-    try invokeFunction(obj, "writeSelf", .{value});
+    if (php.getValueObject(entry)) |obj| {
+        try invokeFunction(obj, "writeSelf", .{value});
+    } else |_| {
+        return php.throwExceptionFmt("attempt to write to null target", .{});
+    }
 }

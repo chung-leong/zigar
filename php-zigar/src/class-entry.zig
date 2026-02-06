@@ -272,6 +272,25 @@ pub const ZigClassEntry = struct {
         errdefer self.instance.release();
         self.static = try self.extractScope(info, "static");
         errdefer self.static.release();
+        if (self.type == .pointer) {
+            // add implicit members for pointer
+            const byte_size = self.byte_size orelse return error.Unexpected;
+            const count = byte_size / @sizeOf(usize);
+            for (0..count) |i| {
+                const member = try php.allocator.create(Member);
+                errdefer php.allocator.destroy(member);
+                member.* = .{
+                    .type = MemberType.uint,
+                    .flags = .{},
+                    .bit_offset = @bitSizeOf(usize) * i,
+                    .bit_size = @bitSizeOf(usize),
+                    .byte_size = @sizeOf(usize),
+                    .slot = null,
+                };
+                var member_ptr = php.createValuePointer(member);
+                php.setHashEntry(&self.instance.members, 1 + i, &member_ptr);
+            }
+        }
         inline for (.{ .static, .instance }) |scope_type| {
             const scope = &@field(self, @tagName(scope_type));
             // attach count the number of slots used
