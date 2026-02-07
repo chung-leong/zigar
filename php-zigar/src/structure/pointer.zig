@@ -19,7 +19,7 @@ pub const Pointer = struct {
         target_class: *ZigClassEntry = undefined,
         target_transform: ?accessor.ObjectTransform = undefined,
         address_acc: *accessor.Primitive = undefined,
-        length_acc: ?accessor.Primitive = null,
+        length_acc: ?*accessor.Primitive = null,
 
         pub fn init(self: *@This(), class: *ZigClassEntry) !void {
             const target_member = try class.getMember(.instance, 0);
@@ -31,7 +31,7 @@ pub const Pointer = struct {
             self.address_acc = &address_member.accessors.primitive;
             if (class.getMember(.instance, 2)) |length_member| {
                 if (length_member.accessors != .primitive) return error.InvalidAccessor;
-                self.address_acc = &length_member.accessors.primitive;
+                self.length_acc = &length_member.accessors.primitive;
             } else |_| {}
         }
 

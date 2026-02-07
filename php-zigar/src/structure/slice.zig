@@ -15,10 +15,18 @@ pub const Slice = struct {
     const Super = structure.Parent(@This());
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
+        element_size: usize = undefined,
+        element_shift: ?u6 = undefined,
 
         pub fn init(self: *@This(), class: *ZigClassEntry) !void {
             const member = try class.getMember(.instance, 0);
             self.value_acc = &member.accessors;
+            self.element_size = class.byte_size orelse 1;
+            self.element_shift = init: {
+                const shift = std.math.log2_int(usize, self.element_size);
+                const one: usize = 1;
+                break :init if (one << shift == self.element_size) shift else null;
+            };
         }
     };
 
@@ -26,6 +34,19 @@ pub const Slice = struct {
         _ = self;
         _ = value;
         unreachable;
+    }
+
+    pub fn stringify(self: *@This()) !Value {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        if (class.flags.slice.is_string) {
+            if (static.element_size == 1) {
+                return php.createValueStringContent(self.bytes.bytes);
+            } else if (static.element_size == 2) {
+                // TODO: convert to UTF-8
+            }
+        }
+        return error.Unsupported;
     }
 
     pub fn readElement(obj: *Object, key: *Value, _: c_int, retval: *Value) !?*Value {
@@ -46,28 +67,47 @@ pub const Slice = struct {
     }
 
     pub fn hasElement(obj: *Object, key: *Value, _: c_int) !c_int {
-        const class = ZigClassEntry.fromObject(obj);
+        const self = Super.fromObject(obj);
+        const len = self.getLength();
         const index = getIndex(key) catch return 0;
-        const len = class.length orelse return error.MissingLength;
         return if (index < len) 1 else 0;
     }
 
     pub fn countElements(obj: *Object, count: *php.Long) !c_int {
-        const class = ZigClassEntry.fromObject(obj);
-        const len = class.length orelse return error.MissingLength;
+        const self = Super.fromObject(obj);
+        const len = self.getLength();
         if (len > std.math.maxInt(php.Long)) return error.TooLarge;
         count.* = @intCast(len);
         return php.SUCCESS;
     }
 
-    fn getIndex(key: *Value) !usize {
-        const key_long = try php.getValueLong(key);
-        if (key_long < 0) return error.NegativeIndex;
-        return @intCast(key_long);
+    pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
+        const value_type = php.Type.fromNumber(type_id) catch return php.FAILURE;
+        if (value_type == .string) {
+            const self = Super.fromObject(obj);
+            const value = self.stringify() catch return php.FAILURE;
+            retval.* = value;
+            return php.SUCCESS;
+        }
+        return php.FAILURE;
+    }
+
+    fn getLength(self: *@This()) usize {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        const len = self.bytes.bytes.len;
+        return if (static.element_shift) |shift|
+            len >> shift
+        else
+            len / static.element_size;
     }
 
     pub const setStorage = Super.setStorage;
     pub const copyArguments = Super.copyArguments;
     pub const readSelf = Super.readSelf;
+    pub const getProperties = Super.getVectorProperties;
     pub const freeObject = Super.freeObject;
+    pub const getIterator = Super.getVectorIterator;
+    const fromObject = Super.fromObject;
+    const getIndex = Super.getIndex;
 };

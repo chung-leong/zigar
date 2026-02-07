@@ -962,7 +962,12 @@ pub fn release(value: anytype) void {
         *Value, *const Value, [*c]Value => php_h.zval_ptr_dtor(@constCast(value)),
         *String, [*c]String => php_h.zend_string_release(value),
         *Object, [*c]Object => php_h.zend_object_release(value),
-        *HashTable, [*c]HashTable => php_h.zend_hash_release(value),
+        *HashTable, [*c]HashTable => {
+            if (@intFromPtr(value) == 0x00007ffff5088180) {
+                std.debug.print("release: 0x00007ffff5088180\n", .{});
+            }
+            php_h.zend_hash_release(value);
+        },
         else => @compileError("Unexpected type: " ++ @typeName(T)),
     }
 }

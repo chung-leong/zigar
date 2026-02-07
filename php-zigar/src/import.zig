@@ -93,7 +93,7 @@ pub const StructureImporter = struct {
                 php.addRef(class_value);
                 php.release(arr);
                 // TODO: find out why there's an extra reference on the array
-                php.release(arr);
+                // php.release(arr);
             }
         }
         // the last class to get finalized is the root namespace
