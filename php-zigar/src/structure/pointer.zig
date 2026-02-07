@@ -25,7 +25,6 @@ pub const Pointer = struct {
             const target_member = try class.getMember(.instance, 0);
             self.target_class = target_member.class orelse return error.MissingClass;
             self.target_transform = target_member.objectTransform();
-            if (self.target_class.byte_size == null) return error.Unexpected;
             const address_member = try class.getMember(.instance, 1);
             if (address_member.accessors != .primitive) return error.InvalidAccessor;
             self.address_acc = &address_member.accessors.primitive;
@@ -45,7 +44,7 @@ pub const Pointer = struct {
             if (pointer.last_address != address and pointer.last_length != length) {
                 php.release(&pointer.slots);
                 if (address >= 0) {
-                    const byte_size = length * self.target_class.byte_size.?;
+                    const byte_size = length * (self.target_class.byte_size orelse 0);
                     const byte_ptr: [*]u8 = @ptrFromInt(address);
                     const bytes = try ByteBuffer.createExternal(byte_ptr[0..byte_size]);
                     defer bytes.release();

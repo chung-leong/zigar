@@ -1,3 +1,5 @@
 const std = @import("std");
 
-pub var string: []const u8 = "Hello world!\n";
+const string: []const u8 = "Hello world!\n";
+
+pub var opaque_ptr: *const anyopaque = string.ptr;

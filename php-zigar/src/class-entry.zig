@@ -210,7 +210,7 @@ pub const ZigClassEntry = struct {
             .type = try php.getPropertyWithType(StructureType, info, "type"),
             .purpose = try php.getPropertyWithType(StructurePurpose, info, "purpose"),
             .flags = try php.getPropertyWithType(?StructureFlags, info, "flags") orelse @bitCast(@as(u32, 0)),
-            .alignment = try php.getPropertyWithType(usize, info, "align"),
+            .alignment = php.getPropertyWithType(usize, info, "align") catch 0,
             .length = try php.getPropertyWithType(?usize, info, "length"),
             .byte_size = try php.getPropertyWithType(?usize, info, "byteSize"),
             .signature = get: {
@@ -266,7 +266,12 @@ pub const ZigClassEntry = struct {
     }
 
     pub fn finalize(class_obj: *Object, info: *Value) !void {
-        errdefer |err| std.debug.print("finalize => {}\n", .{err});
+        errdefer |err| {
+            std.debug.print("finalize => {}\n", .{err});
+            if (@errorReturnTrace()) |ert| {
+                std.debug.dumpStackTrace(ert.*);
+            }
+        }
         const self = fromObject(class_obj);
         self.instance = try self.extractScope(info, "instance");
         errdefer self.instance.release();
