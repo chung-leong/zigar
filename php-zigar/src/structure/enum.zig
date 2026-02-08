@@ -189,6 +189,7 @@ pub const Enum = struct {
     }
 
     pub const setStorage = Super.setStorage;
+    pub const getMemory = Super.getMemory;
     pub const copyArguments = Super.copyArguments;
     pub const getMethod = Super.getMethod;
     const fromObject = Super.fromObject;

@@ -336,6 +336,7 @@ pub const ErrorSet = struct {
     }
 
     pub const setStorage = Super.setStorage;
+    pub const getMemory = Super.getMemory;
     pub const copyArguments = Super.copyArguments;
     const fromObject = Super.fromObject;
     const object = Super.object;

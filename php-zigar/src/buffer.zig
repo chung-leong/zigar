@@ -95,3 +95,72 @@ pub const ByteBuffer = struct {
         return ptr[0..len];
     }
 };
+
+pub const BufferMap = struct {
+    list: std.ArrayList(*ByteBuffer) = .empty,
+
+    pub fn init() !*@This() {
+        const self = try php.allocator.create(@This());
+        self.* = .{};
+        return self;
+    }
+
+    pub fn deinit(self: *@This()) void {
+        self.list.deinit(php.allocator);
+        php.allocator.destroy(self);
+    }
+
+    pub fn add(self: *@This(), buf: *ByteBuffer) !void {
+        const buf_address = @intFromPtr(buf.bytes.ptr);
+        const index = self.findSortedIndex(buf_address);
+        try self.list.insert(php.allocator, index, buf);
+    }
+
+    pub fn remove(self: *@This(), buf: *ByteBuffer) !void {
+        const buf_address = @intFromPtr(buf.bytes.ptr);
+        const index = self.findSortedIndex(buf_address);
+        if (index > 0) {
+            if (self.list.items[index - 1] == buf) {
+                try self.list.orderedRemove(index - 1);
+            }
+        }
+    }
+
+    pub fn get(self: *@This(), address: usize, len: usize) !*ByteBuffer {
+        const index = self.findSortedIndex(address);
+        if (index > 0) {
+            const buf = self.list.items[index - 1];
+            const buf_address = @intFromPtr(buf.bytes.ptr);
+            const buf_len = buf.bytes.len;
+            if (buf_address == address and buf_len == len) {
+                buf.addRef();
+                return buf;
+            } else if (buf_address <= address and address + len <= buf_address + buf_len) {
+                const offset = address - buf_address;
+                return try buf.slice(offset, len);
+            }
+        }
+        const ptr: [*]u8 = @ptrFromInt(address);
+        const buf = try ByteBuffer.createExternal(ptr[0..len]);
+        errdefer buf.release();
+        try self.insert(php.allocator, index, buf);
+        return buf;
+    }
+
+    pub fn release(self: *@This(), buf: *ByteBuffer) void {
+        if (buf.ref_count == 1) self.remove(buf);
+        buf.release();
+    }
+
+    fn findSortedIndex(self: *@This(), address: usize) usize {
+        var low: usize = 0;
+        var high = self.list.items.len;
+        if (high == 0) return 0;
+        while (low < high) {
+            const mid = (low + high) / 2;
+            const mid_address = @intFromPtr(self.list.items[mid].bytes.ptr);
+            if (mid_address <= address) low = mid + 1 else high = mid;
+        }
+        return high;
+    }
+};

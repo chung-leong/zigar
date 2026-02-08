@@ -42,6 +42,7 @@ pub const Struct = struct {
     }
 
     pub const setStorage = Super.setStorage;
+    pub const getMemory = Super.getMemory;
     pub const writeSelf = Super.writeContainer;
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;

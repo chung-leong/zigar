@@ -513,10 +513,13 @@ pub const ZigClassEntry = struct {
 
     fn createBuffer(self: *const @This()) !*ByteBuffer {
         const len = self.byte_size orelse return error.MissingLength;
-        return if (self.instance.template.bytes) |def|
+        const new_buffer = if (self.instance.template.bytes) |def|
             try ByteBuffer.createCopy(def.bytes, self.alignment)
         else
             try ByteBuffer.createNew(len, self.alignment);
+        errdefer new_buffer.release();
+        try self.host.memory_map.add(new_buffer);
+        return new_buffer;
     }
 
     fn createSlots(self: *const @This(), comptime scope_type: ScopeType, prefilled_slots: ?*const Value) !Value {
@@ -573,6 +576,7 @@ pub const ZigClassEntry = struct {
     pub fn createObjectFromString(self: *@This(), str: *String) !*Object {
         const new_buffer = try ByteBuffer.createStringRef(str, self.alignment);
         defer new_buffer.release();
+        try self.host.memory_map.add(new_buffer);
         return try self.createObjectFromBuffer(new_buffer, null);
     }
 

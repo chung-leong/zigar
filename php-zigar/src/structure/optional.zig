@@ -50,6 +50,7 @@ pub const Optional = struct {
     }
 
     pub const setStorage = Super.setStorage;
+    pub const getMemory = Super.getMemory;
     pub const copyArguments = Super.copyArguments;
     pub const freeObject = Super.freeObject;
     const fromObject = Super.fromObject;

@@ -157,8 +157,10 @@ pub const StructureImporter = struct {
                 buffer = try ByteBuffer.createExternal(@constCast(slice));
             }
         } else {
-            buffer = try ByteBuffer.createExternal("");
+            buffer = try ByteBuffer.createExternal(&.{});
         }
+        errdefer buffer.release();
+        try self.host.memory_map.add(buffer);
         const value = php.createValuePointer(buffer);
         return self.allocateValue(value);
     }

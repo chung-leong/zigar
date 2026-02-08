@@ -90,6 +90,11 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
+        pub fn getMemory(self: *S) *const ByteBuffer {
+            if (!@hasField(S, "bytes")) @compileError("No buffer: " ++ @typeName(S));
+            return self.bytes;
+        }
+
         pub fn copyArguments(self: *S, arg_iter: *php.ArgumentIterator) !void {
             if (arg_iter.len != 1) {
                 const arg_desc = switch (@hasDecl(S, "constructor_args")) {

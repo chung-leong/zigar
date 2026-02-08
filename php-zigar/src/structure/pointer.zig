@@ -46,9 +46,11 @@ pub const Pointer = struct {
                 if (address >= 0) {
                     const byte_size = length * (self.target_class.byte_size orelse 0);
                     const byte_ptr: [*]u8 = @ptrFromInt(address);
-                    const bytes = try ByteBuffer.createExternal(byte_ptr[0..byte_size]);
-                    defer bytes.release();
-                    const target = try self.target_class.createObjectFromBuffer(bytes, null);
+                    const new_buffer = try ByteBuffer.createExternal(byte_ptr[0..byte_size]);
+                    defer new_buffer.release();
+                    const class = ZigClassEntry.fromStatic(self);
+                    try class.host.memory_map.add(new_buffer);
+                    const target = try self.target_class.createObjectFromBuffer(new_buffer, null);
                     pointer.slots = php.createValueObject(target);
                 } else {
                     pointer.slots = php.createValueNull();
@@ -81,6 +83,7 @@ pub const Pointer = struct {
     }
 
     pub const setStorage = Super.setStorage;
+    pub const getMemory = Super.getMemory;
     pub const copyArguments = Super.copyArguments;
     pub const freeObject = Super.freeObject;
     const fromObject = Super.fromObject;

@@ -51,6 +51,7 @@ pub const Vector = struct {
     }
 
     pub const setStorage = Super.setStorage;
+    pub const getMemory = Super.getMemory;
     pub const copyArguments = Super.copyArguments;
     pub const readSelf = Super.readSelf;
     pub const hasElement = Super.hasVectorElement;

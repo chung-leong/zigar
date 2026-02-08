@@ -2,6 +2,7 @@ const std = @import("std");
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
+const BufferMap = @import("buffer.zig").BufferMap;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const ModuleGeneric = @import("module/native/interface.zig").Module;
@@ -20,6 +21,7 @@ pub const ModuleHost = struct {
     global_error_set: ?*HashTable = null,
     importer: *StructureImporter = undefined,
     dispatcher: *CallDispatcher = undefined,
+    memory_map: *BufferMap = undefined,
 
     const Module = ModuleGeneric(StructureImporter.Handle);
 
@@ -30,13 +32,13 @@ pub const ModuleHost = struct {
         if (module.version != Module.current_version) return error.IncorrectVersion;
         var self: *@This() = try php.allocator.create(@This());
         errdefer php.allocator.destroy(self);
-        self.* = .{
-            .importer = try .init(self),
-            .dispatcher = try .init(self),
-            .module = module,
-        };
+        self.* = .{ .module = module };
+        self.importer = try .init(self);
         defer self.importer.deinit();
+        self.dispatcher = try .init(self);
         errdefer self.dispatcher.deinit();
+        self.memory_map = try .init();
+        errdefer self.memory_map.deinit();
         _ = module.exports.set_host_instance(@ptrCast(self));
         try self.exportFunctionsToModule();
         // retrieve and run factory thunk
@@ -60,6 +62,7 @@ pub const ModuleHost = struct {
         // std.debug.print("release host (ref = {d})\n", .{self.ref_count});
         if (self.ref_count == 0) {
             // std.debug.print("freeing host\n", .{});
+            self.memory_map.deinit();
             self.dispatcher.deinit();
             if (self.library) |*lib| lib.close();
             php.allocator.destroy(self);

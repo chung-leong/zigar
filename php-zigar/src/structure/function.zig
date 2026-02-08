@@ -13,7 +13,7 @@ const Value = php.Value;
 const structure = @import("../structure.zig");
 
 pub const Function = struct {
-    address: usize = undefined,
+    buffer: *ByteBuffer = undefined,
     closure: *Closure = undefined,
 
     const Super = structure.Parent(@This());
@@ -47,13 +47,20 @@ pub const Function = struct {
         }
     };
 
-    pub fn setStorage(self: *@This(), buffer: *ByteBuffer, _: *const Value) !void {
-        self.address = @intFromPtr(buffer.bytes.ptr);
+    pub fn setStorage(self: *@This(), buffer: *ByteBuffer, slots: *const Value) !void {
+        try Super.setStorage(self, buffer, slots);
         self.closure = try Closure.create(self, invokeThunk, null);
     }
 
+    pub fn writeSelf(self: *@This(), value: *const Value) !void {
+        const class = ZigClassEntry.fromStructure(self);
+        _ = class;
+        _ = value;
+    }
+
     pub fn invokeThunk(self: *@This(), arg_iter: *ArgumentIterator) !?Value {
-        if (self.address != 0) {
+        const fn_addr = @intFromPtr(self.buffer.bytes.ptr);
+        if (fn_addr != 0) {
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(Function);
             const arg = try ZigClassEntry.createObject(static.argument_class.entry());
@@ -72,7 +79,7 @@ pub const Function = struct {
                     };
                     if (is_method_call) arg_iter.makeThisFirst();
                     try arg_struct.copyArguments(arg_iter);
-                    try class.host.runThunk(static.thunk_address, self.address, arg_addr);
+                    try class.host.runThunk(static.thunk_address, fn_addr, arg_addr);
                     return try arg_struct.getReturnValue();
                 },
                 .variadic_struct => {
