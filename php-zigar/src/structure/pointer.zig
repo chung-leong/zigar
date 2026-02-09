@@ -7,6 +7,7 @@ const php = @import("../php.zig");
 const Object = php.Object;
 const Value = php.Value;
 const structure = @import("../structure.zig");
+const invokeFunction = structure.invokeFunction;
 
 pub const Pointer = struct {
     bytes: *ByteBuffer = undefined,
@@ -34,7 +35,7 @@ pub const Pointer = struct {
             } else |_| {}
         }
 
-        pub fn updateTarget(self: *@This(), pointer: *Pointer) !void {
+        pub fn loadTarget(self: *@This(), pointer: *Pointer) !void {
             const address_value = try self.address_acc.get(pointer.bytes);
             const address: usize = @intCast(try php.getValueLong(&address_value));
             const length: usize = if (self.length_acc) |acc| get: {
@@ -59,20 +60,45 @@ pub const Pointer = struct {
                 pointer.last_length = length;
             }
         }
+
+        pub fn saveTarget(self: *@This(), pointer: *Pointer, target_obj: *Object) !void {
+            php.release(&pointer.slots);
+            pointer.slots = php.createValueObject(target_obj);
+            const extent = try invokeFunction(target_obj, "getExtent", .{});
+            const address_value = php.createValueLong(@intCast(extent.address));
+            try self.address_acc.set(pointer.bytes, &address_value);
+            if (self.length_acc) |acc| {
+                const len_value = php.createValueLong(@intCast(extent.len));
+                try acc.set(pointer.bytes, &len_value);
+            }
+            pointer.last_address = extent.address;
+            pointer.last_length = extent.len;
+        }
     };
 
     pub fn readSelf(self: *@This()) accessor.Error!Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        try static.updateTarget(self);
+        try static.loadTarget(self);
         return try accessor.read(&self.slots, static.target_transform);
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) accessor.Error!void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        try static.updateTarget(self);
-        try accessor.write(&self.slots, value);
+        const target_obj = init: {
+            if (php.getValueObject(value)) |obj| {
+                if (php.instanceOf(obj.ce, static.target_class.entry())) {
+                    php.addRef(obj);
+                    break :init obj;
+                }
+            } else |_| {}
+            const new_obj = try static.target_class.createNewObject();
+            errdefer php.release(new_obj);
+            try invokeFunction(new_obj, "writeSelf", .{value});
+            break :init new_obj;
+        };
+        try static.saveTarget(self, target_obj);
     }
 
     pub fn stringify(self: *@This()) !Value {
@@ -83,7 +109,7 @@ pub const Pointer = struct {
     }
 
     pub const setStorage = Super.setStorage;
-    pub const getMemory = Super.getMemory;
+    pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
     pub const freeObject = Super.freeObject;
     const fromObject = Super.fromObject;

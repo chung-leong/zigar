@@ -30,6 +30,13 @@ pub const Slice = struct {
         }
     };
 
+    pub fn getExtent(self: *@This()) Super.ByteExtent {
+        return .{
+            .address = @intFromPtr(self.bytes.bytes.ptr),
+            .len = self.getLength(),
+        };
+    }
+
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
         _ = self;
         _ = value;
@@ -103,7 +110,6 @@ pub const Slice = struct {
     }
 
     pub const setStorage = Super.setStorage;
-    pub const getMemory = Super.getMemory;
     pub const copyArguments = Super.copyArguments;
     pub const readSelf = Super.readSelf;
     pub const getProperties = Super.getVectorProperties;

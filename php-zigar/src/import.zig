@@ -2,6 +2,7 @@ const std = @import("std");
 
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const Comptime = @import("structure.zig").Comptime;
+const Function = @import("structure.zig").Function;
 const hooks = @import("module/native/hooks.zig");
 const ModuleGeneric = @import("module/native/interface.zig").Module;
 const ModuleHost = @import("host.zig").ModuleHost;
@@ -277,8 +278,9 @@ pub const StructureImporter = struct {
         const structure = self.dereference(structure_h);
         const template = self.dereference(template_h);
         const member_flags = self.dereference(member_flags_h);
-        _ = structure;
-        _ = template;
-        _ = member_flags;
+        const func_value = try php.getProperty(structure, self.keys.class);
+        const func_obj = try php.getValueObject(func_value);
+        const func_class = ZigClassEntry.fromObject(func_obj);
+        try func_class.enableCallback(template, member_flags);
     }
 };

@@ -66,9 +66,13 @@ pub fn Parent(comptime S: type) type {
     return struct {
         const scope: ZigClassEntry.ScopeType = if (@hasDecl(S, "scope")) S.scope else .instance;
 
-        const CacheEntry = extern struct {
+        pub const CacheEntry = extern struct {
             class: ?*const ZigClassEntry,
             accessors: *const accessor.Any,
+        };
+        pub const ByteExtent = struct {
+            address: usize,
+            len: usize = 1,
         };
 
         pub fn fromObject(obj: *Object) *S {
@@ -90,9 +94,9 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
-        pub fn getMemory(self: *S) *const ByteBuffer {
+        pub fn getExtent(self: *S) ByteExtent {
             if (!@hasField(S, "bytes")) @compileError("No buffer: " ++ @typeName(S));
-            return self.bytes;
+            return .{ .address = @intFromPtr(self.bytes.bytes.ptr) };
         }
 
         pub fn copyArguments(self: *S, arg_iter: *php.ArgumentIterator) !void {

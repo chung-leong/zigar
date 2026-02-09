@@ -3,4 +3,9 @@
 zigar_compile_module(__DIR__ . "/scratch.zig", "/tmp/scratch.zigar");
 $m = zigar_load_module("/tmp/scratch.zigar");
 
-print_r($m->opaque_ptr);
+function callback($arg) {
+    echo "received $arg\n";
+    return $arg * 10;
+}
+
+$m->call('callback', 1234);

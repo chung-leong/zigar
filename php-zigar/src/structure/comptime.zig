@@ -23,6 +23,10 @@ pub const Comptime = struct {
         }
     };
 
+    pub fn getExtent(_: *@This()) Super.ByteExtent {
+        return .{ .address = 0 };
+    }
+
     pub fn readSelf(self: *@This()) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
@@ -42,7 +46,6 @@ pub const Comptime = struct {
     }
 
     pub const setStorage = Super.setStorage;
-    pub const getMemory = Super.getMemory;
     pub const freeObject = Super.freeObject;
     const fromObject = Super.fromObject;
 };

@@ -37,7 +37,7 @@ pub const Primitive = struct {
     pub const plainify = readSelf;
 
     pub const setStorage = Super.setStorage;
-    pub const getMemory = Super.getMemory;
+    pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
     pub const freeObject = Super.freeObject;
     const fromObject = Super.fromObject;

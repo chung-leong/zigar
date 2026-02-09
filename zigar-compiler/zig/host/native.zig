@@ -189,7 +189,7 @@ pub fn enableCallback(structure: Value, template: Value, member_flags: Value) !v
 
 pub fn handleJscall(fn_id: usize, arg_ptr: *anyopaque, arg_size: usize) E {
     if (!initialized) @panic("Uninitialized thread");
-    var call: Module.Jscall = .{
+    var call: interface.Jscall = .{
         .fn_id = fn_id,
         .arg_address = @intFromPtr(arg_ptr),
         .arg_size = arg_size,

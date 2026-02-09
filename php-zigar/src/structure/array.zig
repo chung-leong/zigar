@@ -72,7 +72,7 @@ pub const Array = struct {
     }
 
     pub const setStorage = Super.setStorage;
-    pub const getMemory = Super.getMemory;
+    pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
     pub const readSelf = Super.readSelf;
     pub const hasElement = Super.hasVectorElement;

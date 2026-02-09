@@ -972,6 +972,10 @@ pub fn release(value: anytype) void {
     }
 }
 
+pub fn isCallable(callable: *const Value) bool {
+    return php_h.zend_is_callable(@constCast(callable), php_h.IS_CALLABLE_CHECK_SILENT, null);
+}
+
 pub fn invokeMethod(obj: *Object, fn_name: []const u8, params: anytype) !Value {
     var callable = createValueArray(null);
     defer release(&callable);
@@ -995,6 +999,15 @@ pub fn invokeMethod(obj: *Object, fn_name: []const u8, params: anytype) !Value {
     var retval: Value = undefined;
     fci.retval = &retval;
     if (php_h.zend_call_function(&fci, &fci_cache) != php_h.SUCCESS)
+        return error.Failure;
+    return retval;
+}
+
+pub fn invokeFunction(callable: *Value, arguments: []const Value) !Value {
+    var retval: Value = undefined;
+    const args = @constCast(arguments.ptr);
+    const len: u32 = @intCast(arguments.len);
+    if (php_h._call_user_function_impl(null, callable, &retval, len, args, null) != php_h.SUCCESS)
         return error.Failure;
     return retval;
 }
@@ -1115,7 +1128,8 @@ fn debugAlloc(size: usize, call_depth: usize) ?*anyopaque {
         if (debug.getCaller(fba.allocator(), call_depth)) |caller| {
             return php_h._emalloc(size, caller.file, caller.line, null, 0);
         } else {
-            return php_h._emalloc(size, "unknown", 0, null, 0);
+            const ptr = php_h._emalloc(size, "unknown", 0, null, 0);
+            return ptr;
         }
     } else {
         return php_h._emalloc(size);

@@ -15,15 +15,27 @@ pub const VariadicStruct = struct {
     pub fn copyArguments(self: *@This(), iter: *php.ArgumentIterator) !void {
         _ = self;
         _ = iter;
-        return error.NotImplemented;
+        unreachable;
     }
 
     pub fn getReturnValue(self: *@This()) !Value {
         _ = self;
+        unreachable;
+    }
+
+    pub fn getArguments(self: *@This()) ![]Value {
+        _ = self;
+        unreachable;
+    }
+
+    pub fn setReturnValue(self: *@This(), value: *const Value) !void {
+        _ = self;
+        _ = value;
+        unreachable;
     }
 
     pub const setStorage = Super.setStorage;
-    pub const getMemory = Super.getMemory;
+    pub const getExtent = Super.getExtent;
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
     const fromObject = Super.fromObject;

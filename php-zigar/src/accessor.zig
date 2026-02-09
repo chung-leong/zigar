@@ -25,6 +25,7 @@ pub const Error = error{
     NotArray,
     NotArrayOrObject,
     NotBoolean,
+    NotCallable,
     NotDouble,
     NotInteger,
     NotNull,

@@ -11,7 +11,7 @@ pub const Opaque = struct {
     const Super = structure.Parent(@This());
 
     pub const setStorage = Super.setStorage;
-    pub const getMemory = Super.getMemory;
+    pub const getExtent = Super.getExtent;
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
 };

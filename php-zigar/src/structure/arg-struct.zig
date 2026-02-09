@@ -44,19 +44,34 @@ pub const ArgStruct = struct {
         // use accessors to write into the argument struct
         var index: usize = 0;
         while (arg_iter.next()) |arg| : (index += 1) {
-            const accessors = static.arg_accessors[index];
-            try accessors.set(self, arg);
+            const acc = static.arg_accessors[index];
+            try acc.set(self, arg);
         }
     }
 
     pub fn getReturnValue(self: *@This()) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        return static.retval_accessors.get(self);
+        return try static.retval_accessors.get(self);
+    }
+
+    pub fn getArguments(self: *@This()) ![]Value {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        const len = static.arg_accessors.len;
+        const list = try php.allocator.alloc(Value, len);
+        for (static.arg_accessors, 0..) |acc, i| list[i] = try acc.get(self);
+        return list;
+    }
+
+    pub fn setReturnValue(self: *@This(), value: *const Value) !void {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        return try static.retval_accessors.set(self, value);
     }
 
     pub const setStorage = Super.setStorage;
-    pub const getMemory = Super.getMemory;
+    pub const getExtent = Super.getExtent;
     pub const freeObject = Super.freeObject;
     const fromObject = Super.fromObject;
 };

@@ -449,7 +449,8 @@ pub const ZigClassEntry = struct {
         const scope_info = try php.getProperty(info, name);
         var members = try self.extractMembers(scope_info);
         errdefer php.destroyHashTable(&members);
-        const template = try self.extractTemplate(scope_info);
+        const template_info = php.getProperty(scope_info, "template") catch null;
+        const template = try self.extractTemplate(template_info);
         return .{ .members = members, .template = template };
     }
 
@@ -490,29 +491,28 @@ pub const ZigClassEntry = struct {
         return result;
     }
 
-    fn extractTemplate(_: *@This(), scope_info: *Value) !Template {
-        if (php.getProperty(scope_info, "template")) |template_info| {
-            const bytes = if (php.getProperty(template_info, "memory")) |value| use: {
+    fn extractTemplate(_: *@This(), template_info: ?*Value) !Template {
+        var template: Template = .{};
+        if (template_info) |info| {
+            if (php.getProperty(info, "memory")) |value| {
                 const buf = try php.getValuePointer(*ByteBuffer, value);
                 buf.addRef();
-                break :use buf;
-            } else |_| null;
-            const slots = if (php.getProperty(template_info, "slots")) |value| use: {
+                template.bytes = buf;
+            } else |_| {}
+            if (php.getProperty(info, "slots")) |value| {
                 // we need to create a new Value, since the one from the importer get freed
                 // the import process is complete
                 const new_value = try php.allocator.create(Value);
                 new_value.* = value.*;
                 php.addRef(new_value);
-                break :use new_value;
-            } else |_| null;
-            return .{ .bytes = bytes, .slots = slots };
-        } else |_| {
-            return .{ .bytes = null, .slots = null };
+                template.slots = new_value;
+            } else |_| {}
         }
+        return template;
     }
 
     fn createBuffer(self: *const @This()) !*ByteBuffer {
-        const len = self.byte_size orelse return error.MissingLength;
+        const len = self.byte_size orelse return error.Unexpected;
         const new_buffer = if (self.instance.template.bytes) |def|
             try ByteBuffer.createCopy(def.bytes, self.alignment)
         else
@@ -580,8 +580,7 @@ pub const ZigClassEntry = struct {
         return try self.createObjectFromBuffer(new_buffer, null);
     }
 
-    pub fn createObject(ce: *ClassEntry) !*Object {
-        const self = fromEntry(ce);
+    pub fn createNewObject(self: *@This()) !*Object {
         switch (self.type) {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
@@ -599,6 +598,30 @@ pub const ZigClassEntry = struct {
                 return zig_obj.object();
             },
         }
+    }
+
+    pub fn enableCallback(self: *@This(), template: *Value, member_flags: *Value) !void {
+        if (self.type != .function) return error.Unexpected;
+        // attach static template, which holds the JS controller pointer
+        self.static.template = try self.extractTemplate(template);
+        const fn_static = self.getStaticData(structure.Function);
+        const controller_buf = self.static.template.bytes orelse return error.Unexpected;
+        fn_static.controller_address = @intFromPtr(controller_buf.bytes.ptr);
+        // add flags to argument members
+        const arg_member = try self.getMember(.instance, 0);
+        const arg_class = arg_member.class orelse return error.MissingClass;
+        var iter = arg_class.getMemberIterator(.instance);
+        var index: usize = 0;
+        while (iter.next()) |member| : (index += 1) {
+            if (try php.getPropertyWithType(?MemberFlags, member_flags, index)) |flags| {
+                member.flags = flags;
+            }
+        }
+    }
+
+    pub fn createObject(ce: *ClassEntry) !*Object {
+        const self = fromEntry(ce);
+        return try self.createNewObject();
     }
 
     fn getAccessors(scope: *Scope, member: *Member) !accessor.Any {

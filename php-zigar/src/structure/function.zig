@@ -13,19 +13,19 @@ const Value = php.Value;
 const structure = @import("../structure.zig");
 
 pub const Function = struct {
-    buffer: *ByteBuffer = undefined,
+    bytes: *ByteBuffer = undefined,
     closure: *Closure = undefined,
 
     const Super = structure.Parent(@This());
     pub const Static = struct {
         thunk_address: usize = undefined,
-        controller_address: usize = undefined,
+        controller_address: usize = 0,
         argument_class: *ZigClassEntry = undefined,
         first_arg_ce: ?*ClassEntry = null,
 
         pub fn init(self: *@This(), class: *ZigClassEntry) !void {
-            self.thunk_address = getAddress(class, .instance);
-            self.controller_address = getAddress(class, .static);
+            const thunk_buf = class.instance.template.bytes orelse return error.Unexpected;
+            self.thunk_address = @intFromPtr(thunk_buf.bytes.ptr);
             const member = try class.getMember(.instance, 0);
             const arg_class = member.class orelse return error.MissingClass;
             const arg_count = arg_class.length orelse return error.MissingLength;
@@ -41,9 +41,26 @@ pub const Function = struct {
             }
         }
 
-        fn getAddress(class: *ZigClassEntry, comptime scope: ZigClassEntry.ScopeType) usize {
-            const buffer = @field(class, @tagName(scope)).template.bytes orelse return 0;
-            return @intFromPtr(buffer.bytes.ptr);
+        pub fn runCallback(self: *@This(), callable: *Value, arg_data: []u8) !void {
+            const arg_buffer = try ByteBuffer.createExternal(arg_data);
+            defer arg_buffer.release();
+            const arg_obj = try self.argument_class.createObjectFromBuffer(arg_buffer, null);
+            defer php.release(arg_obj);
+            switch (self.argument_class.type) {
+                inline .arg_struct, .variadic_struct => |t| {
+                    const S = @field(structure.by_enum, @tagName(t));
+                    const arg_struct = ZigObject(S).fromObject(arg_obj).structure();
+                    const args = try arg_struct.getArguments();
+                    defer {
+                        for (args) |*arg| php.release(arg);
+                        php.allocator.free(args);
+                    }
+                    const result = try php.invokeFunction(callable, args);
+                    defer php.release(&result);
+                    try arg_struct.setReturnValue(&result);
+                },
+                else => unreachable,
+            }
         }
     };
 
@@ -54,12 +71,14 @@ pub const Function = struct {
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
         const class = ZigClassEntry.fromStructure(self);
-        _ = class;
-        _ = value;
+        if (!php.isCallable(value)) return error.NotCallable;
+        const thunk_address = try class.host.dispatcher.createJsThunk(class.object, @constCast(value));
+        const ptr: [*]u8 = @ptrFromInt(thunk_address);
+        self.bytes.bytes = ptr[0..0];
     }
 
     pub fn invokeThunk(self: *@This(), arg_iter: *ArgumentIterator) !?Value {
-        const fn_addr = @intFromPtr(self.buffer.bytes.ptr);
+        const fn_addr = @intFromPtr(self.bytes.bytes.ptr);
         if (fn_addr != 0) {
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(Function);
@@ -107,6 +126,7 @@ pub const Function = struct {
         Super.freeObject(obj);
     }
 
+    pub const getExtent = Super.getExtent;
     pub const readSelf = Super.readSelf;
     const fromObject = Super.fromObject;
 };

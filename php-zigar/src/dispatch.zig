@@ -9,13 +9,17 @@ const Syscall = interface.Syscall;
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
+const Object = php.Object;
 const Stream = php.Stream;
 const Value = php.Value;
 const redirection = @import("redirection.zig");
+const structure = @import("structure.zig");
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
 pub const CallDispatcher = struct {
     redirection_mask: Syscall.Mask = .{},
+    function_list: std.ArrayList(CallbackEntry) = .{},
+    next_function_id: c_ulong = 1,
     stream_map: HashTable,
     host: *ModuleHost,
     hooks_installed: bool = false,
@@ -33,6 +37,11 @@ pub const CallDispatcher = struct {
     pub const HookEntry = interface.HookEntry;
     pub const HandlerVTable = interface.HandlerVTable;
     const redirection_controller = redirection.Controller(@This());
+    const CallbackEntry = struct {
+        id: usize,
+        class: *Object,
+        callable: *Value,
+    };
 
     pub fn init(host: *ModuleHost) !*@This() {
         const self = try php.allocator.create(@This());
@@ -45,8 +54,68 @@ pub const CallDispatcher = struct {
     }
 
     pub fn deinit(self: *@This()) void {
+        self.function_list.deinit(php.allocator);
         php.destroyHashTable(&self.stream_map);
         php.allocator.destroy(self);
+    }
+
+    pub fn createJsThunk(self: *@This(), class_obj: *Object, callable: *Value) !usize {
+        const class = ZigClassEntry.fromObject(class_obj);
+        const fn_static = class.getStaticData(structure.Function);
+        const controller_address = fn_static.controller_address;
+        if (controller_address == 0) return error.Unexpected;
+        var thunk_address: usize = 0;
+        const module = self.host.module orelse return error.Unexpected;
+        const fn_id = try self.saveCallback(class_obj, callable);
+        _ = module.exports.create_js_thunk(controller_address, fn_id, &thunk_address);
+        return thunk_address;
+    }
+
+    pub fn destroyJsThunk(self: *@This(), controller_address: usize, thunk_address: usize) !void {
+        var fn_id: usize = 0;
+        const module = self.host.module orelse return error.Unexpected;
+        _ = module.exports.destroy_js_thunk(controller_address, thunk_address, &fn_id);
+        try self.deleteCallback(fn_id);
+    }
+
+    fn saveCallback(self: *@This(), class_obj: *Object, callable: *Value) !usize {
+        const fn_id = self.next_function_id;
+        self.next_function_id +%= 1;
+        php.addRef(callable);
+        php.addRef(class_obj);
+        try self.function_list.append(php.allocator, .{
+            .id = fn_id,
+            .class = class_obj,
+            .callable = callable,
+        });
+        return fn_id;
+    }
+
+    fn findCallback(self: *@This(), fn_id: usize) ?*CallbackEntry {
+        return for (self.function_list.items) |*item| {
+            if (item.id == fn_id) break item;
+        } else null;
+    }
+
+    fn deleteCallback(self: *@This(), fn_id: usize) void {
+        for (self.function_list.items, 0..) |item, i| {
+            if (item.id == fn_id) {
+                php.release(item.callable);
+                php.release(item.class);
+                _ = self.function_list.swapRemove(i);
+                break;
+            }
+        }
+    }
+
+    pub fn handleJscall(self: *@This(), call: *Jscall) !E {
+        const cb = self.findCallback(call.fn_id) orelse return E.FAULT;
+        const arg_ptr: [*]u8 = @ptrFromInt(call.arg_address);
+        const arg_bytes = arg_ptr[0..call.arg_size];
+        const class = ZigClassEntry.fromObject(cb.class);
+        const fn_static = class.getStaticData(structure.Function);
+        try fn_static.runCallback(cb.callable, arg_bytes);
+        return E.SUCCESS;
     }
 
     pub fn installHooks(self: *@This(), lib: *std.DynLib, lib_path: []const u8, redirect_syscalls: bool) !void {
@@ -76,12 +145,6 @@ pub const CallDispatcher = struct {
             .original = undefined,
             .deferred = &self.env_variable_deferred,
         } else null;
-    }
-
-    pub fn handleJscall(self: *@This(), call: *Jscall) !E {
-        _ = self;
-        _ = call;
-        unreachable;
     }
 
     pub fn handleSyscall(self: *@This(), call: *Syscall) !E {
@@ -132,8 +195,7 @@ pub const CallDispatcher = struct {
     }
 
     pub fn releaseFunction(self: *@This(), fn_id: usize) !void {
-        _ = self;
-        _ = fn_id;
+        self.deleteCallback(fn_id);
     }
 
     pub fn redirectSyscalls(self: *@This(), ptr: *const anyopaque) !void {
