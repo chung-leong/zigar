@@ -30,6 +30,24 @@ pub const Slice = struct {
         }
     };
 
+    pub fn setStorage(self: *@This(), bytes: *ByteBuffer, slots: *const Value) !void {
+        const class = ZigClassEntry.fromStructure(self);
+        const byte_size = class.byte_size orelse return error.Unexpected;
+        const remainder = @rem(bytes.bytes.len, byte_size);
+        if (remainder != 0) {
+            return php.throwExceptionFmt("'{s}'' has elements that are {d} byte{s} in length, received {d}", .{
+                class.getName(),
+                byte_size,
+                if (byte_size != 1) "s" else "",
+                bytes.bytes.len,
+            });
+        }
+        self.bytes = bytes;
+        self.bytes.addRef();
+        self.slots = slots.*;
+        php.addRef(&self.slots);
+    }
+
     pub fn getExtent(self: *@This()) Super.ByteExtent {
         return .{
             .address = @intFromPtr(self.bytes.bytes.ptr),
@@ -109,7 +127,6 @@ pub const Slice = struct {
             len / static.element_size;
     }
 
-    pub const setStorage = Super.setStorage;
     pub const copyArguments = Super.copyArguments;
     pub const readSelf = Super.readSelf;
     pub const getProperties = Super.getVectorProperties;

@@ -85,6 +85,16 @@ pub fn Parent(comptime S: type) type {
 
         pub fn setStorage(self: *S, bytes: *ByteBuffer, slots: *const Value) !void {
             if (@hasField(S, "bytes")) {
+                const class = ZigClassEntry.fromStructure(self);
+                const byte_size = class.byte_size orelse return error.Unexpected;
+                if (byte_size != bytes.bytes.len) {
+                    return php.throwExceptionFmt("{s} has {d} byte{s}, received {d}", .{
+                        class.getName(),
+                        byte_size,
+                        if (byte_size != 1) "s" else "",
+                        bytes.bytes.len,
+                    });
+                }
                 self.bytes = bytes;
                 self.bytes.addRef();
             }

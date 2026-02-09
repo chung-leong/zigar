@@ -89,10 +89,15 @@ pub const Pointer = struct {
         const target_obj = init: {
             if (php.getValueObject(value)) |obj| {
                 if (php.instanceOf(obj.ce, static.target_class.entry())) {
+                    // point to existing object
                     php.addRef(obj);
                     break :init obj;
                 }
+            } else |_| if (php.getValueString(value)) |str| {
+                // autocast from string
+                break :init try static.target_class.createObjectFromString(str);
             } else |_| {}
+            // autovivificate new target
             const new_obj = try static.target_class.createNewObject();
             errdefer php.release(new_obj);
             try invokeFunction(new_obj, "writeSelf", .{value});
