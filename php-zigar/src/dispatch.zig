@@ -17,10 +17,21 @@ const structure = @import("structure.zig");
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
 pub const CallDispatcher = struct {
-    redirection_mask: Syscall.Mask = .{},
+    redirection_mask: Syscall.Mask = .{
+        .open = true,
+        .mkdir = true,
+        .readlink = true,
+        .rename = true,
+        .rmdir = true,
+        .stat = true,
+        .symlink = true,
+        .unlink = true,
+        .utimes = true,
+    },
     function_list: std.ArrayList(CallbackEntry) = .{},
     next_function_id: c_ulong = 1,
     stream_map: HashTable,
+    next_descriptor: c_long = fd_min,
     host: *ModuleHost,
     hooks_installed: bool = false,
     syscall_trap_installed: bool = false,
@@ -33,7 +44,7 @@ pub const CallDispatcher = struct {
     env_variable_ptr: *[*:null]?[*:0]const u8 = undefined,
     env_variable_original: *[*:null]?[*:0]const u8 = undefined,
 
-    pub threadlocal var trapping_syscalls: bool = false;
+    pub threadlocal var trapping_syscalls: bool = true;
     pub const HookEntry = interface.HookEntry;
     pub const HandlerVTable = interface.HandlerVTable;
     const redirection_controller = redirection.Controller(@This());
@@ -42,6 +53,8 @@ pub const CallDispatcher = struct {
         class: *Object,
         callable: *Value,
     };
+    const fd_min = 0x00f0_0000;
+    const fd_max = 0x00ff_ffff;
 
     pub fn init(host: *ModuleHost) !*@This() {
         const self = try php.allocator.create(@This());
@@ -57,6 +70,14 @@ pub const CallDispatcher = struct {
         self.function_list.deinit(php.allocator);
         php.destroyHashTable(&self.stream_map);
         php.allocator.destroy(self);
+    }
+
+    pub fn installHandler() void {
+        CallDispatcher.redirection_controller.installSignalHandler() catch {};
+    }
+
+    pub fn uninstallHandler() void {
+        CallDispatcher.redirection_controller.uninstallSignalHandler();
     }
 
     pub fn createJsThunk(self: *@This(), class_obj: *Object, callable: *Value) !usize {
@@ -109,13 +130,13 @@ pub const CallDispatcher = struct {
     }
 
     pub fn handleJscall(self: *@This(), call: *Jscall) !E {
-        const cb = self.findCallback(call.fn_id) orelse return E.FAULT;
+        const cb = self.findCallback(call.fn_id) orelse return .FAULT;
         const arg_ptr: [*]u8 = @ptrFromInt(call.arg_address);
         const arg_bytes = arg_ptr[0..call.arg_size];
         const class = ZigClassEntry.fromObject(cb.class);
         const fn_static = class.getStaticData(structure.Function);
         try fn_static.runCallback(cb.callable, arg_bytes);
-        return E.SUCCESS;
+        return .SUCCESS;
     }
 
     pub fn installHooks(self: *@This(), lib: *std.DynLib, lib_path: []const u8, redirect_syscalls: bool) !void {
@@ -229,120 +250,167 @@ pub const CallDispatcher = struct {
                 else => return err,
             };
             const strm = php.open(path, mode, 0) orelse return error.Unexpected;
-            var strm_value = php.createValueStream(strm);
-            php.setHashEntry(&self.stream_map, fd, &strm_value);
+            self.addStream(fd, strm);
             return strm;
         }
     }
 
+    fn addStream(self: *@This(), fd: c_long, strm: *Stream) void {
+        var strm_value = php.createValueStream(strm);
+        php.setHashEntry(&self.stream_map, fd, &strm_value);
+    }
+
+    fn createDescriptor(self: *@This()) !c_long {
+        if (self.next_descriptor <= fd_max) {
+            defer self.next_descriptor += 1;
+            return self.next_descriptor;
+        } else {
+            var fd: c_long = fd_min;
+            return while (fd < fd_max) : (fd += 1) {
+                if (!php.hasHashEntry(&self.stream_map, fd))
+                    break fd;
+            } else error.OutOfDescriptor;
+        }
+    }
+
+    fn getWrapperUrl(path: [*:0]const u8) ?[*:0]const u8 {
+        var start: usize = 0;
+        var index: usize = 0;
+        while (true) : (index += 1) {
+            const c = path[index];
+            if (c == ':') {
+                return path[start..];
+            } else if (index == 0 and (c == '/' or c == '\\')) {
+                start += 1;
+            } else if (!std.ascii.isAlphanumeric(c)) {
+                break;
+            }
+        }
+        return null;
+    }
+
     fn handleOpen(self: *@This(), args: anytype) !E {
-        _ = self;
-        _ = args;
-        unreachable;
-        // const env = self.env;
-        // const path_len: u32 = @truncate(std.mem.len(args.path));
-        // return try self.callPosixFunction(self.js.path_open, &.{
-        //     try env.createInt32(args.dirfd),
-        //     try env.createUint32(@as(u32, @bitCast(args.lookup_flags))),
-        //     try env.createUsize(@intFromPtr(args.path)),
-        //     try env.createUint32(path_len),
-        //     try env.createUint32(@as(u16, @bitCast(args.open_flags))),
-        //     try env.createBigintUint64(@as(u64, @bitCast(args.rights))),
-        //     try env.createBigintUint64(0),
-        //     try env.createUint32(@as(u16, @bitCast(args.descriptor_flags))),
-        //     try env.createUsize(@intFromPtr(&args.fd)),
-        //     futex,
-        // });
+        const url = getWrapperUrl(args.path) orelse return .OPNOTSUPP;
+        std.debug.print("url = {s}\n", .{url});
+        const fd = self.createDescriptor() catch return .MFILE;
+        const mode = if (args.rights.FD_WRITE)
+            if (args.open_flags.CREAT)
+                if (args.descriptor_flags.APPEND)
+                    if (args.rights.FD_READ) "a+" else "a"
+                else if (args.open_flags.EXCL)
+                    if (args.rights.FD_READ) "x+" else "x"
+                else if (args.open_flags.TRUNC)
+                    if (args.rights.FD_READ) "w+" else "w"
+                else if (args.rights.FD_READ) "c+" else "c"
+            else
+                "r+"
+        else
+            "r";
+        const strm = php.open(url, mode, 0) orelse return .NOENT;
+        self.addStream(fd, strm);
+        args.fd = @intCast(fd);
+        return .SUCCESS;
     }
 
     fn handleClose(self: *@This(), args: anytype) !E {
-        _ = self;
-        _ = args;
-        unreachable;
-        // const env = self.env;
-        // return try self.callPosixFunction(self.js.fd_close, &.{
-        //     try env.createInt32(args.fd),
-        //     futex,
-        // });
+        const strm = self.getStream(args.fd) catch return .BADF;
+        _ = php.close(strm);
+        return .SUCCESS;
     }
 
     fn handleRead(self: *@This(), args: anytype) !E {
-        _ = self;
-        _ = args;
-        unreachable;
-        // const env = self.env;
-        // const result = try self.callPosixFunction(self.js.fd_read1, &.{
-        //     try env.createInt32(args.fd),
-        //     try env.createUsize(@intFromPtr(args.bytes)),
-        //     try env.createUint32(args.len),
-        //     try env.createUsize(@intFromPtr(&args.read)),
-        //     futex,
-        // });
-        // return result;
+        const strm = self.getStream(args.fd) catch return .BADF;
+        const read = php.read(strm, @constCast(args.bytes), args.len);
+        args.read = @intCast(read);
+        return .SUCCESS;
     }
 
     fn handleVectorRead(self: *@This(), args: anytype) !E {
-        _ = self;
-        _ = args;
-        unreachable;
-        // const env = self.env;
-        // const result = try self.callPosixFunction(self.js.fd_read, &.{
-        //     try env.createInt32(args.fd),
-        //     try env.createUsize(@intFromPtr(args.iovs)),
-        //     try env.createUint32(args.count),
-        //     try env.createUsize(@intFromPtr(&args.read)),
-        //     futex,
-        // });
-        // return result;
+        const strm = self.getStream(args.fd) catch return .BADF;
+        const len: usize = args.count;
+        const iovs = args.iovs[0..len];
+        var total: isize = 0;
+        for (iovs) |iov| {
+            const read = php.read(strm, iov.base, iov.len);
+            if (read < 0) return .BADF;
+            total += read;
+        }
+        args.read = @intCast(total);
+        return .SUCCESS;
     }
 
     fn handlePositionalRead(self: *@This(), args: anytype) !E {
-        _ = self;
-        _ = args;
-        unreachable;
-        // const env = self.env;
-        // return try self.callPosixFunction(self.js.fd_pread1, &.{
-        //     try env.createInt32(args.fd),
-        //     try env.createUsize(@intFromPtr(args.bytes)),
-        //     try env.createUint32(args.len),
-        //     try env.createBigintUint64(args.offset),
-        //     try env.createUsize(@intFromPtr(&args.read)),
-        //     futex,
-        // });
+        const strm = self.getStream(args.fd) catch return .BADF;
+        const pos = php.tell(strm);
+        defer _ = php.seek(strm, pos, 0);
+        if (php.seek(strm, @intCast(args.offset), 0) != 0) return .INVAL;
+        const read = php.read(strm, @constCast(args.bytes), args.len);
+        args.read = @intCast(read);
+        return .SUCCESS;
     }
 
     fn handlePositionalVectorRead(self: *@This(), args: anytype) !E {
-        _ = self;
-        _ = args;
-        unreachable;
-        // const env = self.env;
-        // return try self.callPosixFunction(self.js.fd_pread, &.{
-        //     try env.createInt32(args.fd),
-        //     try env.createUsize(@intFromPtr(args.iovs)),
-        //     try env.createUint32(args.count),
-        //     try env.createBigintUint64(args.offset),
-        //     try env.createUsize(@intFromPtr(&args.read)),
-        //     futex,
-        // });
+        const strm = self.getStream(args.fd) catch return .BADF;
+        const pos = php.tell(strm);
+        defer _ = php.seek(strm, pos, 0);
+        if (php.seek(strm, @intCast(args.offset), 0) != 0) return .INVAL;
+        const len: usize = args.count;
+        const iovs = args.iovs[0..len];
+        var total: isize = 0;
+        for (iovs) |iov| {
+            const read = php.read(strm, iov.base, iov.len);
+            if (read < 0) return .BADF;
+            total += read;
+        }
+        args.read = @intCast(total);
+        return .SUCCESS;
     }
 
     fn handleWrite(self: *@This(), args: anytype) !E {
         const strm = self.getStream(args.fd) catch return .BADF;
-        const w = php.write(strm, args.bytes, args.len);
-        if (w < 0) return .BADF;
-        args.written = @intCast(w);
+        const written = php.write(strm, args.bytes, args.len);
+        if (written < 0) return .BADF;
+        args.written = @intCast(written);
         return .SUCCESS;
     }
 
     fn handleWriteStderr(self: *@This(), args: anytype) !E {
         const strm = self.getStream(2) catch return .BADF;
-        const w = php.write(strm, args.bytes, args.len);
-        if (w < 0) return .BADF;
+        const written = php.write(strm, args.bytes, args.len);
+        if (written < 0) return .BADF;
         return .SUCCESS;
     }
 
     fn handleVectorWrite(self: *@This(), args: anytype) !E {
         const strm = self.getStream(2) catch return .BADF;
+        const len: usize = args.count;
+        const iovs = args.iovs[0..len];
+        var total: usize = 0;
+        for (iovs) |iov| {
+            const written = php.write(strm, iov.base, iov.len);
+            if (written < 0) return .BADF;
+            total += @intCast(written);
+        }
+        args.written = @intCast(total);
+        return .SUCCESS;
+    }
+
+    fn handlePositionalWrite(self: *@This(), args: anytype) !E {
+        const strm = self.getStream(args.fd) catch return .BADF;
+        const pos = php.tell(strm);
+        defer _ = php.seek(strm, pos, 0);
+        if (php.seek(strm, @intCast(args.offset), 0) != 0) return .INVAL;
+        const written = php.write(strm, args.bytes, args.len);
+        if (written < 0) return .BADF;
+        args.written = @intCast(written);
+        return .SUCCESS;
+    }
+
+    fn handlePositionalVectorWrite(self: *@This(), args: anytype) !E {
+        const strm = self.getStream(args.fd) catch return .BADF;
+        const pos = php.tell(strm);
+        defer _ = php.seek(strm, pos, 0);
+        if (php.seek(strm, @intCast(args.offset), 0) != 0) return .INVAL;
         const len: usize = args.count;
         const iovs = args.iovs[0..len];
         var written: usize = 0;
@@ -355,66 +423,25 @@ pub const CallDispatcher = struct {
         return .SUCCESS;
     }
 
-    fn handlePositionalWrite(self: *@This(), args: anytype) !E {
-        _ = self;
-        _ = args;
-        unreachable;
-        // const env = self.env;
-        // return try self.callPosixFunction(self.js.fd_pwrite1, &.{
-        //     try env.createInt32(args.fd),
-        //     try env.createUsize(@intFromPtr(args.bytes)),
-        //     try env.createUint32(args.len),
-        //     try env.createBigintUint64(args.offset),
-        //     try env.createUsize(@intFromPtr(&args.written)),
-        //     futex,
-        // });
-    }
-
-    fn handlePositionalVectorWrite(self: *@This(), args: anytype) !E {
-        _ = self;
-        _ = args;
-        unreachable;
-        // const env = self.env;
-        // return try self.callPosixFunction(self.js.fd_pwrite, &.{
-        //     try env.createInt32(args.fd),
-        //     try env.createUsize(@intFromPtr(args.iovs)),
-        //     try env.createUint32(args.count),
-        //     try env.createBigintUint64(args.offset),
-        //     try env.createUsize(@intFromPtr(&args.written)),
-        //     futex,
-        // });
-    }
-
     fn handleSeek(self: *@This(), args: anytype) !E {
-        _ = self;
-        _ = args;
-        unreachable;
-        // const env = self.env;
-        // return try self.callPosixFunction(self.js.fd_seek, &.{
-        //     try env.createInt32(args.fd),
-        //     try env.createBigintInt64(args.offset),
-        //     try env.createUint32(args.whence),
-        //     try env.createUsize(@intFromPtr(&args.position)),
-        //     futex,
-        // });
+        const strm = self.getStream(args.fd) catch return .BADF;
+        if (php.seek(strm, @intCast(args.offset), @intCast(args.whence)) != 0) return .INVAL;
+        const pos = php.tell(strm);
+        args.position = @intCast(pos);
+        return .SUCCESS;
     }
 
     fn handleTell(self: *@This(), args: anytype) !E {
-        _ = self;
-        _ = args;
-        unreachable;
-        // const env = self.env;
-        // return try self.callPosixFunction(self.js.fd_tell, &.{
-        //     try env.createInt32(args.fd),
-        //     try env.createUsize(@intFromPtr(&args.position)),
-        //     futex,
-        // });
+        const strm = self.getStream(args.fd) catch return .BADF;
+        const pos = php.tell(strm);
+        args.position = @intCast(pos);
+        return .SUCCESS;
     }
 
     fn handleSettimes(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // if (@hasField(@TypeOf(args.*), "fd")) {
         //     return try self.callPosixFunction(self.js.fd_filestat_set_times, &.{
@@ -442,7 +469,7 @@ pub const CallDispatcher = struct {
     fn handleStat(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // if (@hasField(@TypeOf(args.*), "fd")) {
         //     return try self.callPosixFunction(self.js.fd_filestat_get, &.{
@@ -466,7 +493,7 @@ pub const CallDispatcher = struct {
     fn handleGetDescriptorFlags(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // return try self.callPosixFunction(self.js.fd_fdstat_get, &.{
         //     try env.createInt32(args.fd),
@@ -478,7 +505,7 @@ pub const CallDispatcher = struct {
     fn handleSetDescriptorFlags(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // return try self.callPosixFunction(self.js.fd_fdstat_set_flags, &.{
         //     try env.createInt32(args.fd),
@@ -490,7 +517,7 @@ pub const CallDispatcher = struct {
     fn handleSetLock(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // return try self.callPosixFunction(self.js.fd_lock_set, &.{
         //     try env.createInt32(args.fd),
@@ -503,7 +530,7 @@ pub const CallDispatcher = struct {
     fn handleGetLock(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // return try self.callPosixFunction(self.js.fd_lock_get, &.{
         //     try env.createInt32(args.fd),
@@ -515,7 +542,7 @@ pub const CallDispatcher = struct {
     fn handleAdvise(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // return try self.callPosixFunction(self.js.fd_advise, &.{
         //     try env.createInt32(args.fd),
@@ -529,7 +556,7 @@ pub const CallDispatcher = struct {
     fn handleAllocate(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // return try self.callPosixFunction(self.js.fd_allocate, &.{
         //     try env.createInt32(args.fd),
@@ -542,7 +569,7 @@ pub const CallDispatcher = struct {
     fn handleSync(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // return try self.callPosixFunction(self.js.fd_sync, &.{
         //     try env.createInt32(args.fd),
@@ -553,7 +580,7 @@ pub const CallDispatcher = struct {
     fn handleDatasync(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // return try self.callPosixFunction(self.js.fd_datasync, &.{
         //     try env.createInt32(args.fd),
@@ -564,7 +591,7 @@ pub const CallDispatcher = struct {
     fn handleMkdir(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // const path_len: u32 = @truncate(std.mem.len(args.path));
         // return try self.callPosixFunction(self.js.path_create_directory, &.{
@@ -578,7 +605,7 @@ pub const CallDispatcher = struct {
     fn handleRmdir(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // const path_len: u32 = @truncate(std.mem.len(args.path));
         // return try self.callPosixFunction(self.js.path_remove_directory, &.{
@@ -592,7 +619,7 @@ pub const CallDispatcher = struct {
     fn handleUnlink(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // const path_len: u32 = @truncate(std.mem.len(args.path));
         // return try self.callPosixFunction(self.js.path_unlink_file, &.{
@@ -606,7 +633,7 @@ pub const CallDispatcher = struct {
     fn handleReadlink(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // const path_len: u32 = @truncate(std.mem.len(args.path));
         // return try self.callPosixFunction(self.js.path_readlink, &.{
@@ -623,7 +650,7 @@ pub const CallDispatcher = struct {
     fn handleSymlink(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // const target_len: u32 = @truncate(std.mem.len(args.target));
         // const path_len: u32 = @truncate(std.mem.len(args.path));
@@ -640,7 +667,7 @@ pub const CallDispatcher = struct {
     fn handleRename(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // const path_len: u32 = @truncate(std.mem.len(args.path));
         // const new_path_len: u32 = @truncate(std.mem.len(args.new_path));
@@ -658,7 +685,7 @@ pub const CallDispatcher = struct {
     fn handleGetdents(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // return try self.callPosixFunction(self.js.fd_readdir, &.{
         //     try env.createInt32(args.dirfd),
@@ -673,7 +700,7 @@ pub const CallDispatcher = struct {
     fn handlePoll(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // return try self.callPosixFunction(self.js.poll_oneoff, &.{
         //     try env.createUsize(@intFromPtr(args.subscriptions)),
@@ -687,7 +714,7 @@ pub const CallDispatcher = struct {
     fn handleSendFile(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
         // const env = self.env;
         // return try self.callPosixFunction(self.js.fd_sendfile, &.{
         //     try env.createInt32(args.out_fd),
@@ -703,7 +730,8 @@ pub const CallDispatcher = struct {
     fn handleGetEnvironmentStrings(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        unreachable;
+        return .OPNOTSUPP;
+        // unreachable;
         // var result: E = undefined;
         // if (self.env_variable_list != null) {
         //     args.list = @ptrCast(self.env_variable_list.?.ptr);

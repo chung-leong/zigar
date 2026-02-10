@@ -826,6 +826,18 @@ pub fn deleteHashEntry(ht: *HashTable, key: anytype) !void {
     _ = try removeHashEntry(ht, key);
 }
 
+pub fn hasHashEntry(ht: *HashTable, key: anytype) bool {
+    const KT = @TypeOf(key);
+    return if (comptime isStringContent(KT))
+        php_h.zend_hash_str_exists(ht, key.ptr, key.len)
+    else if (comptime isString(KT))
+        php_h.zend_hash_exists(ht, key)
+    else if (comptime isInt(KT))
+        php_h.zend_hash_index_exists(ht, @intCast(key))
+    else
+        @compileError("Invalid key: " ++ @typeName(KT));
+}
+
 pub const HashTableIterator = struct {
     ht: *HashTable,
     pos: HashPosition,

@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const in_use = false;
+
 pub const Caller = struct {
     module: [:0]const u8,
     fn_name: [:0]const u8,
@@ -14,6 +16,7 @@ pub const Caller = struct {
 };
 
 pub fn getCaller(allocator: std.mem.Allocator, depth: usize) ?*Caller {
+    if (!in_use) return null;
     const start_addr: ?usize = null;
     const debug_info = std.debug.getSelfDebugInfo() catch return null;
     var context: std.debug.ThreadContext = undefined;

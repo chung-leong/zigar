@@ -2,7 +2,14 @@
 use PHPUnit\Framework\TestCase;
 
 final class StreamHandlingTest extends TestCase
-{   
+{
+    public function testOpenAndCloseFile(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/open-and-close-file.zig');
+        $path = "php://memory";
+        $m->check($path);
+    }
+
     public function testReadFromFile(): void
     {
         $m = ZigImporter::load(__DIR__ . '/read-from-file.zig');

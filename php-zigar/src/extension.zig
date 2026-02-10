@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const getSharedLibraryName = @import("compilation.zig").getSharedLibraryName;
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
@@ -25,10 +26,12 @@ export fn php_zigar_init(_: c_int, _: c_int) php.Result {
         }
     }
     ZigClassEntry.registerGlobalClasses() catch return php.FAILURE;
+    CallDispatcher.installHandler();
     return php.SUCCESS;
 }
 
 export fn php_zigar_shutdown(_: c_int, _: c_int) php.Result {
+    CallDispatcher.uninstallHandler();
     return php.SUCCESS;
 }
 
