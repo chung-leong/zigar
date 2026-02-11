@@ -94,6 +94,7 @@ pub const Syscall = extern struct {
         mkdir: extern struct {
             dirfd: i32,
             path: [*:0]const u8,
+            mode: u32,
         },
         open: extern struct {
             dirfd: i32,
@@ -1067,7 +1068,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return mkdirat(fd_cwd, path, mode, result);
         }
 
-        pub fn mkdirat(dirfd: c_int, path: [*:0]const u8, _: c_int, result: *c_int) callconv(.c) bool {
+        pub fn mkdirat(dirfd: c_int, path: [*:0]const u8, mode: c_int, result: *c_int) callconv(.c) bool {
             if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.mkdir))) {
                 var resolver = PathResolver.init(dirfd, path) catch {
                     result.* = intFromError(.NOMEM);
@@ -1078,6 +1079,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                     .mkdir = .{
                         .dirfd = resolver.dirfd,
                         .path = resolver.path,
+                        .mode = @intCast(mode),
                     },
                 } };
                 const err = Host.redirectSyscall(&call);

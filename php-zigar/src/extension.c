@@ -43,6 +43,10 @@ void set_zval_stream(zval* zv, php_stream* strm) {
     php_stream_to_zval(strm, zv);
 }
 
+php_stream_context* get_stream_context(php_stream* strm) {
+    return PHP_STREAM_CONTEXT(strm);
+}
+
 typedef struct {
     zval* ptr;
     size_t len;

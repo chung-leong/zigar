@@ -5,4 +5,4 @@ $m = zigar_load_module("/tmp/scratch.zigar");
 
 $m->print('hello world');
 
-$m->check("/php://memory");
+debug_zval_dump($m->check("/php://memory"));

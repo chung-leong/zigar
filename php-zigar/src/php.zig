@@ -15,6 +15,7 @@ pub const ArgInfo = php_h.zend_internal_arg_info;
 pub const Array = php_h.zend_array;
 pub const ClassEntry = php_h.zend_class_entry;
 pub const CompilerGlobals = php_h.zend_compiler_globals;
+pub const DirEntry = php_h.php_stream_dirent;
 pub const ExecutorGlobals = php_h.zend_executor_globals;
 pub const ExecuteData = php_h.zend_execute_data;
 pub const Function = php_h.zend_function;
@@ -64,6 +65,7 @@ pub const ObjectIteratorFunctions = php_h.zend_object_iterator_funcs;
 pub const RefCounted = php_h.zend_refcounted;
 pub const Result = php_h.zend_result;
 pub const Stream = php_h.php_stream;
+pub const StreamContext = php_h.php_stream_context;
 pub const String = php_h.zend_string;
 pub const Ulong = php_h.zend_ulong;
 pub const Value = php_h.zval;
@@ -1170,6 +1172,14 @@ pub fn efree(ptr: ?*anyopaque) void {
     return debugFree(ptr, 1);
 }
 
+pub fn estrdup(s: [*:0]const u8) [*:0]const u8 {
+    if (php_h.ZEND_DEBUG == 1) {
+        return php_h._estrdup(s, "unknown", 0, null, 0);
+    } else {
+        return php_h._estrdup(s);
+    }
+}
+
 pub const allocator: std.mem.Allocator = .{
     .ptr = undefined,
     .vtable = &allocator_impl.vtable,
@@ -1312,40 +1322,121 @@ fn getErrorMessage(comptime ES: type, err: ES) []const u8 {
     };
 }
 
-pub fn open(path: [*c]const u8, mode: [*c]const u8, options: c_int) ?*Stream {
+pub fn open(path: *const String, mode: [*c]const u8, options: c_int) !*Stream {
+    const p = getStringContent(path);
+    var strm: ?*Stream = undefined;
     if (php_h.ZEND_DEBUG == 1) {
         const src = @src();
-        return php_h._php_stream_open_wrapper_ex(
-            path,
-            mode,
-            options,
-            null,
-            null,
-            1,
-            src.file,
-            src.line,
-            src.file,
-            src.line,
-        );
+        strm = php_h._php_stream_open_wrapper_ex(p.ptr, mode, options, null, null, 1, src.file, src.line, src.file, src.line);
     } else {
-        return php_h._php_stream_open_wrapper_ex(path, mode, options, null, null);
+        strm = php_h._php_stream_open_wrapper_ex(p.ptr, mode, options, null, null);
     }
+    return strm orelse error.Failure;
 }
 
-pub const close = php_h.php_stream_close;
-pub const read = php_h._php_stream_read;
-pub const write = php_h._php_stream_write;
-pub const seek = php_h._php_stream_seek;
-pub const tell = php_h._php_stream_tell;
-pub const rewind = php_h.php_stream_rewind;
-pub const mkdir = php_h._php_stream_mkdir;
-pub const rmdir = php_h._php_stream_rmdir;
-pub const opendir = php_h._php_stream_opendir;
-pub const readdir = php_h._php_stream_readdir;
-pub const closedir = php_h.php_stream_closedir;
-pub const rewinddir = php_h.php_stream_rewinddir;
-pub const setOption = php_h._php_stream_set_option;
-pub const truncate = php_h._php_stream_truncate_set_size;
+pub fn close(strm: *Stream) void {
+    _ = php_h.php_stream_close(strm);
+}
+
+pub fn flush(strm: *Stream) void {
+    _ = php_h.php_stream_flush(strm);
+}
+
+pub fn read(strm: *Stream, buf: [*]const u8, size: usize) !usize {
+    const r = php_h._php_stream_read(strm, @constCast(buf), size);
+    if (r < 0) return error.Failure;
+    return @intCast(r);
+}
+
+pub fn write(strm: *Stream, buf: [*]const u8, size: usize) !usize {
+    const w = php_h._php_stream_write(strm, buf, size);
+    if (w < 0) return error.Failure;
+    return @intCast(w);
+}
+
+pub fn seek(strm: *Stream, offset: i64, whence: u32) !void {
+    if (php_h._php_stream_seek(strm, offset, @intCast(whence)) < 0) return error.Failure;
+}
+
+pub fn unlink(path: *const String, context: ?*StreamContext) !void {
+    _ = path;
+    _ = context;
+}
+
+pub fn rename(path: *const String, new_path: *const String, context: ?*StreamContext) !void {
+    _ = path;
+    _ = new_path;
+    _ = context;
+}
+
+pub fn tell(strm: *Stream) !usize {
+    const t = php_h._php_stream_tell(strm);
+    if (t < 0) return error.Failure;
+    return @intCast(t);
+}
+
+pub fn mkdir(path: *const String, mode: u32, context: ?*StreamContext) !void {
+    const p = getStringContent(path);
+    if (php_h._php_stream_mkdir(p.ptr, @intCast(mode), 0, context) < 0) return error.Failure;
+}
+
+pub fn rmdir(path: *const String, context: ?*StreamContext) !void {
+    const p = getStringContent(path);
+    if (php_h._php_stream_rmdir(p.ptr, 0, context) < 0) return error.Failure;
+}
+
+pub fn opendir(path: *String, options: c_int, context: *StreamContext) !*Stream {
+    const p = getStringContent(path);
+    var strm: ?*Stream = undefined;
+    if (php_h.ZEND_DEBUG == 1) {
+        const src = @src();
+        strm = php_h._php_stream_opendir(p.ptr, options, context, 1, src.file, src.line, src.file, src.line);
+    } else {
+        strm = php_h._php_stream_opendir(p.ptr, options, context);
+    }
+    return strm orelse error.Failure;
+}
+
+pub fn readdir(strm: *Stream, ent: *DirEntry) ?*DirEntry {
+    return php_h._php_stream_readdir(strm, ent);
+}
+
+pub fn closedir(strm: *Stream) void {
+    _ = php_h.php_stream_closedir(strm);
+}
+
+pub fn resolve(name: []const u8, parent_path: *String) !*String {
+    const p = getStringContent(parent_path);
+    return php_h.php_resolve_path(name.ptr, name.len, p.ptr) orelse error.Failure;
+}
+
+pub fn rewinddir(strm: *Stream) !void {
+    if (php_h.php_stream_rewinddir(strm) < 0) return error.Failure;
+}
+
+extern fn get_stream_context(strm: *Stream) *StreamContext;
+
+pub fn getStreamContext(strm: *Stream) *StreamContext {
+    return get_stream_context(strm);
+}
+
+pub const StreamOption = enum(c_int) {
+    blocking = php_h.PHP_STREAM_OPTION_BLOCKING,
+    read_buffer = php_h.PHP_STREAM_OPTION_READ_BUFFER,
+    write_buffer = php_h.PHP_STREAM_OPTION_WRITE_BUFFER,
+    read_timeout = php_h.PHP_STREAM_OPTION_READ_TIMEOUT,
+    set_chunk_size = php_h.PHP_STREAM_OPTION_SET_CHUNK_SIZE,
+    locking = php_h.PHP_STREAM_OPTION_LOCKING,
+    sync_api = php_h.PHP_STREAM_OPTION_SYNC_API,
+};
+
+pub fn setOption(strm: *Stream, option: StreamOption, value: c_int, ptr: ?*anyopaque) !void {
+    const opt_id = @intFromEnum(option);
+    if (php_h._php_stream_set_option(strm, opt_id, value, ptr) < 0) return error.Failure;
+}
+
+pub const FSYNC = php_h.PHP_STREAM_SYNC_FSYNC;
+pub const FDSYNC = php_h.PHP_STREAM_SYNC_FDSYNC;
 
 pub const reportWrongParamCount = php_h.zend_wrong_param_count;
 
