@@ -47,6 +47,10 @@ php_stream_context* get_stream_context(php_stream* strm) {
     return PHP_STREAM_CONTEXT(strm);
 }
 
+void set_stream_no_close(php_stream* strm) {
+    strm->flags |= PHP_STREAM_FLAG_NO_CLOSE;
+}
+
 typedef struct {
     zval* ptr;
     size_t len;

@@ -465,37 +465,6 @@ extern fn set_zval_stream(*Value, *Stream) void;
 
 pub fn createValueStream(strm: *Stream) Value {
     var result: Value = .{};
-    // const strm_impl: *extern struct {
-    //     ops: *const php_h.php_stream_ops,
-    //     abstract: *anyopaque,
-    //     readfilters: php_h.php_stream_filter,
-    //     writefilters: php_h.php_stream_filter,
-    //     wrapper: *php_h.php_stream_wrapper,
-    //     wrapperthis: *anyopaque,
-    //     wrapperdata: Value,
-    //     status: packed struct {
-    //         is_persistent: u1,
-    //         in_free: u2,
-    //         eof: u1,
-    //         __exposed: u1,
-    //         fclose_stdiocast: u2,
-    //     },
-    //     mode: []u8,
-    //     flags: u32,
-    //     res: *php_h.zend_resource,
-    //     stdiocast: *php_h.FILE,
-    //     orig_path: [*]u8,
-    //     ctx: *php_h.zend_resource,
-    //     position: php_h.zend_off_t,
-    //     readbuf: [*]u8,
-    //     readbuflen: usize,
-    //     readpos: php_h.zend_off_t,
-    //     writepos: php_h.zend_off_t,
-    //     chunk_size: usize,
-    // } = @ptrCast(@alignCast(strm));
-    // strm_impl.status.__exposed = 1;
-    // result.value.res = strm_impl.res;
-    // result.u1.type_info = php_h.IS_RESOURCE_EX;
     set_zval_stream(&result, strm);
     return result;
 }
@@ -1334,6 +1303,25 @@ pub fn open(path: *const String, mode: [*c]const u8, options: c_int) !*Stream {
     return strm orelse error.Failure;
 }
 
+pub const pipe = php_h.pipe;
+
+extern fn set_stream_no_close(strm: *Stream) void;
+
+pub fn preserveStream(strm: *Stream) void {
+    set_stream_no_close(strm);
+}
+
+pub fn openDescriptor(fd: c_int, mode: [*c]const u8) !*Stream {
+    var strm: ?*Stream = undefined;
+    if (php_h.ZEND_DEBUG == 1) {
+        const src = @src();
+        strm = php_h._php_stream_fopen_from_fd(fd, mode, null, 1, src.file, src.line, src.file, src.line);
+    } else {
+        strm = php_h._php_stream_fopen_from_fd(fd, mode, null);
+    }
+    return strm orelse error.Failure;
+}
+
 pub fn close(strm: *Stream) void {
     _ = php_h.php_stream_close(strm);
 }
@@ -1359,14 +1347,26 @@ pub fn seek(strm: *Stream, offset: i64, whence: u32) !void {
 }
 
 pub fn unlink(path: *const String, context: ?*StreamContext) !void {
-    _ = path;
-    _ = context;
+    const p = getStringContent(path);
+    const wrapper = php_h.php_stream_locate_url_wrapper(p.ptr, null, 0);
+    if (wrapper == null or wrapper.*.wops == null or wrapper.*.wops.*.unlink == null) {
+        return error.Failure;
+    }
+    const handler = wrapper.*.wops.*.unlink.?;
+    if (handler(wrapper, p.ptr, 0, context) == 0) return error.Failure;
 }
 
 pub fn rename(path: *const String, new_path: *const String, context: ?*StreamContext) !void {
-    _ = path;
-    _ = new_path;
-    _ = context;
+    const p = getStringContent(path);
+    const np = getStringContent(new_path);
+    const wrapper = php_h.php_stream_locate_url_wrapper(p.ptr, null, 0);
+    if (wrapper == null or wrapper.*.wops == null or wrapper.*.wops.*.rename == null) {
+        return error.Failure;
+    }
+    const new_wrapper = php_h.php_stream_locate_url_wrapper(np.ptr, null, 0);
+    if (wrapper != new_wrapper) return error.Failure;
+    const handler = wrapper.*.wops.*.rename.?;
+    if (handler(wrapper, p.ptr, np.ptr, 0, context) == 0) return error.Failure;
 }
 
 pub fn tell(strm: *Stream) !usize {
@@ -1420,23 +1420,43 @@ pub fn getStreamContext(strm: *Stream) *StreamContext {
     return get_stream_context(strm);
 }
 
-pub const StreamOption = enum(c_int) {
-    blocking = php_h.PHP_STREAM_OPTION_BLOCKING,
-    read_buffer = php_h.PHP_STREAM_OPTION_READ_BUFFER,
-    write_buffer = php_h.PHP_STREAM_OPTION_WRITE_BUFFER,
-    read_timeout = php_h.PHP_STREAM_OPTION_READ_TIMEOUT,
-    set_chunk_size = php_h.PHP_STREAM_OPTION_SET_CHUNK_SIZE,
-    locking = php_h.PHP_STREAM_OPTION_LOCKING,
-    sync_api = php_h.PHP_STREAM_OPTION_SYNC_API,
-};
-
-pub fn setOption(strm: *Stream, option: StreamOption, value: c_int, ptr: ?*anyopaque) !void {
-    const opt_id = @intFromEnum(option);
-    if (php_h._php_stream_set_option(strm, opt_id, value, ptr) < 0) return error.Failure;
+pub fn setBlocking(strm: *Stream, set: bool) !void {
+    const id = php_h.PHP_STREAM_OPTION_BLOCKING;
+    const value: c_int = if (set) 1 else 0;
+    if (php_h._php_stream_set_option(strm, id, value, null) < 0) return error.Failure;
 }
 
-pub const FSYNC = php_h.PHP_STREAM_SYNC_FSYNC;
-pub const FDSYNC = php_h.PHP_STREAM_SYNC_FDSYNC;
+pub fn setSync(strm: *Stream, sync: bool, sync_data: bool) !void {
+    const id = php_h.PHP_STREAM_OPTION_SYNC_API;
+    const value: c_int = if (sync)
+        php_h.PHP_STREAM_SYNC_FSYNC
+    else if (sync_data)
+        php_h.PHP_STREAM_SYNC_FDSYNC
+    else
+        0;
+    if (php_h._php_stream_set_option(strm, id, value, null) < 0) return error.Failure;
+}
+
+pub fn setLock(strm: *Stream, lock_type: c_int) !void {
+    const id = php_h.PHP_STREAM_OPTION_LOCKING;
+    if (php_h._php_stream_set_option(strm, id, lock_type, null) < 0) return error.Failure;
+}
+
+pub const utimbuf = php_h.utimbuf;
+
+pub fn touch(path: *String, timebuf: *const php_h.utimbuf, context: ?*StreamContext) !void {
+    return try setMetadata(path, php_h.PHP_STREAM_META_TOUCH, timebuf, context);
+}
+
+fn setMetadata(path: *String, op: c_int, param_ptr: ?*const anyopaque, context: ?*StreamContext) !void {
+    const p = getStringContent(path);
+    const wrapper = php_h.php_stream_locate_url_wrapper(p.ptr, null, 0);
+    if (wrapper == null or wrapper.*.wops == null or wrapper.*.wops.*.stream_metadata == null) {
+        return error.Failure;
+    }
+    const handler = wrapper.*.wops.*.stream_metadata.?;
+    if (handler(wrapper, p.ptr, op, @constCast(param_ptr), context) == 0) return error.Failure;
+}
 
 pub const reportWrongParamCount = php_h.zend_wrong_param_count;
 

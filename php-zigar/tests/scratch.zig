@@ -1,16 +1,18 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("fcntl.h");
-    @cInclude("unistd.h");
-});
+const zigar = @import("zigar");
 
-pub fn print(s: []const u8) void {
-    std.debug.print("Text: {s}\n", .{s});
+const Fn = fn (i32) i32;
+
+pub fn call(fn_ptr: *const Fn, int: i32) !void {
+    const thread = try std.Thread.spawn(.{}, run, .{
+        fn_ptr,
+        int,
+    });
+    thread.detach();
 }
 
-pub fn check(path: []const u8) bool {
-    var file = std.fs.openFileAbsolute(path, .{}) catch return false;
-    defer file.close();
-    return true;
+fn run(fn_ptr: *const Fn, int: i32) void {
+    const result = fn_ptr(int);
+    std.debug.print("result = {d}\n", .{result});
 }

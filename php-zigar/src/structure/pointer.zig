@@ -94,8 +94,10 @@ pub const Pointer = struct {
                     break :init obj;
                 }
             } else |_| if (php.getValueString(value)) |str| {
-                // autocast from string
-                break :init try static.target_class.createObjectFromString(str);
+                if (static.target_class.type != .function) {
+                    // autocast from string
+                    break :init try static.target_class.createObjectFromString(str);
+                }
             } else |_| {}
             // autovivificate new target
             const new_obj = try static.target_class.createNewObject();

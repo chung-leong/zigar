@@ -44,21 +44,76 @@ pub const CallDispatcher = struct {
     env_variable_bytes: ?[]const u8 = null,
     env_variable_ptr: *[*:null]?[*:0]const u8 = undefined,
     env_variable_original: *[*:null]?[*:0]const u8 = undefined,
+    multithread_enabled: bool = false,
+    pipe_ptr: *[2]std.posix.fd_t = undefined,
 
-    pub threadlocal var trapping_syscalls: bool = true;
+    pub threadlocal var trapping_syscalls: bool = false;
+    threadlocal var in_main_thread: bool = undefined;
+    threadlocal var pipes: [2]std.posix.fd_t = undefined;
+    var host_list_mutex: std.Thread.Mutex = .{};
+
     pub const HookEntry = interface.HookEntry;
     pub const HandlerVTable = interface.HandlerVTable;
     const redirection_controller = redirection.Controller(@This());
     const CallbackEntry = struct {
         id: usize,
         class: *Object,
-        callable: *Value,
+        callable: Value,
+
+        pub fn deinit(self: *@This()) void {
+            php.release(&self.callable);
+        }
     };
     const StreamEntry = struct {
         fd: c_long,
         url: *String,
         stream: *Stream,
         fd_stat: std.os.wasi.fdstat_t,
+
+        pub fn deinit(self: *@This()) void {
+            php.release(self.url);
+            _ = php.close(self.stream);
+        }
+    };
+    const ScheduledTask = struct {
+        self: *CallDispatcher,
+        call: Call,
+
+        pub const Call = union(enum) {
+            js: *Jscall,
+            sys: *Syscall,
+        };
+    };
+    const Futex = struct {
+        const initial_value = 0xffff_ffff;
+
+        value: std.atomic.Value(u32) = .init(initial_value),
+        handle: usize,
+        timeout: usize = 0,
+
+        pub fn init(self: *@This()) usize {
+            self.* = .{ .handle = @intFromPtr(self) };
+            return self.handle;
+        }
+
+        pub fn wait(self: *@This()) E {
+            if (self.timeout != 0) {
+                std.Thread.Futex.timedWait(&self.value, initial_value, self.timeout) catch {
+                    return E.SUCCESS;
+                };
+            } else {
+                std.Thread.Futex.wait(&self.value, initial_value);
+            }
+            const final_value = self.value.load(.acquire);
+            return std.meta.intToEnum(E, final_value) catch E.FAULT;
+        }
+
+        pub fn wake(handle: usize, result: E) !void {
+            const ptr: *Futex = @ptrFromInt(handle);
+            if (ptr.handle != handle) return error.Unexpected;
+            ptr.value.store(@intFromEnum(result), .release);
+            std.Thread.Futex.wake(&ptr.value, 1);
+        }
     };
     const fd_min = 0x00f0_0000;
     const fd_max = 0x00ff_ffff;
@@ -66,23 +121,26 @@ pub const CallDispatcher = struct {
     pub fn init(host: *ModuleHost) !*@This() {
         const self = try php.allocator.create(@This());
         errdefer php.allocator.destroy(self);
-        self.* = .{ .host = host };
+        self.* = .{ .host = host, .pipe_ptr = &pipes };
         return self;
     }
 
     pub fn deinit(self: *@This()) void {
-        for (self.function_list.items) |entry| php.release(entry.callable);
+        for (self.function_list.items) |*ptr| ptr.deinit();
         self.function_list.deinit(php.allocator);
-        for (self.stream_list.items) |entry| _ = php.close(entry.stream);
+        for (self.stream_list.items) |*ptr| ptr.deinit();
         self.stream_list.deinit(php.allocator);
         php.allocator.destroy(self);
     }
 
-    pub fn installHandler() void {
+    pub fn installHandler() !void {
         CallDispatcher.redirection_controller.installSignalHandler() catch {};
+        if (php.pipe(&pipes) < 0) return error.UnableToOpenPipe;
+        in_main_thread = true;
     }
 
     pub fn uninstallHandler() void {
+        for (pipes) |fd| _ = std.c.close(fd);
         CallDispatcher.redirection_controller.uninstallSignalHandler();
     }
 
@@ -108,13 +166,13 @@ pub const CallDispatcher = struct {
     fn saveCallback(self: *@This(), class_obj: *Object, callable: *Value) !usize {
         const fn_id = self.next_function_id;
         self.next_function_id +%= 1;
-        php.addRef(callable);
-        php.addRef(class_obj);
         try self.function_list.append(php.allocator, .{
             .id = fn_id,
             .class = class_obj,
-            .callable = callable,
+            .callable = callable.*,
         });
+        php.addRef(callable);
+        php.addRef(class_obj);
         return fn_id;
     }
 
@@ -125,24 +183,65 @@ pub const CallDispatcher = struct {
     }
 
     fn deleteCallback(self: *@This(), fn_id: usize) void {
-        for (self.function_list.items, 0..) |item, i| {
-            if (item.id == fn_id) {
-                php.release(item.callable);
-                php.release(item.class);
+        for (self.function_list.items, 0..) |*ptr, i| {
+            if (ptr.id == fn_id) {
+                ptr.deinit();
                 _ = self.function_list.swapRemove(i);
                 break;
             }
         }
     }
 
+    fn scheduleTask(self: *@This(), call: ScheduledTask.Call) !void {
+        const fd = self.pipe_ptr.*[1];
+        const task: ScheduledTask = .{ .self = self, .call = call };
+        const written = std.c.write(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
+        if (written < 0) return error.Unexpected;
+    }
+
+    pub fn getCommandStream() !*Stream {
+        const strm = try php.openDescriptor(pipes[0], "r");
+        php.preserveStream(strm);
+        errdefer php.close(strm);
+        try php.setBlocking(strm, false);
+        return strm;
+    }
+
+    pub fn runScheduledTask() bool {
+        const fd = pipes[0];
+        var task: ScheduledTask = undefined;
+        const read = std.c.read(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
+        if (read != @sizeOf(ScheduledTask)) return false;
+        std.debug.print("running\n", .{});
+        const self = task.self;
+        switch (task.call) {
+            .js => |call| {
+                const err = self.handleJscall(call) catch .FAULT;
+                Futex.wake(call.futex_handle, err) catch {};
+            },
+            .sys => |call| {
+                const err = self.handleSyscall(call) catch .FAULT;
+                Futex.wake(call.futex_handle, err) catch {};
+            },
+        }
+        return true;
+    }
+
     pub fn handleJscall(self: *@This(), call: *Jscall) !E {
-        const cb = self.findCallback(call.fn_id) orelse return .FAULT;
-        const arg_ptr: [*]u8 = @ptrFromInt(call.arg_address);
-        const arg_bytes = arg_ptr[0..call.arg_size];
-        const class = ZigClassEntry.fromObject(cb.class);
-        const fn_static = class.getStaticData(structure.Function);
-        try fn_static.runCallback(cb.callable, arg_bytes);
-        return .SUCCESS;
+        if (in_main_thread) {
+            const cb = self.findCallback(call.fn_id) orelse return .FAULT;
+            const arg_ptr: [*]u8 = @ptrFromInt(call.arg_address);
+            const arg_bytes = arg_ptr[0..call.arg_size];
+            const class = ZigClassEntry.fromObject(cb.class);
+            const fn_static = class.getStaticData(structure.Function);
+            try fn_static.runCallback(&cb.callable, arg_bytes);
+            return .SUCCESS;
+        } else {
+            var futex: Futex = undefined;
+            call.futex_handle = futex.init();
+            try self.scheduleTask(.{ .js = call });
+            return futex.wait();
+        }
     }
 
     pub fn installHooks(self: *@This(), lib: *std.DynLib, lib_path: []const u8, redirect_syscalls: bool) !void {
@@ -175,43 +274,50 @@ pub const CallDispatcher = struct {
     }
 
     pub fn handleSyscall(self: *@This(), call: *Syscall) !E {
-        return switch (call.cmd) {
-            .open => try self.handleOpen(&call.u.open),
-            .close => try self.handleClose(&call.u.close),
-            .read => try self.handleRead(&call.u.read),
-            .readv => try self.handleVectorRead(&call.u.readv),
-            .pread => try self.handlePositionalRead(&call.u.pread),
-            .preadv => try self.handlePositionalVectorRead(&call.u.preadv),
-            .write => try self.handleWrite(&call.u.write),
-            .writev => try self.handleVectorWrite(&call.u.writev),
-            .pwrite => try self.handlePositionalWrite(&call.u.pwrite),
-            .pwritev => try self.handlePositionalVectorWrite(&call.u.pwritev),
-            .seek => try self.handleSeek(&call.u.seek),
-            .tell => try self.handleTell(&call.u.tell),
-            .getfl => try self.handleGetDescriptorFlags(&call.u.getfl),
-            .setfl => try self.handleSetDescriptorFlags(&call.u.setfl),
-            .getlk => try self.handleGetLock(&call.u.getlk),
-            .setlk => try self.handleSetLock(&call.u.setlk),
-            .fstat => try self.handleStat(&call.u.fstat),
-            .stat => try self.handleStat(&call.u.stat),
-            .futimes => try self.handleSettimes(&call.u.futimes),
-            .utimes => try self.handleSettimes(&call.u.utimes),
-            .advise => try self.handleAdvise(&call.u.advise),
-            .allocate => try self.handleAllocate(&call.u.allocate),
-            .sync => try self.handleSync(&call.u.sync),
-            .datasync => try self.handleDatasync(&call.u.datasync),
-            .getdents => try self.handleGetdents(&call.u.getdents),
-            .mkdir => try self.handleMkdir(&call.u.mkdir),
-            .rmdir => try self.handleRmdir(&call.u.rmdir),
-            .unlink => try self.handleUnlink(&call.u.unlink),
-            .readlink => try self.handleReadlink(&call.u.readlink),
-            .symlink => try self.handleSymlink(&call.u.symlink),
-            .rename => try self.handleRename(&call.u.rename),
-            .poll => try self.handlePoll(&call.u.poll),
-            .sendfile => try self.handleSendFile(&call.u.sendfile),
-            .environ => try self.handleGetEnvironmentStrings(&call.u.environ),
-            .write_stderr => try self.handleWriteStderr(&call.u.write_stderr),
-        };
+        if (in_main_thread) {
+            return switch (call.cmd) {
+                .open => try self.handleOpen(&call.u.open),
+                .close => try self.handleClose(&call.u.close),
+                .read => try self.handleRead(&call.u.read),
+                .readv => try self.handleVectorRead(&call.u.readv),
+                .pread => try self.handlePositionalRead(&call.u.pread),
+                .preadv => try self.handlePositionalVectorRead(&call.u.preadv),
+                .write => try self.handleWrite(&call.u.write),
+                .writev => try self.handleVectorWrite(&call.u.writev),
+                .pwrite => try self.handlePositionalWrite(&call.u.pwrite),
+                .pwritev => try self.handlePositionalVectorWrite(&call.u.pwritev),
+                .seek => try self.handleSeek(&call.u.seek),
+                .tell => try self.handleTell(&call.u.tell),
+                .getfl => try self.handleGetDescriptorFlags(&call.u.getfl),
+                .setfl => try self.handleSetDescriptorFlags(&call.u.setfl),
+                .getlk => try self.handleGetLock(&call.u.getlk),
+                .setlk => try self.handleSetLock(&call.u.setlk),
+                .fstat => try self.handleStat(&call.u.fstat),
+                .stat => try self.handleStat(&call.u.stat),
+                .futimes => try self.handleSettimes(&call.u.futimes),
+                .utimes => try self.handleSettimes(&call.u.utimes),
+                .advise => try self.handleAdvise(&call.u.advise),
+                .allocate => try self.handleAllocate(&call.u.allocate),
+                .sync => try self.handleSync(&call.u.sync),
+                .datasync => try self.handleDatasync(&call.u.datasync),
+                .getdents => try self.handleGetdents(&call.u.getdents),
+                .mkdir => try self.handleMkdir(&call.u.mkdir),
+                .rmdir => try self.handleRmdir(&call.u.rmdir),
+                .unlink => try self.handleUnlink(&call.u.unlink),
+                .readlink => try self.handleReadlink(&call.u.readlink),
+                .symlink => try self.handleSymlink(&call.u.symlink),
+                .rename => try self.handleRename(&call.u.rename),
+                .poll => try self.handlePoll(&call.u.poll),
+                .sendfile => try self.handleSendFile(&call.u.sendfile),
+                .environ => try self.handleGetEnvironmentStrings(&call.u.environ),
+                .write_stderr => try self.handleWriteStderr(&call.u.write_stderr),
+            };
+        } else {
+            var futex: Futex = undefined;
+            call.futex_handle = futex.init();
+            try self.scheduleTask(.{ .sys = call });
+            return futex.wait();
+        }
     }
 
     pub fn getSyscallMask(self: *@This(), ptr: *Syscall.Mask) !void {
@@ -231,19 +337,40 @@ pub const CallDispatcher = struct {
     }
 
     pub fn enableMultithread(self: *@This()) !void {
-        _ = self;
+        if (self.multithread_enabled) return;
+        self.multithread_enabled = true;
     }
 
     pub fn disableMultithread(self: *@This()) !void {
-        _ = self;
+        if (!self.multithread_enabled) return;
+        self.multithread_enabled = false;
     }
 
     pub fn initializeThread(self: *@This()) !void {
-        _ = self;
+        in_main_thread = false;
+        if (self.syscall_trap_installed) {
+            try redirection_controller.installSyscallTrap(&trapping_syscalls);
+            self.thread_syscall_trap_list_mutex.lock();
+            defer self.thread_syscall_trap_list_mutex.unlock();
+            try self.thread_syscall_trap_list.append(std.heap.c_allocator, &trapping_syscalls);
+            if (self.syscall_trap_count > 0) {
+                trapping_syscalls = true;
+            }
+        }
+        if (self.host.module) |m| {
+            _ = m.exports.set_host_instance(@ptrCast(self.host));
+        }
     }
 
     pub fn deinitializeThread(self: *@This()) !void {
-        _ = self;
+        if (self.syscall_trap_installed) {
+            self.thread_syscall_trap_list_mutex.lock();
+            defer self.thread_syscall_trap_list_mutex.unlock();
+            const index = for (self.thread_syscall_trap_list.items, 0..) |ptr, i| {
+                if (ptr == &trapping_syscalls) break i;
+            } else return;
+            _ = self.thread_syscall_trap_list.swapRemove(index);
+        }
     }
 
     fn findStream(self: *@This(), fd: c_long) !*StreamEntry {
@@ -364,7 +491,7 @@ pub const CallDispatcher = struct {
 
     fn handleClose(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        php.close(entry.stream);
+        entry.deinit();
         const index = (@intFromPtr(entry) - @intFromPtr(self.stream_list.items.ptr)) / @sizeOf(StreamEntry);
         _ = self.stream_list.swapRemove(index);
         return .SUCCESS;
@@ -478,31 +605,25 @@ pub const CallDispatcher = struct {
     }
 
     fn handleSettimes(self: *@This(), args: anytype) !E {
-        _ = self;
-        _ = args;
-        return .OPNOTSUPP;
-        // const env = self.env;
-        // if (@hasField(@TypeOf(args.*), "fd")) {
-        //     return try self.callPosixFunction(self.js.fd_filestat_set_times, &.{
-        //         try env.createInt32(args.fd),
-        //         try env.createBigintInt64(args.atime),
-        //         try env.createBigintInt64(args.mtime),
-        //         try env.createUint32(@as(u16, @bitCast(args.time_flags))),
-        //         futex,
-        //     });
-        // } else {
-        //     const path_len: u32 = @truncate(std.mem.len(args.path));
-        //     return try self.callPosixFunction(self.js.path_filestat_set_times, &.{
-        //         try env.createInt32(args.dirfd),
-        //         try env.createUint32(@as(u32, @bitCast(args.lookup_flags))),
-        //         try env.createUsize(@intFromPtr(args.path)),
-        //         try env.createUint32(path_len),
-        //         try env.createBigintInt64(args.atime),
-        //         try env.createBigintInt64(args.mtime),
-        //         try env.createUint32(@as(u16, @bitCast(args.time_flags))),
-        //         futex,
-        //     });
-        // }
+        const loc: PathInfo = get: {
+            if (@hasField(@TypeOf(args.*), "fd")) {
+                const entry = self.findStream(args.fd) catch return .BADF;
+                php.addRef(entry.url);
+                break :get .{
+                    .url = entry.url,
+                    .context = php.getStreamContext(entry.stream),
+                };
+            } else {
+                break :get (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
+            }
+        };
+        defer loc.deinit();
+        const buf: php.utimbuf = .{
+            .actime = @divTrunc(args.atime, 1_000_000),
+            .modtime = @divTrunc(args.mtime, 1_000_000),
+        };
+        php.touch(loc.url, &buf, loc.context) catch return .INVAL;
+        return .SUCCESS;
     }
 
     fn handleStat(self: *@This(), args: anytype) !E {
@@ -537,16 +658,14 @@ pub const CallDispatcher = struct {
 
     fn handleSetDescriptorFlags(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        const blocking: c_int = if (args.fdflags.NONBLOCK) 0 else 1;
-        php.setOption(entry.stream, .blocking, blocking, null) catch return .FAULT;
-        const sync = if (args.fdflags.SYNC) php.FSYNC else if (args.fdflags.DSYNC) php.FDSYNC else 0;
-        php.setOption(entry.stream, .sync_api, sync, null) catch return .FAULT;
+        php.setBlocking(entry.stream, args.fdflags.NONBLOCK) catch return .FAULT;
+        php.setSync(entry.stream, args.fdflags.SYNC, args.fdflags.DSYNC) catch return .FAULT;
         return .SUCCESS;
     }
 
     fn handleSetLock(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        php.setOption(entry.stream, .locking, args.lock.type, null) catch return .FAULT;
+        php.setLock(entry.stream, args.lock.type) catch return .FAULT;
         return .SUCCESS;
     }
 
@@ -618,7 +737,7 @@ pub const CallDispatcher = struct {
         defer loc.deinit();
         const new_loc = (self.resolvePath(args.new_dirfd, args.new_path) catch return .BADF) orelse return .OPNOTSUPP;
         defer new_loc.deinit();
-        php.rename(loc.url, new_loc.url, new_loc.context) catch return .NOENT;
+        php.rename(loc.url, new_loc.url, loc.context) catch return .NOENT;
         return .SUCCESS;
     }
 

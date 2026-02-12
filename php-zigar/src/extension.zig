@@ -26,7 +26,7 @@ export fn php_zigar_init(_: c_int, _: c_int) php.Result {
         }
     }
     ZigClassEntry.registerGlobalClasses() catch return php.FAILURE;
-    CallDispatcher.installHandler();
+    CallDispatcher.installHandler() catch return php.FAILURE;
     return php.SUCCESS;
 }
 
@@ -120,6 +120,27 @@ const functions = struct {
             });
             defer php.allocator.free(module_path_resolved);
             try ZigCompiler.compile(source_path_resolved, module_path_resolved, options);
+        }
+    };
+    pub const zigar_get_pipe = struct {
+        pub const arg_info = [_]ArgInfo{};
+        pub const info = FunctionInfo{
+            .required_num_args = 0,
+        };
+
+        pub fn run(_: *ExecuteData, return_value: *Value) !void {
+            const strm = try CallDispatcher.getCommandStream();
+            return_value.* = php.createValueStream(strm);
+        }
+    };
+    pub const zigar_run_next = struct {
+        pub const arg_info = [_]ArgInfo{};
+        pub const info = FunctionInfo{
+            .required_num_args = 0,
+        };
+
+        pub fn run(_: *ExecuteData, _: *Value) !void {
+            while (CallDispatcher.runScheduledTask()) {}
         }
     };
 };

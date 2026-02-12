@@ -8,17 +8,17 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = b.path("src/extension.zig"),
         .target = target,
         .optimize = optimize,
-        .single_threaded = true,
+        .single_threaded = false,
         .link_libc = true,
     });
-    // mod.stack_check = false;
+    mod.stack_check = false;
 
     const lib = b.addLibrary(.{
         .linkage = .dynamic,
         .name = "php_zigar",
         .root_module = mod,
         .version = .{ .major = 1, .minor = 0, .patch = 1 },
-        // .use_llvm = true,
+        .use_llvm = true,
     });
 
     // TODO: find a way to determine the path dynamically
