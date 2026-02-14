@@ -51,7 +51,8 @@ pub const ErrorSet = struct {
             getPrevious: *Closure,
         } = undefined,
 
-        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
+        pub fn init(self: *@This(), class_obj: *Object) !void {
+            const class = ZigClassEntry.fromObject(class_obj);
             const member = try class.getMember(.instance, 0);
             if (member.accessors != .primitive) return error.InvalidAccessor;
             self.value_acc = &member.accessors.primitive;
@@ -124,7 +125,7 @@ pub const ErrorSet = struct {
                         if (ZigClassEntry.isZigError(err_obj.ce)) {
                             return value.*;
                         } else {
-                            const message = try php.invokeMethod(err_obj, "getMessage", .{});
+                            const message = try php.invokeMethod(value, "getMessage", .{});
                             if (php.getHashEntry(self.global_error_set, &message)) |err| {
                                 php.addRef(err);
                                 return err.*;

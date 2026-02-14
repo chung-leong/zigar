@@ -15,7 +15,8 @@ const Value = php.Value;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigCompiler = @import("compilation.zig").ZigCompiler;
 
-export fn php_zigar_init(_: c_int, _: c_int) php.Result {
+export fn php_zigar_mod_init(_: c_int, _: c_int) php.Result {
+    // fixed missing environ due to RTLD_DEEPBIND option to
     if (@intFromPtr(std.c.environ) == 0) {
         if (std.c.dlopen(null, .{ .LAZY = true, .NOLOAD = true })) |handle| {
             defer _ = std.c.dlclose(handle);
@@ -26,12 +27,20 @@ export fn php_zigar_init(_: c_int, _: c_int) php.Result {
         }
     }
     ZigClassEntry.registerGlobalClasses() catch return php.FAILURE;
+    return php.SUCCESS;
+}
+
+export fn php_zigar_mod_shutdown(_: c_int, _: c_int) php.Result {
+    CallDispatcher.uninstallHandlers();
+    return php.SUCCESS;
+}
+
+export fn php_zigar_req_init(_: c_int, _: c_int) php.Result {
     CallDispatcher.installHandler() catch return php.FAILURE;
     return php.SUCCESS;
 }
 
-export fn php_zigar_shutdown(_: c_int, _: c_int) php.Result {
-    CallDispatcher.uninstallHandler();
+export fn php_zigar_req_shutdown(_: c_int, _: c_int) php.Result {
     return php.SUCCESS;
 }
 
@@ -120,27 +129,6 @@ const functions = struct {
             });
             defer php.allocator.free(module_path_resolved);
             try ZigCompiler.compile(source_path_resolved, module_path_resolved, options);
-        }
-    };
-    pub const zigar_get_pipe = struct {
-        pub const arg_info = [_]ArgInfo{};
-        pub const info = FunctionInfo{
-            .required_num_args = 0,
-        };
-
-        pub fn run(_: *ExecuteData, return_value: *Value) !void {
-            const strm = try CallDispatcher.getCommandStream();
-            return_value.* = php.createValueStream(strm);
-        }
-    };
-    pub const zigar_run_next = struct {
-        pub const arg_info = [_]ArgInfo{};
-        pub const info = FunctionInfo{
-            .required_num_args = 0,
-        };
-
-        pub fn run(_: *ExecuteData, _: *Value) !void {
-            while (CallDispatcher.runScheduledTask()) {}
         }
     };
 };

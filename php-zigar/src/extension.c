@@ -4,19 +4,19 @@
 #endif
 
 PHP_MINIT_FUNCTION(php_zigar) {
-    return php_zigar_init(type, module_number);
+    return php_zigar_mod_init(type, module_number);
 }
 
 PHP_MSHUTDOWN_FUNCTION(php_zigar) {
-    return php_zigar_shutdown(type, module_number);
+    return php_zigar_mod_shutdown(type, module_number);
 }
 
 PHP_RINIT_FUNCTION(php_zigar) {
-    return SUCCESS;
+    return php_zigar_req_init(type, module_number);
 }
 
 PHP_RSHUTDOWN_FUNCTION(php_zigar) {
-    return SUCCESS;
+    return php_zigar_req_shutdown(type, module_number);
 }
 
 PHP_MINFO_FUNCTION(php_zigar) {

@@ -18,7 +18,8 @@ pub const ArgStruct = struct {
         arg_accessors: []*accessor.Any = undefined,
         retval_accessors: *accessor.Any = undefined,
 
-        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
+        pub fn init(self: *@This(), class_obj: *Object) !void {
+            const class = ZigClassEntry.fromObject(class_obj);
             var iter = class.getMemberIterator(.instance);
             if (iter.len == 0) return error.Unexpected;
             self.arg_accessors = try php.allocator.alloc(*accessor.Any, iter.len - 1);

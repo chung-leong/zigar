@@ -22,7 +22,8 @@ pub const ErrorUnion = struct {
         error_acc: *accessor.Primitive = undefined,
         error_class: *ZigClassEntry = undefined,
 
-        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
+        pub fn init(self: *@This(), class_obj: *Object) !void {
+            const class = ZigClassEntry.fromObject(class_obj);
             const member0 = try class.getMember(.instance, 0);
             self.payload_acc = &member0.accessors;
             const member1 = try class.getMember(.instance, 1);

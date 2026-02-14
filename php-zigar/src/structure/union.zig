@@ -25,8 +25,10 @@ pub const Union = struct {
             accessors: *accessor.Primitive,
             possible_values: HashTable,
         } = null,
+        class_obj: *Object = undefined,
 
-        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
+        pub fn init(self: *@This(), class_obj: *Object) !void {
+            const class = ZigClassEntry.fromObject(class_obj);
             var iter = class.getMemberIterator(.instance);
             const selector_member = while (iter.next()) |member| {
                 if (member.flags.is_selector) break member;
@@ -34,15 +36,24 @@ pub const Union = struct {
             if (selector_member) |sm| {
                 if (sm.accessors != .primitive) return error.InvalidAccessor;
                 const sel_class = sm.class orelse return error.MissingClass;
-                const sel_class_struct = ZigObject(Class(Union)).fromObject(sel_class.object).structure();
+                const sel_slots = switch (sel_class.type) {
+                    .@"enum" => sel_class.getStaticData(structure.Enum).available_tags,
+                    else => null,
+                };
                 // go through the list of members again and get the possible selector values
                 var sel_ht = php.createHashTable(php.destructor.value);
                 var index: c_long = 0;
                 iter.reset();
-                while (iter.next()) |un_member| {
-                    if (un_member.flags.is_selector) continue;
-                    var selector = try un_member.accessors.get(sel_class_struct);
-                    php.setHashEntry(&sel_ht, iter.currentKey(), &selector);
+                while (iter.next()) |member| {
+                    if (member.flags.is_selector) continue;
+                    const member_name = iter.currentName().?;
+                    if (sel_slots) |*ht| {
+                        const enum_value = try php.getHashEntry(ht, member_name);
+                        php.setHashEntry(&sel_ht, member_name, enum_value);
+                    } else {
+                        var int_value = php.createValueLong(index);
+                        php.setHashEntry(&sel_ht, member_name, &int_value);
+                    }
                     index += 1;
                 }
                 self.selector = .{
@@ -51,12 +62,16 @@ pub const Union = struct {
                     .possible_values = sel_ht,
                 };
             }
+            // because methods are really static functions, we need to maintain a ref on the class object
+            self.class_obj = class_obj;
+            php.addRef(self.class_obj);
         }
 
         pub fn deinit(self: *@This()) void {
             if (self.selector) |*selector| {
                 php.destroyHashTable(&selector.possible_values);
             }
+            php.release(self.class_obj);
         }
     };
     pub const constructor_args = "an array as argument or one named argument";

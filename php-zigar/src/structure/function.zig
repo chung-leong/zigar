@@ -23,7 +23,8 @@ pub const Function = struct {
         argument_class: *ZigClassEntry = undefined,
         first_arg_ce: ?*ClassEntry = null,
 
-        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
+        pub fn init(self: *@This(), class_obj: *Object) !void {
+            const class = ZigClassEntry.fromObject(class_obj);
             const thunk_buf = class.instance.template.bytes orelse return error.Unexpected;
             self.thunk_address = @intFromPtr(thunk_buf.bytes.ptr);
             const member = try class.getMember(.instance, 0);
@@ -72,7 +73,7 @@ pub const Function = struct {
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
         const class = ZigClassEntry.fromStructure(self);
         if (!php.isCallable(value)) return error.NotCallable;
-        const thunk_address = try class.host.dispatcher.createJsThunk(class.object, @constCast(value));
+        const thunk_address = try class.host.dispatcher.createJsThunk(class, @constCast(value));
         const ptr: [*]u8 = @ptrFromInt(thunk_address);
         self.bytes.bytes = ptr[0..0];
     }

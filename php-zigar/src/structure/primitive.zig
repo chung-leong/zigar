@@ -15,7 +15,8 @@ pub const Primitive = struct {
     pub const Static = struct {
         value_acc: *accessor.Primitive = undefined,
 
-        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
+        pub fn init(self: *@This(), class_obj: *Object) !void {
+            const class = ZigClassEntry.fromObject(class_obj);
             const member = try class.getMember(.instance, 0);
             if (member.accessors != .primitive) return error.InvalidAccessor;
             self.value_acc = &member.accessors.primitive;

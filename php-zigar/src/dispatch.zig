@@ -3,11 +3,14 @@ const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
+const Closure = @import("closure.zig").Closure;
 const interface = @import("module/native/interface.zig");
 const Jscall = interface.Jscall;
 const Syscall = interface.Syscall;
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
+const ArgumentIterator = php.ArgumentIterator;
+const ExecuteData = php.ExecuteData;
 const HashTable = php.HashTable;
 const Object = php.Object;
 const Stream = php.Stream;
@@ -48,19 +51,26 @@ pub const CallDispatcher = struct {
     pipe_ptr: *[2]std.posix.fd_t = undefined,
 
     pub threadlocal var trapping_syscalls: bool = false;
-    threadlocal var in_main_thread: bool = undefined;
+    threadlocal var thread_initialized: bool = false;
+    threadlocal var in_main_thread: bool = false;
     threadlocal var pipes: [2]std.posix.fd_t = undefined;
-    var host_list_mutex: std.Thread.Mutex = .{};
+    threadlocal var multithread_count: usize = 0;
+    threadlocal var suspension: Value = undefined;
+    threadlocal var loop_handler_id: Value = undefined;
+
+    var pipe_list_mutex: std.Thread.Mutex = .{};
+    var pipe_list: std.ArrayList(std.posix.fd_t) = .empty;
 
     pub const HookEntry = interface.HookEntry;
     pub const HandlerVTable = interface.HandlerVTable;
     const redirection_controller = redirection.Controller(@This());
     const CallbackEntry = struct {
         id: usize,
-        class: *Object,
+        class: *ZigClassEntry,
         callable: Value,
 
         pub fn deinit(self: *@This()) void {
+            self.class.release();
             php.release(&self.callable);
         }
     };
@@ -77,11 +87,12 @@ pub const CallDispatcher = struct {
     };
     const ScheduledTask = struct {
         self: *CallDispatcher,
-        call: Call,
+        operation: Operation,
 
-        pub const Call = union(enum) {
-            js: *Jscall,
-            sys: *Syscall,
+        pub const Operation = union(enum) {
+            jscall: *Jscall,
+            syscall: *Syscall,
+            disable: void,
         };
     };
     const Futex = struct {
@@ -126,6 +137,13 @@ pub const CallDispatcher = struct {
     }
 
     pub fn deinit(self: *@This()) void {
+        self.disableMultithread() catch {};
+        if (self.syscall_trap_installed) {
+            if (self.getSyscallHook("__sc_vtable")) |hook| {
+                const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
+                redirection_controller.removeSyscallVtable(vtable) catch {};
+            }
+        }
         for (self.function_list.items) |*ptr| ptr.deinit();
         self.function_list.deinit(php.allocator);
         for (self.stream_list.items) |*ptr| ptr.deinit();
@@ -134,24 +152,27 @@ pub const CallDispatcher = struct {
     }
 
     pub fn installHandler() !void {
-        CallDispatcher.redirection_controller.installSignalHandler() catch {};
-        if (php.pipe(&pipes) < 0) return error.UnableToOpenPipe;
-        in_main_thread = true;
+        if (!thread_initialized) {
+            in_main_thread = true;
+            redirection_controller.installSignalHandler() catch {};
+            if (php.pipe(&pipes) < 0) return error.UnableToOpenPipe;
+            pipe_list_mutex.lock();
+            defer pipe_list_mutex.unlock();
+            for (pipes) |fd| try pipe_list.append(std.heap.c_allocator, fd);
+        }
     }
 
-    pub fn uninstallHandler() void {
+    pub fn uninstallHandlers() void {
         for (pipes) |fd| _ = std.c.close(fd);
-        CallDispatcher.redirection_controller.uninstallSignalHandler();
     }
 
-    pub fn createJsThunk(self: *@This(), class_obj: *Object, callable: *Value) !usize {
-        const class = ZigClassEntry.fromObject(class_obj);
+    pub fn createJsThunk(self: *@This(), class: *ZigClassEntry, callable: *Value) !usize {
         const fn_static = class.getStaticData(structure.Function);
         const controller_address = fn_static.controller_address;
         if (controller_address == 0) return error.Unexpected;
         var thunk_address: usize = 0;
         const module = self.host.module orelse return error.Unexpected;
-        const fn_id = try self.saveCallback(class_obj, callable);
+        const fn_id = try self.saveCallback(class, callable);
         _ = module.exports.create_js_thunk(controller_address, fn_id, &thunk_address);
         return thunk_address;
     }
@@ -163,16 +184,16 @@ pub const CallDispatcher = struct {
         try self.deleteCallback(fn_id);
     }
 
-    fn saveCallback(self: *@This(), class_obj: *Object, callable: *Value) !usize {
+    fn saveCallback(self: *@This(), class: *ZigClassEntry, callable: *Value) !usize {
         const fn_id = self.next_function_id;
         self.next_function_id +%= 1;
         try self.function_list.append(php.allocator, .{
             .id = fn_id,
-            .class = class_obj,
+            .class = class,
             .callable = callable.*,
         });
         php.addRef(callable);
-        php.addRef(class_obj);
+        class.addRef();
         return fn_id;
     }
 
@@ -192,39 +213,11 @@ pub const CallDispatcher = struct {
         }
     }
 
-    fn scheduleTask(self: *@This(), call: ScheduledTask.Call) !void {
+    fn scheduleTask(self: *@This(), operation: ScheduledTask.Operation) !void {
         const fd = self.pipe_ptr.*[1];
-        const task: ScheduledTask = .{ .self = self, .call = call };
+        const task: ScheduledTask = .{ .self = self, .operation = operation };
         const written = std.c.write(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
         if (written < 0) return error.Unexpected;
-    }
-
-    pub fn getCommandStream() !*Stream {
-        const strm = try php.openDescriptor(pipes[0], "r");
-        php.preserveStream(strm);
-        errdefer php.close(strm);
-        try php.setBlocking(strm, false);
-        return strm;
-    }
-
-    pub fn runScheduledTask() bool {
-        const fd = pipes[0];
-        var task: ScheduledTask = undefined;
-        const read = std.c.read(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
-        if (read != @sizeOf(ScheduledTask)) return false;
-        std.debug.print("running\n", .{});
-        const self = task.self;
-        switch (task.call) {
-            .js => |call| {
-                const err = self.handleJscall(call) catch .FAULT;
-                Futex.wake(call.futex_handle, err) catch {};
-            },
-            .sys => |call| {
-                const err = self.handleSyscall(call) catch .FAULT;
-                Futex.wake(call.futex_handle, err) catch {};
-            },
-        }
-        return true;
     }
 
     pub fn handleJscall(self: *@This(), call: *Jscall) !E {
@@ -232,14 +225,13 @@ pub const CallDispatcher = struct {
             const cb = self.findCallback(call.fn_id) orelse return .FAULT;
             const arg_ptr: [*]u8 = @ptrFromInt(call.arg_address);
             const arg_bytes = arg_ptr[0..call.arg_size];
-            const class = ZigClassEntry.fromObject(cb.class);
-            const fn_static = class.getStaticData(structure.Function);
+            const fn_static = cb.class.getStaticData(structure.Function);
             try fn_static.runCallback(&cb.callable, arg_bytes);
             return .SUCCESS;
         } else {
             var futex: Futex = undefined;
             call.futex_handle = futex.init();
-            try self.scheduleTask(.{ .js = call });
+            try self.scheduleTask(.{ .jscall = call });
             return futex.wait();
         }
     }
@@ -315,7 +307,7 @@ pub const CallDispatcher = struct {
         } else {
             var futex: Futex = undefined;
             call.futex_handle = futex.init();
-            try self.scheduleTask(.{ .sys = call });
+            try self.scheduleTask(.{ .syscall = call });
             return futex.wait();
         }
     }
@@ -337,13 +329,78 @@ pub const CallDispatcher = struct {
     }
 
     pub fn enableMultithread(self: *@This()) !void {
-        if (self.multithread_enabled) return;
-        self.multithread_enabled = true;
+        if (in_main_thread) {
+            if (self.multithread_enabled) return;
+            self.multithread_enabled = true;
+            multithread_count += 1;
+            if (multithread_count > 1) return;
+            var event_loop = php.createValueStringContent("Revolt\\EventLoop");
+            defer php.release(&event_loop);
+            suspension = try php.invokeMethod(&event_loop, "getSuspension", .{});
+            errdefer php.release(&suspension);
+            const strm = try getCommandStream();
+            defer php.release(&strm);
+            const handler = try getTaskHandler();
+            defer php.release(&handler);
+            loop_handler_id = try php.invokeMethod(&event_loop, "onReadable", .{ strm, handler });
+        } else {
+            return error.NotInMainThread;
+        }
     }
 
     pub fn disableMultithread(self: *@This()) !void {
-        if (!self.multithread_enabled) return;
-        self.multithread_enabled = false;
+        if (in_main_thread) {
+            if (!self.multithread_enabled) return;
+            self.multithread_enabled = false;
+            multithread_count -= 1;
+            if (multithread_count > 0) return;
+            var event_loop = php.createValueStringContent("Revolt\\EventLoop");
+            defer php.release(&event_loop);
+            _ = try php.invokeMethod(&event_loop, "cancel", .{loop_handler_id});
+            _ = try php.invokeMethod(&suspension, "resume", .{});
+            php.release(&suspension);
+            php.release(&loop_handler_id);
+        } else {
+            try self.scheduleTask(.{ .disable = {} });
+        }
+    }
+
+    fn getCommandStream() !Value {
+        const strm = try php.openDescriptor(pipes[0], "r");
+        php.preserveStream(strm);
+        errdefer php.close(strm);
+        try php.setBlocking(strm, false);
+        return php.createValueStream(strm);
+    }
+
+    fn getTaskHandler() !Value {
+        const handler = php.transform(runScheduledTask);
+        var func = php.createFunction(&handler, "onReadable");
+        var this = php.createValueNull();
+        return php.createValueClosure(&func, null, null, &this);
+    }
+
+    fn runScheduledTask(_: *ExecuteData, _: *Value) void {
+        const fd = pipes[0];
+        var task: ScheduledTask = undefined;
+        while (true) {
+            const read = std.c.read(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
+            if (read != @sizeOf(ScheduledTask)) break;
+            const self = task.self;
+            switch (task.operation) {
+                .jscall => |call| {
+                    const err = self.handleJscall(call) catch .FAULT;
+                    Futex.wake(call.futex_handle, err) catch {};
+                },
+                .syscall => |call| {
+                    const err = self.handleSyscall(call) catch .FAULT;
+                    Futex.wake(call.futex_handle, err) catch {};
+                },
+                .disable => {
+                    self.disableMultithread() catch {};
+                },
+            }
+        }
     }
 
     pub fn initializeThread(self: *@This()) !void {

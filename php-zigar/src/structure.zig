@@ -182,9 +182,10 @@ pub fn Parent(comptime S: type) type {
         pub fn findMethod(self: *S, name: *String) !?*php.Function {
             // methods are actually static functions with self as the first argument
             const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(S);
             const member = try class.getMember(.static, name);
             if (!member.flags.is_method) return null;
-            const class_struct = ZigObject(Class(S)).fromObject(class.object).structure();
+            const class_struct = ZigObject(Class(S)).fromObject(static.class_obj).structure();
             var field = try member.accessors.get(class_struct);
             defer php.release(&field);
             const field_obj = php.getValueObject(&field) catch return null;

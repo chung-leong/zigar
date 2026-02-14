@@ -8,6 +8,7 @@ pub const php_h = @cImport({
     @cInclude("zend_builtin_functions.h");
     @cInclude("zend_exceptions.h");
     @cInclude("zend_interfaces.h");
+    @cInclude("zend_closures.h");
     @cInclude("ext/standard/info.h");
 });
 
@@ -358,6 +359,8 @@ pub const Type = enum(u8) {
     object = php_h.IS_OBJECT, // 8
     resource = php_h.IS_RESOURCE, // 9
     reference = php_h.IS_REFERENCE, // 10
+    constant_ast = php_h.IS_CONSTANT_AST, // 11
+    callable = php_h.IS_CALLABLE, // 12
 
     pub fn fromNumber(n: c_int) !@This() {
         return std.meta.intToEnum(@This(), n);
@@ -466,6 +469,19 @@ extern fn set_zval_stream(*Value, *Stream) void;
 pub fn createValueStream(strm: *Stream) Value {
     var result: Value = .{};
     set_zval_stream(&result, strm);
+    return result;
+}
+
+pub fn createValueCallable(func: *Function) Value {
+    var result: Value = .{};
+    result.value.func = func;
+    result.u1.type_info = php_h.IS_CALLABLE;
+    return result;
+}
+
+pub fn createValueClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*ClassEntry, this_ptr: *Value) Value {
+    var result: Value = undefined;
+    php_h.zend_create_closure(&result, func, scope, called_scope, this_ptr);
     return result;
 }
 
@@ -959,21 +975,17 @@ pub fn isCallable(callable: *const Value) bool {
     return php_h.zend_is_callable(@constCast(callable), php_h.IS_CALLABLE_CHECK_SILENT, null);
 }
 
-pub fn invokeMethod(obj: *Object, fn_name: []const u8, params: anytype) !Value {
+pub fn invokeMethod(container: *const Value, fn_name: []const u8, params: anytype) !Value {
     var callable = createValueArray(null);
     defer release(&callable);
-    var obj_value = createValueObject(obj);
     var fn_name_value = createValueStringContent(fn_name);
-    setProperty(&callable, 0, &obj_value) catch unreachable;
+    setPropertyRef(&callable, 0, @constCast(container)) catch unreachable;
     setProperty(&callable, 1, &fn_name_value) catch unreachable;
     var args: [params.len]Value = undefined;
     inline for (params, 0..) |param, i| {
         args[i] = param;
     }
-    var fci: php_h.zend_fcall_info = .{
-        .params = &args,
-        .param_count = args.len,
-    };
+    var fci: php_h.zend_fcall_info = undefined;
     var fci_cache: php_h.zend_fcall_info_cache = undefined;
     var error_str: [*c]u8 = null;
     if (php_h.zend_fcall_info_init(&callable, 0, &fci, &fci_cache, null, &error_str) != php_h.SUCCESS)
@@ -981,6 +993,8 @@ pub fn invokeMethod(obj: *Object, fn_name: []const u8, params: anytype) !Value {
     defer if (error_str != null) efree(error_str);
     var retval: Value = undefined;
     fci.retval = &retval;
+    fci.params = &args;
+    fci.param_count = args.len;
     if (php_h.zend_call_function(&fci, &fci_cache) != php_h.SUCCESS)
         return error.Failure;
     return retval;

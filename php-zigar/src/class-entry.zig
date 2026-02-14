@@ -39,7 +39,6 @@ pub const ZigClassEntry = struct {
         finalized: bool = false,
         activated: bool = false,
     } = .{},
-    object: *Object = undefined,
     static_data: StaticData = undefined,
     php_portion: ClassEntry = undefined,
 
@@ -258,8 +257,6 @@ pub const ZigClassEntry = struct {
                 break :create class_zobj.object();
             },
         };
-        // make it accessible through the class entry
-        self.object = class_obj;
         // removing the initial refcount now that class_obj is holding a ref to this
         self.release();
         return class_obj;
@@ -341,7 +338,7 @@ pub const ZigClassEntry = struct {
                     errdefer std.debug.print("Unable to initialize: {}\n", .{@FieldType(StaticData, name)});
                     self.static_data = @unionInit(StaticData, name, .{});
                     const data = &@field(self.static_data, name);
-                    try data.init(self);
+                    try data.init(class_obj);
                 }
             },
         }
@@ -351,7 +348,7 @@ pub const ZigClassEntry = struct {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
                 const C = structure.Class(S);
-                const class_struct = ZigObject(C).fromObject(self.object).structure();
+                const class_struct = ZigObject(C).fromObject(class_obj).structure();
                 const closures = class_struct.closures;
                 // set methods that are implemented as function objects
                 inline for (comptime std.meta.fields(@TypeOf(closures))) |field| {

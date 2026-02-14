@@ -18,7 +18,8 @@ pub const Slice = struct {
         element_size: usize = undefined,
         element_shift: ?u6 = undefined,
 
-        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
+        pub fn init(self: *@This(), class_obj: *Object) !void {
+            const class = ZigClassEntry.fromObject(class_obj);
             const member = try class.getMember(.instance, 0);
             self.value_acc = &member.accessors;
             self.element_size = class.byte_size orelse 1;

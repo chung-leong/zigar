@@ -19,7 +19,8 @@ pub const Vector = struct {
     pub const Static = struct {
         value_acc: *accessor.Vector = undefined,
 
-        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
+        pub fn init(self: *@This(), class_obj: *Object) !void {
+            const class = ZigClassEntry.fromObject(class_obj);
             // fetch the accessor in advance since we know it can only be a of the vector type
             const member = try class.getMember(.instance, 0);
             if (member.accessors != .vector) return error.InvalidAccessor;

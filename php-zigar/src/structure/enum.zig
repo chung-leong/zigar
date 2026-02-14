@@ -29,8 +29,10 @@ pub const Enum = struct {
     pub const Static = struct {
         value_acc: *accessor.Primitive = undefined,
         available_tags: HashTable = undefined,
+        class_obj: *Object = undefined,
 
-        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
+        pub fn init(self: *@This(), class_obj: *Object) !void {
+            const class = ZigClassEntry.fromObject(class_obj);
             const member = try class.getMember(.instance, 0);
             if (member.accessors != .primitive) return error.InvalidAccessor;
             self.value_acc = &member.accessors.primitive;
@@ -50,10 +52,14 @@ pub const Enum = struct {
                 // decrement ref count on class (since the class holds a ref on the tag)
                 class.release();
             }
+            // because methods are really static functions, we need to maintain a ref on the class object
+            self.class_obj = class_obj;
+            php.addRef(self.class_obj);
         }
 
         pub fn deinit(self: *@This()) void {
             php.destroyHashTable(&self.available_tags);
+            php.release(self.class_obj);
         }
 
         pub fn findCanonical(self: *@This(), key: *const Value) !Value {

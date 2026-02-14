@@ -17,7 +17,8 @@ pub const Comptime = struct {
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
 
-        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
+        pub fn init(self: *@This(), class_obj: *Object) !void {
+            const class = ZigClassEntry.fromObject(class_obj);
             const member = try class.getMember(.instance, 0);
             self.value_acc = &member.accessors;
         }

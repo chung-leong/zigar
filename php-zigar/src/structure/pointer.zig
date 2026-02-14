@@ -22,7 +22,8 @@ pub const Pointer = struct {
         address_acc: *accessor.Primitive = undefined,
         length_acc: ?*accessor.Primitive = null,
 
-        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
+        pub fn init(self: *@This(), class_obj: *Object) !void {
+            const class = ZigClassEntry.fromObject(class_obj);
             const target_member = try class.getMember(.instance, 0);
             self.target_class = target_member.class orelse return error.MissingClass;
             self.target_transform = target_member.objectTransform();

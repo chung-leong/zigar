@@ -18,15 +18,22 @@ pub const Struct = struct {
     const Super = structure.Parent(@This());
     pub const Static = struct {
         required_field_count: usize = 0,
+        class_obj: *Object = undefined,
 
-        pub fn init(self: *@This(), class: *ZigClassEntry) !void {
+        pub fn init(self: *@This(), class_obj: *Object) !void {
+            const class = ZigClassEntry.fromObject(class_obj);
             var iter = class.getMemberIterator(.instance);
             while (iter.next()) |member| {
                 if (member.flags.is_required) self.required_field_count += 1;
             }
+            // because methods are really static functions, we need to maintain a ref on the class object
+            self.class_obj = class_obj;
+            php.addRef(self.class_obj);
         }
 
-        pub fn deinit(_: *@This()) void {}
+        pub fn deinit(self: *@This()) void {
+            php.release(self.class_obj);
+        }
     };
     pub const constructor_args = "an array as argument or named arguments";
 
