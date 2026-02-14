@@ -1260,7 +1260,7 @@ fn isInt(comptime T: type) bool {
     };
 }
 
-fn getErrorMessage(comptime ES: type, err: ES) []const u8 {
+fn getErrorMessage(comptime ES: type, err: ES) [:0]const u8 {
     @setEvalBranchQuota(2000000);
     return switch (err) {
         inline else => |possible_error| get: {
@@ -1300,7 +1300,7 @@ fn getErrorMessage(comptime ES: type, err: ES) []const u8 {
                 @memcpy(&array, buffer[0..len]);
                 break :decamelize array;
             };
-            break :get &msg;
+            break :get @ptrCast(&msg);
         },
     };
 }

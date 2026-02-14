@@ -345,7 +345,7 @@ pub const ErrorSet = struct {
 
 fn createDecamelizedMessage(name_obj: *const String) *String {
     const name = php.getStringContent(name_obj);
-    var len_required: usize = 0;
+    var len_required: usize = 1;
     for (name, 0..) |c, i| {
         const conversion_needed = check: {
             var needed = false;
@@ -393,5 +393,6 @@ fn createDecamelizedMessage(name_obj: *const String) *String {
             len += 1;
         }
     }
+    buffer[len] = 0;
     return message;
 }
