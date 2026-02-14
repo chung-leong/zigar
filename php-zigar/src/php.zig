@@ -1009,11 +1009,11 @@ pub fn invokeFunction(callable: *Value, arguments: []const Value) !Value {
     return retval;
 }
 
-pub fn createFunction(func_ptr: php_h.zif_handler, name: ?[]const u8) Function {
+pub fn createFunction(func_ptr: php_h.zif_handler, name: []const u8) Function {
     return .{
         .internal_function = .{
             .type = php_h.ZEND_INTERNAL_FUNCTION,
-            .function_name = if (name) |n| createInternedString(n) else null,
+            .function_name = createInternedString(name),
             .handler = func_ptr,
             .num_args = 0,
             .fn_flags = php_h.ZEND_ACC_VARIADIC,

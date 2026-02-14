@@ -15,12 +15,30 @@ final class StreamHandlingTest extends TestCase
         $m = ZigImporter::load(__DIR__ . '/read-from-file.zig');
     }
 
+    public function testOpenAndReadFromFileUsingPosixFunctions(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/open-and-read-file-with-posix-functions.zig');
+        $correct = 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+        $path = __DIR__ . '/data/test.txt';
+        $url = "/php://filter/resource=${path}";
+        $hash = (string) $m->hash($url);
+        $this->assertSame($correct, $hash);
+    }
+
+    public function testOpenAndReadFromFileUsingLibcFunctions(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/open-and-read-file-with-libc-functions.zig');
+        $correct = 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+        $path = __DIR__ . '/data/test.txt';
+        $url = "/php://filter/resource=${path}";
+        $hash = (string) $m->hash($url);
+        $this->assertSame($correct, $hash);
+    }
+
     public function testReadFromFileInMainThread(): void
     {
         $m = ZigImporter::load(__DIR__ . '/read-from-file-in-main-thread.zig');
-        $correct = (PHP_OS_FAMILY === 'Windows') 
-        ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
-        : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+        $correct = 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
     }
 
     public function testOpenAndReadFromFileInMainThread(): void

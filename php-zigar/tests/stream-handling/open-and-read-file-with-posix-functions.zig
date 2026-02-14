@@ -7,7 +7,7 @@ const c = @cImport({
 
 pub fn hash(path: [*:0]const u8) ![std.crypto.hash.Sha1.digest_length * 2]u8 {
     const fd = c.open(path, c.O_RDONLY);
-    if (fd <= 0) return error.UnableTOpenFile;
+    if (fd <= 0) return error.UnableToOpenFile;
     defer _ = c.close(fd);
     var buffer: [128]u8 = undefined;
     var sha1: std.crypto.hash.Sha1 = .init(.{});

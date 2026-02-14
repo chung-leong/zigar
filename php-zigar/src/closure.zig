@@ -11,7 +11,7 @@ pub const Closure = extern struct {
     ptr: *anyopaque,
     php_portion: Function,
 
-    pub fn create(ptr: anytype, cb: anytype, name: ?[]const u8) !*@This() {
+    pub fn create(ptr: anytype, cb: anytype, name: []const u8) !*@This() {
         const ns = struct {
             fn run(ed: [*c]ExecuteData, return_value: [*c]Value) callconv(.c) void {
                 const func: *Function = @ptrCast(ed.*.func);
