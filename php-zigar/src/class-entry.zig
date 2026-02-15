@@ -652,35 +652,43 @@ pub const ZigClassEntry = struct {
                     return .{ .vector = vector };
                 }
             },
-            .int, .uint => inline for (0..65) |bits| {
+            inline .int, .uint => |t| inline for (0..65) |bits| {
+                const signedness = if (t == .int) .signed else .unsigned;
                 if (member.bit_size == bits) {
-                    inline for (.{ .signed, .unsigned }) |signedness| {
-                        if ((member.type == .int) == (signedness == .signed)) {
-                            if (for_scalar) {
-                                inline for (.{ null, 0, 1, 2, 3, 4, 5, 6, 7 }) |offset| {
-                                    if (bit_offset_mod8 == offset) {
-                                        const primitive = accessor.int.get(.{
-                                            .signedness = signedness,
-                                            .bit_size = bits,
-                                            .bit_offset = offset,
-                                        }, .{
-                                            .byte_offset = byte_offset,
-                                            .transform = member.primitiveTransform(),
-                                        });
-                                        return .{ .primitive = primitive };
-                                    }
-                                }
-                            } else {
-                                const T = @Type(.{
-                                    .int = .{ .signedness = signedness, .bits = bits },
+                    if (for_scalar) {
+                        inline for (.{ null, 0, 1, 2, 3, 4, 5, 6, 7 }) |offset| {
+                            if (bit_offset_mod8 == offset) {
+                                const primitive = accessor.int.get(.{
+                                    .signedness = signedness,
+                                    .bit_size = bits,
+                                    .bit_offset = offset,
+                                }, .{
+                                    .byte_offset = byte_offset,
+                                    .transform = member.primitiveTransform(),
                                 });
-                                const vector = accessor.vector.get(.{ .child = T, .is_packed = false }, .{});
-                                return .{ .vector = vector };
+                                return .{ .primitive = primitive };
                             }
                         }
+                    } else {
+                        const T = @Type(.{
+                            .int = .{ .signedness = signedness, .bits = bits },
+                        });
+                        const vector = accessor.vector.get(.{ .child = T, .is_packed = false }, .{});
+                        return .{ .vector = vector };
                     }
                     break;
                 }
+            } else {
+                // TODO: big int support
+                const primitive = accessor.int.get(.{
+                    .signedness = .unsigned,
+                    .bit_size = 0,
+                    .bit_offset = 0,
+                }, .{
+                    .byte_offset = byte_offset,
+                    .transform = member.primitiveTransform(),
+                });
+                return .{ .primitive = primitive };
             },
             .float => inline for (.{ 16, 32, 64, 80, 128 }) |bits| {
                 if (member.bit_size == bits) {

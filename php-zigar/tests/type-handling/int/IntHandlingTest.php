@@ -62,7 +62,11 @@ final class IntHandlingTest extends TestCase
         $this->assertSame(0x1FFF_FFFF_FFFF_FFFF, $m->getInt64());
         $this->assertSame(0x7FFF_FFFF_FFFF_FFFF, $m->getUint64());
         $this->assertSame(1000, $m->getIsize());
-        $this->assertSame(0x7FFF_FFFF_FFFF_FFFF, $m->getUsize());
+        if (PHP_INT_SIZE == 4) {
+            $this->assertSame(0x7FFF_FFFF, $m->getUsize());
+        } else {
+            $this->assertSame(0x7FFF_FFFF_FFFF_FFFF, $m->getUsize());
+        } 
     }
 
     public function testHandleIntInArray(): void
@@ -90,10 +94,10 @@ final class IntHandlingTest extends TestCase
     public function testHandleIntInStruct(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
-        print_r($m->struct_a);
-        $m->print();        
+        $m->struct_a->number2 = -555;
+        $m->print();
         $this->expectOutputString(<<<OUTPUT
-        .{ .number1 = -5, .number2 = -444 }
+        .{ .number1 = -5, .number2 = -555 }
 
         OUTPUT);
     }
@@ -101,25 +105,38 @@ final class IntHandlingTest extends TestCase
     public function testHandleIntInPackedStruct(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
-        $this->assertSame("B", "B");
+        $this->assertSame(15, $m->struct_a->number1);
+        $this->assertSame(777, $m->struct_a->number2);
+        $this->assertSame(-420, $m->struct_a->number3);
+        $m->print();
+        $this->expectOutputString(<<<OUTPUT
+        .{ .number1 = 15, .number2 = 777, .state = true, .number3 = -420 }
+
+        OUTPUT);
     }
 
     public function testHandleIntAsComptimeField(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
-        $this->assertSame("B", "B");
+        $this->assertSame(true, $m->struct_a->state);
+        $this->assertSame(5000, $m->struct_a->number);
+        $m->struct_a->number = 5000;
     }
 
     public function testHandleIntInBareUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
-        $this->assertSame("B", "B");
+        $this->assertSame(1234, $m->union_a->number);
+        $m->union_a->number = 4567;
+        $this->assertSame(4567, $m->union_a->number);
     }
 
     public function testHandleIntInTaggedUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-tagged-union.zig');
-        $this->assertSame("B", "B");
+        $this->assertSame(3456, $m->union_a->number);
+        $this->expectExceptionMessage("access of union field 'state' while field 'number' is active");
+        $m->union_a->state = false;
     }
 
     public function testHandleIntInOptional(): void
