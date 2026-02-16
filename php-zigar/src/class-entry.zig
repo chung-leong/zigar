@@ -682,15 +682,17 @@ pub const ZigClassEntry = struct {
                 const signedness = if (t == .int) .signed else .unsigned;
                 if (for_scalar) {
                     inline for (.{ null, 0, 1, 2, 3, 4, 5, 6, 7 }) |offset| {
-                        const primitive = accessor.gmp.get(.{
-                            .signedness = signedness,
-                            .bit_offset = offset,
-                        }, .{
-                            .byte_offset = byte_offset,
-                            .bit_size = member.bit_size,
-                            .transform = member.primitiveTransform(),
-                        });
-                        return .{ .primitive = primitive };
+                        if (bit_offset_mod8 == offset) {
+                            const primitive = accessor.gmp.get(.{
+                                .signedness = signedness,
+                                .bit_offset = offset,
+                            }, .{
+                                .byte_offset = byte_offset,
+                                .bit_size = member.bit_size,
+                                .transform = member.primitiveTransform(),
+                            });
+                            return .{ .primitive = primitive };
+                        }
                     }
                 } else {}
             },

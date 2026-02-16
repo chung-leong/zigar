@@ -14,7 +14,7 @@ final class IntHandlingTest extends TestCase
         $this->assertSame(34567, $m->uint32);
         $this->assertSame(0x1FFF_FFFF_FFFF_FFFF, $m->int64);
         $this->assertSame(0x7FFF_FFFF_FFFF_FFFF, $m->uint64);
-        $this->assertEquals(gmp_init("0xFFFFFFFFFFFFFFFF12345678"), $m->int128);
+        $this->assertSame((string) gmp_init("0xFFFFFFFFFFFFFFFF12345678"), (string) $m->int128);
         $this->assertSame(7, $m->int4);
         $this->assertSame(1234, $m->size1);
         $this->assertSame(-1234, $m->size2);
@@ -106,6 +106,10 @@ final class IntHandlingTest extends TestCase
         $this->assertSame(15, $m->struct_a->number1);
         $this->assertSame(777, $m->struct_a->number2);
         $this->assertSame(-420, $m->struct_a->number3);
+        $this->assertSame(1, $m->struct_b->number1);
+        $this->assertSame((string) gmp_init("12345678901234567890"), (string) $m->struct_b->number2);
+        $this->assertSame(false, $m->struct_b->state);
+
         $m->print();
         $this->expectOutputString(<<<OUTPUT
         .{ .number1 = 15, .number2 = 777, .state = true, .number3 = -420 }

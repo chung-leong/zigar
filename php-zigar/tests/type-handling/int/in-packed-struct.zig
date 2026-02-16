@@ -12,3 +12,15 @@ pub var struct_a: StructA = .{ .number1 = 15, .number2 = 777, .state = true, .nu
 pub fn print() void {
     std.debug.print("{any}\n", .{struct_a});
 }
+
+pub const StructB = packed struct {
+    number1: i2 = 1,
+    number2: i137 = 12345678901234567890,
+    state: bool = false,
+};
+
+pub var struct_b: StructB = .{};
+
+pub fn printB() void {
+    std.debug.print("{any}\n", .{struct_b});
+}

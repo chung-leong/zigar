@@ -1,7 +1,9 @@
 const std = @import("std");
 
-pub var bigint: i128 = 0x12345678900000;
+pub const StructB = packed struct {
+    number1: i2 = 1,
+    number2: i137 = 12345678901234567890,
+    state: bool = false,
+};
 
-pub fn print() void {
-    std.debug.print("bigint = {d}\n", .{bigint});
-}
+pub var struct_b: StructB = .{};

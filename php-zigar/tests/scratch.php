@@ -7,12 +7,12 @@ use Revolt\EventLoop;
 zigar_compile_module(__DIR__ . "/scratch.zig", "/tmp/scratch.zigar");
 $m = zigar_load_module("/tmp/scratch.zigar");
 
-$m->print();
+// $m->printB();
 
-echo $m->bigint, "\n";
+echo $m->struct_b->number2, "\n";
 
-$a = gmp_init(1234);
+// $a = gmp_init(1234);
 
-$m->bigint = "123456789123456789";
+// $m->bigint = "123456789123456789";
 
-$m->print();
+// $m->print();
