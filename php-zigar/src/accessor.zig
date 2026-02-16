@@ -20,6 +20,7 @@ pub const Error = error{
     CannotCreateObject,
     ExceptionThrown,
     Failure,
+    IntegerOverflow,
     InvalidOperation,
     InvalidType,
     Missing,

@@ -5,9 +5,11 @@ const accessor = @import("../accessor.zig");
 const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const php = @import("../php.zig");
+const String = php.String;
 const Value = php.Value;
 var gmp_import: Value = php.empty_value;
 var gmp_export: Value = php.empty_value;
+var gmp_init: Value = php.empty_value;
 var gmp_neg: Value = php.empty_value;
 var gmp_sign: Value = php.empty_value;
 
@@ -23,18 +25,18 @@ pub const Attributes = struct {
 };
 
 pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) accessor.Primitive {
+    const be = comptime builtin.target.cpu.arch.endian() == .big;
+    const extra = if (attrs.bit_offset != null and attrs.bit_offset != 0) 1 else 0;
     const ns = struct {
         pub fn get(acc: *const accessor.Primitive, buffer: *ByteBuffer) Error!Value {
-            const be = builtin.target.cpu.arch.endian() == .big;
             const bytes: []u8 = buffer.bytes;
-            const extra = if (attrs.bit_offset != null and attrs.bit_offset != 0) 1 else 0;
             const byte_count = (acc.params.bit_size + 7) / 8;
+            if (acc.params.byte_offset + byte_count + extra > bytes.len) return error.OutOfBound;
             const str = php.createStringWithLength(byte_count);
             defer php.release(str);
-            const dest = @constCast(php.getStringContent(str));
-            if (acc.params.byte_offset + byte_count + extra > bytes.len) return error.OutOfBound;
+            const dst = @constCast(php.getStringContent(str));
             var offset = acc.params.byte_offset + if (be) 0 else byte_count - 1;
-            var dest_offset: usize = 0;
+            var dst_offset: usize = 0;
             var negate = false;
             // read the most significant byte first
             const msb_bits = acc.params.bit_size - (byte_count - 1) * 8;
@@ -43,59 +45,131 @@ pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) ac
                     const T = @Type(.{ .int = .{ .bits = bits, .signedness = attrs.signedness } });
                     const AT = accessor.WithBitOffset(T, attrs.bit_offset);
                     const ptr: *align(1) AT = @ptrCast(&bytes[offset]);
-                    const int = if (comptime AT == T) ptr.* else ptr.value;
+                    var int = if (comptime AT == T) ptr.* else ptr.value;
                     if (attrs.signedness == .signed and int < 0) {
-                        dest[dest_offset] = @intCast(@as(T, -1) ^ int);
+                        int = int ^ -1;
                         negate = true;
-                    } else {
-                        dest[dest_offset] = @intCast(int);
                     }
+                    dst[dst_offset] = @intCast(int);
                     break;
                 }
             }
-            if (attrs.signedness == .signed) {
-                const mask: u8 = if (negate) 0xff else 0;
-                while (dest_offset < byte_count - 1) {
-                    if (be) offset += 1 else offset -= 1;
-                    dest_offset += 1;
-                    const U = accessor.WithBitOffset(u8, attrs.bit_offset);
-                    const ptr: *align(1) U = @ptrCast(&bytes[offset]);
-                    const int = if (comptime U == u8) ptr.* else ptr.value;
-                    dest[dest_offset] = mask ^ int;
-                }
-                if (negate) {
-                    // need to add one
-                    while (true) {
-                        dest[dest_offset] +%= 1;
-                        if (dest[dest_offset] != 0) break;
-                        if (dest_offset == 0) break;
-                        // keep carry to next digit
-                        dest_offset -= 1;
-                    }
+            const mask: u8 = if (negate) 0xff else 0;
+            while (dst_offset < byte_count - 1) {
+                if (be) offset += 1 else offset -= 1;
+                dst_offset += 1;
+                const U = accessor.WithBitOffset(u8, attrs.bit_offset);
+                const ptr: *align(1) U = @ptrCast(&bytes[offset]);
+                const int = if (comptime U == u8) ptr.* else ptr.value;
+                dst[dst_offset] = int ^ mask;
+            }
+            if (attrs.signedness == .signed and negate) {
+                // need to add one
+                while (true) {
+                    dst[dst_offset] +%= 1;
+                    if (dst[dst_offset] != 0 or dst_offset == 0) break;
+                    // apply carry to previous byte
+                    dst_offset -= 1;
                 }
             }
+            const value = try gmpFromString(str, negate);
+            return if (acc.params.transform) |t| try t.toValue(&value) else value;
+        }
+
+        pub fn set(acc: *const accessor.Primitive, buffer: *ByteBuffer, value: *const Value) Error!void {
+            const bytes: []u8 = buffer.bytes;
+            const byte_count = (acc.params.bit_size + 7) / 8;
+            if (acc.params.byte_offset + byte_count + extra > bytes.len) return error.OutOfBound;
+            const str, const negate = try stringFromGmp(value);
+            defer php.release(str);
+            const src = php.getStringContent(str);
+            if (src.len > byte_count) return error.IntegerOverflow;
+            const blk_offset = byte_count - src.len;
+            var offset = acc.params.byte_offset + if (be) 0 else byte_count - 1;
+            var src_offset: usize = 0;
+            // write the most significant byte
+            const msb_bits = acc.params.bit_size - (byte_count - 1) * 8;
+            inline for (.{ 1, 2, 3, 4, 5, 6, 7, 8 }) |bits| {
+                if (msb_bits == bits) {
+                    const T = @Type(.{ .int = .{ .bits = bits, .signedness = attrs.signedness } });
+                    const AT = accessor.WithBitOffset(T, attrs.bit_offset);
+                    const ptr: *align(1) AT = @ptrCast(&bytes[offset]);
+                    const byte = if (src_offset >= blk_offset) src[src_offset - blk_offset] else 0;
+                    if (byte > std.math.maxInt(T)) return error.IntegerOverflow;
+                    var int: T = @intCast(byte);
+                    if (attrs.signedness == .signed and negate) int = int ^ -1;
+                    if (comptime AT == T) ptr.* = int else ptr.value = int;
+                    break;
+                }
+            }
+            const mask: u8 = if (negate) 0xff else 0;
+            while (src_offset < byte_count - 1) {
+                if (be) offset += 1 else offset -= 1;
+                src_offset += 1;
+                const U = accessor.WithBitOffset(u8, attrs.bit_offset);
+                const ptr: *align(1) U = @ptrCast(&bytes[offset]);
+                const byte = if (src_offset >= blk_offset) src[src_offset - blk_offset] else 0;
+                const int = byte ^ mask;
+                if (comptime U == u8) ptr.* = int else ptr.value = int;
+            }
+            if (attrs.signedness == .signed and negate) {
+                // need to shift value by one
+                const last = acc.params.byte_offset + if (be) byte_count - 1 else 0;
+                while (true) {
+                    bytes[offset] +%= 1;
+                    if (bytes[offset] != 0 or offset == last) break;
+                    // need to borrow from previous byte
+                    if (be) offset += 1 else offset -= 1;
+                }
+            }
+        }
+
+        fn gmpFromString(str: *String, negate: bool) !Value {
             const str_value = php.createValueString(str);
             if (php.getType(&gmp_import) != .string) {
                 const name = php.createPersistentString("gmp_import");
                 gmp_import = php.createValueString(name);
             }
-            var value = try php.invokeFunction(&gmp_import, &.{str_value});
             if (attrs.signedness == .signed and negate) {
+                const pos_value = try php.invokeFunction(&gmp_import, &.{str_value});
+                defer php.release(&pos_value);
                 if (php.getType(&gmp_neg) != .string) {
                     const name = php.createPersistentString("gmp_neg");
                     gmp_neg = php.createValueString(name);
                 }
-                const pos_value = value;
-                value = try php.invokeFunction(&gmp_neg, &.{pos_value});
-                php.release(&pos_value);
+                return try php.invokeFunction(&gmp_neg, &.{pos_value});
+            } else {
+                return try php.invokeFunction(&gmp_import, &.{str_value});
             }
-            return if (acc.params.transform) |t| try t.toValue(&value) else value;
         }
 
-        pub fn set(acc: *const accessor.Primitive, buffer: *ByteBuffer, value: *const Value) Error!void {
-            _ = acc;
-            _ = buffer;
-            _ = value;
+        fn stringFromGmp(value: *const Value) !std.meta.Tuple(&.{ *String, bool }) {
+            const gmp_value = switch (php.getType(value)) {
+                .object => use: {
+                    php.addRef(@constCast(value));
+                    break :use value.*;
+                },
+                else => convert: {
+                    if (php.getType(&gmp_init) != .string) {
+                        const name = php.createPersistentString("gmp_init");
+                        gmp_init = php.createValueString(name);
+                    }
+                    break :convert try php.invokeFunction(&gmp_init, &.{value.*});
+                },
+            };
+            defer php.release(&gmp_value);
+            if (php.getType(&gmp_sign) != .string) {
+                const name = php.createPersistentString("gmp_sign");
+                gmp_sign = php.createValueString(name);
+            }
+            const sign_value = try php.invokeFunction(&gmp_sign, &.{value.*});
+            const sign = try php.getValueLong(&sign_value);
+            if (php.getType(&gmp_export) != .string) {
+                const name = php.createPersistentString("gmp_export");
+                gmp_export = php.createValueString(name);
+            }
+            const str_value = try php.invokeFunction(&gmp_export, &.{gmp_value});
+            return .{ try php.getValueString(&str_value), sign < 0 };
         }
     };
     return .{ .getter = &ns.get, .setter = &ns.set, .params = params };
