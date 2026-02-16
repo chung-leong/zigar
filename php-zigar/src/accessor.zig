@@ -2,6 +2,7 @@ const std = @import("std");
 
 pub const boolean = @import("accessor/boolean.zig");
 pub const float = @import("accessor/float.zig");
+pub const gmp = @import("accessor/gmp.zig");
 pub const int = @import("accessor/int.zig");
 pub const @"null" = @import("accessor/null.zig");
 pub const slot = @import("accessor/slot.zig");
@@ -88,6 +89,7 @@ pub const Primitive = struct {
 
     pub const Parameters = struct {
         byte_offset: usize,
+        bit_size: usize = 0,
         transform: ?PrimitiveTransform = null,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer) Error!Value;

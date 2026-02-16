@@ -679,16 +679,20 @@ pub const ZigClassEntry = struct {
                     break;
                 }
             } else {
-                // TODO: big int support
-                const primitive = accessor.int.get(.{
-                    .signedness = .unsigned,
-                    .bit_size = 0,
-                    .bit_offset = 0,
-                }, .{
-                    .byte_offset = byte_offset,
-                    .transform = member.primitiveTransform(),
-                });
-                return .{ .primitive = primitive };
+                const signedness = if (t == .int) .signed else .unsigned;
+                if (for_scalar) {
+                    inline for (.{ null, 0, 1, 2, 3, 4, 5, 6, 7 }) |offset| {
+                        const primitive = accessor.gmp.get(.{
+                            .signedness = signedness,
+                            .bit_offset = offset,
+                        }, .{
+                            .byte_offset = byte_offset,
+                            .bit_size = member.bit_size,
+                            .transform = member.primitiveTransform(),
+                        });
+                        return .{ .primitive = primitive };
+                    }
+                } else {}
             },
             .float => inline for (.{ 16, 32, 64, 80, 128 }) |bits| {
                 if (member.bit_size == bits) {

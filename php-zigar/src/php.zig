@@ -105,6 +105,8 @@ pub const RESOLVED_INTERFACES = php_h.ZEND_ACC_RESOLVED_INTERFACES;
 pub const std_object_handlers = &php_h.std_object_handlers;
 pub const empty_array = &php_h.zend_empty_array;
 
+pub const empty_value: Value = .{ .u1 = .{ .type_info = php_h.IS_NULL } };
+
 pub const use_tsrm = false;
 
 fn Globals(comptime name: []const u8) type {
