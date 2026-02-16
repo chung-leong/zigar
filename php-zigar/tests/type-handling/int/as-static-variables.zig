@@ -9,7 +9,7 @@ pub var uint32: i32 = 34567;
 pub var int64: i64 = 0x1FFF_FFFF_FFFF_FFFF;
 pub var uint64: u64 = 0x7FFF_FFFF_FFFF_FFFF;
 
-// pub var int128: i128 = 0xFFFF_FFFF_FFFF_FFFF_1234_5678;
+pub var int128: i128 = 0xFFFF_FFFF_FFFF_FFFF_1234_5678;
 pub var int4: i4 = 7;
 
 pub var size1: usize = 1234;

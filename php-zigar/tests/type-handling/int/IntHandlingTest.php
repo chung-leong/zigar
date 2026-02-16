@@ -14,12 +14,10 @@ final class IntHandlingTest extends TestCase
         $this->assertSame(34567, $m->uint32);
         $this->assertSame(0x1FFF_FFFF_FFFF_FFFF, $m->int64);
         $this->assertSame(0x7FFF_FFFF_FFFF_FFFF, $m->uint64);
+        $this->assertEquals(gmp_init("0xFFFFFFFFFFFFFFFF12345678"), $m->int128);
         $this->assertSame(7, $m->int4);
         $this->assertSame(1234, $m->size1);
         $this->assertSame(-1234, $m->size2);
-
-        // TODO: test big int implementation
-
         $this->assertSame(false, isset($m->private));
 
         $this->expectOutputString(<<<OUTPUT
