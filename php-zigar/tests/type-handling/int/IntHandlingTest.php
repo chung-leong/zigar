@@ -71,7 +71,9 @@ final class IntHandlingTest extends TestCase
     {
         $m = ZigImporter::load(__DIR__ . '/array-of.zig');
         $this->assertSame(1, $m->array1[0]);
-        $this->assertSame(2, $m->array1[1]);
+        $this->assertSame(2, $m->array2[1]);
+        $this->assertSame((string) gmp_init("3"), (string) $m->array3[2]);
+
         for ($i = 0; $i < count($m->array2); $i++) {
             $m->array2[$i] *= 10;
         }

@@ -648,7 +648,10 @@ pub const ZigClassEntry = struct {
                     }
                 } else {
                     // TODO: deal with vectors inside packed struct
-                    const vector = accessor.vector.get(.{ .child = bool, .is_packed = false }, .{});
+                    const vector = accessor.vector.get(.{
+                        .child = .{ .bool = .{} },
+                        .is_packed = false,
+                    }, .{});
                     return .{ .vector = vector };
                 }
             },
@@ -670,10 +673,15 @@ pub const ZigClassEntry = struct {
                             }
                         }
                     } else {
-                        const T = @Type(.{
-                            .int = .{ .signedness = signedness, .bits = bits },
-                        });
-                        const vector = accessor.vector.get(.{ .child = T, .is_packed = false }, .{});
+                        const vector = accessor.vector.get(.{
+                            .child = .{
+                                .int = .{
+                                    .signedness = signedness,
+                                    .bit_size = bits,
+                                },
+                            },
+                            .is_packed = false,
+                        }, .{});
                         return .{ .vector = vector };
                     }
                     break;
@@ -694,7 +702,15 @@ pub const ZigClassEntry = struct {
                             return .{ .primitive = primitive };
                         }
                     }
-                } else {}
+                } else {
+                    const vector = accessor.vector.get(.{
+                        .child = .{ .gmp = .{ .signedness = signedness } },
+                        .is_packed = false,
+                    }, .{
+                        .bit_size = member.bit_size,
+                    });
+                    return .{ .vector = vector };
+                }
             },
             .float => inline for (.{ 16, 32, 64, 80, 128 }) |bits| {
                 if (member.bit_size == bits) {
@@ -711,19 +727,27 @@ pub const ZigClassEntry = struct {
                             }
                         }
                     } else {
-                        const T = @Type(.{
-                            .float = .{ .bits = bits },
-                        });
-                        const vector = accessor.vector.get(.{ .child = T, .is_packed = false }, .{});
+                        const vector = accessor.vector.get(.{
+                            .child = .{ .float = .{ .bit_size = bits } },
+                            .is_packed = false,
+                        }, .{});
                         return .{ .vector = vector };
                     }
                 }
             },
             .void => {
-                const primitive = accessor.void.get(.{}, .{
-                    .byte_offset = byte_offset,
-                });
-                return .{ .primitive = primitive };
+                if (for_scalar) {
+                    const primitive = accessor.void.get(.{}, .{
+                        .byte_offset = byte_offset,
+                    });
+                    return .{ .primitive = primitive };
+                } else {
+                    const vector = accessor.vector.get(.{
+                        .child = .{ .void = .{} },
+                        .is_packed = false,
+                    }, .{});
+                    return .{ .vector = vector };
+                }
             },
             .object, .literal => {
                 if (member.byte_size) |byte_size| {

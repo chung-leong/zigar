@@ -7,7 +7,7 @@ const php = @import("../php.zig");
 const Value = php.Value;
 
 pub const Attributes = struct {
-    bit_offset: ?u3,
+    bit_offset: ?u3 = null,
     bit_size: usize,
 
     pub fn Type(self: @This()) type {

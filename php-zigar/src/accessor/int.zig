@@ -8,8 +8,8 @@ const Value = php.Value;
 
 pub const Attributes = struct {
     signedness: std.builtin.Signedness,
-    bit_offset: ?u3,
-    bit_size: usize,
+    bit_offset: ?u3 = null,
+    bit_size: usize = 0,
 
     pub fn Type(self: @This()) type {
         return @Type(.{

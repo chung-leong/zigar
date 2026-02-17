@@ -110,7 +110,9 @@ pub const Vector = struct {
     getter: *const Getter,
     setter: *const Setter,
 
-    pub const Parameters = struct {};
+    pub const Parameters = struct {
+        bit_size: usize = 0,
+    };
     pub const Getter = fn (*const @This(), *ByteBuffer, usize) Error!Value;
     pub const Setter = fn (*const @This(), *ByteBuffer, usize, *const Value) Error!void;
 

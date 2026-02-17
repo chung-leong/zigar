@@ -15,7 +15,7 @@ var gmp_sign: Value = php.empty_value;
 
 pub const Attributes = struct {
     signedness: std.builtin.Signedness,
-    bit_offset: ?u3,
+    bit_offset: ?u3 = null,
 
     pub fn Type(self: @This()) type {
         return @Type(.{
