@@ -18,7 +18,7 @@ pub const Attributes = struct {
 
     pub fn bitSize(self: *const @This()) ?usize {
         return switch (self.child) {
-            .bool => 1,
+            .bool => if (self.is_packed) @bitSizeOf(bool) else @sizeOf(bool) * 8,
             .int => |int| int.bit_size,
             .gmp => null,
             .float => |float| float.bit_size,

@@ -41,7 +41,7 @@ final class IntHandlingTest extends TestCase
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
         $this->expectOutputString(<<<OUTPUT
         123 456
-        0xdeadbeef 0xbadf00d
+        deadbeef badf00d
 
         OUTPUT);
         $m->print1(123, 456);
