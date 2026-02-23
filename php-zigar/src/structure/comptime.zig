@@ -48,5 +48,6 @@ pub const Comptime = struct {
 
     pub const setStorage = Super.setStorage;
     pub const freeObject = Super.freeObject;
+    pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
 };

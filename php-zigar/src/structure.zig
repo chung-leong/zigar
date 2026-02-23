@@ -322,6 +322,12 @@ pub fn Parent(comptime S: type) type {
             const self = fromObject(obj);
             return try findMethod(self, name);
         }
+
+        pub fn getReferencedObjects(_: *Object, table: *[*c]Value, n: *c_int) ?*HashTable {
+            table.* = null;
+            n.* = 0;
+            return null;
+        }
     };
 }
 

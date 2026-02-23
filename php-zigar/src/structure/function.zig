@@ -129,5 +129,6 @@ pub const Function = struct {
 
     pub const getExtent = Super.getExtent;
     pub const readSelf = Super.readSelf;
+    pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
 };

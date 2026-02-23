@@ -60,5 +60,6 @@ pub const Vector = struct {
     pub const getProperties = Super.getVectorProperties;
     pub const freeObject = Super.freeObject;
     pub const getIterator = Super.getVectorIterator;
+    pub const getReferencedObjects = Super.getReferencedObjects;
     const getIndex = Super.getIndex;
 };

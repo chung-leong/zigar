@@ -38,5 +38,6 @@ pub const VariadicStruct = struct {
     pub const getExtent = Super.getExtent;
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
+    pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
 };

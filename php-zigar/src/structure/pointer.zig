@@ -120,5 +120,6 @@ pub const Pointer = struct {
     pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
     pub const freeObject = Super.freeObject;
+    pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
 };

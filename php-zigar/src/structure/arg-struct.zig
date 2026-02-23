@@ -74,5 +74,6 @@ pub const ArgStruct = struct {
     pub const setStorage = Super.setStorage;
     pub const getExtent = Super.getExtent;
     pub const freeObject = Super.freeObject;
+    pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
 };

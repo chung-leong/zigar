@@ -57,6 +57,7 @@ pub const Struct = struct {
     pub const writeProperty = Super.writeContainerProperty;
     pub const getProperties = Super.getContainerProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
+    pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
     const writeMember = Super.writeMember;
     const throwFieldError = Super.throwFieldError;

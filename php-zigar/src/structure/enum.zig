@@ -198,6 +198,7 @@ pub const Enum = struct {
     pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
     pub const getMethod = Super.getMethod;
+    pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
     const object = Super.object;
 };

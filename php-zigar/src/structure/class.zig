@@ -123,6 +123,7 @@ pub fn Class(comptime S: type) type {
         pub const readProperty = Super.readContainerProperty;
         pub const writeProperty = Super.writeContainerProperty;
         pub const getPropertyPointer = Super.getPropertyPointer;
+        pub const getReferencedObjects = Super.getReferencedObjects;
         const fromObject = Super.fromObject;
         const object = Super.object;
         const readMember = Super.readMember;

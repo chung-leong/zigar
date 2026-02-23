@@ -163,6 +163,7 @@ pub const Union = struct {
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
     pub const getPropertyPointer = Super.getPropertyPointer;
+    pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
     const writeMember = Super.writeMember;
     const findAccessors = Super.findAccessors;
