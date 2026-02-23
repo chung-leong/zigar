@@ -70,6 +70,12 @@ pub const ByteBuffer = struct {
         self.is_read_only = true;
     }
 
+    pub fn copy(self: *@This(), other: *const @This()) !void {
+        if (self.is_read_only) return error.WriteProtected;
+        if (self.bytes.len != other.bytes.len) return error.LengthMismatch;
+        @memcpy(self.bytes, other.bytes);
+    }
+
     pub fn addRef(self: *@This()) void {
         self.ref_count += 1;
     }

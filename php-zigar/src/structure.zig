@@ -126,6 +126,15 @@ pub fn Parent(comptime S: type) type {
 
         // error set cannot be inferred due to recursion
         pub fn writeContainer(self: *S, value: *const Value) accessor.Error!void {
+            if (php.getType(value) == .object) {
+                const obj = php.getValueObject(value) catch unreachable;
+                const class = ZigClassEntry.fromStructure(self);
+                if (obj.ce == class.entry()) {
+                    const obj_struct = ZigObject(S).fromObject(obj).structure();
+                    try self.bytes.copy(obj_struct.bytes);
+                    return;
+                }
+            }
             const ht = try php.getValueHashTable(value);
             var iter: HashTableIterator = .init(ht, .{});
             while (iter.next()) |field_value| {

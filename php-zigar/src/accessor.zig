@@ -23,6 +23,7 @@ pub const Error = error{
     IntegerOverflow,
     InvalidOperation,
     InvalidType,
+    LengthMismatch,
     Missing,
     NotArray,
     NotArrayOrObject,

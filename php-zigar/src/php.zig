@@ -561,7 +561,7 @@ pub fn getValueStream(value: *const Value) !*Stream {
 pub fn getValueHashTable(value: *const Value) !*HashTable {
     return switch (value.u1.v.type) {
         php_h.IS_ARRAY => value.value.arr,
-        php_h.IS_OBJECT => value.value.obj.*.properties,
+        php_h.IS_OBJECT => value.value.obj.*.properties orelse error.NotArrayOrObject,
         else => error.NotArrayOrObject,
     };
 }
