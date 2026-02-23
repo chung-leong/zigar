@@ -1,9 +1,12 @@
 const std = @import("std");
 
-pub const StructB = packed struct {
-    number1: i2 = 1,
-    number2: i137 = 12345678901234567890,
-    state: bool = false,
+pub const Struct = struct {
+    number1: i32 = 123,
+    number2: i32 = 456,
 };
 
-pub var struct_b: StructB = .{};
+pub var struct_var: Struct = .{ .number1 = 789 };
+
+pub fn print() void {
+    std.debug.print("{}\n", .{struct_var});
+}

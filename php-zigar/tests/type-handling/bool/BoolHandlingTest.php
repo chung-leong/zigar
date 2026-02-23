@@ -72,26 +72,53 @@ final class BoolHandlingTest extends TestCase
 
         $this->expectOutputString(<<<OUTPUT
         .{ .state1 = false, .state2 = true }
+        .{ .state1 = true, .state2 = false }
 
         OUTPUT);       
         $m->print();
-        // $m->struct_a = $b;
-        // $m->print();
+        $m->struct_a = $b;
+        $m->print();
     }
 
     public function testHandleBoolInPackedStruct(): void
     {
-        $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
-        $this->assertSame(false, $m->struct_a->state1);
-        $this->assertSame(true, $m->struct_a->state2);
-        $this->assertSame(200, $m->struct_a->number);
-        $this->assertSame(true, $m->struct_a->state3);
+        $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');        
+        $this->assertSame([ 
+            'state1' => false, 
+            'state2' => true,
+            'number' => 200,
+            'state3' => true,
+        ], (array) $m->struct_a);
+        $b = new $m->StructA();
+        $this->assertSame([ 
+            'state1' => true, 
+            'state2' => false,
+            'number' => 100,
+            'state3' => false,
+        ], (array) $b);
+
+        $this->expectOutputString(<<<OUTPUT
+        .{ .state1 = false, .state2 = true, .number = 200, .state3 = true }
+        .{ .state1 = true, .state2 = false, .number = 100, .state3 = false }
+
+        OUTPUT);       
+        $m->print();
+        $m->struct_a = $b;
+        $m->print();
     }
 
     public function testHandleBoolAsComptimeField(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
         $this->assertSame(false, $m->struct_a->state);
+        $b = new $m->StructA([ 'number' => 500 ]);
+        $this->assertSame(false, $b->state);
+
+        $this->expectOutputString(<<<OUTPUT
+        .{ .number = 500, .state = false }
+
+        OUTPUT);       
+        $m->print($b);
     }
 
     public function testHandleBoolInBareUnion(): void

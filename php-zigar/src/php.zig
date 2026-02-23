@@ -1018,7 +1018,7 @@ pub fn createFunction(func_ptr: php_h.zif_handler, name: []const u8) Function {
             .function_name = createInternedString(name),
             .handler = func_ptr,
             .num_args = 0,
-            .fn_flags = php_h.ZEND_ACC_VARIADIC,
+            .fn_flags = php_h.ZEND_ACC_VARIADIC | php_h.ZEND_ACC_PUBLIC,
         },
     };
 }
