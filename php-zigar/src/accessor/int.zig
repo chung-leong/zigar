@@ -39,20 +39,25 @@ pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) ac
             if (buffer.is_read_only) return error.WriteProtected;
             if (acc.params.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
             const ptr: *align(1) AT = @ptrCast(&bytes[acc.params.byte_offset]);
-            const int_value = if (acc.params.transform) |t| get: {
-                const int_bytes = try t.fromValue(value);
-                const int_acc: accessor.Primitive = .{
-                    .params = .{ .byte_offset = 0 },
-                    .getter = undefined,
-                    .setter = undefined,
-                };
-                const transformed_value = try @This().get(&int_acc, int_bytes);
-                break :get &transformed_value;
-            } else value;
-            const long = try php.getValueLong(int_value);
-            const int: T = switch (attrs.signedness) {
-                .signed => @truncate(long),
-                .unsigned => @truncate(@as(c_ulong, @bitCast(long))),
+            const int: T = switch (php.isNull(value)) {
+                false => get: {
+                    const int_value = if (acc.params.transform) |t| transform: {
+                        const int_bytes = try t.fromValue(value);
+                        const int_acc: accessor.Primitive = .{
+                            .params = .{ .byte_offset = 0 },
+                            .getter = undefined,
+                            .setter = undefined,
+                        };
+                        const transformed_value = try @This().get(&int_acc, int_bytes);
+                        break :transform &transformed_value;
+                    } else value;
+                    const long = try php.getValueLong(int_value);
+                    break :get switch (attrs.signedness) {
+                        .signed => @truncate(long),
+                        .unsigned => @truncate(@as(c_ulong, @bitCast(long))),
+                    };
+                },
+                true => 0,
             };
             if (comptime AT == T) ptr.* = int else ptr.value = int;
         }

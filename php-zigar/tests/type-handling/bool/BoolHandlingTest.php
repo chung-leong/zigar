@@ -151,13 +151,20 @@ final class BoolHandlingTest extends TestCase
     {
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertSame(true, $m->error_union);
+
         $this->expectOutputString(<<<OUTPUT
         true
         error.GoldfishDied
+        error.NoMoney
+        false
 
         OUTPUT);       
         $m->print();
         $m->error_union = new Exception('goldfish died');
+        $m->print();
+        $m->error_union = new Exception('no money');
+        $m->print();
+        $m->error_union = false;
         $m->print();
     }
 

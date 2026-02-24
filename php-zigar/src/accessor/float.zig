@@ -35,7 +35,10 @@ pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) ac
             if (buffer.is_read_only) return error.WriteProtected;
             if (acc.params.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
             const ptr: *align(1) AT = @ptrCast(&bytes[acc.params.byte_offset]);
-            const double = try php.getValueDouble(value);
+            const double = switch (php.isNull(value)) {
+                false => try php.getValueDouble(value),
+                true => 0.0,
+            };
             if (comptime AT == T) ptr.* = @floatCast(double) else ptr.value = @floatCast(double);
         }
     };

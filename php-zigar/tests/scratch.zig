@@ -1,12 +1,9 @@
 const std = @import("std");
 
-pub const Struct = struct {
-    number1: i32 = 123,
-    number2: i32 = 456,
-};
+pub const Error = error{ GoldfishDied, NoMoney };
 
-pub var struct_var: Struct = .{ .number1 = 789 };
+pub var error_union: Error!bool = true;
 
 pub fn print() void {
-    std.debug.print("{}\n", .{struct_var});
+    std.debug.print("{any}\n", .{error_union});
 }

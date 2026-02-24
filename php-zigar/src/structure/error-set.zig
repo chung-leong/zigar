@@ -40,7 +40,7 @@ pub const ErrorSet = struct {
     };
     pub const Static = struct {
         value_acc: *accessor.Primitive = undefined,
-        global_error_set: *HashTable = undefined,
+        error_set: *HashTable = undefined,
         closures: struct {
             getMessage: *Closure,
             getCode: *Closure,
@@ -56,29 +56,25 @@ pub const ErrorSet = struct {
             const member = try class.getMember(.instance, 0);
             if (member.accessors != .primitive) return error.InvalidAccessor;
             self.value_acc = &member.accessors.primitive;
-            // loop through static members and add errors to global error set, keyed by value,
-            // name, and error message
-            self.global_error_set = get: {
-                if (class.host.global_error_set) |ht| {
-                    php.addRef(ht);
-                    break :get ht;
-                } else {
-                    const ht = php.createArray();
-                    class.host.global_error_set = ht;
-                    break :get ht;
+            if (class.flags.error_set.is_global) {
+                self.error_set = class.host.global_error_set;
+                php.addRef(self.error_set);
+            } else {
+                self.error_set = php.createArray();
+                // loop through static members and add errors to error set, keyed by value,
+                // name, and error message
+                const static_slots = class.static.template.slots orelse return error.MissingSlots;
+                var iter = class.getMemberIterator(.static);
+                while (iter.next()) |static_member| {
+                    const slot = static_member.slot orelse continue;
+                    const err = try php.getProperty(static_slots, slot);
+                    const err_obj = try php.getValueObject(err);
+                    if (ZigClassEntry.fromObject(err_obj).type != .error_set) continue;
+                    const name = iter.currentName() orelse return error.MissingName;
+                    try self.addCanonical(name, err_obj);
+                    // decrement ref count on class (since the class holds a ref on the error)
+                    class.release();
                 }
-            };
-            const static_slots = class.static.template.slots orelse return error.MissingSlots;
-            var iter = class.getMemberIterator(.static);
-            while (iter.next()) |static_member| {
-                const slot = static_member.slot orelse continue;
-                const err = try php.getProperty(static_slots, slot);
-                const err_obj = try php.getValueObject(err);
-                if (ZigClassEntry.fromObject(err_obj).type != .error_set) continue;
-                const name = iter.currentName() orelse return error.MissingName;
-                try self.addCanonical(name, err_obj);
-                // decrement ref count on class (since the class holds a ref on the error)
-                class.release();
             }
             inline for (std.meta.fields(@TypeOf(self.closures))) |field| {
                 const handler = @field(ErrorSet, field.name);
@@ -87,11 +83,30 @@ pub const ErrorSet = struct {
         }
 
         pub fn deinit(self: *@This()) void {
-            php.release(self.global_error_set);
+            php.release(self.error_set);
             inline for (std.meta.fields(@TypeOf(self.closures))) |field| {
                 const closure = @field(self.closures, field.name);
                 closure.release();
             }
+        }
+
+        pub fn createCanonicalName(self: *@This()) ![]const u8 {
+            const class = ZigClassEntry.fromStatic(self);
+            if (class.flags.error_set.is_global) return try php.allocator.dupe(u8, "global error set");
+            var iter = class.getMemberIterator(.static);
+            const list = try php.allocator.alloc([]const u8, iter.len);
+            defer php.allocator.free(list);
+            var index: usize = 0;
+            while (iter.next()) |_| {
+                list[index] = php.getStringContent(iter.currentName().?);
+                index += 1;
+            }
+            const joined = try std.mem.join(php.allocator, ", ", list);
+            defer php.allocator.free(joined);
+            return if (iter.len <= 1)
+                try std.fmt.allocPrint(php.allocator, "error{{{s}}}", .{joined})
+            else
+                try std.fmt.allocPrint(php.allocator, "error{{ {s} }}", .{joined});
         }
 
         pub fn findCanonical(self: *@This(), value: *const Value) !Value {
@@ -100,7 +115,7 @@ pub const ErrorSet = struct {
                 .long => {
                     const err_code = php.getValueLong(value) catch unreachable;
                     if (err_code == 0) return php.createValueNull();
-                    if (php.getHashEntry(self.global_error_set, err_code)) |err| {
+                    if (php.getHashEntry(self.error_set, err_code)) |err| {
                         php.addRef(err);
                         return err.*;
                     } else |_| {
@@ -126,12 +141,15 @@ pub const ErrorSet = struct {
                             return value.*;
                         } else {
                             const message = try php.invokeMethod(value, "getMessage", .{});
-                            if (php.getHashEntry(self.global_error_set, &message)) |err| {
+                            if (php.getHashEntry(self.error_set, &message)) |err| {
                                 php.addRef(err);
                                 return err.*;
                             } else |_| {
-                                return php.throwExceptionFmt("'{s}' does not correspond to an entry in global error set (zig)", .{
+                                const name = try self.createCanonicalName();
+                                defer php.allocator.free(name);
+                                return php.throwExceptionFmt("'{s}' does not correspond to an entry in {s} (zig)", .{
                                     try php.getValueStringContent(&message),
+                                    name,
                                 });
                             }
                         }
@@ -153,6 +171,7 @@ pub const ErrorSet = struct {
         }
 
         fn addCanonical(self: *@This(), name: *String, err_obj: *Object) !void {
+            const class = ZigClassEntry.fromStatic(self);
             const err_struct = fromObject(err_obj);
             var acc = self.value_acc.*;
             acc.params.transform = null;
@@ -160,12 +179,15 @@ pub const ErrorSet = struct {
             // reference err by integer value
             const long = try php.getValueLong(&err_value);
             var err = php.createValueObject(err_obj);
-            php.setHashEntryRef(self.global_error_set, long, &err);
+            php.setHashEntryRef(self.error_set, long, &err);
+            php.setHashEntryRef(class.host.global_error_set, long, &err);
             // reference err by name
-            php.setHashEntryRef(self.global_error_set, name, &err);
+            php.setHashEntryRef(self.error_set, name, &err);
+            php.setHashEntryRef(class.host.global_error_set, name, &err);
             // reference err by message
             const message = createDecamelizedMessage(name);
-            php.setHashEntryRef(self.global_error_set, message, &err);
+            php.setHashEntryRef(self.error_set, message, &err);
+            php.setHashEntryRef(class.host.global_error_set, message, &err);
             // attach canonical info to err
             const props = try php.allocator.create(Canonical);
             props.* = .{ .message = message };
@@ -346,7 +368,7 @@ pub const ErrorSet = struct {
 
 fn createDecamelizedMessage(name_obj: *const String) *String {
     const name = php.getStringContent(name_obj);
-    var len_required: usize = 1;
+    var len_required: usize = 0;
     for (name, 0..) |c, i| {
         const conversion_needed = check: {
             var needed = false;
@@ -368,7 +390,7 @@ fn createDecamelizedMessage(name_obj: *const String) *String {
         }
     }
     const message = php.createStringWithLength(len_required);
-    const buffer = @constCast(php.getStringContent(message));
+    var buffer = @constCast(php.getStringContent(message));
     var len: usize = 0;
     for (name, 0..) |c, i| {
         const conversion_needed = check: {
@@ -394,6 +416,8 @@ fn createDecamelizedMessage(name_obj: *const String) *String {
             len += 1;
         }
     }
+    // set sentinel
+    buffer.len += 1;
     buffer[len] = 0;
     return message;
 }

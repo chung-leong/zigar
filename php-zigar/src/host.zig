@@ -18,7 +18,7 @@ pub const ModuleHost = struct {
     ref_count: isize = 0,
     module: ?*Module = null,
     library: ?std.DynLib = null,
-    global_error_set: ?*HashTable = null,
+    global_error_set: *HashTable,
     importer: *StructureImporter = undefined,
     dispatcher: *CallDispatcher = undefined,
     memory_map: *BufferMap = undefined,
@@ -32,7 +32,10 @@ pub const ModuleHost = struct {
         if (module.version != Module.current_version) return error.IncorrectVersion;
         var self: *@This() = try php.allocator.create(@This());
         errdefer php.allocator.destroy(self);
-        self.* = .{ .module = module };
+        self.* = .{
+            .module = module,
+            .global_error_set = php.createArray(),
+        };
         self.importer = try .init(self);
         defer self.importer.deinit();
         self.dispatcher = try .init(self);
@@ -62,6 +65,7 @@ pub const ModuleHost = struct {
         // std.debug.print("release host (ref = {d})\n", .{self.ref_count});
         if (self.ref_count == 0) {
             // std.debug.print("freeing host\n", .{});
+            php.release(self.global_error_set);
             self.memory_map.deinit();
             self.dispatcher.deinit();
             if (self.library) |*lib| lib.close();

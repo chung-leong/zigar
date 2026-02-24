@@ -154,7 +154,11 @@ pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) ac
                         const name = php.createPersistentString("gmp_init");
                         gmp_init = php.createValueString(name);
                     }
-                    break :convert try php.invokeFunction(&gmp_init, &.{value.*});
+                    const not_gmp = switch (php.isNull(value)) {
+                        false => value.*,
+                        true => php.createValueLong(0),
+                    };
+                    break :convert try php.invokeFunction(&gmp_init, &.{not_gmp});
                 },
             };
             defer php.release(&gmp_value);

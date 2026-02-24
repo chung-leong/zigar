@@ -489,6 +489,10 @@ pub fn createValueClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*
 
 pub const convertValueToString = php_h._convert_to_string;
 
+pub fn isNull(value: *const Value) bool {
+    return value.u1.v.type == php_h.IS_NULL;
+}
+
 pub fn getValueNull(value: *const Value) !void {
     return switch (value.u1.v.type) {
         php_h.IS_NULL => {},
