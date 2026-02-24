@@ -100,9 +100,15 @@ pub const Union = struct {
     pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
         const self = fromObject(obj);
         self.checkSelector(name) catch |err| {
-            // we have to return a valid pointer here
-            const es = self.throwFieldError(name, err);
-            _ = &es;
+            const class = ZigClassEntry.fromObject(obj);
+            if (!class.flags.@"union".has_tag) {
+                // when the union is untagged, it isn't possible to determine programmatically
+                // whether a field is set or not when optimize is release; the selector is only
+                // available for debug purpose; throwing an error because the operation is illegal
+                const es = self.throwFieldError(name, err);
+                _ = &es;
+            }
+            retval.* = php.createValueNull();
             return retval;
         };
         return Super.readContainerProperty(obj, name, prop_type, cache_slot, retval);

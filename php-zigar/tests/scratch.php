@@ -7,9 +7,4 @@ use Revolt\EventLoop;
 zigar_compile_module(__DIR__ . "/scratch.zig", "/tmp/scratch.zigar");
 $m = zigar_load_module("/tmp/scratch.zigar");
 
-$e = new Exception("goldfish died");
-
-$m->error_union = $e;
-$m->print();
-$m->error_union = false;
-$m->print();
+echo $m->some_union->number1, "\n";

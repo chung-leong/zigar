@@ -65,10 +65,10 @@ const functions = struct {
             .required_num_args = 1,
         };
 
-        pub fn run(_: *ExecuteData, return_value: *Value) !void {
+        pub fn run(ed: *ExecuteData, return_value: *Value) !void {
             const al = php.allocator;
             var module_path: *String = undefined;
-            try php.parseArguments("S", .{&module_path});
+            try php.parseArguments(ed, "S", .{&module_path});
             const so_name = try getSharedLibraryName(al, .this, .this);
             defer al.free(so_name);
             const cwd_path = try std.process.getCwdAlloc(al);
@@ -110,12 +110,12 @@ const functions = struct {
             .required_num_args = 2,
         };
 
-        pub fn run(_: *ExecuteData, _: *Value) !void {
+        pub fn run(ed: *ExecuteData, _: *Value) !void {
             const al = php.allocator;
             var source_path: *String = undefined;
             var module_path: *String = undefined;
             var options: ?*Value = null;
-            try php.parseArguments("PP|A", .{ &source_path, &module_path, &options });
+            try php.parseArguments(ed, "PP|A", .{ &source_path, &module_path, &options });
             const cwd_path = try std.process.getCwdAlloc(al);
             defer php.allocator.free(cwd_path);
             const source_path_resolved = try std.fs.path.resolve(al, &.{

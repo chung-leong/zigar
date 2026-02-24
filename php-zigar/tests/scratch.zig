@@ -2,8 +2,10 @@ const std = @import("std");
 
 pub const Error = error{ GoldfishDied, NoMoney };
 
-pub var error_union: Error!bool = true;
+pub const Union = union(enum) {
+    number1: i32,
+    number2: i32,
+    state: bool,
+};
 
-pub fn print() void {
-    std.debug.print("{any}\n", .{error_union});
-}
+pub var some_union: Union = .{ .state = false };

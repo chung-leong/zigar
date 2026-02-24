@@ -190,7 +190,6 @@ pub const ZigCompiler = struct {
     }
 
     fn acquireConfig(self: *@This(), src_path: []const u8, mod_path: ?[]const u8, options: ?*Value) !void {
-        errdefer |err| std.debug.print("acquireConfig => {}\n", .{err});
         const al = self.allocator();
         self.options = try .init(options);
         const mod_name = std.mem.sliceTo(std.fs.path.basename(mod_path orelse src_path), '.');
@@ -359,26 +358,6 @@ pub const ZigCompiler = struct {
 
     fn runCompiler(self: *@This()) !void {
         const al = self.allocator();
-        // var buffer: [1024]u8 = undefined;
-        // var stdout = std.fs.File.stderr().writer(&buffer);
-        // const si = &stdout.interface;
-        // const info = .{
-        //     .options = self.options,
-        //     .module_name = self.module_name,
-        //     .module_path = self.module_path,
-        //     .module_dir = self.module_dir,
-        //     .module_build_dir = self.module_build_dir,
-        //     .zigar_src_path = self.zigar_src_path,
-        //     .build_file_path = self.build_file_path,
-        //     .package_config_path = self.package_config_path,
-        //     .extra_file_path = self.extra_file_path,
-        //     .output_path = self.output_path,
-        //     .pdb_path = self.pdb_path,
-        //     .compiler_args = self.compiler_args,
-        // };
-        // try std.zon.stringify.serialize(info, .{}, si);
-        // try si.print("\n", .{});
-        // try si.flush();
         var child: std.process.Child = .init(self.compiler_args, al);
         child.cwd = self.module_build_dir;
         child.stderr_behavior = .Pipe;

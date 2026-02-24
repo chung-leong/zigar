@@ -135,7 +135,7 @@ pub const ParseOptions = struct {
     accept_object: bool = true,
 };
 
-pub fn parseArguments(comptime specs: [:0]const u8, arg_ptrs: anytype) !void {
+pub fn parseArguments(ed: *ExecuteData, comptime specs: [:0]const u8, arg_ptrs: anytype) !void {
     const AT = @TypeOf(arg_ptrs);
     const is_tuple = switch (@typeInfo(AT)) {
         .@"struct" => |st| st.is_tuple,
@@ -158,7 +158,6 @@ pub fn parseArguments(comptime specs: [:0]const u8, arg_ptrs: anytype) !void {
         .is_comptime = false,
         .alignment = @alignOf([*c]const u8),
     };
-    var required: u32 = 0;
     inline for (fields, 0..) |field, i| {
         new_fields[i + 2] = .{
             .name = std.fmt.comptimePrint("{d}", .{i + 2}),
@@ -167,8 +166,6 @@ pub fn parseArguments(comptime specs: [:0]const u8, arg_ptrs: anytype) !void {
             .is_comptime = false,
             .alignment = @alignOf(field.type),
         };
-        const T = @typeInfo(field.type).pointer.child;
-        if (@typeInfo(T) != .optional) required += 1;
     }
     const NewAT = @Type(.{
         .@"struct" = .{
@@ -178,8 +175,10 @@ pub fn parseArguments(comptime specs: [:0]const u8, arg_ptrs: anytype) !void {
             .is_tuple = true,
         },
     });
+    var info: ArgPtrCountExtra = undefined;
+    get_argument_info(ed, &info);
     var new_args: NewAT = undefined;
-    new_args[0] = required;
+    new_args[0] = @truncate(info.len);
     new_args[1] = specs.ptr;
     inline for (arg_ptrs, 0..) |arg, i| {
         new_args[2 + i] = arg;
@@ -187,6 +186,14 @@ pub fn parseArguments(comptime specs: [:0]const u8, arg_ptrs: anytype) !void {
     const result = @call(.auto, php_h.zend_parse_parameters, new_args);
     if (result != php_h.SUCCESS) return error.UnableToParseArgument;
 }
+
+const ArgPtrCountExtra = extern struct {
+    ptr: [*]Value,
+    len: usize,
+    extra: bool,
+};
+
+extern fn get_argument_info(*ExecuteData, *ArgPtrCountExtra) void;
 
 pub const ArgumentIterator = struct {
     arg_ptr: [*]Value,
@@ -196,14 +203,6 @@ pub const ArgumentIterator = struct {
     len: usize,
     total: usize,
     index: usize = 0,
-
-    const ArgPtrCountExtra = extern struct {
-        ptr: [*]Value,
-        len: usize,
-        extra: bool,
-    };
-
-    extern fn get_argument_info(*ExecuteData, *ArgPtrCountExtra) void;
 
     pub fn init(ed: *ExecuteData) @This() {
         var info: ArgPtrCountExtra = undefined;

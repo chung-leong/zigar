@@ -125,8 +125,27 @@ final class BoolHandlingTest extends TestCase
     {
         $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
         $this->assertSame(true, $m->union_a->state);
-        // TODO: runtime safe check
-        echo $m->union_a->snumber, "\n";
+        if (ZigImporter::safetyCheck()) {
+            $this->expectExceptionMessage("'state' is active");
+        }
+        $x = $m->union_a->number;
+
+        $b = new $m->UnionA(state: false);
+        $this->assertSame(false, $b->state);
+        $c = new $m->UnionA(number: 123);
+        $this->assertSame(123, $b->number);
+        if (ZigImporter::safetyCheck()) {
+            $this->expectExceptionMessage("'number' is active");
+        }
+        $x = $c->state;
+
+        $m->union_a = $b;
+        $this->assertSame(false, $m->union_a->state);
+        $m->union_a = $c;
+        if (ZigImporter::safetyCheck()) {
+            $this->expectExceptionMessage("'number' is active");
+        }
+        $x = $m->union_a->state;
     }
 
     public function testHandleBoolInTaggedUnion(): void
