@@ -7,4 +7,4 @@ use Revolt\EventLoop;
 zigar_compile_module(__DIR__ . "/scratch.zig", "/tmp/scratch.zigar");
 $m = zigar_load_module("/tmp/scratch.zigar");
 
-echo $m->some_union->number1, "\n";
+print_r($m->vector);

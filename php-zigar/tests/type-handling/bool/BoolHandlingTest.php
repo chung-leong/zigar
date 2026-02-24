@@ -190,8 +190,8 @@ final class BoolHandlingTest extends TestCase
     public function testHandleBoolInVector(): void
     {
         $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
-        $this->assertSame(false, $m->vector[1]);
-        $this->assertSame(true, $m->vector[3]);
+        $this->assertSame([ true, false, false, true ], (array) $m->vector);
+        $this->assertSame([ false, false, false, false ], (array) $m->vector_const);
 
         $this->expectOutputString(<<<OUTPUT
         { true, false, false, true }

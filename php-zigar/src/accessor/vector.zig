@@ -91,7 +91,7 @@ fn setPrimitiveWithSize(comptime attrs: Attributes, comptime bit_offset: ?u3, by
     return acc_ct.setter(&acc, bytes, value);
 }
 
-fn possibleRemainders(comptime bit_size: usize) [8 / std.math.gcd(bit_size, 8)]u8 {
+fn possibleRemainders(comptime bit_size: usize) [8 / std.math.gcd(bit_size, 8)]u3 {
     const gcd = std.math.gcd(bit_size, 8);
     var remainders: [8 / gcd]u3 = undefined;
     var n: usize = 0;
@@ -106,7 +106,7 @@ fn possibleRemainders(comptime bit_size: usize) [8 / std.math.gcd(bit_size, 8)]u
 pub fn get(comptime attrs: Attributes, params: accessor.Vector.Parameters) accessor.Vector {
     const ns = struct {
         pub fn get(acc: *const accessor.Vector, buffer: *ByteBuffer, index: usize) Error!Value {
-            if (attrs.bitSize()) |bit_size| {
+            if (comptime attrs.bitSize()) |bit_size| {
                 if (bit_size == 0) return php.createValueLong(0);
                 const bit_index = index * bit_size;
                 const byte_index = bit_index / 8;
@@ -139,7 +139,7 @@ pub fn get(comptime attrs: Attributes, params: accessor.Vector.Parameters) acces
         }
 
         pub fn set(acc: *const accessor.Vector, buffer: *ByteBuffer, index: usize, value: *const Value) Error!void {
-            if (attrs.bitSize()) |bit_size| {
+            if (comptime attrs.bitSize()) |bit_size| {
                 if (bit_size == 0) return;
                 const bit_index = index * bit_size;
                 const byte_index = bit_index / 8;

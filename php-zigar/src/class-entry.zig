@@ -306,7 +306,7 @@ pub const ZigClassEntry = struct {
             // attach accessors to members
             iter.reset();
             while (iter.next()) |member| {
-                member.accessors = try getAccessors(scope, member);
+                member.accessors = try self.getAccessors(scope, member);
             }
         }
         // set the class name
@@ -621,7 +621,7 @@ pub const ZigClassEntry = struct {
         return try self.createNewObject();
     }
 
-    fn getAccessors(scope: *Scope, member: *Member) !accessor.Any {
+    fn getAccessors(self: @This(), scope: *Scope, member: *Member) !accessor.Any {
         @setEvalBranchQuota(2000000);
         // array accessors don't have an offset
         const for_scalar = member.bit_offset != null;
@@ -648,11 +648,16 @@ pub const ZigClassEntry = struct {
                     }
                 } else {
                     // TODO: deal with vectors inside packed struct
-                    const vector = accessor.vector.get(.{
-                        .child = .{ .bool = .{} },
-                        .is_packed = false,
-                    }, .{});
-                    return .{ .vector = vector };
+                    const is_vector = self.type == .vector;
+                    return inline for (.{ false, true }) |is_packed| {
+                        if (is_vector == is_packed) {
+                            const vector = accessor.vector.get(.{
+                                .child = .{ .bool = .{} },
+                                .is_packed = is_packed,
+                            }, .{});
+                            break .{ .vector = vector };
+                        }
+                    } else unreachable;
                 }
             },
             inline .int, .uint => |t| inline for (0..65) |bits| {
