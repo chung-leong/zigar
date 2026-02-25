@@ -215,7 +215,7 @@ describe('Error functions', function() {
     it('should have expected message', function() {
       const structure = {
         name: 'Hello',
-        type: StructureType.BareUnion,
+        type: StructureType.Union,
         byteSize: 8,
       };
       const err = new MultipleUnionInitializers(structure, 16);
@@ -346,7 +346,7 @@ describe('Error functions', function() {
     it('should have expected message', function() {
       const structure = {
         name: 'Hello',
-        type: StructureType.BareUnion,
+        type: StructureType.Union,
         byteSize: 8,
         instance: {
           members: [
@@ -363,7 +363,7 @@ describe('Error functions', function() {
     it('should have expected message', function() {
       const structure1 = {
         name: 'Hello',
-        type: StructureType.BareUnion,
+        type: StructureType.Union,
         byteSize: 8,
         instance: {
           members: [
@@ -376,7 +376,7 @@ describe('Error functions', function() {
       expect(err1.message).to.contain('cat').and.contain('dog');
       const structure2 = {
         name: 'Hello',
-        type: StructureType.BareUnion,
+        type: StructureType.Union,
         byteSize: 8,
         instance: {
           members: [
@@ -394,7 +394,7 @@ describe('Error functions', function() {
     it('should have expected message', function() {
       const structure = {
         name: 'Hello',
-        type: StructureType.BareUnion,
+        type: StructureType.Union,
         byteSize: 8,
       };
       const err = new InvalidInitializer(structure, 'object', 16);
@@ -415,7 +415,7 @@ describe('Error functions', function() {
     it('should have expected message', function() {
       const structure = {
         name: 'Hello',
-        type: StructureType.BareUnion,
+        type: StructureType.Union,
         byteSize: 8,
         instance: {
           members: [
@@ -432,7 +432,7 @@ describe('Error functions', function() {
     it('should have expected message', function() {
       const structure = {
         name: 'Hello',
-        type: StructureType.BareUnion,
+        type: StructureType.Union,
         byteSize: 8,
         instance: {
           members: [ { name: 'cat' } ]
@@ -444,7 +444,7 @@ describe('Error functions', function() {
     it('should indicate field is comptime when member is present', function() {
       const structure = {
         name: 'Hello',
-        type: StructureType.BareUnion,
+        type: StructureType.Union,
         byteSize: 8,
         instance: {
           members: [ { name: 'cat' } ]
