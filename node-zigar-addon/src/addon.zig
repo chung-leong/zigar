@@ -194,14 +194,16 @@ const ModuleHost = struct {
 
     fn compileJavaScript(env: Env) !Value {
         const js_file_name = switch (@bitSizeOf(usize)) {
-            64 => "dist/addon.64b.js.gz",
-            32 => "dist/addon.32b.js.gz",
+            64 => "dist/addon.64b.js.zst",
+            32 => "dist/addon.32b.js.zst",
             else => unreachable,
         };
         // decompress JS
         var input: std.Io.Reader = .fixed(@embedFile(js_file_name));
-        var decompression_buffer: [std.compress.flate.max_window_len]u8 = undefined;
-        var decompressor: std.compress.flate.Decompress = .init(&input, .gzip, &decompression_buffer);
+        var decompression_buffer: [256 * 1024]u8 = undefined;
+        var decompressor: std.compress.zstd.Decompress = .init(&input, &decompression_buffer, .{
+            .window_len = decompression_buffer.len,
+        });
         var buffer: [512 * 1024]u8 = undefined;
         const len = try decompressor.reader.readSliceShort(&buffer);
         const js_bytes = buffer[0..len];
