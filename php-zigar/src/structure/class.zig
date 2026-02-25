@@ -97,15 +97,16 @@ pub fn Class(comptime S: type) type {
             const static = class.getStaticData(S);
             const Static = @TypeOf(static.*);
             // certain types like enum can cast from other types
-            if (@hasDecl(Static, "cast")) {
-                if (try static.cast(arg)) |value| return value;
+            if (@hasDecl(Static, "castValue")) {
+                if (try static.castValue(arg)) |value| return value;
             }
             const str = php.getValueString(arg) catch {
                 const cast_args = switch (@hasDecl(Static, "cast_args")) {
-                    true => Static.cast_args,
+                    true => static.getCastArgs(),
                     false => "a string",
                 };
-                return php.throwExceptionFmt("casting operation expects " ++ cast_args ++ " as argument, received {s}", .{
+                return php.throwExceptionFmt("casting operation expects {s} as argument, received {s}", .{
+                    cast_args,
                     @tagName(php.getType(arg)),
                 });
             };

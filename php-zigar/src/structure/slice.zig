@@ -108,7 +108,7 @@ pub const Slice = struct {
     }
 
     pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
-        const value_type = php.Type.fromNumber(type_id) catch return php.FAILURE;
+        const value_type = php.Type.fromInt(type_id) catch return php.FAILURE;
         if (value_type == .string) {
             const self = Super.fromObject(obj);
             const value = self.stringify() catch return php.FAILURE;

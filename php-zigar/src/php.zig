@@ -362,8 +362,12 @@ pub const Type = enum(u8) {
     reference = php_h.IS_REFERENCE, // 10
     constant_ast = php_h.IS_CONSTANT_AST, // 11
     callable = php_h.IS_CALLABLE, // 12
+    // fake types
+    @"error" = php_h._IS_ERROR, // 15
+    boolean = php_h._IS_BOOL, // 18
+    number = php_h._IS_NUMBER, // 19
 
-    pub fn fromNumber(n: c_int) !@This() {
+    pub fn fromInt(n: c_int) !@This() {
         return std.meta.intToEnum(@This(), n);
     }
 
@@ -486,7 +490,18 @@ pub fn createValueClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*
     return result;
 }
 
-pub const convertValueToString = php_h._convert_to_string;
+pub fn convertValue(value: *Value, desired_type: Type) !void {
+    switch (desired_type) {
+        .boolean => php_h.convert_to_boolean(value),
+        .long => php_h.convert_to_boolean(value),
+        .string => php_h._convert_to_string(value),
+        .array => php_h.convert_to_array(value),
+        .object => php_h.convert_to_object(value),
+        .double => php_h.convert_to_double(value),
+        .null => php_h.convert_to_null(value),
+        else => return error.Unexpected,
+    }
+}
 
 pub fn isNull(value: *const Value) bool {
     return value.u1.v.type == php_h.IS_NULL;

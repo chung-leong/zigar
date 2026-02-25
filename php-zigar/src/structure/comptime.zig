@@ -42,7 +42,7 @@ pub const Comptime = struct {
 
     pub fn stringify(self: *@This()) !Value {
         var value = try self.readSelf();
-        php.convertValueToString(&value);
+        try php.convertValue(&value, .string);
         return value;
     }
 

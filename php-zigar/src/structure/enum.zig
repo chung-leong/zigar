@@ -31,8 +31,6 @@ pub const Enum = struct {
         available_tags: HashTable = undefined,
         class_obj: *Object = undefined,
 
-        pub const cast_args = "an integer, tagged union, or string";
-
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             const member = try class.getMember(.instance, 0);
@@ -64,7 +62,7 @@ pub const Enum = struct {
             php.release(self.class_obj);
         }
 
-        pub fn cast(self: *@This(), value: *Value) !?Value {
+        pub fn castValue(self: *@This(), value: *Value) !?Value {
             switch (php.getType(value)) {
                 .long => return try self.findCanonical(value),
                 .object => {
@@ -82,6 +80,10 @@ pub const Enum = struct {
                 else => {},
             }
             return null;
+        }
+
+        pub fn getCastArgs(_: *@This()) []const u8 {
+            return "an integer, tagged union, or string";
         }
 
         pub fn findCanonical(self: *@This(), key: *const Value) !Value {
@@ -206,7 +208,7 @@ pub const Enum = struct {
     }
 
     pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
-        const value_type = php.Type.fromNumber(type_id) catch return php.FAILURE;
+        const value_type = php.Type.fromInt(type_id) catch return php.FAILURE;
         const self = Super.fromObject(obj);
         retval.* = switch (value_type) {
             .string => try self.stringify(),

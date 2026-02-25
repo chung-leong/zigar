@@ -208,5 +208,14 @@ final class BoolHandlingTest extends TestCase
         $this->expectExceptionMessage("write protected (zig)");
         $m->vector_const[2] = false;
     }   
+
+    public function testConstructBool(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/constructor.zig');
+        $a = new $m->Bool(true);
+        $b = new $m->Bool(false);
+        $this->assertSame(true, (boolean) $a);
+        $this->assertSame(false, (boolean) $b);
+    }
 }
 

@@ -231,6 +231,14 @@ pub fn Parent(comptime S: type) type {
             class.release();
         }
 
+        pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
+            const self = fromObject(obj);
+            const desired_type = php.Type.fromInt(type_id) catch return error.Unexpected;
+            retval.* = try self.readSelf();
+            try php.convertValue(retval, desired_type);
+            return php.SUCCESS;
+        }
+
         pub fn readContainerProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
             _ = prop_type;
             const self = fromObject(obj);
