@@ -31,6 +31,8 @@ pub const Enum = struct {
         available_tags: HashTable = undefined,
         class_obj: *Object = undefined,
 
+        pub const cast_args = "an integer, tagged union, or string";
+
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             const member = try class.getMember(.instance, 0);
@@ -60,6 +62,26 @@ pub const Enum = struct {
         pub fn deinit(self: *@This()) void {
             php.destroyHashTable(&self.available_tags);
             php.release(self.class_obj);
+        }
+
+        pub fn cast(self: *@This(), value: *Value) !?Value {
+            switch (php.getType(value)) {
+                .long => return try self.findCanonical(value),
+                .object => {
+                    const obj = php.getValueObject(value) catch unreachable;
+                    if (ZigClassEntry.get(obj, false)) |value_class| {
+                        if (value_class.type == .@"union") {
+                            // see if the union uses this enum as its tag
+                            const value_static = value_class.getStaticData(structure.Union);
+                            if (value_static.getEnumClass() == ZigClassEntry.fromStatic(self)) {
+                                return try value_static.getEnum(obj);
+                            }
+                        }
+                    }
+                },
+                else => {},
+            }
+            return null;
         }
 
         pub fn findCanonical(self: *@This(), key: *const Value) !Value {

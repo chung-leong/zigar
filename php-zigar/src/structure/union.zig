@@ -73,6 +73,19 @@ pub const Union = struct {
             }
             php.release(self.class_obj);
         }
+
+        pub fn getEnumClass(self: *@This()) ?*ZigClassEntry {
+            if (self.selector) |sel| {
+                if (sel.class.type == .@"enum") return sel.class;
+            }
+            return null;
+        }
+
+        pub fn getEnum(self: *@This(), obj: *Object) !Value {
+            const sel = self.selector orelse return error.Unexpected;
+            const union_struct = ZigObject(Union).fromObject(obj).structure();
+            return try sel.accessors.get(union_struct.bytes);
+        }
     };
     pub const constructor_args = "an array as argument or one named argument";
 

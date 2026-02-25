@@ -1,3 +1,9 @@
 const std = @import("std");
 
-pub var vector: @Vector(4, bool) = .{ true, false, false, true };
+pub const Enum = enum { cat, dog };
+pub const Union = union(Enum) {
+    cat: i32,
+    dog: i32,
+};
+
+pub const tagged_union: Union = .{ .cat = 1234 };

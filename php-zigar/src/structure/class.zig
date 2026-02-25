@@ -88,15 +88,27 @@ pub fn Class(comptime S: type) type {
         pub fn cast(self: *@This(), arg_iter: *ArgumentIterator) !?Value {
             const class = ZigClassEntry.fromStructure(self);
             const byte_size = class.byte_size orelse return error.InvalidType;
-            if (arg_iter.len != 1)
+            if (arg_iter.len != 1) {
                 return php.throwExceptionFmt("casting operation expects 1 argument, received {d}", .{
                     arg_iter.total,
                 });
+            }
             const arg = arg_iter.next().?;
-            const str = php.getValueString(arg) catch
-                return php.throwExceptionFmt("casting operation expects a string as argument, received {s}", .{
+            const static = class.getStaticData(S);
+            const Static = @TypeOf(static.*);
+            // certain types like enum can cast from other types
+            if (@hasDecl(Static, "cast")) {
+                if (try static.cast(arg)) |value| return value;
+            }
+            const str = php.getValueString(arg) catch {
+                const cast_args = switch (@hasDecl(Static, "cast_args")) {
+                    true => Static.cast_args,
+                    false => "a string",
+                };
+                return php.throwExceptionFmt("casting operation expects " ++ cast_args ++ " as argument, received {s}", .{
                     @tagName(php.getType(arg)),
                 });
+            };
             if (str.len != byte_size) {
                 return php.throwExceptionFmt("{s} '{s}' expects {d} bytes, received a string with {d} bytes", .{
                     class.getStructureName(),

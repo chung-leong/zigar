@@ -200,6 +200,14 @@ pub const ZigClassEntry = struct {
         }
     }
 
+    pub fn get(obj: *Object, comptime is_error: bool) ?*@This() {
+        const parent_ce = switch (is_error) {
+            true => global_error_class,
+            false => global_class,
+        };
+        return if (php.instanceOf(obj.ce, parent_ce)) fromEntry(obj.ce) else null;
+    }
+
     pub fn define(host: *Host, info: *Value) !*Object {
         errdefer |err| std.debug.print("define => {}\n", .{err});
         var self: *@This() = try php.allocator.create(@This());
