@@ -107,7 +107,6 @@ pub fn get(comptime attrs: Attributes, params: accessor.Vector.Parameters) acces
     const ns = struct {
         pub fn get(acc: *const accessor.Vector, buffer: *ByteBuffer, index: usize) Error!Value {
             if (comptime attrs.bitSize()) |bit_size| {
-                if (bit_size == 0) return php.createValueLong(0);
                 const bit_index = index * bit_size;
                 const byte_index = bit_index / 8;
                 if (attrs.is_packed) {

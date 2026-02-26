@@ -37,8 +37,9 @@ final class VoidHandlingTest extends TestCase
     public function testHandleVoidInArray(): void
     {
         $m = ZigImporter::load(__DIR__ . '/array-of.zig');
-        $this->assertSame(null, $array[2]);
-        $this->assertSame(null, $array_writable[3]);
+        $this->assertSame(null, $m->array[1]);
+        $this->assertSame([ null, null, null, null ], (array) $m->array);
+        $this->assertSame(null, $m->array_writable[3]);
         $m->array_writable[3] = null;
 
         $this->expectOutputString(<<<OUTPUT

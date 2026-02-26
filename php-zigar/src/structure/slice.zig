@@ -80,6 +80,7 @@ pub const Slice = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const index = try getIndex(key);
+        // TODO: bound check for zero-length element
         retval.* = try static.value_acc.getElement(self, index);
         return retval;
     }

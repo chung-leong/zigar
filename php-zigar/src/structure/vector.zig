@@ -21,6 +21,7 @@ pub const Vector = struct {
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
+            if (class.length == null) return error.Unexpected;
             // fetch the accessor in advance since we know it can only be a of the vector type
             const member = try class.getMember(.instance, 0);
             if (member.accessors != .vector) return error.InvalidAccessor;
@@ -39,6 +40,7 @@ pub const Vector = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const index = try getIndex(key);
+        if (index >= class.length.?) return error.OutOfBound;
         retval.* = try static.value_acc.get(self.bytes, index);
         return retval;
     }
@@ -48,6 +50,7 @@ pub const Vector = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const index = try getIndex(key);
+        if (index >= class.length.?) return error.OutOfBound;
         try static.value_acc.set(self.bytes, index, value);
     }
 

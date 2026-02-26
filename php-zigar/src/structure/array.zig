@@ -21,6 +21,7 @@ pub const Array = struct {
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
+            if (class.length == null) return error.Unexpected;
             const member = try class.getMember(.instance, 0);
             self.value_acc = &member.accessors;
         }
@@ -49,6 +50,8 @@ pub const Array = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const index = try getIndex(key);
+        // need bound check needed here because element might be zero-bit
+        if (index >= class.length.?) return error.OutOfBound;
         retval.* = try static.value_acc.getElement(self, index);
         return retval;
     }
@@ -58,6 +61,7 @@ pub const Array = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const index = try getIndex(key);
+        if (index >= class.length.?) return error.OutOfBound;
         try static.value_acc.setElement(self, index, value);
     }
 
