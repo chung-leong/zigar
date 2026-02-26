@@ -159,6 +159,7 @@ pub const StructureImporter = struct {
             }
         } else {
             buffer = try ByteBuffer.createExternal(&.{});
+            if (copying) buffer.protect();
         }
         errdefer buffer.release();
         try self.host.memory_map.add(buffer);
