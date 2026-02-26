@@ -124,23 +124,53 @@ final class IntHandlingTest extends TestCase
         $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
         $this->assertSame(true, $m->struct_a->state);
         $this->assertSame(5000, $m->struct_a->number);
-        $m->struct_a->number = 5000;
+        $b = new $m->StructA(state: true);
+        $this->assertSame([ 'state' => true, 'number' => 5000 ], (array) $b);
     }
 
     public function testHandleIntInBareUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
         $this->assertSame(1234, $m->union_a->number);
-        $m->union_a->number = 4567;
+        if (ZigImporter::safetyCheck()) {
+            $this->expectExceptionMessage("'number' is active");
+        }
+        $x = $m->union_a->state;
+        $b = new $m->UnionA(number: 4567);
+        $c = new $m->UnionA(state: false);
+        $this->assertSame(4567, $b->number);
+        $this->assertSame(false, $c->state);
+        if (ZigImporter::safetyCheck()) {
+            $this->expectExceptionMessage("'state' is active");
+        }
+        $x = $c->number;
+
+        $m->union_a = $b;
         $this->assertSame(4567, $m->union_a->number);
+        $m->union_a = $c;
+        if (ZigImporter::safetyCheck()) {
+            $this->expectExceptionMessage("'state' is active");
+        }
+        $x = $m->union_a->number;
     }
 
     public function testHandleIntInTaggedUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-tagged-union.zig');
         $this->assertSame(3456, $m->union_a->number);
+        $tag = $m->TagType($m->union_a);
+        $this->assertSame('number', (string) $tag);
+        $this->assertSame(null, $m->union_a->state);
+        $b = new $m->UnionA(number: 123);
+        $c = new $m->UnionA(state: false);
+        $this->assertSame(false, $c->state);
+        $this->assertSame(null, $c->number);
+        $m->union_a = $b;
+        $this->assertSame(123, $m->union_a->number);
         $this->expectExceptionMessage("access of union field 'state' while field 'number' is active");
         $m->union_a->state = false;
+        $m->union_a = $c;
+        $this->assertSame(null, $m->union_a->number);
     }
 
     public function testHandleIntInOptional(): void
@@ -169,7 +199,7 @@ final class IntHandlingTest extends TestCase
 
         $this->expectOutputString(<<<OUTPUT
         3000
-        GoldfishDied
+        error.GoldfishDied
         4000
 
         OUTPUT);
@@ -179,8 +209,9 @@ final class IntHandlingTest extends TestCase
         $m->error_union = 4000;
         $m->print();
 
-        $this->expectException(ZigError);
-        $m->error_union;
+        $m->error_union = new Exception('no money');
+        $this->expectException('ZigError');
+        $x = $m->error_union;
     }
 
     public function testHandleIntInVector(): void
@@ -204,6 +235,15 @@ final class IntHandlingTest extends TestCase
         $m->print1();
         $m->print2();
         $m->print3();
-    }   
+    }
+
+    public function testConstructInt(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/constructor.zig');
+        $a = new $m->Int(1234);
+        $b = new $m->Int(-2);
+        $this->assertSame(1234, (int) $a);
+        $this->assertSame(-2, (int) $b);
+    }
 }
 

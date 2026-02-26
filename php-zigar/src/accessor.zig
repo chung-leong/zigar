@@ -34,6 +34,7 @@ pub const Error = error{
     NotNull,
     NotObject,
     NotString,
+    NotTheSame,
     KeyIsNotString,
     OutOfBound,
     OutOfMemory,
