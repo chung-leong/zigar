@@ -90,6 +90,7 @@ pub const Union = struct {
     pub const constructor_args = "an array as argument or one named argument";
 
     pub fn writeSelf(self: *@This(), value: *const Value) Error!void {
+        if (try self.copySelf(value)) return;
         const ht = try php.getValueHashTable(value);
         var iter: HashTableIterator = .init(ht, .{});
         if (iter.len != 1) {
@@ -180,6 +181,7 @@ pub const Union = struct {
     pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
     pub const readSelf = Super.readSelf;
+    pub const copySelf = Super.copySelf;
     pub const freeObject = Super.freeObject;
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getReferencedObjects = Super.getReferencedObjects;

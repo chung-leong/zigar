@@ -216,6 +216,10 @@ final class BoolHandlingTest extends TestCase
         $b = new $m->Bool(false);
         $this->assertSame(true, (boolean) $a);
         $this->assertSame(false, (boolean) $b);
+        $c = $m->Bool("\x00");
+        $d = $m->Bool("\x01");
+        $this->assertSame(false, (boolean) $c);
+        $this->assertSame(true, (boolean) $d);
     }
 }
 
