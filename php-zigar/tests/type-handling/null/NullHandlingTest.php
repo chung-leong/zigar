@@ -26,14 +26,25 @@ final class NullHandlingTest extends TestCase
     public function testHandleNullInArray(): void
     {
         $m = ZigImporter::load(__DIR__ . '/array-of.zig');
-        for ($i = 0; $i < 4; $i++) {
-            $this->assertSame(null, $m->array[$i]);
-        }
+        $this->assertSame([ null, null, null, null ], (array) $m->array);
     }
 
     public function testHandleNullInStruct(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
+        $this->assertSame([ 'empty1' => null, 'empty2' => null, 'hello' => 1234 ], (array) $m->struct_a);
+
+        $this->expectExceptionMessage("write protection");
+        $x = new $m->StructA(empty1: null);
+
+        $b = new $m->StructA(hello: 234);
+        $this->assertSame([ 'empty1' => null, 'empty2' => null, 'hello' => 234 ], (array) $b);
+
+        $this->expectOutputString(<<<OUTPUT
+        .{ .empty1 = null, .empty2 = null, .hello = 1234 }
+
+        OUTPUT);
+        $m->print();
     }
 
     public function testHandleNullInPackedStruct(): void
@@ -45,6 +56,9 @@ final class NullHandlingTest extends TestCase
     public function testHandleNullAsComptimeField(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
+        $this->assertSame(null, $m->struct_a->empty);
+        $b = new $m->StructA(number: 500);
+        $this->assertSame(null, $b->empty);
     }
 
     public function testHandleNullInBareUnion(): void
@@ -56,6 +70,16 @@ final class NullHandlingTest extends TestCase
     public function testHandleNullInTaggedUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-tagged-union.zig');
+        $this->assertSame(null, $m->union_a->empty);
+        $tag = $m->TagType($m->union_a);
+        $this->assertSame($m->TagType->empty, $tag);
+        $this->assertSame(null, $m->union_a->number);
+
+        $b = new $m->UnionA(number: 777);
+        $this->assertSame([ 'number' => 777 ], (array) $b);
+
+        $this->expectExceptionMessage("write protection");
+        $x = new $m->UnionA(empty: null);
     }
 
     public function testHandleNullInOptional(): void
@@ -83,6 +107,12 @@ final class NullHandlingTest extends TestCase
     {
         $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+    }
+
+    public function testConstructNull(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/constructor.zig');
+        $this->assertSame(false, isset($m->Null));
     }
 }
 
