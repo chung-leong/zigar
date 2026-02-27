@@ -75,6 +75,8 @@ pub const Enum = struct {
                                 return try value_static.getEnum(obj);
                             }
                         }
+                    } else if (isGMP(obj)) {
+                        return self.findCanonical(value) catch php.createValueNull();
                     }
                 },
                 else => {},
@@ -90,8 +92,8 @@ pub const Enum = struct {
             const class = ZigClassEntry.fromStatic(self);
             switch (php.getType(key)) {
                 .long => {
-                    const enum_code = php.getValueLong(key) catch unreachable;
-                    if (php.getHashEntry(&self.available_tags, enum_code)) |tag| {
+                    const tag_code = php.getValueLong(key) catch unreachable;
+                    if (php.getHashEntry(&self.available_tags, tag_code)) |tag| {
                         php.addRef(tag);
                         return tag.*;
                     } else |err| {
@@ -101,9 +103,8 @@ pub const Enum = struct {
                             var acc = self.value_acc.*;
                             acc.params.transform = null;
                             try acc.set(bytes, key);
-                            const tag_code = php.getValueLong(key) catch unreachable;
                             const tag_obj = try class.createObjectFromBuffer(bytes, null);
-                            var buffer: [32]u8 = undefined;
+                            var buffer: [48]u8 = undefined;
                             const text = std.fmt.bufPrint(&buffer, "@enumFromInt({d})", .{tag_code}) catch unreachable;
                             const name = php.createString(text);
                             defer php.release(name);
@@ -122,12 +123,42 @@ pub const Enum = struct {
                     return tag.*;
                 },
                 .object => {
-                    const tag_obj = php.getValueObject(key) catch unreachable;
-                    if (tag_obj.ce == class.entry()) {
+                    const obj = php.getValueObject(key) catch unreachable;
+                    if (obj.ce == class.entry()) {
                         return key.*;
+                    } else if (isGMP(obj)) {
+                        var key_copy = key.*;
+                        php.addRef(&key_copy);
+                        try php.convertValue(&key_copy, .string);
+                        defer php.release(&key_copy);
+                        const tag_code_str = php.getValueString(&key_copy) catch unreachable;
+                        if (php.getHashEntry(&self.available_tags, tag_code_str)) |tag| {
+                            php.addRef(tag);
+                            return tag.*;
+                        } else |err| {
+                            if (class.flags.@"enum".is_open_ended) {
+                                // create new item
+                                const bytes = try ByteBuffer.createNew(class.byte_size.?, class.alignment);
+                                var acc = self.value_acc.*;
+                                acc.params.transform = null;
+                                try acc.set(bytes, key);
+                                const tag_obj = try class.createObjectFromBuffer(bytes, null);
+                                const text = try std.fmt.allocPrint(php.allocator, "@enumFromInt({s})", .{
+                                    php.getStringContent(tag_code_str),
+                                });
+                                defer php.allocator.free(text);
+                                const name = php.createString(text);
+                                defer php.release(name);
+                                try self.addCanonical(name, tag_obj);
+                                // tag_obj has refcount = 2 at this point, which is correct
+                                return php.createValueObject(tag_obj);
+                            } else {
+                                return err;
+                            }
+                        }
                     } else {
                         return php.throwExceptionFmt("'{s}' is not a tag of enum '{s}' (zig)", .{
-                            php.getStringContent(tag_obj.ce.*.name),
+                            php.getStringContent(obj.ce.*.name),
                             class.getName(),
                         });
                     }
@@ -162,11 +193,23 @@ pub const Enum = struct {
         fn addCanonical(self: *@This(), name: *String, tag_obj: *Object) !void {
             const tag_struct = fromObject(tag_obj);
             // reference tag by integer value
-            const tag_value = try tag_struct.numerify();
+            var tag_value = try tag_struct.numerify();
+            defer php.release(&tag_value);
             var tag = php.createValueObject(tag_obj);
             // reference tag by value
-            const tag_code = try php.getValueLong(&tag_value);
-            php.setHashEntryRef(&self.available_tags, tag_code, &tag);
+            switch (php.getType(&tag_value)) {
+                .long => {
+                    const tag_code = try php.getValueLong(&tag_value);
+                    php.setHashEntryRef(&self.available_tags, tag_code, &tag);
+                },
+                .object => {
+                    // GMP object
+                    try php.convertValue(&tag_value, .string);
+                    const tag_code_str = try php.getValueString(&tag_value);
+                    php.setHashEntryRef(&self.available_tags, tag_code_str, &tag);
+                },
+                else => return error.Unexpected,
+            }
             // reference tag by name
             php.setHashEntryRef(&self.available_tags, name, &tag);
             // attach canonical info to tag
@@ -174,6 +217,12 @@ pub const Enum = struct {
             props.* = .{ .name = name };
             php.addRef(name);
             tag_struct.canonical = props;
+        }
+
+        fn isGMP(obj: *Object) bool {
+            const name_str = obj.ce.*.name orelse return false;
+            const name = php.getStringContent(name_str);
+            return std.mem.eql(u8, name, "GMP");
         }
     };
 

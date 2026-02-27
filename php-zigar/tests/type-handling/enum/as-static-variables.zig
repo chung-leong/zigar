@@ -6,14 +6,14 @@ pub const Pet = enum {
     monkey,
 };
 
-const Donut = enum(u128) {
-    Jelly = 0xffff_ffff_ffff_ffff_ffff_ffff_ffff_fffe,
-    Plain = 0,
+pub const Donut = enum(u128) {
+    jelly = 0xffff_ffff_ffff_ffff_ffff_ffff_ffff_fffe,
+    plain = 0,
     _,
 };
 
 pub var pet: Pet = .cat;
-var donut: Donut = @enumFromInt(5);
+pub var donut: Donut = @enumFromInt(5);
 
 pub fn print() void {
     std.debug.print("{any}\n", .{pet});

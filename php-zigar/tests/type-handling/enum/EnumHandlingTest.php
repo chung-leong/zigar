@@ -10,16 +10,37 @@ final class EnumHandlingTest extends TestCase
         $this->assertSame('dog cat monkey', "{$m->Pet->dog} {$m->Pet->cat} {$m->Pet->monkey}");
         $this->assertSame($m->Pet->cat, $m->Pet(1));
         $this->assertSame(null, $m->Pet(5));
+        $this->assertSame(true, $m->pet instanceof $m->Pet);
+        $this->assertSame($m->Pet->cat, $m->pet);
+        $this->assertSame($m->Donut->plain, $m->Donut(gmp_init('0')));
+        $this->assertSame($m->Donut->jelly, $m->Donut(gmp_init('0xfffffffffffffffffffffffffffffffe')));
+        $this->assertSame('@enumFromInt(5)', (string) $m->Donut(gmp_init('5')));
+
+        $this->expectOutputString(<<<OUTPUT
+        .cat
+        .dog
+
+        OUTPUT);
+        $m->print();
+        $m->pet = $m->Pet->dog;
+        $m->print();        
     }
 
     public function testPrintEnumArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
+        $this->expectOutputString(<<<OUTPUT
+        .cat .dog
+
+        OUTPUT);
+        $m->print($m->Pet->cat, $m->Pet->dog);
     }
 
     public function testReturnEnum(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-return-value.zig');
+        $result = $m->getEnum();
+        $this->assertSame($m->Pet->cat, $result);
     }
 
     public function testHandleEnumInArray(): void
