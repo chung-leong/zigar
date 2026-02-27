@@ -30,6 +30,7 @@ pub const Error = error{
     NotBoolean,
     NotCallable,
     NotDouble,
+    NotFound,
     NotInteger,
     NotNull,
     NotObject,

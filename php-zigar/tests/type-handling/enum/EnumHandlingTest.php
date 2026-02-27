@@ -6,6 +6,10 @@ final class EnumHandlingTest extends TestCase
     public function testImportEnumAsStaticVariables(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
+        $this->assertSame(1, (int) $m->Pet->cat);
+        $this->assertSame('dog cat monkey', "{$m->Pet->dog} {$m->Pet->cat} {$m->Pet->monkey}");
+        $this->assertSame($m->Pet->cat, $m->Pet(1));
+        $this->assertSame(null, $m->Pet(5));
     }
 
     public function testPrintEnumArguments(): void

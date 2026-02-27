@@ -64,7 +64,7 @@ pub const Enum = struct {
 
         pub fn castValue(self: *@This(), value: *Value) !?Value {
             switch (php.getType(value)) {
-                .long => return try self.findCanonical(value),
+                .long => return self.findCanonical(value) catch php.createValueNull(),
                 .object => {
                     const obj = php.getValueObject(value) catch unreachable;
                     if (ZigClassEntry.get(obj, false)) |value_class| {
@@ -94,7 +94,7 @@ pub const Enum = struct {
                     if (php.getHashEntry(&self.available_tags, enum_code)) |tag| {
                         php.addRef(tag);
                         return tag.*;
-                    } else |_| {
+                    } else |err| {
                         if (class.flags.@"enum".is_open_ended) {
                             // create new item
                             const bytes = try ByteBuffer.createNew(class.byte_size.?, class.alignment);
@@ -111,24 +111,15 @@ pub const Enum = struct {
                             // tag_obj has refcount = 2 at this point, which is correct
                             return php.createValueObject(tag_obj);
                         } else {
-                            return php.throwExceptionFmt("enum '{s}' has no tag with value {d} (zig)", .{
-                                class.getName(),
-                                enum_code,
-                            });
+                            return err;
                         }
                     }
                 },
                 .string => {
                     const name = php.getValueStringContent(key) catch unreachable;
-                    if (php.getHashEntry(&self.available_tags, name)) |tag| {
-                        php.addRef(tag);
-                        return tag.*;
-                    } else |_| {
-                        return php.throwExceptionFmt("enum '{s}' has no tag named '{s}' (zig)", .{
-                            class.getName(),
-                            name,
-                        });
-                    }
+                    const tag = try php.getHashEntry(&self.available_tags, name);
+                    php.addRef(tag);
+                    return tag.*;
                 },
                 .object => {
                     const tag_obj = php.getValueObject(key) catch unreachable;
@@ -146,7 +137,23 @@ pub const Enum = struct {
         }
 
         pub fn findCanonicalBytes(self: *@This(), value: *const Value) !*ByteBuffer {
-            const tag = try self.findCanonical(value);
+            const tag = self.findCanonical(value) catch |err| {
+                const class = ZigClassEntry.fromStatic(self);
+                return switch (err) {
+                    error.NotFound => switch (php.getType(value)) {
+                        .string => php.throwExceptionFmt("enum '{s}' has no tag named '{s}' (zig)", .{
+                            class.getName(),
+                            php.getValueStringContent(value) catch unreachable,
+                        }),
+                        .long => php.throwExceptionFmt("enum '{s}' has no tag with value {d} (zig)", .{
+                            class.getName(),
+                            php.getValueLong(value) catch unreachable,
+                        }),
+                        else => unreachable,
+                    },
+                    else => err,
+                };
+            };
             const tag_obj = try php.getValueObject(&tag);
             const tag_struct = fromObject(tag_obj);
             return tag_struct.bytes;
