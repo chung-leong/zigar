@@ -147,21 +147,81 @@ final class EnumHandlingTest extends ZigarTestCase
     public function testHandleEnumInTaggedUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-tagged-union.zig');
+        $this->assertSame($m->Pet->cat, $m->union_a->pet);
+        $tag = $m->TagType($m->union_a);
+        $this->assertSame($m->TagType->pet, $tag);
+        $this->assertSame(null, $m->union_a->number);
+
+        $b = new $m->UnionA(pet: $m->Pet->monkey);
+        $c = new $m->UnionA(number: 123);
+        $this->assertSame($m->Pet->monkey, $b->pet);
+        $this->assertSame(123, $c->number);
+        $this->assertSame(null, $c->pet);
+
+        $m->union_a = $b;
+        $this->assertSame($m->Pet->monkey, $m->union_a->pet);
+        $m->union_a = $c;
+        $this->assertSame(null, $m->union_a->pet);
     }
 
     public function testHandleEnumInOptional(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
+        $this->assertSame($m->Pet->cat, $m->optional);
+
+        $this->expectOutputString(<<<OUTPUT
+        .cat
+        null
+        .monkey
+
+        OUTPUT);
+        $m->print();
+        $m->optional = null;
+        $m->print();
+        $m->optional = $m->Pet->monkey;
+        $m->print();
     }
 
     public function testHandleEnumInErrorUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
+        $this->assertSame($m->Pet->cat, $m->error_union);
+        $this->expectOutputString(<<<OUTPUT
+        .cat
+        error.GoldfishDied
+        .dog
+
+        OUTPUT);
+        $m->print();
+        $m->error_union = new Exception('goldfish died');
+        $m->print();
+        $this->assertExceptionMessage('goldfish died', function() use($m) {
+            $x = $m->error_union;
+        });
+        $m->error_union = $m->Pet->dog;
+        $m->print();
     }
 
     public function testHandleEnumInVector(): void
     {
-        $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        });
     }
+
+    public function testConstructEnum(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/constructor.zig');
+        $a = new $m->Enum($m->Enum->cat);
+        $b = $m->Enum(0);
+        $c = $m->Enum(1);
+        $d = $m->Enum(5);
+        $this->assertSame('cat', (string) $a);
+        $this->assertSame('dog', (string) $b);
+        $this->assertSame('cat', (string) $c);
+        $this->assertSame('@enumFromInt(5)', (string) $c);
+        $e = $m->Enum(pack('S', 1));
+        $this->assertSame('cat', (string) $e);
+    }    
 }
 
