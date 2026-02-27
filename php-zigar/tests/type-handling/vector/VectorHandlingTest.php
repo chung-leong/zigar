@@ -1,7 +1,6 @@
 <?php declare(strict_types=1);
-use PHPUnit\Framework\TestCase;
 
-final class VectorHandlingTest extends TestCase
+final class VectorHandlingTest extends ZigarTestCase
 {   
     public function testImportVectorAsStaticVariables(): void
     {
@@ -60,8 +59,9 @@ final class VectorHandlingTest extends TestCase
 
     public function testHandleVectorInVector(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        });
     }
 }
 

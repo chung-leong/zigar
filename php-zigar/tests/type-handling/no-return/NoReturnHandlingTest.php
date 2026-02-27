@@ -1,18 +1,19 @@
 <?php declare(strict_types=1);
-use PHPUnit\Framework\TestCase;
 
-final class NoReturnHandlingTest extends TestCase
+final class NoReturnHandlingTest extends ZigarTestCase
 {   
     public function testImportNoReturnAsStaticVariables(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
+        });
     }
 
     public function testPrintNoReturnArguments(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
+        });
     }
 
     public function testReturnNoReturn(): void
@@ -24,56 +25,65 @@ final class NoReturnHandlingTest extends TestCase
 
     public function testHandleNoReturnInArray(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/array-of.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/array-of.zig');
+        });
     }
 
     public function testHandleNoReturnInStruct(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
+        });
     }
 
     public function testHandleNoReturnInPackedStruct(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
+        });
     }
 
     public function testHandleNoReturnAsComptimeField(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
+        });
     }
 
     public function testHandleNoReturnInBareUnion(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
+        });
     }
 
     public function testHandleNoReturnInTaggedUnion(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/in-tagged-union.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-tagged-union.zig');
+        });
     }
 
     public function testHandleNoReturnInOptional(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
+        });
     }
 
     public function testHandleNoReturnInErrorUnion(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
+        });
     }
 
     public function testHandleNoReturnInVector(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        });
     }
 }
 

@@ -1,15 +1,15 @@
 <?php declare(strict_types=1);
-use PHPUnit\Framework\TestCase;
 
-final class ComptimeFloatHandlingTest extends TestCase
+final class ComptimeFloatHandlingTest extends ZigarTestCase
 {   
     public function testImportComptimeFloatAsStaticVariables(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
         $this->assertSame(M_PI, $m->pi);
         
-        $this->expectExceptionMessage("write protected (zig)");
-        $m->pi = 1234;
+        $this->assertExceptionMessage("write protected (zig)", function() use($m) {
+            $m->pi = 1234;
+        });
     }
 
     public function testPrintComptimeFloatArguments(): void
@@ -37,8 +37,9 @@ final class ComptimeFloatHandlingTest extends TestCase
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
         $this->assertSame([ 'number1' => 1.1, 'number2' => 2.2 ], (array) $m->struct_a);
 
-        $this->expectExceptionMessage("write protected (zig)");
-        $x = new $m->StructA(number1: 1.0);
+        $this->assertExceptionMessage("write protected (zig)", function() use($m) {
+            $x = new $m->StructA(number1: 1.0);
+        });
 
         $b = new $m->StructA([]);
         $this->assertSame([ 'number1' => 0.1, 'number2' => 0.2 ], (array) $b);
@@ -51,8 +52,9 @@ final class ComptimeFloatHandlingTest extends TestCase
 
     public function testHandleComptimeFloatInPackedStruct(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
+        });
     }
 
     public function testHandleComptimeFloatAsComptimeField(): void
@@ -65,8 +67,9 @@ final class ComptimeFloatHandlingTest extends TestCase
 
     public function testHandleComptimeFloatInBareUnion(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
+        });
     }
 
     public function testHandleComptimeFloatInTaggedUnion(): void
@@ -80,8 +83,9 @@ final class ComptimeFloatHandlingTest extends TestCase
         $b = new $m->UnionA(state: true);
         $this->assertSame([ 'state' => true ], (array) $b);
 
-        $this->expectExceptionMessage("write protected (zig)");
-        $x = new $m->UnionA(number: 0.0);
+        $this->assertExceptionMessage("write protected (zig)", function() use($m) {
+            $x = new $m->UnionA(number: 0.0);
+        });
     }
 
     public function testHandleComptimeFloatInOptional(): void
@@ -95,14 +99,16 @@ final class ComptimeFloatHandlingTest extends TestCase
     {
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertSame(1234.0, $m->error_union1);
-        $this->expectExceptionMessage("goldfish died");
-        $x = $m->error_union2;
+        $this->assertExceptionMessage("goldfish died", function() {
+            $x = $m->error_union2;
+        });
     }
 
     public function testHandleComptimeFloatInVector(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        });
     }   
 
     public function testConstructComptimeFloat(): void

@@ -1,7 +1,6 @@
 <?php declare(strict_types=1);
-use PHPUnit\Framework\TestCase;
 
-final class VoidHandlingTest extends TestCase
+final class VoidHandlingTest extends ZigarTestCase
 {   
     public function testImportVoidAsStaticVariables(): void
     {
@@ -11,8 +10,9 @@ final class VoidHandlingTest extends TestCase
 
         $m->empty_writable = null;
 
-        $this->expectExceptionMessage("write protected (zig)");
-        $m->empty = null;
+        $this->assertExceptionMessage("write protected (zig)", function() use($m) {
+            $m->empty = null;
+        });
     }
 
     public function testPrintVoidArguments(): void
@@ -24,8 +24,9 @@ final class VoidHandlingTest extends TestCase
 
         OUTPUT);
 
-        $this->expectExceptionMessage("not null (zig)");
-        $m->print(123);
+        $this->assertExceptionMessage("not null (zig)", function() use($m) {
+            $m->print(123);
+        });
     }
 
     public function testReturnVoid(): void
@@ -48,11 +49,13 @@ final class VoidHandlingTest extends TestCase
         OUTPUT);
         $m->print();
 
-        $this->expectExceptionMessage("write protected (zig)");
-        $m->array[2] = null;
+        $this->assertExceptionMessage("write protected (zig)", function() use($m) {
+            $m->array[2] = null;
+        });
 
-        $this->expectExceptionMessage("out of bound (zig)");
-        $m->array_writable[4] = null;
+        $this->assertExceptionMessage("out of bound (zig)", function() use($m) {
+            $m->array_writable[4] = null;
+        });
     }
 
     public function testHandleVoidInStruct(): void
@@ -118,26 +121,29 @@ final class VoidHandlingTest extends TestCase
         $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
         $this->assertSame(null, $m->union_a->empty);
         if (ZigImporter::safetyCheck()) {
-            $this->expectExceptionMessage("'empty' is active");
+            $this->assertExceptionMessage("'empty' is active", function() use($m) {
+                $x = $m->union_a->number;
+            });
         }
-        $x = $m->union_a->number;
 
         $b = new $m->UnionA(empty: null);
         $c = new $m->UnionA(number: 123);
         $this->assertSame(null, $b->empty);
         $this->assertSame(123, $c->number);
         if (ZigImporter::safetyCheck()) {
-            $this->expectExceptionMessage("'number' is active");
+            $this->assertExceptionMessage("'number' is active", function() use($c) {
+                $x = $c->number;
+            });
         }
-        $x = $c->number;
 
         $m->union_a = $b;
         $this->assertSame(null, $m->union_a->empty);
         $m->union_a = $c;
         if (ZigImporter::safetyCheck()) {
-            $this->expectExceptionMessage("'number' is active");
+            $this->assertExceptionMessage("'number' is active", function() use($m) {
+                $x = $m->union_a->empty;
+            });
         }
-        $x = $m->union_a->empty;
     }
 
     public function testHandleVoidInTaggedUnion(): void
@@ -172,8 +178,9 @@ final class VoidHandlingTest extends TestCase
         $m->optional = null;
         $m->print();
 
-        $this->expectExceptionMessage("not null (zig)");
-        $m->optional = 123;
+        $this->assertExceptionMessage("not null (zig)", function() use($m) {
+            $m->optional = 123;
+        });
     }
 
     public function testHandleVoidInErrorUnion(): void
@@ -196,14 +203,16 @@ final class VoidHandlingTest extends TestCase
         $m->error_union = null;  
         $m->print();
 
-        $this->expectExceptionMessage("'pig is flying'");
-        $m->error_union = new Exception('pig is flying');
+        $this->assertExceptionMessage("'pig is flying'", function() use($m) {
+            $m->error_union = new Exception('pig is flying');
+        });
     }
 
     public function testHandleVoidInVector(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        });
     }
 
     public function testConstructVoid(): void

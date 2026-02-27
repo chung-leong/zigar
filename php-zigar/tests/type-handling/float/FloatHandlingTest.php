@@ -1,7 +1,6 @@
 <?php declare(strict_types=1);
-use PHPUnit\Framework\TestCase;
 
-final class FloatHandlingTest extends TestCase
+final class FloatHandlingTest extends ZigarTestCase
 {   
     public function testImportFloatAsStaticVariables(): void
     {
@@ -23,8 +22,9 @@ final class FloatHandlingTest extends TestCase
         $m->float64 = 1.234;
         $m->print();
 
-        $this->expectExceptionMessage("write protected (zig)");
-        $m->float16_const = 1.23;
+        $this->assertExceptionMessage("write protected (zig)", function() use($m) {
+            $m->float16_const = 1.23;
+        });
     }
 
     public function testPrintFloatArguments(): void
@@ -129,25 +129,28 @@ final class FloatHandlingTest extends TestCase
         $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
         $this->assertSame(1.234, $m->union_a->number);
         if (ZigImporter::safetyCheck()) {
-            $this->expectExceptionMessage("'number' is active");
+            $this->assertExceptionMessage("'number' is active", function() use($m) {
+                $x = $m->union_a->state;
+            });
         }
-        $x = $m->union_a->state;
 
         $b = new $m->UnionA(number: 4.567);
         $c = new $m->UnionA(state: false);
         $this->assertSame(4.567, $b->number);
         $this->assertSame(false, $b->state);
         if (ZigImporter::safetyCheck()) {
-            $this->expectExceptionMessage("'state' is active");
+            $this->assertExceptionMessage("'state' is active", function() use($c) {
+                $x = $c->number;
+            });
         }
-        $x = $c->number;
         $m->union_a = $b;
         $this->assertSame(4.567, $m->union_a->number);
         $m->union_a = $c;
         if (ZigImporter::safetyCheck()) {
-            $this->expectExceptionMessage("'state' is active");
+            $this->assertExceptionMessage("'state' is active", function() use($m) {
+                $x = $m->union_a->number;
+            });
         }
-        $x = $m->union_a->number;
     }
 
     public function testHandleFloatInTaggedUnion(): void
@@ -209,8 +212,9 @@ final class FloatHandlingTest extends TestCase
         $m->error_union = 8.12;  
         $m->print();
 
-        $this->expectExceptionMessage("'pig is flying'");
-        $m->error_union = new Exception('pig is flying');    
+        $this->assertExceptionMessage("'pig is flying'", function() use($m) {
+            $m->error_union = new Exception('pig is flying');
+        });
     }
 
     public function testHandleFloatInVector(): void

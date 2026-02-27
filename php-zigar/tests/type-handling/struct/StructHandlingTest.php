@@ -1,7 +1,6 @@
 <?php declare(strict_types=1);
-use PHPUnit\Framework\TestCase;
 
-final class StructHandlingTest extends TestCase
+final class StructHandlingTest extends ZigarTestCase
 {   
     public function testImportStructAsStaticVariables(): void
     {

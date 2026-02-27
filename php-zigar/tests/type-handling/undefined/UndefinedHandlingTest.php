@@ -1,7 +1,6 @@
 <?php declare(strict_types=1);
-use PHPUnit\Framework\TestCase;
 
-final class UndefinedHandlingTest extends TestCase
+final class UndefinedHandlingTest extends ZigarTestCase
 {   
     public function testImportUndefinedAsStaticVariables(): void
     {
@@ -32,8 +31,9 @@ final class UndefinedHandlingTest extends TestCase
 
     public function testHandleUndefinedInPackedStruct(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
+        });
     }
 
     public function testHandleUndefinedAsComptimeField(): void
@@ -63,8 +63,9 @@ final class UndefinedHandlingTest extends TestCase
 
     public function testHandleUndefinedInVector(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        });
     }
 }
 

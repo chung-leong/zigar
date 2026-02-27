@@ -1,7 +1,6 @@
 <?php declare(strict_types=1);
-use PHPUnit\Framework\TestCase;
 
-final class BoolHandlingTest extends TestCase
+final class BoolHandlingTest extends ZigarTestCase
 {   
     public function testImportBoolAsStaticVariables(): void
     {
@@ -14,8 +13,9 @@ final class BoolHandlingTest extends TestCase
         $m->bool1 = false;
         $this->assertSame(false, $m->bool1);
 
-        $this->expectExceptionMessage("write protected (zig)");
-        $m->bool4 = false;
+        $this->assertExceptionMessage("write protected (zig)", function() use($m) {
+            $m->bool4 = false;
+        });
 
         $this->expectOutputString('no');
         $m->print();
@@ -58,8 +58,9 @@ final class BoolHandlingTest extends TestCase
         $m->array[2] = true;
         $m->print();
 
-        $this->expectExceptionMessage("write protected (zig)");
-        $m->array_const[2] = false;
+        $this->assertExceptionMessage("write protected (zig)", function() use($m) {
+            $m->array_const[2] = false;
+        });
     }
 
     public function testHandleBoolInStruct(): void
@@ -126,26 +127,29 @@ final class BoolHandlingTest extends TestCase
         $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
         $this->assertSame(true, $m->union_a->state);
         if (ZigImporter::safetyCheck()) {
-            $this->expectExceptionMessage("'state' is active");
+            $this->assertExceptionMessage("'state' is active", function() use($m) {
+                $x = $m->union_a->number;
+            });
         }
-        $x = $m->union_a->number;
 
         $b = new $m->UnionA(state: false);
         $this->assertSame(false, $b->state);
         $c = new $m->UnionA(number: 123);
         $this->assertSame(123, $b->number);
         if (ZigImporter::safetyCheck()) {
-            $this->expectExceptionMessage("'number' is active");
+            $this->assertExceptionMessage("'number' is active", function() use($c) {
+                $x = $c->state;
+            });
         }
-        $x = $c->state;
 
         $m->union_a = $b;
         $this->assertSame(false, $m->union_a->state);
         $m->union_a = $c;
         if (ZigImporter::safetyCheck()) {
-            $this->expectExceptionMessage("'number' is active");
+            $this->assertExceptionMessage("'number' is active", function() use($m) {
+                $x = $m->union_a->state;
+            });
         }
-        $x = $m->union_a->state;
     }
 
     public function testHandleBoolInTaggedUnion(): void
@@ -205,8 +209,9 @@ final class BoolHandlingTest extends TestCase
         $m->vector[2] = true;
         $m->print();
 
-        $this->expectExceptionMessage("write protected (zig)");
-        $m->vector_const[2] = false;
+        $this->assertExceptionMessage("write protected (zig)", function() use($m) {
+            $m->vector_const[2] = false;
+        });
     }   
 
     public function testConstructBool(): void

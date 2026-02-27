@@ -1,7 +1,6 @@
 <?php declare(strict_types=1);
-use PHPUnit\Framework\TestCase;
 
-final class IntHandlingTest extends TestCase
+final class IntHandlingTest extends ZigarTestCase
 {   
     public function testImportIntAsStaticVariables(): void
     {
@@ -32,8 +31,9 @@ final class IntHandlingTest extends TestCase
         $module->uint16 = 88;
         $m->print();
 
-        $this->expectExceptionMessage("write protected (zig)");
-        $m->int16 = -123;
+        $this->assertExceptionMessage("write protected (zig)", function() use($m) {
+            $m->int16 = -123;
+        });
     }
 
     public function testPrintIntArguments(): void
@@ -133,25 +133,28 @@ final class IntHandlingTest extends TestCase
         $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
         $this->assertSame(1234, $m->union_a->number);
         if (ZigImporter::safetyCheck()) {
-            $this->expectExceptionMessage("'number' is active");
+            $this->assertExceptionMessage("'number' is active", function() use($m) {
+                $x = $m->union_a->state;
+            });
         }
-        $x = $m->union_a->state;
         $b = new $m->UnionA(number: 4567);
         $c = new $m->UnionA(state: false);
         $this->assertSame(4567, $b->number);
         $this->assertSame(false, $c->state);
         if (ZigImporter::safetyCheck()) {
-            $this->expectExceptionMessage("'state' is active");
+            $this->assertExceptionMessage("'state' is active", function() use($c) {
+                $x = $c->number;
+            });
         }
-        $x = $c->number;
 
         $m->union_a = $b;
         $this->assertSame(4567, $m->union_a->number);
         $m->union_a = $c;
         if (ZigImporter::safetyCheck()) {
-            $this->expectExceptionMessage("'state' is active");
+            $this->assertExceptionMessage("'state' is active", function() use($m) {
+                $x = $m->union_a->number;
+            });
         }
-        $x = $m->union_a->number;
     }
 
     public function testHandleIntInTaggedUnion(): void
@@ -167,8 +170,9 @@ final class IntHandlingTest extends TestCase
         $this->assertSame(null, $c->number);
         $m->union_a = $b;
         $this->assertSame(123, $m->union_a->number);
-        $this->expectExceptionMessage("access of union field 'state' while field 'number' is active");
-        $m->union_a->state = false;
+        $this->assertExceptionMessage("access of union field 'state' while field 'number' is active", function() use($m) {
+            $m->union_a->state = false;
+        });
         $m->union_a = $c;
         $this->assertSame(null, $m->union_a->number);
     }

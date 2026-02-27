@@ -1,7 +1,6 @@
 <?php declare(strict_types=1);
-use PHPUnit\Framework\TestCase;
 
-final class OutputTest extends TestCase
+final class OutputTest extends ZigarTestCase
 {   
     public function testPrintToPhpOutput(): void
     {

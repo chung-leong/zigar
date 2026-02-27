@@ -1,7 +1,6 @@
 <?php declare(strict_types=1);
-use PHPUnit\Framework\TestCase;
 
-final class OptionalHandlingTest extends TestCase
+final class OptionalHandlingTest extends ZigarTestCase
 {   
     public function testImportOptionalAsStaticVariables(): void
     {
@@ -88,8 +87,9 @@ final class OptionalHandlingTest extends TestCase
 
     public function testHandleOptionalInPackedStruct(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
+        });
     }
 
     public function testHandleOptionalAsComptimeField(): void
@@ -119,26 +119,29 @@ final class OptionalHandlingTest extends TestCase
         $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
         $this->assertSame(1234, $m->union_a->number);
         if (ZigImporter::safetyCheck()) {
-            $this->expectExceptionMessage("'number' is active");
+            $this->assertExceptionMessage("'number' is active", function() use($m) {
+                $x = $m->union_a->state;
+            });
         }
-        $x = $m->union_a->state;
 
         $b = new $m->UnionA(number: null);
         $c = new $m->UnionA(state: false);
         $this->assertSame(null, $b->number);
         $this->assertSame(false, $c->state);
         if (ZigImporter::safetyCheck()) {
-            $this->expectExceptionMessage("'state' is active");
+            $this->assertExceptionMessage("'state' is active", function() use($c) {
+                $x = $c->number;
+            });
         }
-        $x = $c->number;
 
         $m->union_a = $b;
         $this->assertSame(null, $m->union_a->number);
         $m->union_a = $c;
         if (ZigImporter::safetyCheck()) {
-            $this->expectExceptionMessage("'state' is active");
+            $this->assertExceptionMessage("'state' is active", function() use($c) {
+                $x = $c->number;
+            });
         }
-        $x = $c->number;
     }
 
     public function testHandleOptionalInTaggedUnion(): void
@@ -203,8 +206,9 @@ final class OptionalHandlingTest extends TestCase
 
     public function testHandleOptionalInVector(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        });
     }
 
     public function testConstructOptional(): void

@@ -1,7 +1,6 @@
 <?php declare(strict_types=1);
-use PHPUnit\Framework\TestCase;
 
-final class ErrorSetHandlingTest extends TestCase
+final class ErrorSetHandlingTest extends ZigarTestCase
 {   
     public function testImportErrorSetAsStaticVariables(): void
     {

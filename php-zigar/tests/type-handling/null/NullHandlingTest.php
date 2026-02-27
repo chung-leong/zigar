@@ -1,7 +1,6 @@
 <?php declare(strict_types=1);
-use PHPUnit\Framework\TestCase;
 
-final class NullHandlingTest extends TestCase
+final class NullHandlingTest extends ZigarTestCase
 {   
     public function testImportNullAsStaticVariables(): void
     {
@@ -12,15 +11,17 @@ final class NullHandlingTest extends TestCase
     public function testIgnoreFunctionAcceptingNull(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->expectExceptionMessage("Call to undefined method");
-        $m->print(null);
+        $this->assertExceptionMessage("Call to undefined method", function() use($m) {
+            $m->print(null);
+        });
     }
 
     public function testIgnoreFunctionReturningNull(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-return-value.zig');
-        $this->expectExceptionMessage("Call to undefined method");
-        $m->getNull();
+        $this->assertExceptionMessage("Call to undefined method", function() use($m) {
+            $m->getNull();
+        });
     }
 
     public function testHandleNullInArray(): void
@@ -34,8 +35,9 @@ final class NullHandlingTest extends TestCase
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
         $this->assertSame([ 'empty1' => null, 'empty2' => null, 'hello' => 1234 ], (array) $m->struct_a);
 
-        $this->expectExceptionMessage("write protection");
-        $x = new $m->StructA(empty1: null);
+        $this->assertExceptionMessage("write protection", function() use($m) {
+            $x = new $m->StructA(empty1: null);
+        });
 
         $b = new $m->StructA(hello: 234);
         $this->assertSame([ 'empty1' => null, 'empty2' => null, 'hello' => 234 ], (array) $b);
@@ -49,8 +51,9 @@ final class NullHandlingTest extends TestCase
 
     public function testHandleNullInPackedStruct(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
+        });
     }
 
     public function testHandleNullAsComptimeField(): void
@@ -63,8 +66,9 @@ final class NullHandlingTest extends TestCase
 
     public function testHandleNullInBareUnion(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
+        });
     }
 
     public function testHandleNullInTaggedUnion(): void
@@ -78,14 +82,16 @@ final class NullHandlingTest extends TestCase
         $b = new $m->UnionA(number: 777);
         $this->assertSame([ 'number' => 777 ], (array) $b);
 
-        $this->expectExceptionMessage("write protection");
-        $x = new $m->UnionA(empty: null);
+        $this->assertExceptionMessage("write protection", function() use($m) {
+            $x = new $m->UnionA(empty: null);
+        });
     }
 
     public function testHandleNullInOptional(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
+        });
     }
 
     public function testHandleNullInErrorUnion(): void
@@ -99,14 +105,16 @@ final class NullHandlingTest extends TestCase
         OUTPUT);
         $m->print();
 
-        $this->expectExceptionMessage("goldfish died");
-        $m->error_union2;
+        $this->assertExceptionMessage("goldfish died", function() use($m) {
+            $x = $m->error_union2;
+        });
     }
 
     public function testHandleNullInVector(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        });
     }
 
     public function testConstructNull(): void

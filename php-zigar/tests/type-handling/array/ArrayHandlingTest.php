@@ -1,7 +1,6 @@
 <?php declare(strict_types=1);
-use PHPUnit\Framework\TestCase;
 
-final class ArrayHandlingTest extends TestCase
+final class ArrayHandlingTest extends ZigarTestCase
 {   
     public function testImportArrayAsStaticVariables(): void
     {

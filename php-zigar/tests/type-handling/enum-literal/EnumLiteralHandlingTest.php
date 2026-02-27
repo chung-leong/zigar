@@ -1,7 +1,6 @@
 <?php declare(strict_types=1);
-use PHPUnit\Framework\TestCase;
 
-final class EnumLiteralHandlingTest extends TestCase
+final class EnumLiteralHandlingTest extends ZigarTestCase
 {   
     public function testImportEnumLiteralAsStaticVariables(): void
     {
@@ -28,15 +27,17 @@ final class EnumLiteralHandlingTest extends TestCase
     public function testIgnoreFunctionAcceptingEnumLiteral(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->expectExceptionMessage('Call to undefined method');
-        $m->print();
+        $this->assertExceptionMessage('Call to undefined method', function() use($m) {
+            $m->print();
+        });
     }
 
     public function testReturnEnumLiteral(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-return-value.zig');
-        $this->expectExceptionMessage('Call to undefined method');
-        $m->getLiteral();
+        $this->assertExceptionMessage('Call to undefined method', function() use($m) {
+            $m->getLiteral();
+        });
     }
 
     public function testHandleEnumLiteralInArray(): void
@@ -55,8 +56,9 @@ final class EnumLiteralHandlingTest extends TestCase
 
     public function testFailToCompileCodeWithEnumLiteralInPackedStruct(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
+        });
     }
 
     public function testHandleEnumLiteralAsComptimeField(): void
@@ -100,8 +102,9 @@ final class EnumLiteralHandlingTest extends TestCase
 
     public function testFailToCompileCodeContaingEnumLiteralInVector(): void
     {
-        $this->expectExceptionMessage("unable to create module");
-        $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        });
     }
 }
 
