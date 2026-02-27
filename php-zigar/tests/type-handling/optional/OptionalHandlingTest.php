@@ -8,6 +8,28 @@ final class OptionalHandlingTest extends TestCase
         $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
         $this->assertSame(null, $m->i32_empty);
         $this->assertSame(1234, $m->i32_value);
+        $this->assertSame(null, $m->bool_empty);
+        $this->assertSame(true, $m->bool_value);
+        $this->assertSame(null, $m->f64_empty);
+        $this->assertSame(3.14, $m->f64_value);
+        // $this->assertSame(null, $m->struct_empty);
+        // $this->assertSame([ 
+        //     'integer' => 1234, 
+        //     'boolean' => true, 
+        //     'decimal' => 3.5,
+        // ], $m->struct_value);
+
+        $this->expectOutputString(<<<OUTPUT
+        1234
+        null
+        4567
+
+        OUTPUT);
+        $m->print();
+        $m->i32_value = null;
+        $m->print();
+        $m->i32_value = 4567;
+        $m->print();
     }
 
     public function testPrintOptionalArguments(): void
@@ -51,7 +73,17 @@ final class OptionalHandlingTest extends TestCase
     public function testHandleOptionalInStruct(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
-        $this->assertSame("B", "B");
+        $this->assertSame([ 'number1' => null,  'number2' => -444 ], (array) $m->struct_a);
+        $b = new $m->StructA();
+        $this->assertSame([ 'number1' => 123,  'number2' => null ], (array) $b);
+        $this->expectOutputString(<<<OUTPUT
+        .{ .number1 = null, .number2 = -444 }
+        .{ .number1 = 123, .number2 = null }
+
+        OUTPUT);
+        $m->print();
+        $m->struct_a = $b;
+        $m->print();
     }
 
     public function testHandleOptionalInPackedStruct(): void
@@ -63,49 +95,127 @@ final class OptionalHandlingTest extends TestCase
     public function testHandleOptionalAsComptimeField(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
-        $this->assertSame("B", "B");
+        $this->assertSame(5000, $m->struct_a->number1);
+        $this->assertSame(null, $m->struct_a->number2);
+        $this->assertSame([
+            'state' => true,
+            'number1' => 5000, 
+            'number2' => null,
+        ], (array) $m->struct_a);
+
+        $b = new $m->StructA(state: true);
+        $this->assertSame(5000, $b->number1);
+        $this->assertSame(null, $b->number2);
+
+        $this->expectOutputString(<<<OUTPUT
+        .{ .state = true, .number1 = 5000, .number2 = null }
+
+        OUTPUT);
+        $m->print($b);
     }
 
     public function testHandleOptionalInBareUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
-        $this->assertSame("B", "B");
+        $this->assertSame(1234, $m->union_a->number);
+        if (ZigImporter::safetyCheck()) {
+            $this->expectExceptionMessage("'number' is active");
+        }
+        $x = $m->union_a->state;
+
+        $b = new $m->UnionA(number: null);
+        $c = new $m->UnionA(state: false);
+        $this->assertSame(null, $b->number);
+        $this->assertSame(false, $c->state);
+        if (ZigImporter::safetyCheck()) {
+            $this->expectExceptionMessage("'state' is active");
+        }
+        $x = $c->number;
+
+        $m->union_a = $b;
+        $this->assertSame(null, $m->union_a->number);
+        $m->union_a = $c;
+        if (ZigImporter::safetyCheck()) {
+            $this->expectExceptionMessage("'state' is active");
+        }
+        $x = $c->number;
     }
 
     public function testHandleOptionalInTaggedUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-tagged-union.zig');
-        $this->assertSame("B", "B");
+        $this->assertSame(3456, $m->union_a->number);
+        $tag = $m->TagType($m->union_a);
+        $this->assertSame($m->TagType->number, $tag);
+        $this->assertSame(null, $m->union_a->state);
+
+        $b = new $m->UnionA(number: null);
+        $c = new $m->UnionA(state: false);
+        $this->assertSame(null, $b->number);
+        $this->assertSame(false, $c->state);
+        $this->assertSame(null, $c->number);
+
+        $m->union_a = $b;
+        $this->assertSame(null, $m->union_a->number);
+        $m->union_a = $c;
+        $this->assertSame(false, $m->union_a->state);
+        $this->assertSame(null, $m->union_a->number);
     }
 
     public function testHandleOptionalInOptional(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
-        $this->assertSame(null, $m->optional);
+        $this->assertSame(3000, $m->optional);
 
         $this->expectOutputString(<<<OUTPUT
-        void
+        3000
         null
+        -4000
 
         OUTPUT);
         $m->print();
         $m->optional = null;
         $m->print();
-
-        $this->expectExceptionMessage("not null (zig)");
-        $m->optional = 123;
+        $m->optional = -4000;
+        $m->print();
     }
 
     public function testHandleOptionalInErrorUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
-        $this->assertSame("B", "B");
+        $this->assertSame(3000, $m->error_union);
+
+        $this->expectOutputString(<<<OUTPUT
+        3000
+        error.GoldfishDied
+        error.NoMoney
+        -4000
+
+        OUTPUT);
+        $m->print();
+        $m->error_union = $m->Error->GoldfishDied;
+        $m->print();
+        $m->error_union = new Exception('no money');
+        $m->print();
+        $m->error_union = -4000;
+        $m->print();       
     }
 
     public function testHandleOptionalInVector(): void
     {
         $this->expectExceptionMessage("unable to create module");
         $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+    }
+
+    public function testConstructOptional(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/constructor.zig');
+        $a = new $m->Optional(1234);
+        $b = new $m->Optional(null);
+        $this->assertSame(1234, $a->{'$'});
+        $this->assertSame(null, $b->{'$'});
+        $c = $m->Optional(pack("Lcccc", 777, 1, 0, 0, 0));
+        $this->assertEquals(777, $c->{'$'});
     }
 }
 
