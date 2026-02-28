@@ -5,26 +5,64 @@ final class VectorHandlingTest extends ZigarTestCase
     public function testImportVectorAsStaticVariables(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
+        $this->assertSame([ 1.0, 2.0, 3.0, 4.0 ], (array) $m->v1);
+        // TODO
+        // $m->v2 = [ 4, 5, 6 ];
     }
 
     public function testPrintVectorArguments(): void
     {
-        $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
+        $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');        
+        $this->expectOutputString(<<<OUTPUT
+        { 1.1, 2.2, 3.3, 4.4 }
+
+        OUTPUT);
+        $m->print([ 1.1, 2.2, 3.3, 4.4 ]);
     }
 
     public function testReturnVector(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-return-value.zig');
+        $result = $m->getVector();
+        $this->assertSame([ 1, 2, 3, 4 ], (array) $result);
     }
 
     public function testHandleVectorInArray(): void
     {
         $m = ZigImporter::load(__DIR__ . '/array-of.zig');
+        $this->assertSame(2, count($m->array));
+        $this->assertSame([ 1, 2, 3, 4 ], (array) $m->array[0]);
+        $this->assertSame([ 2, 3, 4, 5 ], (array) $m->array[1]);
+
+        $this->expectOutputString(<<<OUTPUT
+        { { 1, 2, 3, 4 }, { 2, 3, 4, 5 } }
+        { { 1, 2, 300, 4 }, { 2, 3, 4, 5000 } }
+
+        OUTPUT);
+        $m->print();
+        $m->array[0][2] = 300;
+        $m->array[0][3] = 5000;
+        $m->print();
     }
 
     public function testHandleVectorInStruct(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
+        $this->assertSame([ 10, 20, 30, 40 ], (array) $m->struct_a->vector1);
+        $this->assertSame([ 11, 21, 31, 41 ], (array) $m->struct_a->vector2);
+        
+        $b = new $m->StructA();
+        $this->assertSame([ 1, 2, 3, 4 ], (array) $b->vector1);
+        $this->assertSame([ 5, 6, 7, 8 ], (array) $b->vector2);
+
+        $this->expectOutputString(<<<OUTPUT
+        .{ .vector1 = { 10, 20, 30, 40 }, .vector2 = { 11, 21, 31, 41 } }
+        .{ .vector1 = { 1, 2, 3, 4 }, .vector2 = { 5, 6, 7, 8 } }
+
+        OUTPUT);
+        $m->print();
+        $m->struct_a = $b;
+        $m->print();
     }
 
     public function testHandleVectorInPackedStruct(): void
@@ -35,11 +73,47 @@ final class VectorHandlingTest extends ZigarTestCase
     public function testHandleVectorAsComptimeField(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
+        $this->assertSame([ 1, 2, 3, 4 ], (array) $m->struct_a->vector);
+
+        $b = new $m->StructA(number: 500);
+        $this->assertSame(500, $b->number);
+        $this->assertSame([ 1, 2, 3, 4 ], (array) $b->vector);
+
+        $this->expectOutputString(<<<OUTPUT
+        .{ .number = 500, .vector = { 1, 2, 3, 4 } }
+
+        OUTPUT);
+        $m->print($b);
     }
 
     public function testHandleVectorInBareUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
+        $this->assertSame([ 1, 2, 3, 4 ], (array) $m->union_a->vector);
+        if (ZigImporter::safetyCheck()) {
+            $this->assertExceptionMessage("'vector' is active", function() use($m) {
+                $x = $m->union_a->number;
+            });
+        }
+
+        $b = new $m->UnionA(vector: [ 5, 6, 7, 8 ]);
+        $this->assertSame([ 5, 6, 7, 8 ], (array) $b->vector);
+        $c = new $m->UnionA(number: 123);
+        $this->assertSame(123, $c->number);
+        if (ZigImporter::safetyCheck()) {
+            $this->assertExceptionMessage("'number' is active", function() use($c) {
+                $x = $c->vector;
+            });
+        }
+
+        $m->union_a = $b;
+        $this->assertSame(false, $m->union_a->vector);
+        $m->union_a = $c;
+        if (ZigImporter::safetyCheck()) {
+            $this->assertExceptionMessage("'number' is active", function() use($m) {
+                $x = $m->union_a->vector;
+            });
+        }
     }
 
     public function testHandleVectorInTaggedUnion(): void
@@ -50,11 +124,40 @@ final class VectorHandlingTest extends ZigarTestCase
     public function testHandleVectorInOptional(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
+        $this->expectOutputString(<<<OUTPUT
+        { 1, 2, 3, 4 }
+        null
+        { 5, 6, 7, 8 }
+        
+        OUTPUT);
+        $m->print();
+        $m->optional = null;
+        $m->print(); 
+        $m->optional = [ 5, 6, 7, 8 ];
+        $m->print();
     }
 
     public function testHandleVectorInErrorUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
+        $this->assertSame([ 1, 2, 3, 4 ], (array) $m->error_union);
+
+        $this->expectOutputString(<<<OUTPUT
+        { 1, 2, 3, 4 }
+        error.GoldfishDied
+        { 10, 20, 30, 40 }
+
+        OUTPUT);
+        $m->print();
+        $m->error_union = $m->Error->GoldfishDied;
+        $m->print();
+        $m->error_union = [ 10, 20, 30, 40 ];
+        $m->print();
+
+        $m->error_union = new Exception('no money');
+        $this->assertExceptionMessage('no money', function() use($m) {
+            $x = $m->error_union;
+        });
     }
 
     public function testHandleVectorInVector(): void

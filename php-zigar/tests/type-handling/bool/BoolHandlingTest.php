@@ -135,7 +135,7 @@ final class BoolHandlingTest extends ZigarTestCase
         $b = new $m->UnionA(state: false);
         $this->assertSame(false, $b->state);
         $c = new $m->UnionA(number: 123);
-        $this->assertSame(123, $b->number);
+        $this->assertSame(123, $c->number);
         if (ZigImporter::safetyCheck()) {
             $this->assertExceptionMessage("'number' is active", function() use($c) {
                 $x = $c->state;
