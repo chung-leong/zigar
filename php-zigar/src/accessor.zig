@@ -115,6 +115,7 @@ pub const Vector = struct {
 
     pub const Parameters = struct {
         bit_size: usize = 0,
+        transform: ?PrimitiveTransform = null,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer, usize) Error!Value;
     pub const Setter = fn (*const @This(), *ByteBuffer, usize, *const Value) Error!void;

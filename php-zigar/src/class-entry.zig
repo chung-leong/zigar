@@ -694,7 +694,9 @@ pub const ZigClassEntry = struct {
                                 },
                             },
                             .is_packed = false,
-                        }, .{});
+                        }, .{
+                            .transform = member.primitiveTransform(),
+                        });
                         return .{ .vector = vector };
                     }
                     break;
@@ -721,6 +723,7 @@ pub const ZigClassEntry = struct {
                         .is_packed = false,
                     }, .{
                         .bit_size = member.bit_size,
+                        .transform = member.primitiveTransform(),
                     });
                     return .{ .vector = vector };
                 }

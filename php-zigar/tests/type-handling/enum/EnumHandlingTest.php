@@ -46,9 +46,9 @@ final class EnumHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/array-of.zig');
         $this->assertSame([ 
-            (int) $m->Pet->monkey,
-            (int) $m->Pet->dog,
-            (int) $m->Pet->cat,
+            $m->Pet->monkey,
+            $m->Pet->dog,
+            $m->Pet->cat,
         ], (array) $m->array);
 
         $this->expectOutputString(<<<OUTPUT

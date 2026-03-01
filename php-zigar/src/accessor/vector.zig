@@ -17,13 +17,18 @@ pub const Attributes = struct {
     is_packed: bool = false,
 
     pub fn bitSize(self: *const @This()) ?usize {
-        return switch (self.child) {
-            .bool => if (self.is_packed) @bitSizeOf(bool) else @sizeOf(bool) * 8,
-            .int => |int| int.bit_size,
-            .gmp => null,
-            .float => |float| float.bit_size,
-            .void => 0,
+        const T = switch (self.child) {
+            .bool => bool,
+            .int => |int| @Type(.{
+                .int = .{ .bits = int.bit_size, .signedness = int.signedness },
+            }),
+            .gmp => return null,
+            .float => |float| @Type(.{
+                .float = .{ .bits = float.bit_size },
+            }),
+            .void => void,
         };
+        return if (self.is_packed) @bitSizeOf(T) else @sizeOf(T) * 8;
     }
 };
 
@@ -49,42 +54,70 @@ fn getPrimitiveAccessors(comptime attrs: Attributes, comptime bit_offset: ?u3) a
     };
 }
 
-fn getPrimitive(comptime attrs: Attributes, comptime bit_offset: ?u3, bytes: *ByteBuffer, byte_offset: usize) !Value {
+fn getPrimitive(
+    comptime attrs: Attributes,
+    comptime bit_offset: ?u3,
+    bytes: *ByteBuffer,
+    byte_offset: usize,
+    transform: ?accessor.PrimitiveTransform,
+) !Value {
     // devirtualize the operation by obtaining the getter at comptime
     const acc_ct = comptime getPrimitiveAccessors(attrs, bit_offset);
     const acc: accessor.Primitive = .{
-        .params = .{ .byte_offset = byte_offset },
+        .params = .{ .byte_offset = byte_offset, .transform = transform },
         .getter = undefined,
         .setter = undefined,
     };
     return acc_ct.getter(&acc, bytes);
 }
 
-fn getPrimitiveWithSize(comptime attrs: Attributes, comptime bit_offset: ?u3, bytes: *ByteBuffer, byte_offset: usize, bit_size: usize) !Value {
+fn getPrimitiveWithSize(
+    comptime attrs: Attributes,
+    comptime bit_offset: ?u3,
+    bytes: *ByteBuffer,
+    byte_offset: usize,
+    transform: ?accessor.PrimitiveTransform,
+    bit_size: usize,
+) !Value {
     // devirtualize the operation by obtaining the getter at comptime
     const acc_ct = comptime getPrimitiveAccessors(attrs, bit_offset);
     const acc: accessor.Primitive = .{
-        .params = .{ .byte_offset = byte_offset, .bit_size = bit_size },
+        .params = .{ .byte_offset = byte_offset, .transform = transform, .bit_size = bit_size },
         .getter = undefined,
         .setter = undefined,
     };
     return acc_ct.getter(&acc, bytes);
 }
 
-fn setPrimitive(comptime attrs: Attributes, comptime bit_offset: ?u3, bytes: *ByteBuffer, byte_offset: usize, value: *const Value) !void {
+fn setPrimitive(
+    comptime attrs: Attributes,
+    comptime bit_offset: ?u3,
+    bytes: *ByteBuffer,
+    byte_offset: usize,
+    transform: ?accessor.PrimitiveTransform,
+    value: *const Value,
+) !void {
     const acc_ct = comptime getPrimitiveAccessors(attrs, bit_offset);
     const acc: accessor.Primitive = .{
-        .params = .{ .byte_offset = byte_offset },
+        .params = .{ .byte_offset = byte_offset, .transform = transform },
         .getter = undefined,
         .setter = undefined,
     };
     return acc_ct.setter(&acc, bytes, value);
 }
 
-fn setPrimitiveWithSize(comptime attrs: Attributes, comptime bit_offset: ?u3, bytes: *ByteBuffer, byte_offset: usize, bit_size: usize, value: *const Value) !void {
+fn setPrimitiveWithSize(
+    comptime attrs: Attributes,
+    comptime bit_offset: ?u3,
+    bytes: *ByteBuffer,
+    byte_offset: usize,
+    transform: ?accessor.PrimitiveTransform,
+    bit_size: usize,
+    value: *const Value,
+) !void {
     const acc_ct = comptime getPrimitiveAccessors(attrs, bit_offset);
     const acc: accessor.Primitive = .{
-        .params = .{ .byte_offset = byte_offset, .bit_size = bit_size },
+        .params = .{ .byte_offset = byte_offset, .transform = transform, .bit_size = bit_size },
         .getter = undefined,
         .setter = undefined,
     };
@@ -106,6 +139,7 @@ fn possibleRemainders(comptime bit_size: usize) [8 / std.math.gcd(bit_size, 8)]u
 pub fn get(comptime attrs: Attributes, params: accessor.Vector.Parameters) accessor.Vector {
     const ns = struct {
         pub fn get(acc: *const accessor.Vector, buffer: *ByteBuffer, index: usize) Error!Value {
+            const transform = acc.params.transform;
             if (comptime attrs.bitSize()) |bit_size| {
                 const bit_index = index * bit_size;
                 const byte_index = bit_index / 8;
@@ -113,11 +147,11 @@ pub fn get(comptime attrs: Attributes, params: accessor.Vector.Parameters) acces
                     const bit_offset = bit_index % 8;
                     return inline for (comptime possibleRemainders(bit_size)) |possible_offset| {
                         if (bit_offset == possible_offset) {
-                            break try getPrimitive(attrs, possible_offset, buffer, byte_index);
+                            break try getPrimitive(attrs, possible_offset, buffer, byte_index, transform);
                         }
                     } else unreachable;
                 } else {
-                    return try getPrimitive(attrs, null, buffer, byte_index);
+                    return try getPrimitive(attrs, null, buffer, byte_index, transform);
                 }
             } else {
                 // gmp accessors don't have comptime known bit size
@@ -128,16 +162,17 @@ pub fn get(comptime attrs: Attributes, params: accessor.Vector.Parameters) acces
                     const bit_offset = bit_index % 8;
                     return inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |possible_offset| {
                         if (bit_offset == possible_offset) {
-                            break try getPrimitiveWithSize(attrs, possible_offset, buffer, byte_index, bit_size);
+                            break try getPrimitiveWithSize(attrs, possible_offset, buffer, byte_index, transform, bit_size);
                         }
                     } else unreachable;
                 } else {
-                    return try getPrimitiveWithSize(attrs, null, buffer, byte_index, bit_size);
+                    return try getPrimitiveWithSize(attrs, null, buffer, byte_index, transform, bit_size);
                 }
             }
         }
 
         pub fn set(acc: *const accessor.Vector, buffer: *ByteBuffer, index: usize, value: *const Value) Error!void {
+            const transform = acc.params.transform;
             if (comptime attrs.bitSize()) |bit_size| {
                 if (bit_size == 0) return;
                 const bit_index = index * bit_size;
@@ -146,11 +181,11 @@ pub fn get(comptime attrs: Attributes, params: accessor.Vector.Parameters) acces
                     const bit_offset = bit_index % 8;
                     return inline for (comptime possibleRemainders(bit_size)) |possible_offset| {
                         if (bit_offset == possible_offset) {
-                            break try setPrimitive(attrs, possible_offset, buffer, byte_index, value);
+                            break try setPrimitive(attrs, possible_offset, buffer, byte_index, transform, value);
                         }
                     } else unreachable;
                 } else {
-                    return try setPrimitive(attrs, null, buffer, byte_index, value);
+                    return try setPrimitive(attrs, null, buffer, byte_index, transform, value);
                 }
             } else {
                 const bit_size = acc.params.bit_size;
@@ -160,11 +195,11 @@ pub fn get(comptime attrs: Attributes, params: accessor.Vector.Parameters) acces
                     const bit_offset = bit_index % 8;
                     return inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |possible_offset| {
                         if (bit_offset == possible_offset) {
-                            break try setPrimitiveWithSize(attrs, possible_offset, buffer, byte_index, bit_size, value);
+                            break try setPrimitiveWithSize(attrs, possible_offset, buffer, byte_index, transform, bit_size, value);
                         }
                     } else unreachable;
                 } else {
-                    return try setPrimitiveWithSize(attrs, null, buffer, byte_index, bit_size, value);
+                    return try setPrimitiveWithSize(attrs, null, buffer, byte_index, transform, bit_size, value);
                 }
             }
         }
