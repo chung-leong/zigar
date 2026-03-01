@@ -172,26 +172,32 @@ pub const ErrorSet = struct {
 
         fn addCanonical(self: *@This(), name: *String, err_obj: *Object) !void {
             const class = ZigClassEntry.fromStatic(self);
+
             const err_struct = fromObject(err_obj);
             var acc = self.value_acc.*;
             acc.params.transform = null;
             const err_value = try acc.get(err_struct.bytes);
             // reference err by integer value
-            const long = try php.getValueLong(&err_value);
-            var err = php.createValueObject(err_obj);
-            php.setHashEntryRef(self.error_set, long, &err);
-            php.setHashEntryRef(class.host.global_error_set, long, &err);
+            const err_code = try php.getValueLong(&err_value);
+            var err, const is_new = if (php.getHashEntry(class.host.global_error_set, err_code)) |e_ptr|
+                .{ e_ptr.*, false }
+            else |_|
+                .{ php.createValueObject(err_obj), true };
+            php.setHashEntryRef(self.error_set, err_code, &err);
             // reference err by name
             php.setHashEntryRef(self.error_set, name, &err);
-            php.setHashEntryRef(class.host.global_error_set, name, &err);
             // reference err by message
             const message = createDecamelizedMessage(name);
             php.setHashEntryRef(self.error_set, message, &err);
-            php.setHashEntryRef(class.host.global_error_set, message, &err);
-            // attach canonical info to err
-            const props = try php.allocator.create(Canonical);
-            props.* = .{ .message = message };
-            err_struct.canonical = props;
+            if (is_new) {
+                php.setHashEntryRef(class.host.global_error_set, name, &err);
+                php.setHashEntryRef(class.host.global_error_set, err_code, &err);
+                php.setHashEntryRef(class.host.global_error_set, message, &err);
+                // attach canonical info to err
+                const props = try php.allocator.create(Canonical);
+                props.* = .{ .message = message };
+                err_struct.canonical = props;
+            }
         }
     };
 
