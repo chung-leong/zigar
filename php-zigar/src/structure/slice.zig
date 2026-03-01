@@ -4,6 +4,7 @@ const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
+const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
 const Value = php.Value;
 const structure = @import("../structure.zig");
@@ -57,9 +58,19 @@ pub const Slice = struct {
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
-        _ = self;
-        _ = value;
-        unreachable;
+        if (try self.copySelf(value)) return;
+        const class = ZigClassEntry.fromStructure(self);
+        const ht = try php.getValueArray(value);
+        const len = self.getLength();
+        var iter: HashTableIterator = .init(ht, .{});
+        const static = class.getStaticData(@This());
+        while (iter.next()) |field_value| {
+            const key = iter.currentIndex() orelse return error.KeyIsNotInteger;
+            if (key < 0) return error.NegativeIndex;
+            const index: usize = @intCast(key);
+            if (index >= len) return error.OutOfBound;
+            try static.value_acc.setElement(self, index, field_value);
+        }
     }
 
     pub fn stringify(self: *@This()) !Value {
@@ -131,6 +142,7 @@ pub const Slice = struct {
 
     pub const copyArguments = Super.copyArguments;
     pub const readSelf = Super.readSelf;
+    pub const copySelf = Super.copySelf;
     pub const getProperties = Super.getVectorProperties;
     pub const freeObject = Super.freeObject;
     pub const getIterator = Super.getVectorIterator;

@@ -58,10 +58,10 @@ final class FloatHandlingTest extends ZigarTestCase
 
         $this->expectOutputString(<<<OUTPUT
         { 1.25, 2.25, 3.25, 4.25 }
+        { 3.5, 3.5, 3.5, 3.5 }
 
         OUTPUT);
         $m->print1();
-        // TODO array assignment
         $m->array1 = [ 3.5, 3.5, 3.5, 3.5 ];
         $m->print1();
     }
@@ -226,11 +226,11 @@ final class FloatHandlingTest extends ZigarTestCase
 
         $this->expectOutputString(<<<OUTPUT
         { 1.5, 2.5, 3.5, 4.5 }
+        { 3.5, 4.5, 5.5, 6.5 }
 
         OUTPUT);
         $m->print1();
-        // TODO vector assignment
-        $m->vector1 = [ 3.5, 3.5, 3.5, 3.5 ];
+        $m->vector1 = [ 3.5, 4.5, 5.5, 6.5 ];
         $m->print1();        
     }
 
