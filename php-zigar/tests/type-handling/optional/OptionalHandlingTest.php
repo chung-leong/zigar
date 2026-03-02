@@ -57,9 +57,9 @@ final class OptionalHandlingTest extends ZigarTestCase
         $this->assertSame(null, $m->array[2]);
 
         $this->expectOutputString(<<<OUTPUT
-        .{ 1, 2, null, 4 }
-        .{ 1, null, null, 4 }
-        .{ 1, null, 777, 4 }
+        { 1, 2, null, 4 }
+        { 1, null, null, 4 }
+        { 1, null, 777, 4 }
 
         OUTPUT);
         $m->print();

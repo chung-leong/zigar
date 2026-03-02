@@ -29,5 +29,5 @@ pub var array_c: [2]StructA = .{
 };
 
 pub fn print() void {
-    std.debug.print("{any}", .{array_c});
+    std.debug.print("{any}\n", .{array_c});
 }
