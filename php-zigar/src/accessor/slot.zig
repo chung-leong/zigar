@@ -100,12 +100,13 @@ const array_slot = struct {
 
     fn vivicateSlot(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize) Error!*Value {
         const ht = try php.getValueHashTable(slots);
-        return php.getHashEntry(ht, acc.params.slot) catch vivicate: {
+        const key: c_long = @intCast(index);
+        return php.getHashEntry(ht, key) catch vivicate: {
             const offset = acc.params.byte_size * index;
             const len = acc.params.byte_size;
             const new_obj = try acc.params.class.createObjectFromSlice(buffer, offset, len);
-            const new_value = php.createValueObject(new_obj);
-            break :vivicate php.insertHashEntry(ht, acc.params.slot, &new_value);
+            var new_value = php.createValueObject(new_obj);
+            break :vivicate php.insertHashEntry(ht, key, &new_value);
         };
     }
 };

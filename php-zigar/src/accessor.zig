@@ -189,7 +189,6 @@ pub const ArraySlot = struct {
 
     pub const Parameters = struct {
         byte_size: usize,
-        slot: usize,
         class: *ZigClassEntry,
         transform: ?ObjectTransform = null,
     };

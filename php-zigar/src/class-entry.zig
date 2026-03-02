@@ -317,6 +317,11 @@ pub const ZigClassEntry = struct {
                 member.accessors = try self.getAccessors(scope, member);
             }
         }
+        if (self.type == .array and self.flags.array.has_slot) {
+            self.instance.slot_count = self.length orelse return error.Unexpected;
+        } else if (self.type == .slice and self.flags.slice.has_slot) {
+            self.instance.slot_count = std.math.maxInt(usize);
+        }
         // set the class name
         self.php_portion.name = get: {
             if (php.getProperty(info, "name")) |value| {
@@ -770,26 +775,38 @@ pub const ZigClassEntry = struct {
                     // compound types like structs and unions are represented by objects
                     // these are stored in slots of their parent objects and are created lazily
                     const class = member.class orelse return error.MissingClass;
-                    return if (scope.slot_count > 1) .{
-                        .multi_slot = accessor.slot.get(.{
-                            .type = .multi_slot,
-                        }, .{
-                            .class = class,
-                            .byte_offset = byte_offset,
-                            .byte_size = byte_size,
-                            .slot = member.slot orelse return error.MissingSlot,
-                            .transform = member.objectTransform(),
-                        }),
-                    } else .{
-                        .single_slot = accessor.slot.get(.{
-                            .type = .single_slot,
-                        }, .{
-                            .class = class,
-                            .byte_offset = byte_offset,
-                            .byte_size = byte_size,
-                            .transform = member.objectTransform(),
-                        }),
-                    };
+                    if (for_scalar) {
+                        return if (scope.slot_count > 1) .{
+                            .multi_slot = accessor.slot.get(.{
+                                .type = .multi_slot,
+                            }, .{
+                                .class = class,
+                                .byte_offset = byte_offset,
+                                .byte_size = byte_size,
+                                .slot = member.slot orelse return error.MissingSlot,
+                                .transform = member.objectTransform(),
+                            }),
+                        } else .{
+                            .single_slot = accessor.slot.get(.{
+                                .type = .single_slot,
+                            }, .{
+                                .class = class,
+                                .byte_offset = byte_offset,
+                                .byte_size = byte_size,
+                                .transform = member.objectTransform(),
+                            }),
+                        };
+                    } else {
+                        return .{
+                            .array_slot = accessor.slot.get(.{
+                                .type = .array_slot,
+                            }, .{
+                                .class = class,
+                                .byte_size = byte_size,
+                                .transform = member.objectTransform(),
+                            }),
+                        };
+                    }
                 } else {
                     // static members don't have a size since they're ready-made objects
                     // that sit in the template slots; this is applicable to comptime field as well
