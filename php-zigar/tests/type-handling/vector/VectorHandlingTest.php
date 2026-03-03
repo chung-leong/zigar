@@ -68,6 +68,19 @@ final class VectorHandlingTest extends ZigarTestCase
     public function testHandleVectorInPackedStruct(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
+        $this->assertSame([ 10, 20, 30, 40 ], (array) $m->struct_a->vector1);
+        $this->assertSame([ 2, 3, 4, 5 ], (array) $m->struct_a->vector2);
+        $this->assertSame(200, $m->struct_a->number);
+        $this->assertSame([ 12, 22, 32, 42 ], (array) $m->struct_a->vector3);
+
+        $this->expectOutputString(<<<OUTPUT
+        .{ .vector1 = { 10, 20, 30, 40 }, .vector2 = { 2, 3, 4, 5 }, .number = 200, .vector3 = { 12, 22, 32, 42 } }
+        .{ .vector1 = { 10, 20, 30, 40 }, .vector2 = { 2, 3, 4, 5 }, .number = 201, .vector3 = { 12, 22, 32, 42 } }
+
+        OUTPUT);
+        $m->print();
+        $m->struct_a->number = 201;
+        $m->print();
     }
 
     public function testHandleVectorAsComptimeField(): void
@@ -119,6 +132,21 @@ final class VectorHandlingTest extends ZigarTestCase
     public function testHandleVectorInTaggedUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-tagged-union.zig');
+        $this->assertSame([ 1, 2, 3, 4 ], (array) $m->union_a->vector);
+        $tag = $m->TagType($m->union_a);
+        $this->assertSame($m->TagType->vector, $tag);
+        $this->assertSame(null, $m->union_a->number);
+
+        $b = new $m->UnionA(vector: [ 5, 6, 7, 8 ]);
+        $c = new $m->UnionA(number: 123);
+        $this->assertSame([ 5, 6, 7, 8 ], (array) $b->vector);
+        $this->assertSame(123, $c->number);
+        $this->assertSame(null, $c->vector);
+
+        $m->union_a = $b;
+        $this->assertSame([ 5, 6, 7, 8 ], (array) $m->union_a->vector);
+        $m->union_a = $c;
+        $this->assertSame(null, $m->union_a->vector);
     }
 
     public function testHandleVectorInOptional(): void

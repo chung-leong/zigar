@@ -6,8 +6,7 @@ final class EnumLiteralHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
         $this->assertSame('hello', $m->hello);
-
-        $worlds = [
+        $this->assertSame([
             'Asgard',
             'Midgard',
             'Jotunheim',
@@ -17,11 +16,7 @@ final class EnumLiteralHandlingTest extends ZigarTestCase
             'Niflheim',
             'Alfheim',
             'Nidavellir',
-        ];
-        foreach($worlds as $index => $world) {
-            // world is a tuple
-            $this->assertSame($world, $m->world[$index]);
-        }
+        ], (array) $m->world);
     }
 
     public function testIgnoreFunctionAcceptingEnumLiteral(): void
@@ -43,15 +38,19 @@ final class EnumLiteralHandlingTest extends ZigarTestCase
     public function testHandleEnumLiteralInArray(): void
     {
         $m = ZigImporter::load(__DIR__ . '/array-of.zig');
-        $words = [ 'hello', 'world', 'dog', 'cat' ];
-        foreach ($words as $key => $word) {
-            $this->assertSame($word, $m->array[$key]);
-        }
+        $this->assertSame([ 'hello', 'world', 'dog', 'cat' ], (array) $m->array);
     }
 
     public function testHandleEnumLiteralInStruct(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
+        $this->assertSame([ 'literal1' => 'hello', 'literal2' => 'world' ], (array) $m->struct_a);
+
+        $this->expectOutputString(<<<OUTPUT
+        .{ .literal1 = .hello, .literal2 = .world }
+
+        OUTPUT);
+        $m->print();
     }
 
     public function testFailToCompileCodeWithEnumLiteralInPackedStruct(): void
@@ -64,16 +63,32 @@ final class EnumLiteralHandlingTest extends ZigarTestCase
     public function testHandleEnumLiteralAsComptimeField(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
+        $this->assertSame('hello', $m->struct_a->literal);
+        
+        $this->expectOutputString(<<<OUTPUT
+        .{ .number = 123, .literal = .hello }
+        .{ .number = 55, .literal = .hello }
+
+        OUTPUT);
+        $m->print();
+        $m->struct_a->number = 55;
+        $m->print();
     }
 
     public function testHandleEnumLiteralInBareUnion(): void
     {
-        $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
+        });
     }
 
     public function testHandleEnumLiteralInTaggedUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-tagged-union.zig');
+        $this->assertSame('hello', $m->union_a->literal);
+        $tag = $m->TagType($m->union_a);
+        $this->assertSame($m->TagType->literal, $tag);
+        $this->assertSame(null, $m->union_a->number);
     }
 
     public function testHandleEnumLiteralInOptional(): void
