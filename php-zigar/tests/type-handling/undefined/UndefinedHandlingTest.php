@@ -12,21 +12,32 @@ final class UndefinedHandlingTest extends ZigarTestCase
     public function testPrintUndefinedArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
+        $this->assertSame(false, isset($m->print));
+        $this->assertSame(false, is_callable([ $m, 'print' ]));
     }
 
     public function testReturnUndefined(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-return-value.zig');
+        $this->assertSame(false, isset($m->getUndefined));
+        $this->assertSame(false, is_callable([ $m, 'getUndefined' ]));
     }
 
     public function testHandleUndefinedInArray(): void
     {
         $m = ZigImporter::load(__DIR__ . '/array-of.zig');
+        $this->assertSame(4, count($m->array));
+        $this->assertSame([ null, null, null, null ], (array) $m->array);
     }
 
     public function testHandleUndefinedInStruct(): void
     {
-        $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
+        $m = ZigImporter::load(__DIR__ . '/in-struct.zig');        
+        $this->assertExceptionMessage("write protected", function() {
+            $x = new $m->StructA(empty1: null);
+        });
+        $b = new $m->StructA();
+        $this->assertSame([ 'empty1' => null, 'empty2' => null ], (array) $b);
     }
 
     public function testHandleUndefinedInPackedStruct(): void
@@ -39,26 +50,46 @@ final class UndefinedHandlingTest extends ZigarTestCase
     public function testHandleUndefinedAsComptimeField(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
+        $this->assertSame(null, $m->struct_a->empty);
+
+        $b = new $m->StructA(number: 500);
+        $this->assertSame(500, $b->number);
+        $this->assertSame(null, $b->empty);
     }
 
     public function testHandleUndefinedInBareUnion(): void
     {
-        $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
+        });
     }
 
     public function testHandleUndefinedInTaggedUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-tagged-union.zig');
+        $this->assertSame(null, $m->union_a->empty);
+        $tag = $m->TagType($m->union_a);
+        $this->assertSame($m->TagType->empty, $tag);
+        $this->assertSame(null, $m->union_a->number);
+        $this->assertExceptionMessage('write protected', function() use($m) {
+            $x = new $m->UnionA(empty: null);
+        });
+        $b = new $m->UnionA(number: 123);
+        $this->assertSame([ 'number' => 123 ], (array) $b);
     }
 
     public function testHandleUndefinedInOptional(): void
     {
-        $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
+        });
     }
 
     public function testHandleUndefinedInErrorUnion(): void
     {
-        $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
+        $this->assertExceptionMessage("unable to create module", function() {
+            $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
+        });
     }
 
     public function testHandleUndefinedInVector(): void
