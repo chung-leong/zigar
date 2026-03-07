@@ -380,6 +380,12 @@ pub const Type = enum(u8) {
     }
 };
 
+pub fn isGMP(obj: *Object) bool {
+    const name_str = obj.ce.*.name orelse return false;
+    const name = getStringContent(name_str);
+    return std.mem.eql(u8, name, "GMP");
+}
+
 pub fn getType(value: *const Value) Type {
     return @enumFromInt(value.u1.v.type);
 }
@@ -1106,6 +1112,18 @@ pub fn getClassEntry(ctype: ClassEntryName) *ClassEntry {
     };
     return @ptrCast(ptr);
 }
+
+pub const PropPurpose = enum(c_uint) {
+    debug = php_h.ZEND_PROP_PURPOSE_DEBUG,
+    array_cast = php_h.ZEND_PROP_PURPOSE_ARRAY_CAST,
+    serialize = php_h.ZEND_PROP_PURPOSE_SERIALIZE,
+    var_export = php_h.ZEND_PROP_PURPOSE_VAR_EXPORT,
+    json = php_h.ZEND_PROP_PURPOSE_JSON,
+
+    pub fn fromInt(n: c_uint) !@This() {
+        return std.meta.intToEnum(@This(), n);
+    }
+};
 
 pub fn throwError(err: anytype) error{ExceptionThrown} {
     const ES = @TypeOf(err);

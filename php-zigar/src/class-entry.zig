@@ -784,7 +784,6 @@ pub const ZigClassEntry = struct {
                                 .byte_offset = byte_offset,
                                 .byte_size = byte_size,
                                 .slot = member.slot orelse return error.MissingSlot,
-                                .transform = member.objectTransform(),
                             }),
                         } else .{
                             .single_slot = accessor.slot.get(.{
@@ -793,7 +792,6 @@ pub const ZigClassEntry = struct {
                                 .class = class,
                                 .byte_offset = byte_offset,
                                 .byte_size = byte_size,
-                                .transform = member.objectTransform(),
                             }),
                         };
                     } else {
@@ -803,7 +801,6 @@ pub const ZigClassEntry = struct {
                             }, .{
                                 .class = class,
                                 .byte_size = byte_size,
-                                .transform = member.objectTransform(),
                             }),
                         };
                     }
@@ -815,14 +812,11 @@ pub const ZigClassEntry = struct {
                             .type = .multi_slot_prebaked,
                         }, .{
                             .slot = member.slot orelse return error.MissingSlot,
-                            .transform = member.objectTransform(),
                         }),
                     } else .{
                         .single_slot_prebaked = accessor.slot.get(.{
                             .type = .single_slot_prebaked,
-                        }, .{
-                            .transform = member.objectTransform(),
-                        }),
+                        }, .{}),
                     };
                 }
             },

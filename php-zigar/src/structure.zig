@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("accessor.zig");
+const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const enums = @import("enums.zig");
 const StructureType = enums.StructureType;
@@ -68,7 +69,7 @@ pub fn Parent(comptime S: type) type {
 
         pub const CacheEntry = extern struct {
             class: ?*const ZigClassEntry,
-            accessors: *const accessor.Any,
+            member: *const ZigClassEntry.Member,
         };
         pub const ByteExtent = struct {
             address: usize,
@@ -137,6 +138,60 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
+        pub fn readGeneric(self: *S, transform: ObjectTransform) !Value {
+            var value = try returnSelf(self);
+            if (transform != .to_value) try transform.apply(&value);
+            return value;
+        }
+
+        pub fn readVector(self: *S, transform: ObjectTransform) !Value {
+            const class = ZigClassEntry.fromStructure(self);
+            return switch (transform) {
+                .to_value => returnSelf(self),
+                .to_plain => create: {
+                    const len = try self.getLength();
+                    const ht = php.createArray();
+                    for (0..len) |i| {
+                        var value = try self.getElement(i);
+                        try transform.apply(&value);
+                        _ = php.appendHashEntry(ht, &value);
+                    }
+                    break :create php.createValueArray(ht);
+                },
+                .to_string => create: {
+                    const flags = class.getFlags(S);
+                    if (!@hasDecl(@TypeOf(flags), "is_string") or !flags.is_string) {
+                        break :create error.Unsupported;
+                    }
+                    const len = try S.getLength(self);
+                    const byte_count = self.bytes.bytes.len;
+                    if (byte_count == len) {
+                        break :create php.createValueStringContent(self.bytes.bytes);
+                    } else if (byte_count == len * 2) {
+                        // TODO: convert to UTF-8
+                        @panic("TODO");
+                    } else {
+                        break :create error.Unexpected;
+                    }
+                },
+                .to_integer => error.Unsupported,
+            };
+        }
+
+        pub fn writeVector(self: *S, value: *const Value) !void {
+            if (try copySelf(self, value)) return;
+            const ht = try php.getValueArray(value);
+            const len = try S.getLength(self);
+            var iter: HashTableIterator = .init(ht, .{});
+            while (iter.next()) |field_value| {
+                const key = iter.currentIndex() orelse return error.KeyIsNotInteger;
+                if (key < 0) return error.NegativeIndex;
+                const index: usize = @intCast(key);
+                if (index >= len) return error.OutOfBound;
+                try S.setElement(self, index, field_value);
+            }
+        }
+
         pub fn copySelf(self: *S, value: *const Value) !bool {
             if (php.getType(value) == .object) {
                 const obj = php.getValueObject(value) catch unreachable;
@@ -150,27 +205,28 @@ pub fn Parent(comptime S: type) type {
             return false;
         }
 
-        pub fn readSelf(self: *S) !Value {
-            // by default just return the object itself
+        pub fn returnSelf(self: *S) !Value {
             const obj = ZigObject(S).fromStructure(self).object();
             php.addRef(obj);
             return php.createValueObject(obj);
         }
 
         pub fn readMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !Value {
-            if (findAccessors(self, name, cache_slot)) |accessors| {
-                return try accessors.get(self);
+            if (findMember(self, name, cache_slot)) |member| {
+                var value = try member.accessors.get(self);
+                if (member.objectTransform()) |ot| try ot.apply(&value);
+                return value;
             } else |err| {
                 if (@hasDecl(S, "readSelf")) {
-                    if (isDollarSign(name)) return try self.readSelf();
+                    if (isDollarSign(name)) return try self.readSelf(.to_value);
                 }
                 return err;
             }
         }
 
         pub fn writeMember(self: *S, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !void {
-            if (findAccessors(self, name, cache_slot)) |accessors| {
-                return try accessors.set(self, value);
+            if (findMember(self, name, cache_slot)) |member| {
+                return try member.accessors.set(self, value);
             } else |err| {
                 if (@hasDecl(S, "writeSelf")) {
                     if (isDollarSign(name)) return try self.writeSelf(value);
@@ -179,18 +235,18 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
-        pub fn findAccessors(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !*const accessor.Any {
+        pub fn findMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !*const ZigClassEntry.Member {
             const class = ZigClassEntry.fromStructure(self);
             const cache_entry: ?*CacheEntry = @ptrCast(cache_slot);
             if (cache_entry) |cached| {
-                if (cached.class == class) return cached.accessors;
+                if (cached.class == class) return cached.member;
             }
             const member = try class.getMember(scope, name);
             if (cache_entry) |cached| {
                 cached.class = class;
-                cached.accessors = &member.accessors;
+                cached.member = member;
             }
-            return &member.accessors;
+            return member;
         }
 
         pub fn findMethod(self: *S, name: *String) !?*php.Function {
@@ -238,9 +294,21 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
+            const desired_type = try php.Type.fromInt(type_id);
+            const transform: ?ObjectTransform = switch (desired_type) {
+                .string => .to_string,
+                .long => .to_integer,
+                else => null,
+            };
             const self = fromObject(obj);
-            const desired_type = php.Type.fromInt(type_id) catch return error.Unexpected;
-            retval.* = try self.readSelf();
+            if (transform) |t| {
+                if (self.readSelf(t)) |value| {
+                    retval.* = value;
+                    return php.SUCCESS;
+                } else |_| {}
+            }
+            // get the value and cast the result
+            retval.* = try self.readSelf(.to_value);
             try php.convertValue(retval, desired_type);
             return php.SUCCESS;
         }
@@ -265,16 +333,34 @@ pub fn Parent(comptime S: type) type {
             return value;
         }
 
+        pub fn readVectorElement(obj: *Object, key: *Value, _: c_int, retval: *Value) !?*Value {
+            const self = fromObject(obj);
+            const index = try getIndex(key);
+            const len = try S.getLength(self);
+            // need bound check needed here because element might be zero-bit
+            if (index >= len) return error.OutOfBound;
+            retval.* = try S.getElement(self, index);
+            return retval;
+        }
+
+        pub fn writeVectorElement(obj: *Object, key: *Value, value: *Value) !void {
+            const self = fromObject(obj);
+            const index = try getIndex(key);
+            const len = try self.getLength();
+            if (index >= len) return error.OutOfBound;
+            try S.setElement(self, index, value);
+        }
+
         pub fn hasVectorElement(obj: *Object, key: *Value, _: c_int) !c_int {
-            const class = ZigClassEntry.fromObject(obj);
+            const self = fromObject(obj);
             const index = getIndex(key) catch return 0;
-            const len = class.length orelse return error.MissingLength;
+            const len = try self.getLength();
             return if (index < len) 1 else 0;
         }
 
         pub fn countVectorElements(obj: *Object, count: *php.Long) !c_int {
-            const class = ZigClassEntry.fromObject(obj);
-            const len = class.length orelse return error.MissingLength;
+            const self = fromObject(obj);
+            const len = try self.getLength();
             if (len > std.math.maxInt(php.Long)) return error.TooLarge;
             count.* = @intCast(len);
             return php.SUCCESS;
@@ -311,14 +397,11 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn getVectorProperties(obj: *Object) !*HashTable {
+            const self = fromObject(obj);
             const ht = php.createArray();
-            var count: c_long = undefined;
-            _ = try S.countElements(obj, &count);
-            var i: c_long = 0;
-            while (i < count) : (i += 1) {
-                var key = php.createValueLong(i);
-                var value: Value = undefined;
-                _ = try S.readElement(obj, &key, 0, &value);
+            const len = try self.getLength();
+            for (0..len) |i| {
+                var value = try self.getElement(i);
                 _ = php.appendHashEntry(ht, &value);
             }
             // same as above
@@ -345,7 +428,7 @@ pub fn Parent(comptime S: type) type {
     };
 }
 
-pub fn invokeFunction(obj: *Object, comptime name: []const u8, args: anytype) RT: {
+pub fn invokeMethod(obj: *Object, comptime name: []const u8, args: anytype) RT: {
     var error_set = error{};
     var payload: ?type = null;
     for (std.meta.fields(@TypeOf(by_enum))) |field| {

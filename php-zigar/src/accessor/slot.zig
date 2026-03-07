@@ -6,6 +6,8 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
 const Value = php.Value;
+const structure = @import("../structure.zig");
+const invokeMethod = structure.invokeMethod;
 
 pub const Attributes = struct {
     type: accessor.SlotAccessorType,
@@ -45,12 +47,13 @@ pub fn get(comptime attrs: Attributes, params: Parameters(attrs)) Accessors(attr
 const multi_slot = struct {
     pub fn get(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, slots: *Value) Error!Value {
         const entry = try vivicateSlot(acc, buffer, slots);
-        return try accessor.read(entry, acc.params.transform);
+        php.addRef(entry);
+        return entry.*;
     }
 
     pub fn set(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, slots: *Value, value: *const Value) Error!void {
         const entry = try vivicateSlot(acc, buffer, slots);
-        try accessor.write(entry, value);
+        try write(entry, value);
     }
 
     fn vivicateSlot(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, slots: *Value) Error!*Value {
@@ -68,12 +71,13 @@ const multi_slot = struct {
 const single_slot = struct {
     pub fn get(acc: *const accessor.SingleSlot, buffer: *ByteBuffer, slot: *Value) Error!Value {
         const entry = try vivicateSlot(acc, buffer, slot);
-        return try accessor.read(entry, acc.params.transform);
+        php.addRef(entry);
+        return entry.*;
     }
 
     pub fn set(acc: *const accessor.SingleSlot, buffer: *ByteBuffer, slot: *Value, value: *const Value) Error!void {
         const entry = try vivicateSlot(acc, buffer, slot);
-        try accessor.write(entry, value);
+        try write(entry, value);
     }
 
     fn vivicateSlot(acc: *const accessor.SingleSlot, buffer: *ByteBuffer, slot: *Value) Error!*Value {
@@ -90,12 +94,13 @@ const single_slot = struct {
 const array_slot = struct {
     pub fn get(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize) Error!Value {
         const entry = try vivicateSlot(acc, buffer, slots, index);
-        return try accessor.read(entry, acc.params.transform);
+        php.addRef(entry);
+        return entry.*;
     }
 
     pub fn set(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize, value: *const Value) Error!void {
         const entry = try vivicateSlot(acc, buffer, slots, index);
-        try accessor.write(entry, value);
+        try write(entry, value);
     }
 
     fn vivicateSlot(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize) Error!*Value {
@@ -115,22 +120,32 @@ const multi_slot_prebaked = struct {
     pub fn get(acc: *const accessor.MultiSlotPrebaked, slots: *Value) Error!Value {
         const ht = try php.getValueHashTable(slots);
         const entry = try php.getHashEntry(ht, acc.params.slot);
-        return try accessor.read(entry, acc.params.transform);
+        php.addRef(entry);
+        return entry.*;
     }
 
     pub fn set(acc: *const accessor.MultiSlotPrebaked, slots: *Value, value: *const Value) Error!void {
         const ht = try php.getValueHashTable(slots);
         const entry = try php.getHashEntry(ht, acc.params.slot);
-        try accessor.write(entry, value);
+        try write(entry, value);
     }
 };
 
 const single_slot_prebaked = struct {
-    pub fn get(acc: *const accessor.SingleSlotPrebaked, slot: *Value) Error!Value {
-        return try accessor.read(slot, acc.params.transform);
+    pub fn get(_: *const accessor.SingleSlotPrebaked, slot: *Value) Error!Value {
+        php.addRef(slot);
+        return slot.*;
     }
 
     pub fn set(_: *const accessor.SingleSlotPrebaked, slot: *Value, value: *const Value) Error!void {
-        try accessor.write(slot, value);
+        try write(slot, value);
     }
 };
+
+fn write(entry: *Value, value: *const Value) Error!void {
+    if (php.getValueObject(entry)) |obj| {
+        try invokeMethod(obj, "writeSelf", .{value});
+    } else |_| {
+        return php.throwExceptionFmt("attempt to write to null target", .{});
+    }
+}

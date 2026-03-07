@@ -2,6 +2,7 @@ const std = @import("std");
 
 const accessor = @import("../accessor.zig");
 const Error = accessor.Error;
+const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
@@ -48,17 +49,44 @@ pub const Struct = struct {
         return try Super.copyArguments(self, arg_iter);
     }
 
+    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
+        const class = ZigClassEntry.fromStructure(self);
+        return switch (transform) {
+            .to_value => self.returnSelf(),
+            .to_plain => create: {
+                var iter = class.getMemberIterator(.instance);
+                const ht = php.createArray();
+                while (iter.next()) |member| {
+                    const name = iter.currentName() orelse return error.Unexpected;
+                    var value = try member.accessors.get(self);
+                    try transform.apply(&value);
+                    php.setHashEntry(ht, name, &value);
+                }
+                var value = php.createValueArray(ht);
+                try php.convertValue(&value, .object);
+                break :create value;
+            },
+            .to_integer => get: {
+                // TODO: handle packed struct
+                break :get error.Unsupported;
+            },
+            .to_string => error.Unsupported,
+        };
+    }
+
     pub const setStorage = Super.setStorage;
     pub const getExtent = Super.getExtent;
     pub const writeSelf = Super.writeContainer;
-    pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
+    pub const castObject = Super.castObject;
     pub const readProperty = Super.readContainerProperty;
     pub const writeProperty = Super.writeContainerProperty;
     pub const getProperties = Super.getContainerProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
+    const returnSelf = Super.returnSelf;
+    const readMember = Super.readMember;
     const writeMember = Super.writeMember;
     const throwFieldError = Super.throwFieldError;
 };

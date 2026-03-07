@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
+const ObjectTransform = accessor.ObjectTransform;
 const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
@@ -89,6 +90,31 @@ pub const Union = struct {
     };
     pub const constructor_args = "an array as argument or one named argument";
 
+    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
+        return switch (transform) {
+            .to_value => self.returnSelf(),
+            .to_plain => create: {
+                const class = ZigClassEntry.fromStructure(self);
+                var iter = class.getMemberIterator(.instance);
+                const ht = php.createArray();
+                while (iter.next()) |member| {
+                    const name = iter.currentName() orelse return error.Unexpected;
+                    var value = try member.accessors.get(self);
+                    try transform.apply(&value);
+                    php.setHashEntry(ht, name, &value);
+                }
+                var value = php.createValueArray(ht);
+                try php.convertValue(&value, .object);
+                break :create value;
+            },
+            .to_integer => get: {
+                // TODO: packed union
+                break :get error.Unsupported;
+            },
+            .to_string => error.Unsupported,
+        };
+    }
+
     pub fn writeSelf(self: *@This(), value: *const Value) Error!void {
         if (try self.copySelf(value)) return;
         const ht = try php.getValueHashTable(value);
@@ -154,8 +180,8 @@ pub const Union = struct {
     }
 
     fn throwFieldError(self: *@This(), name: *String, err: anytype) error{ExceptionThrown} {
-        const accessors = self.findAccessors(name, null) catch null;
-        if (accessors != null and err == error.InactiveField) {
+        const member = self.findMember(name, null) catch null;
+        if (member != null and err == error.InactiveField) {
             const active_name = find: {
                 const class = ZigClassEntry.fromStructure(self);
                 const static = class.getStaticData(@This());
@@ -180,12 +206,13 @@ pub const Union = struct {
     pub const setStorage = Super.setStorage;
     pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
-    pub const readSelf = Super.readSelf;
     pub const copySelf = Super.copySelf;
     pub const freeObject = Super.freeObject;
+    pub const castObject = Super.castObject;
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
+    const returnSelf = Super.returnSelf;
     const writeMember = Super.writeMember;
-    const findAccessors = Super.findAccessors;
+    const findMember = Super.findMember;
 };

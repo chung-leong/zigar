@@ -26,8 +26,9 @@ pub const Opaque = struct {
     };
 
     pub const setStorage = Super.setStorage;
+    pub const readSelf = Super.readGeneric;
     pub const getExtent = Super.getExtent;
-    pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
+    pub const castObject = Super.castObject;
     pub const getReferencedObjects = Super.getReferencedObjects;
 };

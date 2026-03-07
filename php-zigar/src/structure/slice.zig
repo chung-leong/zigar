@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
+const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
@@ -53,84 +54,11 @@ pub const Slice = struct {
     pub fn getExtent(self: *@This()) Super.ByteExtent {
         return .{
             .address = @intFromPtr(self.bytes.bytes.ptr),
-            .len = self.getLength(),
+            .len = self.getLength() catch unreachable,
         };
     }
 
-    pub fn writeSelf(self: *@This(), value: *const Value) !void {
-        if (try self.copySelf(value)) return;
-        const class = ZigClassEntry.fromStructure(self);
-        const ht = try php.getValueArray(value);
-        const len = self.getLength();
-        var iter: HashTableIterator = .init(ht, .{});
-        const static = class.getStaticData(@This());
-        while (iter.next()) |field_value| {
-            const key = iter.currentIndex() orelse return error.KeyIsNotInteger;
-            if (key < 0) return error.NegativeIndex;
-            const index: usize = @intCast(key);
-            if (index >= len) return error.OutOfBound;
-            try static.value_acc.setElement(self, index, field_value);
-        }
-    }
-
-    pub fn stringify(self: *@This()) !Value {
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        if (class.flags.slice.is_string) {
-            if (static.element_size == 1) {
-                return php.createValueStringContent(self.bytes.bytes);
-            } else if (static.element_size == 2) {
-                // TODO: convert to UTF-8
-            }
-        }
-        return error.Unsupported;
-    }
-
-    pub fn readElement(obj: *Object, key: *Value, _: c_int, retval: *Value) !?*Value {
-        const self = Super.fromObject(obj);
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        const index = try getIndex(key);
-        // TODO: bound check for zero-length element
-        retval.* = try static.value_acc.getElement(self, index);
-        return retval;
-    }
-
-    pub fn writeElement(obj: *Object, key: *Value, value: *Value) !void {
-        const self = Super.fromObject(obj);
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        const index = try getIndex(key);
-        try static.value_acc.setElement(self, index, value);
-    }
-
-    pub fn hasElement(obj: *Object, key: *Value, _: c_int) !c_int {
-        const self = Super.fromObject(obj);
-        const len = self.getLength();
-        const index = getIndex(key) catch return 0;
-        return if (index < len) 1 else 0;
-    }
-
-    pub fn countElements(obj: *Object, count: *php.Long) !c_int {
-        const self = Super.fromObject(obj);
-        const len = self.getLength();
-        if (len > std.math.maxInt(php.Long)) return error.TooLarge;
-        count.* = @intCast(len);
-        return php.SUCCESS;
-    }
-
-    pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
-        const value_type = php.Type.fromInt(type_id) catch return php.FAILURE;
-        if (value_type == .string) {
-            const self = Super.fromObject(obj);
-            const value = self.stringify() catch return php.FAILURE;
-            retval.* = value;
-            return php.SUCCESS;
-        }
-        return php.FAILURE;
-    }
-
-    fn getLength(self: *@This()) usize {
+    pub fn getLength(self: *@This()) !usize {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const len = self.bytes.bytes.len;
@@ -140,11 +68,28 @@ pub const Slice = struct {
             len / static.element_size;
     }
 
+    pub fn getElement(self: *@This(), index: usize) !Value {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        return try static.value_acc.getElement(self, index);
+    }
+
+    pub fn setElement(self: *@This(), index: usize, value: *Value) !void {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        try static.value_acc.setElement(self, index, value);
+    }
+
     pub const copyArguments = Super.copyArguments;
-    pub const readSelf = Super.readSelf;
-    pub const copySelf = Super.copySelf;
+    pub const readSelf = Super.readVector;
+    pub const writeSelf = Super.writeVector;
+    pub const readElement = Super.readVectorElement;
+    pub const writeElement = Super.writeVectorElement;
+    pub const hasElement = Super.hasVectorElement;
+    pub const countElements = Super.countVectorElements;
     pub const getProperties = Super.getVectorProperties;
     pub const freeObject = Super.freeObject;
+    pub const castObject = Super.castObject;
     pub const getIterator = Super.getVectorIterator;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;

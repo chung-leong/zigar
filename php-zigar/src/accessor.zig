@@ -13,8 +13,9 @@ const php = @import("php.zig");
 const HashTable = php.HashTable;
 const Value = php.Value;
 const structure = @import("structure.zig");
-const invokeFunction = structure.invokeFunction;
+const invokeMethod = structure.invokeMethod;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
+const ZigObject = @import("object.zig").ZigObject;
 
 pub const Error = error{
     CannotCreateObject,
@@ -68,9 +69,9 @@ pub const PrimitiveTransform = struct {
     class: *ZigClassEntry,
 
     pub fn toValue(self: *const @This(), value: *const Value) Error!Value {
-        inline for (.{ .@"enum", .error_set }) |t| {
-            if (self.class.type == t) {
-                const S = @field(structure.by_enum, @tagName(t));
+        inline for (.{ .@"enum", .error_set }) |object_type| {
+            if (self.class.type == object_type) {
+                const S = @field(structure.by_enum, @tagName(object_type));
                 const static = self.class.getStaticData(S);
                 return static.findCanonical(value);
             }
@@ -108,6 +109,12 @@ pub const Primitive = struct {
     pub fn set(self: *const @This(), buffer: *ByteBuffer, value: *const Value) Error!void {
         return try self.setter(self, buffer, value);
     }
+
+    pub fn transform(self: *const @This(), new_transform: ?PrimitiveTransform) @This() {
+        var copy = self.*;
+        copy.params.transform = new_transform;
+        return copy;
+    }
 };
 
 pub const Vector = struct {
@@ -129,11 +136,41 @@ pub const Vector = struct {
     pub fn set(self: *const @This(), buffer: *ByteBuffer, index: usize, value: *const Value) Error!void {
         return try self.setter(self, buffer, index, value);
     }
+
+    pub fn transform(self: *const @This(), new_transform: ?ObjectTransform) @This() {
+        var copy = self.*;
+        copy.params.transform = new_transform;
+        return copy;
+    }
 };
 
 pub const SlotAccessorType = enum { multi_slot, single_slot, multi_slot_prebaked, single_slot_prebaked, array_slot };
 
-pub const ObjectTransform = enum { to_string, to_plain, to_value };
+pub const ObjectTransform = enum {
+    to_string,
+    to_integer,
+    to_plain,
+    to_value,
+
+    pub fn apply(self: @This(), value: *Value) Error!void {
+        switch (php.getType(value)) {
+            .object => {
+                const obj = php.getValueObject(value) catch unreachable;
+                if (ZigClassEntry.isZig(obj.ce)) {
+                    defer php.release(obj);
+                    value.* = try invokeMethod(obj, "readSelf", .{self});
+                } else if (php.isGMP(obj)) {
+                    if (self == .to_string) try php.convertValue(value, .string);
+                }
+            },
+            else => switch (self) {
+                .to_string => try php.convertValue(value, .string),
+                .to_integer => try php.convertValue(value, .long),
+                else => {},
+            },
+        }
+    }
+};
 
 pub const MultiSlot = struct {
     params: Parameters,
@@ -145,7 +182,6 @@ pub const MultiSlot = struct {
         byte_size: usize,
         slot: usize,
         class: *ZigClassEntry,
-        transform: ?ObjectTransform = null,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer, *Value) Error!Value;
     pub const Setter = fn (*const @This(), *ByteBuffer, *Value, *const Value) Error!void;
@@ -168,7 +204,6 @@ pub const SingleSlot = struct {
         byte_offset: usize = undefined,
         byte_size: usize,
         class: *ZigClassEntry,
-        transform: ?ObjectTransform = null,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer, *Value) Error!Value;
     pub const Setter = fn (*const @This(), *ByteBuffer, *Value, *const Value) Error!void;
@@ -190,7 +225,6 @@ pub const ArraySlot = struct {
     pub const Parameters = struct {
         byte_size: usize,
         class: *ZigClassEntry,
-        transform: ?ObjectTransform = null,
     };
     pub const Getter = fn (*const @This(), *ByteBuffer, *Value, usize) Error!Value;
     pub const Setter = fn (*const @This(), *ByteBuffer, *Value, usize, *const Value) Error!void;
@@ -211,7 +245,6 @@ pub const MultiSlotPrebaked = struct {
 
     pub const Parameters = struct {
         slot: usize,
-        transform: ?ObjectTransform = null,
     };
     pub const Getter = fn (*const @This(), *Value) Error!Value;
     pub const Setter = fn (*const @This(), *Value, *const Value) Error!void;
@@ -230,9 +263,7 @@ pub const SingleSlotPrebaked = struct {
     getter: *const Getter,
     setter: *const Setter,
 
-    pub const Parameters = struct {
-        transform: ?ObjectTransform = null,
-    };
+    pub const Parameters = struct {};
     pub const Getter = fn (*const @This(), *Value) Error!Value;
     pub const Setter = fn (*const @This(), *Value, *const Value) Error!void;
 
@@ -340,29 +371,4 @@ pub fn WithBitOffset(comptime T: type, comptime bit_offset: ?u3) type {
             },
         });
     } else T;
-}
-
-pub fn read(entry: *Value, transform: ?ObjectTransform) !Value {
-    if (transform) |t| {
-        if (php.getValueObject(entry)) |obj| {
-            return switch (t) {
-                .to_string => try invokeFunction(obj, "stringify", .{}),
-                .to_plain => try invokeFunction(obj, "plainify", .{}),
-                .to_value => try invokeFunction(obj, "readSelf", .{}),
-            };
-        } else |_| {
-            return php.createValueNull();
-        }
-    } else {
-        php.addRef(entry);
-        return entry.*;
-    }
-}
-
-pub fn write(entry: *Value, value: *const Value) Error!void {
-    if (php.getValueObject(entry)) |obj| {
-        try invokeFunction(obj, "writeSelf", .{value});
-    } else |_| {
-        return php.throwExceptionFmt("attempt to write to null target", .{});
-    }
 }

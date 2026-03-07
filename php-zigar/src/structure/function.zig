@@ -127,8 +127,9 @@ pub const Function = struct {
         Super.freeObject(obj);
     }
 
+    pub const readSelf = Super.readGeneric;
     pub const getExtent = Super.getExtent;
-    pub const readSelf = Super.readSelf;
+    pub const castObject = Super.castObject;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
 };

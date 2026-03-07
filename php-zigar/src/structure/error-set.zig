@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
+const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const Closure = @import("../closure.zig").Closure;
@@ -121,9 +122,7 @@ pub const ErrorSet = struct {
                     } else |_| {
                         // create new error
                         const bytes = try ByteBuffer.createNew(class.byte_size.?, class.alignment);
-                        var acc = self.value_acc.*;
-                        acc.params.transform = null;
-                        try acc.set(bytes, value);
+                        try self.value_acc.transform(null).set(bytes, value);
                         const err_obj = try class.createObjectFromBuffer(bytes, null);
                         var buffer: [64]u8 = undefined;
                         const text = std.fmt.bufPrint(&buffer, "UnknownError #{d}", .{err_code}) catch unreachable;
@@ -174,9 +173,7 @@ pub const ErrorSet = struct {
             const class = ZigClassEntry.fromStatic(self);
 
             const err_struct = fromObject(err_obj);
-            var acc = self.value_acc.*;
-            acc.params.transform = null;
-            const err_value = try acc.get(err_struct.bytes);
+            const err_value = try self.value_acc.transform(null).get(err_struct.bytes);
             // reference err by integer value
             const err_code = try php.getValueLong(&err_value);
             var err, const is_new = if (php.getHashEntry(class.host.global_error_set, err_code)) |e_ptr|
@@ -201,46 +198,60 @@ pub const ErrorSet = struct {
         }
     };
 
-    pub fn readSelf(self: *@This()) !Value {
+    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        return try static.value_acc.get(self.bytes);
+        const err_value = try static.value_acc.get(self.bytes);
+        if (transform == .to_value) return err_value;
+        const err_obj = try php.getValueObject(&err_value);
+        defer php.release(err_obj);
+        const err_struct = fromObject(err_obj);
+        return switch (transform) {
+            .to_value => unreachable,
+            .to_plain => create: {
+                const props = err_struct.canonical.?;
+                const message = php.useString(props.message, "");
+                var message_value = php.createValueString(message);
+                const ht = php.createArray();
+                php.setHashEntry(ht, "message", &message_value);
+                var value = php.createValueArray(ht);
+                try php.convertValue(&value, .object);
+                break :create value;
+            },
+            .to_string => create: {
+                const props = err_struct.canonical.?;
+                const message = php.useString(props.message, "");
+                defer php.release(message);
+                const file = php.useString(props.file, "(unknown)");
+                defer php.release(file);
+                const trace = php.useArray(props.trace);
+                defer php.release(trace);
+                const trace_str = php.traceToString(trace, true);
+                defer php.release(trace_str);
+                const text = try std.fmt.allocPrint(
+                    php.allocator,
+                    \\ZigError: {s} in {s}:{d}
+                    \\Stack trace:
+                    \\{s}
+                ,
+                    .{
+                        php.getStringContent(message),
+                        php.getStringContent(file),
+                        props.lineno,
+                        php.getStringContent(trace_str),
+                    },
+                );
+                defer php.allocator.free(text);
+                break :create php.createValueStringContent(text);
+            },
+            .to_integer => try static.value_acc.transform(null).get(err_struct.bytes),
+        };
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         try static.value_acc.set(self.bytes, value);
-    }
-
-    pub fn stringify(self: *@This()) !Value {
-        const err_value = try self.readSelf();
-        const err_obj = try php.getValueObject(&err_value);
-        const err_struct = fromObject(err_obj);
-        const props = err_struct.canonical.?;
-        const message = php.useString(props.message, "");
-        defer php.release(message);
-        const file = php.useString(props.file, "(unknown)");
-        defer php.release(file);
-        const trace = php.useArray(props.trace);
-        defer php.release(trace);
-        const trace_str = php.traceToString(trace, true);
-        defer php.release(trace_str);
-        const text = try std.fmt.allocPrint(
-            php.allocator,
-            \\ZigError: {s} in {s}:{d}
-            \\Stack trace:
-            \\{s}
-        ,
-            .{
-                php.getStringContent(message),
-                php.getStringContent(file),
-                props.lineno,
-                php.getStringContent(trace_str),
-            },
-        );
-        defer php.allocator.free(text);
-        return php.createValueStringContent(text);
     }
 
     pub fn acquireDebugInfo(self: *@This()) !void {
@@ -269,7 +280,7 @@ pub const ErrorSet = struct {
         _ = prop_type;
         _ = cache_slot;
         const self = fromObject(obj);
-        const err_value = try self.readSelf();
+        const err_value = try self.readSelf(.to_value);
         const err_obj = try php.getValueObject(&err_value);
         const err_struct = fromObject(err_obj);
         const props = err_struct.canonical.?;
@@ -292,7 +303,7 @@ pub const ErrorSet = struct {
     pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
         _ = cache_slot;
         const self = fromObject(obj);
-        const err_value = try self.readSelf();
+        const err_value = try self.readSelf(.to_value);
         const err_obj = try php.getValueObject(&err_value);
         const err_struct = fromObject(err_obj);
         const props = err_struct.canonical.?;
@@ -367,6 +378,7 @@ pub const ErrorSet = struct {
     pub const setStorage = Super.setStorage;
     pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
+    pub const castObject = Super.castObject;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
     const object = Super.object;

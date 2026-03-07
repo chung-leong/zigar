@@ -132,7 +132,6 @@ pub fn Class(comptime S: type) type {
             return &ZigObject(S).fromObject(obj).zig_portion;
         }
 
-        pub const readSelf = Super.readSelf;
         pub const readProperty = Super.readContainerProperty;
         pub const writeProperty = Super.writeContainerProperty;
         pub const getPropertyPointer = Super.getPropertyPointer;

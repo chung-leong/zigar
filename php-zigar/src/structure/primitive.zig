@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
+const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
@@ -23,10 +24,12 @@ pub const Primitive = struct {
         }
     };
 
-    pub fn readSelf(self: *@This()) !Value {
+    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        return try static.value_acc.get(self.bytes);
+        var value = try static.value_acc.get(self.bytes);
+        try transform.apply(&value);
+        return value;
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
@@ -35,7 +38,6 @@ pub const Primitive = struct {
         return try static.value_acc.set(self.bytes, value);
     }
 
-    pub const plainify = readSelf;
     pub const setStorage = Super.setStorage;
     pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;

@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
+const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
@@ -27,16 +28,16 @@ pub const Optional = struct {
         }
     };
 
-    pub fn readSelf(self: *@This()) !Value {
+    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const present = try static.present_acc.get(self.bytes);
-        const is_present = try php.getValueLong(&present) != 0;
-        if (is_present) {
-            return try static.payload_acc.get(self);
-        } else {
+        if (try php.getValueLong(&present) == 0) {
             return php.createValueNull();
         }
+        var value = try static.payload_acc.get(self);
+        if (transform != .to_value) try transform.apply(&value);
+        return value;
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
@@ -54,6 +55,8 @@ pub const Optional = struct {
     pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
     pub const freeObject = Super.freeObject;
+    pub const castObject = Super.castObject;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
+    const returnSelf = Super.returnSelf;
 };

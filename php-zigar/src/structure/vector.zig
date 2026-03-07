@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
+const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const Iterator = @import("../iterator.zig").Iterator;
@@ -30,49 +31,35 @@ pub const Vector = struct {
         }
     };
 
-    pub fn writeSelf(self: *@This(), value: *const Value) !void {
-        if (try self.copySelf(value)) return;
+    pub fn getLength(self: *@This()) !usize {
         const class = ZigClassEntry.fromStructure(self);
-        const ht = try php.getValueArray(value);
-        var iter: HashTableIterator = .init(ht, .{});
-        const static = class.getStaticData(@This());
-        while (iter.next()) |field_value| {
-            const key = iter.currentIndex() orelse return error.KeyIsNotInteger;
-            if (key < 0) return error.NegativeIndex;
-            const index: usize = @intCast(key);
-            if (index >= class.length.?) return error.OutOfBound;
-            try static.value_acc.set(self.bytes, index, field_value);
-        }
+        return class.length orelse return error.Unexpected;
     }
 
-    pub fn readElement(obj: *Object, key: *Value, _: c_int, retval: *Value) !?*Value {
-        const self = Super.fromObject(obj);
+    pub fn getElement(self: *@This(), index: usize) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        const index = try getIndex(key);
-        if (index >= class.length.?) return error.OutOfBound;
-        retval.* = try static.value_acc.get(self.bytes, index);
-        return retval;
+        return try static.value_acc.get(self.bytes, index);
     }
 
-    pub fn writeElement(obj: *Object, key: *Value, value: *Value) !void {
-        const self = Super.fromObject(obj);
+    pub fn setElement(self: *@This(), index: usize, value: *Value) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        const index = try getIndex(key);
-        if (index >= class.length.?) return error.OutOfBound;
         try static.value_acc.set(self.bytes, index, value);
     }
 
     pub const setStorage = Super.setStorage;
     pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
-    pub const readSelf = Super.readSelf;
-    pub const copySelf = Super.copySelf;
+    pub const readSelf = Super.readVector;
+    pub const writeSelf = Super.writeVector;
+    pub const readElement = Super.readVectorElement;
+    pub const writeElement = Super.writeVectorElement;
     pub const hasElement = Super.hasVectorElement;
     pub const countElements = Super.countVectorElements;
     pub const getProperties = Super.getVectorProperties;
     pub const freeObject = Super.freeObject;
+    pub const castObject = Super.castObject;
     pub const getIterator = Super.getVectorIterator;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const getIndex = Super.getIndex;

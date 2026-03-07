@@ -1,13 +1,14 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
+const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
 const Object = php.Object;
 const Value = php.Value;
 const structure = @import("../structure.zig");
-const invokeFunction = structure.invokeFunction;
+const invokeFunction = structure.invokeMethod;
 
 pub const Pointer = struct {
     bytes: *ByteBuffer = undefined,
@@ -77,11 +78,14 @@ pub const Pointer = struct {
         }
     };
 
-    pub fn readSelf(self: *@This()) accessor.Error!Value {
+    pub fn readSelf(self: *@This(), transform: ObjectTransform) accessor.Error!Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         try static.loadTarget(self);
-        return try accessor.read(&self.slots, static.target_transform);
+        var value = self.slots;
+        if (static.target_transform) |tt| try tt.apply(&value);
+        if (transform != .to_value) try transform.apply(&value);
+        return value;
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) accessor.Error!void {
@@ -109,17 +113,11 @@ pub const Pointer = struct {
         try static.saveTarget(self, target_obj);
     }
 
-    pub fn stringify(self: *@This()) !Value {
-        const class = ZigClassEntry.fromStructure(self);
-        _ = class;
-        std.debug.print("stringify\n", .{});
-        unreachable;
-    }
-
     pub const setStorage = Super.setStorage;
     pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
     pub const freeObject = Super.freeObject;
+    pub const castObject = Super.castObject;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
 };

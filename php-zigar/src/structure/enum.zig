@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
+const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const ZigObject = @import("../object.zig").ZigObject;
@@ -75,7 +76,7 @@ pub const Enum = struct {
                                 return try value_static.getEnum(obj);
                             }
                         }
-                    } else if (isGMP(obj)) {
+                    } else if (php.isGMP(obj)) {
                         return self.findCanonical(value) catch php.createValueNull();
                     }
                 },
@@ -100,9 +101,7 @@ pub const Enum = struct {
                         if (class.flags.@"enum".is_open_ended) {
                             // create new item
                             const bytes = try ByteBuffer.createNew(class.byte_size.?, class.alignment);
-                            var acc = self.value_acc.*;
-                            acc.params.transform = null;
-                            try acc.set(bytes, key);
+                            try self.value_acc.transform(null).set(bytes, key);
                             const tag_obj = try class.createObjectFromBuffer(bytes, null);
                             var buffer: [48]u8 = undefined;
                             const text = std.fmt.bufPrint(&buffer, "@enumFromInt({d})", .{tag_code}) catch unreachable;
@@ -126,7 +125,7 @@ pub const Enum = struct {
                     const obj = php.getValueObject(key) catch unreachable;
                     if (obj.ce == class.entry()) {
                         return key.*;
-                    } else if (isGMP(obj)) {
+                    } else if (php.isGMP(obj)) {
                         var key_copy = key.*;
                         php.addRef(&key_copy);
                         try php.convertValue(&key_copy, .string);
@@ -139,9 +138,7 @@ pub const Enum = struct {
                             if (class.flags.@"enum".is_open_ended) {
                                 // create new item
                                 const bytes = try ByteBuffer.createNew(class.byte_size.?, class.alignment);
-                                var acc = self.value_acc.*;
-                                acc.params.transform = null;
-                                try acc.set(bytes, key);
+                                try self.value_acc.transform(null).set(bytes, key);
                                 const tag_obj = try class.createObjectFromBuffer(bytes, null);
                                 const text = try std.fmt.allocPrint(php.allocator, "@enumFromInt({s})", .{
                                     php.getStringContent(tag_code_str),
@@ -193,7 +190,7 @@ pub const Enum = struct {
         fn addCanonical(self: *@This(), name: *String, tag_obj: *Object) !void {
             const tag_struct = fromObject(tag_obj);
             // reference tag by integer value
-            var tag_value = try tag_struct.numerify();
+            var tag_value = try tag_struct.readSelf(.to_integer);
             defer php.release(&tag_value);
             var tag = php.createValueObject(tag_obj);
             // reference tag by value
@@ -218,37 +215,32 @@ pub const Enum = struct {
             php.addRef(name);
             tag_struct.canonical = props;
         }
-
-        fn isGMP(obj: *Object) bool {
-            const name_str = obj.ce.*.name orelse return false;
-            const name = php.getStringContent(name_str);
-            return std.mem.eql(u8, name, "GMP");
-        }
     };
 
-    pub fn readSelf(self: *@This()) !Value {
+    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        return try static.value_acc.get(self.bytes);
+        const enum_value = try static.value_acc.get(self.bytes);
+        if (transform == .to_value) return enum_value;
+        const enum_obj = try php.getValueObject(&enum_value);
+        defer php.release(enum_obj);
+        const enum_struct = fromObject(enum_obj);
+        return switch (transform) {
+            .to_value => unreachable,
+            .to_string, .to_plain => {
+                const props = enum_struct.canonical orelse return error.Unexpected;
+                return php.createValueString(props.name);
+            },
+            .to_integer => {
+                return static.value_acc.transform(null).get(enum_struct.bytes);
+            },
+        };
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         try static.value_acc.set(self.bytes, value);
-    }
-
-    pub fn stringify(self: *@This()) !Value {
-        const props = self.canonical orelse return error.Unexpected;
-        return php.createValueString(props.name);
-    }
-
-    pub fn numerify(self: *@This()) !Value {
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        var acc = static.value_acc.*;
-        acc.params.transform = null;
-        return try acc.get(self.bytes);
     }
 
     pub fn freeObject(obj: *Object) void {
@@ -263,20 +255,10 @@ pub const Enum = struct {
         }
     }
 
-    pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
-        const value_type = php.Type.fromInt(type_id) catch return php.FAILURE;
-        const self = Super.fromObject(obj);
-        retval.* = switch (value_type) {
-            .string => try self.stringify(),
-            .long => try self.numerify(),
-            else => return php.FAILURE,
-        };
-        return php.SUCCESS;
-    }
-
     pub const setStorage = Super.setStorage;
     pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
+    pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;

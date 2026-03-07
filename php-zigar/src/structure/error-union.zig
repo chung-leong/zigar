@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
+const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const ZigObject = @import("../object.zig").ZigObject;
@@ -33,21 +34,21 @@ pub const ErrorUnion = struct {
         }
     };
 
-    pub fn readSelf(self: *@This()) !Value {
+    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const err = try static.error_acc.get(self.bytes);
-        return switch (php.getType(&err)) {
-            .null => try static.payload_acc.get(self),
-            .object => throw: {
-                const err_obj = php.getValueObject(&err) catch unreachable;
-                const err_struct = ZigObject(ErrorSet).fromObject(err_obj).structure();
-                try err_struct.acquireDebugInfo();
-                _ = &php.throwExceptionObject(err_obj);
-                break :throw php.createValueNull();
-            },
-            else => unreachable,
-        };
+        if (php.getType(&err) == .object) {
+            const err_obj = php.getValueObject(&err) catch unreachable;
+            const err_struct = ZigObject(ErrorSet).fromObject(err_obj).structure();
+            try err_struct.acquireDebugInfo();
+            _ = &php.throwExceptionObject(err_obj);
+            return php.createValueNull();
+        } else {
+            var value = try static.payload_acc.get(self);
+            if (transform != .to_value) try transform.apply(&value);
+            return value;
+        }
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
@@ -76,6 +77,8 @@ pub const ErrorUnion = struct {
     pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
     pub const freeObject = Super.freeObject;
+    pub const castObject = Super.castObject;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
+    const returnSelf = Super.returnSelf;
 };
