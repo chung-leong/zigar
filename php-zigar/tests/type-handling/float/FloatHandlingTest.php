@@ -243,4 +243,3 @@ final class FloatHandlingTest extends ZigarTestCase
         $this->assertSame(0.1234, (double) $b);
     }
 }
-

@@ -126,9 +126,8 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn readGeneric(self: *S, transform: ObjectTransform) !Value {
-            var value = try returnSelf(self);
-            if (transform != .to_value) try transform.apply(&value);
-            return value;
+            if (transform != .to_value) return error.Unsupported;
+            return try returnSelf(self);
         }
 
         pub fn readContainer(self: *S, transform: ObjectTransform) !Value {
@@ -485,6 +484,7 @@ pub fn Parent(comptime S: type) type {
             while (iter.next()) |member| {
                 if (iter.currentName()) |name| {
                     var value = try member.accessors.get(self);
+                    if (member.objectTransform()) |ot| try ot.apply(&value);
                     php.setHashEntry(ht, name, &value);
                 }
             }

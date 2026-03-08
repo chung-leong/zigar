@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const accessor = @import("../accessor.zig");
+const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const Closure = @import("../closure.zig").Closure;
@@ -15,6 +17,7 @@ const structure = @import("../structure.zig");
 pub const Function = struct {
     bytes: *ByteBuffer = undefined,
     closure: *Closure = undefined,
+    transform: ?ObjectTransform = null,
 
     const Super = structure.Parent(@This());
     pub const Static = struct {
@@ -70,6 +73,11 @@ pub const Function = struct {
         self.closure = try Closure.create(self, invokeThunk, "");
     }
 
+    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
+        if (transform != .to_value) self.transform = transform;
+        return self.returnSelf();
+    }
+
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
         const class = ZigClassEntry.fromStructure(self);
         if (!php.isCallable(value)) return error.NotCallable;
@@ -85,8 +93,8 @@ pub const Function = struct {
             const static = class.getStaticData(Function);
             const arg = try ZigClassEntry.createObject(static.argument_class.entry());
             defer php.release(arg);
-            switch (static.argument_class.type) {
-                .arg_struct => {
+            var retval = switch (static.argument_class.type) {
+                .arg_struct => run: {
                     const arg_struct = ZigObject(structure.ArgStruct).fromObject(arg).structure();
                     const arg_addr = @intFromPtr(arg_struct.bytes.bytes.ptr);
                     const is_method_call = init: {
@@ -100,14 +108,16 @@ pub const Function = struct {
                     if (is_method_call) arg_iter.makeThisFirst();
                     try arg_struct.copyArguments(arg_iter);
                     try class.host.runThunk(static.thunk_address, fn_addr, arg_addr);
-                    return try arg_struct.getReturnValue();
+                    break :run try arg_struct.getReturnValue();
                 },
                 .variadic_struct => {
                     // TODO
                     @panic("TODO");
                 },
                 else => unreachable,
-            }
+            };
+            if (self.transform) |t| try t.apply(&retval);
+            return retval;
         } else {
             @panic("TODO");
         }
@@ -127,9 +137,9 @@ pub const Function = struct {
         Super.freeObject(obj);
     }
 
-    pub const readSelf = Super.readGeneric;
     pub const getExtent = Super.getExtent;
     pub const castObject = Super.castObject;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
+    const returnSelf = Super.returnSelf;
 };
