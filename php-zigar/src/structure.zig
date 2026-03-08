@@ -144,7 +144,8 @@ pub fn Parent(comptime S: type) type {
                     }
                     php.addRef(ht);
                     var value = php.createValueArray(ht);
-                    try php.convertValue(&value, .object);
+                    // don't convert if the struct is a tuple
+                    if (!isTuple(self)) try php.convertValue(&value, .object);
                     break :create value;
                 },
                 .to_bytes => try returnBytes(self),
@@ -481,11 +482,16 @@ pub fn Parent(comptime S: type) type {
             const class = ZigClassEntry.fromObject(obj);
             const ht = php.createArray();
             var iter = class.getMemberIterator(.instance);
+            const is_tuple = isTuple(self);
             while (iter.next()) |member| {
                 if (iter.currentName()) |name| {
                     var value = try member.accessors.get(self);
                     if (member.objectTransform()) |ot| try ot.apply(&value);
-                    php.setHashEntry(ht, name, &value);
+                    if (is_tuple) {
+                        _ = php.appendHashEntry(ht, &value);
+                    } else {
+                        php.setHashEntry(ht, name, &value);
+                    }
                 }
             }
             // caller seem to expect a hash table with zero refcount
@@ -521,6 +527,17 @@ pub fn Parent(comptime S: type) type {
             table.* = null;
             n.* = 0;
             return null;
+        }
+
+        fn isTuple(self: *S) bool {
+            if (scope == .instance) {
+                const class = ZigClassEntry.fromStructure(self);
+                const flags = class.getFlags(S);
+                if (@hasField(@TypeOf(flags), "is_tuple")) {
+                    return flags.is_tuple;
+                }
+            }
+            return false;
         }
     };
 }

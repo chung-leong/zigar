@@ -6,6 +6,10 @@ final class StructHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
         $this->assertSame([ 'number1' => 123, 'number2' => 456 ], (array) $m->constant);
+        $this->assertEquals((object) [ 
+            'number1' => 123, 
+            'number2' => 456
+        ], $m->constant->__plain);
         $this->assertExceptionMessage('write protected', function() use($m) {
             $m->constant->number1 = 1;
         });
@@ -22,7 +26,17 @@ final class StructHandlingTest extends ZigarTestCase
         $m->variable = [ 'number1' => 888, 'number2' => 999 ];
         $m->print();
 
-        // TODO: comptime struct
+        $this->assertEquals((object) [
+            'input' => (object) [
+                'src' => (object) [ 'channels' => 4 ],
+                'params' => [ 0, 1, 2, 3 ],
+            ]
+        ], $m->comptime_struct->__plain);
+        $this->assertEquals([
+            123,
+            3.14,
+            [ 101, 118, 105, 108 ],
+        ], $m->tuple->__plain);
     }
 
     public function testPrintStructArguments(): void

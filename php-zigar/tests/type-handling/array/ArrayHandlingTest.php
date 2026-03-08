@@ -246,5 +246,16 @@ final class ArrayHandlingTest extends ZigarTestCase
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
         });
     }
+
+    public function testHandleConstructArray(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/constructor.zig');
+        $b = new $m->IntArray4([ 1, 2, 3, 4 ]);
+        $this->assertSame([ 1, 2, 3, 4 ], (array) $b);
+        $this->assertSame([ 1, 2, 3, 4 ], $b->__plain);
+        $this->assertExceptionMessage('out of bound', function() use($m) {
+            $x = new $m->IntArray4([ 1, 2, 3, 4, 5 ]);
+        });
+    }
 }
 
