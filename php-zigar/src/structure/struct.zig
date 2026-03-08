@@ -68,6 +68,7 @@ pub const Struct = struct {
     pub const castObject = Super.castObject;
     pub const readProperty = Super.readContainerProperty;
     pub const writeProperty = Super.writeContainerProperty;
+    pub const hasProperty = Super.hasContainerProperty;
     pub const getProperties = Super.getContainerProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getReferencedObjects = Super.getReferencedObjects;

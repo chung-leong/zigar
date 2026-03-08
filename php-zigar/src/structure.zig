@@ -283,6 +283,18 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
+        pub fn hasContainerMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) bool {
+            if (findContainerMember(self, name, cache_slot)) |_| {
+                return true;
+            } else |_| {
+                return hasGenericMember(self, name);
+            }
+        }
+
+        pub fn hasGenericMember(_: *S, name: *String) bool {
+            return ObjectTransform.fromPropName(name) != null;
+        }
+
         pub fn findContainerMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !*const ZigClassEntry.Member {
             const class = ZigClassEntry.fromStructure(self);
             const cache_entry: ?*CacheEntry = @ptrCast(cache_slot);
@@ -403,6 +415,19 @@ pub fn Parent(comptime S: type) type {
                 return throwFieldError(self, name, err);
             };
             return value;
+        }
+
+        pub fn hasContainerProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) c_int {
+            _ = prop_type;
+            const self = fromObject(obj);
+            return if (hasContainerMember(self, name, cache_slot)) 1 else 0;
+        }
+
+        pub fn hasGenericProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) c_int {
+            _ = prop_type;
+            _ = cache_slot;
+            const self = fromObject(obj);
+            return if (hasGenericMember(self, name)) 1 else 0;
         }
 
         pub fn readVectorElement(obj: *Object, key: *Value, _: c_int, retval: *Value) !?*Value {

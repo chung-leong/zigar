@@ -221,6 +221,7 @@ pub const Union = struct {
     pub const copyArguments = Super.copyArguments;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
+    pub const hasProperty = Super.hasContainerProperty;
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;

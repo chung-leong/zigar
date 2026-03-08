@@ -263,6 +263,7 @@ pub const Enum = struct {
     pub const getMethod = Super.getMethod;
     pub const readProperty = Super.readGenericProperty;
     pub const writeProperty = Super.writeGenericProperty;
+    pub const hasProperty = Super.hasGenericProperty;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;

@@ -137,6 +137,7 @@ pub fn Class(comptime S: type) type {
         pub const readSelf = Super.readContainer;
         pub const readProperty = Super.readContainerProperty;
         pub const writeProperty = Super.writeContainerProperty;
+        pub const hasProperty = Super.hasContainerProperty;
         pub const getProperties = Super.getContainerProperties;
         pub const getPropertyPointer = Super.getPropertyPointer;
         pub const getReferencedObjects = Super.getReferencedObjects;

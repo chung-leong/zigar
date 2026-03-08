@@ -56,6 +56,7 @@ pub const Array = struct {
     pub const countElements = Super.countVectorElements;
     pub const readProperty = Super.readGenericProperty;
     pub const writeProperty = Super.writeGenericProperty;
+    pub const hasProperty = Super.hasGenericProperty;
     pub const getProperties = Super.getVectorProperties;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;

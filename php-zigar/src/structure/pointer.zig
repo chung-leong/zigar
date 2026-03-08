@@ -120,6 +120,7 @@ pub const Pointer = struct {
     pub const castObject = Super.castObject;
     pub const readProperty = Super.readGenericProperty;
     pub const writeProperty = Super.writeGenericProperty;
+    pub const hasProperty = Super.hasGenericProperty;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
 };

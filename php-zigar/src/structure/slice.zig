@@ -93,6 +93,7 @@ pub const Slice = struct {
     pub const getIterator = Super.getVectorIterator;
     pub const readProperty = Super.readGenericProperty;
     pub const writeProperty = Super.writeGenericProperty;
+    pub const hasProperty = Super.hasGenericProperty;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
     const getIndex = Super.getIndex;
