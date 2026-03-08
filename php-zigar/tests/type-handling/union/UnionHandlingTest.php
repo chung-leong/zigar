@@ -174,7 +174,7 @@ final class UnionHandlingTest extends ZigarTestCase
 
         $m->union_a = $b;
         $this->assertSame([ 'float' => 3.14 ], (array) $m->union_a->variant);
-        $n->union_a = $c;
+        $m->union_a = $c;
         $this->assertSame(null, $m->union_a->variant);
     }
 

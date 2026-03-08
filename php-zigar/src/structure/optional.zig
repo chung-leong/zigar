@@ -41,6 +41,7 @@ pub const Optional = struct {
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
+        if (try self.copySelf(value)) return;
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const is_present = if (php.getValueNull(value)) false else |_| true;
@@ -58,5 +59,6 @@ pub const Optional = struct {
     pub const castObject = Super.castObject;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
+    const copySelf = Super.copySelf;
     const returnSelf = Super.returnSelf;
 };

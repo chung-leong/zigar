@@ -76,6 +76,10 @@ pub const ByteBuffer = struct {
         @memcpy(self.bytes, other.bytes);
     }
 
+    pub fn clear(self: *@This()) void {
+        @memset(self.bytes, 0);
+    }
+
     pub fn addRef(self: *@This()) void {
         self.ref_count += 1;
     }

@@ -5,6 +5,8 @@ final class TypeHandlingTest extends ZigarTestCase
     public function testImportTypeAsStaticVariables(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
+        $this->assertSame(true, is_callable($m->Int32));
+        // $this->assertSame(true, is_callable([ $m, 'Int32' ]));
     }
 
     public function testIgnoreFunctionAcceptingType(): void

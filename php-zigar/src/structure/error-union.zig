@@ -52,6 +52,7 @@ pub const ErrorUnion = struct {
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
+        if (try self.copySelf(value)) return;
         const class = ZigClassEntry.fromStructure(self);
         var static = class.getStaticData(@This());
         const err_maybe = switch (php.getType(value)) {
@@ -80,5 +81,6 @@ pub const ErrorUnion = struct {
     pub const castObject = Super.castObject;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
+    const copySelf = Super.copySelf;
     const returnSelf = Super.returnSelf;
 };

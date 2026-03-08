@@ -248,6 +248,7 @@ pub const ErrorSet = struct {
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
+        if (try self.copySelf(value)) return;
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         try static.value_acc.set(self.bytes, value);
@@ -380,6 +381,7 @@ pub const ErrorSet = struct {
     pub const castObject = Super.castObject;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
+    const copySelf = Super.copySelf;
     const object = Super.object;
 };
 

@@ -193,14 +193,21 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn copySelf(self: *S, value: *const Value) !bool {
-            if (php.getType(value) == .object) {
-                const obj = php.getValueObject(value) catch unreachable;
-                const class = ZigClassEntry.fromStructure(self);
-                if (obj.ce == class.entry()) {
-                    const obj_struct = ZigObject(S).fromObject(obj).structure();
-                    try self.bytes.copy(obj_struct.bytes);
+            switch (php.getType(value)) {
+                .object => {
+                    const obj = php.getValueObject(value) catch unreachable;
+                    const class = ZigClassEntry.fromStructure(self);
+                    if (obj.ce == class.entry()) {
+                        const obj_struct = ZigObject(S).fromObject(obj).structure();
+                        try self.bytes.copy(obj_struct.bytes);
+                        return true;
+                    }
+                },
+                .null => {
+                    self.bytes.clear();
                     return true;
-                }
+                },
+                else => {},
             }
             return false;
         }
