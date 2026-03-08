@@ -228,13 +228,12 @@ pub const Enum = struct {
         const enum_struct = fromObject(enum_obj);
         return switch (transform) {
             .to_value => unreachable,
-            .to_string, .to_plain => {
+            .to_string, .to_plain => create: {
                 const props = enum_struct.canonical orelse return error.Unexpected;
-                return php.createValueString(props.name);
+                break :create php.createValueString(props.name);
             },
-            .to_integer => {
-                return static.value_acc.transform(null).get(enum_struct.bytes);
-            },
+            .to_integer => try static.value_acc.transform(null).get(enum_struct.bytes),
+            .to_bytes => try self.returnBytes(),
         };
     }
 
@@ -262,8 +261,11 @@ pub const Enum = struct {
     pub const copyArguments = Super.copyArguments;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;
+    pub const readProperty = Super.readGenericProperty;
+    pub const writeProperty = Super.writeGenericProperty;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;
+    const returnBytes = Super.returnBytes;
     const object = Super.object;
 };

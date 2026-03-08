@@ -244,6 +244,7 @@ pub const ErrorSet = struct {
                 break :create php.createValueStringContent(text);
             },
             .to_integer => try static.value_acc.transform(null).get(err_struct.bytes),
+            .to_bytes => try self.returnBytes(),
         };
     }
 
@@ -277,8 +278,6 @@ pub const ErrorSet = struct {
     }
 
     pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
-        _ = prop_type;
-        _ = cache_slot;
         const self = fromObject(obj);
         const err_value = try self.readSelf(.to_value);
         const err_obj = try php.getValueObject(&err_value);
@@ -294,14 +293,12 @@ pub const ErrorSet = struct {
         } else if (std.mem.eql(u8, name_c, "line")) {
             retval.* = php.createValueLong(@intCast(props.lineno));
         } else {
-            std.debug.print("readProperty {s}\n", .{name_c});
-            retval.* = php.createValueNull();
+            return try readGenericProperty(obj, name, prop_type, cache_slot, retval);
         }
         return retval;
     }
 
     pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
-        _ = cache_slot;
         const self = fromObject(obj);
         const err_value = try self.readSelf(.to_value);
         const err_obj = try php.getValueObject(&err_value);
@@ -313,6 +310,8 @@ pub const ErrorSet = struct {
             if (props.string) |s| php.release(s);
             props.string = new_str;
             php.addRef(new_str);
+        } else {
+            return try writeGenericProperty(obj, name, value, cache_slot);
         }
         return value;
     }
@@ -382,6 +381,9 @@ pub const ErrorSet = struct {
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;
+    const returnBytes = Super.returnBytes;
+    const readGenericProperty = Super.readGenericProperty;
+    const writeGenericProperty = Super.writeGenericProperty;
     const object = Super.object;
 };
 

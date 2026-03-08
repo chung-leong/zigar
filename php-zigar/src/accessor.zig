@@ -42,6 +42,7 @@ pub const Error = error{
     KeyIsNotString,
     OutOfBound,
     OutOfMemory,
+    ReadOnlyProperty,
     Unexpected,
     Unsupported,
     WriteProtected,
@@ -151,24 +152,39 @@ pub const ObjectTransform = enum {
     to_integer,
     to_plain,
     to_value,
+    to_bytes,
 
     pub fn apply(self: @This(), value: *Value) Error!void {
-        switch (php.getType(value)) {
-            .object => {
-                const obj = php.getValueObject(value) catch unreachable;
-                if (ZigClassEntry.isZig(obj.ce)) {
-                    defer php.release(obj);
-                    value.* = try invokeMethod(obj, "readSelf", .{self});
-                } else if (php.isGMP(obj)) {
-                    if (self == .to_string) try php.convertValue(value, .string);
-                }
-            },
-            else => switch (self) {
-                .to_string => try php.convertValue(value, .string),
-                .to_integer => try php.convertValue(value, .long),
-                else => {},
-            },
+        if (php.getType(value) == .object) {
+            const obj = php.getValueObject(value) catch unreachable;
+            if (ZigClassEntry.isZig(obj.ce)) {
+                defer php.release(obj);
+                value.* = try invokeMethod(obj, "readSelf", .{self});
+                return;
+            } else if (php.isGMP(obj)) {
+                // leave GMP object as is
+                if (self == .to_integer) return;
+            }
         }
+        switch (self) {
+            .to_string => try php.convertValue(value, .string),
+            .to_integer => try php.convertValue(value, .long),
+            .to_bytes => return error.Unsupported,
+            else => {},
+        }
+    }
+
+    pub fn fromPropName(name: *const php.String) ?@This() {
+        const transforms = .{
+            .__plain = .to_plain,
+            .__value = .to_value,
+            .__string = .to_string,
+            .__int = .to_integer,
+            .__bytes = .to_bytes,
+        };
+        return inline for (std.meta.fields(@TypeOf(transforms))) |field| {
+            if (php.matchString(name, field.name)) break @field(transforms, field.name);
+        } else null;
     }
 };
 

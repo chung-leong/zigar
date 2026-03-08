@@ -694,10 +694,15 @@ pub fn getStringContent(str: *const String) []const u8 {
     return s[0..len];
 }
 
-pub fn compareStrings(s1: *String, s2: *String) bool {
+pub fn compareStrings(s1: *const String, s2: *const String) bool {
     const sc1 = getStringContent(s1);
     const sc2 = getStringContent(s2);
     return std.mem.eql(u8, sc1, sc2);
+}
+
+pub fn matchString(s: *const String, text: []const u8) bool {
+    const sc = getStringContent(s);
+    return std.mem.eql(u8, sc, text);
 }
 
 pub fn useString(str: ?*String, def: []const u8) *String {

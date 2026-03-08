@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const accessor = @import("../accessor.zig");
+const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const Closure = @import("../closure.zig").Closure;
@@ -50,7 +52,7 @@ pub fn Class(comptime S: type) type {
         pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: *const Value) !?*Function {
             const obj = obj_ptr.*;
             const self = fromObject(obj);
-            const field = self.readMember(name, null) catch return null;
+            const field = self.readContainerMember(name, null) catch return null;
             defer php.release(&field);
             const field_obj = php.getValueObject(&field) catch return null;
             const field_class = ZigClassEntry.fromObject(field_obj);
@@ -132,12 +134,14 @@ pub fn Class(comptime S: type) type {
             return &ZigObject(S).fromObject(obj).zig_portion;
         }
 
+        pub const readSelf = Super.readContainer;
         pub const readProperty = Super.readContainerProperty;
         pub const writeProperty = Super.writeContainerProperty;
+        pub const getProperties = Super.getContainerProperties;
         pub const getPropertyPointer = Super.getPropertyPointer;
         pub const getReferencedObjects = Super.getReferencedObjects;
         const fromObject = Super.fromObject;
         const object = Super.object;
-        const readMember = Super.readMember;
+        const readContainerMember = Super.readContainerMember;
     };
 }

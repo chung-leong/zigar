@@ -71,9 +71,13 @@ pub const ByteBuffer = struct {
     }
 
     pub fn copy(self: *@This(), other: *const @This()) !void {
+        try self.copyBytes(other.bytes);
+    }
+
+    pub fn copyBytes(self: *@This(), bytes: []const u8) !void {
         if (self.is_read_only) return error.WriteProtected;
-        if (self.bytes.len != other.bytes.len) return error.LengthMismatch;
-        @memcpy(self.bytes, other.bytes);
+        if (self.bytes.len != bytes.len) return error.LengthMismatch;
+        @memcpy(self.bytes, bytes);
     }
 
     pub fn clear(self: *@This()) void {

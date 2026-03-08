@@ -51,27 +51,14 @@ pub const Struct = struct {
 
     pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
-        return switch (transform) {
-            .to_value => self.returnSelf(),
-            .to_plain => create: {
-                var iter = class.getMemberIterator(.instance);
-                const ht = php.createArray();
-                while (iter.next()) |member| {
-                    const name = iter.currentName() orelse return error.Unexpected;
-                    var value = try member.accessors.get(self);
-                    try transform.apply(&value);
-                    php.setHashEntry(ht, name, &value);
-                }
-                var value = php.createValueArray(ht);
-                try php.convertValue(&value, .object);
-                break :create value;
-            },
-            .to_integer => get: {
+        if (transform == .to_integer) {
+            const flags = class.getFlags(@This());
+            if (flags.is_packed) {
                 // TODO: handle packed struct
-                break :get error.Unsupported;
-            },
-            .to_string => error.Unsupported,
-        };
+                @panic("TODO");
+            }
+        }
+        return self.readContainer(transform);
     }
 
     pub const setStorage = Super.setStorage;
@@ -85,8 +72,5 @@ pub const Struct = struct {
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
-    const returnSelf = Super.returnSelf;
-    const readMember = Super.readMember;
-    const writeMember = Super.writeMember;
-    const throwFieldError = Super.throwFieldError;
+    const readContainer = Super.readContainer;
 };

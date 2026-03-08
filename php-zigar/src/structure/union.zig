@@ -90,31 +90,6 @@ pub const Union = struct {
     };
     pub const constructor_args = "an array as argument or one named argument";
 
-    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
-        return switch (transform) {
-            .to_value => self.returnSelf(),
-            .to_plain => create: {
-                const class = ZigClassEntry.fromStructure(self);
-                var iter = class.getMemberIterator(.instance);
-                const ht = php.createArray();
-                while (iter.next()) |member| {
-                    const name = iter.currentName() orelse return error.Unexpected;
-                    var value = try member.accessors.get(self);
-                    try transform.apply(&value);
-                    php.setHashEntry(ht, name, &value);
-                }
-                var value = php.createValueArray(ht);
-                try php.convertValue(&value, .object);
-                break :create value;
-            },
-            .to_integer => get: {
-                // TODO: packed union
-                break :get error.Unsupported;
-            },
-            .to_string => error.Unsupported,
-        };
-    }
-
     pub fn writeSelf(self: *@This(), value: *const Value) Error!void {
         if (try self.copySelf(value)) return;
         const ht = try php.getValueHashTable(value);
@@ -126,7 +101,7 @@ pub const Union = struct {
         }
         const field_value = iter.next().?;
         const name = iter.currentName() orelse return error.KeyIsNotString;
-        self.writeMember(name, field_value, null) catch |err| {
+        self.writeContainerMember(name, field_value, null) catch |err| {
             return self.throwFieldError(name, err);
         };
         const class = ZigClassEntry.fromStructure(self);
@@ -141,17 +116,17 @@ pub const Union = struct {
         const self = fromObject(obj);
         self.checkSelector(name) catch |err| {
             const class = ZigClassEntry.fromObject(obj);
-            if (!class.flags.@"union".has_tag) {
+            retval.* = php.createValueNull();
+            if (err != error.InactiveField or !class.flags.@"union".has_tag) {
                 // when the union is untagged, it isn't possible to determine programmatically
                 // whether a field is set or not when optimize is release; the selector is only
                 // available for debug purpose; throwing an error because the operation is illegal
                 const es = self.throwFieldError(name, err);
                 _ = &es;
             }
-            retval.* = php.createValueNull();
             return retval;
         };
-        return Super.readContainerProperty(obj, name, prop_type, cache_slot, retval);
+        return readContainerProperty(obj, name, prop_type, cache_slot, retval);
     }
 
     pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
@@ -159,7 +134,7 @@ pub const Union = struct {
         self.checkSelector(name) catch |err| {
             return self.throwFieldError(name, err);
         };
-        return Super.writeContainerProperty(obj, name, value, cache_slot);
+        return writeContainerProperty(obj, name, value, cache_slot);
     }
 
     pub fn getProperties(obj: *Object) !*HashTable {
@@ -201,7 +176,9 @@ pub const Union = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const selector = static.selector orelse return;
-        const sel_value = try php.getHashEntry(&selector.possible_values, name);
+        const sel_value = php.getHashEntry(&selector.possible_values, name) catch |err| {
+            return if (ObjectTransform.fromPropName(name) != null) {} else err;
+        };
         const active_sel_value = try selector.accessors.get(self.bytes);
         if (!compareSelectors(sel_value, &active_sel_value)) return error.InactiveField;
     }
@@ -215,7 +192,7 @@ pub const Union = struct {
     }
 
     fn throwFieldError(self: *@This(), name: *String, err: anytype) error{ExceptionThrown} {
-        const member = self.findMember(name, null) catch null;
+        const member = self.findContainerMember(name, null) catch null;
         if (member != null and err == error.InactiveField) {
             const active_name = find: {
                 const class = ZigClassEntry.fromStructure(self);
@@ -239,6 +216,7 @@ pub const Union = struct {
     }
 
     pub const setStorage = Super.setStorage;
+    pub const readSelf = Super.readContainer;
     pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
     pub const freeObject = Super.freeObject;
@@ -248,6 +226,9 @@ pub const Union = struct {
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;
     const returnSelf = Super.returnSelf;
-    const writeMember = Super.writeMember;
-    const findMember = Super.findMember;
+    const returnBytes = Super.returnBytes;
+    const readContainerProperty = Super.readContainerProperty;
+    const writeContainerProperty = Super.writeContainerProperty;
+    const writeContainerMember = Super.writeContainerMember;
+    const findContainerMember = Super.findContainerMember;
 };

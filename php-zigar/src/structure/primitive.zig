@@ -25,6 +25,7 @@ pub const Primitive = struct {
     };
 
     pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
+        if (transform == .to_bytes) return try self.returnBytes();
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         var value = try static.value_acc.get(self.bytes);
@@ -45,4 +46,5 @@ pub const Primitive = struct {
     pub const castObject = Super.castObject;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
+    const returnBytes = Super.returnBytes;
 };

@@ -5,4 +5,9 @@ pub const U = union(enum) {
     number2: i32,
 };
 
-pub var something: U = .{ .number1 = 1 };
+pub var something: [4]U = .{
+    .{ .number1 = 1 },
+    .{ .number2 = 2 },
+    .{ .number1 = 3 },
+    .{ .number2 = 4 },
+};

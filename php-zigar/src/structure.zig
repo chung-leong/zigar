@@ -125,23 +125,32 @@ pub fn Parent(comptime S: type) type {
             return try S.writeSelf(self, arg);
         }
 
-        // error set cannot be inferred due to recursion
-        pub fn writeContainer(self: *S, value: *const Value) accessor.Error!void {
-            if (try copySelf(self, value)) return;
-            const ht = try php.getValueHashTable(value);
-            var iter: HashTableIterator = .init(ht, .{});
-            while (iter.next()) |field_value| {
-                const name = iter.currentName() orelse return error.KeyIsNotString;
-                writeMember(self, name, field_value, null) catch |err| {
-                    return throwFieldError(self, name, err);
-                };
-            }
-        }
-
         pub fn readGeneric(self: *S, transform: ObjectTransform) !Value {
             var value = try returnSelf(self);
             if (transform != .to_value) try transform.apply(&value);
             return value;
+        }
+
+        pub fn readContainer(self: *S, transform: ObjectTransform) !Value {
+            return switch (transform) {
+                .to_value => returnSelf(self),
+                .to_plain => create: {
+                    const ht = try S.getProperties(object(self));
+                    var iter: HashTableIterator = .init(ht, .{});
+                    while (iter.next()) |value| {
+                        // make child objects plain too
+                        if (php.getType(value) == .object) {
+                            try transform.apply(value);
+                        }
+                    }
+                    php.addRef(ht);
+                    var value = php.createValueArray(ht);
+                    try php.convertValue(&value, .object);
+                    break :create value;
+                },
+                .to_bytes => try returnBytes(self),
+                .to_string, .to_integer => error.Unsupported,
+            };
         }
 
         pub fn readVector(self: *S, transform: ObjectTransform) !Value {
@@ -175,7 +184,21 @@ pub fn Parent(comptime S: type) type {
                     }
                 },
                 .to_integer => error.Unsupported,
+                .to_bytes => try returnBytes(self),
             };
+        }
+
+        // error set cannot be inferred due to recursion
+        pub fn writeContainer(self: *S, value: *const Value) accessor.Error!void {
+            if (try copySelf(self, value)) return;
+            const ht = try php.getValueHashTable(value);
+            var iter: HashTableIterator = .init(ht, .{});
+            while (iter.next()) |field_value| {
+                const name = iter.currentName() orelse return error.KeyIsNotString;
+                writeContainerMember(self, name, field_value, null) catch |err| {
+                    return throwFieldError(self, name, err);
+                };
+            }
         }
 
         pub fn writeVector(self: *S, value: *const Value) !void {
@@ -218,31 +241,49 @@ pub fn Parent(comptime S: type) type {
             return php.createValueObject(obj);
         }
 
-        pub fn readMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !Value {
-            if (findMember(self, name, cache_slot)) |member| {
+        pub fn returnBytes(self: *S) !Value {
+            if (!@hasField(S, "bytes")) return error.Unsupported;
+            return php.createValueStringContent(self.bytes.bytes);
+        }
+
+        pub fn readContainerMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !Value {
+            if (findContainerMember(self, name, cache_slot)) |member| {
                 var value = try member.accessors.get(self);
                 if (member.objectTransform()) |ot| try ot.apply(&value);
                 return value;
-            } else |err| {
-                if (@hasDecl(S, "readSelf")) {
-                    if (isDollarSign(name)) return try self.readSelf(.to_value);
-                }
-                return err;
+            } else |_| {
+                return readGenericMember(self, name);
             }
         }
 
-        pub fn writeMember(self: *S, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !void {
-            if (findMember(self, name, cache_slot)) |member| {
-                return try member.accessors.set(self, value);
-            } else |err| {
-                if (@hasDecl(S, "writeSelf")) {
-                    if (isDollarSign(name)) return try self.writeSelf(value);
-                }
-                return err;
+        pub fn readGenericMember(self: *S, name: *String) !Value {
+            const transform = ObjectTransform.fromPropName(name) orelse return error.Missing;
+            return self.readSelf(transform) catch |err| switch (err) {
+                error.Unsupported => error.Missing,
+                else => err,
+            };
+        }
+
+        pub fn writeContainerMember(self: *S, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !void {
+            if (findContainerMember(self, name, cache_slot)) |member| {
+                try member.accessors.set(self, value);
+            } else |_| {
+                if (scope == .instance) try writeGenericMember(self, name, value);
             }
         }
 
-        pub fn findMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !*const ZigClassEntry.Member {
+        pub fn writeGenericMember(self: *S, name: *String, value: *Value) !void {
+            if (php.matchString(name, "__value")) {
+                try self.writeSelf(value);
+            } else if (@hasField(S, "bytes") and php.matchString(name, "__bytes")) {
+                const sc = try php.getValueStringContent(value);
+                try self.bytes.copyBytes(sc);
+            } else {
+                return error.NotFound;
+            }
+        }
+
+        pub fn findContainerMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !*const ZigClassEntry.Member {
             const class = ZigClassEntry.fromStructure(self);
             const cache_entry: ?*CacheEntry = @ptrCast(cache_slot);
             if (cache_entry) |cached| {
@@ -312,21 +353,41 @@ pub fn Parent(comptime S: type) type {
             return php.SUCCESS;
         }
 
+        pub fn readGenericProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
+            _ = prop_type;
+            _ = cache_slot;
+            const self = fromObject(obj);
+            if (readGenericMember(self, name)) |value| {
+                retval.* = value;
+            } else |err| {
+                _ = &throwFieldError(self, name, err);
+            }
+            return retval;
+        }
+
         pub fn readContainerProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
             _ = prop_type;
             const self = fromObject(obj);
-            const value = readMember(self, name, cache_slot) catch |err| {
+            if (readContainerMember(self, name, cache_slot)) |value| {
+                retval.* = value;
+            } else |err| {
                 _ = &throwFieldError(self, name, err);
-                // PHP expects us to return a valid pointer
-                return retval;
-            };
-            retval.* = value;
+            }
             return retval;
+        }
+
+        pub fn writeGenericProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
+            _ = cache_slot;
+            const self = fromObject(obj);
+            writeGenericMember(self, name, value) catch |err| {
+                return throwFieldError(self, name, err);
+            };
+            return value;
         }
 
         pub fn writeContainerProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
             const self = fromObject(obj);
-            writeMember(self, name, value, cache_slot) catch |err| {
+            writeContainerMember(self, name, value, cache_slot) catch |err| {
                 return throwFieldError(self, name, err);
             };
             return value;
@@ -482,8 +543,4 @@ fn Payload(comptime RT: type) type {
         .error_union => |eu| eu.payload,
         else => RT,
     };
-}
-
-fn isDollarSign(str: *String) bool {
-    return str.len == 1 and str.val[0] == '$';
 }

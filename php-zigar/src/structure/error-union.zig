@@ -82,5 +82,4 @@ pub const ErrorUnion = struct {
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;
-    const returnSelf = Super.returnSelf;
 };
