@@ -190,7 +190,8 @@ pub const Enum = struct {
         fn addCanonical(self: *@This(), name: *String, tag_obj: *Object) !void {
             const tag_struct = fromObject(tag_obj);
             // reference tag by integer value
-            var tag_value = try tag_struct.readSelf(.to_integer);
+            var tag_value = try self.value_acc.transform(null).get(tag_struct.bytes);
+            // tag_value might contain a GMP object, so we need to release it
             defer php.release(&tag_value);
             var tag = php.createValueObject(tag_obj);
             // reference tag by value

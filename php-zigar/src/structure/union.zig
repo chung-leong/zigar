@@ -162,6 +162,41 @@ pub const Union = struct {
         return Super.writeContainerProperty(obj, name, value, cache_slot);
     }
 
+    pub fn getProperties(obj: *Object) !*HashTable {
+        const class = ZigClassEntry.fromObject(obj);
+        const flags = class.getFlags(@This());
+        const self = fromObject(obj);
+        const static = class.getStaticData(@This());
+        const ht = php.createArray();
+        var iter = class.getMemberIterator(.instance);
+        if (flags.has_tag) {
+            // tagged unions return only the active member
+            const selector = static.selector orelse return error.Unexpected;
+            const active_sel_value = try selector.accessors.get(self.bytes);
+            while (iter.next()) |member| {
+                if (iter.currentName()) |name| {
+                    const sel_value = try php.getHashEntry(&selector.possible_values, name);
+                    if (compareSelectors(sel_value, &active_sel_value)) {
+                        var value = try member.accessors.get(self);
+                        php.setHashEntry(ht, name, &value);
+                        break;
+                    }
+                }
+            }
+        } else {
+            // where as untagged ones return all members
+            while (iter.next()) |member| {
+                if (iter.currentName()) |name| {
+                    var value = try member.accessors.get(self);
+                    php.setHashEntry(ht, name, &value);
+                }
+            }
+        }
+        // caller seem to expect a hash table with zero refcount
+        ht.gc.refcount = 0;
+        return ht;
+    }
+
     fn checkSelector(self: *@This(), name: *String) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());

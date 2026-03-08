@@ -145,7 +145,6 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn readVector(self: *S, transform: ObjectTransform) !Value {
-            const class = ZigClassEntry.fromStructure(self);
             return switch (transform) {
                 .to_value => returnSelf(self),
                 .to_plain => create: {
@@ -159,8 +158,9 @@ pub fn Parent(comptime S: type) type {
                     break :create php.createValueArray(ht);
                 },
                 .to_string => create: {
+                    const class = ZigClassEntry.fromStructure(self);
                     const flags = class.getFlags(S);
-                    if (!@hasDecl(@TypeOf(flags), "is_string") or !flags.is_string) {
+                    if (!@hasField(@TypeOf(flags), "is_string") or !flags.is_string) {
                         break :create error.Unsupported;
                     }
                     const len = try S.getLength(self);
@@ -295,21 +295,13 @@ pub fn Parent(comptime S: type) type {
 
         pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
             const desired_type = try php.Type.fromInt(type_id);
-            const transform: ?ObjectTransform = switch (desired_type) {
+            const transform: ObjectTransform = switch (desired_type) {
                 .string => .to_string,
                 .long => .to_integer,
-                else => null,
+                else => return php.FAILURE,
             };
             const self = fromObject(obj);
-            if (transform) |t| {
-                if (self.readSelf(t)) |value| {
-                    retval.* = value;
-                    return php.SUCCESS;
-                } else |_| {}
-            }
-            // get the value and cast the result
-            retval.* = try self.readSelf(.to_value);
-            try php.convertValue(retval, desired_type);
+            retval.* = self.readSelf(transform) catch return php.FAILURE;
             return php.SUCCESS;
         }
 

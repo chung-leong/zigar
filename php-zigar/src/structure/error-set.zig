@@ -171,7 +171,6 @@ pub const ErrorSet = struct {
 
         fn addCanonical(self: *@This(), name: *String, err_obj: *Object) !void {
             const class = ZigClassEntry.fromStatic(self);
-
             const err_struct = fromObject(err_obj);
             const err_value = try self.value_acc.transform(null).get(err_struct.bytes);
             // reference err by integer value
