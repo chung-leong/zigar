@@ -316,7 +316,7 @@ pub const ErrorSet = struct {
         return value;
     }
 
-    pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: *const Value) !?*Function {
+    pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: ?*const Value) !?*Function {
         const obj = obj_ptr.*;
         const class = ZigClassEntry.fromObject(obj);
         const static = class.getStaticData(@This());

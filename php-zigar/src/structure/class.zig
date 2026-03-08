@@ -49,7 +49,7 @@ pub fn Class(comptime S: type) type {
             Super.freeObject(obj);
         }
 
-        pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: *const Value) !?*Function {
+        pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: ?*const Value) !?*Function {
             const obj = obj_ptr.*;
             const self = fromObject(obj);
             const field = self.readContainerMember(name, null) catch return null;
@@ -59,7 +59,7 @@ pub fn Class(comptime S: type) type {
             if (field_class.type == .function) {
                 const func = ZigObject(structure.Function).fromObject(field_obj).structure();
                 return func.closure.function();
-            } else if (field_obj.handlers.*.get_closure) |_| {
+            } else if (field_obj.handlers.*.get_closure != php.std_object_handlers.get_closure) {
                 // aside from Function, only Class implements getClosure()
                 const class_struct = fromObject(field_obj);
                 if (class_struct.closures.cast) |c| return c.function();

@@ -7,5 +7,6 @@ $m = zigar_load_module("/tmp/scratch.zigar");
 
 debug_zval_dump(isset($m->foo));
 debug_zval_dump(isset($m->function));
-debug_zval_dump(is_callable($m, 'foo'));
-debug_zval_dump(is_callable($m, 'function'));
+debug_zval_dump(is_callable([ $m, 'foo' ]));
+debug_zval_dump(is_callable([ $m, 'function' ]));
+debug_zval_dump(is_callable([ $m, 'number' ]));
