@@ -343,13 +343,25 @@ pub fn Parent(comptime S: type) type {
 
         pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
             const desired_type = try php.Type.fromInt(type_id);
-            const transform: ObjectTransform = switch (desired_type) {
-                .string => .to_string,
-                .long => .to_integer,
-                else => return php.FAILURE,
-            };
             const self = fromObject(obj);
-            retval.* = self.readSelf(transform) catch return php.FAILURE;
+            switch (desired_type) {
+                .string => retval.* = self.readSelf(.to_string) catch return php.FAILURE,
+                .long => retval.* = self.readSelf(.to_integer) catch return php.FAILURE,
+                .boolean, .double => {
+                    retval.* = try self.readSelf(.to_value);
+                    if (php.getValueObject(retval)) |value_obj| {
+                        defer php.release(value_obj);
+                        if (desired_type == .boolean) {
+                            retval.* = php.createValueBool(true);
+                        } else {
+                            return php.FAILURE;
+                        }
+                    } else |_| {
+                        try php.convertValue(retval, desired_type);
+                    }
+                },
+                else => return php.FAILURE,
+            }
             return php.SUCCESS;
         }
 
