@@ -58,7 +58,7 @@ final class TypeHandlingTest extends ZigarTestCase
         $this->assertSame($m->struct_a->Type2, $m->Uint16);
     }
 
-    public function testHandleTypeInPackedStruct(): void
+    public function testFailWithTypeInPackedStruct(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
@@ -78,7 +78,7 @@ final class TypeHandlingTest extends ZigarTestCase
         // TODO: check __plain
     }
 
-    public function testHandleTypeInBareUnion(): void
+    public function testFailWithTypeInBareUnion(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
@@ -130,7 +130,7 @@ final class TypeHandlingTest extends ZigarTestCase
         $m->print();
     }
 
-    public function testHandleTypeInVector(): void
+    public function testFailWithTypeInVector(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');

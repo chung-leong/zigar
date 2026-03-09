@@ -49,7 +49,7 @@ final class NullHandlingTest extends ZigarTestCase
         $m->print();
     }
 
-    public function testHandleNullInPackedStruct(): void
+    public function testFailWithNullInPackedStruct(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
@@ -64,7 +64,7 @@ final class NullHandlingTest extends ZigarTestCase
         $this->assertSame(null, $b->empty);
     }
 
-    public function testHandleNullInBareUnion(): void
+    public function testFailWithNullInBareUnion(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
@@ -87,7 +87,7 @@ final class NullHandlingTest extends ZigarTestCase
         });
     }
 
-    public function testHandleNullInOptional(): void
+    public function testFailWithNullInOptional(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
@@ -110,7 +110,7 @@ final class NullHandlingTest extends ZigarTestCase
         });
     }
 
-    public function testHandleNullInVector(): void
+    public function testFailWithNullInVector(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');

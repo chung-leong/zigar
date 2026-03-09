@@ -54,7 +54,7 @@ final class ComptimeIntHandlingTest extends ZigarTestCase
         $m->print();
     }
 
-    public function testHandleComptimeIntInPackedStruct(): void
+    public function testFailWithComptimeIntInPackedStruct(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
@@ -69,7 +69,7 @@ final class ComptimeIntHandlingTest extends ZigarTestCase
         $this->assertSame([ 'number' => 1234, 'state' => false ], (array) $b);
     }
 
-    public function testHandleComptimeIntInBareUnion(): void
+    public function testFailWithComptimeIntInBareUnion(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
@@ -108,7 +108,7 @@ final class ComptimeIntHandlingTest extends ZigarTestCase
         });
     }
 
-    public function testHandleComptimeIntInVector(): void
+    public function testFailWithComptimeIntInVector(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');

@@ -85,7 +85,7 @@ final class OptionalHandlingTest extends ZigarTestCase
         $m->print();
     }
 
-    public function testHandleOptionalInPackedStruct(): void
+    public function testFailWithOptionalInPackedStruct(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
@@ -204,7 +204,7 @@ final class OptionalHandlingTest extends ZigarTestCase
         $m->print();       
     }
 
-    public function testHandleOptionalInVector(): void
+    public function testFailWithOptionalInVector(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');

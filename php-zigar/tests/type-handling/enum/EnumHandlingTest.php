@@ -202,7 +202,7 @@ final class EnumHandlingTest extends ZigarTestCase
         $m->print();
     }
 
-    public function testHandleEnumInVector(): void
+    public function testFailWithEnumInVector(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');

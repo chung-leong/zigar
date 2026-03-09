@@ -2,14 +2,14 @@
 
 final class NoReturnHandlingTest extends ZigarTestCase
 {   
-    public function testImportNoReturnAsStaticVariables(): void
+    public function testFailWithNoReturnAsStaticVariables(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
         });
     }
 
-    public function testPrintNoReturnArguments(): void
+    public function testFailWithNoReturnArguments(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
@@ -25,70 +25,70 @@ final class NoReturnHandlingTest extends ZigarTestCase
         $this->assertSame(true, (bool) $m->exit);
     }
 
-    public function testHandleNoReturnInArray(): void
+    public function testFailWithNoReturnInArray(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/array-of.zig');
         });
     }
 
-    public function testHandleNoReturnInStruct(): void
+    public function testFailWithNoReturnInStruct(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
         });
     }
 
-    public function testHandleNoReturnInPackedStruct(): void
+    public function testFailWithNoReturnInPackedStruct(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
         });
     }
 
-    public function testHandleNoReturnAsComptimeField(): void
+    public function testFailWithNoReturnAsComptimeField(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
         });
     }
 
-    public function testHandleNoReturnInBareUnion(): void
+    public function testFailWithNoReturnInBareUnion(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
         });
     }
 
-    public function testHandleNoReturnInTaggedUnion(): void
+    public function testFailWithNoReturnInTaggedUnion(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-tagged-union.zig');
         });
     }
 
-    public function testHandleNoReturnInOptional(): void
+    public function testFailWithNoReturnInOptional(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
         });
     }
 
-    public function testHandleNoReturnInErrorUnion(): void
+    public function testFailWithNoReturnInErrorUnion(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         });
     }
 
-    public function testHandleNoReturnInVector(): void
+    public function testFailWithNoReturnInVector(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
         });
     }
 
-    public function testConstructNoReturn(): void
+    public function testFailToConstructNoReturn(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/constructor.zig');

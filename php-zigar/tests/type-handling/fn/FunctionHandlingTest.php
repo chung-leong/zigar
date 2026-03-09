@@ -27,7 +27,7 @@ final class FunctionHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
     }
 
-    public function testHandleFunctionInPackedStruct(): void
+    public function testFailWithFunctionInPackedStruct(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
@@ -39,7 +39,7 @@ final class FunctionHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
     }
 
-    public function testHandleFunctionInBareUnion(): void
+    public function testFailWithFunctionInBareUnion(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
@@ -61,7 +61,7 @@ final class FunctionHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
     }
 
-    public function testHandleFunctionInVector(): void
+    public function testFailWithFunctionInVector(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');

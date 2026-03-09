@@ -208,7 +208,7 @@ final class VoidHandlingTest extends ZigarTestCase
         });
     }
 
-    public function testHandleVoidInVector(): void
+    public function testFailWithVoidInVector(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');

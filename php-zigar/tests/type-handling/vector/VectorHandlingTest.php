@@ -227,7 +227,7 @@ final class VectorHandlingTest extends ZigarTestCase
         // });
     }
 
-    public function testHandleVectorInVector(): void
+    public function testFailWithVectorInVector(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');

@@ -40,7 +40,7 @@ final class UndefinedHandlingTest extends ZigarTestCase
         $this->assertSame([ 'empty1' => null, 'empty2' => null ], (array) $b);
     }
 
-    public function testHandleUndefinedInPackedStruct(): void
+    public function testFailWithUndefinedInPackedStruct(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
@@ -57,7 +57,7 @@ final class UndefinedHandlingTest extends ZigarTestCase
         $this->assertSame(null, $b->empty);
     }
 
-    public function testHandleUndefinedInBareUnion(): void
+    public function testFailWithUndefinedInBareUnion(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
@@ -78,21 +78,21 @@ final class UndefinedHandlingTest extends ZigarTestCase
         $this->assertSame([ 'number' => 123 ], (array) $b);
     }
 
-    public function testHandleUndefinedInOptional(): void
+    public function testFailWithUndefinedInOptional(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
         });
     }
 
-    public function testHandleUndefinedInErrorUnion(): void
+    public function testFailWithUndefinedInErrorUnion(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         });
     }
 
-    public function testHandleUndefinedInVector(): void
+    public function testFailWithUndefinedInVector(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');

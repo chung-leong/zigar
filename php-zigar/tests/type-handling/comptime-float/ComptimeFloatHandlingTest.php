@@ -50,7 +50,7 @@ final class ComptimeFloatHandlingTest extends ZigarTestCase
         $m->print();
     }
 
-    public function testHandleComptimeFloatInPackedStruct(): void
+    public function testFailWithComptimeFloatInPackedStruct(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
@@ -65,7 +65,7 @@ final class ComptimeFloatHandlingTest extends ZigarTestCase
         $this->assertSame([ 'state' => false, 'number' => 1.234 ], (array) $b);
     }
 
-    public function testHandleComptimeFloatInBareUnion(): void
+    public function testFailWithComptimeFloatInBareUnion(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
@@ -104,7 +104,7 @@ final class ComptimeFloatHandlingTest extends ZigarTestCase
         });
     }
 
-    public function testHandleComptimeFloatInVector(): void
+    public function testFailWithComptimeFloatInVector(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');

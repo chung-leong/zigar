@@ -110,7 +110,7 @@ final class ErrorUnionHandlingTest extends ZigarTestCase
         $m->print();
     }
 
-    public function testHandleErrorUnionInPackedStruct(): void
+    public function testFailWithErrorUnionInPackedStruct(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
@@ -207,7 +207,7 @@ final class ErrorUnionHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
     }
 
-    public function testHandleErrorUnionInVector(): void
+    public function testFailWithErrorUnionInVector(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');

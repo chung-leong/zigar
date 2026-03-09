@@ -53,7 +53,7 @@ final class EnumLiteralHandlingTest extends ZigarTestCase
         $m->print();
     }
 
-    public function testFailToCompileCodeWithEnumLiteralInPackedStruct(): void
+    public function testFailWithEnumLiteralInPackedStruct(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
@@ -75,7 +75,7 @@ final class EnumLiteralHandlingTest extends ZigarTestCase
         $m->print();
     }
 
-    public function testHandleEnumLiteralInBareUnion(): void
+    public function testFailWithEnumLiteralInBareUnion(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
@@ -115,7 +115,7 @@ final class EnumLiteralHandlingTest extends ZigarTestCase
         $m->print();
     }
 
-    public function testFailToCompileCodeContaingEnumLiteralInVector(): void
+    public function testFailWithEnumLiteralInVector(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');

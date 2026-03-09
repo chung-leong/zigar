@@ -109,7 +109,7 @@ final class ArrayHandlingTest extends ZigarTestCase
         ], $m->struct_b->__plain);
     }
 
-    public function testHandleArrayInPackedStruct(): void
+    public function testFailWithArrayInPackedStruct(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
@@ -240,7 +240,7 @@ final class ArrayHandlingTest extends ZigarTestCase
         $m->print();
     }
 
-    public function testHandleArrayInVector(): void
+    public function testFailWithArrayInVector(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
