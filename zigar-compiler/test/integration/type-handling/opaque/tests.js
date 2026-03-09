@@ -23,7 +23,7 @@ export function addTests(importModule, options) {
       const dv2 = module.orange_ptr.dataView;
       expect(dv1.byteLength).to.equal(4);
       expect(dv2.byteLength).to.equal(0);
-      expect(dv2.buffer).to.equal(dv2.buffer);
+      expect(dv2.buffer).to.equal(dv1.buffer);
       const result = compare(module.int_ptr, module.orange_ptr);
       expect(result).to.be.true;
     })

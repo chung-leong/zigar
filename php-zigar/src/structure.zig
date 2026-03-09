@@ -87,14 +87,15 @@ pub fn Parent(comptime S: type) type {
         pub fn setStorage(self: *S, bytes: *ByteBuffer, slots: *const Value) !void {
             if (@hasField(S, "bytes")) {
                 const class = ZigClassEntry.fromStructure(self);
-                const byte_size = class.byte_size orelse return error.Unexpected;
-                if (byte_size != bytes.bytes.len) {
-                    return php.throwExceptionFmt("{s} has {d} byte{s}, received {d}", .{
-                        class.getName(),
-                        byte_size,
-                        if (byte_size != 1) "s" else "",
-                        bytes.bytes.len,
-                    });
+                if (class.byte_size) |byte_size| {
+                    if (byte_size != bytes.bytes.len) {
+                        return php.throwExceptionFmt("{s} has {d} byte{s}, received {d}", .{
+                            class.getName(),
+                            byte_size,
+                            if (byte_size != 1) "s" else "",
+                            bytes.bytes.len,
+                        });
+                    }
                 }
                 self.bytes = bytes;
                 self.bytes.addRef();
@@ -258,9 +259,12 @@ pub fn Parent(comptime S: type) type {
 
         pub fn readGenericMember(self: *S, name: *String) !Value {
             const transform = ObjectTransform.fromPropName(name) orelse return error.Missing;
-            return self.readSelf(transform) catch |err| switch (err) {
-                error.Unsupported => error.Missing,
-                else => err,
+            return self.readSelf(transform) catch |err| {
+                const E = @TypeOf(err);
+                return if (isPartOf(error.Unsupported, E) and err == error.Unsupported)
+                    error.Missing
+                else
+                    err;
             };
         }
 
@@ -327,8 +331,9 @@ pub fn Parent(comptime S: type) type {
 
         pub fn throwFieldError(self: *S, name: *String, err: anytype) error{ExceptionThrown} {
             const class = ZigClassEntry.fromStructure(self);
-            return switch (err) {
-                error.Missing => switch (scope) {
+            const E = @TypeOf(err);
+            return if (isPartOf(error.Missing, E) and err == error.Missing)
+                switch (scope) {
                     .instance => php.throwExceptionFmt("no field named '{s}' in {s} '{s}' (zig)", .{
                         php.getStringContent(name),
                         class.getStructureName(),
@@ -339,10 +344,11 @@ pub fn Parent(comptime S: type) type {
                         class.getName(),
                         php.getStringContent(name),
                     }),
-                },
-                error.ExceptionThrown => error.ExceptionThrown,
-                else => php.throwError(err),
-            };
+                }
+            else if (!isPartOf(error.ExceptionThrown, E) or err != error.ExceptionThrown)
+                php.throwError(err)
+            else
+                error.ExceptionThrown;
         }
 
         pub fn freeObject(obj: *Object) void {
@@ -597,4 +603,11 @@ fn Payload(comptime RT: type) type {
         .error_union => |eu| eu.payload,
         else => RT,
     };
+}
+
+fn isPartOf(comptime err: anytype, comptime Set: anytype) bool {
+    const errors = @typeInfo(Set).error_set orelse return true;
+    return inline for (errors) |e| {
+        if (std.mem.eql(u8, @errorName(err), e.name)) break true;
+    } else false;
 }

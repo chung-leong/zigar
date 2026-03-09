@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const accessor = @import("../accessor.zig");
+const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
@@ -25,10 +27,30 @@ pub const Opaque = struct {
         }
     };
 
+    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
+        if (transform == .to_bytes) return try self.returnBytes();
+        return self.throwException();
+    }
+
+    pub fn writeSelf(self: *@This(), value: *const Value) !void {
+        _ = value;
+        return self.throwException();
+    }
+
+    fn throwException(self: *@This()) error{ExceptionThrown} {
+        const class = ZigClassEntry.fromStructure(self);
+        return php.throwExceptionFmt("cannot access opaque structure '{s}' (zig)", .{
+            class.getName(),
+        });
+    }
+
     pub const setStorage = Super.setStorage;
-    pub const readSelf = Super.readGeneric;
     pub const getExtent = Super.getExtent;
+    pub const copyArguments = Super.copyArguments;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
+    pub const readProperty = Super.readGenericProperty;
+    pub const writeProperty = Super.writeGenericProperty;
     pub const getReferencedObjects = Super.getReferencedObjects;
+    const returnBytes = Super.returnBytes;
 };

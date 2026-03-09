@@ -17,6 +17,7 @@ pub const Slice = struct {
     const Super = structure.Parent(@This());
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
+        value_transform: ?ObjectTransform = null,
         element_size: usize = undefined,
         element_shift: ?u6 = undefined,
 
@@ -24,6 +25,7 @@ pub const Slice = struct {
             const class = ZigClassEntry.fromObject(class_obj);
             const member = try class.getMember(.instance, 0);
             self.value_acc = &member.accessors;
+            self.value_transform = member.objectTransform();
             self.element_size = class.byte_size orelse 1;
             self.element_shift = init: {
                 const shift = std.math.log2_int(usize, self.element_size);
@@ -71,7 +73,9 @@ pub const Slice = struct {
     pub fn getElement(self: *@This(), index: usize) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        return try static.value_acc.getElement(self, index);
+        var value = try static.value_acc.getElement(self, index);
+        if (static.value_transform) |ot| try ot.apply(&value);
+        return value;
     }
 
     pub fn setElement(self: *@This(), index: usize, value: *Value) !void {

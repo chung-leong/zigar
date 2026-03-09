@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const array: [2]@Vector(4, i32) = .{
+pub var array: [2]@Vector(4, i32) = .{
     .{ 1, 2, 3, 4 },
     .{ 2, 3, 4, 5 },
 };

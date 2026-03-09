@@ -20,11 +20,13 @@ pub const Array = struct {
     const Super = structure.Parent(@This());
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
+        value_transform: ?ObjectTransform = null,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             const member = try class.getMember(.instance, 0);
             self.value_acc = &member.accessors;
+            self.value_transform = member.objectTransform();
         }
     };
 
@@ -36,7 +38,9 @@ pub const Array = struct {
     pub fn getElement(self: *@This(), index: usize) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        return try static.value_acc.getElement(self, index);
+        var value = try static.value_acc.getElement(self, index);
+        if (static.value_transform) |ot| try ot.apply(&value);
+        return value;
     }
 
     pub fn setElement(self: *@This(), index: usize, value: *Value) !void {

@@ -164,10 +164,12 @@ final class IntHandlingTest extends ZigarTestCase
         $tag = $m->TagType($m->union_a);
         $this->assertSame('number', (string) $tag);
         $this->assertSame(null, $m->union_a->state);
+
         $b = new $m->UnionA(number: 123);
         $c = new $m->UnionA(state: false);
         $this->assertSame(false, $c->state);
         $this->assertSame(null, $c->number);
+        
         $m->union_a = $b;
         $this->assertSame(123, $m->union_a->number);
         $this->assertExceptionMessage("access of union field 'state' while field 'number' is active", function() use($m) {

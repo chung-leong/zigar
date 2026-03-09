@@ -19,7 +19,6 @@ pub const Pointer = struct {
     const Super = structure.Parent(@This());
     pub const Static = struct {
         target_class: *ZigClassEntry = undefined,
-        target_transform: ?accessor.ObjectTransform = undefined,
         address_acc: *accessor.Primitive = undefined,
         length_acc: ?*accessor.Primitive = null,
 
@@ -27,7 +26,6 @@ pub const Pointer = struct {
             const class = ZigClassEntry.fromObject(class_obj);
             const target_member = try class.getMember(.instance, 0);
             self.target_class = target_member.class orelse return error.MissingClass;
-            self.target_transform = target_member.objectTransform();
             const address_member = try class.getMember(.instance, 1);
             if (address_member.accessors != .primitive) return error.InvalidAccessor;
             self.address_acc = &address_member.accessors.primitive;
@@ -83,7 +81,6 @@ pub const Pointer = struct {
         const static = class.getStaticData(@This());
         try static.loadTarget(self);
         var value = self.slots;
-        if (static.target_transform) |tt| try tt.apply(&value);
         if (transform != .to_value) try transform.apply(&value);
         return value;
     }

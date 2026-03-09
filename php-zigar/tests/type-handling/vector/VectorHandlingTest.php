@@ -6,13 +6,23 @@ final class VectorHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
         $this->assertSame([ 1.0, 2.0, 3.0, 4.0 ], (array) $m->v1);
-        // TODO
-        // $m->v2 = [ 4, 5, 6 ];
+        $this->assertSame([ 1.0, 2.0, 3.0, 4.0 ], [ ...$m->v1 ]);
+        $this->assertSame([ 1.0, 2.0, 3.0, 4.0 ], $m->v1->__plain);
+
+        $m->v2 = [ 4.0, 5.0, 6.0 ];
+        $this->assertSame([ 4.0, 5.0, 6.0 ], $m->v2->__plain);
+        $this->expectOutputString(<<<OUTPUT
+        { 4, 5, 6 }
+
+        OUTPUT);
+        $m->print();
+
+        $this->assertSame([ 1.0, 2.0, 3.0, 4.0 ], $m->v3);
     }
 
     public function testPrintVectorArguments(): void
     {
-        $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');        
+        $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
         $this->expectOutputString(<<<OUTPUT
         { 1.1, 2.2, 3.3, 4.4 }
 
@@ -33,6 +43,10 @@ final class VectorHandlingTest extends ZigarTestCase
         $this->assertSame(2, count($m->array));
         $this->assertSame([ 1, 2, 3, 4 ], (array) $m->array[0]);
         $this->assertSame([ 2, 3, 4, 5 ], (array) $m->array[1]);
+        $this->assertSame([
+            [ 1, 2, 3, 4 ],
+            [ 2, 3, 4, 5 ],
+        ], $m->array->__plain);
 
         $this->expectOutputString(<<<OUTPUT
         { { 1, 2, 3, 4 }, { 2, 3, 4, 5 } }
@@ -41,7 +55,7 @@ final class VectorHandlingTest extends ZigarTestCase
         OUTPUT);
         $m->print();
         $m->array[0][2] = 300;
-        $m->array[0][3] = 5000;
+        $m->array[1][3] = 5000;
         $m->print();
     }
 
@@ -50,10 +64,18 @@ final class VectorHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
         $this->assertSame([ 10, 20, 30, 40 ], (array) $m->struct_a->vector1);
         $this->assertSame([ 11, 21, 31, 41 ], (array) $m->struct_a->vector2);
+        $this->assertEquals((object) [
+            'vector1' =>  [ 10, 20, 30, 40 ],
+            'vector2' =>  [ 11, 21, 31, 41 ],
+        ], $m->struct_a->__plain);
         
         $b = new $m->StructA();
         $this->assertSame([ 1, 2, 3, 4 ], (array) $b->vector1);
         $this->assertSame([ 5, 6, 7, 8 ], (array) $b->vector2);
+        $this->assertEquals((object) [
+            'vector1' => [ 1, 2, 3, 4 ],
+            'vector2' => [ 5, 6, 7, 8 ],
+        ], $b->__plain);
 
         $this->expectOutputString(<<<OUTPUT
         .{ .vector1 = { 10, 20, 30, 40 }, .vector2 = { 11, 21, 31, 41 } }
@@ -120,7 +142,11 @@ final class VectorHandlingTest extends ZigarTestCase
         }
 
         $m->union_a = $b;
-        $this->assertSame(false, $m->union_a->vector);
+        $this->assertSame([ 5, 6, 7, 8 ], (array) $m->union_a->vector);
+        $this->assertEquals((object) [ 
+            'vector' => [ 5, 6, 7, 8 ],
+            'number' => 5,
+        ], $m->union_a->__plain);
         $m->union_a = $c;
         if (ZigImporter::safetyCheck()) {
             $this->assertExceptionMessage("'number' is active", function() use($m) {
@@ -140,13 +166,25 @@ final class VectorHandlingTest extends ZigarTestCase
         $b = new $m->UnionA(vector: [ 5, 6, 7, 8 ]);
         $c = new $m->UnionA(number: 123);
         $this->assertSame([ 5, 6, 7, 8 ], (array) $b->vector);
+        $this->assertEquals((object) [
+            'vector' => [ 5, 6, 7, 8 ]
+        ], $b->__plain);
         $this->assertSame(123, $c->number);
         $this->assertSame(null, $c->vector);
+        $this->assertEquals((object) [
+            'number' => 123
+        ], $c->__plain);
 
         $m->union_a = $b;
         $this->assertSame([ 5, 6, 7, 8 ], (array) $m->union_a->vector);
+        $this->assertEquals((object) [
+            'vector' => [ 5, 6, 7, 8 ]
+        ], $m->union_a->__plain);
         $m->union_a = $c;
         $this->assertSame(null, $m->union_a->vector);
+        $this->assertEquals((object) [
+            'number' => 123
+        ], $m->union_a->__plain);
     }
 
     public function testHandleVectorInOptional(): void

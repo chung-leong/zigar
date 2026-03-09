@@ -20,6 +20,7 @@ pub const ErrorUnion = struct {
     const Super = structure.Parent(@This());
     pub const Static = struct {
         payload_acc: *accessor.Any = undefined,
+        payload_transform: ?ObjectTransform = null,
         error_acc: *accessor.Primitive = undefined,
         error_class: *ZigClassEntry = undefined,
 
@@ -27,6 +28,7 @@ pub const ErrorUnion = struct {
             const class = ZigClassEntry.fromObject(class_obj);
             const member0 = try class.getMember(.instance, 0);
             self.payload_acc = &member0.accessors;
+            self.payload_transform = member0.objectTransform();
             const member1 = try class.getMember(.instance, 1);
             if (member1.accessors != .primitive) return error.InvalidAccessor;
             self.error_acc = &member1.accessors.primitive;
@@ -46,7 +48,11 @@ pub const ErrorUnion = struct {
             return php.createValueNull();
         } else {
             var value = try static.payload_acc.get(self);
-            if (transform != .to_value) try transform.apply(&value);
+            if (static.payload_transform) |ot| {
+                try ot.apply(&value);
+            } else if (transform != .to_value) {
+                try transform.apply(&value);
+            }
             return value;
         }
     }
