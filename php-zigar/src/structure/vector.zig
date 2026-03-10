@@ -15,19 +15,19 @@ const structure = @import("../structure.zig");
 
 pub const Vector = struct {
     bytes: *ByteBuffer = undefined,
+    slots: Value = undefined,
 
     const Super = structure.ArrayLike(@This());
 
     pub const Static = struct {
-        value_acc: *accessor.Vector = undefined,
+        value_acc: *accessor.Any = undefined,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             if (class.length == null) return error.Unexpected;
             // fetch the accessor in advance since we know it can only be a of the vector type
             const member = try class.getMember(.instance, 0);
-            if (member.accessors != .vector) return error.InvalidAccessor;
-            self.value_acc = &member.accessors.vector;
+            self.value_acc = &member.accessors;
         }
     };
 
@@ -39,13 +39,13 @@ pub const Vector = struct {
     pub fn getElement(self: *@This(), index: usize) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        return try static.value_acc.get(self.bytes, index);
+        return try static.value_acc.getElement(self, index);
     }
 
     pub fn setElement(self: *@This(), index: usize, value: *Value) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        try static.value_acc.set(self.bytes, index, value);
+        try static.value_acc.setElement(self, index, value);
     }
 
     pub const setStorage = Super.setStorage;

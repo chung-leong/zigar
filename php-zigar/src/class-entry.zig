@@ -317,10 +317,17 @@ pub const ZigClassEntry = struct {
                 member.accessors = try self.getAccessors(scope, member);
             }
         }
-        if (self.type == .array and self.flags.array.has_slot) {
-            self.instance.slot_count = self.length orelse return error.Unexpected;
-        } else if (self.type == .slice and self.flags.slice.has_slot) {
-            self.instance.slot_count = std.math.maxInt(usize);
+        switch (self.type) {
+            .array => if (self.flags.array.has_slot) {
+                self.instance.slot_count = self.length orelse return error.Unexpected;
+            },
+            .vector => if (self.flags.vector.has_slot) {
+                self.instance.slot_count = self.length orelse return error.Unexpected;
+            },
+            .slice => if (self.flags.slice.has_slot) {
+                self.instance.slot_count = std.math.maxInt(usize);
+            },
+            else => {},
         }
         // set the class name
         self.php_portion.name = get: {
