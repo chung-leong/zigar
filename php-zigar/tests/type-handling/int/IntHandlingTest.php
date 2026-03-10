@@ -26,9 +26,9 @@ final class IntHandlingTest extends ZigarTestCase
 
         OUTPUT);
         $m->print();
-        $module->uint16 = 66;
+        $m->uint16 = 66;
         $m->print();
-        $module->uint16 = 88;
+        $m->uint16 = 88;
         $m->print();
 
         $this->assertExceptionMessage("write protected (zig)", function() use($m) {
