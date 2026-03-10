@@ -35,7 +35,7 @@ pub const VariadicStruct = struct {
     }
 
     pub const setStorage = Super.setStorage;
-    pub const readSelf = Super.readGeneric;
+    pub const readSelf = Super.readSelf;
     pub const getExtent = Super.getExtent;
     pub const freeObject = Super.freeObject;
     pub const getReferencedObjects = Super.getReferencedObjects;

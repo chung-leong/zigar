@@ -16,7 +16,7 @@ pub const Struct = struct {
     bytes: *ByteBuffer = undefined,
     slots: Value = undefined,
 
-    const Super = structure.Parent(@This());
+    const Super = structure.StructLike(@This());
     pub const Static = struct {
         required_field_count: usize = 0,
         class_obj: *Object = undefined,
@@ -58,18 +58,18 @@ pub const Struct = struct {
                 @panic("TODO");
             }
         }
-        return self.readContainer(transform);
+        return self.readSelf(transform);
     }
 
     pub const setStorage = Super.setStorage;
     pub const getExtent = Super.getExtent;
-    pub const writeSelf = Super.writeContainer;
+    pub const writeSelf = Super.writeSelf;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
-    pub const readProperty = Super.readContainerProperty;
-    pub const writeProperty = Super.writeContainerProperty;
-    pub const hasProperty = Super.hasContainerProperty;
-    pub const getProperties = Super.getContainerProperties;
+    pub const readProperty = Super.readProperty;
+    pub const writeProperty = Super.writeProperty;
+    pub const hasProperty = Super.hasProperty;
+    pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;

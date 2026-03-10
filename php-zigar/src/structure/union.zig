@@ -19,7 +19,7 @@ pub const Union = struct {
     bytes: *ByteBuffer = undefined,
     slots: Value = undefined,
 
-    const Super = structure.Parent(@This());
+    const Super = structure.StructLike(@This());
     pub const Static = struct {
         selector: ?struct {
             class: *ZigClassEntry,
@@ -101,7 +101,7 @@ pub const Union = struct {
         }
         const field_value = iter.next().?;
         const name = iter.currentName() orelse return error.KeyIsNotString;
-        self.writeContainerMember(name, field_value, null) catch |err| {
+        self.writeMember(name, field_value, null) catch |err| {
             return self.throwFieldError(name, err);
         };
         const class = ZigClassEntry.fromStructure(self);
@@ -126,7 +126,7 @@ pub const Union = struct {
             }
             return retval;
         };
-        return readContainerProperty(obj, name, prop_type, cache_slot, retval);
+        return Super.readProperty(obj, name, prop_type, cache_slot, retval);
     }
 
     pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
@@ -134,7 +134,7 @@ pub const Union = struct {
         self.checkSelector(name) catch |err| {
             return self.throwFieldError(name, err);
         };
-        return writeContainerProperty(obj, name, value, cache_slot);
+        return Super.writeProperty(obj, name, value, cache_slot);
     }
 
     pub fn getProperties(obj: *Object) !*HashTable {
@@ -192,7 +192,7 @@ pub const Union = struct {
     }
 
     fn throwFieldError(self: *@This(), name: *String, err: anytype) error{ExceptionThrown} {
-        const member = self.findContainerMember(name, null) catch null;
+        const member = self.findMember(name, null) catch null;
         if (member != null and err == error.InactiveField) {
             const active_name = find: {
                 const class = ZigClassEntry.fromStructure(self);
@@ -216,20 +216,18 @@ pub const Union = struct {
     }
 
     pub const setStorage = Super.setStorage;
-    pub const readSelf = Super.readContainer;
+    pub const readSelf = Super.readSelf;
     pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
-    pub const hasProperty = Super.hasContainerProperty;
+    pub const hasProperty = Super.hasProperty;
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;
     const returnSelf = Super.returnSelf;
     const returnBytes = Super.returnBytes;
-    const readContainerProperty = Super.readContainerProperty;
-    const writeContainerProperty = Super.writeContainerProperty;
-    const writeContainerMember = Super.writeContainerMember;
-    const findContainerMember = Super.findContainerMember;
+    const writeMember = Super.writeMember;
+    const findMember = Super.findMember;
 };

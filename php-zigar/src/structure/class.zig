@@ -31,7 +31,7 @@ pub fn Class(comptime S: type) type {
 
         pub const scope: ZigClassEntry.ScopeType = .static;
 
-        const Super = structure.Parent(@This());
+        const Super = structure.StructLike(@This());
 
         pub fn setStorage(self: *@This(), bytes: *ByteBuffer, slots: *const Value) !void {
             try Super.setStorage(self, bytes, slots);
@@ -52,7 +52,7 @@ pub fn Class(comptime S: type) type {
         pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: ?*const Value) !?*Function {
             const obj = obj_ptr.*;
             const self = fromObject(obj);
-            const field = self.readContainerMember(name, null) catch return null;
+            const field = self.readMember(name, null) catch return null;
             defer php.release(&field);
             const field_obj = php.getValueObject(&field) catch return null;
             const field_class = ZigClassEntry.fromObject(field_obj);
@@ -134,15 +134,15 @@ pub fn Class(comptime S: type) type {
             return &ZigObject(S).fromObject(obj).zig_portion;
         }
 
-        pub const readSelf = Super.readContainer;
-        pub const readProperty = Super.readContainerProperty;
-        pub const writeProperty = Super.writeContainerProperty;
-        pub const hasProperty = Super.hasContainerProperty;
-        pub const getProperties = Super.getContainerProperties;
+        pub const readSelf = Super.readSelf;
+        pub const readProperty = Super.readProperty;
+        pub const writeProperty = Super.writeProperty;
+        pub const hasProperty = Super.hasProperty;
+        pub const getProperties = Super.getProperties;
         pub const getPropertyPointer = Super.getPropertyPointer;
         pub const getReferencedObjects = Super.getReferencedObjects;
         const fromObject = Super.fromObject;
         const object = Super.object;
-        const readContainerMember = Super.readContainerMember;
+        const readMember = Super.readMember;
     };
 }

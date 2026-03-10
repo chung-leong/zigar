@@ -293,7 +293,7 @@ pub const ErrorSet = struct {
         } else if (std.mem.eql(u8, name_c, "line")) {
             retval.* = php.createValueLong(@intCast(props.lineno));
         } else {
-            return try readGenericProperty(obj, name, prop_type, cache_slot, retval);
+            return try Super.readProperty(obj, name, prop_type, cache_slot, retval);
         }
         return retval;
     }
@@ -311,7 +311,7 @@ pub const ErrorSet = struct {
             props.string = new_str;
             php.addRef(new_str);
         } else {
-            return try writeGenericProperty(obj, name, value, cache_slot);
+            return try Super.writeProperty(obj, name, value, cache_slot);
         }
         return value;
     }
@@ -378,14 +378,11 @@ pub const ErrorSet = struct {
     pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
     pub const castObject = Super.castObject;
-    pub const hasProperty = Super.hasGenericProperty;
+    pub const hasProperty = Super.hasProperty;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;
     const returnBytes = Super.returnBytes;
-    const readGenericProperty = Super.readGenericProperty;
-    const writeGenericProperty = Super.writeGenericProperty;
-    const object = Super.object;
 };
 
 fn createDecamelizedMessage(name_obj: *const String) *String {
