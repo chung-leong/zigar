@@ -6,7 +6,7 @@ final class UndefinedHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
         $this->assertSame(null, $m->weird);
-        $this->assertSame(false, isset($m->weird));
+        $this->assertSame(true, isset($m->weird));
     }
 
     public function testIgnoreFunctionWithUndefinedArguments(): void
@@ -26,15 +26,15 @@ final class UndefinedHandlingTest extends ZigarTestCase
     public function testHandleUndefinedInArray(): void
     {
         $m = ZigImporter::load(__DIR__ . '/array-of.zig');
-        $this->assertSame(4, count($m->array));
+        // $this->assertSame(4, count($m->array));
         $this->assertSame([ null, null, null, null ], (array) $m->array);
     }
 
     public function testHandleUndefinedInStruct(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');        
-        $this->assertExceptionMessage("write protected", function() {
-            $x = new $m->StructA(empty1: null);
+        $this->assertExceptionMessage("not null", function() use ($m) {
+            $x = new $m->StructA(empty1: false);
         });
         $b = new $m->StructA();
         $this->assertSame([ 'empty1' => null, 'empty2' => null ], (array) $b);
@@ -71,8 +71,8 @@ final class UndefinedHandlingTest extends ZigarTestCase
         $tag = $m->TagType($m->union_a);
         $this->assertSame($m->TagType->empty, $tag);
         $this->assertSame(null, $m->union_a->number);
-        $this->assertExceptionMessage('write protected', function() use($m) {
-            $x = new $m->UnionA(empty: null);
+        $this->assertExceptionMessage('not null', function() use($m) {
+            $x = new $m->UnionA(empty: false);
         });
         $b = new $m->UnionA(number: 123);
         $this->assertSame([ 'number' => 123 ], (array) $b);

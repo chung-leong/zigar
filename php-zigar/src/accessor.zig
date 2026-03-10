@@ -325,6 +325,7 @@ pub const Any = union(enum) {
                 return try acc.get(source.bytes, index),
             .array_slot => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots"))
                 return try acc.get(source.bytes, &source.slots, index),
+            .null => |acc| return try acc.get(),
             else => {},
         }
         return error.InvalidOperation;
@@ -352,6 +353,7 @@ pub const Any = union(enum) {
                 return try acc.set(source.bytes, index, value),
             .array_slot => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots"))
                 return try acc.set(source.bytes, &source.slots, index, value),
+            .null => |acc| return try acc.set(value),
             else => {},
         }
         return error.InvalidOperation;
