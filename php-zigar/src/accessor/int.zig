@@ -35,8 +35,8 @@ pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) ac
         }
 
         pub fn set(acc: *const accessor.Primitive, buffer: *ByteBuffer, value: *const Value) Error!void {
-            if (comptime @bitSizeOf(T) == 0) return;
             if (buffer.is_read_only) return error.WriteProtected;
+            if (comptime @bitSizeOf(T) == 0) return;
             const bytes: []u8 = buffer.bytes;
             const byte_size = (@bitSizeOf(AT) + 7) / 8;
             if (acc.params.byte_offset + byte_size > bytes.len) return error.OutOfBound;

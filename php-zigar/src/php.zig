@@ -101,6 +101,7 @@ pub const LINKED = php_h.ZEND_ACC_LINKED;
 pub const NO_DYNAMIC_PROPERTIES = php_h.ZEND_ACC_NO_DYNAMIC_PROPERTIES;
 pub const NOT_SERIALIZABLE = php_h.ZEND_ACC_NOT_SERIALIZABLE;
 pub const RESOLVED_INTERFACES = php_h.ZEND_ACC_RESOLVED_INTERFACES;
+pub const STRICT_TYPES = php_h.ZEND_ACC_STRICT_TYPES;
 
 pub const std_object_handlers = &php_h.std_object_handlers;
 pub const empty_array = &php_h.zend_empty_array;
@@ -499,7 +500,7 @@ pub fn createValueClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*
 pub fn convertValue(value: *Value, desired_type: Type) !void {
     switch (desired_type) {
         .boolean => php_h.convert_to_boolean(value),
-        .long => php_h.convert_to_boolean(value),
+        .long => php_h.convert_to_long(value),
         .string => php_h._convert_to_string(value),
         .array => php_h.convert_to_array(value),
         .object => php_h.convert_to_object(value),
@@ -545,6 +546,30 @@ pub fn getValueBool(value: *const Value) !bool {
 pub fn getValueLong(value: *const Value) !c_long {
     return switch (value.u1.v.type) {
         php_h.IS_LONG => value.value.lval,
+        php_h.IS_STRING => convert: {
+            const s: [*c]u8 = &value.value.str.*.val;
+            const len = value.value.str.*.len;
+            var long: Long = undefined;
+            var double: f64 = undefined;
+            const result = php_h.is_numeric_string(s, len, &long, &double, false);
+            break :convert switch (result) {
+                php_h.IS_LONG => long,
+                php_h.IS_DOUBLE => try doubleToLong(double),
+                else => error.NotInteger,
+            };
+        },
+        php_h.IS_DOUBLE => convert: {
+            break :convert try doubleToLong(value.value.dval);
+        },
+        else => error.NotInteger,
+    };
+}
+
+fn doubleToLong(value: f64) !Long {
+    const long: Long = @intFromFloat(value);
+    const double: f64 = @floatFromInt(long);
+    return switch (double == value) {
+        true => long,
         else => error.NotInteger,
     };
 }
@@ -558,6 +583,30 @@ pub fn getValueUlong(value: *const Value) !c_ulong {
 pub fn getValueDouble(value: *const Value) !f64 {
     return switch (value.u1.v.type) {
         php_h.IS_DOUBLE => value.value.dval,
+        php_h.IS_STRING => convert: {
+            const s: [*c]u8 = &value.value.str.*.val;
+            const len = value.value.str.*.len;
+            var long: Long = undefined;
+            var double: f64 = undefined;
+            const result = php_h.is_numeric_string(s, len, &long, &double, false);
+            break :convert switch (result) {
+                php_h.IS_DOUBLE => double,
+                php_h.IS_LONG => try longToDouble(long),
+                else => error.NotDouble,
+            };
+        },
+        php_h.IS_LONG => convert: {
+            break :convert try longToDouble(value.value.lval);
+        },
+        else => error.NotDouble,
+    };
+}
+
+fn longToDouble(value: Long) !f64 {
+    const double: f64 = @floatFromInt(value);
+    const long: Long = @intFromFloat(double);
+    return switch (long == value) {
+        true => double,
         else => error.NotDouble,
     };
 }

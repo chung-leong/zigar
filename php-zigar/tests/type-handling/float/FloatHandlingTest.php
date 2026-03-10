@@ -137,7 +137,7 @@ final class FloatHandlingTest extends ZigarTestCase
         $b = new $m->UnionA(number: 4.567);
         $c = new $m->UnionA(state: false);
         $this->assertSame(4.567, $b->number);
-        $this->assertSame(false, $b->state);
+        $this->assertSame(false, $c->state);
         if (ZigImporter::safetyCheck()) {
             $this->assertExceptionMessage("'state' is active", function() use($c) {
                 $x = $c->number;
@@ -241,5 +241,12 @@ final class FloatHandlingTest extends ZigarTestCase
         $this->assertSame(3.14, (double) $a);
         $b = $m->Double(pack('d', 0.1234));
         $this->assertSame(0.1234, (double) $b);
+        $c = new $m->Double('3.14');
+        $this->assertSame(3.14, (double) $c);
+        $d = new $m->Double(3);
+        $this->assertSame(3.0, (double) $d);
+        $this->assertExceptionMessage('not double', function() use($m) {
+            $x = new $m->Double('Hello');
+        });
     }
 }

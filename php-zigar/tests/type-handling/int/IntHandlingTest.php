@@ -250,6 +250,20 @@ final class IntHandlingTest extends ZigarTestCase
         $b = new $m->Int(-2);
         $this->assertSame(1234, (int) $a);
         $this->assertSame(-2, (int) $b);
+        $c = new $m->Int('4567');
+        $this->assertSame(4567, (int) $c);
+        $this->assertExceptionMessage('not integer', function() use($m) {
+            $x = new $m->Int('Hello');
+        });
+        $d = new $m->Int('2000.0');
+        $this->assertSame(2000, (int) $d);
+        $e = new $m->Int(2000.0);
+        $this->assertSame(2000, (int) $e);
+        $this->assertExceptionMessage('not integer', function() use($m) {
+            $x = new $m->Int(3.01);
+        });
+        $d = new $m->BigInt('12345678901234567890123456789012345678');
+        $this->assertSame('12345678901234567890123456789012345678', (string) $d);
     }
 }
 
