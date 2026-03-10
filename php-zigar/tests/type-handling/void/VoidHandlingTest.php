@@ -132,7 +132,7 @@ final class VoidHandlingTest extends ZigarTestCase
         $this->assertSame(123, $c->number);
         if (ZigImporter::safetyCheck()) {
             $this->assertExceptionMessage("'number' is active", function() use($c) {
-                $x = $c->number;
+                $x = $c->empty;
             });
         }
 

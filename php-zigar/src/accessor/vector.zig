@@ -174,7 +174,9 @@ pub fn get(comptime attrs: Attributes, params: accessor.Vector.Parameters) acces
         pub fn set(acc: *const accessor.Vector, buffer: *ByteBuffer, index: usize, value: *const Value) Error!void {
             const transform = acc.params.transform;
             if (comptime attrs.bitSize()) |bit_size| {
-                if (bit_size == 0) return;
+                if (bit_size == 0) {
+                    return if (buffer.is_read_only) error.WriteProtected else {};
+                }
                 const bit_index = index * bit_size;
                 const byte_index = bit_index / 8;
                 if (attrs.is_packed) {
