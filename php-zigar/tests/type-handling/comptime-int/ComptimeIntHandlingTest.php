@@ -32,8 +32,8 @@ final class ComptimeIntHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/array-of.zig');
         $this->assertSame([ 1, 2, 3, 4 ], (array) $m->array1);
-        // $this->assertSame(0x1000_0000_0000_0000, $m->array2[0]);
-        // $this->assertSame(0x2000_0000_0000_0000, $m->array2[1]);
+        $this->assertSame(true, gmp_init('0x1000000000000000') == $m->array2[0]);
+        $this->assertSame(true, gmp_init('0x2000000000000000') == $m->array2[1]);
     }
 
     public function testHandleComptimeIntInStruct(): void

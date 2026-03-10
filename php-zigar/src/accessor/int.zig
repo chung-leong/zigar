@@ -26,7 +26,8 @@ pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) ac
         pub fn get(acc: *const accessor.Primitive, buffer: *ByteBuffer) Error!Value {
             if (comptime @bitSizeOf(T) == 0) return php.createValueLong(0);
             const bytes: []u8 = buffer.bytes;
-            if (acc.params.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
+            const byte_size = (@bitSizeOf(AT) + 7) / 8;
+            if (acc.params.byte_offset + byte_size > bytes.len) return error.OutOfBound;
             const ptr: *align(1) AT = @ptrCast(&bytes[acc.params.byte_offset]);
             const int = if (comptime AT == T) ptr.* else ptr.value;
             const value = php.createValueAnyInt(int);
@@ -35,9 +36,10 @@ pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) ac
 
         pub fn set(acc: *const accessor.Primitive, buffer: *ByteBuffer, value: *const Value) Error!void {
             if (comptime @bitSizeOf(T) == 0) return;
-            const bytes: []u8 = buffer.bytes;
             if (buffer.is_read_only) return error.WriteProtected;
-            if (acc.params.byte_offset + @sizeOf(AT) > bytes.len) return error.OutOfBound;
+            const bytes: []u8 = buffer.bytes;
+            const byte_size = (@bitSizeOf(AT) + 7) / 8;
+            if (acc.params.byte_offset + byte_size > bytes.len) return error.OutOfBound;
             const ptr: *align(1) AT = @ptrCast(&bytes[acc.params.byte_offset]);
             const int: T = switch (php.isNull(value)) {
                 false => get: {

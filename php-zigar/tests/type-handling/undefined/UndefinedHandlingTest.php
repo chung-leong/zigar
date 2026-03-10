@@ -9,14 +9,14 @@ final class UndefinedHandlingTest extends ZigarTestCase
         $this->assertSame(false, isset($m->weird));
     }
 
-    public function testPrintUndefinedArguments(): void
+    public function testIgnoreFunctionWithUndefinedArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
         $this->assertSame(false, isset($m->print));
         $this->assertSame(false, is_callable([ $m, 'print' ]));
     }
 
-    public function testReturnUndefined(): void
+    public function testIgnoreFunctionReturningUndefined(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-return-value.zig');
         $this->assertSame(false, isset($m->getUndefined));

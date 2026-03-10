@@ -30,6 +30,7 @@ final class ComptimeFloatHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/array-of.zig');
         $this->assertSame([ 1.1, 2.1, 3.1, 4.1 ], (array) $m->array);
+        $this->assertSame([ 1.1, 2.1, 3.1, 4.1 ], $m->array->__plain);
     }
 
     public function testHandleComptimeFloatInStruct(): void
