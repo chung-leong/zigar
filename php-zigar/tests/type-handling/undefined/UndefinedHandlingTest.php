@@ -98,5 +98,14 @@ final class UndefinedHandlingTest extends ZigarTestCase
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
         });
     }
+
+    public function testConstructUndefined(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/constructor.zig');
+        $this->assertSame(true, isset($m->Undefined));
+        $this->assertExceptionMessage("cannot create comptime object", function() use($m) {
+            $x = new $m->Undefined();
+        });
+    }
 }
 

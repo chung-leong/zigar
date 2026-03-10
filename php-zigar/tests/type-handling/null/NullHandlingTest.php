@@ -11,17 +11,15 @@ final class NullHandlingTest extends ZigarTestCase
     public function testIgnoreFunctionAcceptingNull(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->assertExceptionMessage("Call to undefined method", function() use($m) {
-            $m->print(null);
-        });
+        $this->assertSame(false, isset($m->print));
+        $this->assertSame(false, is_callable([ $m, 'print' ]));
     }
 
     public function testIgnoreFunctionReturningNull(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-return-value.zig');
-        $this->assertExceptionMessage("Call to undefined method", function() use($m) {
-            $m->getNull();
-        });
+        $this->assertSame(false, isset($m->getNull));
+        $this->assertSame(false, is_callable([ $m, 'getNull' ]));
     }
 
     public function testHandleNullInArray(): void
@@ -35,8 +33,8 @@ final class NullHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
         $this->assertSame([ 'empty1' => null, 'empty2' => null, 'hello' => 1234 ], (array) $m->struct_a);
 
-        $this->assertExceptionMessage("write protection", function() use($m) {
-            $x = new $m->StructA(empty1: null);
+        $this->assertExceptionMessage("not null", function() use($m) {
+            $x = new $m->StructA(empty1: false);
         });
 
         $b = new $m->StructA(hello: 234);
@@ -82,8 +80,8 @@ final class NullHandlingTest extends ZigarTestCase
         $b = new $m->UnionA(number: 777);
         $this->assertSame([ 'number' => 777 ], (array) $b);
 
-        $this->assertExceptionMessage("write protection", function() use($m) {
-            $x = new $m->UnionA(empty: null);
+        $this->assertExceptionMessage("not null", function() use($m) {
+            $x = new $m->UnionA(empty: false);
         });
     }
 
@@ -120,7 +118,10 @@ final class NullHandlingTest extends ZigarTestCase
     public function testConstructNull(): void
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
-        $this->assertSame(false, isset($m->Null));
+        $this->assertSame(true, isset($m->Null));
+        $this->assertExceptionMessage("cannot create comptime object", function() use($m) {
+            $x = new $m->Null();
+        });
     }
 }
 

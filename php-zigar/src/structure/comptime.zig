@@ -29,6 +29,10 @@ pub const Comptime = struct {
         return .{ .address = 0 };
     }
 
+    pub fn copyArguments(_: *@This(), _: *php.ArgumentIterator) !void {
+        return error.CannotCreateComptimeObject;
+    }
+
     pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
