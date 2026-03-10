@@ -71,10 +71,10 @@ final class PointerHandlingTest extends ZigarTestCase
         $m->print();
 
         $this->assertSame('{"text1":"apple","text2":"orange"}', json_encode($m->struct_b));
-        $this->assertSame((object) [
+        $this->assertEquals((object) [
             'text1' => 'apple',
             'text2' => 'orange',
-        ], $m->StructC->plain);
+        ], $m->StructC->__plain);
     }
 
     public function testFailWithPointerInPackedStruct(): void
@@ -96,7 +96,7 @@ final class PointerHandlingTest extends ZigarTestCase
         .{ .number = 500, .text = { 72, 101, 108, 108, 111 } }
 
         OUTPUT);
-        $m->print();
+        $m->print($b);
     }
 
     public function testHandlePointerInBareUnion(): void
@@ -148,7 +148,7 @@ final class PointerHandlingTest extends ZigarTestCase
         $c = new $m->UnionA(number: 123);
         $this->assertSame('World', $b->text->__string);
         $this->assertSame(123, $c->number);
-        $this->assertSame(null, $c->ptr);
+        $this->assertSame(null, $c->text);
 
         $m->union_a = $b;
         $this->assertSame('World', $m->union_a->text->__string);

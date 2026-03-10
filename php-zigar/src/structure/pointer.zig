@@ -81,6 +81,7 @@ pub const Pointer = struct {
         const static = class.getStaticData(@This());
         try static.loadTarget(self);
         var value = self.slots;
+        php.addRef(&value);
         if (transform != .to_value) try transform.apply(&value);
         return value;
     }
