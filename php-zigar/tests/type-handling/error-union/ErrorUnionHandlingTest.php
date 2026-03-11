@@ -18,7 +18,7 @@ final class ErrorUnionHandlingTest extends ZigarTestCase
         });
 
         $this->assertExceptionMessage('dog ate all memory', function() use($m) {
-            $m->encounterBadLuck(true);
+            $x = $m->encounterBadLuck(true);
         });
         $this->assertSame(456, $m->encounterBadLuck(false));
 
@@ -200,17 +200,60 @@ final class ErrorUnionHandlingTest extends ZigarTestCase
     public function testHandleErrorUnionInOptional(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
+        $this->assertSame(3000, $m->optional);
+
+        $this->expectOutputString(<<<OUTPUT
+        3000
+        null
+        error.GoldfishDied
+        450
+
+        OUTPUT);
+        $m->print();
+        $m->optional = null;
+        $m->print();
+        $m->optional = $m->Error->GoldfishDied;
+        $m->print();
+        $m->optional = 450;
+        $m->print();
     }
 
     public function testHandleErrorUnionInErrorUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
+        $this->assertSame(3000, $m->error_union);
+
+        $this->expectOutputString(<<<OUTPUT
+        3000
+        error.GoldfishDied
+        error.Corrupted
+        450
+
+        OUTPUT);
+        $m->print();
+        $m->error_union = $m->Error->GoldfishDied;
+        $m->print();
+        $m->error_union = $m->FileError->Corrupted;
+        $m->print();
+        $m->error_union = 450;
+        $m->print();
     }
 
     public function testFailWithErrorUnionInVector(): void
     {
         $this->assertExceptionMessage("unable to create module", function() {
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
+        });
+    }
+
+    public function testConstructErrorUnion(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/constructor.zig');
+        $a = new $m->ErrorUnion(1234);
+        $b = new $m->ErrorUnion(new Exception('no money'));
+        $this->assertSame(1234, $a->__value);
+        $this->assertExceptionMessage("no money", function() use($b) {
+            $x = $b->__value;
         });
     }
 }

@@ -216,10 +216,10 @@ final class OptionalHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
         $a = new $m->Optional(1234);
         $b = new $m->Optional(null);
-        $this->assertSame(1234, $a->{'$'});
-        $this->assertSame(null, $b->{'$'});
+        $this->assertSame(1234, $a->__value);
+        $this->assertSame(null, $b->__value);
         $c = $m->Optional(pack("Lcccc", 777, 1, 0, 0, 0));
-        $this->assertEquals(777, $c->{'$'});
+        $this->assertEquals(777, $c->__value);
     }
 }
 

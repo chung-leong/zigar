@@ -17,7 +17,7 @@ const structure = @import("../structure.zig");
 pub const Function = struct {
     bytes: *ByteBuffer = undefined,
     closure: *Closure = undefined,
-    transform: ?ObjectTransform = null,
+    transform: ObjectTransform = .to_value,
 
     const Super = structure.Parent(@This());
     pub const Static = struct {
@@ -74,7 +74,7 @@ pub const Function = struct {
     }
 
     pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
-        if (transform != .to_value) self.transform = transform;
+        self.transform = transform;
         return self.returnSelf();
     }
 
@@ -116,7 +116,7 @@ pub const Function = struct {
                 },
                 else => unreachable,
             };
-            if (self.transform) |t| try t.apply(&retval);
+            try self.transform.apply(&retval);
             return retval;
         } else {
             @panic("TODO");

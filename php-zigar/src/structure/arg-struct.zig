@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
+const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
@@ -25,10 +26,11 @@ pub const ArgStruct = struct {
             self.arg_accessors = try php.allocator.alloc(*accessor.Any, iter.len - 1);
             var index: usize = 0;
             while (iter.next()) |member| {
-                if (index == 0)
-                    self.retval_accessors = &member.accessors
-                else
+                if (index == 0) {
+                    self.retval_accessors = &member.accessors;
+                } else {
                     self.arg_accessors[index - 1] = &member.accessors;
+                }
                 index += 1;
             }
         }
