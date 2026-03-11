@@ -66,7 +66,7 @@ final class ComptimeIntHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
         $this->assertSame(1234, $m->struct_a->number);
         $b = new $m->StructA(state: false);
-        $this->assertSame([ 'number' => 1234, 'state' => false ], (array) $b);
+        $this->assertSame([ 'state' => false, 'number' => 1234 ], (array) $b);
     }
 
     public function testFailWithComptimeIntInBareUnion(): void
@@ -118,7 +118,12 @@ final class ComptimeIntHandlingTest extends ZigarTestCase
     public function testConstructComptimeInt(): void
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
-        $this->assertSame(false, isset($m->ComptimeInt));
+        $this->assertSame(true, isset($m->ComptimeInt));
+        // $this->assertSame(true, is_callable($m->ComptimeInt));
+        $this->assertSame(true, is_callable([ $m, 'ComptimeInt' ]));
+        $this->assertExceptionMessage("cannot create comptime object", function() use($m) {
+            $x = new $m->ComptimeInt(1);
+        });
     }
 }
 

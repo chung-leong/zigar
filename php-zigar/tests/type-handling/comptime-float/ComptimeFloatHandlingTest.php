@@ -100,7 +100,7 @@ final class ComptimeFloatHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
         $this->assertSame(1234.0, $m->error_union1);
-        $this->assertExceptionMessage("goldfish died", function() {
+        $this->assertExceptionMessage("goldfish died", function() use($m) {
             $x = $m->error_union2;
         });
     }

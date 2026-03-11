@@ -37,7 +37,7 @@ pub const Comptime = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         var value = try static.value_acc.get(self);
-        if (transform != .to_value) try transform.apply(&value);
+        try transform.apply(&value);
         return value;
     }
 

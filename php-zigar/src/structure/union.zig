@@ -153,6 +153,7 @@ pub const Union = struct {
                     const sel_value = try php.getHashEntry(&selector.possible_values, name);
                     if (compareSelectors(sel_value, &active_sel_value)) {
                         var value = try member.accessors.get(self);
+                        if (member.objectTransform()) |ot| try ot.apply(&value);
                         php.setHashEntry(ht, name, &value);
                         break;
                     }
@@ -163,6 +164,7 @@ pub const Union = struct {
             while (iter.next()) |member| {
                 if (iter.currentName()) |name| {
                     var value = try member.accessors.get(self);
+                    if (member.objectTransform()) |ot| try ot.apply(&value);
                     php.setHashEntry(ht, name, &value);
                 }
             }

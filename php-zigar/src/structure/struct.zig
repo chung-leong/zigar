@@ -58,7 +58,7 @@ pub const Struct = struct {
                 @panic("TODO");
             }
         }
-        return self.readSelf(transform);
+        return Super.readSelf(self, transform);
     }
 
     pub const setStorage = Super.setStorage;
