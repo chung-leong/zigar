@@ -17,11 +17,13 @@ pub const Comptime = struct {
     const Super = structure.Parent(@This());
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
+        value_transform: ?ObjectTransform = null,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             const member = try class.getMember(.instance, 0);
             self.value_acc = &member.accessors;
+            self.value_transform = member.objectTransform();
         }
     };
 
@@ -37,7 +39,11 @@ pub const Comptime = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         var value = try static.value_acc.get(self);
-        try transform.apply(&value);
+        if (static.value_transform) |ot| {
+            try ot.apply(&value);
+        } else {
+            if (transform != .to_value) try transform.apply(&value);
+        }
         return value;
     }
 

@@ -22,17 +22,15 @@ final class EnumLiteralHandlingTest extends ZigarTestCase
     public function testIgnoreFunctionAcceptingEnumLiteral(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->assertExceptionMessage('Call to undefined method', function() use($m) {
-            $m->print();
-        });
+        $this->assertSame(false, isset($m->print));
+        $this->assertSame(false, is_callable([ $m, 'print' ]));
     }
 
-    public function testReturnEnumLiteral(): void
+    public function testIgnoreFunctionReturningEnumLiteral(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-return-value.zig');
-        $this->assertExceptionMessage('Call to undefined method', function() use($m) {
-            $m->getLiteral();
-        });
+        $this->assertSame(false, isset($m->getLiteral));
+        $this->assertSame(false, is_callable([ $m, 'getLiteral' ]));
     }
 
     public function testHandleEnumLiteralInArray(): void
