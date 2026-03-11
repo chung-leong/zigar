@@ -91,6 +91,14 @@ pub const ErrorSet = struct {
             }
         }
 
+        pub fn castValue(self: *@This(), value: *Value) !?Value {
+            switch (php.getType(value)) {
+                .long => return self.findCanonical(value) catch php.createValueNull(),
+                else => {},
+            }
+            return null;
+        }
+
         pub fn createCanonicalName(self: *@This()) ![]const u8 {
             const class = ZigClassEntry.fromStatic(self);
             if (class.flags.error_set.is_global) return try php.allocator.dupe(u8, "global error set");

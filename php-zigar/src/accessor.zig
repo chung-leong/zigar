@@ -157,7 +157,7 @@ pub const ObjectTransform = enum {
     pub fn apply(self: @This(), value: *Value) Error!void {
         if (php.getType(value) == .object) {
             const obj = php.getValueObject(value) catch unreachable;
-            if (ZigClassEntry.isZig(obj.ce)) {
+            if (ZigClassEntry.isZig(obj.ce) or ZigClassEntry.isZigError(obj.ce)) {
                 defer php.release(obj);
                 value.* = try invokeMethod(obj, "readSelf", .{self});
                 return;

@@ -192,6 +192,10 @@ final class ErrorSetHandlingTest extends ZigarTestCase
     public function testConstructErrorSet(): void
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
+        $b = new $m->ErrorSet($m->ErrorSet->DogAteAllMemory);
+        $this->assertSame($m->ErrorSet->DogAteAllMemory, $b->__value);
+        $c = $m->ErrorSet((int) $m->ErrorSet->DogAteAllMemory);
+        $this->assertSame($m->ErrorSet->DogAteAllMemory, $c->__value);
     }    
 }
 

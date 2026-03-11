@@ -1,4 +1,4 @@
-pub const StrangeError = error{
+pub const ErrorSet = error{
     SystemIsOnFire,
     DogAteAllMemory,
     AlienInvasion,
