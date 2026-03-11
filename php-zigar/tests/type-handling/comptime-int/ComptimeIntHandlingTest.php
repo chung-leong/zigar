@@ -87,7 +87,7 @@ final class ComptimeIntHandlingTest extends ZigarTestCase
         $b = new $m->UnionA(state: true);
         $this->assertSame([ 'state' => true ], (array) $b);
 
-        $this->assertExceptionMessage("write protected (zig)", function() use($m) {
+        $this->assertExceptionMessage("cannot create comptime object (zig)", function() use($m) {
             $x = new $m->UnionA(number: 0);
         });
     }
@@ -119,7 +119,7 @@ final class ComptimeIntHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
         $this->assertSame(true, isset($m->ComptimeInt));
-        // $this->assertSame(true, is_callable($m->ComptimeInt));
+        $this->assertSame(true, is_callable($m->ComptimeInt));
         $this->assertSame(true, is_callable([ $m, 'ComptimeInt' ]));
         $this->assertExceptionMessage("cannot create comptime object", function() use($m) {
             $x = new $m->ComptimeInt(1);

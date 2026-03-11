@@ -84,7 +84,7 @@ final class ComptimeFloatHandlingTest extends ZigarTestCase
         $b = new $m->UnionA(state: true);
         $this->assertSame([ 'state' => true ], (array) $b);
 
-        $this->assertExceptionMessage("write protected (zig)", function() use($m) {
+        $this->assertExceptionMessage("cannot create comptime object", function() use($m) {
             $x = new $m->UnionA(number: 0.0);
         });
     }
@@ -115,7 +115,12 @@ final class ComptimeFloatHandlingTest extends ZigarTestCase
     public function testConstructComptimeFloat(): void
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
-        $this->assertSame(false, isset($m->ComptimeFloat));
+        $this->assertSame(true, isset($m->ComptimeFloat));
+        $this->assertSame(true, is_callable($m->ComptimeFloat));
+        $this->assertSame(true, is_callable([ $m, 'ComptimeFloat' ]));
+        $this->assertExceptionMessage("cannot create comptime object", function() use($m) {
+            $x = new $m->ComptimeFloat(1.0);
+        });
     }
 }
 

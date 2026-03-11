@@ -52,6 +52,10 @@ pub fn ZigObject(comptime S: type) type {
             return try self.zig_portion.setStorage(bytes, slots);
         }
 
+        pub fn isInstance(obj: *Object) bool {
+            return obj.handlers == getHandlers();
+        }
+
         fn getHandlers() *ObjectHandlers {
             if (object_handlers == null) {
                 object_handlers = init: {

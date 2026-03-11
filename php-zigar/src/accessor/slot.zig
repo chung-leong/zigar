@@ -53,7 +53,7 @@ const multi_slot = struct {
 
     pub fn set(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, slots: *Value, value: *const Value) Error!void {
         const entry = try vivicateSlot(acc, buffer, slots);
-        try write(entry, value);
+        try write(entry, value, false);
     }
 
     fn vivicateSlot(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, slots: *Value) Error!*Value {
@@ -77,7 +77,7 @@ const single_slot = struct {
 
     pub fn set(acc: *const accessor.SingleSlot, buffer: *ByteBuffer, slot: *Value, value: *const Value) Error!void {
         const entry = try vivicateSlot(acc, buffer, slot);
-        try write(entry, value);
+        try write(entry, value, false);
     }
 
     fn vivicateSlot(acc: *const accessor.SingleSlot, buffer: *ByteBuffer, slot: *Value) Error!*Value {
@@ -100,7 +100,7 @@ const array_slot = struct {
 
     pub fn set(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize, value: *const Value) Error!void {
         const entry = try vivicateSlot(acc, buffer, slots, index);
-        try write(entry, value);
+        try write(entry, value, false);
     }
 
     fn vivicateSlot(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize) Error!*Value {
@@ -127,7 +127,7 @@ const multi_slot_prebaked = struct {
     pub fn set(acc: *const accessor.MultiSlotPrebaked, slots: *Value, value: *const Value) Error!void {
         const ht = try php.getValueHashTable(slots);
         const entry = try php.getHashEntry(ht, acc.params.slot);
-        try write(entry, value);
+        try write(entry, value, true);
     }
 };
 
@@ -138,14 +138,18 @@ const single_slot_prebaked = struct {
     }
 
     pub fn set(_: *const accessor.SingleSlotPrebaked, slot: *Value, value: *const Value) Error!void {
-        try write(slot, value);
+        try write(slot, value, true);
     }
 };
 
-fn write(entry: *Value, value: *const Value) Error!void {
+fn write(entry: *Value, value: *const Value, comptime prebaked: bool) Error!void {
     if (php.getValueObject(entry)) |obj| {
         try invokeMethod(obj, "writeSelf", .{value});
     } else |_| {
-        return php.throwExceptionFmt("attempt to write to null target", .{});
+        const msg = switch (prebaked) {
+            true => "cannot create comptime object",
+            false => "attempt to write to null target",
+        };
+        return php.throwExceptionFmt("{s} (zig)", .{msg});
     }
 }

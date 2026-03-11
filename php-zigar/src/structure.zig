@@ -626,13 +626,26 @@ pub fn invokeMethod(obj: *Object, comptime name: []const u8, args: anytype) RT: 
         inline else => |t| {
             const s_name = @tagName(t);
             const S = @field(by_enum, s_name);
-            if (comptime @hasDecl(S, name)) {
-                const func = @field(S, name);
-                const self = Parent(S).fromObject(obj);
-                const RT = ReturnType(S, name);
-                const result = @call(.auto, func, .{self} ++ args);
-                return if (ErrorType(RT) != null) try result else result;
-            } else @panic(@typeName(S) ++ "has not implementation for " ++ name ++ "()");
+            const C = Class(S);
+            // the class object has the same class entry as instance objects; we can only
+            // distingish the two by checking the object handlers
+            if (ZigObject(C).isInstance(obj)) {
+                if (comptime @hasDecl(C, name)) {
+                    const func = @field(C, name);
+                    const self = ZigObject(C).fromObject(obj).structure();
+                    const RT = ReturnType(C, name);
+                    const result = @call(.auto, func, .{self} ++ args);
+                    return if (ErrorType(RT) != null) try result else result;
+                } else @panic(@typeName(C) ++ "has not implementation for " ++ name ++ "()");
+            } else {
+                if (comptime @hasDecl(S, name)) {
+                    const func = @field(S, name);
+                    const self = ZigObject(S).fromObject(obj).structure();
+                    const RT = ReturnType(S, name);
+                    const result = @call(.auto, func, .{self} ++ args);
+                    return if (ErrorType(RT) != null) try result else result;
+                } else @panic(@typeName(S) ++ "has not implementation for " ++ name ++ "()");
+            }
         },
     }
 }
