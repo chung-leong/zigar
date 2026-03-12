@@ -233,5 +233,17 @@ final class VectorHandlingTest extends ZigarTestCase
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
         });
     }
+
+    public function testConstructVector(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/constructor.zig');
+        $b = new $m->Vector([ 1, 2, 3, 4 ]);
+        $this->assertSame([ 1.0, 2.0, 3.0, 4.0 ], $b->__plain);
+        $c = $m->Vector(pack('ffff', 1.0, 2.0, 3.0, 4.0));
+        $this->assertSame([ 1.0, 2.0, 3.0, 4.0 ], $c->__plain);
+        $this->assertExceptionMessage("out of bound", function() use($m) {
+            $x = new $m->Vector([ 1, 2, 3, 4, 5 ]);
+        });
+    }
 }
 

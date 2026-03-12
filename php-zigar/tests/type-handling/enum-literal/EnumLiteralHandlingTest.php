@@ -119,5 +119,16 @@ final class EnumLiteralHandlingTest extends ZigarTestCase
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
         });
     }
+
+    public function testConstructEnumLiteral(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/constructor.zig');
+        $this->assertSame(true, isset($m->EnumLiteral));
+        $this->assertSame(true, is_callable($m->EnumLiteral));
+        $this->assertSame(true, is_callable([ $m, 'EnumLiteral' ]));
+        $this->assertExceptionMessage("cannot create comptime object", function() use($m) {
+            $x = new $m->EnumLiteral('hello');
+        });
+    }
 }
 

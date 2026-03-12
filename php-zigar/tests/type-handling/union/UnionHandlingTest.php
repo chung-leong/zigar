@@ -224,5 +224,23 @@ final class UnionHandlingTest extends ZigarTestCase
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
         });
     }
+
+    public function testConstructUnion(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/constructor.zig');
+        $b = new $m->TaggedUnion(number1: 123);
+        $this->assertEquals((object) [ 'number1' => 123 ], $b->__plain);
+        
+        $c = new $m->ExternUnion(number1: -1234);
+        $this->assertEquals((object) [ 'number1' => -1234, 'number2' => -1234 ], $c->__plain);
+        $d = $m->ExternUnion(pack('l', 12345));
+        $this->assertEquals((object) [ 'number1' => 12345, 'number2' => 12345 ], $d->__plain);
+        $this->assertExceptionMessage("union can only have 1 active field", function() use($m) {
+            $x = new $m->ExternUnion([ 'number1' => 123, 'number2' => 456 ]);
+        });
+        $this->assertExceptionMessage("not found", function() use($m) {
+            $x = new $m->ExternUnion([ 'number3' => 123 ]);
+        });
+    }
 }
 

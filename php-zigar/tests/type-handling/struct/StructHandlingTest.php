@@ -216,5 +216,56 @@ final class StructHandlingTest extends ZigarTestCase
             $m = ZigImporter::load(__DIR__ . '/vector-of.zig');
         });
     }
+
+    public function testConstructStruct(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/constructor.zig');
+        $b = new $m->Struct(number1: 1111, number2: 2222);
+        $this->assertEquals((object) [ 'number1' => 1111, 'number2' => 2222, 'number3' => 3333 ], $b->__plain);
+        $this->assertExceptionMessage("struct constructor expects an array as argument or named arguments", function() use($m) {
+            $x = new $m->Struct();
+        });
+        // TODO: check for missing required fields
+        $this->assertExceptionMessage("???", function() use($m) {
+            $x = new $m->Struct(number1: 1234);
+        });
+
+        $c = new $m->ExternStruct(number1: 1111, number2: 2222);
+        $this->assertEquals((object) [ 'number1' => 1111, 'number2' => 2222 ], $c->__plain);
+        $d = $m->ExternStruct(pack('ll', 1234, 4567));
+        $this->assertEquals((object) [ 'number1' => 1234, 'number2' => 4567 ], $d->__plain);
+
+        $e = new $m->PackedStruct(
+            state1: true,
+            state2: false,
+            state3: true,
+            state4: false,
+            state5: true,
+            state6: false,
+            state7: true,
+            state8: false,
+        );
+        $this->assertEquals((object) [ 
+            'state1' => true, 
+            'state2' => false, 
+            'state3' => true, 
+            'state4' => false, 
+            'state5' => true, 
+            'state6' => false, 
+            'state7' => true, 
+            'state8' => false,
+        ], $e->__plain);
+        $f = $m->PackedStruct("\xFE");
+        $this->assertEquals((object) [ 
+            'state1' => false, 
+            'state2' => true, 
+            'state3' => true, 
+            'state4' => true, 
+            'state5' => true, 
+            'state6' => true, 
+            'state7' => true, 
+            'state8' => true,
+        ], $f->__plain);
+    }
 }
 
