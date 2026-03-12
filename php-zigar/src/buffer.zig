@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const findSortedIndex = @import("address-map.zig").findSortedIndex;
 const php = @import("php.zig");
 const ClassEntry = php.ClassEntry;
 const Object = php.Object;
@@ -125,14 +126,16 @@ pub const BufferMap = struct {
     }
 
     pub fn add(self: *@This(), buf: *ByteBuffer) !void {
-        const buf_address = @intFromPtr(buf.bytes.ptr);
-        const index = self.findSortedIndex(buf_address);
+        if (buf.parent != null) return;
+        const buf_address = getBufferAddress(buf);
+        const index = findSortedIndex(*ByteBuffer, &self.list, buf_address, getBufferAddress);
         try self.list.insert(php.allocator, index, buf);
     }
 
     pub fn remove(self: *@This(), buf: *ByteBuffer) !void {
-        const buf_address = @intFromPtr(buf.bytes.ptr);
-        const index = self.findSortedIndex(buf_address);
+        if (buf.parent != null) return;
+        const buf_address = getBufferAddress(buf);
+        const index = findSortedIndex(*ByteBuffer, &self.list, buf_address, getBufferAddress);
         if (index > 0) {
             if (self.list.items[index - 1] == buf) {
                 try self.list.orderedRemove(index - 1);
@@ -141,14 +144,18 @@ pub const BufferMap = struct {
     }
 
     pub fn get(self: *@This(), address: usize, len: usize) !*ByteBuffer {
-        const index = self.findSortedIndex(address);
+        const index = findSortedIndex(*ByteBuffer, &self.list, address, getBufferAddress);
+        var existing_ptr: ?**ByteBuffer = null;
         if (index > 0) {
             const buf = self.list.items[index - 1];
-            const buf_address = @intFromPtr(buf.bytes.ptr);
+            const buf_address = getBufferAddress(buf);
             const buf_len = buf.bytes.len;
             if (buf_address == address and buf_len == len) {
                 buf.addRef();
                 return buf;
+            } else if (buf_address == address and buf_len < len) {
+                // existing entry is within new buffer
+                existing_ptr = &self.list.items[index - 1];
             } else if (buf_address <= address and address + len <= buf_address + buf_len) {
                 const offset = address - buf_address;
                 return try buf.slice(offset, len);
@@ -156,8 +163,15 @@ pub const BufferMap = struct {
         }
         const ptr: [*]u8 = @ptrFromInt(address);
         const buf = try ByteBuffer.createExternal(ptr[0..len]);
-        errdefer buf.release();
-        try self.insert(php.allocator, index, buf);
+        if (existing_ptr) |buf_ptr| {
+            // make existing buffer the child of this one and replace it in the list
+            buf_ptr.*.parent = buf;
+            buf_ptr.*.is_owner = false;
+            buf_ptr.* = buf;
+        } else {
+            errdefer buf.release();
+            try self.insert(php.allocator, index, buf);
+        }
         return buf;
     }
 
@@ -166,15 +180,7 @@ pub const BufferMap = struct {
         buf.release();
     }
 
-    fn findSortedIndex(self: *@This(), address: usize) usize {
-        var low: usize = 0;
-        var high = self.list.items.len;
-        if (high == 0) return 0;
-        while (low < high) {
-            const mid = (low + high) / 2;
-            const mid_address = @intFromPtr(self.list.items[mid].bytes.ptr);
-            if (mid_address <= address) low = mid + 1 else high = mid;
-        }
-        return high;
+    pub fn getBufferAddress(buf: *ByteBuffer) usize {
+        return @intFromPtr(buf.bytes.ptr);
     }
 };

@@ -4,12 +4,12 @@
     },
     "autoload": {
         "classmap": [
-            "tests/"
+            "test/"
         ]
     },
     "scripts": {
-        "test": "php -d extension=./modules/php_zigar.so ./vendor/bin/phpunit --testdox tests",
-        "debug": "lldb php -- -d extension=./modules/php_zigar.so ./vendor/bin/phpunit tests"
+        "test": "php -d extension=./modules/php_zigar.so ./vendor/bin/phpunit --testdox test",
+        "debug": "lldb php -- -d extension=./modules/php_zigar.so ./vendor/bin/phpunit test"
     },
     "require": {
         "revolt/event-loop": "^1.0"
