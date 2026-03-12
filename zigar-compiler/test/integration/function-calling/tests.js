@@ -891,5 +891,9 @@ export function addTests(importModule, options) {
         typed_array: new Uint8Array([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ]),
       });
     })
+    it('should call inline function', async function() {
+      const { print } = await importTest('call-inline-function.zig');
+      throw Error('TODO');
+    })
   })
 }
