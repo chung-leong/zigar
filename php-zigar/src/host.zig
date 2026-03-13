@@ -21,7 +21,7 @@ pub const ModuleHost = struct {
     global_error_set: *HashTable,
     importer: *StructureImporter = undefined,
     dispatcher: *CallDispatcher = undefined,
-    memory_map: *BufferMap = undefined,
+    buffer_map: *BufferMap = undefined,
 
     const Module = ModuleGeneric(StructureImporter.Handle);
 
@@ -40,8 +40,8 @@ pub const ModuleHost = struct {
         defer self.importer.deinit();
         self.dispatcher = try .init(self);
         errdefer self.dispatcher.deinit();
-        self.memory_map = try .init();
-        errdefer self.memory_map.deinit();
+        self.buffer_map = try .init();
+        errdefer self.buffer_map.deinit();
         _ = module.exports.set_host_instance(@ptrCast(self));
         try self.exportFunctionsToModule();
         // retrieve and run factory thunk
@@ -66,7 +66,7 @@ pub const ModuleHost = struct {
         if (self.ref_count == 0) {
             // std.debug.print("freeing host\n", .{});
             php.release(self.global_error_set);
-            self.memory_map.deinit();
+            self.buffer_map.deinit();
             self.dispatcher.deinit();
             if (self.library) |*lib| lib.close();
             php.allocator.destroy(self);

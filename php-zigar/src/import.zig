@@ -64,7 +64,7 @@ pub const StructureImporter = struct {
         php.destroyHashTable(&self.structure_map);
         for (self.value_list.items) |*item| {
             if (php.getValuePointer(*ByteBuffer, item)) |b|
-                b.release()
+                self.host.buffer_map.release(b)
             else |_|
                 php.release(item);
         }
@@ -162,7 +162,7 @@ pub const StructureImporter = struct {
             if (copying) buffer.protect();
         }
         errdefer buffer.release();
-        try self.host.memory_map.add(buffer);
+        try self.host.buffer_map.add(buffer);
         const value = php.createValuePointer(buffer);
         return self.allocateValue(value);
     }

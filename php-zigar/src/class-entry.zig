@@ -535,7 +535,7 @@ pub const ZigClassEntry = struct {
         else
             try ByteBuffer.createNew(len, self.alignment);
         errdefer new_buffer.release();
-        try self.host.memory_map.add(new_buffer);
+        try self.host.buffer_map.add(new_buffer);
         return new_buffer;
     }
 
@@ -593,7 +593,7 @@ pub const ZigClassEntry = struct {
     pub fn createObjectFromString(self: *@This(), str: *String) !*Object {
         const new_buffer = try ByteBuffer.createStringRef(str, self.alignment);
         defer new_buffer.release();
-        try self.host.memory_map.add(new_buffer);
+        try self.host.buffer_map.add(new_buffer);
         return try self.createObjectFromBuffer(new_buffer, null);
     }
 

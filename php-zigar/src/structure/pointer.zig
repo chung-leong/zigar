@@ -50,7 +50,7 @@ pub const Pointer = struct {
                     const new_buffer = try ByteBuffer.createExternal(byte_ptr[0..byte_size]);
                     defer new_buffer.release();
                     const class = ZigClassEntry.fromStatic(self);
-                    try class.host.memory_map.add(new_buffer);
+                    try class.host.buffer_map.add(new_buffer);
                     const target = try self.target_class.createObjectFromBuffer(new_buffer, null);
                     pointer.slots = php.createValueObject(target);
                 } else {

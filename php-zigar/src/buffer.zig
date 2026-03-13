@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const findSortedIndex = @import("address-map.zig").findSortedIndex;
+const MemoryMap = @import("memory-map.zig").MemoryMap;
 const php = @import("php.zig");
 const ClassEntry = php.ClassEntry;
 const Object = php.Object;
@@ -112,7 +112,7 @@ pub const ByteBuffer = struct {
 };
 
 pub const BufferMap = struct {
-    list: std.ArrayList(*ByteBuffer) = .empty,
+    map: MemoryMap(*ByteBuffer, php.allocator, getBufferBytes) = .{},
 
     pub fn init() !*@This() {
         const self = try php.allocator.create(@This());
@@ -121,58 +121,46 @@ pub const BufferMap = struct {
     }
 
     pub fn deinit(self: *@This()) void {
-        self.list.deinit(php.allocator);
+        self.map.deinit();
         php.allocator.destroy(self);
     }
 
     pub fn add(self: *@This(), buf: *ByteBuffer) !void {
         if (buf.parent != null) return;
-        const buf_address = getBufferAddress(buf);
-        const index = findSortedIndex(*ByteBuffer, &self.list, buf_address, getBufferAddress);
-        try self.list.insert(php.allocator, index, buf);
+        try self.map.add(buf);
     }
 
-    pub fn remove(self: *@This(), buf: *ByteBuffer) !void {
+    pub fn remove(self: *@This(), buf: *ByteBuffer) void {
         if (buf.parent != null) return;
-        const buf_address = getBufferAddress(buf);
-        const index = findSortedIndex(*ByteBuffer, &self.list, buf_address, getBufferAddress);
-        if (index > 0) {
-            if (self.list.items[index - 1] == buf) {
-                try self.list.orderedRemove(index - 1);
-            }
-        }
+        self.map.remove(buf);
     }
 
-    pub fn get(self: *@This(), address: usize, len: usize) !*ByteBuffer {
-        const index = findSortedIndex(*ByteBuffer, &self.list, address, getBufferAddress);
-        var existing_ptr: ?**ByteBuffer = null;
-        if (index > 0) {
-            const buf = self.list.items[index - 1];
-            const buf_address = getBufferAddress(buf);
-            const buf_len = buf.bytes.len;
-            if (buf_address == address and buf_len == len) {
+    pub fn get(self: *@This(), bytes: []const u8) !*ByteBuffer {
+        const result = self.map.find(bytes);
+        return switch (result.match_type) {
+            .exact => get: {
+                const buf = result.ptr.?.*;
                 buf.addRef();
-                return buf;
-            } else if (buf_address == address and buf_len < len) {
-                // existing entry is within new buffer
-                existing_ptr = &self.list.items[index - 1];
-            } else if (buf_address <= address and address + len <= buf_address + buf_len) {
-                const offset = address - buf_address;
-                return try buf.slice(offset, len);
-            }
-        }
-        const ptr: [*]u8 = @ptrFromInt(address);
-        const buf = try ByteBuffer.createExternal(ptr[0..len]);
-        if (existing_ptr) |buf_ptr| {
-            // make existing buffer the child of this one and replace it in the list
-            buf_ptr.*.parent = buf;
-            buf_ptr.*.is_owner = false;
-            buf_ptr.* = buf;
-        } else {
-            errdefer buf.release();
-            try self.insert(php.allocator, index, buf);
-        }
-        return buf;
+                break :get buf;
+            },
+            .larger => borrow: {
+                const buf = result.ptr.?.*;
+                const offset = @intFromPtr(bytes.ptr) - @intFromPtr(buf.bytes.ptr);
+                break :borrow try buf.slice(offset, bytes.len);
+            },
+            else => |mt| create: {
+                const buf = try ByteBuffer.createExternal(bytes);
+                if (mt == .smaller) {
+                    result.ptr.?.parent = buf;
+                    result.ptr.?.is_owner = false;
+                    result.ptr.?.* = buf;
+                } else {
+                    errdefer buf.release();
+                    try self.map.insert(result, buf);
+                }
+                break :create buf;
+            },
+        };
     }
 
     pub fn release(self: *@This(), buf: *ByteBuffer) void {
@@ -180,7 +168,7 @@ pub const BufferMap = struct {
         buf.release();
     }
 
-    pub fn getBufferAddress(buf: *ByteBuffer) usize {
-        return @intFromPtr(buf.bytes.ptr);
+    pub fn getBufferBytes(buf: *ByteBuffer) []u8 {
+        return buf.bytes;
     }
 };

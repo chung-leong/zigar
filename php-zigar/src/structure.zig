@@ -228,7 +228,10 @@ pub fn Parent(comptime S: type) type {
 
         pub fn freeObject(obj: *Object) void {
             const self = fromObject(obj);
-            if (@hasField(S, "bytes")) self.bytes.release();
+            if (@hasField(S, "bytes")) {
+                const class = ZigClassEntry.fromObject(obj);
+                class.host.buffer_map.release(self.bytes);
+            }
             if (@hasField(S, "slots")) php.release(&self.slots);
             const class = ZigClassEntry.fromObject(obj);
             class.release();
