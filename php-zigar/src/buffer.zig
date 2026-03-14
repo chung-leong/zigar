@@ -168,6 +168,11 @@ pub const BufferMap = struct {
         buf.release();
     }
 
+    pub fn free(self: *@This(), bytes: []const u8) void {
+        const result = self.map.find(bytes);
+        if (self.map.eject(result)) |buf| buf.release();
+    }
+
     pub fn getBufferBytes(buf: *ByteBuffer) []u8 {
         return buf.bytes;
     }

@@ -22,6 +22,7 @@ pub const ModuleHost = struct {
     importer: *StructureImporter = undefined,
     dispatcher: *CallDispatcher = undefined,
     buffer_map: *BufferMap = undefined,
+    allocator: std.mem.Allocator = undefined,
 
     const Module = ModuleGeneric(StructureImporter.Handle);
 
@@ -36,6 +37,7 @@ pub const ModuleHost = struct {
             .module = module,
             .global_error_set = php.createArray(),
         };
+        self.allocator = .{ .ptr = self, .vtable = &BufferAllocator.vtable };
         self.importer = try .init(self);
         defer self.importer.deinit();
         self.dispatcher = try .init(self);
@@ -154,6 +156,66 @@ pub const ModuleHost = struct {
     pub fn runThunk(self: *@This(), thunk_address: usize, fn_address: usize, arg_address: usize) !void {
         if (self.module.?.exports.run_thunk(thunk_address, fn_address, arg_address) != .SUCCESS)
             return error.UnableToExecuteZigFunction;
+    }
+};
+
+const BufferAllocator = struct {
+    pub const vtable: std.mem.Allocator.VTable = .{
+        .alloc = alloc,
+        .resize = resize,
+        .remap = remap,
+        .free = free,
+    };
+
+    fn alloc(
+        ctx: *anyopaque,
+        len: usize,
+        alignment: std.mem.Alignment,
+        return_address: usize,
+    ) ?[*]u8 {
+        _ = return_address;
+        const host: *ModuleHost = @ptrCast(@alignCast(ctx));
+        const buf = ByteBuffer.createNew(len, alignment.toByteUnits()) catch return null;
+        errdefer buf.release();
+        host.buffer_map.add(buf) catch return null;
+        return buf.bytes.ptr;
+    }
+
+    fn resize(
+        _: *anyopaque,
+        memory: []u8,
+        alignment: std.mem.Alignment,
+        new_len: usize,
+        return_address: usize,
+    ) bool {
+        _ = alignment;
+        _ = return_address;
+        return new_len <= memory.len;
+    }
+
+    fn remap(
+        ctx: *anyopaque,
+        memory: []u8,
+        alignment: std.mem.Alignment,
+        new_len: usize,
+        return_address: usize,
+    ) ?[*]u8 {
+        if (resize(ctx, memory, alignment, new_len, return_address)) {
+            return memory.ptr;
+        }
+        return null;
+    }
+
+    fn free(
+        ctx: *anyopaque,
+        memory: []u8,
+        alignment: std.mem.Alignment,
+        return_address: usize,
+    ) void {
+        _ = alignment;
+        _ = return_address;
+        const host: *ModuleHost = @ptrCast(@alignCast(ctx));
+        host.buffer_map.free(memory);
     }
 };
 
