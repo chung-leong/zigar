@@ -143,7 +143,7 @@ pub fn Parent(comptime S: type) type {
                     }
                 },
                 .null => {
-                    self.bytes.clear();
+                    try self.bytes.clear();
                     return true;
                 },
                 else => {},
@@ -227,14 +227,12 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn freeObject(obj: *Object) void {
-            const self = fromObject(obj);
-            if (@hasField(S, "bytes")) {
-                const class = ZigClassEntry.fromObject(obj);
-                class.host.buffer_map.release(self.bytes);
-            }
-            if (@hasField(S, "slots")) php.release(&self.slots);
             const class = ZigClassEntry.fromObject(obj);
-            class.release();
+            defer class.release();
+            class.unmapObject(obj);
+            const self = fromObject(obj);
+            self.bytes.release();
+            if (@hasField(S, "slots")) php.release(&self.slots);
         }
 
         pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {

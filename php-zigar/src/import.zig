@@ -63,10 +63,11 @@ pub const StructureImporter = struct {
     pub fn deinit(self: *@This()) void {
         php.destroyHashTable(&self.structure_map);
         for (self.value_list.items) |*item| {
-            if (php.getValuePointer(*ByteBuffer, item)) |b|
-                self.host.buffer_map.release(b)
-            else |_|
+            if (php.getValuePointer(*ByteBuffer, item)) |b| {
+                b.release();
+            } else |_| {
                 php.release(item);
+            }
         }
         self.value_list.deinit(php.allocator);
         self.instance_list.deinit(php.allocator);
@@ -147,22 +148,24 @@ pub const StructureImporter = struct {
         return self.allocateValue(value);
     }
 
-    pub fn createView(self: *@This(), bytes: ?[*]const u8, len: usize, copying: bool, _: usize) !Handle {
+    pub fn createView(self: *@This(), bytes: ?[*]const u8, len: usize, copying: bool, _: usize, alignment: usize) !Handle {
         var buffer: *ByteBuffer = undefined;
         if (bytes) |b| {
             const slice = b[0..len];
+            if (!std.math.isPowerOfTwo(alignment)) {
+                return error.InvalidAlignment;
+            }
+            const align_enum = std.mem.Alignment.fromByteUnits(alignment);
             if (copying) {
-                buffer = try ByteBuffer.createCopy(slice, 1);
+                buffer = try ByteBuffer.createCopy(slice, align_enum);
                 buffer.protect();
             } else {
-                buffer = try ByteBuffer.createExternal(@constCast(slice));
+                buffer = try ByteBuffer.createExternal(@constCast(slice), align_enum);
             }
         } else {
-            buffer = try ByteBuffer.createExternal(&.{});
+            buffer = try ByteBuffer.createExternal(&.{}, .@"1");
             if (copying) buffer.protect();
         }
-        errdefer buffer.release();
-        try self.host.buffer_map.add(buffer);
         const value = php.createValuePointer(buffer);
         return self.allocateValue(value);
     }
@@ -175,7 +178,7 @@ pub const StructureImporter = struct {
         const memory = self.dereference(dv_h);
         const bytes = try php.getValuePointer(*ByteBuffer, memory);
         const prefilled_slots = if (prefilled_slots_h) |vh| self.dereference(vh) else null;
-        const instance = try class.createObjectFromBuffer(bytes, prefilled_slots);
+        const instance = try class.obtainObjectFromBuffer(bytes, prefilled_slots);
         try self.instance_list.append(php.allocator, instance);
         const value = php.createValueObject(instance);
         return self.allocateValue(value);

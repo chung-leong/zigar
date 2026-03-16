@@ -18,6 +18,7 @@ const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigObject = @import("object.zig").ZigObject;
 
 pub const Error = error{
+    AccessingDeallocatedMemory,
     CannotCreateObject,
     ExceptionThrown,
     Failure,
@@ -305,58 +306,82 @@ pub const Any = union(enum) {
 
     pub fn get(self: *const @This(), source: anytype) !Value {
         const S = @TypeOf(source.*);
-        switch (self.*) {
-            .primitive => |acc| if (@hasField(S, "bytes"))
-                return try acc.get(source.bytes),
-            inline .multi_slot, .single_slot => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots"))
-                return try acc.get(source.bytes, &source.slots),
-            inline .multi_slot_prebaked, .single_slot_prebaked => |acc| if (@hasField(S, "slots"))
-                return try acc.get(&source.slots),
-            .null => |acc| return try acc.get(),
-            else => {},
-        }
-        return error.InvalidOperation;
+        const has_bytes = @hasField(S, "bytes");
+        const has_slots = @hasField(S, "slots");
+        return switch (self.*) {
+            .primitive => |acc| switch (has_bytes) {
+                true => try acc.get(source.bytes),
+                false => error.InvalidOperation,
+            },
+            inline .multi_slot, .single_slot => |acc| switch (has_bytes and has_slots) {
+                true => try acc.get(source.bytes, &source.slots),
+                false => error.InvalidOperation,
+            },
+            inline .multi_slot_prebaked, .single_slot_prebaked => |acc| switch (has_slots) {
+                true => try acc.get(&source.slots),
+                false => error.InvalidOperation,
+            },
+            .null => |acc| try acc.get(),
+            else => error.InvalidOperation,
+        };
     }
 
     pub fn getElement(self: *const @This(), source: anytype, index: usize) !Value {
         const S = @TypeOf(source.*);
-        switch (self.*) {
-            .vector => |acc| if (@hasField(S, "bytes"))
-                return try acc.get(source.bytes, index),
-            .array_slot => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots"))
-                return try acc.get(source.bytes, &source.slots, index),
-            .null => |acc| return try acc.get(),
-            else => {},
-        }
-        return error.InvalidOperation;
+        const has_bytes = @hasField(S, "bytes");
+        const has_slots = @hasField(S, "slots");
+        return switch (self.*) {
+            .vector => |acc| switch (has_bytes) {
+                true => try acc.get(source.bytes, index),
+                false => error.InvalidOperation,
+            },
+            .array_slot => |acc| switch (has_bytes and has_slots) {
+                true => try acc.get(source.bytes, &source.slots, index),
+                false => error.InvalidOperation,
+            },
+            .null => |acc| try acc.get(),
+            else => error.InvalidOperation,
+        };
     }
 
     pub fn set(self: *const @This(), source: anytype, value: *const Value) !void {
         const S = @TypeOf(source.*);
-        switch (self.*) {
-            .primitive => |acc| if (@hasField(S, "bytes"))
-                return try acc.set(source.bytes, value),
-            inline .multi_slot, .single_slot => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots"))
-                return try acc.set(source.bytes, &source.slots, value),
-            inline .multi_slot_prebaked, .single_slot_prebaked => |acc| if (@hasField(S, "slots"))
-                return try acc.set(&source.slots, value),
-            .null => |acc| return try acc.set(value),
-            else => {},
-        }
-        return error.InvalidOperation;
+        const has_bytes = @hasField(S, "bytes");
+        const has_slots = @hasField(S, "slots");
+        return switch (self.*) {
+            .primitive => |acc| switch (has_bytes) {
+                true => try acc.set(source.bytes, value),
+                false => error.InvalidOperation,
+            },
+            inline .multi_slot, .single_slot => |acc| switch (has_bytes and has_slots) {
+                true => try acc.set(source.bytes, &source.slots, value),
+                false => error.InvalidOperation,
+            },
+            inline .multi_slot_prebaked, .single_slot_prebaked => |acc| switch (has_slots) {
+                true => try acc.set(&source.slots, value),
+                false => error.InvalidOperation,
+            },
+            .null => |acc| try acc.set(value),
+            else => error.InvalidOperation,
+        };
     }
 
     pub fn setElement(self: *const @This(), source: anytype, index: usize, value: *const Value) !void {
         const S = @TypeOf(source.*);
-        switch (self.*) {
-            .vector => |acc| if (@hasField(S, "bytes"))
-                return try acc.set(source.bytes, index, value),
-            .array_slot => |acc| if (@hasField(S, "bytes") and @hasField(S, "slots"))
-                return try acc.set(source.bytes, &source.slots, index, value),
-            .null => |acc| return try acc.set(value),
-            else => {},
-        }
-        return error.InvalidOperation;
+        const has_bytes = @hasField(S, "bytes");
+        const has_slots = @hasField(S, "slots");
+        return switch (self.*) {
+            .vector => |acc| switch (has_bytes) {
+                true => try acc.set(source.bytes, index, value),
+                false => error.InvalidOperation,
+            },
+            .array_slot => |acc| switch (has_bytes and has_slots) {
+                true => try acc.set(source.bytes, &source.slots, index, value),
+                false => error.InvalidOperation,
+            },
+            .null => |acc| try acc.set(value),
+            else => error.InvalidOperation,
+        };
     }
 };
 

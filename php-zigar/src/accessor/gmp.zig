@@ -29,9 +29,8 @@ pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) ac
     const extra = if (attrs.bit_offset != null and attrs.bit_offset != 0) 1 else 0;
     const ns = struct {
         pub fn get(acc: *const accessor.Primitive, buffer: *ByteBuffer) Error!Value {
-            const bytes: []u8 = buffer.bytes;
             const byte_count = (acc.params.bit_size + 7) / 8;
-            if (acc.params.byte_offset + byte_count + extra > bytes.len) return error.OutOfBound;
+            const bytes = try buffer.data(acc.params.byte_offset + byte_count + extra, false);
             const str = php.createStringWithLength(byte_count);
             defer php.release(str);
             const dst = @constCast(php.getStringContent(str));
@@ -77,9 +76,8 @@ pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) ac
         }
 
         pub fn set(acc: *const accessor.Primitive, buffer: *ByteBuffer, value: *const Value) Error!void {
-            const bytes: []u8 = buffer.bytes;
             const byte_count = (acc.params.bit_size + 7) / 8;
-            if (acc.params.byte_offset + byte_count + extra > bytes.len) return error.OutOfBound;
+            const bytes = try buffer.data(acc.params.byte_offset + byte_count + extra, true);
             const str, const negate = try stringFromGmp(value);
             defer php.release(str);
             const src = php.getStringContent(str);

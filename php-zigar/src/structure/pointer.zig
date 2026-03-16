@@ -11,10 +11,10 @@ const structure = @import("../structure.zig");
 const invokeFunction = structure.invokeMethod;
 
 pub const Pointer = struct {
-    bytes: *ByteBuffer = undefined,
     slots: Value = undefined,
     last_address: usize = 0,
     last_length: usize = 0,
+    bytes: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
     pub const Static = struct {
@@ -46,12 +46,7 @@ pub const Pointer = struct {
                 php.release(&pointer.slots);
                 if (address >= 0) {
                     const byte_size = length * (self.target_class.byte_size orelse 0);
-                    const byte_ptr: [*]u8 = @ptrFromInt(address);
-                    const new_buffer = try ByteBuffer.createExternal(byte_ptr[0..byte_size]);
-                    defer new_buffer.release();
-                    const class = ZigClassEntry.fromStatic(self);
-                    try class.host.buffer_map.add(new_buffer);
-                    const target = try self.target_class.createObjectFromBuffer(new_buffer, null);
+                    const target = try self.target_class.obtainObjectAtAddress(address, byte_size);
                     pointer.slots = php.createValueObject(target);
                 } else {
                     pointer.slots = php.createValueNull();
@@ -99,11 +94,11 @@ pub const Pointer = struct {
             } else |_| if (php.getValueString(value)) |str| {
                 if (static.target_class.type != .function) {
                     // autocast from string
-                    break :init try static.target_class.createObjectFromString(str);
+                    break :init try static.target_class.obtainObjectFromString(str);
                 }
             } else |_| {}
             // autovivificate new target
-            const new_obj = try static.target_class.createNewObject();
+            const new_obj = try static.target_class.obtainNewObject();
             errdefer php.release(new_obj);
             try invokeFunction(new_obj, "writeSelf", .{value});
             break :init new_obj;

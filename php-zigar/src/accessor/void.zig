@@ -15,7 +15,7 @@ pub fn get(comptime _: Attributes, params: accessor.Primitive.Parameters) access
         }
 
         pub fn set(_: *const accessor.Primitive, buffer: *ByteBuffer, value: *const Value) Error!void {
-            if (buffer.is_read_only) return error.WriteProtected;
+            _ = try buffer.data(0, true);
             try php.getValueNull(value);
         }
     };

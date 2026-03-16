@@ -15,9 +15,9 @@ const Value = php.Value;
 const structure = @import("../structure.zig");
 
 pub const Function = struct {
-    bytes: *ByteBuffer = undefined,
     closure: *Closure = undefined,
-    transform: ObjectTransform = .to_value,
+    transform: ObjectTransform align(@alignOf(*ByteBuffer)) = .to_value, // force bytes to be the last field
+    bytes: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
     pub const Static = struct {
@@ -46,7 +46,8 @@ pub const Function = struct {
         }
 
         pub fn runCallback(self: *@This(), callable: *Value, arg_data: []u8) !void {
-            const arg_buffer = try ByteBuffer.createExternal(arg_data);
+            const class = ZigClassEntry.fromStatic(self);
+            const arg_buffer = try ByteBuffer.createExternal(arg_data, class.alignment);
             defer arg_buffer.release();
             const arg_obj = try self.argument_class.createObjectFromBuffer(arg_buffer, null);
             defer php.release(arg_obj);

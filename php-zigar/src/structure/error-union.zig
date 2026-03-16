@@ -14,8 +14,8 @@ const error_set = @import("error-set.zig");
 const ErrorSet = error_set.ErrorSet;
 
 pub const ErrorUnion = struct {
-    bytes: *ByteBuffer = undefined,
     slots: Value = undefined,
+    bytes: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
     pub const Static = struct {

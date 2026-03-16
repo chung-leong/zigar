@@ -5,9 +5,13 @@ const builtin = @import("builtin");
 const BufferMap = @import("buffer.zig").BufferMap;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
+const getObjectBytes = @import("object.zig").getObjectBytes;
 const ModuleGeneric = @import("module/native/interface.zig").Module;
+const ObjectMap = @import("object.zig").ObjectMap;
 const php = @import("php.zig");
+const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
+const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
 const StructureImporter = @import("import.zig").StructureImporter;
@@ -21,8 +25,9 @@ pub const ModuleHost = struct {
     global_error_set: *HashTable,
     importer: *StructureImporter = undefined,
     dispatcher: *CallDispatcher = undefined,
-    buffer_map: *BufferMap = undefined,
     allocator: std.mem.Allocator = undefined,
+    unclaimed_buffer_map: BufferMap = .{},
+    object_map: ObjectMap = .{},
 
     const Module = ModuleGeneric(StructureImporter.Handle);
 
@@ -42,8 +47,6 @@ pub const ModuleHost = struct {
         defer self.importer.deinit();
         self.dispatcher = try .init(self);
         errdefer self.dispatcher.deinit();
-        self.buffer_map = try .init();
-        errdefer self.buffer_map.deinit();
         _ = module.exports.set_host_instance(@ptrCast(self));
         try self.exportFunctionsToModule();
         // retrieve and run factory thunk
@@ -68,7 +71,8 @@ pub const ModuleHost = struct {
         if (self.ref_count == 0) {
             // std.debug.print("freeing host\n", .{});
             php.release(self.global_error_set);
-            self.buffer_map.deinit();
+            self.unclaimed_buffer_map.deinit();
+            self.object_map.deinit();
             self.dispatcher.deinit();
             if (self.library) |*lib| lib.close();
             php.allocator.destroy(self);
@@ -175,9 +179,7 @@ const BufferAllocator = struct {
     ) ?[*]u8 {
         _ = return_address;
         const host: *ModuleHost = @ptrCast(@alignCast(ctx));
-        const buf = ByteBuffer.createNew(len, alignment.toByteUnits()) catch return null;
-        errdefer buf.release();
-        host.buffer_map.add(buf) catch return null;
+        const buf = host.unclaimed_buffer_map.add(len, alignment) catch return null;
         return buf.bytes.ptr;
     }
 
@@ -215,7 +217,14 @@ const BufferAllocator = struct {
         _ = alignment;
         _ = return_address;
         const host: *ModuleHost = @ptrCast(@alignCast(ctx));
-        host.buffer_map.free(memory);
+        // try releasing buffer that has just been allocated
+        if (!host.unclaimed_buffer_map.free(memory)) {
+            // failing that, look for a buffer that's being used by an object
+            if (host.object_map.findBuffer(memory)) |buf| {
+                // free its memory without releasing it
+                buf.free();
+            }
+        }
     }
 };
 

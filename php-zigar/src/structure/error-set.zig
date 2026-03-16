@@ -19,8 +19,8 @@ const Value = php.Value;
 const structure = @import("../structure.zig");
 
 pub const ErrorSet = struct {
-    bytes: *ByteBuffer = undefined,
     canonical: ?*Canonical = null,
+    bytes: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
     const Canonical = struct {
@@ -129,9 +129,9 @@ pub const ErrorSet = struct {
                         return err.*;
                     } else |_| {
                         // create new error
-                        const bytes = try ByteBuffer.createNew(class.byte_size.?, class.alignment);
+                        const err_obj = try class.obtainNewObject();
+                        const bytes = ZigObject(ErrorSet).fromObject(err_obj).structure().bytes;
                         try self.value_acc.transform(null).set(bytes, value);
-                        const err_obj = try class.createObjectFromBuffer(bytes, null);
                         var buffer: [64]u8 = undefined;
                         const text = std.fmt.bufPrint(&buffer, "UnknownError #{d}", .{err_code}) catch unreachable;
                         const name = php.createString(text);

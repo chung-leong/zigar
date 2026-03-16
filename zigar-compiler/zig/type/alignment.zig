@@ -9,7 +9,7 @@ pub fn get(comptime T: type) ?u16 {
         return null;
     }
     return switch (@typeInfo(T)) {
-        .null, .undefined, .@"fn" => 0,
+        .null, .undefined, .@"fn" => 1,
         .@"opaque" => null,
         .error_set => @alignOf(anyerror),
         else => return @alignOf(T),

@@ -13,8 +13,8 @@ const Value = php.Value;
 const structure = @import("../structure.zig");
 
 pub const Enum = struct {
-    bytes: *ByteBuffer = undefined,
     canonical: ?*Canonical = null,
+    bytes: *ByteBuffer = undefined,
 
     const Canonical = struct {
         name: *String,
@@ -100,9 +100,9 @@ pub const Enum = struct {
                     } else |err| {
                         if (class.flags.@"enum".is_open_ended) {
                             // create new item
-                            const bytes = try ByteBuffer.createNew(class.byte_size.?, class.alignment);
+                            const tag_obj = try class.obtainNewObject();
+                            const bytes = ZigObject(Enum).fromObject(tag_obj).structure().bytes;
                             try self.value_acc.transform(null).set(bytes, key);
-                            const tag_obj = try class.createObjectFromBuffer(bytes, null);
                             var buffer: [48]u8 = undefined;
                             const text = std.fmt.bufPrint(&buffer, "@enumFromInt({d})", .{tag_code}) catch unreachable;
                             const name = php.createString(text);
@@ -137,9 +137,9 @@ pub const Enum = struct {
                         } else |err| {
                             if (class.flags.@"enum".is_open_ended) {
                                 // create new item
-                                const bytes = try ByteBuffer.createNew(class.byte_size.?, class.alignment);
+                                const tag_obj = try class.obtainNewObject();
+                                const bytes = ZigObject(Enum).fromObject(tag_obj).structure().bytes;
                                 try self.value_acc.transform(null).set(bytes, key);
-                                const tag_obj = try class.createObjectFromBuffer(bytes, null);
                                 const text = try std.fmt.allocPrint(php.allocator, "@enumFromInt({s})", .{
                                     php.getStringContent(tag_code_str),
                                 });

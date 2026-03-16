@@ -61,7 +61,7 @@ const multi_slot = struct {
         return php.getHashEntry(ht, acc.params.slot) catch vivicate: {
             const offset = acc.params.byte_offset;
             const len = acc.params.byte_size;
-            const new_obj = try acc.params.class.createObjectFromSlice(buffer, offset, len);
+            const new_obj = try acc.params.class.obtainObjectAtOffset(buffer, offset, len);
             var new_value = php.createValueObject(new_obj);
             break :vivicate php.insertHashEntry(ht, acc.params.slot, &new_value);
         };
@@ -84,7 +84,7 @@ const single_slot = struct {
         if (php.getType(slot) == .null) {
             const offset = acc.params.byte_offset;
             const len = acc.params.byte_size;
-            const new_obj = try acc.params.class.createObjectFromSlice(buffer, offset, len);
+            const new_obj = try acc.params.class.obtainObjectAtOffset(buffer, offset, len);
             slot.* = php.createValueObject(new_obj);
         }
         return slot;
@@ -109,7 +109,7 @@ const array_slot = struct {
         return php.getHashEntry(ht, key) catch vivicate: {
             const offset = acc.params.byte_size * index;
             const len = acc.params.byte_size;
-            const new_obj = try acc.params.class.createObjectFromSlice(buffer, offset, len);
+            const new_obj = try acc.params.class.obtainObjectAtOffset(buffer, offset, len);
             var new_value = php.createValueObject(new_obj);
             break :vivicate php.insertHashEntry(ht, key, &new_value);
         };

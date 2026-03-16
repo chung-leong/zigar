@@ -1,12 +1,15 @@
 const std = @import("std");
 
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
+const MemoryMap = @import("memory-map.zig").MemoryMap;
 const php = @import("php.zig");
+const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
 const ObjectHandlers = php.ObjectHandlers;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
+const RelativePosition = @import("memory-map.zig").RelativePosition;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
 pub fn ZigObject(comptime S: type) type {
@@ -76,10 +79,110 @@ pub fn ZigObject(comptime S: type) type {
             return &object_handlers.?;
         }
     };
-    if (@offsetOf(Result, "php_portion") + @sizeOf(Object) != @sizeOf(Result))
+    if (@offsetOf(Result, "php_portion") + @sizeOf(Object) != @sizeOf(Result)) {
         @compileError("PHP object is in the wrong position");
+    }
+    if (@hasField(S, "bytes") and @offsetOf(S, "bytes") + @sizeOf(*ByteBuffer) != @sizeOf(S)) {
+        @compileError("Field 'bytes' is in the wrong position in " ++ @typeName(S));
+    }
     return Result;
 }
+
+pub const ObjectMap = struct {
+    map: Map = .{},
+
+    const Map = MemoryMap(*Object, php.allocator, compareObjects);
+    const SearchResult = Map.SearchResult;
+    const GenericObject = struct {
+        bytes: *ByteBuffer,
+        php_portion: php.Object,
+    };
+
+    pub fn deinit(self: *@This()) void {
+        self.map.deinit();
+    }
+
+    pub fn add(self: *@This(), obj: *Object) !void {
+        try self.map.add(obj, obj);
+    }
+
+    pub fn insert(self: *@This(), result: SearchResult, obj: *Object) !void {
+        try self.map.insert(result, obj);
+    }
+
+    pub fn remove(self: *@This(), obj: *Object) void {
+        self.map.remove(obj);
+    }
+
+    pub fn search(self: *@This(), bytes: []const u8, ce: ?*ClassEntry) SearchResult {
+        var fake_buf: ByteBuffer = .{
+            .bytes = @constCast(bytes),
+            .alignment = undefined,
+            .ref_count = undefined,
+            .flags = undefined,
+            .source = undefined,
+        };
+        var b: GenericObject = .{
+            .bytes = &fake_buf,
+            .php_portion = .{
+                .ce = ce,
+                .gc = undefined,
+                .handle = undefined,
+                .handlers = undefined,
+                .properties = undefined,
+                .properties_table = undefined,
+            },
+        };
+        return self.map.search(&b.php_portion);
+    }
+
+    pub fn find(self: *@This(), bytes: []const u8) ?*Object {
+        const result = self.search(bytes, null);
+        if (result.match != .yes) return null;
+        return result.value();
+    }
+
+    pub fn findBuffer(self: *@This(), bytes: []const u8) ?*ByteBuffer {
+        const obj = self.find(bytes) orelse return null;
+        return getObjectBuffer(obj);
+    }
+
+    pub fn acquireBuffer(self: *@This(), bytes: []const u8) !?*ByteBuffer {
+        const result = self.search(bytes, null);
+        return switch (result.match) {
+            .yes => use: {
+                const buf = getObjectBuffer(result.value());
+                buf.addRef();
+                break :use buf;
+            },
+            .outside => slice: {
+                const buf = getObjectBuffer(result.value());
+                const offset = @intFromPtr(bytes.ptr) - @intFromPtr(buf.bytes.ptr);
+                break :slice try buf.slice(offset, bytes.len);
+            },
+            else => null,
+        };
+    }
+
+    fn getObjectBuffer(obj: *const Object) *ByteBuffer {
+        const ptr: *const GenericObject = @fieldParentPtr("php_portion", obj);
+        return ptr.bytes;
+    }
+
+    fn compareObjects(a: *const Object, b: *const Object) RelativePosition {
+        const buf_a = getObjectBuffer(a);
+        const buf_b = getObjectBuffer(b);
+        return switch (buf_a.compare(buf_b)) {
+            .a_is_b => if (a.ce == b.ce or b.ce == null)
+                .a_is_b
+            else if (a.ce < b.ce)
+                .a_before_b
+            else
+                .b_before_a,
+            else => |pos| pos,
+        };
+    }
+};
 
 const object_handler_mapping = .{
     .free_obj = "freeObject",

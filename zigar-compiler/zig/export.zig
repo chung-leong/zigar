@@ -1165,6 +1165,10 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .@"fn" => 0,
                 else => @sizeOf(pt.child),
             };
+            const child_align = switch (@typeInfo(pt.child)) {
+                .@"fn" => 1,
+                else => @alignOf(pt.child),
+            };
             const address = switch (pt.size) {
                 .slice => @intFromPtr(ptr.ptr),
                 else => @intFromPtr(ptr),
@@ -1175,7 +1179,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 break :create @intFromPtr(invalid_ptr);
             };
             if (address == invalid_address) {
-                return host.createView(null, 0, copying, export_handle);
+                return host.createView(null, 0, copying, export_handle, child_align);
             }
             const len: usize = switch (pt.size) {
                 .one => child_size,
@@ -1198,7 +1202,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 },
             };
             const bytes: [*]const u8 = @ptrFromInt(address);
-            return host.createView(bytes, len, copying, export_handle);
+            return host.createView(bytes, len, copying, export_handle, child_align);
         }
 
         fn createInstance(structure: Value, ptr: anytype, copying: bool, export_handle: anytype, slots: ?Value) !Value {

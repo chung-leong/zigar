@@ -72,9 +72,9 @@ pub fn createString(initializer: []const u8) !Value {
     return value;
 }
 
-pub fn createView(bytes: ?[*]const u8, len: usize, copying: bool, export_handle: ?usize) !Value {
+pub fn createView(bytes: ?[*]const u8, len: usize, copying: bool, export_handle: ?usize, alignment: usize) !Value {
     var value: Value = undefined;
-    if (imports.create_view(instance, bytes, len, copying, export_handle orelse 0, &value) != .SUCCESS) {
+    if (imports.create_view(instance, bytes, len, copying, export_handle orelse 0, alignment, &value) != .SUCCESS) {
         return error.UnableToCreateDataView;
     }
     return value;

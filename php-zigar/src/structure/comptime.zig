@@ -13,6 +13,7 @@ const structure = @import("../structure.zig");
 
 pub const Comptime = struct {
     slots: Value = undefined,
+    bytes: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
     pub const Static = struct {

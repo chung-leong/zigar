@@ -16,8 +16,8 @@ const structure = @import("../structure.zig");
 const Class = structure.Class;
 
 pub const Union = struct {
-    bytes: *ByteBuffer = undefined,
     slots: Value = undefined,
+    bytes: *ByteBuffer = undefined,
 
     const Super = structure.StructLike(@This());
     pub const Static = struct {

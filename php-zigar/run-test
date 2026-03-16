@@ -1,2 +1,2 @@
 #!/bin/env bash
-zig build && php -d extension=./modules/php_zigar.so tests/scratch.php
+zig build && php -d extension=./modules/php_zigar.so test/scratch.php

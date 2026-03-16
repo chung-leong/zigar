@@ -16,18 +16,16 @@ pub fn get(comptime attrs: Attributes, params: accessor.Primitive.Parameters) ac
     const AT = accessor.WithBitOffset(T, attrs.bit_offset);
     const ns = struct {
         pub fn get(acc: *const accessor.Primitive, buffer: *ByteBuffer) Error!Value {
-            const bytes: []u8 = buffer.bytes;
             const byte_size = (@bitSizeOf(AT) + 7) / 8;
-            if (acc.params.byte_offset + byte_size > bytes.len) return error.OutOfBound;
+            const bytes: []u8 = try buffer.data(acc.params.byte_offset + byte_size, false);
             const ptr: *align(1) AT = @ptrCast(&bytes[acc.params.byte_offset]);
             const boolean = if (comptime AT == T) ptr.* else ptr.value;
             return php.createValueBool(boolean);
         }
 
         pub fn set(acc: *const accessor.Primitive, buffer: *ByteBuffer, value: *const Value) Error!void {
-            if (buffer.is_read_only) return error.WriteProtected;
-            const bytes: []u8 = buffer.bytes;
             const byte_size = (@bitSizeOf(AT) + 7) / 8;
+            const bytes: []u8 = try buffer.data(acc.params.byte_offset + byte_size, true);
             if (acc.params.byte_offset + byte_size > bytes.len) return error.OutOfBound;
             const ptr: *align(1) AT = @ptrCast(&bytes[acc.params.byte_offset]);
             const boolean = switch (php.isNull(value)) {

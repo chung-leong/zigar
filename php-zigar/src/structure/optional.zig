@@ -10,8 +10,8 @@ const Value = php.Value;
 const structure = @import("../structure.zig");
 
 pub const Optional = struct {
-    bytes: *ByteBuffer = undefined,
     slots: Value = undefined,
+    bytes: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
     pub const Static = struct {

@@ -13,8 +13,8 @@ const Value = php.Value;
 const structure = @import("../structure.zig");
 
 pub const Struct = struct {
-    bytes: *ByteBuffer = undefined,
     slots: Value = undefined,
+    bytes: *ByteBuffer = undefined,
 
     const Super = structure.StructLike(@This());
     pub const Static = struct {
