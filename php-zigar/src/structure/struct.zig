@@ -62,9 +62,20 @@ pub const Struct = struct {
         return Super.readSelf(self, transform);
     }
 
+    pub fn writeSelf(self: *@This(), value: *const Value) !void {
+        const class = ZigClassEntry.fromStructure(self);
+        switch (class.purpose) {
+            .allocator => {
+                const allocator = php.getValuePointer(*std.mem.Allocator, value) catch unreachable;
+                try self.bytes.copyBytes(std.mem.asBytes(allocator));
+                return;
+            },
+            else => try Super.writeSelf(self, value),
+        }
+    }
+
     pub const setStorage = Super.setStorage;
     pub const getExtent = Super.getExtent;
-    pub const writeSelf = Super.writeSelf;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
     pub const readProperty = Super.readProperty;
