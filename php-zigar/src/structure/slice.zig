@@ -56,11 +56,11 @@ pub const Slice = struct {
     pub fn getExtent(self: *@This()) Super.ByteExtent {
         return .{
             .address = @intFromPtr(self.bytes.bytes.ptr),
-            .len = self.getLength() catch unreachable,
+            .len = self.getLength(),
         };
     }
 
-    pub fn getLength(self: *@This()) !usize {
+    pub fn getLength(self: *@This()) usize {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const len = self.bytes.bytes.len;

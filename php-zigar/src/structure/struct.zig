@@ -17,6 +17,7 @@ pub const Struct = struct {
     bytes: *ByteBuffer = undefined,
 
     const Super = structure.StructLike(@This());
+
     pub const Static = struct {
         required_field_count: usize = 0,
         class_obj: *Object = undefined,

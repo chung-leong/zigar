@@ -17,6 +17,7 @@ pub const Pointer = struct {
     bytes: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
+
     pub const Static = struct {
         target_class: *ZigClassEntry = undefined,
         address_acc: *accessor.Primitive = undefined,

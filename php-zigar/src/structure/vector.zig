@@ -31,9 +31,9 @@ pub const Vector = struct {
         }
     };
 
-    pub fn getLength(self: *@This()) !usize {
+    pub fn getLength(self: *@This()) usize {
         const class = ZigClassEntry.fromStructure(self);
-        return class.length orelse return error.Unexpected;
+        return class.length.?;
     }
 
     pub fn getElement(self: *@This(), index: usize) !Value {

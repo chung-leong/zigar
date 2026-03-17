@@ -627,6 +627,13 @@ pub const ZigClassEntry = struct {
     }
 
     pub fn obtainObjectFromBuffer(self: *@This(), buf: *ByteBuffer, prefilled_slots: ?*const Value) !*Object {
+        const is_mapped = switch (self.type) {
+            inline else => |t| check: {
+                const S = @field(structure.by_enum, @tagName(t));
+                break :check @hasDecl(S, "getExtent");
+            },
+        };
+        if (!is_mapped) return try self.createObjectFromBuffer(buf, prefilled_slots);
         const result = self.host.object_map.search(buf.bytes, self.entry());
         if (result.match == .yes) {
             const obj = result.value();

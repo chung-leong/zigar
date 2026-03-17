@@ -18,21 +18,23 @@ pub const Array = struct {
     bytes: *ByteBuffer = undefined,
 
     const Super = structure.ArrayLike(@This());
+
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
         value_transform: ?ObjectTransform = null,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
+            if (class.length == null) return error.Unexpected;
             const member = try class.getMember(.instance, 0);
             self.value_acc = &member.accessors;
             self.value_transform = member.objectTransform();
         }
     };
 
-    pub fn getLength(self: *@This()) !usize {
+    pub fn getLength(self: *@This()) usize {
         const class = ZigClassEntry.fromStructure(self);
-        return class.length orelse return error.Unexpected;
+        return class.length.?;
     }
 
     pub fn getElement(self: *@This(), index: usize) !Value {
@@ -50,7 +52,6 @@ pub const Array = struct {
     }
 
     pub const setStorage = Super.setStorage;
-    pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
     pub const readSelf = Super.readSelf;
     pub const writeSelf = Super.writeSelf;

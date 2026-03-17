@@ -20,6 +20,7 @@ pub const Function = struct {
     bytes: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
+
     pub const Static = struct {
         thunk_address: usize = undefined,
         controller_address: usize = 0,

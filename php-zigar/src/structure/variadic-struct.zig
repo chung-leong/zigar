@@ -12,6 +12,7 @@ pub const VariadicStruct = struct {
     bytes: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
+
     pub const Static = structure.ArgStruct.Static;
 
     pub fn copyArguments(self: *@This(), iter: *php.ArgumentIterator) !void {
@@ -36,17 +37,9 @@ pub const VariadicStruct = struct {
         unreachable;
     }
 
-    pub fn freeObject(obj: *Object) void {
-        const class = ZigClassEntry.fromObject(obj);
-        defer class.release();
-        const self = fromObject(obj);
-        self.bytes.release();
-        php.release(&self.slots);
-    }
-
     pub const setStorage = Super.setStorage;
     pub const readSelf = Super.readSelf;
-    pub const getExtent = Super.getExtent;
+    pub const freeObject = Super.freeObject;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
 };

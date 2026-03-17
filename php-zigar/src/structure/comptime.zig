@@ -13,9 +13,9 @@ const structure = @import("../structure.zig");
 
 pub const Comptime = struct {
     slots: Value = undefined,
-    bytes: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
+
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
         value_transform: ?ObjectTransform = null,
@@ -27,10 +27,6 @@ pub const Comptime = struct {
             self.value_transform = member.objectTransform();
         }
     };
-
-    pub fn getExtent(_: *@This()) Super.ByteExtent {
-        return .{ .address = 0 };
-    }
 
     pub fn copyArguments(_: *@This(), _: *php.ArgumentIterator) !void {
         return error.CannotCreateComptimeObject;

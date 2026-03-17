@@ -13,6 +13,7 @@ pub const Primitive = struct {
     bytes: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
+
     pub const Static = struct {
         value_acc: *accessor.Primitive = undefined,
 

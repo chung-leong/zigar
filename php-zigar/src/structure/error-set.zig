@@ -39,6 +39,7 @@ pub const ErrorSet = struct {
             php.allocator.destroy(self);
         }
     };
+
     pub const Static = struct {
         value_acc: *accessor.Primitive = undefined,
         error_set: *HashTable = undefined,

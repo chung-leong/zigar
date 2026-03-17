@@ -18,6 +18,7 @@ pub const ErrorUnion = struct {
     bytes: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
+
     pub const Static = struct {
         payload_acc: *accessor.Any = undefined,
         payload_transform: ?ObjectTransform = null,

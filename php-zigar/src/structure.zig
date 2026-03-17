@@ -107,7 +107,6 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn getExtent(self: *S) ByteExtent {
-            if (!@hasField(S, "bytes")) @compileError("No buffer: " ++ @typeName(S));
             return .{ .address = @intFromPtr(self.bytes.bytes.ptr) };
         }
 
@@ -123,7 +122,7 @@ pub fn Parent(comptime S: type) type {
                 });
             }
             const arg = arg_iter.next() orelse unreachable;
-            return try S.writeSelf(self, arg);
+            return try self.writeSelf(arg);
         }
 
         pub fn readSelf(self: *S, transform: ObjectTransform) !Value {
@@ -229,9 +228,10 @@ pub fn Parent(comptime S: type) type {
         pub fn freeObject(obj: *Object) void {
             const class = ZigClassEntry.fromObject(obj);
             defer class.release();
-            class.unmapObject(obj);
+            // only structure that a pointer can points to implement getExtent()
+            if (@hasDecl(S, "getExtent")) class.unmapObject(obj);
             const self = fromObject(obj);
-            self.bytes.release();
+            if (@hasField(S, "bytes")) self.bytes.release();
             if (@hasField(S, "slots")) php.release(&self.slots);
         }
 
@@ -417,7 +417,7 @@ pub fn StructLike(comptime S: type) type {
             const self = fromObject(obj);
             const class = ZigClassEntry.fromObject(obj);
             const ht = php.createArray();
-            var iter = class.getMemberIterator(.instance);
+            var iter = class.getMemberIterator(scope);
             const is_tuple = isTuple(self);
             while (iter.next()) |member| {
                 if (iter.currentName()) |name| {
@@ -481,7 +481,7 @@ pub fn ArrayLike(comptime S: type) type {
             return switch (transform) {
                 .to_value => returnSelf(self),
                 .to_plain => create: {
-                    const len = try self.getLength();
+                    const len = self.getLength();
                     const ht = php.createArray();
                     for (0..len) |i| {
                         var value = try self.getElement(i);
@@ -496,7 +496,7 @@ pub fn ArrayLike(comptime S: type) type {
                     if (!@hasField(@TypeOf(flags), "is_string") or !flags.is_string) {
                         break :create error.Unsupported;
                     }
-                    const len = try S.getLength(self);
+                    const len = self.getLength();
                     const byte_count = self.bytes.bytes.len;
                     if (byte_count == len) {
                         break :create php.createValueStringContent(self.bytes.bytes);
@@ -515,45 +515,45 @@ pub fn ArrayLike(comptime S: type) type {
         pub fn writeSelf(self: *S, value: *const Value) !void {
             if (try copySelf(self, value)) return;
             const ht = try php.getValueArray(value);
-            const len = try S.getLength(self);
+            const len = self.getLength();
             var iter: HashTableIterator = .init(ht, .{});
             while (iter.next()) |field_value| {
                 const key = iter.currentIndex() orelse return error.KeyIsNotInteger;
                 if (key < 0) return error.NegativeIndex;
                 const index: usize = @intCast(key);
                 if (index >= len) return error.OutOfBound;
-                try S.setElement(self, index, field_value);
+                try self.setElement(index, field_value);
             }
         }
 
         pub fn readElement(obj: *Object, key: *Value, _: c_int, retval: *Value) !?*Value {
             const self = fromObject(obj);
             const index = try getIndex(key);
-            const len = try S.getLength(self);
+            const len = self.getLength();
             // need bound check needed here because element might be zero-bit
             if (index >= len) return error.OutOfBound;
-            retval.* = try S.getElement(self, index);
+            retval.* = try self.getElement(index);
             return retval;
         }
 
         pub fn writeElement(obj: *Object, key: *Value, value: *Value) !void {
             const self = fromObject(obj);
             const index = try getIndex(key);
-            const len = try self.getLength();
+            const len = self.getLength();
             if (index >= len) return error.OutOfBound;
-            try S.setElement(self, index, value);
+            try self.setElement(index, value);
         }
 
         pub fn hasElement(obj: *Object, key: *Value, _: c_int) !c_int {
             const self = fromObject(obj);
             const index = getIndex(key) catch return 0;
-            const len = try self.getLength();
+            const len = self.getLength();
             return if (index < len) 1 else 0;
         }
 
         pub fn countElements(obj: *Object, count: *php.Long) !c_int {
             const self = fromObject(obj);
-            const len = try self.getLength();
+            const len = self.getLength();
             if (len > std.math.maxInt(php.Long)) return error.TooLarge;
             count.* = @intCast(len);
             return php.SUCCESS;
@@ -568,7 +568,7 @@ pub fn ArrayLike(comptime S: type) type {
         pub fn getProperties(obj: *Object) !*HashTable {
             const self = fromObject(obj);
             const ht = php.createArray();
-            const len = try self.getLength();
+            const len = self.getLength();
             for (0..len) |i| {
                 var value = try self.getElement(i);
                 _ = php.appendHashEntry(ht, &value);

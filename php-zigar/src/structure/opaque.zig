@@ -13,6 +13,7 @@ pub const Opaque = struct {
     bytes: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
+
     pub const Static = struct {
         class_obj: *Object = undefined,
 

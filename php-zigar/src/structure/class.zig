@@ -42,13 +42,12 @@ pub fn Class(comptime S: type) type {
         }
 
         pub fn freeObject(obj: *Object) void {
-            const class = ZigClassEntry.fromObject(obj);
-            defer class.release();
             const self = fromObject(obj);
             inline for (comptime std.meta.fields(@TypeOf(self.closures))) |field| {
                 if (@field(self.closures, field.name)) |c| c.release();
             }
             php.release(&self.slots);
+            Super.freeObject(obj);
         }
 
         pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: ?*const Value) !?*Function {

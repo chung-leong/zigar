@@ -15,6 +15,7 @@ pub const ArgStruct = struct {
     bytes: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
+
     pub const Static = struct {
         arg_accessors: []*accessor.Any = undefined,
         retval_accessors: *accessor.Any = undefined,
@@ -73,17 +74,9 @@ pub const ArgStruct = struct {
         return try static.retval_accessors.set(self, value);
     }
 
-    pub fn freeObject(obj: *Object) void {
-        const class = ZigClassEntry.fromObject(obj);
-        defer class.release();
-        const self = fromObject(obj);
-        self.bytes.release();
-        php.release(&self.slots);
-    }
-
     pub const setStorage = Super.setStorage;
     pub const readSelf = Super.readSelf;
-    pub const getExtent = Super.getExtent;
+    pub const freeObject = Super.freeObject;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
 };

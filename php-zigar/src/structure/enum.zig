@@ -27,6 +27,7 @@ pub const Enum = struct {
     };
 
     const Super = structure.Parent(@This());
+
     pub const Static = struct {
         value_acc: *accessor.Primitive = undefined,
         available_tags: HashTable = undefined,

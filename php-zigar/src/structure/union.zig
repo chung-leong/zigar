@@ -20,6 +20,7 @@ pub const Union = struct {
     bytes: *ByteBuffer = undefined,
 
     const Super = structure.StructLike(@This());
+
     pub const Static = struct {
         selector: ?struct {
             class: *ZigClassEntry,
