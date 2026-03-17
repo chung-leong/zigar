@@ -566,7 +566,7 @@ pub const ZigClassEntry = struct {
         const parent_bytes = try parent_buf.data(offset + len, false);
         const bytes = parent_bytes[offset .. offset + len];
         // see if there's an existing object
-        const result = self.host.object_map.search(bytes, self.entry());
+        const result = self.host.object_map.search(bytes, self.entry(), parent_buf.flags.is_read_only);
         if (result.match == .yes) {
             const obj = result.value();
             php.addRef(obj);
@@ -580,27 +580,30 @@ pub const ZigClassEntry = struct {
         }
     }
 
-    pub fn obtainObjectAtAddress(self: *@This(), address: usize, len: usize) !*Object {
+    pub fn obtainObjectAtAddress(self: *@This(), address: usize, len: usize, is_const: bool) !*Object {
         const byte_ptr: [*]u8 = @ptrFromInt(address);
         const bytes = byte_ptr[0..len];
         // see if there's an existing object
-        const result = self.host.object_map.search(bytes, self.entry());
+        const result = self.host.object_map.search(bytes, self.entry(), is_const);
         if (result.match == .yes) {
             const obj = result.value();
             php.addRef(obj);
             return obj;
         } else {
             const buf = get: {
-                // look for a buffer that has jsut been allocated
                 if (self.host.unclaimed_buffer_map.claim(bytes)) |buf| {
+                    // use a buffer that has just been allocated
+                    if (is_const) buf.protect();
+                    break :get buf;
+                } else if (try self.host.object_map.acquireBuffer(bytes, is_const)) |buf| {
+                    // use a buffer that's attached to an existing object
+                    break :get buf;
+                } else {
+                    // assume memory is valid; it's just sitting somewhere
+                    const buf = try ByteBuffer.createExternal(bytes, self.alignment);
+                    if (is_const) buf.protect();
                     break :get buf;
                 }
-                // look for a buffer that's attached to an existing object
-                if (try self.host.object_map.acquireBuffer(bytes)) |buf| {
-                    break :get buf;
-                }
-                // assume memory is valid
-                break :get try ByteBuffer.createExternal(bytes, self.alignment);
             };
             defer buf.release();
             const obj = try self.createObjectFromBuffer(buf, null);
@@ -634,7 +637,7 @@ pub const ZigClassEntry = struct {
             },
         };
         if (!is_mapped) return try self.createObjectFromBuffer(buf, prefilled_slots);
-        const result = self.host.object_map.search(buf.bytes, self.entry());
+        const result = self.host.object_map.search(buf.bytes, self.entry(), buf.flags.is_read_only);
         if (result.match == .yes) {
             const obj = result.value();
             php.addRef(obj);

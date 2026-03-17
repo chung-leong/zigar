@@ -93,6 +93,19 @@ pub const ByteBuffer = struct {
         return new;
     }
 
+    pub fn duplciate(self: *@This()) !*@This() {
+        const bytes = try self.data(0, false);
+        const new = try php.allocator.create(@This());
+        new.* = .{
+            .bytes = bytes,
+            .alignment = self.alignment,
+            .flags = self.flags,
+            .source = .{ .buffer = self },
+        };
+        self.addRef();
+        return new;
+    }
+
     pub fn protect(self: *@This()) void {
         self.flags.is_read_only = true;
     }

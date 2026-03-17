@@ -46,8 +46,10 @@ pub const Pointer = struct {
             if (pointer.last_address != address and pointer.last_length != length) {
                 php.release(&pointer.slots);
                 if (address >= 0) {
+                    const class = ZigClassEntry.fromStatic(self);
+                    const flags = class.getFlags(Pointer);
                     const byte_size = length * (self.target_class.byte_size orelse 0);
-                    const target = try self.target_class.obtainObjectAtAddress(address, byte_size);
+                    const target = try self.target_class.obtainObjectAtAddress(address, byte_size, flags.is_const);
                     pointer.slots = php.createValueObject(target);
                 } else {
                     pointer.slots = php.createValueNull();

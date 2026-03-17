@@ -114,12 +114,12 @@ pub const ObjectMap = struct {
         self.map.remove(obj);
     }
 
-    pub fn search(self: *@This(), bytes: []const u8, ce: ?*ClassEntry) SearchResult {
+    pub fn search(self: *@This(), bytes: []const u8, ce: ?*ClassEntry, is_read_only: bool) SearchResult {
         var fake_buf: ByteBuffer = .{
             .bytes = @constCast(bytes),
             .alignment = undefined,
             .ref_count = undefined,
-            .flags = undefined,
+            .flags = .{ .is_read_only = is_read_only },
             .source = undefined,
         };
         var b: GenericObject = .{
@@ -137,8 +137,11 @@ pub const ObjectMap = struct {
     }
 
     pub fn find(self: *@This(), bytes: []const u8) ?*Object {
-        const result = self.search(bytes, null);
-        if (result.match != .yes) return null;
+        var result = self.search(bytes, null, false);
+        if (result.match != .yes) {
+            result = self.search(bytes, null, true);
+            if (result.match != .yes) return null;
+        }
         return result.value();
     }
 
@@ -147,18 +150,25 @@ pub const ObjectMap = struct {
         return getObjectBuffer(obj);
     }
 
-    pub fn acquireBuffer(self: *@This(), bytes: []const u8) !?*ByteBuffer {
-        const result = self.search(bytes, null);
+    pub fn acquireBuffer(self: *@This(), bytes: []const u8, is_read_only: bool) !?*ByteBuffer {
+        const result = self.search(bytes, null, is_read_only);
         return switch (result.match) {
             .yes => use: {
-                const buf = getObjectBuffer(result.value());
-                buf.addRef();
+                var buf = getObjectBuffer(result.value());
+                if (buf.flags.is_read_only == is_read_only) {
+                    buf.addRef();
+                } else {
+                    buf = try buf.duplciate();
+                    if (is_read_only) buf.protect();
+                }
                 break :use buf;
             },
             .outside => slice: {
-                const buf = getObjectBuffer(result.value());
-                const offset = @intFromPtr(bytes.ptr) - @intFromPtr(buf.bytes.ptr);
-                break :slice try buf.slice(offset, bytes.len);
+                const parent_buf = getObjectBuffer(result.value());
+                const offset = @intFromPtr(bytes.ptr) - @intFromPtr(parent_buf.bytes.ptr);
+                const buf = try parent_buf.slice(offset, bytes.len);
+                if (is_read_only) buf.protect();
+                break :slice buf;
             },
             else => null,
         };
@@ -174,7 +184,12 @@ pub const ObjectMap = struct {
         const buf_b = getObjectBuffer(b);
         return switch (buf_a.compare(buf_b)) {
             .a_is_b => if (a.ce == b.ce or b.ce == null)
-                .a_is_b
+                if (buf_a.flags.is_read_only == buf_b.flags.is_read_only)
+                    .a_is_b
+                else if (buf_b.flags.is_read_only)
+                    .a_before_b
+                else
+                    .b_before_a
             else if (a.ce < b.ce)
                 .a_before_b
             else
