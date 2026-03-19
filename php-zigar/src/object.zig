@@ -19,19 +19,19 @@ pub fn ZigObject(comptime S: type) type {
 
         var object_handlers: ?ObjectHandlers = null;
 
-        pub fn object(self: *@This()) *Object {
+        pub inline fn object(self: *@This()) *Object {
             return &self.php_portion;
         }
 
-        pub fn structure(self: *@This()) *S {
+        pub inline fn structure(self: *@This()) *S {
             return &self.zig_portion;
         }
 
-        pub fn fromObject(obj: *Object) *@This() {
+        pub inline fn fromObject(obj: *Object) *@This() {
             return @fieldParentPtr("php_portion", obj);
         }
 
-        pub fn fromStructure(s: *S) *@This() {
+        pub inline fn fromStructure(s: *S) *@This() {
             return @alignCast(@fieldParentPtr("zig_portion", s));
         }
 

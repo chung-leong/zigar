@@ -126,25 +126,25 @@ pub const ZigClassEntry = struct {
         });
     };
 
-    pub fn entry(self: *@This()) *ClassEntry {
+    pub inline fn entry(self: *@This()) *ClassEntry {
         return &self.php_portion;
     }
 
-    pub fn fromEntry(ce: *ClassEntry) *@This() {
+    pub inline fn fromEntry(ce: *ClassEntry) *@This() {
         return @fieldParentPtr("php_portion", ce);
     }
 
-    pub fn fromObject(obj: *Object) *@This() {
+    pub inline fn fromObject(obj: *Object) *@This() {
         return fromEntry(obj.ce);
     }
 
-    pub fn fromStructure(s: anytype) *@This() {
+    pub inline fn fromStructure(s: anytype) *@This() {
         const S = @TypeOf(s.*);
         const zig_obj = ZigObject(S).fromStructure(s);
-        return fromEntry(zig_obj.php_portion.ce);
+        return fromObject(zig_obj.object());
     }
 
-    pub fn fromStatic(s: anytype) *@This() {
+    pub inline fn fromStatic(s: anytype) *@This() {
         const S = @TypeOf(s.*);
         const field_name = inline for (std.meta.fields(StaticData)) |field| {
             if (field.type == S) break field.name;
@@ -205,7 +205,7 @@ pub const ZigClassEntry = struct {
             true => global_error_class,
             false => global_class,
         };
-        return if (php.instanceOf(obj.ce, parent_ce)) fromEntry(obj.ce) else null;
+        return if (php.instanceOf(obj.ce, parent_ce)) fromObject(obj) else null;
     }
 
     pub fn define(host: *Host, info: *Value) !*Object {
@@ -234,10 +234,15 @@ pub const ZigClassEntry = struct {
         };
         const interfaces = try self.createInterfaceList();
         const ce = &self.php_portion;
+        const name = if (php.getProperty(info, "name")) |value| use: {
+            const str = try php.getValueString(value);
+            php.addRef(str);
+            break :use str;
+        } else |_| php.createString(""); // use an empty string for now
         ce.* = .{
             .type = php.INTERNAL_CLASS,
             .refcount = 1,
-            .name = php.createString(""), // use an empty string for now
+            .name = name,
             .ce_flags = php.LINKED | php.RESOLVED_INTERFACES,
             .properties_info = php.createHashTable(null),
             .constants_table = php.createHashTable(null),
@@ -331,16 +336,6 @@ pub const ZigClassEntry = struct {
             },
             else => {},
         }
-        // set the class name
-        self.php_portion.name = get: {
-            if (php.getProperty(info, "name")) |value| {
-                const str = try php.getValueString(value);
-                php.addRef(str);
-                break :get str;
-            } else |_| {
-                break :get try self.inferName();
-            }
-        };
         // set slots of class object
         const slots = try self.createSlots(.static, null);
         defer php.release(&slots);
@@ -386,11 +381,15 @@ pub const ZigClassEntry = struct {
         self.status.finalized = true;
     }
 
-    pub fn activate(obj: *Object) void {
+    pub fn activate(obj: *Object) !void {
         // this method is called when the host is about to release the structure map
-        const self = fromEntry(obj.ce);
+        const self = fromObject(obj);
         self.host.addRef();
         self.status.activated = true;
+        // infer the name of the class if there isn't one
+        if (self.php_portion.name.*.len == 0) {
+            self.php_portion.name = try self.inferName();
+        }
     }
 
     pub fn getFlags(self: *@This(), comptime S: type) @FieldType(StructureFlags, structure.enumName(S)) {
@@ -494,7 +493,7 @@ pub const ZigClassEntry = struct {
             if (php.getHashEntry(member_ht, "structure")) |struct_info| {
                 const ref = try php.getProperty(struct_info, "class");
                 const obj = try php.getValueObject(ref);
-                const class = fromEntry(obj.ce);
+                const class = fromObject(obj);
                 member.class = class;
                 member.flags.is_self_referencing = class == self;
                 if (class != self) class.addRef();
@@ -980,7 +979,7 @@ pub const ZigClassEntry = struct {
             .pointer => get: {
                 const member_value = try php.getHashEntry(&self.instance.members, 0);
                 const member = try php.getValuePointer(*Member, member_value);
-                const class = member.class orelse return error.MissingClass;
+                const element_class = member.class orelse return error.MissingClass;
                 var prefix: []const u8 = switch (self.flags.pointer.is_multiple) {
                     false => "*",
                     true => if (self.flags.pointer.has_length)
@@ -991,9 +990,14 @@ pub const ZigClassEntry = struct {
                         "[*]",
                 };
                 // TODO: deal with sentinel
-                if (self.flags.pointer.is_const)
+                if (self.flags.pointer.is_const) {
                     prefix = try std.fmt.allocPrint(allocator, "{s}const ", .{prefix});
-                break :get try std.fmt.allocPrint(allocator, "{s}{s}", .{ prefix, class.getName() });
+                }
+                var element_name = element_class.getName();
+                if (element_class.type == .slice) {
+                    element_name = element_name[3..];
+                }
+                break :get try std.fmt.allocPrint(allocator, "{s}{s}", .{ prefix, element_name });
             },
             .slice => get: {
                 const member_value = try php.getHashEntry(&self.instance.members, 0);

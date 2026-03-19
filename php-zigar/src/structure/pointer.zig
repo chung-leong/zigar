@@ -63,12 +63,8 @@ pub const Pointer = struct {
             php.release(&pointer.slots);
             pointer.slots = php.createValueObject(target_obj);
             const extent = try invokeFunction(target_obj, "getExtent", .{});
-            const address_value = php.createValueLong(@intCast(extent.address));
-            try self.address_acc.set(pointer.bytes, &address_value);
-            if (self.length_acc) |acc| {
-                const len_value = php.createValueLong(@intCast(extent.len));
-                try acc.set(pointer.bytes, &len_value);
-            }
+            try self.setAddress(pointer, extent.address);
+            try self.setLength(pointer, extent.len);
             pointer.last_address = extent.address;
             pointer.last_length = extent.len;
         }
@@ -76,6 +72,18 @@ pub const Pointer = struct {
         pub fn getAddress(self: *@This(), pointer: *Pointer) !usize {
             const address_value = try self.address_acc.get(pointer.bytes);
             return try php.getValueUsize(&address_value);
+        }
+
+        pub fn setAddress(self: *@This(), pointer: *Pointer, address: usize) !void {
+            const address_value = php.createValueLong(@bitCast(address));
+            try self.address_acc.set(pointer.bytes, &address_value);
+        }
+
+        pub fn setLength(self: *@This(), pointer: *Pointer, len: usize) !void {
+            if (self.length_acc) |acc| {
+                const len_value = php.createValueLong(@bitCast(len));
+                try acc.set(pointer.bytes, &len_value);
+            }
         }
     };
 
@@ -93,18 +101,32 @@ pub const Pointer = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const target_obj = init: {
-            if (php.getValueObject(value)) |obj| {
-                if (php.instanceOf(obj.ce, static.target_class.entry())) {
-                    // point to existing object
-                    php.addRef(obj);
-                    break :init obj;
-                }
-            } else |_| if (php.getValueString(value)) |str| {
-                if (static.target_class.type != .function) {
-                    // autocast from string
-                    break :init try static.target_class.obtainObjectFromString(str);
-                }
-            } else |_| {}
+            switch (php.getType(value)) {
+                .object => {
+                    const obj = php.getValueObject(value) catch unreachable;
+                    if (php.instanceOf(obj.ce, static.target_class.entry())) {
+                        // point to existing object
+                        php.addRef(obj);
+                        break :init obj;
+                    }
+                },
+                .string => {
+                    if (static.target_class.type != .function) {
+                        // autocast from string
+                        const str = php.getValueString(value) catch unreachable;
+                        break :init try static.target_class.obtainObjectFromString(str);
+                    }
+                },
+                .pointer => {
+                    if (static.target_class.type == .slice and static.target_class.flags.slice.is_opaque) {
+                        const ptr = php.getValuePointer(*anyopaque, value) catch unreachable;
+                        const address = @intFromPtr(ptr);
+                        try static.setAddress(self, address);
+                        return;
+                    }
+                },
+                else => {},
+            }
             // autovivificate new target
             const new_obj = try static.target_class.obtainNewObject();
             errdefer php.release(new_obj);

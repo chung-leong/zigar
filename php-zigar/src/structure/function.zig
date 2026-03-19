@@ -80,6 +80,7 @@ pub const Function = struct {
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
+        if (try Super.copySelf(self, value)) return;
         const class = ZigClassEntry.fromStructure(self);
         if (!php.isCallable(value)) return error.NotCallable;
         const thunk_address = try class.host.dispatcher.createJsThunk(class, @constCast(value));

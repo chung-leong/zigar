@@ -79,7 +79,7 @@ pub const StructureImporter = struct {
         // initially, the host holds references to ZigClassEntry objects through the "class"
         // property in the structure arrays; prior to destroying these we need to flip the
         // relationship so that these objects own the host instead
-        for (self.class_list.items) |class_obj| ZigClassEntry.activate(class_obj);
+        for (self.class_list.items) |class_obj| try ZigClassEntry.activate(class_obj);
         // the exporter uses structure arrays to refer to types, since their class object
         // (i.e. their constructor) would have been created yet when a struct has a pointer
         // to its own kind; we're going to fix that here

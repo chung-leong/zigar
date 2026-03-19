@@ -504,13 +504,6 @@ pub fn createValueStream(strm: *Stream) Value {
     return result;
 }
 
-pub fn createValueCallable(func: *Function) Value {
-    var result: Value = .{};
-    result.value.func = func;
-    result.u1.type_info = php_h.IS_CALLABLE;
-    return result;
-}
-
 pub fn createValueClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*ClassEntry, this_ptr: *Value) Value {
     var result: Value = undefined;
     php_h.zend_create_closure(&result, func, scope, called_scope, this_ptr);
@@ -1145,6 +1138,13 @@ pub fn createFunction(func_ptr: php_h.zif_handler, name: []const u8) Function {
 
 pub fn destroyFunction(func: *Function) void {
     if (func.internal_function.function_name) |n| release(n);
+}
+
+// static void zend_create_closure_ex(zval *res, zend_function *func, zend_class_entry *scope, zend_class_entry *called_scope, zval *this_ptr, bool is_fake) /* {{{ */
+pub fn createClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*ClassEntry, this: ?*Value) Value {
+    var result: Value = undefined;
+    php_h.zend_create_closure(&result, func, scope, called_scope, this);
+    return result;
 }
 
 pub const instanceOf = php_h.instanceof_function;
