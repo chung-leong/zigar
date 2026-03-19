@@ -108,8 +108,8 @@ pub const ZigClassEntry = struct {
         const fields = std.meta.fields(@TypeOf(structure.by_enum));
         var new_fields: [fields.len]std.builtin.Type.UnionField = undefined;
         for (fields, 0..) |field, i| {
-            const Structure = @field(structure.by_enum, field.name);
-            const StructureStatic = if (@hasDecl(Structure, "Static")) Structure.Static else void;
+            const S = @field(structure.by_enum, field.name);
+            const StructureStatic = if (@hasDecl(S, "Static")) S.Static else void;
             new_fields[i] = .{
                 .name = field.name,
                 .type = StructureStatic,

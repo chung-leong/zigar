@@ -41,6 +41,7 @@ export fn php_zigar_req_init(_: c_int, _: c_int) php.Result {
 }
 
 export fn php_zigar_req_shutdown(_: c_int, _: c_int) php.Result {
+    CallDispatcher.use_event_loop = null;
     return php.SUCCESS;
 }
 
@@ -129,6 +130,26 @@ const functions = struct {
             });
             defer php.allocator.free(module_path_resolved);
             try ZigCompiler.compile(source_path_resolved, module_path_resolved, options);
+        }
+    };
+    pub const zigar_event_loop = struct {
+        pub const arg_info = [_]ArgInfo{
+            .{
+                .name = "value",
+                .type = .{
+                    .type_mask = php.MAY_BE_BOOL,
+                    .ptr = null,
+                },
+            },
+        };
+        pub const info = FunctionInfo{
+            .required_num_args = 1,
+        };
+
+        pub fn run(ed: *ExecuteData, _: *Value) !void {
+            var enabled: bool = undefined;
+            try php.parseArguments(ed, "b", .{&enabled});
+            CallDispatcher.use_event_loop = enabled;
         }
     };
 };

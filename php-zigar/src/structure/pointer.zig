@@ -38,7 +38,7 @@ pub const Pointer = struct {
 
         pub fn loadTarget(self: *@This(), pointer: *Pointer) !void {
             const address_value = try self.address_acc.get(pointer.bytes);
-            const address: usize = @intCast(try php.getValueLong(&address_value));
+            const address: usize = try php.getValueUsize(&address_value);
             const length: usize = if (self.length_acc) |acc| get: {
                 const value = try acc.get(pointer.bytes);
                 break :get @intCast(try php.getValueLong(&value));
@@ -71,6 +71,11 @@ pub const Pointer = struct {
             }
             pointer.last_address = extent.address;
             pointer.last_length = extent.len;
+        }
+
+        pub fn getAddress(self: *@This(), pointer: *Pointer) !usize {
+            const address_value = try self.address_acc.get(pointer.bytes);
+            return try php.getValueUsize(&address_value);
         }
     };
 
@@ -107,6 +112,13 @@ pub const Pointer = struct {
             break :init new_obj;
         };
         try static.saveTarget(self, target_obj);
+    }
+
+    pub fn getTarget(self: *@This(), comptime T: type) !*T {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        const address = try static.getAddress(self);
+        return @ptrFromInt(address);
     }
 
     pub const setStorage = Super.setStorage;

@@ -37,8 +37,10 @@ pub const Error = error{
     NotInteger,
     NotNull,
     NotObject,
+    NotPointer,
     NotString,
     NotTheSame,
+    NullPointer,
     KeyIsNotInteger,
     KeyIsNotString,
     OutOfBound,
@@ -342,6 +344,12 @@ pub const Any = union(enum) {
             .null => |acc| try acc.get(),
             else => error.InvalidOperation,
         };
+    }
+
+    pub fn getObject(self: *const @This(), comptime T: type, source: anytype) !*T {
+        const value = try self.get(source);
+        const obj = php.getValueObject(&value) catch unreachable;
+        return ZigObject(T).fromObject(obj).structure();
     }
 
     pub fn set(self: *const @This(), source: anytype, value: *const Value) !void {

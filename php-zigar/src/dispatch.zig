@@ -51,11 +51,14 @@ pub const CallDispatcher = struct {
     pipe_ptr: *[2]std.posix.fd_t = undefined,
 
     pub threadlocal var trapping_syscalls: bool = false;
+    pub threadlocal var use_event_loop: ?bool = null;
+
     threadlocal var thread_initialized: bool = false;
     threadlocal var in_main_thread: bool = false;
     threadlocal var pipes: [2]std.posix.fd_t = undefined;
     threadlocal var multithread_count: usize = 0;
-    threadlocal var suspension: Value = undefined;
+    threadlocal var main_fiber: Value = undefined;
+    threadlocal var has_main_fiber: bool = false;
     threadlocal var loop_handler_id: Value = undefined;
 
     var pipe_list_mutex: std.Thread.Mutex = .{};
@@ -63,6 +66,7 @@ pub const CallDispatcher = struct {
 
     pub const HookEntry = interface.HookEntry;
     pub const HandlerVTable = interface.HandlerVTable;
+
     const redirection_controller = redirection.Controller(@This());
     const CallbackEntry = struct {
         id: usize,
@@ -222,9 +226,9 @@ pub const CallDispatcher = struct {
 
     pub fn handleJscall(self: *@This(), call: *Jscall) !E {
         if (in_main_thread) {
-            const cb = self.findCallback(call.fn_id) orelse return .FAULT;
             const arg_ptr: [*]u8 = @ptrFromInt(call.arg_address);
             const arg_bytes = arg_ptr[0..call.arg_size];
+            const cb = self.findCallback(call.fn_id) orelse return .FAULT;
             const fn_static = cb.class.getStaticData(structure.Function);
             try fn_static.runCallback(&cb.callable, arg_bytes);
             return .SUCCESS;
@@ -234,35 +238,6 @@ pub const CallDispatcher = struct {
             try self.scheduleTask(.{ .jscall = call });
             return futex.wait();
         }
-    }
-
-    pub fn installHooks(self: *@This(), lib: *std.DynLib, lib_path: []const u8, redirect_syscalls: bool) !void {
-        const pos = try redirection_controller.installHooks(self, lib, lib_path);
-        if (redirect_syscalls) {
-            if (self.getSyscallHook("__sc_vtable")) |hook| {
-                const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
-                try redirection_controller.addSyscallVtable(pos, vtable);
-                errdefer redirection_controller.removeSyscallVtable(vtable) catch {};
-                if (redirection_controller.installSyscallTrap(&trapping_syscalls)) {
-                    self.syscall_trap_installed = true;
-                } else |_| {}
-            }
-            self.hooks_installed = true;
-        }
-    }
-
-    pub fn getSyscallHook(self: *@This(), name: [*:0]const u8) ?HookEntry {
-        const module = self.host.module.?;
-        var hook: HookEntry = undefined;
-        return if (module.exports.get_syscall_hook(name, &hook) == .SUCCESS) .{
-            .handler = hook.handler,
-            .original = hook.original,
-        } else if (std.mem.eql(u8, name[0..std.mem.len(name)], "environ")) .{
-            // get the address to the pointer
-            .handler = undefined,
-            .original = undefined,
-            .deferred = &self.env_variable_deferred,
-        } else null;
     }
 
     pub fn handleSyscall(self: *@This(), call: *Syscall) !E {
@@ -312,6 +287,35 @@ pub const CallDispatcher = struct {
         }
     }
 
+    pub fn installHooks(self: *@This(), lib: *std.DynLib, lib_path: []const u8, redirect_syscalls: bool) !void {
+        const pos = try redirection_controller.installHooks(self, lib, lib_path);
+        if (redirect_syscalls) {
+            if (self.getSyscallHook("__sc_vtable")) |hook| {
+                const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
+                try redirection_controller.addSyscallVtable(pos, vtable);
+                errdefer redirection_controller.removeSyscallVtable(vtable) catch {};
+                if (redirection_controller.installSyscallTrap(&trapping_syscalls)) {
+                    self.syscall_trap_installed = true;
+                } else |_| {}
+            }
+            self.hooks_installed = true;
+        }
+    }
+
+    pub fn getSyscallHook(self: *@This(), name: [*:0]const u8) ?HookEntry {
+        const module = self.host.module.?;
+        var hook: HookEntry = undefined;
+        return if (module.exports.get_syscall_hook(name, &hook) == .SUCCESS) .{
+            .handler = hook.handler,
+            .original = hook.original,
+        } else if (std.mem.eql(u8, name[0..std.mem.len(name)], "environ")) .{
+            // get the address to the pointer
+            .handler = undefined,
+            .original = undefined,
+            .deferred = &self.env_variable_deferred,
+        } else null;
+    }
+
     pub fn getSyscallMask(self: *@This(), ptr: *Syscall.Mask) !void {
         var mask = self.redirection_mask;
         // a stat request can be handled by a 'stat' or an 'open' event handler
@@ -328,21 +332,76 @@ pub const CallDispatcher = struct {
         _ = ptr;
     }
 
+    const event_loop_ns = "Revolt\\EventLoop";
+
+    pub fn usingEventLoop() bool {
+        return use_event_loop orelse detect: {
+            const present = php.findClassEntry(event_loop_ns) != null;
+            use_event_loop = present;
+            break :detect present;
+        };
+    }
+
+    fn getEventLoopNs() Value {
+        return php.createValueString(php.persistent("Revolt\\EventLoop"));
+    }
+
+    pub fn getFiber() !Value {
+        if (usingEventLoop()) {
+            const event_loop = getEventLoopNs();
+            return php.invokeMethod(&event_loop, "getSuspension", .{});
+        } else {
+            return php.createValueNull();
+        }
+    }
+
+    pub fn suspendFiber(fiber: *Value) !void {
+        if (usingEventLoop()) {
+            _ = try php.invokeMethod(fiber, "suspend", .{});
+        } else {
+            const futex_ptr: *std.atomic.Value(u32) = @ptrCast(&fiber.value.lval);
+            std.Thread.Futex.wait(futex_ptr, 0);
+        }
+    }
+
+    pub fn resumeFiber(fiber: *Value) void {
+        if (usingEventLoop()) {
+            const null_value = php.createValueNull();
+            _ = php.invokeMethod(fiber, "resume", .{null_value}) catch {
+                @panic("Unable to resume fiber");
+            };
+        } else {
+            const futex_ptr: *std.atomic.Value(u32) = @ptrCast(&fiber.value.lval);
+            futex_ptr.store(1, .release);
+            std.Thread.Futex.wake(futex_ptr, 1);
+        }
+    }
+
+    pub fn addHandler(comptime name: []const u8, arg: *const Value, cb: *const Value) !Value {
+        const event_loop = getEventLoopNs();
+        return try php.invokeMethod(&event_loop, name, .{ arg, cb });
+    }
+
+    pub fn removeHandler(handler_id: *const Value) void {
+        const event_loop = getEventLoopNs();
+        _ = php.invokeMethod(&event_loop, "cancel", .{handler_id}) catch {};
+    }
+
     pub fn enableMultithread(self: *@This()) !void {
         if (in_main_thread) {
             if (self.multithread_enabled) return;
             self.multithread_enabled = true;
             multithread_count += 1;
             if (multithread_count > 1) return;
-            var event_loop = php.createValueStringContent("Revolt\\EventLoop");
-            defer php.release(&event_loop);
-            suspension = try php.invokeMethod(&event_loop, "getSuspension", .{});
-            errdefer php.release(&suspension);
+
+            if (!usingEventLoop()) return error.NoEventLoop;
+            main_fiber = try getFiber();
+            errdefer php.release(&main_fiber);
             const strm = try getCommandStream();
             defer php.release(&strm);
             const handler = try getTaskHandler();
             defer php.release(&handler);
-            loop_handler_id = try php.invokeMethod(&event_loop, "onReadable", .{ strm, handler });
+            loop_handler_id = try addHandler("onReadable", &strm, &handler);
         } else {
             return error.NotInMainThread;
         }
@@ -354,12 +413,13 @@ pub const CallDispatcher = struct {
             self.multithread_enabled = false;
             multithread_count -= 1;
             if (multithread_count > 0) return;
-            var event_loop = php.createValueStringContent("Revolt\\EventLoop");
-            defer php.release(&event_loop);
-            _ = try php.invokeMethod(&event_loop, "cancel", .{loop_handler_id});
-            _ = try php.invokeMethod(&suspension, "resume", .{});
-            php.release(&suspension);
-            php.release(&loop_handler_id);
+
+            if (has_main_fiber) {
+                removeHandler(&loop_handler_id);
+                php.release(&main_fiber);
+                php.release(&loop_handler_id);
+                has_main_fiber = false;
+            }
         } else {
             try self.scheduleTask(.{ .disable = {} });
         }

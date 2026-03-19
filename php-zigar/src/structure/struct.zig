@@ -5,11 +5,15 @@ const Error = accessor.Error;
 const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const Closure = @import("../closure.zig").Closure;
+const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
+const ArgumentIterator = php.ArgumentIterator;
 const HashTable = php.HashTable;
 const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
 const Value = php.Value;
+const Promise = @import("../promise.zig").Promise;
 const structure = @import("../structure.zig");
 
 pub const Struct = struct {
@@ -21,6 +25,7 @@ pub const Struct = struct {
     pub const Static = struct {
         required_field_count: usize = 0,
         class_obj: *Object = undefined,
+        callback: ?*Object = null,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -31,10 +36,37 @@ pub const Struct = struct {
             // because methods are really static functions, we need to maintain a ref on the class object
             self.class_obj = class_obj;
             php.addRef(self.class_obj);
+            switch (class.purpose) {
+                .promise => {
+                    const closure = try Closure.create(self, resolvePromise, "resolve");
+                    const ptr_member = try class.getMember(.instance, "ptr");
+                    const ptr_class = ptr_member.class orelse return error.Unexpected;
+                    if (ptr_class.type != .pointer) return error.Unexpected;
+                    const cb_member = try class.getMember(.instance, "callback");
+                    const cb_class = cb_member.class orelse return error.Unexpected;
+                    if (cb_class.type != .pointer) return error.Unexpected;
+                    const cb_obj = try cb_class.obtainNewObject();
+                    const cb_struct = ZigObject(structure.Pointer).fromObject(cb_obj).structure();
+                    const cb_value = php.createValueCallable(closure.function());
+                    try cb_struct.writeSelf(&cb_value);
+                    self.callback = cb_obj;
+                },
+                else => {},
+            }
         }
 
         pub fn deinit(self: *@This()) void {
             php.release(self.class_obj);
+            if (self.callback) |cb| php.release(cb);
+        }
+
+        pub fn resolvePromise(_: *@This(), arg_iter: *ArgumentIterator) !void {
+            const ptr = arg_iter.next() orelse return error.Unexpected;
+            const ptr_obj = php.getValueObject(ptr) catch unreachable;
+            const ptr_struct = ZigObject(structure.Pointer).fromObject(ptr_obj).structure();
+            const promise: *Promise = try ptr_struct.getTarget(Promise);
+            const result = arg_iter.next() orelse return error.Unexpected;
+            promise.resolve(result);
         }
     };
     pub const constructor_args = "an array as argument or named arguments";
@@ -64,14 +96,23 @@ pub const Struct = struct {
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
         const class = ZigClassEntry.fromStructure(self);
-        switch (class.purpose) {
-            .allocator => {
-                const allocator = php.getValuePointer(*std.mem.Allocator, value) catch unreachable;
-                try self.bytes.copyBytes(std.mem.asBytes(allocator));
-                return;
-            },
-            else => try Super.writeSelf(self, value),
+        if (php.getType(value) == .pointer) {
+            switch (class.purpose) {
+                .allocator => {
+                    const allocator = try php.getValuePointer(*std.mem.Allocator, value);
+                    try self.bytes.copyBytes(std.mem.asBytes(allocator));
+                    return;
+                },
+                .promise => {
+                    const static = class.getStaticData(@This());
+                    try Super.writeMember(self, php.persistent("ptr"), value, null);
+                    var cb_value = php.createValueObject(static.callback.?);
+                    try Super.writeMember(self, php.persistent("callback"), &cb_value, null);
+                },
+                else => {},
+            }
         }
+        return try Super.writeSelf(self, value);
     }
 
     pub const setStorage = Super.setStorage;
@@ -85,5 +126,4 @@ pub const Struct = struct {
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
-    const readContainer = Super.readContainer;
 };

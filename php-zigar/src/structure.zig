@@ -29,7 +29,6 @@ pub const Primitive = @import("structure/primitive.zig").Primitive;
 pub const Slice = @import("structure/slice.zig").Slice;
 pub const Struct = @import("structure/struct.zig").Struct;
 pub const Union = @import("structure/union.zig").Union;
-pub const VariadicStruct = @import("structure/variadic-struct.zig").VariadicStruct;
 pub const Vector = @import("structure/vector.zig").Vector;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigObject = @import("object.zig").ZigObject;
@@ -47,8 +46,8 @@ pub const by_enum = .{
     .slice = Slice,
     .vector = Vector,
     .@"opaque" = Opaque,
-    .arg_struct = ArgStruct,
-    .variadic_struct = VariadicStruct,
+    .arg_struct = ArgStruct(false),
+    .variadic_struct = ArgStruct(true),
     .function = Function,
     .@"comptime" = Comptime,
 };
@@ -172,7 +171,7 @@ pub fn Parent(comptime S: type) type {
             };
         }
 
-        pub fn writeMember(self: *S, name: *String, value: *Value) !void {
+        pub fn writeMember(self: *S, name: *String, value: *const Value) accessor.Error!void {
             if (php.matchString(name, "__value")) {
                 try self.writeSelf(value);
             } else if (@hasField(S, "bytes") and php.matchString(name, "__bytes")) {
@@ -358,7 +357,7 @@ pub fn StructLike(comptime S: type) type {
             }
         }
 
-        pub fn writeMember(self: *S, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !void {
+        pub fn writeMember(self: *S, name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) !void {
             if (findMember(self, name, cache_slot)) |member| {
                 try member.accessors.set(self, value);
             } else |_| {

@@ -1,0 +1,58 @@
+const std = @import("std");
+
+const CallDispatcher = @import("dispatch.zig").CallDispatcher;
+const ModuleHost = @import("host.zig").ModuleHost;
+const php = @import("php.zig");
+const Fiber = php.Fiber;
+const Object = php.Object;
+const FiberTransfer = php.FiberTransfer;
+const Value = php.Value;
+const structure = @import("structure.zig");
+const invokeMethod = structure.invokeMethod;
+const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
+const ZigObject = @import("object.zig").ZigObject;
+
+pub const Promise = struct {
+    ref_count: u32 = 1,
+    status: enum { unresolved, waiting, resolved } = .unresolved,
+    fiber: Value = undefined,
+    result: Value = undefined,
+
+    pub fn create() !*@This() {
+        const self = try php.allocator.create(@This());
+        self.* = .{};
+        return self;
+    }
+
+    pub fn addRef(self: *@This()) void {
+        self.ref_count += 1;
+    }
+
+    pub fn release(self: *@This()) void {
+        self.ref_count -= 1;
+        if (self.ref_count == 0) {
+            php.allocator.destroy(self);
+        }
+    }
+
+    pub fn await(self: *@This()) !Value {
+        if (self.status == .unresolved) {
+            self.fiber = try CallDispatcher.getFiber();
+            self.status = .waiting;
+            try CallDispatcher.suspendFiber(&self.fiber);
+        }
+        if (php.getType(&self.result) == .object) {
+            const result_obj = php.getValueObject(&self.result) catch unreachable;
+            self.result = try invokeMethod(result_obj, "readSelf", .{.to_plain});
+        }
+        return self.result;
+    }
+
+    pub fn resolve(self: *@This(), value: *Value) void {
+        self.result = value.*;
+        self.status = .resolved;
+        if (self.status == .waiting) {
+            CallDispatcher.resumeFiber(&self.fiber);
+        }
+    }
+};

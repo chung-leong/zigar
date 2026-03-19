@@ -7,6 +7,7 @@ pub const php_h = @cImport({
     @cInclude("php.h");
     @cInclude("zend_builtin_functions.h");
     @cInclude("zend_exceptions.h");
+    @cInclude("zend_fibers.h");
     @cInclude("zend_interfaces.h");
     @cInclude("zend_closures.h");
     @cInclude("ext/standard/info.h");
@@ -19,6 +20,8 @@ pub const CompilerGlobals = php_h.zend_compiler_globals;
 pub const DirEntry = php_h.php_stream_dirent;
 pub const ExecutorGlobals = php_h.zend_executor_globals;
 pub const ExecuteData = php_h.zend_execute_data;
+pub const Fiber = php_h.zend_fiber;
+pub const FiberTransfer = php_h.zend_fiber_transfer;
 pub const Function = php_h.zend_function;
 pub const FunctionEntry = extern struct {
     // zig_handler for some reason causes a "dependency loop detected" error
@@ -349,6 +352,10 @@ pub fn removeError(retval: anytype) switch (@typeInfo(@TypeOf(retval))) {
 
 pub const initializeClassData = php_h.zend_initialize_class_data;
 
+pub fn findClassEntry(comptime name: []const u8) ?*ClassEntry {
+    return php_h.zend_lookup_class(persistent(name));
+}
+
 pub const Type = enum(u8) {
     undefined = php_h.IS_UNDEF, // 0
     null = php_h.IS_NULL, // 1
@@ -363,6 +370,8 @@ pub const Type = enum(u8) {
     reference = php_h.IS_REFERENCE, // 10
     constant_ast = php_h.IS_CONSTANT_AST, // 11
     callable = php_h.IS_CALLABLE, // 12
+    pointer = php_h.IS_PTR, // 13
+
     // fake types
     @"error" = php_h._IS_ERROR, // 15
     boolean = php_h._IS_BOOL, // 18
@@ -476,6 +485,17 @@ pub fn createValueArray(arr: ?*Array) Value {
     return result;
 }
 
+pub fn persistent(comptime s: []const u8) *String {
+    const static = struct {
+        var string: ?*String = null;
+    };
+    return static.string orelse create: {
+        const string = createPersistentString(s);
+        static.string = string;
+        break :create string;
+    };
+}
+
 extern fn set_zval_stream(*Value, *Stream) void;
 
 pub fn createValueStream(strm: *Stream) Value {
@@ -578,6 +598,11 @@ pub fn getValueUlong(value: *const Value) !c_ulong {
     const long = try getValueLong(value);
     if (long < 0) return error.NegativeValue;
     return @intCast(long);
+}
+
+pub fn getValueUsize(value: *const Value) !usize {
+    const long = try getValueLong(value);
+    return @bitCast(long);
 }
 
 pub fn getValueDouble(value: *const Value) !f64 {
@@ -1069,15 +1094,18 @@ pub fn isCallable(callable: *const Value) bool {
     return php_h.zend_is_callable(@constCast(callable), php_h.IS_CALLABLE_CHECK_SILENT, null);
 }
 
-pub fn invokeMethod(container: *const Value, fn_name: []const u8, params: anytype) !Value {
+pub fn invokeMethod(container: *const Value, comptime fn_name: []const u8, params: anytype) !Value {
     var callable = createValueArray(null);
     defer release(&callable);
-    var fn_name_value = createValueStringContent(fn_name);
+    var fn_name_value = createValueString(persistent(fn_name));
     setPropertyRef(&callable, 0, @constCast(container)) catch unreachable;
     setProperty(&callable, 1, &fn_name_value) catch unreachable;
     var args: [params.len]Value = undefined;
     inline for (params, 0..) |param, i| {
-        args[i] = param;
+        args[i] = switch (@typeInfo(@TypeOf(param))) {
+            .pointer => param.*,
+            else => param,
+        };
     }
     var fci: php_h.zend_fcall_info = undefined;
     var fci_cache: php_h.zend_fcall_info_cache = undefined;

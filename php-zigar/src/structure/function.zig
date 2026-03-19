@@ -52,21 +52,20 @@ pub const Function = struct {
             defer arg_buffer.release();
             const arg_obj = try self.argument_class.createObjectFromBuffer(arg_buffer, null);
             defer php.release(arg_obj);
-            switch (self.argument_class.type) {
-                inline .arg_struct, .variadic_struct => |t| {
-                    const S = @field(structure.by_enum, @tagName(t));
-                    const arg_struct = ZigObject(S).fromObject(arg_obj).structure();
-                    const args = try arg_struct.getArguments();
-                    defer {
-                        for (args) |*arg| php.release(arg);
-                        php.allocator.free(args);
-                    }
-                    const result = try php.invokeFunction(callable, args);
-                    defer php.release(&result);
-                    try arg_struct.setReturnValue(&result);
-                },
-                else => unreachable,
-            }
+            const arg_struct = ZigObject(structure.ArgStruct(false)).fromObject(arg_obj).structure();
+            var args_on_stack: [16]Value = undefined;
+            var args_allocated = false;
+            const arg_count = arg_struct.getArgumentCount();
+            const args = if (arg_count <= args_on_stack.len) args_on_stack[0..arg_count] else alloc: {
+                args_allocated = true;
+                break :alloc try php.allocator.alloc(Value, arg_count);
+            };
+            defer if (args_allocated) php.allocator.free(args);
+            try arg_struct.extractArguments(args);
+            defer for (args) |*arg| php.release(arg);
+            const result = try php.invokeFunction(callable, args);
+            defer php.release(&result);
+            try arg_struct.setReturnValue(&result);
         }
     };
 
@@ -93,33 +92,35 @@ pub const Function = struct {
         if (fn_addr != 0) {
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(Function);
+            const is_method_call = init: {
+                if (static.first_arg_ce) |ce| {
+                    if (php.getValueObject(arg_iter.this)) |obj| {
+                        break :init obj.ce == ce;
+                    } else |_| {}
+                }
+                break :init false;
+            };
+            if (is_method_call) arg_iter.makeThisFirst();
             const arg = try ZigClassEntry.createObject(static.argument_class.entry());
             defer php.release(arg);
-            var retval = switch (static.argument_class.type) {
-                .arg_struct => run: {
-                    const arg_struct = ZigObject(structure.ArgStruct).fromObject(arg).structure();
+            return switch (static.argument_class.type) {
+                inline .arg_struct, .variadic_struct => |t| run: {
+                    const S = @field(structure.by_enum, @tagName(t));
+                    const arg_struct = ZigObject(S).fromObject(arg).structure();
                     const arg_addr = @intFromPtr(arg_struct.bytes.bytes.ptr);
-                    const is_method_call = init: {
-                        if (static.first_arg_ce) |ce| {
-                            if (php.getValueObject(arg_iter.this)) |obj| {
-                                break :init obj.ce == ce;
-                            } else |_| {}
-                        }
-                        break :init false;
-                    };
-                    if (is_method_call) arg_iter.makeThisFirst();
                     try arg_struct.copyArguments(arg_iter);
-                    try class.host.runThunk(static.thunk_address, fn_addr, arg_addr);
-                    break :run try arg_struct.getReturnValue();
-                },
-                .variadic_struct => {
-                    // TODO
-                    @panic("TODO");
+                    if (t == .arg_struct) {
+                        try class.host.runThunk(static.thunk_address, fn_addr, arg_addr);
+                    }
+                    var retval = try arg_struct.getReturnValue();
+                    if (arg_struct.promise) |p| {
+                        if (php.isNull(&retval)) retval = try p.await();
+                    }
+                    try self.transform.apply(&retval);
+                    break :run retval;
                 },
                 else => unreachable,
             };
-            try self.transform.apply(&retval);
-            return retval;
         } else {
             @panic("TODO");
         }

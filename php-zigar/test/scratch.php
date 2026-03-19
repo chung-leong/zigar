@@ -6,4 +6,4 @@ zigar_compile_module(__DIR__ . "/scratch.zig", "/tmp/scratch.zigar");
 $m = zigar_load_module("/tmp/scratch.zigar");
 
 $retval = $m->create();
-debug_zval_dump($retval->__value);
+echo "$retval->__string\n";
