@@ -98,6 +98,7 @@ pub const Pointer = struct {
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) accessor.Error!void {
+        if (try Super.copySelf(self, value)) return;
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const target_obj = init: {

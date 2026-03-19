@@ -41,7 +41,7 @@ pub const Struct = struct {
                 .promise => {
                     const resolve_handler = php.transform(resolvePromise);
                     var resolve = php.createFunction(resolve_handler, "resolve");
-                    const closure = php.createClosure(&resolve, null, null, null);
+                    const closure = php.createValueClosure(&resolve, null, null, null);
                     const ptr_member = try class.getMember(.instance, "ptr");
                     const ptr_class = ptr_member.class orelse return error.Unexpected;
                     if (ptr_class.type != .optional) return error.Unexpected;
@@ -104,8 +104,8 @@ pub const Struct = struct {
     }
 
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
-        const class = ZigClassEntry.fromStructure(self);
         if (php.getType(value) == .pointer) {
+            const class = ZigClassEntry.fromStructure(self);
             switch (class.purpose) {
                 .allocator => {
                     const allocator = try php.getValuePointer(*std.mem.Allocator, value);

@@ -487,6 +487,7 @@ pub fn createValueArray(arr: ?*Array) Value {
 
 pub fn persistent(comptime s: []const u8) *String {
     const static = struct {
+        comptime text: []const u8 = s,
         var string: ?*String = null;
     };
     return static.string orelse create: {
@@ -504,7 +505,7 @@ pub fn createValueStream(strm: *Stream) Value {
     return result;
 }
 
-pub fn createValueClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*ClassEntry, this_ptr: *Value) Value {
+pub fn createValueClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*ClassEntry, this_ptr: ?*Value) Value {
     var result: Value = undefined;
     php_h.zend_create_closure(&result, func, scope, called_scope, this_ptr);
     return result;
@@ -1073,12 +1074,7 @@ pub fn release(value: anytype) void {
         *Value, *const Value, [*c]Value => php_h.zval_ptr_dtor(@constCast(value)),
         *String, [*c]String => php_h.zend_string_release(value),
         *Object, [*c]Object => php_h.zend_object_release(value),
-        *HashTable, [*c]HashTable => {
-            if (@intFromPtr(value) == 0x00007ffff5088180) {
-                std.debug.print("release: 0x00007ffff5088180\n", .{});
-            }
-            php_h.zend_hash_release(value);
-        },
+        *HashTable, [*c]HashTable => php_h.zend_hash_release(value),
         else => @compileError("Unexpected type: " ++ @typeName(T)),
     }
 }
@@ -1103,15 +1099,17 @@ pub fn invokeMethod(container: *const Value, comptime fn_name: []const u8, param
     var fci: php_h.zend_fcall_info = undefined;
     var fci_cache: php_h.zend_fcall_info_cache = undefined;
     var error_str: [*c]u8 = null;
-    if (php_h.zend_fcall_info_init(&callable, 0, &fci, &fci_cache, null, &error_str) != php_h.SUCCESS)
+    if (php_h.zend_fcall_info_init(&callable, 0, &fci, &fci_cache, null, &error_str) != php_h.SUCCESS) {
+        if (error_str != null) efree(error_str);
         return error.Failure;
-    defer if (error_str != null) efree(error_str);
+    }
     var retval: Value = undefined;
     fci.retval = &retval;
     fci.params = &args;
     fci.param_count = args.len;
-    if (php_h.zend_call_function(&fci, &fci_cache) != php_h.SUCCESS)
+    if (php_h.zend_call_function(&fci, &fci_cache) != php_h.SUCCESS) {
         return error.Failure;
+    }
     return retval;
 }
 
@@ -1138,13 +1136,6 @@ pub fn createFunction(func_ptr: php_h.zif_handler, name: []const u8) Function {
 
 pub fn destroyFunction(func: *Function) void {
     if (func.internal_function.function_name) |n| release(n);
-}
-
-// static void zend_create_closure_ex(zval *res, zend_function *func, zend_class_entry *scope, zend_class_entry *called_scope, zval *this_ptr, bool is_fake) /* {{{ */
-pub fn createClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*ClassEntry, this: ?*Value) Value {
-    var result: Value = undefined;
-    php_h.zend_create_closure(&result, func, scope, called_scope, this);
-    return result;
 }
 
 pub const instanceOf = php_h.instanceof_function;

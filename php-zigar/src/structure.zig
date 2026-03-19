@@ -134,7 +134,7 @@ pub fn Parent(comptime S: type) type {
                 .object => {
                     const obj = php.getValueObject(value) catch unreachable;
                     const class = ZigClassEntry.fromStructure(self);
-                    if (obj.ce == class.entry()) {
+                    if (php.instanceOf(obj.ce, class.entry())) {
                         const obj_struct = ZigObject(S).fromObject(obj).structure();
                         try self.bytes.copy(obj_struct.bytes);
                         return true;

@@ -48,7 +48,7 @@ pub const CallDispatcher = struct {
     env_variable_ptr: *[*:null]?[*:0]const u8 = undefined,
     env_variable_original: *[*:null]?[*:0]const u8 = undefined,
     multithread_enabled: bool = false,
-    pipe_ptr: *[2]std.posix.fd_t = undefined,
+    pipe_ptr: ?*[2]std.posix.fd_t = null,
 
     pub threadlocal var trapping_syscalls: bool = false;
     pub threadlocal var use_event_loop: ?bool = null;
@@ -57,9 +57,7 @@ pub const CallDispatcher = struct {
     threadlocal var in_main_thread: bool = false;
     threadlocal var pipes: [2]std.posix.fd_t = undefined;
     threadlocal var multithread_count: usize = 0;
-    threadlocal var main_fiber: Value = undefined;
-    threadlocal var has_main_fiber: bool = false;
-    threadlocal var loop_handler_id: Value = undefined;
+    threadlocal var loop_handler_id: ?Value = null;
 
     var pipe_list_mutex: std.Thread.Mutex = .{};
     var pipe_list: std.ArrayList(std.posix.fd_t) = .empty;
@@ -136,7 +134,7 @@ pub const CallDispatcher = struct {
     pub fn init(host: *ModuleHost) !*@This() {
         const self = try php.allocator.create(@This());
         errdefer php.allocator.destroy(self);
-        self.* = .{ .host = host, .pipe_ptr = &pipes };
+        self.* = .{ .host = host };
         return self;
     }
 
@@ -218,7 +216,8 @@ pub const CallDispatcher = struct {
     }
 
     fn scheduleTask(self: *@This(), operation: ScheduledTask.Operation) !void {
-        const fd = self.pipe_ptr.*[1];
+        const ptr = self.pipe_ptr orelse return error.Deadlock;
+        const fd = ptr.*[1];
         const task: ScheduledTask = .{ .self = self, .operation = operation };
         const written = std.c.write(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
         if (written < 0) return error.Unexpected;
@@ -226,6 +225,7 @@ pub const CallDispatcher = struct {
 
     pub fn handleJscall(self: *@This(), call: *Jscall) !E {
         if (in_main_thread) {
+            std.debug.print("handleJscall\n", .{});
             const arg_ptr: [*]u8 = @ptrFromInt(call.arg_address);
             const arg_bytes = arg_ptr[0..call.arg_size];
             const cb = self.findCallback(call.fn_id) orelse return .FAULT;
@@ -233,6 +233,7 @@ pub const CallDispatcher = struct {
             try fn_static.runCallback(&cb.callable, arg_bytes);
             return .SUCCESS;
         } else {
+            std.debug.print("handleJscall (thread)\n", .{});
             var futex: Futex = undefined;
             call.futex_handle = futex.init();
             try self.scheduleTask(.{ .jscall = call });
@@ -334,20 +335,12 @@ pub const CallDispatcher = struct {
 
     const event_loop_ns = "Revolt\\EventLoop";
 
-    pub fn usingEventLoop() bool {
-        return use_event_loop orelse detect: {
-            const present = php.findClassEntry(event_loop_ns) != null;
-            use_event_loop = present;
-            break :detect present;
-        };
-    }
-
     fn getEventLoopNs() Value {
         return php.createValueString(php.persistent("Revolt\\EventLoop"));
     }
 
     pub fn getFiber() !Value {
-        if (usingEventLoop()) {
+        if (loop_handler_id != null) {
             const event_loop = getEventLoopNs();
             return php.invokeMethod(&event_loop, "getSuspension", .{});
         } else {
@@ -356,7 +349,7 @@ pub const CallDispatcher = struct {
     }
 
     pub fn suspendFiber(fiber: *Value) !void {
-        if (usingEventLoop()) {
+        if (loop_handler_id != null) {
             _ = try php.invokeMethod(fiber, "suspend", .{});
         } else {
             const futex_ptr: *std.atomic.Value(u32) = @ptrCast(&fiber.value.lval);
@@ -365,7 +358,7 @@ pub const CallDispatcher = struct {
     }
 
     pub fn resumeFiber(fiber: *Value) void {
-        if (usingEventLoop()) {
+        if (loop_handler_id != null) {
             const null_value = php.createValueNull();
             _ = php.invokeMethod(fiber, "resume", .{null_value}) catch {
                 @panic("Unable to resume fiber");
@@ -394,14 +387,20 @@ pub const CallDispatcher = struct {
             multithread_count += 1;
             if (multithread_count > 1) return;
 
-            if (!usingEventLoop()) return error.NoEventLoop;
-            main_fiber = try getFiber();
-            errdefer php.release(&main_fiber);
+            const use = use_event_loop orelse detect: {
+                const present = php.findClassEntry(event_loop_ns) != null;
+                use_event_loop = present;
+                break :detect present;
+            };
+            if (!use) return;
+            self.pipe_ptr = &pipes;
             const strm = try getCommandStream();
             defer php.release(&strm);
             const handler = try getTaskHandler();
             defer php.release(&handler);
             loop_handler_id = try addHandler("onReadable", &strm, &handler);
+            std.debug.print("multithreading enabled\n", .{});
+            std.debug.print("loop handler = {s}\n", .{try php.getValueStringContent(&loop_handler_id.?)});
         } else {
             return error.NotInMainThread;
         }
@@ -414,12 +413,13 @@ pub const CallDispatcher = struct {
             multithread_count -= 1;
             if (multithread_count > 0) return;
 
-            if (has_main_fiber) {
-                removeHandler(&loop_handler_id);
-                php.release(&main_fiber);
-                php.release(&loop_handler_id);
-                has_main_fiber = false;
+            if (loop_handler_id) |id| {
+                removeHandler(&id);
+                php.release(&id);
+                loop_handler_id = null;
+                self.pipe_ptr = null;
             }
+            std.debug.print("multithreading disabled\n", .{});
         } else {
             try self.scheduleTask(.{ .disable = {} });
         }
@@ -447,6 +447,7 @@ pub const CallDispatcher = struct {
             const read = std.c.read(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
             if (read != @sizeOf(ScheduledTask)) break;
             const self = task.self;
+            std.debug.print("runScheduledTask\n", .{});
             switch (task.operation) {
                 .jscall => |call| {
                     const err = self.handleJscall(call) catch .FAULT;
