@@ -1045,6 +1045,24 @@ pub fn createObject(ce: *ClassEntry) *Object {
     return php_h.zend_objects_new(ce);
 }
 
+pub fn constructObject(name: *const String, params: []const Value) !*Object {
+    const ce = php_h.zend_lookup_class(@constCast(name)) orelse return error.NonexistentClass;
+    const obj = php_h.zend_objects_new(ce);
+    const ctor = obj.*.handlers.*.get_constructor.?(obj);
+    if (ctor) |f| {
+        php_h.zend_call_known_function(
+            f,
+            obj,
+            obj.*.ce,
+            null,
+            @intCast(params.len),
+            @constCast(params.ptr),
+            null,
+        );
+    }
+    return obj;
+}
+
 pub fn readObjectProperty(obj: *const Object, name: *const String) Value {
     var value: Value = createValueNull();
     _ = php_h.zend_read_property_ex(obj.ce, @constCast(obj), @constCast(name), true, &value);
@@ -1054,9 +1072,9 @@ pub fn readObjectProperty(obj: *const Object, name: *const String) Value {
 pub fn addRef(value: anytype) void {
     const T = @TypeOf(value);
     switch (T) {
-        *Value, [*c]Value => {
+        *Value, *const Value, [*c]Value => {
             if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0)
-                _ = php_h.zval_addref_p(value);
+                _ = php_h.zval_addref_p(@constCast(value));
         },
         *String, [*c]String => {
             _ = php_h.zend_string_addref(value);
@@ -1113,11 +1131,11 @@ pub fn invokeMethod(container: *const Value, comptime fn_name: []const u8, param
     return retval;
 }
 
-pub fn invokeFunction(callable: *Value, arguments: []const Value) !Value {
+pub fn invokeFunction(callable: *const Value, arguments: []const Value) !Value {
     var retval: Value = undefined;
     const args = @constCast(arguments.ptr);
     const len: u32 = @intCast(arguments.len);
-    if (php_h._call_user_function_impl(null, callable, &retval, len, args, null) != php_h.SUCCESS)
+    if (php_h._call_user_function_impl(null, @constCast(callable), &retval, len, args, null) != php_h.SUCCESS)
         return error.Failure;
     return retval;
 }

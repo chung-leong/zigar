@@ -41,7 +41,6 @@ export fn php_zigar_req_init(_: c_int, _: c_int) php.Result {
 }
 
 export fn php_zigar_req_shutdown(_: c_int, _: c_int) php.Result {
-    CallDispatcher.use_event_loop = null;
     return php.SUCCESS;
 }
 
@@ -149,7 +148,6 @@ const functions = struct {
         pub fn run(ed: *ExecuteData, _: *Value) !void {
             var enabled: bool = undefined;
             try php.parseArguments(ed, "b", .{&enabled});
-            CallDispatcher.use_event_loop = enabled;
         }
     };
 };

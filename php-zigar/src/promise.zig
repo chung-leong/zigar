@@ -31,15 +31,16 @@ pub const Promise = struct {
     pub fn release(self: *@This()) void {
         self.ref_count -= 1;
         if (self.ref_count == 0) {
+            self.dispatcher.host.release();
             php.allocator.destroy(self);
         }
     }
 
     pub fn await(self: *@This()) !Value {
         if (self.status == .unresolved) {
-            self.fiber = try CallDispatcher.getFiber();
+            self.fiber = try CallDispatcher.event_loop.getFiber();
             self.status = .waiting;
-            try CallDispatcher.suspendFiber(&self.fiber);
+            try CallDispatcher.event_loop.suspendFiber(&self.fiber);
         }
         if (php.getType(&self.result) == .object) {
             const result_obj = php.getValueObject(&self.result) catch unreachable;
@@ -52,7 +53,7 @@ pub const Promise = struct {
         self.result = value.*;
         self.status = .resolved;
         if (self.status == .waiting) {
-            CallDispatcher.resumeFiber(&self.fiber);
+            CallDispatcher.event_loop.resumeFiber(&self.fiber);
         }
     }
 };
