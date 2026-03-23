@@ -9,8 +9,9 @@ pub const shutdown = work_queue.promisify(.shutdown);
 pub const get = work_queue.promisify(worker.get);
 
 const worker = struct {
-    pub fn get() i32 {
+    pub fn get(num: i32) !i32 {
         std.Thread.sleep(1000000000);
-        return 1234;
+        if (num == 0) return error.ZeroEncountered;
+        return num;
     }
 };

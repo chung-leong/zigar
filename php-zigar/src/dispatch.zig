@@ -225,12 +225,20 @@ pub const CallDispatcher = struct {
 
     pub fn handleJscall(self: *@This(), call: *Jscall) !E {
         if (in_main_thread) {
-            const arg_ptr: [*]u8 = @ptrFromInt(call.arg_address);
-            const arg_bytes = arg_ptr[0..call.arg_size];
             std.debug.print("handleJscall, fd_id = {d}\n", .{call.fn_id});
             const cb = self.findCallback(call.fn_id) orelse return .FAULT;
+            const arg_ptr: [*]u8 = @ptrFromInt(call.arg_address);
+            const arg_bytes = arg_ptr[0..call.arg_size];
+            // create a copy of the arg struct, which sits on the stack, when the call
+            // comes from a different thread
+            const arg_buffer = switch (call.futex_handle) {
+                0 => try ByteBuffer.createExternal(arg_bytes, cb.class.alignment),
+                else => try ByteBuffer.createCopy(arg_bytes, cb.class.alignment),
+            };
+            defer arg_buffer.release();
+            // use the function structure's static method to run the callback
             const fn_static = cb.class.getStaticData(structure.Function);
-            try fn_static.runCallback(&cb.callable, arg_bytes);
+            try fn_static.runCallback(&cb.callable, arg_buffer);
             return .SUCCESS;
         } else {
             var futex: Futex = undefined;

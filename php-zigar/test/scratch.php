@@ -9,7 +9,11 @@ $m = zigar_load_module("/tmp/scratch.zigar");
 
 $m->startup();
 try {
-    $retval = $m->get();
+    $retval = $m->get(1234);
+    echo "retval = $retval\n";
+    $retval = $m->get(12345);
+    echo "retval = $retval\n";
+    $retval = $m->get(0);
     echo "retval = $retval\n";
 } finally {
     $m->shutdown();

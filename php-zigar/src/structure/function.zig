@@ -46,10 +46,7 @@ pub const Function = struct {
             }
         }
 
-        pub fn runCallback(self: *@This(), callable: *Value, arg_data: []u8) !void {
-            const class = ZigClassEntry.fromStatic(self);
-            const arg_buffer = try ByteBuffer.createExternal(arg_data, class.alignment);
-            defer arg_buffer.release();
+        pub fn runCallback(self: *@This(), callable: *Value, arg_buffer: *ByteBuffer) !void {
             const arg_obj = try self.argument_class.createObjectFromBuffer(arg_buffer, null);
             defer php.release(arg_obj);
             const arg_struct = ZigObject(structure.ArgStruct(false)).fromObject(arg_obj).structure();

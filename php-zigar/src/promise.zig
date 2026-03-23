@@ -48,7 +48,7 @@ pub const Promise = struct {
         std.debug.print("Promise.await() resumed\n", .{});
         if (php.getType(&self.result) == .object) {
             const result_obj = php.getValueObject(&self.result) catch unreachable;
-            self.result = try invokeMethod(result_obj, "readSelf", .{.to_plain});
+            self.result = try invokeMethod(result_obj, "readSelf", .{.to_value});
         }
         return self.result;
     }
