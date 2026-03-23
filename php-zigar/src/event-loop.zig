@@ -14,7 +14,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
         pub fn init(self: *@This(), stream: *const Value) !void {
             // create closure for loop fiber
             const handler = php.transform(runLoop);
-            var func = php.createFunction(&handler, "onReadable");
+            var func = php.createFunction(&handler, "runLoop", 0, false);
             func.internal_function.reserved[0] = self;
             const closure = php.createValueClosure(&func, null, null, null);
             errdefer php.release(&closure);
@@ -33,7 +33,9 @@ pub fn EventLoop(comptime cb: fn () void) type {
         pub fn deinit(self: *@This()) void {
             self.terminated = true;
             // jump into the loop fiber so the loop would terminate
-            self.resumeLoop() catch {};
+            self.resumeLoop() catch |err| {
+                std.debug.print("Cannot resume loop: {}\n", .{err});
+            };
             php.release(&self.fiber);
             php.release(&self.stream);
         }
@@ -59,8 +61,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         pub fn suspendLoop(self: *@This()) void {
-            const null_value = php.createValueNull();
-            _ = php.invokeMethod(&self.fiber, "suspend", .{null_value}) catch {
+            _ = php.invokeMethod(&self.fiber, "suspend", .{}) catch {
                 @panic("Unable to resume fiber");
             };
         }
@@ -108,7 +109,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
 
         pub fn init(self: *@This(), stream: *const Value) !void {
             const handler = php.transform(onReadable);
-            var func = php.createFunction(&handler, "onReadable");
+            var func = php.createFunction(&handler, "onReadable", 0, false);
             const closure = php.createValueClosure(&func, null, null, null);
             errdefer php.release(&closure);
             self.namespace = php.createValueString(php.persistent("Revolt\\EventLoop"));
@@ -143,6 +144,8 @@ pub fn EventLoop(comptime cb: fn () void) type {
         type: Type = .temporary,
         loop: Loop = .{ .temporary = undefined },
         ready: bool = false,
+        registered: bool = false,
+        pendingFiber: ?*const Value = null,
 
         pub const Type = enum { temporary, revolt };
 
@@ -161,14 +164,26 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         pub fn init(self: *@This(), stream: *const Value) !void {
-            self.ready = true;
-            errdefer self.ready = false;
+            if (self.ready) return;
+            if (!self.registered) {
+                // register a shutdown function for the purpose of shutting down the loop
+                const handler = php.transform(shutdown);
+                var func = php.createFunction(&handler, "shutdown", 0, false);
+                func.internal_function.reserved[0] = self;
+                const closure = php.createValueClosure(&func, null, null, null);
+                errdefer php.release(&closure);
+                const register = php.createValueString(php.persistent("register_shutdown_function"));
+                _ = try php.invokeFunction(&register, &.{closure});
+                self.registered = true;
+            }
             switch (self.type) {
                 inline else => |t| try @field(self.loop, @tagName(t)).init(stream),
             }
+            self.ready = true;
         }
 
         pub fn deinit(self: *@This()) void {
+            std.debug.print("EventLoop.deinit\n", .{});
             if (!self.ready) return;
             self.ready = false;
             switch (self.type) {
@@ -193,8 +208,25 @@ pub fn EventLoop(comptime cb: fn () void) type {
         pub fn resumeFiber(self: *@This(), fiber: *const Value) void {
             if (!self.ready) @panic("No event loop");
             switch (self.type) {
-                inline else => |t| try @field(self.loop, @tagName(t)).resumeFiber(fiber),
+                inline else => |t| @field(self.loop, @tagName(t)).resumeFiber(fiber),
             }
+        }
+
+        pub fn resumeFiberAfterward(self: *@This(), fiber: *const Value) void {
+            self.pendingFiber = fiber;
+        }
+
+        pub fn resumePendingFiber(self: *@This()) void {
+            if (self.pendingFiber) |fiber| {
+                self.pendingFiber = null;
+                self.resumeFiber(fiber);
+            }
+        }
+
+        pub fn shutdown(ed: *ExecuteData, _: *Value) void {
+            std.debug.print("EventLoop.shutdown() called\n", .{});
+            const self: *@This() = @ptrCast(@alignCast(ed.func.*.internal_function.reserved[0]));
+            self.deinit();
         }
     };
 }

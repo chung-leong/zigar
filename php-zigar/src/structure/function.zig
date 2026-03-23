@@ -71,7 +71,7 @@ pub const Function = struct {
 
     pub fn setStorage(self: *@This(), buffer: *ByteBuffer, slots: *const Value) !void {
         try Super.setStorage(self, buffer, slots);
-        self.closure = try Closure.create(self, invokeThunk, "");
+        self.closure = try Closure.create(self, invokeThunk, "run");
     }
 
     pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {

@@ -4,19 +4,13 @@ const zigar = @import("zigar");
 
 var work_queue: zigar.thread.WorkQueue(worker) = .{};
 
-pub fn startup() !void {
-    std.debug.print("starting up\n", .{});
-    try work_queue.init(.{
-        .allocator = std.heap.c_allocator,
-        .n_jobs = 1,
-    });
-    std.debug.print("start-up complete\n", .{});
-}
-pub const create = work_queue.promisify(worker.create);
+pub const startup = work_queue.promisify(.startup1);
+pub const shutdown = work_queue.promisify(.shutdown);
+pub const get = work_queue.promisify(worker.get);
 
 const worker = struct {
-    pub fn create(allocator: std.mem.Allocator) ![]const u8 {
-        std.Thread.sleep(5000000000);
-        return try allocator.dupe(u8, "Hello world");
+    pub fn get() i32 {
+        std.Thread.sleep(1000000000);
+        return 1234;
     }
 };

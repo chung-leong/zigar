@@ -340,6 +340,8 @@ pub const CallDispatcher = struct {
             if (multithread_count > 1) return;
             const strm_obj = try php.openDescriptor(pipes[0], "r");
             php.preserveStream(strm_obj);
+            errdefer php.close(strm_obj);
+            try php.setBlocking(strm_obj, false);
             const strm = php.createValueStream(strm_obj);
             try event_loop.init(&strm);
             defer php.release(&strm);
@@ -355,7 +357,6 @@ pub const CallDispatcher = struct {
             multithread_count -= 1;
             if (multithread_count > 0) return;
             event_loop.deinit();
-            std.debug.print("multithreading disabled\n", .{});
         } else {
             try self.scheduleTask(.{ .disable = {} });
         }
@@ -371,7 +372,10 @@ pub const CallDispatcher = struct {
             std.debug.print("runScheduledTask\n", .{});
             switch (task.operation) {
                 .jscall => |call| {
-                    const err = self.handleJscall(call) catch .FAULT;
+                    const err = self.handleJscall(call) catch |err| blk: {
+                        std.debug.print("err = {}\n", .{err});
+                        break :blk .FAULT;
+                    };
                     Futex.wake(call.futex_handle, err) catch {};
                 },
                 .syscall => |call| {
@@ -382,6 +386,7 @@ pub const CallDispatcher = struct {
                     self.disableMultithread() catch {};
                 },
             }
+            event_loop.resumePendingFiber();
         }
     }
 

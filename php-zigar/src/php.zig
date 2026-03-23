@@ -1156,14 +1156,24 @@ pub fn invokeFunction(callable: *const Value, arguments: []const Value) !Value {
     return retval;
 }
 
-pub fn createFunction(func_ptr: php_h.zif_handler, name: []const u8) Function {
+pub inline fn createFunction(
+    func_ptr: php_h.zif_handler,
+    comptime name: []const u8,
+    comptime arg_count: usize,
+    comptime is_variadic: bool,
+) Function {
+    const arg_info_count = arg_count + if (is_variadic) 1 else 0;
+    var arg_info = std.mem.zeroes([arg_info_count]ArgInfo);
+    var fn_flags: u32 = php_h.ZEND_ACC_PUBLIC;
+    if (is_variadic) fn_flags |= php_h.ZEND_ACC_VARIADIC;
     return .{
         .internal_function = .{
             .type = php_h.ZEND_INTERNAL_FUNCTION,
             .function_name = createInternedString(name),
             .handler = func_ptr,
             .num_args = 0,
-            .fn_flags = php_h.ZEND_ACC_VARIADIC | php_h.ZEND_ACC_PUBLIC,
+            .arg_info = &arg_info,
+            .fn_flags = fn_flags,
         },
     };
 }

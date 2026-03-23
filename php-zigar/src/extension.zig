@@ -42,6 +42,7 @@ export fn php_zigar_req_init(_: c_int, _: c_int) php.Result {
 }
 
 export fn php_zigar_req_shutdown(_: c_int, _: c_int) php.Result {
+    std.debug.print("php_zigar_req_shutdown\n", .{});
     return php.SUCCESS;
 }
 

@@ -26,7 +26,7 @@ pub fn ArgStruct(variadic: bool) type {
         pub const Static = struct {
             arg_accessors: []*accessor.Any = undefined,
             retval_accessors: *accessor.Any = undefined,
-            retval_transform: ObjectTransform = undefined,
+            retval_transform: ?ObjectTransform = undefined,
             allocator_accessors: ?*accessor.Any = null,
             promise_accessors: ?*accessor.Any = null,
             generator_accessors: ?*accessor.Any = null,
@@ -51,6 +51,7 @@ pub fn ArgStruct(variadic: bool) type {
                 self.arg_accessors = try php.allocator.alloc(*accessor.Any, arg_count);
                 const retval_member = iter.next().?;
                 self.retval_accessors = &retval_member.accessors;
+                self.retval_transform = retval_member.objectTransform();
                 var index: usize = 0;
                 while (iter.next()) |member| {
                     if (member.class) |c| {
@@ -113,7 +114,7 @@ pub fn ArgStruct(variadic: bool) type {
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
             var value = try static.retval_accessors.get(self);
-            try static.retval_transform.apply(&value);
+            if (static.retval_transform) |ot| try ot.apply(&value);
             return value;
         }
 

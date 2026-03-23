@@ -9,7 +9,6 @@ const Closure = @import("../closure.zig").Closure;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const ArgumentIterator = php.ArgumentIterator;
-const ExecuteData = php.ExecuteData;
 const HashTable = php.HashTable;
 const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
@@ -39,9 +38,7 @@ pub const Struct = struct {
             php.addRef(self.class_obj);
             switch (class.purpose) {
                 .promise => {
-                    const resolve_handler = php.transform(resolvePromise);
-                    var resolve = php.createFunction(resolve_handler, "resolve");
-                    const closure = php.createValueClosure(&resolve, null, null, null);
+                    const closure = Promise.getHandler();
                     const ptr_member = try class.getMember(.instance, "ptr");
                     const ptr_class = ptr_member.class orelse return error.Unexpected;
                     if (ptr_class.type != .optional) return error.Unexpected;
@@ -60,22 +57,6 @@ pub const Struct = struct {
         pub fn deinit(self: *@This()) void {
             php.release(self.class_obj);
             if (self.callback) |cb| php.release(cb);
-        }
-
-        pub fn resolvePromise(ed: *ExecuteData, return_value: *Value) !void {
-            _ = return_value;
-            var arg_iter: ArgumentIterator = .init(ed);
-            const ptr = arg_iter.next() orelse return error.Unexpected;
-            const ptr_obj = php.getValueObject(ptr) catch unreachable;
-            const ptr_struct = ZigObject(structure.Optional).fromObject(ptr_obj).structure();
-            const promise_value = try ptr_struct.readSelf(.to_value);
-            const promise_obj = try php.getValueObject(&promise_value);
-            const promise_class = ZigClassEntry.fromObject(promise_obj);
-            std.debug.print("{}\n", .{promise_class.type});
-            // const promise: *Promise = undefined;
-            const result = arg_iter.next() orelse return error.Unexpected;
-            _ = result;
-            // promise.resolve(result);
         }
     };
     pub const constructor_args = "an array as argument or named arguments";

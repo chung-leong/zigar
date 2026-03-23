@@ -11,7 +11,7 @@ pub const Closure = extern struct {
     ptr: *anyopaque,
     php_portion: Function,
 
-    pub fn create(ptr: anytype, cb: anytype, name: []const u8) !*@This() {
+    pub fn create(ptr: anytype, cb: anytype, comptime name: []const u8) !*@This() {
         const ns = struct {
             fn run(ed: [*c]ExecuteData, return_value: [*c]Value) callconv(.c) void {
                 const func: *Function = @ptrCast(ed.*.func);
@@ -32,7 +32,7 @@ pub const Closure = extern struct {
         const self = try php.allocator.create(@This());
         self.* = .{
             .ptr = ptr,
-            .php_portion = php.createFunction(ns.run, name),
+            .php_portion = php.createFunction(ns.run, name, 0, true),
         };
         return self;
     }

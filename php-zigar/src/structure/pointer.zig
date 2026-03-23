@@ -137,13 +137,6 @@ pub const Pointer = struct {
         try static.saveTarget(self, target_obj);
     }
 
-    pub fn getTarget(self: *@This(), comptime T: type) !*T {
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        const address = try static.getAddress(self);
-        return @ptrFromInt(address);
-    }
-
     pub const setStorage = Super.setStorage;
     pub const getExtent = Super.getExtent;
     pub const copyArguments = Super.copyArguments;
