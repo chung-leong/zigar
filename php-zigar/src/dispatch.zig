@@ -219,14 +219,15 @@ pub const CallDispatcher = struct {
         const fd = self.pipe_ptr[1];
         const task: ScheduledTask = .{ .self = self, .operation = operation };
         const written = std.c.write(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
+        std.debug.print("CallDispatcher.scheduleTask() called\n", .{});
         if (written < 0) return error.Unexpected;
     }
 
     pub fn handleJscall(self: *@This(), call: *Jscall) !E {
         if (in_main_thread) {
-            std.debug.print("handleJscall\n", .{});
             const arg_ptr: [*]u8 = @ptrFromInt(call.arg_address);
             const arg_bytes = arg_ptr[0..call.arg_size];
+            std.debug.print("handleJscall, fd_id = {d}\n", .{call.fn_id});
             const cb = self.findCallback(call.fn_id) orelse return .FAULT;
             const fn_static = cb.class.getStaticData(structure.Function);
             try fn_static.runCallback(&cb.callable, arg_bytes);
@@ -337,7 +338,9 @@ pub const CallDispatcher = struct {
             self.multithread_enabled = true;
             multithread_count += 1;
             if (multithread_count > 1) return;
-            const strm = try getCommandStream();
+            const strm_obj = try php.openDescriptor(pipes[0], "r");
+            php.preserveStream(strm_obj);
+            const strm = php.createValueStream(strm_obj);
             try event_loop.init(&strm);
             defer php.release(&strm);
         } else {
@@ -356,14 +359,6 @@ pub const CallDispatcher = struct {
         } else {
             try self.scheduleTask(.{ .disable = {} });
         }
-    }
-
-    fn getCommandStream() !Value {
-        const strm = try php.openDescriptor(pipes[0], "r");
-        php.preserveStream(strm);
-        errdefer php.close(strm);
-        try php.setBlocking(strm, false);
-        return php.createValueStream(strm);
     }
 
     fn runScheduledTask() void {

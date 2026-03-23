@@ -5,6 +5,7 @@ const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const getSharedLibraryName = @import("compilation.zig").getSharedLibraryName;
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
+const ArgumentIterator = php.ArgumentIterator;
 const ArgInfo = php.ArgInfo;
 const FunctionInfo = php.FunctionInfo;
 const ExecuteData = php.ExecuteData;
@@ -145,10 +146,7 @@ const functions = struct {
             .required_num_args = 1,
         };
 
-        pub fn run(ed: *ExecuteData, _: *Value) !void {
-            var enabled: bool = undefined;
-            try php.parseArguments(ed, "b", .{&enabled});
-        }
+        pub fn run(_: *ExecuteData, _: *Value) !void {}
     };
 };
 

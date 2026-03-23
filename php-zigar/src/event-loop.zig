@@ -15,18 +15,19 @@ pub fn EventLoop(comptime cb: fn () void) type {
             // create closure for loop fiber
             const handler = php.transform(runLoop);
             var func = php.createFunction(&handler, "onReadable");
-            var this = php.createValuePointer(self);
-            const closure = php.createValueClosure(&func, null, null, &this);
+            func.internal_function.reserved[0] = self;
+            const closure = php.createValueClosure(&func, null, null, null);
             errdefer php.release(&closure);
             // create the fiber used for handling the command stream
-            const fiber_obj = try php.constructObject(php.persistent("Fiber"), &.{closure});
-            errdefer php.release(fiber_obj);
-            self.fiber = php.createValueObject(fiber_obj);
+            self.fiber = try php.createValueNewObject(php.persistent("Fiber"), &.{closure});
+            errdefer php.release(&self.fiber);
             self.stream = stream.*;
             php.addRef(stream);
             self.terminated = false;
             // star the fiber
-            _ = try php.invokeMethod(&self.fiber, "start", .{});
+            _ = php.invokeMethod(&self.fiber, "start", .{}) catch |err| {
+                std.debug.print("error = {}\n", .{err});
+            };
         }
 
         pub fn deinit(self: *@This()) void {
@@ -45,12 +46,16 @@ pub fn EventLoop(comptime cb: fn () void) type {
 
         pub fn suspendFiber(self: *@This(), _: *const Value) !void {
             // suspend fiber by switching into loop fiber
+            std.debug.print("EventLoop.suspendFiber() called\n", .{});
             try self.resumeLoop();
+            std.debug.print("EventLoop.suspendFiber() resumed\n", .{});
         }
 
         pub fn resumeFiber(self: *@This(), _: *const Value) void {
             // return to original fiber by suspending loop fiber
+            std.debug.print("EventLoop.resumeFiber() called\n", .{});
             self.suspendLoop();
+            std.debug.print("EventLoop.resumeFiber() resumed\n", .{});
         }
 
         pub fn suspendLoop(self: *@This()) void {
@@ -65,29 +70,36 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         pub fn runLoop(ed: *ExecuteData, _: *Value) void {
-            const iter: ArgumentIterator = .init(ed);
-            const self = php.getValuePointer(*@This(), iter.this) catch unreachable;
+            const self: *@This() = @ptrCast(@alignCast(ed.func.*.internal_function.reserved[0]));
             const stream_select = php.createValueString(php.persistent("stream_select"));
-            const fd_array = php.createArray();
-            const read_fds = php.createValueArray(fd_array);
-            const write_fds = php.createValueNull();
-            const except_fds = php.createValueNull();
-            const timeout = php.createValueLong(0);
+            const read_fds = php.createValueReference(&php.createValueArray(null));
+            defer php.release(&read_fds);
+            const write_fds = php.createValueReference(&php.createValueNull());
+            defer php.release(&write_fds);
+            const except_fds = php.createValueReference(&php.createValueNull());
+            defer php.release(&except_fds);
+            const timeout = php.createValueNull();
             // wait for activation by main fiber
             self.suspendLoop();
-            while (self.terminated) {
+            std.debug.print("EventLoop.runLoop() resumed\n", .{});
+            while (!self.terminated) {
                 // halt thread until stream is ready to be read
-                php.setHashEntryRef(fd_array, 1, &self.stream);
+                const fd_array_ref = php.getValueReference(&read_fds) catch unreachable;
+                const fd_array = php.getValueArray(&fd_array_ref.val) catch unreachable;
+                php.setHashEntryRef(fd_array, 0, &self.stream);
+                std.debug.print("EventLoop.runLoop() calling select()\n", .{});
                 const result = php.invokeFunction(&stream_select, &.{
                     read_fds,
                     write_fds,
                     except_fds,
                     timeout,
                 }) catch @panic("Unable to run stream_select()");
+                std.debug.print("EventLoop.runLoop() resumed from select()\n", .{});
                 // invoke the callback if the stream is ready
                 const count = php.getValueLong(&result) catch 0;
                 if (count == 1) cb();
             }
+            std.debug.print("EventLoop.runLoop() exiting\n", .{});
         }
     };
     const Revolt = struct {

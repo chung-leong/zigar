@@ -67,6 +67,7 @@ pub const ObjectHandlers = php_h.zend_object_handlers;
 pub const ObjectIterator = php_h.zend_object_iterator;
 pub const ObjectIteratorFunctions = php_h.zend_object_iterator_funcs;
 pub const RefCounted = php_h.zend_refcounted;
+pub const Reference = php_h.zend_reference;
 pub const Result = php_h.zend_result;
 pub const Stream = php_h.php_stream;
 pub const StreamContext = php_h.php_stream_context;
@@ -471,6 +472,36 @@ pub fn createValueObject(object: *Object) Value {
     return result;
 }
 
+pub fn createValueReference(target: *const Value) Value {
+    var result: Value = .{};
+    const ref: *Reference = @ptrCast(@alignCast(debugAlloc(@sizeOf(Reference), 1)));
+    ref.gc = .{ .refcount = 1, .u = .{ .type_info = php_h.GC_REFERENCE } };
+    ref.val = target.*;
+    result.value.ref = ref;
+    result.u1.type_info = php_h.IS_REFERENCE_EX;
+    return result;
+}
+
+pub fn createValueNewObject(name: *const String, params: []const Value) !Value {
+    var result: Value = undefined;
+    const ce = php_h.zend_lookup_class(@constCast(name)) orelse return error.NonexistentClass;
+    if (php_h.object_init_ex(&result, ce) != php_h.SUCCESS) return error.CannotCreateObject;
+    const obj = result.value.obj;
+    const ctor = obj.*.handlers.*.get_constructor.?(obj);
+    if (ctor) |f| {
+        php_h.zend_call_known_function(
+            f,
+            obj,
+            obj.*.ce,
+            null,
+            @intCast(params.len),
+            @constCast(params.ptr),
+            null,
+        );
+    }
+    return result;
+}
+
 pub fn createValuePointer(ptr: ?*anyopaque) Value {
     var result: Value = .{};
     result.value.ptr = ptr;
@@ -676,6 +707,13 @@ pub fn getValueObject(value: *const Value) !*Object {
     return switch (value.u1.v.type) {
         php_h.IS_OBJECT => value.value.obj,
         else => error.NotObject,
+    };
+}
+
+pub fn getValueReference(value: *const Value) !*Reference {
+    return switch (value.u1.v.type) {
+        php_h.IS_REFERENCE => value.value.ref,
+        else => error.NotReference,
     };
 }
 
@@ -1041,28 +1079,6 @@ pub fn HashTableObjectIterator(comptime T: type) type {
     };
 }
 
-pub fn createObject(ce: *ClassEntry) *Object {
-    return php_h.zend_objects_new(ce);
-}
-
-pub fn constructObject(name: *const String, params: []const Value) !*Object {
-    const ce = php_h.zend_lookup_class(@constCast(name)) orelse return error.NonexistentClass;
-    const obj = php_h.zend_objects_new(ce);
-    const ctor = obj.*.handlers.*.get_constructor.?(obj);
-    if (ctor) |f| {
-        php_h.zend_call_known_function(
-            f,
-            obj,
-            obj.*.ce,
-            null,
-            @intCast(params.len),
-            @constCast(params.ptr),
-            null,
-        );
-    }
-    return obj;
-}
-
 pub fn readObjectProperty(obj: *const Object, name: *const String) Value {
     var value: Value = createValueNull();
     _ = php_h.zend_read_property_ex(obj.ce, @constCast(obj), @constCast(name), true, &value);
@@ -1106,7 +1122,7 @@ pub fn invokeMethod(container: *const Value, comptime fn_name: []const u8, param
     defer release(&callable);
     var fn_name_value = createValueString(persistent(fn_name));
     setPropertyRef(&callable, 0, @constCast(container)) catch unreachable;
-    setProperty(&callable, 1, &fn_name_value) catch unreachable;
+    setPropertyRef(&callable, 1, &fn_name_value) catch unreachable;
     var args: [params.len]Value = undefined;
     inline for (params, 0..) |param, i| {
         args[i] = switch (@typeInfo(@TypeOf(param))) {

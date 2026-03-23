@@ -115,7 +115,9 @@ pub const Function = struct {
                     }
                     var retval = try arg_struct.getReturnValue();
                     if (arg_struct.promise) |p| {
-                        if (php.isNull(&retval)) retval = try p.await();
+                        if (php.isNull(&retval)) {
+                            retval = try p.await();
+                        }
                     }
                     try self.transform.apply(&retval);
                     break :run retval;

@@ -26,6 +26,7 @@ pub fn ArgStruct(variadic: bool) type {
         pub const Static = struct {
             arg_accessors: []*accessor.Any = undefined,
             retval_accessors: *accessor.Any = undefined,
+            retval_transform: ObjectTransform = undefined,
             allocator_accessors: ?*accessor.Any = null,
             promise_accessors: ?*accessor.Any = null,
             generator_accessors: ?*accessor.Any = null,
@@ -111,7 +112,9 @@ pub fn ArgStruct(variadic: bool) type {
         pub fn getReturnValue(self: *@This()) !Value {
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
-            return try static.retval_accessors.get(self);
+            var value = try static.retval_accessors.get(self);
+            try static.retval_transform.apply(&value);
+            return value;
         }
 
         pub fn setReturnValue(self: *@This(), value: *const Value) !void {
