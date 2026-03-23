@@ -15,6 +15,8 @@ try {
     echo "retval = $retval\n";
     $retval = $m->get(0);
     echo "retval = $retval\n";
+} catch (Throwable $e) {
+    echo $e->getMessage(), "\n";
 } finally {
     $m->shutdown();
 }

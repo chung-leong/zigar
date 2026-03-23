@@ -37,8 +37,7 @@ pub fn Class(comptime S: type) type {
             try Super.setStorage(self, bytes, slots);
             self.closures.constructor = try Closure.create(self, construct, "constructor");
             self.closures.cast = try Closure.create(self, cast, "cast");
-            if (@hasDecl(S, "stringify"))
-                self.closures.__tostring = try Closure.create(self, stringify, "stringify");
+            self.closures.__tostring = try Closure.create(self, stringify, "stringify");
         }
 
         pub fn freeObject(obj: *Object) void {
@@ -127,7 +126,7 @@ pub fn Class(comptime S: type) type {
 
         pub fn stringify(_: *@This(), arg_iter: *ArgumentIterator) !?Value {
             const this_struct = try getThis(arg_iter);
-            return try this_struct.stringify();
+            return try this_struct.readSelf(.to_string);
         }
 
         fn getThis(arg_iter: *ArgumentIterator) !*S {
