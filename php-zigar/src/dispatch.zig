@@ -219,22 +219,18 @@ pub const CallDispatcher = struct {
         const fd = self.pipe_ptr[1];
         const task: ScheduledTask = .{ .self = self, .operation = operation };
         const written = std.c.write(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
-        std.debug.print("CallDispatcher.scheduleTask() called\n", .{});
+        // std.debug.print("CallDispatcher.scheduleTask() called\n", .{});
         if (written < 0) return error.Unexpected;
     }
 
     pub fn handleJscall(self: *@This(), call: *Jscall) !E {
         if (in_main_thread) {
-            std.debug.print("handleJscall, fd_id = {d}\n", .{call.fn_id});
+            // std.debug.print("handleJscall, fd_id = {d}\n", .{call.fn_id});
             const cb = self.findCallback(call.fn_id) orelse return .FAULT;
             const arg_ptr: [*]u8 = @ptrFromInt(call.arg_address);
             const arg_bytes = arg_ptr[0..call.arg_size];
-            // create a copy of the arg struct, which sits on the stack, when the call
-            // comes from a different thread
-            const arg_buffer = switch (call.futex_handle) {
-                0 => try ByteBuffer.createExternal(arg_bytes, cb.class.alignment),
-                else => try ByteBuffer.createCopy(arg_bytes, cb.class.alignment),
-            };
+            // need to make copy, since arg_bytes are on the stack
+            const arg_buffer = try ByteBuffer.createCopy(arg_bytes, cb.class.alignment);
             defer arg_buffer.release();
             // use the function structure's static method to run the callback
             const fn_static = cb.class.getStaticData(structure.Function);
@@ -377,13 +373,10 @@ pub const CallDispatcher = struct {
             const read = std.c.read(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
             if (read != @sizeOf(ScheduledTask)) break;
             const self = task.self;
-            std.debug.print("runScheduledTask\n", .{});
+            // std.debug.print("runScheduledTask\n", .{});
             switch (task.operation) {
                 .jscall => |call| {
-                    const err = self.handleJscall(call) catch |err| blk: {
-                        std.debug.print("err = {}\n", .{err});
-                        break :blk .FAULT;
-                    };
+                    const err = self.handleJscall(call) catch .FAULT;
                     Futex.wake(call.futex_handle, err) catch {};
                 },
                 .syscall => |call| {

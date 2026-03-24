@@ -53,7 +53,7 @@ pub const Union = struct {
                         const enum_value = try php.getHashEntry(ht, member_name);
                         php.setHashEntry(&sel_ht, member_name, enum_value);
                     } else {
-                        var int_value = php.createValueLong(index);
+                        const int_value = php.createValueLong(index);
                         php.setHashEntry(&sel_ht, member_name, &int_value);
                     }
                     index += 1;

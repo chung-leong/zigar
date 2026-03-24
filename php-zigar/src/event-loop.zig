@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const php = @import("php.zig");
+const String = php.String;
 const ExecuteData = php.ExecuteData;
 const Value = php.Value;
 const ArgumentIterator = php.ArgumentIterator;
@@ -8,7 +9,7 @@ const ArgumentIterator = php.ArgumentIterator;
 pub fn EventLoop(comptime cb: fn () void) type {
     const Temporary = struct {
         fiber: Value,
-        stream: Value,
+        stream: *const Value,
         terminated: bool,
 
         pub fn init(self: *@This(), stream: *const Value) !void {
@@ -19,25 +20,21 @@ pub fn EventLoop(comptime cb: fn () void) type {
             const closure = php.createValueClosure(&func, null, null, null);
             errdefer php.release(&closure);
             // create the fiber used for handling the command stream
-            self.fiber = try php.createValueNewObject(php.persistent("Fiber"), &.{closure});
+            const class_name = php.persistent("Fiber");
+            self.fiber = try php.createValueNewObject(class_name, &.{closure});
             errdefer php.release(&self.fiber);
-            self.stream = stream.*;
-            php.addRef(stream);
+            self.stream = stream;
             self.terminated = false;
-            // star the fiber
-            _ = php.invokeMethod(&self.fiber, "start", .{}) catch |err| {
-                std.debug.print("error = {}\n", .{err});
-            };
+            // star the loop fiber
+            const method = php.createValuePersistentString("start");
+            _ = try php.invokeMethod(&self.fiber, &method, &.{});
         }
 
         pub fn deinit(self: *@This()) void {
             self.terminated = true;
             // jump into the loop fiber so the loop would terminate
-            self.resumeLoop() catch |err| {
-                std.debug.print("Cannot resume loop: {}\n", .{err});
-            };
+            self.resumeLoop() catch {};
             php.release(&self.fiber);
-            php.release(&self.stream);
         }
 
         pub fn getFiber(_: *@This()) !Value {
@@ -48,26 +45,22 @@ pub fn EventLoop(comptime cb: fn () void) type {
 
         pub fn suspendFiber(self: *@This(), _: *const Value) !void {
             // suspend fiber by switching into loop fiber
-            std.debug.print("EventLoop.suspendFiber() called\n", .{});
             try self.resumeLoop();
-            std.debug.print("EventLoop.suspendFiber() resumed\n", .{});
         }
 
-        pub fn resumeFiber(self: *@This(), _: *const Value) void {
+        pub fn resumeFiber(self: *@This(), _: *const Value) !void {
             // return to original fiber by suspending loop fiber
-            std.debug.print("EventLoop.resumeFiber() called\n", .{});
-            self.suspendLoop();
-            std.debug.print("EventLoop.resumeFiber() resumed\n", .{});
+            try self.suspendLoop();
         }
 
-        pub fn suspendLoop(self: *@This()) void {
-            _ = php.invokeMethod(&self.fiber, "suspend", .{}) catch {
-                @panic("Unable to resume fiber");
-            };
+        pub fn suspendLoop(self: *@This()) !void {
+            const method = php.createValuePersistentString("suspend");
+            _ = try php.invokeMethod(&self.fiber, &method, &.{});
         }
 
         pub fn resumeLoop(self: *@This()) !void {
-            _ = try php.invokeMethod(&self.fiber, "resume", .{});
+            const method = php.createValuePersistentString("resume");
+            _ = try php.invokeMethod(&self.fiber, &method, &.{});
         }
 
         pub fn runLoop(ed: *ExecuteData, _: *Value) void {
@@ -81,30 +74,26 @@ pub fn EventLoop(comptime cb: fn () void) type {
             defer php.release(&except_fds);
             const timeout = php.createValueNull();
             // wait for activation by main fiber
-            self.suspendLoop();
-            std.debug.print("EventLoop.runLoop() resumed\n", .{});
+            self.suspendLoop() catch unreachable;
             while (!self.terminated) {
                 // halt thread until stream is ready to be read
                 const fd_array_ref = php.getValueReference(&read_fds) catch unreachable;
                 const fd_array = php.getValueArray(&fd_array_ref.val) catch unreachable;
-                php.setHashEntryRef(fd_array, 0, &self.stream);
-                std.debug.print("EventLoop.runLoop() calling select()\n", .{});
+                php.setHashEntryRef(fd_array, 0, self.stream);
                 const result = php.invokeFunction(&stream_select, &.{
                     read_fds,
                     write_fds,
                     except_fds,
                     timeout,
                 }) catch @panic("Unable to run stream_select()");
-                std.debug.print("EventLoop.runLoop() resumed from select()\n", .{});
                 // invoke the callback if the stream is ready
                 const count = php.getValueLong(&result) catch 0;
                 if (count == 1) cb();
             }
-            std.debug.print("EventLoop.runLoop() exiting\n", .{});
         }
     };
     const Revolt = struct {
-        namespace: Value,
+        class_path: Value,
         handler_id: Value,
 
         pub fn init(self: *@This(), stream: *const Value) !void {
@@ -112,37 +101,50 @@ pub fn EventLoop(comptime cb: fn () void) type {
             var func = php.createFunction(&handler, "onReadable", 0, false);
             const closure = php.createValueClosure(&func, null, null, null);
             errdefer php.release(&closure);
-            self.namespace = php.createValueString(php.persistent("Revolt\\EventLoop"));
-            self.handler_id = try php.invokeMethod(&self.namespace, "onReadable", .{ stream, closure });
+            const method = php.createValuePersistentString("onReadable");
+            self.class_path = php.createValuePersistentString("Revolt\\EventLoop");
+            self.handler_id = try php.invokeMethod(&self.class_path, &method, &.{ stream.*, closure });
         }
 
         pub fn deinit(self: *@This()) void {
-            _ = php.invokeMethod(&self.namespace, "cancel", .{self.handler_id}) catch {};
+            const method = php.createValuePersistentString("cancel");
+            _ = php.invokeMethod(&self.class_path, &method, &.{self.handler_id}) catch {};
             php.release(&self.handler_id);
         }
 
         pub fn getFiber(self: *@This()) !Value {
-            return php.invokeMethod(&self.namespace, "getSuspension", .{});
+            std.debug.print("EventLoop.getFiber() called\n", .{});
+            errdefer std.debug.print("EventLoop.getFiber() failed\n", .{});
+            const method = php.createValuePersistentString("getSuspension");
+            return php.invokeMethod(&self.class_path, &method, &.{});
         }
 
         pub fn suspendFiber(_: *@This(), fiber: *const Value) !void {
-            _ = try php.invokeMethod(fiber, "suspend", .{});
+            std.debug.print("EventLoop.suspendFiber() called\n", .{});
+            errdefer std.debug.print("EventLoop.suspendFiber() failed\n", .{});
+            defer std.debug.print("EventLoop.suspendFiber() resumed\n", .{});
+            const method = php.createValuePersistentString("suspend");
+            _ = try php.invokeMethod(fiber, &method, &.{});
         }
 
-        pub fn resumeFiber(_: *@This(), fiber: *const Value) void {
-            const null_value = php.createValueNull();
-            _ = php.invokeMethod(fiber, "resume", .{null_value}) catch {
-                @panic("Unable to resume fiber");
-            };
+        pub fn resumeFiber(_: *@This(), fiber: *const Value) !void {
+            std.debug.print("EventLoop.resumeFiber() called\n", .{});
+            errdefer std.debug.print("EventLoop.resumeFiber() failed\n", .{});
+            defer std.debug.print("EventLoop.resumeFiber() resumed\n", .{});
+            const method = php.createValuePersistentString("resume");
+            _ = try php.invokeMethod(fiber, &method, &.{});
         }
 
         pub fn onReadable(_: *ExecuteData, _: *Value) void {
+            std.debug.print("EventLoop.onReadable() called\n", .{});
+            defer std.debug.print("EventLoop.onReadable() resumed\n", .{});
             cb();
         }
     };
     return struct {
         type: Type = .temporary,
         loop: Loop = .{ .temporary = undefined },
+        stream: Value = undefined,
         ready: bool = false,
         registered: bool = false,
         pendingFiber: ?*const Value = null,
@@ -154,13 +156,24 @@ pub fn EventLoop(comptime cb: fn () void) type {
             revolt: Revolt,
         };
 
-        pub fn use(self: *@This(), new_type: Type) void {
-            self.deinit();
-            self.ready = false;
-            self.type = new_type;
-            self.loop = switch (new_type) {
-                inline else => |t| @unionInit(Loop, @tagName(t), undefined),
-            };
+        pub fn use(self: *@This(), type_name: *const String) !void {
+            const reinit = self.ready;
+            if (self.ready) {
+                self.deinit();
+                self.ready = false;
+            }
+            inline for (@typeInfo(Type).@"enum".fields) |field| {
+                if (std.mem.eql(u8, field.name, php.getStringContent(type_name))) {
+                    const tag = @field(Type, field.name);
+                    self.type = tag;
+                    self.loop = @unionInit(Loop, @tagName(tag), undefined);
+                    if (reinit) {
+                        try @field(self.loop, field.name).init(&self.stream);
+                        self.ready = true;
+                    }
+                    break;
+                }
+            } else return error.InvalidLoopType;
         }
 
         pub fn init(self: *@This(), stream: *const Value) !void {
@@ -176,19 +189,21 @@ pub fn EventLoop(comptime cb: fn () void) type {
                 _ = try php.invokeFunction(&register, &.{closure});
                 self.registered = true;
             }
+            self.stream = stream.*;
             switch (self.type) {
-                inline else => |t| try @field(self.loop, @tagName(t)).init(stream),
+                inline else => |t| try @field(self.loop, @tagName(t)).init(&self.stream),
             }
             self.ready = true;
+            php.addRef(&self.stream);
         }
 
         pub fn deinit(self: *@This()) void {
-            std.debug.print("EventLoop.deinit\n", .{});
             if (!self.ready) return;
             self.ready = false;
             switch (self.type) {
                 inline else => |t| @field(self.loop, @tagName(t)).deinit(),
             }
+            php.release(&self.stream);
         }
 
         pub fn getFiber(self: *@This()) !Value {
@@ -208,7 +223,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
         pub fn resumeFiber(self: *@This(), fiber: *const Value) void {
             if (!self.ready) @panic("No event loop");
             switch (self.type) {
-                inline else => |t| @field(self.loop, @tagName(t)).resumeFiber(fiber),
+                inline else => |t| @field(self.loop, @tagName(t)).resumeFiber(fiber) catch {},
             }
         }
 
@@ -224,7 +239,6 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         pub fn shutdown(ed: *ExecuteData, _: *Value) void {
-            std.debug.print("EventLoop.shutdown() called\n", .{});
             const self: *@This() = @ptrCast(@alignCast(ed.func.*.internal_function.reserved[0]));
             self.deinit();
         }

@@ -42,7 +42,6 @@ export fn php_zigar_req_init(_: c_int, _: c_int) php.Result {
 }
 
 export fn php_zigar_req_shutdown(_: c_int, _: c_int) php.Result {
-    std.debug.print("php_zigar_req_shutdown\n", .{});
     return php.SUCCESS;
 }
 
@@ -147,7 +146,11 @@ const functions = struct {
             .required_num_args = 1,
         };
 
-        pub fn run(_: *ExecuteData, _: *Value) !void {}
+        pub fn run(ed: *ExecuteData, _: *Value) !void {
+            var loop_type: *String = undefined;
+            try php.parseArguments(ed, "S", .{&loop_type});
+            try CallDispatcher.event_loop.use(loop_type);
+        }
     };
 };
 

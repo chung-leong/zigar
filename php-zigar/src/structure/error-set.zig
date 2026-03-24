@@ -148,7 +148,8 @@ pub const ErrorSet = struct {
                         if (ZigClassEntry.isZigError(err_obj.ce)) {
                             return value.*;
                         } else {
-                            const message = try php.invokeMethod(value, "getMessage", .{});
+                            const method = php.createValuePersistentString("resume");
+                            const message = try php.invokeMethod(value, &method, &.{});
                             if (php.getHashEntry(self.error_set, &message)) |err| {
                                 php.addRef(err);
                                 return err.*;
@@ -184,7 +185,7 @@ pub const ErrorSet = struct {
             const err_value = try self.value_acc.transform(null).get(err_struct.bytes);
             // reference err by integer value
             const err_code = try php.getValueLong(&err_value);
-            var err, const is_new = if (php.getHashEntry(class.host.global_error_set, err_code)) |e_ptr|
+            const err, const is_new = if (php.getHashEntry(class.host.global_error_set, err_code)) |e_ptr|
                 .{ e_ptr.*, false }
             else |_|
                 .{ php.createValueObject(err_obj), true };
@@ -219,7 +220,7 @@ pub const ErrorSet = struct {
             .to_plain => create: {
                 const props = err_struct.canonical.?;
                 const message = php.useString(props.message, "");
-                var message_value = php.createValueString(message);
+                const message_value = php.createValueString(message);
                 const ht = php.createArray();
                 php.setHashEntry(ht, "message", &message_value);
                 var value = php.createValueArray(ht);

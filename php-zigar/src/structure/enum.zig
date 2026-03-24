@@ -194,7 +194,7 @@ pub const Enum = struct {
             var tag_value = try self.value_acc.transform(null).get(tag_struct.bytes);
             // tag_value might contain a GMP object, so we need to release it
             defer php.release(&tag_value);
-            var tag = php.createValueObject(tag_obj);
+            const tag = php.createValueObject(tag_obj);
             // reference tag by value
             switch (php.getType(&tag_value)) {
                 .long => {

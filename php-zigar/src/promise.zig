@@ -39,13 +39,13 @@ pub const Promise = struct {
     }
 
     pub fn await(self: *@This()) !Value {
-        std.debug.print("Promise.await() called\n", .{});
+        // std.debug.print("Promise.await() called\n", .{});
         if (self.status == .unresolved) {
             self.fiber = try CallDispatcher.event_loop.getFiber();
             self.status = .waiting;
             try CallDispatcher.event_loop.suspendFiber(&self.fiber);
         }
-        std.debug.print("Promise.await() resumed\n", .{});
+        // std.debug.print("Promise.await() resumed\n", .{});
         if (php.getType(&self.result) == .object) {
             const result_obj = php.getValueObject(&self.result) catch unreachable;
             self.result = try invokeMethod(result_obj, "readSelf", .{.to_value});

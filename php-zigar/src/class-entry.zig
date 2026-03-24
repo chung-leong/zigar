@@ -498,7 +498,7 @@ pub const ZigClassEntry = struct {
                 member.flags.is_self_referencing = class == self;
                 if (class != self) class.addRef();
             } else |_| {}
-            var member_ptr = php.createValuePointer(member);
+            const member_ptr = php.createValuePointer(member);
             if (name) |n| {
                 const key = try php.getValueString(n);
                 php.setHashEntry(&result, key, &member_ptr);

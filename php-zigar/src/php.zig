@@ -439,30 +439,23 @@ pub fn createValueDouble(d: f64) Value {
     return result;
 }
 
-pub fn createValueStringContent(s: []const u8) Value {
-    var result: Value = .{};
-    const str = createString(s);
-    result.value.str = str;
-    // non-interned string need to be gc'ed
-    result.u1.type_info = if (str.gc.u.type_info & php_h.Z_TYPE_FLAGS_MASK == 0)
-        php_h.IS_STRING_EX
-    else
-        php_h.IS_STRING;
-    return result;
-}
-
 pub fn createValueString(s: *String) Value {
     var result: Value = .{};
     result.value.str = s;
-    result.u1.type_info = php_h.IS_STRING_EX;
+    // non-interned string need to be gc'ed
+    result.u1.type_info = switch (s.gc.u.type_info & php_h.IS_STR_INTERNED) {
+        0 => php_h.IS_STRING_EX,
+        else => php_h.IS_STRING,
+    };
     return result;
 }
 
-pub fn createValuePersistentString(s: []const u8) Value {
-    var result: Value = .{};
-    result.value.str = createPersistentString(s);
-    result.u1.type_info = php_h.IS_STRING;
-    return result;
+pub fn createValueStringContent(sc: []const u8) Value {
+    return createValueString(createString(sc));
+}
+
+pub fn createValuePersistentString(comptime sc: []const u8) Value {
+    return createValueString(persistent(sc));
 }
 
 pub fn createValueObject(object: *Object) Value {
@@ -910,7 +903,7 @@ pub fn getHashEntryWithType(comptime T: type, ht: *const HashTable, key: anytype
     }
 }
 
-pub fn insertHashEntry(ht: *HashTable, key: anytype, value: *Value) *Value {
+pub fn insertHashEntry(ht: *HashTable, key: anytype, value: *const Value) *Value {
     const KT = @TypeOf(key);
     if (KT == *Value or KT == *const Value) {
         return switch (getType(key)) {
@@ -921,28 +914,28 @@ pub fn insertHashEntry(ht: *HashTable, key: anytype, value: *Value) *Value {
     }
     ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
     const result = if (comptime isStringContent(KT))
-        php_h.zend_hash_str_update(ht, key.ptr, key.len, value)
+        php_h.zend_hash_str_update(ht, key.ptr, key.len, @constCast(value))
     else if (comptime isInt(KT))
-        php_h.zend_hash_index_update(ht, @intCast(key), value)
+        php_h.zend_hash_index_update(ht, @intCast(key), @constCast(value))
     else if (comptime isString(KT))
-        php_h.zend_hash_update(ht, key, value)
+        php_h.zend_hash_update(ht, key, @constCast(value))
     else
         @compileError("Invalid key: " ++ @typeName(KT));
     return @ptrCast(result);
 }
 
-pub fn setHashEntry(ht: *HashTable, key: anytype, value: *Value) void {
+pub fn setHashEntry(ht: *HashTable, key: anytype, value: *const Value) void {
     _ = insertHashEntry(ht, key, value);
 }
 
-pub fn setHashEntryRef(ht: *HashTable, key: anytype, value: *Value) void {
+pub fn setHashEntryRef(ht: *HashTable, key: anytype, value: *const Value) void {
     setHashEntry(ht, key, value);
     addRef(value);
 }
 
-pub fn appendHashEntry(ht: *HashTable, value: *Value) usize {
+pub fn appendHashEntry(ht: *HashTable, value: *const Value) usize {
     ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
-    _ = php_h.zend_hash_next_index_insert(ht, value);
+    _ = php_h.zend_hash_next_index_insert(ht, @constCast(value));
     return php_h.zend_hash_num_elements(ht);
 }
 
@@ -1117,34 +1110,12 @@ pub fn isCallable(callable: *const Value) bool {
     return php_h.zend_is_callable(@constCast(callable), php_h.IS_CALLABLE_CHECK_SILENT, null);
 }
 
-pub fn invokeMethod(container: *const Value, comptime fn_name: []const u8, params: anytype) !Value {
+pub fn invokeMethod(container: *const Value, fn_name: *const Value, arguments: []const Value) !Value {
     var callable = createValueArray(null);
     defer release(&callable);
-    var fn_name_value = createValueString(persistent(fn_name));
     setPropertyRef(&callable, 0, @constCast(container)) catch unreachable;
-    setPropertyRef(&callable, 1, &fn_name_value) catch unreachable;
-    var args: [params.len]Value = undefined;
-    inline for (params, 0..) |param, i| {
-        args[i] = switch (@typeInfo(@TypeOf(param))) {
-            .pointer => param.*,
-            else => param,
-        };
-    }
-    var fci: php_h.zend_fcall_info = undefined;
-    var fci_cache: php_h.zend_fcall_info_cache = undefined;
-    var error_str: [*c]u8 = null;
-    if (php_h.zend_fcall_info_init(&callable, 0, &fci, &fci_cache, null, &error_str) != php_h.SUCCESS) {
-        if (error_str != null) efree(error_str);
-        return error.Failure;
-    }
-    var retval: Value = undefined;
-    fci.retval = &retval;
-    fci.params = &args;
-    fci.param_count = args.len;
-    if (php_h.zend_call_function(&fci, &fci_cache) != php_h.SUCCESS) {
-        return error.Failure;
-    }
-    return retval;
+    setPropertyRef(&callable, 1, @constCast(fn_name)) catch unreachable;
+    return invokeFunction(&callable, arguments);
 }
 
 pub fn invokeFunction(callable: *const Value, arguments: []const Value) !Value {
