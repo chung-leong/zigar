@@ -156,6 +156,11 @@ pub fn EventLoop(comptime cb: fn () void) type {
             revolt: Revolt,
         };
 
+        pub fn reset(self: *@This()) void {
+            self.deinit();
+            self.loop = .{ .temporary = undefined };
+        }
+
         pub fn use(self: *@This(), type_name: *const String) !void {
             const reinit = self.ready;
             if (self.ready) {

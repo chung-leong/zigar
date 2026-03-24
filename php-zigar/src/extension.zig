@@ -42,6 +42,7 @@ export fn php_zigar_req_init(_: c_int, _: c_int) php.Result {
 }
 
 export fn php_zigar_req_shutdown(_: c_int, _: c_int) php.Result {
+    CallDispatcher.event_loop.reset();
     return php.SUCCESS;
 }
 
@@ -137,7 +138,7 @@ const functions = struct {
             .{
                 .name = "value",
                 .type = .{
-                    .type_mask = php.MAY_BE_BOOL,
+                    .type_mask = php.MAY_BE_STRING,
                     .ptr = null,
                 },
             },
