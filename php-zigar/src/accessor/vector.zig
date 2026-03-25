@@ -57,7 +57,7 @@ fn getPrimitiveAccessors(comptime attrs: Attributes, comptime bit_offset: ?u3) a
 fn getPrimitive(
     comptime attrs: Attributes,
     comptime bit_offset: ?u3,
-    bytes: *ByteBuffer,
+    buffer: *ByteBuffer,
     byte_offset: usize,
     transform: ?accessor.PrimitiveTransform,
 ) !Value {
@@ -68,13 +68,13 @@ fn getPrimitive(
         .getter = undefined,
         .setter = undefined,
     };
-    return acc_ct.getter(&acc, bytes);
+    return acc_ct.getter(&acc, buffer);
 }
 
 fn getPrimitiveWithSize(
     comptime attrs: Attributes,
     comptime bit_offset: ?u3,
-    bytes: *ByteBuffer,
+    buffer: *ByteBuffer,
     byte_offset: usize,
     transform: ?accessor.PrimitiveTransform,
     bit_size: usize,
@@ -86,13 +86,13 @@ fn getPrimitiveWithSize(
         .getter = undefined,
         .setter = undefined,
     };
-    return acc_ct.getter(&acc, bytes);
+    return acc_ct.getter(&acc, buffer);
 }
 
 fn setPrimitive(
     comptime attrs: Attributes,
     comptime bit_offset: ?u3,
-    bytes: *ByteBuffer,
+    buffer: *ByteBuffer,
     byte_offset: usize,
     transform: ?accessor.PrimitiveTransform,
     value: *const Value,
@@ -103,13 +103,13 @@ fn setPrimitive(
         .getter = undefined,
         .setter = undefined,
     };
-    return acc_ct.setter(&acc, bytes, value);
+    return acc_ct.setter(&acc, buffer, value);
 }
 
 fn setPrimitiveWithSize(
     comptime attrs: Attributes,
     comptime bit_offset: ?u3,
-    bytes: *ByteBuffer,
+    buffer: *ByteBuffer,
     byte_offset: usize,
     transform: ?accessor.PrimitiveTransform,
     bit_size: usize,
@@ -121,7 +121,7 @@ fn setPrimitiveWithSize(
         .getter = undefined,
         .setter = undefined,
     };
-    return acc_ct.setter(&acc, bytes, value);
+    return acc_ct.setter(&acc, buffer, value);
 }
 
 fn possibleRemainders(comptime bit_size: usize) [8 / std.math.gcd(bit_size, 8)]u3 {

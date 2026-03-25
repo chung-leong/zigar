@@ -10,7 +10,7 @@ const Value = php.Value;
 const structure = @import("../structure.zig");
 
 pub const Primitive = struct {
-    bytes: *ByteBuffer = undefined,
+    buffer: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
 
@@ -29,7 +29,7 @@ pub const Primitive = struct {
         if (transform == .to_bytes) return try self.returnBytes();
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        var value = try static.value_acc.get(self.bytes);
+        var value = try static.value_acc.get(self.buffer);
         try transform.apply(&value);
         return value;
     }
@@ -37,7 +37,7 @@ pub const Primitive = struct {
     pub fn writeSelf(self: *@This(), value: *const Value) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        return try static.value_acc.set(self.bytes, value);
+        return try static.value_acc.set(self.buffer, value);
     }
 
     pub const setStorage = Super.setStorage;

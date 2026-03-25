@@ -75,7 +75,7 @@ pub const Promise = struct {
         const slice_value = try ptr_struct.readSelf(.to_value);
         const slice_obj = php.getValueObject(&slice_value) catch unreachable;
         const slice_struct = ZigObject(structure.Slice).fromObject(slice_obj).structure();
-        const promise: *Promise = @ptrCast(@alignCast(slice_struct.bytes.bytes.ptr));
+        const promise: *Promise = @ptrCast(@alignCast(slice_struct.buffer.bytes.ptr));
         const result = arg_iter.next() orelse return error.Unexpected;
         promise.resolve(result);
         const eg = php.getExecutorGlobals();

@@ -45,19 +45,19 @@ pub fn get(comptime attrs: Attributes, params: Parameters(attrs)) Accessors(attr
 }
 
 const multi_slot = struct {
-    pub fn get(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, slots: *Value) Error!Value {
-        const entry = try vivicateSlot(acc, buffer, slots);
+    pub fn get(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, table: *Value) Error!Value {
+        const entry = try vivicateSlot(acc, buffer, table);
         php.addRef(entry);
         return entry.*;
     }
 
-    pub fn set(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, slots: *Value, value: *const Value) Error!void {
-        const entry = try vivicateSlot(acc, buffer, slots);
+    pub fn set(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, table: *Value, value: *const Value) Error!void {
+        const entry = try vivicateSlot(acc, buffer, table);
         try write(entry, value, false);
     }
 
-    fn vivicateSlot(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, slots: *Value) Error!*Value {
-        const ht = try php.getValueHashTable(slots);
+    fn vivicateSlot(acc: *const accessor.MultiSlot, buffer: *ByteBuffer, table: *Value) Error!*Value {
+        const ht = try php.getValueHashTable(table);
         return php.getHashEntry(ht, acc.params.slot) catch vivicate: {
             const offset = acc.params.byte_offset;
             const len = acc.params.byte_size;
@@ -92,19 +92,19 @@ const single_slot = struct {
 };
 
 const array_slot = struct {
-    pub fn get(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize) Error!Value {
-        const entry = try vivicateSlot(acc, buffer, slots, index);
+    pub fn get(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, table: *Value, index: usize) Error!Value {
+        const entry = try vivicateSlot(acc, buffer, table, index);
         php.addRef(entry);
         return entry.*;
     }
 
-    pub fn set(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize, value: *const Value) Error!void {
-        const entry = try vivicateSlot(acc, buffer, slots, index);
+    pub fn set(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, table: *Value, index: usize, value: *const Value) Error!void {
+        const entry = try vivicateSlot(acc, buffer, table, index);
         try write(entry, value, false);
     }
 
-    fn vivicateSlot(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, slots: *Value, index: usize) Error!*Value {
-        const ht = try php.getValueHashTable(slots);
+    fn vivicateSlot(acc: *const accessor.ArraySlot, buffer: *ByteBuffer, table: *Value, index: usize) Error!*Value {
+        const ht = try php.getValueHashTable(table);
         const key: c_long = @intCast(index);
         return php.getHashEntry(ht, key) catch vivicate: {
             const offset = acc.params.byte_size * index;
@@ -117,15 +117,15 @@ const array_slot = struct {
 };
 
 const multi_slot_prebaked = struct {
-    pub fn get(acc: *const accessor.MultiSlotPrebaked, slots: *Value) Error!Value {
-        const ht = try php.getValueHashTable(slots);
+    pub fn get(acc: *const accessor.MultiSlotPrebaked, table: *Value) Error!Value {
+        const ht = try php.getValueHashTable(table);
         const entry = try php.getHashEntry(ht, acc.params.slot);
         php.addRef(entry);
         return entry.*;
     }
 
-    pub fn set(acc: *const accessor.MultiSlotPrebaked, slots: *Value, value: *const Value) Error!void {
-        const ht = try php.getValueHashTable(slots);
+    pub fn set(acc: *const accessor.MultiSlotPrebaked, table: *Value, value: *const Value) Error!void {
+        const ht = try php.getValueHashTable(table);
         const entry = try php.getHashEntry(ht, acc.params.slot);
         try write(entry, value, true);
     }

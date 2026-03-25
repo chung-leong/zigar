@@ -26,15 +26,15 @@ const Closures = struct {
 pub fn Class(comptime S: type) type {
     return struct {
         // these needs to be initialized, since setStorage() isn't called immediately
-        slots: Value = .{},
         closures: Closures = .{},
+        table: Value = .{},
 
         pub const scope: ZigClassEntry.ScopeType = .static;
 
         const Super = structure.StructLike(@This());
 
-        pub fn setStorage(self: *@This(), bytes: *ByteBuffer, slots: *const Value) !void {
-            try Super.setStorage(self, bytes, slots);
+        pub fn setStorage(self: *@This(), buffer: *ByteBuffer, table: *const Value) !void {
+            try Super.setStorage(self, buffer, table);
             self.closures.constructor = try Closure.create(self, construct, "constructor");
             self.closures.cast = try Closure.create(self, cast, "cast");
             self.closures.__tostring = try Closure.create(self, stringify, "stringify");
@@ -45,7 +45,7 @@ pub fn Class(comptime S: type) type {
             inline for (comptime std.meta.fields(@TypeOf(self.closures))) |field| {
                 if (@field(self.closures, field.name)) |c| c.release();
             }
-            php.release(&self.slots);
+            php.release(&self.table);
             Super.freeObject(obj);
         }
 

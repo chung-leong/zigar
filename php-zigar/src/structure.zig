@@ -83,30 +83,30 @@ pub fn Parent(comptime S: type) type {
             return &ZigObject(S).fromObject(obj).zig_portion;
         }
 
-        pub fn setStorage(self: *S, bytes: *ByteBuffer, slots: *const Value) !void {
-            if (@hasField(S, "bytes")) {
+        pub fn setStorage(self: *S, buffer: *ByteBuffer, table: *const Value) !void {
+            if (@hasField(S, "buffer")) {
                 const class = ZigClassEntry.fromStructure(self);
                 if (class.byte_size) |byte_size| {
-                    if (byte_size != bytes.bytes.len) {
+                    if (byte_size != buffer.bytes.len) {
                         return php.throwExceptionFmt("{s} has {d} byte{s}, received {d}", .{
                             class.getName(),
                             byte_size,
                             if (byte_size != 1) "s" else "",
-                            bytes.bytes.len,
+                            buffer.bytes.len,
                         });
                     }
                 }
-                self.bytes = bytes;
-                self.bytes.addRef();
+                self.buffer = buffer;
+                self.buffer.addRef();
             }
-            if (@hasField(S, "slots")) {
-                self.slots = slots.*;
-                php.addRef(&self.slots);
+            if (@hasField(S, "table")) {
+                self.table = table.*;
+                php.addRef(&self.table);
             }
         }
 
         pub fn getExtent(self: *S) ByteExtent {
-            return .{ .address = @intFromPtr(self.bytes.bytes.ptr) };
+            return .{ .address = @intFromPtr(self.buffer.bytes.ptr) };
         }
 
         pub fn copyArguments(self: *S, arg_iter: *php.ArgumentIterator) !void {
@@ -136,12 +136,12 @@ pub fn Parent(comptime S: type) type {
                     const class = ZigClassEntry.fromStructure(self);
                     if (php.instanceOf(obj.ce, class.entry())) {
                         const obj_struct = ZigObject(S).fromObject(obj).structure();
-                        try self.bytes.copy(obj_struct.bytes);
+                        try self.buffer.copy(obj_struct.buffer);
                         return true;
                     }
                 },
                 .null => {
-                    try self.bytes.clear();
+                    try self.buffer.clear();
                     return true;
                 },
                 else => {},
@@ -156,8 +156,8 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn returnBytes(self: *S) !Value {
-            if (!@hasField(S, "bytes")) return error.Unsupported;
-            return php.createValueStringContent(self.bytes.bytes);
+            if (!@hasField(S, "buffer")) return error.Unsupported;
+            return php.createValueStringContent(self.buffer.bytes);
         }
 
         pub fn readMember(self: *S, name: *String) !Value {
@@ -174,9 +174,9 @@ pub fn Parent(comptime S: type) type {
         pub fn writeMember(self: *S, name: *String, value: *const Value) accessor.Error!void {
             if (php.matchString(name, "__value")) {
                 try self.writeSelf(value);
-            } else if (@hasField(S, "bytes") and php.matchString(name, "__bytes")) {
+            } else if (@hasField(S, "buffer") and php.matchString(name, "__bytes")) {
                 const sc = try php.getValueStringContent(value);
-                try self.bytes.copyBytes(sc);
+                try self.buffer.copyBytes(sc);
             } else {
                 return error.NotFound;
             }
@@ -230,8 +230,8 @@ pub fn Parent(comptime S: type) type {
             // only structure that a pointer can points to implement getExtent()
             if (@hasDecl(S, "getExtent")) class.unmapObject(obj);
             const self = fromObject(obj);
-            if (@hasField(S, "bytes")) self.bytes.release();
-            if (@hasField(S, "slots")) php.release(&self.slots);
+            if (@hasField(S, "buffer")) self.buffer.release();
+            if (@hasField(S, "table")) php.release(&self.table);
         }
 
         pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
@@ -496,9 +496,9 @@ pub fn ArrayLike(comptime S: type) type {
                         break :create error.Unsupported;
                     }
                     const len = self.getLength();
-                    const byte_count = self.bytes.bytes.len;
+                    const byte_count = self.buffer.bytes.len;
                     if (byte_count == len) {
-                        break :create php.createValueStringContent(self.bytes.bytes);
+                        break :create php.createValueStringContent(self.buffer.bytes);
                     } else if (byte_count == len * 2) {
                         // TODO: convert to UTF-8
                         @panic("TODO");

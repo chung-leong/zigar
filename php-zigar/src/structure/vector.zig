@@ -14,8 +14,8 @@ const Value = php.Value;
 const structure = @import("../structure.zig");
 
 pub const Vector = struct {
-    slots: Value = undefined,
-    bytes: *ByteBuffer = undefined,
+    table: Value = undefined,
+    buffer: *ByteBuffer = undefined,
 
     const Super = structure.ArrayLike(@This());
 

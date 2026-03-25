@@ -17,7 +17,7 @@ const structure = @import("../structure.zig");
 pub const Function = struct {
     closure: *Closure = undefined,
     transform: ObjectTransform align(@alignOf(*ByteBuffer)) = .to_value, // force bytes to be the last field
-    bytes: *ByteBuffer = undefined,
+    buffer: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
 
@@ -29,7 +29,7 @@ pub const Function = struct {
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
-            const thunk_buf = class.instance.template.bytes orelse return error.Unexpected;
+            const thunk_buf = class.instance.template.buffer orelse return error.Unexpected;
             self.thunk_address = @intFromPtr(thunk_buf.bytes.ptr);
             const member = try class.getMember(.instance, 0);
             const arg_class = member.class orelse return error.MissingClass;
@@ -66,8 +66,8 @@ pub const Function = struct {
         }
     };
 
-    pub fn setStorage(self: *@This(), buffer: *ByteBuffer, slots: *const Value) !void {
-        try Super.setStorage(self, buffer, slots);
+    pub fn setStorage(self: *@This(), buffer: *ByteBuffer, table: *const Value) !void {
+        try Super.setStorage(self, buffer, table);
         self.closure = try Closure.create(self, invokeThunk, "run");
     }
 
@@ -82,11 +82,11 @@ pub const Function = struct {
         if (!php.isCallable(value)) return error.NotCallable;
         const thunk_address = try class.host.dispatcher.createJsThunk(class, @constCast(value));
         const ptr: [*]u8 = @ptrFromInt(thunk_address);
-        self.bytes.bytes = ptr[0..0];
+        self.buffer.bytes = ptr[0..0];
     }
 
     pub fn invokeThunk(self: *@This(), arg_iter: *ArgumentIterator) !?Value {
-        const fn_addr = @intFromPtr(self.bytes.bytes.ptr);
+        const fn_addr = @intFromPtr(self.buffer.bytes.ptr);
         if (fn_addr != 0) {
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(Function);
@@ -105,7 +105,7 @@ pub const Function = struct {
                 inline .arg_struct, .variadic_struct => |t| run: {
                     const S = @field(structure.by_enum, @tagName(t));
                     const arg_struct = ZigObject(S).fromObject(arg).structure();
-                    const arg_addr = @intFromPtr(arg_struct.bytes.bytes.ptr);
+                    const arg_addr = @intFromPtr(arg_struct.buffer.bytes.ptr);
                     try arg_struct.copyArguments(arg_iter);
                     if (t == .arg_struct) {
                         try class.host.runThunk(static.thunk_address, fn_addr, arg_addr);

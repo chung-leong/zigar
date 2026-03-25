@@ -11,8 +11,8 @@ const Value = php.Value;
 const structure = @import("../structure.zig");
 
 pub const Slice = struct {
-    slots: Value = undefined,
-    bytes: *ByteBuffer = undefined,
+    table: Value = undefined,
+    buffer: *ByteBuffer = undefined,
 
     const Super = structure.ArrayLike(@This());
     pub const Static = struct {
@@ -35,29 +35,29 @@ pub const Slice = struct {
         }
     };
 
-    pub fn setStorage(self: *@This(), bytes: *ByteBuffer, slots: *const Value) !void {
+    pub fn setStorage(self: *@This(), buffer: *ByteBuffer, table: *const Value) !void {
         const class = ZigClassEntry.fromStructure(self);
         // the target of *anyopaque is represented by a slice with no element size
         if (class.byte_size) |byte_size| {
-            const remainder = @rem(bytes.bytes.len, byte_size);
+            const remainder = @rem(buffer.bytes.len, byte_size);
             if (remainder != 0) {
                 return php.throwExceptionFmt("'{s}'' has elements that are {d} byte{s} in length, received {d}", .{
                     class.getName(),
                     byte_size,
                     if (byte_size != 1) "s" else "",
-                    bytes.bytes.len,
+                    buffer.bytes.len,
                 });
             }
         }
-        self.bytes = bytes;
-        self.bytes.addRef();
-        self.slots = slots.*;
-        php.addRef(&self.slots);
+        self.buffer = buffer;
+        self.buffer.addRef();
+        self.table = table.*;
+        php.addRef(&self.table);
     }
 
     pub fn getExtent(self: *@This()) Super.ByteExtent {
         return .{
-            .address = @intFromPtr(self.bytes.bytes.ptr),
+            .address = @intFromPtr(self.buffer.bytes.ptr),
             .len = self.getLength(),
         };
     }
@@ -65,7 +65,7 @@ pub const Slice = struct {
     pub fn getLength(self: *@This()) usize {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        const len = self.bytes.bytes.len;
+        const len = self.buffer.bytes.len;
         return if (static.element_shift) |shift|
             len >> shift
         else

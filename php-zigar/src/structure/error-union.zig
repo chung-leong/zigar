@@ -14,8 +14,8 @@ const error_set = @import("error-set.zig");
 const ErrorSet = error_set.ErrorSet;
 
 pub const ErrorUnion = struct {
-    slots: Value = undefined,
-    bytes: *ByteBuffer = undefined,
+    table: Value = undefined,
+    buffer: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
 
@@ -40,7 +40,7 @@ pub const ErrorUnion = struct {
     pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        const err = try static.error_acc.get(self.bytes);
+        const err = try static.error_acc.get(self.buffer);
         if (php.getType(&err) == .object) {
             const err_obj = php.getValueObject(&err) catch unreachable;
             const err_struct = ZigObject(ErrorSet).fromObject(err_obj).structure();
@@ -73,10 +73,10 @@ pub const ErrorUnion = struct {
         };
         const null_value = php.createValueNull();
         if (err_maybe) |err| {
-            try static.error_acc.set(self.bytes, err);
+            try static.error_acc.set(self.buffer, err);
             try static.payload_acc.set(self, &null_value);
         } else {
-            try static.error_acc.set(self.bytes, &null_value);
+            try static.error_acc.set(self.buffer, &null_value);
             try static.payload_acc.set(self, value);
         }
     }

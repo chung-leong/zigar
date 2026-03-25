@@ -20,7 +20,7 @@ const structure = @import("../structure.zig");
 
 pub const ErrorSet = struct {
     canonical: ?*Canonical = null,
-    bytes: *ByteBuffer = undefined,
+    buffer: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
     const Canonical = struct {
@@ -65,11 +65,11 @@ pub const ErrorSet = struct {
                 self.error_set = php.createArray();
                 // loop through static members and add errors to error set, keyed by value,
                 // name, and error message
-                const static_slots = class.static.template.slots orelse return error.MissingSlots;
+                const static_table = class.static.template.table orelse return error.MissingTable;
                 var iter = class.getMemberIterator(.static);
                 while (iter.next()) |static_member| {
                     const slot = static_member.slot orelse continue;
-                    const err = try php.getProperty(static_slots, slot);
+                    const err = try php.getProperty(static_table, slot);
                     const err_obj = try php.getValueObject(err);
                     if (ZigClassEntry.fromObject(err_obj).type != .error_set) continue;
                     const name = iter.currentName() orelse return error.MissingName;
@@ -131,7 +131,7 @@ pub const ErrorSet = struct {
                     } else |_| {
                         // create new error
                         const err_obj = try class.obtainNewObject();
-                        const bytes = ZigObject(ErrorSet).fromObject(err_obj).structure().bytes;
+                        const bytes = ZigObject(ErrorSet).fromObject(err_obj).structure().buffer;
                         try self.value_acc.transform(null).set(bytes, value);
                         var buffer: [64]u8 = undefined;
                         const text = std.fmt.bufPrint(&buffer, "UnknownError #{d}", .{err_code}) catch unreachable;
@@ -176,13 +176,13 @@ pub const ErrorSet = struct {
             const err = try self.findCanonical(value);
             const err_obj = try php.getValueObject(&err);
             const err_struct = fromObject(err_obj);
-            return err_struct.bytes;
+            return err_struct.buffer;
         }
 
         fn addCanonical(self: *@This(), name: *String, err_obj: *Object) !void {
             const class = ZigClassEntry.fromStatic(self);
             const err_struct = fromObject(err_obj);
-            const err_value = try self.value_acc.transform(null).get(err_struct.bytes);
+            const err_value = try self.value_acc.transform(null).get(err_struct.buffer);
             // reference err by integer value
             const err_code = try php.getValueLong(&err_value);
             const err, const is_new = if (php.getHashEntry(class.host.global_error_set, err_code)) |e_ptr|
@@ -210,7 +210,7 @@ pub const ErrorSet = struct {
     pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        const err_value = try static.value_acc.get(self.bytes);
+        const err_value = try static.value_acc.get(self.buffer);
         if (transform == .to_value) return err_value;
         const err_obj = try php.getValueObject(&err_value);
         defer php.release(err_obj);
@@ -253,7 +253,7 @@ pub const ErrorSet = struct {
                 defer php.allocator.free(text);
                 break :create php.createValueStringContent(text);
             },
-            .to_integer => try static.value_acc.transform(null).get(err_struct.bytes),
+            .to_integer => try static.value_acc.transform(null).get(err_struct.buffer),
             .to_bytes => try self.returnBytes(),
         };
     }
@@ -262,7 +262,7 @@ pub const ErrorSet = struct {
         if (try self.copySelf(value)) return;
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        try static.value_acc.set(self.bytes, value);
+        try static.value_acc.set(self.buffer, value);
     }
 
     pub fn acquireDebugInfo(self: *@This()) !void {
@@ -347,7 +347,7 @@ pub const ErrorSet = struct {
     pub fn getCode(static: *Static, arg_iter: *ArgumentIterator) !?Value {
         const obj = try php.getValueObject(arg_iter.this);
         const self = fromObject(obj);
-        return try static.value_acc.get(self.bytes);
+        return try static.value_acc.get(self.buffer);
     }
 
     pub fn getFile(_: *Static, arg_iter: *ArgumentIterator) !?Value {

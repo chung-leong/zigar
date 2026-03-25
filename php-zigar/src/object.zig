@@ -44,15 +44,15 @@ pub fn ZigObject(comptime S: type) type {
             const self: *@This() = @ptrCast(@alignCast(mem));
             self.* = .{};
             const obj = self.object();
-            obj.handlers = @ptrCast(getHandlers());
+            obj.handlers = getHandlers();
             php.initializeStandardObject(self.object(), class.entry());
             php.initializeObjectProperties(self.object(), class.entry());
             class.addRef();
             return self;
         }
 
-        pub fn setStorage(self: *@This(), bytes: *ByteBuffer, slots: *const Value) !void {
-            return try self.zig_portion.setStorage(bytes, slots);
+        pub fn setStorage(self: *@This(), buffer: *ByteBuffer, table: *const Value) !void {
+            return try self.zig_portion.setStorage(buffer, table);
         }
 
         pub fn isInstance(obj: *Object) bool {
@@ -82,8 +82,8 @@ pub fn ZigObject(comptime S: type) type {
     if (@offsetOf(Result, "php_portion") + @sizeOf(Object) != @sizeOf(Result)) {
         @compileError("PHP object is in the wrong position");
     }
-    if (@hasField(S, "bytes") and @offsetOf(S, "bytes") + @sizeOf(*ByteBuffer) != @sizeOf(S)) {
-        @compileError("Field 'bytes' is in the wrong position in " ++ @typeName(S));
+    if (@hasField(S, "buffer") and @offsetOf(S, "buffer") + @sizeOf(*ByteBuffer) != @sizeOf(S)) {
+        @compileError("Field 'buffer' is in the wrong position in " ++ @typeName(S));
     }
     return Result;
 }
@@ -94,7 +94,7 @@ pub const ObjectMap = struct {
     const Map = MemoryMap(*Object, php.allocator, compareObjects);
     const SearchResult = Map.SearchResult;
     const GenericObject = struct {
-        bytes: *ByteBuffer,
+        buffer: *ByteBuffer,
         php_portion: php.Object,
     };
 
@@ -123,7 +123,7 @@ pub const ObjectMap = struct {
             .source = undefined,
         };
         var b: GenericObject = .{
-            .bytes = &fake_buf,
+            .buffer = &fake_buf,
             .php_portion = .{
                 .ce = ce,
                 .gc = undefined,
@@ -176,7 +176,7 @@ pub const ObjectMap = struct {
 
     fn getObjectBuffer(obj: *const Object) *ByteBuffer {
         const ptr: *const GenericObject = @fieldParentPtr("php_portion", obj);
-        return ptr.bytes;
+        return ptr.buffer;
     }
 
     fn compareObjects(a: *const Object, b: *const Object) RelativePosition {

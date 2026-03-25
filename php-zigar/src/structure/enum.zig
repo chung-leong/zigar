@@ -14,7 +14,7 @@ const structure = @import("../structure.zig");
 
 pub const Enum = struct {
     canonical: ?*Canonical = null,
-    bytes: *ByteBuffer = undefined,
+    buffer: *ByteBuffer = undefined,
 
     const Canonical = struct {
         name: *String,
@@ -41,11 +41,11 @@ pub const Enum = struct {
             // loop through static members and add them to a hash table, keyed by
             // their integer values and names
             self.available_tags = php.createHashTable(php.destructor.value);
-            const static_slots = class.static.template.slots orelse return error.MissingSlots;
+            const static_table = class.static.template.table orelse return error.MissingTable;
             var iter = class.getMemberIterator(.static);
             while (iter.next()) |static_member| {
                 const slot = static_member.slot orelse continue;
-                const tag = try php.getProperty(static_slots, slot);
+                const tag = try php.getProperty(static_table, slot);
                 const tag_obj = try php.getValueObject(tag);
                 // enums can have methods so we need to check the structure type
                 if (ZigClassEntry.fromObject(tag_obj).type != .@"enum") continue;
@@ -102,7 +102,7 @@ pub const Enum = struct {
                         if (class.flags.@"enum".is_open_ended) {
                             // create new item
                             const tag_obj = try class.obtainNewObject();
-                            const bytes = ZigObject(Enum).fromObject(tag_obj).structure().bytes;
+                            const bytes = ZigObject(Enum).fromObject(tag_obj).structure().buffer;
                             try self.value_acc.transform(null).set(bytes, key);
                             var buffer: [48]u8 = undefined;
                             const text = std.fmt.bufPrint(&buffer, "@enumFromInt({d})", .{tag_code}) catch unreachable;
@@ -139,7 +139,7 @@ pub const Enum = struct {
                             if (class.flags.@"enum".is_open_ended) {
                                 // create new item
                                 const tag_obj = try class.obtainNewObject();
-                                const bytes = ZigObject(Enum).fromObject(tag_obj).structure().bytes;
+                                const bytes = ZigObject(Enum).fromObject(tag_obj).structure().buffer;
                                 try self.value_acc.transform(null).set(bytes, key);
                                 const text = try std.fmt.allocPrint(php.allocator, "@enumFromInt({s})", .{
                                     php.getStringContent(tag_code_str),
@@ -185,13 +185,13 @@ pub const Enum = struct {
             };
             const tag_obj = try php.getValueObject(&tag);
             const tag_struct = fromObject(tag_obj);
-            return tag_struct.bytes;
+            return tag_struct.buffer;
         }
 
         fn addCanonical(self: *@This(), name: *String, tag_obj: *Object) !void {
             const tag_struct = fromObject(tag_obj);
             // reference tag by integer value
-            var tag_value = try self.value_acc.transform(null).get(tag_struct.bytes);
+            var tag_value = try self.value_acc.transform(null).get(tag_struct.buffer);
             // tag_value might contain a GMP object, so we need to release it
             defer php.release(&tag_value);
             const tag = php.createValueObject(tag_obj);
@@ -222,7 +222,7 @@ pub const Enum = struct {
     pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        const enum_value = try static.value_acc.get(self.bytes);
+        const enum_value = try static.value_acc.get(self.buffer);
         if (transform == .to_value) return enum_value;
         const enum_obj = try php.getValueObject(&enum_value);
         defer php.release(enum_obj);
@@ -233,7 +233,7 @@ pub const Enum = struct {
                 const props = enum_struct.canonical orelse return error.Unexpected;
                 break :create php.createValueString(props.name);
             },
-            .to_integer => try static.value_acc.transform(null).get(enum_struct.bytes),
+            .to_integer => try static.value_acc.transform(null).get(enum_struct.buffer),
             .to_bytes => try self.returnBytes(),
         };
     }
@@ -242,12 +242,12 @@ pub const Enum = struct {
         if (try self.copySelf(value)) return;
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        try static.value_acc.set(self.bytes, value);
+        try static.value_acc.set(self.buffer, value);
     }
 
     pub fn freeObject(obj: *Object) void {
         const self = fromObject(obj);
-        self.bytes.release();
+        self.buffer.release();
         if (self.canonical == null or self.canonical.?.unknown) {
             const class = ZigClassEntry.fromObject(obj);
             class.release();

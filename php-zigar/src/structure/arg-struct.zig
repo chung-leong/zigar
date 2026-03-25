@@ -17,9 +17,9 @@ const structure = @import("../structure.zig");
 pub fn ArgStruct(variadic: bool) type {
     _ = variadic;
     return struct {
-        slots: Value = undefined,
         promise: ?*Promise = null,
-        bytes: *ByteBuffer = undefined,
+        table: Value = undefined,
+        buffer: *ByteBuffer = undefined,
 
         const Super = structure.Parent(@This());
 

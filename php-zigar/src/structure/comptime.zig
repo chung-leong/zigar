@@ -12,7 +12,7 @@ const String = php.String;
 const structure = @import("../structure.zig");
 
 pub const Comptime = struct {
-    slots: Value = undefined,
+    table: Value = undefined,
 
     const Super = structure.Parent(@This());
 

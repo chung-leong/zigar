@@ -10,7 +10,7 @@ const Value = php.Value;
 const structure = @import("../structure.zig");
 
 pub const Opaque = struct {
-    bytes: *ByteBuffer = undefined,
+    buffer: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
 

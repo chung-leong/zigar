@@ -10,8 +10,8 @@ const Value = php.Value;
 const structure = @import("../structure.zig");
 
 pub const Optional = struct {
-    slots: Value = undefined,
-    bytes: *ByteBuffer = undefined,
+    table: Value = undefined,
+    buffer: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
 
@@ -34,7 +34,7 @@ pub const Optional = struct {
     pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        const present = try static.present_acc.get(self.bytes);
+        const present = try static.present_acc.get(self.buffer);
         if (try php.getValueLong(&present) == 0) {
             return php.createValueNull();
         }
@@ -62,7 +62,7 @@ pub const Optional = struct {
             // optionals of error sets and pointers don't use a separate present flag
             // non-zero value indiciate whether a value is present or not
             const present_flag = php.createValueLong(if (is_present) 1 else 0);
-            try static.present_acc.set(self.bytes, &present_flag);
+            try static.present_acc.set(self.buffer, &present_flag);
         }
     }
 

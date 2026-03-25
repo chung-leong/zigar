@@ -11,10 +11,10 @@ const structure = @import("../structure.zig");
 const invokeFunction = structure.invokeMethod;
 
 pub const Pointer = struct {
-    slots: Value = undefined,
     last_address: usize = 0,
     last_length: usize = 0,
-    bytes: *ByteBuffer = undefined,
+    table: Value = undefined,
+    buffer: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
 
@@ -37,22 +37,22 @@ pub const Pointer = struct {
         }
 
         pub fn loadTarget(self: *@This(), pointer: *Pointer) !void {
-            const address_value = try self.address_acc.get(pointer.bytes);
+            const address_value = try self.address_acc.get(pointer.buffer);
             const address: usize = try php.getValueUsize(&address_value);
             const length: usize = if (self.length_acc) |acc| get: {
-                const value = try acc.get(pointer.bytes);
+                const value = try acc.get(pointer.buffer);
                 break :get @intCast(try php.getValueLong(&value));
             } else 1;
             if (pointer.last_address != address and pointer.last_length != length) {
-                php.release(&pointer.slots);
+                php.release(&pointer.table);
                 if (address >= 0) {
                     const class = ZigClassEntry.fromStatic(self);
                     const flags = class.getFlags(Pointer);
                     const byte_size = length * (self.target_class.byte_size orelse 0);
                     const target = try self.target_class.obtainObjectAtAddress(address, byte_size, flags.is_const);
-                    pointer.slots = php.createValueObject(target);
+                    pointer.table = php.createValueObject(target);
                 } else {
-                    pointer.slots = php.createValueNull();
+                    pointer.table = php.createValueNull();
                 }
                 pointer.last_address = address;
                 pointer.last_length = length;
@@ -60,8 +60,8 @@ pub const Pointer = struct {
         }
 
         pub fn saveTarget(self: *@This(), pointer: *Pointer, target_obj: *Object) !void {
-            php.release(&pointer.slots);
-            pointer.slots = php.createValueObject(target_obj);
+            php.release(&pointer.table);
+            pointer.table = php.createValueObject(target_obj);
             const extent = try invokeFunction(target_obj, "getExtent", .{});
             try self.setAddress(pointer, extent.address);
             try self.setLength(pointer, extent.len);
@@ -70,19 +70,19 @@ pub const Pointer = struct {
         }
 
         pub fn getAddress(self: *@This(), pointer: *Pointer) !usize {
-            const address_value = try self.address_acc.get(pointer.bytes);
+            const address_value = try self.address_acc.get(pointer.buffer);
             return try php.getValueUsize(&address_value);
         }
 
         pub fn setAddress(self: *@This(), pointer: *Pointer, address: usize) !void {
             const address_value = php.createValueLong(@bitCast(address));
-            try self.address_acc.set(pointer.bytes, &address_value);
+            try self.address_acc.set(pointer.buffer, &address_value);
         }
 
         pub fn setLength(self: *@This(), pointer: *Pointer, len: usize) !void {
             if (self.length_acc) |acc| {
                 const len_value = php.createValueLong(@bitCast(len));
-                try acc.set(pointer.bytes, &len_value);
+                try acc.set(pointer.buffer, &len_value);
             }
         }
     };
@@ -91,7 +91,7 @@ pub const Pointer = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         try static.loadTarget(self);
-        var value = self.slots;
+        var value = self.table;
         php.addRef(&value);
         if (transform != .to_value) try transform.apply(&value);
         return value;

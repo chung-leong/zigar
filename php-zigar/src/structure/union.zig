@@ -16,8 +16,8 @@ const structure = @import("../structure.zig");
 const Class = structure.Class;
 
 pub const Union = struct {
-    slots: Value = undefined,
-    bytes: *ByteBuffer = undefined,
+    table: Value = undefined,
+    buffer: *ByteBuffer = undefined,
 
     const Super = structure.StructLike(@This());
 
@@ -86,7 +86,7 @@ pub const Union = struct {
         pub fn getEnum(self: *@This(), obj: *Object) !Value {
             const sel = self.selector orelse return error.Unexpected;
             const union_struct = ZigObject(Union).fromObject(obj).structure();
-            return try sel.accessors.get(union_struct.bytes);
+            return try sel.accessors.get(union_struct.buffer);
         }
     };
     pub const constructor_args = "an array as argument or one named argument";
@@ -109,7 +109,7 @@ pub const Union = struct {
         const static = class.getStaticData(@This());
         if (static.selector) |selector| {
             const sel_value = try php.getHashEntry(&selector.possible_values, name);
-            try selector.accessors.set(self.bytes, sel_value);
+            try selector.accessors.set(self.buffer, sel_value);
         }
     }
 
@@ -148,7 +148,7 @@ pub const Union = struct {
         if (flags.has_tag) {
             // tagged unions return only the active member
             const selector = static.selector orelse return error.Unexpected;
-            const active_sel_value = try selector.accessors.get(self.bytes);
+            const active_sel_value = try selector.accessors.get(self.buffer);
             while (iter.next()) |member| {
                 if (iter.currentName()) |name| {
                     const sel_value = try php.getHashEntry(&selector.possible_values, name);
@@ -182,7 +182,7 @@ pub const Union = struct {
         const sel_value = php.getHashEntry(&selector.possible_values, name) catch |err| {
             return if (ObjectTransform.fromPropName(name) != null) {} else err;
         };
-        const active_sel_value = try selector.accessors.get(self.bytes);
+        const active_sel_value = try selector.accessors.get(self.buffer);
         if (!compareSelectors(sel_value, &active_sel_value)) return error.InactiveField;
     }
 
@@ -201,7 +201,7 @@ pub const Union = struct {
                 const class = ZigClassEntry.fromStructure(self);
                 const static = class.getStaticData(@This());
                 const selector = static.selector.?;
-                const active_sel_value = selector.accessors.get(self.bytes) catch unreachable;
+                const active_sel_value = selector.accessors.get(self.buffer) catch unreachable;
                 var iter: HashTableIterator = .init(&selector.possible_values, .{});
                 break :find while (iter.next()) |sel_value| {
                     if (compareSelectors(sel_value, &active_sel_value)) {

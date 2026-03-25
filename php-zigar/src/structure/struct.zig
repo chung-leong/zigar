@@ -17,8 +17,8 @@ const Promise = @import("../promise.zig").Promise;
 const structure = @import("../structure.zig");
 
 pub const Struct = struct {
-    slots: Value = undefined,
-    bytes: *ByteBuffer = undefined,
+    table: Value = undefined,
+    buffer: *ByteBuffer = undefined,
 
     const Super = structure.StructLike(@This());
 
@@ -90,7 +90,7 @@ pub const Struct = struct {
             switch (class.purpose) {
                 .allocator => {
                     const allocator = try php.getValuePointer(*std.mem.Allocator, value);
-                    try self.bytes.copyBytes(std.mem.asBytes(allocator));
+                    try self.buffer.copyBytes(std.mem.asBytes(allocator));
                     return;
                 },
                 .promise => {
