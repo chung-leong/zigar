@@ -12,6 +12,7 @@ const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
 const Object = php.Object;
 const Value = php.Value;
+const Promise = @import("../promise.zig").Promise;
 const structure = @import("../structure.zig");
 
 pub const Function = struct {
@@ -31,15 +32,14 @@ pub const Function = struct {
             const class = ZigClassEntry.fromObject(class_obj);
             const thunk_buf = class.instance.template.buffer orelse return error.Unexpected;
             self.thunk_address = @intFromPtr(thunk_buf.bytes.ptr);
-            const member = try class.getMember(.instance, 0);
-            const arg_class = member.class orelse return error.MissingClass;
-            const arg_count = arg_class.length orelse return error.MissingLength;
-            switch (arg_class.type) {
+            const arg_member = try class.getMember(.instance, 0);
+            const arg_count = arg_member.class.length orelse return error.MissingLength;
+            switch (arg_member.class.type) {
                 .arg_struct, .variadic_struct => {
-                    self.argument_class = arg_class;
+                    self.argument_class = arg_member.class;
                     if (arg_count > 0) {
-                        const arg = try arg_class.getMember(.instance, "0");
-                        if (arg.class) |c| self.first_arg_ce = c.entry();
+                        const arg = try arg_member.class.getMember(.instance, "0");
+                        self.first_arg_ce = arg.class.entry();
                     }
                 },
                 else => return error.Unexpected,
@@ -111,9 +111,12 @@ pub const Function = struct {
                         try class.host.runThunk(static.thunk_address, fn_addr, arg_addr);
                     }
                     var retval = try arg_struct.getReturnValue();
-                    if (arg_struct.promise) |p| {
+                    if (arg_struct.flags.has_promise) {
+                        const promise_struct = try arg_struct.getSpecialArgument(.promise);
+                        const promise = try promise_struct.getOpaquePointer(Promise, php.persistent("ptr"));
+                        defer promise.release();
                         if (php.isNull(&retval)) {
-                            retval = try p.await();
+                            retval = try promise.await();
                         }
                     }
                     try self.transform.apply(&retval);

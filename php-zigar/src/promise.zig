@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
@@ -15,27 +16,28 @@ const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigObject = @import("object.zig").ZigObject;
 
 pub const Promise = struct {
-    ref_count: u32 = 1,
     status: enum { unresolved, waiting, resolved } = .unresolved,
     fiber: Value = undefined,
-    result: Value = undefined,
+    result: Value,
+    buffer: *ByteBuffer,
 
     pub fn create() !*@This() {
-        const self = try php.allocator.create(@This());
-        self.* = .{};
+        const alignment: std.mem.Alignment = .fromByteUnits(@alignOf(@This()));
+        const buf = try ByteBuffer.createNew(@sizeOf(@This()), alignment, false);
+        const self: *@This() = @ptrCast(@alignCast(buf.bytes.ptr));
+        self.* = .{
+            .buffer = buf,
+            .result = php.createValueNull(),
+        };
         return self;
     }
 
     pub fn addRef(self: *@This()) void {
-        self.ref_count += 1;
+        self.buffer.addRef();
     }
 
     pub fn release(self: *@This()) void {
-        self.ref_count -= 1;
-        if (self.ref_count == 0) {
-            self.dispatcher.host.release();
-            php.allocator.destroy(self);
-        }
+        self.buffer.release();
     }
 
     pub fn await(self: *@This()) !Value {

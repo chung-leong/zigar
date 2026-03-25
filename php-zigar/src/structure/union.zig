@@ -37,9 +37,8 @@ pub const Union = struct {
             } else null;
             if (selector_member) |sm| {
                 if (sm.accessors != .primitive) return error.InvalidAccessor;
-                const sel_class = sm.class orelse return error.MissingClass;
-                const sel_slots = switch (sel_class.type) {
-                    .@"enum" => sel_class.getStaticData(structure.Enum).available_tags,
+                const sel_slots = switch (sm.class.type) {
+                    .@"enum" => sm.class.getStaticData(structure.Enum).available_tags,
                     else => null,
                 };
                 // go through the list of members again and get the possible selector values
@@ -60,7 +59,7 @@ pub const Union = struct {
                 }
                 self.selector = .{
                     .accessors = &sm.accessors.primitive,
-                    .class = sel_class,
+                    .class = sm.class,
                     .possible_values = sel_ht,
                 };
             }

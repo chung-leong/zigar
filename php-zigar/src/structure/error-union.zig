@@ -33,7 +33,7 @@ pub const ErrorUnion = struct {
             const member1 = try class.getMember(.instance, 1);
             if (member1.accessors != .primitive) return error.InvalidAccessor;
             self.error_acc = &member1.accessors.primitive;
-            self.error_class = member1.class orelse return error.MissingClass;
+            self.error_class = member1.class;
         }
     };
 

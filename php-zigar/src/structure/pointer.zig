@@ -26,7 +26,7 @@ pub const Pointer = struct {
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             const target_member = try class.getMember(.instance, 0);
-            self.target_class = target_member.class orelse return error.MissingClass;
+            self.target_class = target_member.class;
             const address_member = try class.getMember(.instance, 1);
             if (address_member.accessors != .primitive) return error.InvalidAccessor;
             self.address_acc = &address_member.accessors.primitive;

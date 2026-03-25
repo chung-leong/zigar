@@ -51,33 +51,33 @@ pub const ZigClassEntry = struct {
         bit_size: usize,
         byte_size: ?usize,
         slot: ?usize,
-        class: ?*ZigClassEntry = null,
+        class: *ZigClassEntry = undefined,
         accessors: accessor.Any = undefined,
 
         pub fn destructor(value: [*c]Value) callconv(.c) void {
             const member = php.getValuePointer(*Member, value) catch unreachable;
-            if (!member.flags.is_self_referencing) {
-                if (member.class) |c| c.release();
+            if (!member.flags.is_self_referencing and !member.flags.is_missing_class) {
+                member.class.release();
             }
             php.allocator.destroy(member);
         }
 
         pub fn objectTransform(self: *const @This()) ?accessor.ObjectTransform {
-            if (self.flags.is_string or self.type == .literal) {
-                return .to_string;
-            } else if (self.flags.is_plain) {
-                return .to_plain;
-            } else if (self.class) |class| {
-                if (class.flags.common.has_value or class.flags.common.has_proxy)
-                    return .to_value;
-            }
-            return null;
+            if (self.flags.is_missing_class) return null;
+            return if (self.flags.is_string or self.type == .literal)
+                .to_string
+            else if (self.flags.is_plain)
+                .to_plain
+            else if (self.class.flags.common.has_value or self.class.flags.common.has_proxy)
+                .to_value
+            else
+                null;
         }
 
         pub fn primitiveTransform(self: *@This()) ?accessor.PrimitiveTransform {
-            const class = self.class orelse return null;
-            return switch (class.type) {
-                inline .@"enum", .error_set => .{ .class = class },
+            if (self.flags.is_missing_class) return null;
+            return switch (self.class.type) {
+                inline .@"enum", .error_set => .{ .class = self.class },
                 else => null,
             };
         }
@@ -298,7 +298,7 @@ pub const ZigClassEntry = struct {
                 errdefer php.allocator.destroy(member);
                 member.* = .{
                     .type = MemberType.uint,
-                    .flags = .{},
+                    .flags = .{ .is_missing_class = true },
                     .bit_offset = @bitSizeOf(usize) * i,
                     .bit_size = @bitSizeOf(usize),
                     .byte_size = @sizeOf(usize),
@@ -437,7 +437,24 @@ pub const ZigClassEntry = struct {
         }
     }
 
-    pub fn createInterfaceList(self: *@This()) ![]*ClassEntry {
+    pub fn getPointerTarget(self: *@This()) !*@This() {
+        return switch (self.type) {
+            .pointer => get: {
+                const target_value = try php.getHashEntry(&self.instance.members, 0);
+                const target_member = try php.getValuePointer(*Member, target_value);
+                break :get target_member.class;
+            },
+            .error_union, .optional => get: {
+                const payload_value = try php.getHashEntry(&self.instance.members, 0);
+                const payload_member = try php.getValuePointer(*Member, payload_value);
+                const payload_class = payload_member.class;
+                break :get try payload_class.getPointerTarget();
+            },
+            else => error.NotPointer,
+        };
+    }
+
+    fn createInterfaceList(self: *@This()) ![]*ClassEntry {
         var buffer: [16]*ClassEntry = undefined;
         var count: usize = 0;
         switch (self.type) {
@@ -497,7 +514,9 @@ pub const ZigClassEntry = struct {
                 member.class = class;
                 member.flags.is_self_referencing = class == self;
                 if (class != self) class.addRef();
-            } else |_| {}
+            } else |_| {
+                member.flags.is_missing_class = true;
+            }
             const member_ptr = php.createValuePointer(member);
             if (name) |n| {
                 const key = try php.getValueString(n);
@@ -675,8 +694,7 @@ pub const ZigClassEntry = struct {
         fn_static.controller_address = @intFromPtr(controller_buf.bytes.ptr);
         // add flags to argument members
         const arg_member = try self.getMember(.instance, 0);
-        const arg_class = arg_member.class orelse return error.MissingClass;
-        var iter = arg_class.getMemberIterator(.instance);
+        var iter = arg_member.class.getMemberIterator(.instance);
         var index: usize = 0;
         while (iter.next()) |member| : (index += 1) {
             if (try php.getPropertyWithType(?MemberFlags, member_flags, index)) |flags| {
@@ -830,13 +848,12 @@ pub const ZigClassEntry = struct {
                 if (member.byte_size) |byte_size| {
                     // compound types like structs and unions are represented by objects
                     // these are stored in the tables of their parent objects and are created lazily
-                    const class = member.class orelse return error.MissingClass;
                     if (for_scalar) {
                         return if (scope.slot_count > 1) .{
                             .multi_slot = accessor.slot.get(.{
                                 .type = .multi_slot,
                             }, .{
-                                .class = class,
+                                .class = member.class,
                                 .byte_offset = byte_offset,
                                 .byte_size = byte_size,
                                 .slot = member.slot orelse return error.MissingSlot,
@@ -845,7 +862,7 @@ pub const ZigClassEntry = struct {
                             .single_slot = accessor.slot.get(.{
                                 .type = .single_slot,
                             }, .{
-                                .class = class,
+                                .class = member.class,
                                 .byte_offset = byte_offset,
                                 .byte_size = byte_size,
                             }),
@@ -855,7 +872,7 @@ pub const ZigClassEntry = struct {
                             .array_slot = accessor.slot.get(.{
                                 .type = .array_slot,
                             }, .{
-                                .class = class,
+                                .class = member.class,
                                 .byte_size = byte_size,
                             }),
                         };
@@ -929,9 +946,8 @@ pub const ZigClassEntry = struct {
             .array => get: {
                 const member_value = try php.getHashEntry(&self.instance.members, 0);
                 const member = try php.getValuePointer(*Member, member_value);
-                const class = member.class orelse return error.MissingClass;
                 const len = self.length orelse return error.MissingLength;
-                break :get try std.fmt.allocPrint(allocator, "[{d}]{s}", .{ len, class.getName() });
+                break :get try std.fmt.allocPrint(allocator, "[{d}]{s}", .{ len, member.class.getName() });
             },
             .@"struct" => switch (self.purpose) {
                 .promise => "Promise",
@@ -949,14 +965,12 @@ pub const ZigClassEntry = struct {
             .@"union" => try std.fmt.allocPrint(allocator, "U{d}", .{counters.@"union"}),
             .error_union => get: {
                 const member0_value = try php.getHashEntry(&self.instance.members, 0);
-                const member0 = try php.getValuePointer(*Member, member0_value);
+                const payload_member = try php.getValuePointer(*Member, member0_value);
                 const member1_value = try php.getHashEntry(&self.instance.members, 1);
-                const member1 = try php.getValuePointer(*Member, member1_value);
-                const payload_class = member0.class orelse return error.MissingClass;
-                const err_class = member1.class orelse return error.MissingClass;
+                const err_member = try php.getValuePointer(*Member, member1_value);
                 break :get try std.fmt.allocPrint(allocator, "{s}!{s}", .{
-                    err_class.getName(),
-                    payload_class.getName(),
+                    err_member.class.getName(),
+                    payload_member.class.getName(),
                 });
             },
             .error_set => switch (self.flags.error_set.is_global) {
@@ -973,13 +987,11 @@ pub const ZigClassEntry = struct {
             .optional => get: {
                 const member_value = try php.getHashEntry(&self.instance.members, 0);
                 const member = try php.getValuePointer(*Member, member_value);
-                const class = member.class orelse return error.MissingClass;
-                break :get try std.fmt.allocPrint(allocator, "?{s}", .{class.getName()});
+                break :get try std.fmt.allocPrint(allocator, "?{s}", .{member.class.getName()});
             },
             .pointer => get: {
                 const member_value = try php.getHashEntry(&self.instance.members, 0);
                 const member = try php.getValuePointer(*Member, member_value);
-                const element_class = member.class orelse return error.MissingClass;
                 var prefix: []const u8 = switch (self.flags.pointer.is_multiple) {
                     false => "*",
                     true => if (self.flags.pointer.has_length)
@@ -993,8 +1005,8 @@ pub const ZigClassEntry = struct {
                 if (self.flags.pointer.is_const) {
                     prefix = try std.fmt.allocPrint(allocator, "{s}const ", .{prefix});
                 }
-                var element_name = element_class.getName();
-                if (element_class.type == .slice) {
+                var element_name = member.class.getName();
+                if (member.class.type == .slice) {
                     element_name = element_name[3..];
                 }
                 break :get try std.fmt.allocPrint(allocator, "{s}{s}", .{ prefix, element_name });
@@ -1002,18 +1014,16 @@ pub const ZigClassEntry = struct {
             .slice => get: {
                 const member_value = try php.getHashEntry(&self.instance.members, 0);
                 const member = try php.getValuePointer(*Member, member_value);
-                const class = member.class orelse return error.MissingClass;
                 break :get switch (self.flags.slice.is_opaque) {
-                    false => try std.fmt.allocPrint(allocator, "[_]{s}", .{class.getName()}),
+                    false => try std.fmt.allocPrint(allocator, "[_]{s}", .{member.class.getName()}),
                     true => "anyopaque",
                 };
             },
             .vector => get: {
                 const member_value = try php.getHashEntry(&self.instance.members, 0);
                 const member = try php.getValuePointer(*Member, member_value);
-                const class = member.class orelse return error.MissingClass;
                 const len = self.length orelse return error.MissingLength;
-                break :get try std.fmt.allocPrint(allocator, "@Vector({d}, {s})", .{ len, class.getName() });
+                break :get try std.fmt.allocPrint(allocator, "@Vector({d}, {s})", .{ len, member.class.getName() });
             },
             .@"opaque" => get: {
                 defer counters.@"opaque" += 1;
@@ -1026,8 +1036,7 @@ pub const ZigClassEntry = struct {
                 const names = try allocator.alloc([]const u8, iter.len);
                 defer allocator.free(names);
                 while (iter.next()) |member| {
-                    const class = member.class orelse return error.MissingClass;
-                    names[index] = class.getName();
+                    names[index] = member.class.getName();
                     index += 1;
                 }
                 break :get try std.fmt.allocPrint(allocator, "Arg(fn ({s}{s}) {s})", .{
@@ -1039,8 +1048,7 @@ pub const ZigClassEntry = struct {
             .function => get: {
                 const member_value = try php.getHashEntry(&self.instance.members, 0);
                 const member = try php.getValuePointer(*Member, member_value);
-                const class = member.class orelse return error.MissingClass;
-                const arg_name = class.getName();
+                const arg_name = member.class.getName();
                 break :get arg_name[4 .. arg_name.len - 1];
             },
         };
