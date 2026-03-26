@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const accessor = @import("accessor.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const ModuleHost = @import("host.zig").ModuleHost;
@@ -19,11 +20,11 @@ const structure = @import("structure.zig");
 const ZigObject = @import("object.zig").ZigObject;
 
 pub const Generator = struct {
-    status: enum { unresolved, waiting, resolved, finished, terminated } = .unresolved,
+    status: enum { unresolved, waiting, resolved, finished, released } = .unresolved,
     fiber: Value = undefined,
     result: Value,
     callback: ?Value,
-    index: isize = -1,
+    index: isize = 0,
     transform: ObjectTransform = .to_value,
     buffer: *ByteBuffer,
 
@@ -42,16 +43,17 @@ pub const Generator = struct {
         return self;
     }
 
-    pub fn terminate(obj: *Object) void {
-        const self = getSelf(obj);
-        if (self.status != .finish) {
-            self.status = .terminated;
-            self.buffer.addRef();
+    pub fn release(self: *@This()) void {
+        if (self.status == .finished) {
+            self.buffer.release();
+        } else {
+            // preserve the generator until the content source has been informed
+            self.status = .released;
         }
     }
 
     pub fn current(_: *anyopaque, arg_iter: *ArgumentIterator) !?Value {
-        const self = getSelfFromValue(arg_iter.this);
+        const self = try getSelf(arg_iter);
         return if (self.status == .resolved)
             self.result
         else
@@ -59,7 +61,7 @@ pub const Generator = struct {
     }
 
     pub fn key(_: *anyopaque, arg_iter: *ArgumentIterator) !?Value {
-        const self = getSelfFromValue(arg_iter.this);
+        const self = try getSelf(arg_iter);
         return if (self.status == .resolved and self.index <= std.math.maxInt(c_long))
             php.createValueLong(@truncate(self.index))
         else
@@ -67,66 +69,67 @@ pub const Generator = struct {
     }
 
     pub fn next(_: *anyopaque, arg_iter: *ArgumentIterator) !?Value {
-        const self = getSelfFromValue(arg_iter.this);
+        const self = try getSelf(arg_iter);
         self.status = .waiting;
-        try CallDispatcher.event_loop.suspendFiber(&self.fiber);
         self.index += 1;
+        try CallDispatcher.event_loop.suspendFiber(&self.fiber);
         return php.createValueNull();
     }
 
     pub fn rewind(_: *anyopaque, arg_iter: *ArgumentIterator) !?Value {
-        const self = getSelfFromValue(arg_iter.this);
+        const self = try getSelf(arg_iter);
         if (self.status == .unresolved) {
             self.fiber = try CallDispatcher.event_loop.getFiber();
-            try self.next();
+            self.status = .waiting;
+            try CallDispatcher.event_loop.suspendFiber(&self.fiber);
         }
         return php.createValueNull();
     }
 
     pub fn valid(_: *anyopaque, arg_iter: *ArgumentIterator) !?Value {
-        const self = getSelfFromValue(arg_iter.this);
+        const self = try getSelf(arg_iter);
         return php.createValueBool(self.status == .resolved);
     }
 
-    fn getSelfFromValue(arg_iter: *ArgumentIterator) !*@This() {
+    fn getSelf(arg_iter: *ArgumentIterator) !*@This() {
         const obj = try php.getValueObject(arg_iter.this);
-        return getSelf(obj);
-    }
-
-    fn getSelf(obj: *Object) !*@This() {
         const generator_struct = ZigObject(structure.Struct).fromObject(obj).structure();
-        return try generator_struct.getSpecialContext(.generator);
+        return try generator_struct.getSpecialContext(@This());
     }
 
     pub fn getHandler() Value {
-        const handler = php.transform(runGenerator);
+        const handler = php.transform(resolveGenerator);
         var func = php.createFunction(handler, "output", 1, false);
         return php.createValueClosure(&func, null, null, null);
     }
 
     pub fn resolve(self: *@This(), value: *Value) !bool {
-        self.status = .resolved;
-        if (self.status == .terminated) {
-            return false;
-        } else {
-            self.result = value.*;
-            try self.transform.apply(&self.result);
-            if (self.status == .waiting) {
-                CallDispatcher.event_loop.resumeFiberAfterward(&self.fiber);
-            }
+        switch (self.status) {
+            .released => {
+                self.buffer.release();
+                return false;
+            },
+            .waiting => CallDispatcher.event_loop.resumeFiberAfterward(&self.fiber),
+            else => {},
+        }
+        self.result = value.*;
+        try self.transform.apply(&self.result);
+        if (!php.isNull(&self.result)) {
+            self.status = .resolved;
             return true;
+        } else {
+            self.status = .finished;
+            return false;
         }
     }
 
-    pub fn runGenerator(ed: *ExecuteData, return_value: *Value) !void {
+    pub fn resolveGenerator(ed: *ExecuteData, return_value: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
         const ptr = arg_iter.next() orelse return error.Unexpected;
         const ptr_obj = php.getValueObject(ptr) catch unreachable;
         const ptr_struct = ZigObject(structure.Optional).fromObject(ptr_obj).structure();
-        const slice_value = try ptr_struct.readSelf(.to_value);
-        const slice_obj = php.getValueObject(&slice_value) catch unreachable;
-        const slice_struct = ZigObject(structure.Slice).fromObject(slice_obj).structure();
-        const self: *@This() = @ptrCast(@alignCast(slice_struct.buffer.bytes.ptr));
+        const target = try ptr_struct.readSelf(.to_value);
+        const self = try accessor.getOpaqueTarget(@This(), &target);
         const result = arg_iter.next() orelse return error.Unexpected;
         const more = try self.resolve(result);
         return_value.* = php.createValueBool(more);

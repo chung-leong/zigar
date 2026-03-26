@@ -50,6 +50,7 @@ pub const Opaque = struct {
     pub const copyArguments = Super.copyArguments;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
+    pub const getMethod = Super.getMethod;
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
     pub const getReferencedObjects = Super.getReferencedObjects;

@@ -30,11 +30,19 @@ pub const Struct = struct {
     };
 
     const Super = structure.StructLike(@This());
+    const GeneratorClosures = struct {
+        current: *Closure,
+        key: *Closure,
+        next: *Closure,
+        rewind: *Closure,
+        valid: *Closure,
+    };
 
     pub const Static = struct {
         required_field_count: usize = 0,
         class_obj: *Object = undefined,
         callback: ?*Object = null,
+        generator_closures: ?*GeneratorClosures = null,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -58,6 +66,21 @@ pub const Struct = struct {
                     const cb_struct = ZigObject(structure.Pointer).fromObject(cb_obj).structure();
                     try cb_struct.writeSelf(&closure);
                     self.callback = cb_obj;
+                    if (p == .generator) {
+                        const closures = try php.allocator.create(GeneratorClosures);
+                        errdefer php.allocator.destroy(closures);
+                        var failed_index: usize = undefined;
+                        errdefer inline for (comptime std.meta.fieldNames(GeneratorClosures), 0..) |name, i| {
+                            if (i == failed_index) break;
+                            @field(closures, name).release();
+                        };
+                        inline for (comptime std.meta.fieldNames(GeneratorClosures), 0..) |name, i| {
+                            errdefer failed_index = i;
+                            const handler = @field(Generator, name);
+                            @field(closures, name) = try Closure.create(self, handler, name);
+                        }
+                        self.generator_closures = closures;
+                    }
                 },
                 else => {},
             }
@@ -66,6 +89,13 @@ pub const Struct = struct {
         pub fn deinit(self: *@This()) void {
             php.release(self.class_obj);
             if (self.callback) |cb| php.release(cb);
+            if (self.generator_closures) |closures| {
+                inline for (comptime std.meta.fieldNames(GeneratorClosures)) |name| {
+                    const closure = @field(closures, name);
+                    closure.release();
+                }
+                php.allocator.destroy(closures);
+            }
         }
     };
     pub const constructor_args = "an array as argument or named arguments";
@@ -93,11 +123,11 @@ pub const Struct = struct {
         return Super.readSelf(self, transform);
     }
 
-    pub fn initSpecial(self: *@This(), comptime purpose: StructurePurpose, args: SpecialArgs) !void {
+    pub fn initSpecial(self: *@This(), comptime T: type, args: SpecialArgs) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        switch (purpose) {
-            .allocator => {
+        switch (T) {
+            std.mem.Allocator => {
                 if (args.allocator) |av| {
                     const src_obj = try php.getValueObject(av);
                     const src_class = ZigClassEntry.fromObject(src_obj);
@@ -112,12 +142,7 @@ pub const Struct = struct {
                     try self.buffer.copyBytes(bytes);
                 }
             },
-            .promise, .generator => {
-                const T = switch (purpose) {
-                    .promise => Promise,
-                    .generator => Generator,
-                    else => @compileError("Unrecognized purpose: " ++ @tagName(purpose)),
-                };
+            Promise, Generator => {
                 const ctx = try T.create(args.callback);
                 const ptr_member = try class.getMember(.instance, php.persistent("ptr"));
                 const opaque_class = try ptr_member.class.getPointerTarget();
@@ -132,32 +157,51 @@ pub const Struct = struct {
                     const allocator_obj = try php.getValueObject(&allocator_value);
                     defer php.release(allocator_obj);
                     const allocator_struct = ZigObject(structure.Struct).fromObject(allocator_obj).structure();
-                    try allocator_struct.initSpecial(.allocator, args);
+                    try allocator_struct.initSpecial(std.mem.Allocator, args);
                 } else |_| {}
             },
             else => {},
         }
     }
 
-    pub fn getSpecialContext(self: *@This(), comptime purpose: StructurePurpose) !switch (purpose) {
-        .promise => *Promise,
-        .generator => *Generator,
-        else => @compileError("Unrecognized purpose: " ++ @tagName(purpose)),
-    } {
-        const ptr_value = try self.readMember(php.persistent("ptr"), null);
-        const ptr_obj = try php.getValueObject(&ptr_value);
-        const ptr_class = ZigClassEntry.fromObject(ptr_obj);
-        if (ptr_class.type != .slice or !ptr_class.flags.slice.is_opaque) {
-            return error.NotOpaque;
+    pub fn getSpecialContext(self: *@This(), comptime T: type) !*T {
+        const target = try self.readMember(php.persistent("ptr"), null);
+        return accessor.getOpaqueTarget(T, &target);
+    }
+
+    pub fn freeObject(obj: *Object) void {
+        const class = ZigClassEntry.fromObject(obj);
+        const self = fromObject(obj);
+        // release the promise/generator context
+        switch (class.purpose) {
+            .promise => {
+                if (self.getSpecialContext(Promise)) |ctx| ctx.release() else |_| {}
+            },
+            .generator => {
+                if (self.getSpecialContext(Generator)) |ctx| ctx.release() else |_| {}
+            },
+            else => {},
         }
-        const opaque_struct = ZigObject(structure.Slice).fromObject(ptr_obj).structure();
-        return @ptrCast(@alignCast(opaque_struct.buffer.bytes.ptr));
+        Super.freeObject(obj);
+    }
+
+    pub fn getMethod(obj_ptr: *[*c]Object, name: *String, key: *const Value) !?*php.Function {
+        const obj = obj_ptr.*;
+        const class = ZigClassEntry.fromObject(obj);
+        const static = class.getStaticData(@This());
+        if (static.generator_closures) |closures| {
+            const name_s = php.getStringContent(name);
+            inline for (std.meta.fields(GeneratorClosures)) |field| {
+                if (std.mem.eql(u8, name_s, field.name))
+                    return @field(closures, field.name).function();
+            }
+        }
+        return Super.getMethod(obj_ptr, name, key);
     }
 
     pub const setStorage = Super.setStorage;
     pub const writeSelf = Super.writeSelf;
     pub const getExtent = Super.getExtent;
-    pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;

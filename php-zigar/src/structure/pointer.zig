@@ -4,6 +4,7 @@ const accessor = @import("../accessor.zig");
 const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const Object = php.Object;
 const Value = php.Value;

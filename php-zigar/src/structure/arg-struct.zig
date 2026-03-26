@@ -99,7 +99,14 @@ pub fn ArgStruct(variadic: bool) type {
                     const obj = try php.getValueObject(&value);
                     defer php.release(obj);
                     const a_struct = ZigObject(structure.Struct).fromObject(obj).structure();
-                    try a_struct.initSpecial(t, special_args);
+                    const T = switch (t) {
+                        .allocator => std.mem.Allocator,
+                        .promise => Promise,
+                        .generator => Generator,
+                        .abort_signal => void,
+                        else => unreachable,
+                    };
+                    try a_struct.initSpecial(T, special_args);
                     @field(self.flags, "has_" ++ @tagName(t)) = true;
                 }
             }
@@ -125,6 +132,9 @@ pub fn ArgStruct(variadic: bool) type {
             const static = class.getStaticData(@This());
             var value = try static.retval_accessors.get(self);
             if (static.retval_transform) |ot| try ot.apply(&value);
+            const eg = php.getExecutorGlobals();
+            // an error union has yielded an error
+            if (eg.exception != null) return error.ExceptionThrown;
             return value;
         }
 
@@ -134,10 +144,15 @@ pub fn ArgStruct(variadic: bool) type {
             return try static.retval_accessors.set(self, value);
         }
 
-        pub fn getSpecialArgument(self: *@This(), name: @TypeOf(.enum_literal)) !*structure.Struct {
+        pub fn getSpecialArgument(self: *@This(), comptime T: type) !*structure.Struct {
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
-            const member = @field(static, @tagName(name)) orelse return error.Missing;
+            const member = switch (T) {
+                std.mem.Allocator => static.allocator,
+                Promise => static.promise,
+                Generator => static.generator,
+                else => @compileError("Unexpected type: " ++ @typeName(T)),
+            } orelse return error.Missing;
             const value = try member.accessors.get(self);
             const obj = php.getValueObject(&value) catch unreachable;
             defer php.release(obj);

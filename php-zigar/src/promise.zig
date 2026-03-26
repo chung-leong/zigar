@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const accessor = @import("accessor.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const ModuleHost = @import("host.zig").ModuleHost;
@@ -17,7 +18,7 @@ const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigObject = @import("object.zig").ZigObject;
 
 pub const Promise = struct {
-    status: enum { unresolved, waiting, resolved } = .unresolved,
+    status: enum { unresolved, waiting, resolved, released } = .unresolved,
     fiber: Value = undefined,
     result: Value,
     callback: ?Value,
@@ -39,12 +40,13 @@ pub const Promise = struct {
         return self;
     }
 
-    pub fn addRef(self: *@This()) void {
-        self.buffer.addRef();
-    }
-
     pub fn release(self: *@This()) void {
-        self.buffer.release();
+        if (self.status == .resolved) {
+            self.buffer.release();
+        } else {
+            // preserve the promise object until the callback is called
+            self.status = .released;
+        }
     }
 
     pub fn await(self: *@This()) !Value {
@@ -63,11 +65,16 @@ pub const Promise = struct {
     }
 
     pub fn resolve(self: *@This(), value: *Value) !void {
+        switch (self.status) {
+            .released => {
+                self.buffer.release();
+                return;
+            },
+            .waiting => CallDispatcher.event_loop.resumeFiberAfterward(&self.fiber),
+            else => {},
+        }
         self.result = value.*;
         try self.transform.apply(&self.result);
-        if (self.status == .waiting) {
-            CallDispatcher.event_loop.resumeFiberAfterward(&self.fiber);
-        }
         self.status = .resolved;
     }
 
@@ -82,12 +89,10 @@ pub const Promise = struct {
         const ptr = arg_iter.next() orelse return error.Unexpected;
         const ptr_obj = php.getValueObject(ptr) catch unreachable;
         const ptr_struct = ZigObject(structure.Optional).fromObject(ptr_obj).structure();
-        const slice_value = try ptr_struct.readSelf(.to_value);
-        const slice_obj = php.getValueObject(&slice_value) catch unreachable;
-        const slice_struct = ZigObject(structure.Slice).fromObject(slice_obj).structure();
-        const promise: *@This() = @ptrCast(@alignCast(slice_struct.buffer.bytes.ptr));
+        const target = try ptr_struct.readSelf(.to_value);
+        const self = try accessor.getOpaqueTarget(@This(), &target);
         const result = arg_iter.next() orelse return error.Unexpected;
-        try promise.resolve(result);
+        try self.resolve(result);
         return_value.* = php.createValueNull();
     }
 };

@@ -39,19 +39,20 @@ pub const ErrorSet = struct {
             php.allocator.destroy(self);
         }
     };
+    const Closures = struct {
+        getMessage: *Closure,
+        getCode: *Closure,
+        getFile: *Closure,
+        getLine: *Closure,
+        getTrace: *Closure,
+        getTraceAsString: *Closure,
+        getPrevious: *Closure,
+    };
 
     pub const Static = struct {
         value_acc: *accessor.Primitive = undefined,
         error_set: *HashTable = undefined,
-        closures: struct {
-            getMessage: *Closure,
-            getCode: *Closure,
-            getFile: *Closure,
-            getLine: *Closure,
-            getTrace: *Closure,
-            getTraceAsString: *Closure,
-            getPrevious: *Closure,
-        } = undefined,
+        closures: Closures = undefined,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -78,16 +79,23 @@ pub const ErrorSet = struct {
                     class.release();
                 }
             }
-            inline for (std.meta.fields(@TypeOf(self.closures))) |field| {
-                const handler = @field(ErrorSet, field.name);
-                @field(self.closures, field.name) = try Closure.create(self, handler, field.name);
+            var failed_index: usize = undefined;
+            errdefer inline for (comptime std.meta.fieldNames(Closures), 0..) |name, i| {
+                // release previously allocated items on failure
+                if (i == failed_index) break;
+                @field(self.closures, name).release();
+            };
+            inline for (comptime std.meta.fieldNames(Closures), 0..) |name, i| {
+                errdefer failed_index = i;
+                const handler = @field(ErrorSet, name);
+                @field(self.closures, name) = try Closure.create(self, handler, name);
             }
         }
 
         pub fn deinit(self: *@This()) void {
             php.release(self.error_set);
-            inline for (std.meta.fields(@TypeOf(self.closures))) |field| {
-                const closure = @field(self.closures, field.name);
+            inline for (comptime std.meta.fieldNames(@TypeOf(self.closures))) |name| {
+                const closure = @field(self.closures, name);
                 closure.release();
             }
         }
@@ -331,7 +339,7 @@ pub const ErrorSet = struct {
         const class = ZigClassEntry.fromObject(obj);
         const static = class.getStaticData(@This());
         const name_s = php.getStringContent(name);
-        inline for (std.meta.fields(@FieldType(Static, "closures"))) |field| {
+        inline for (std.meta.fields(Closures)) |field| {
             if (std.mem.eql(u8, name_s, field.name))
                 return @field(static.closures, field.name).function();
         }

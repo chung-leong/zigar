@@ -466,6 +466,7 @@ pub fn StructLike(comptime S: type) type {
         pub const freeObject = Super.freeObject;
         pub const castObject = Super.castObject;
         pub const getReferencedObjects = Super.getReferencedObjects;
+        pub const getMethod = Super.getMethod;
     };
 }
 

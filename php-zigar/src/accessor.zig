@@ -423,3 +423,13 @@ pub fn WithBitOffset(comptime T: type, comptime bit_offset: ?u3) type {
         });
     } else T;
 }
+
+pub fn getOpaqueTarget(comptime T: type, value: *const Value) !*T {
+    const obj = php.getValueObject(value) catch unreachable;
+    const class = ZigClassEntry.fromObject(obj);
+    if (class.type != .slice or !class.flags.slice.is_opaque) {
+        return error.NotOpaque;
+    }
+    const slice_struct = ZigObject(structure.Slice).fromObject(obj).structure();
+    return @ptrCast(@alignCast(slice_struct.buffer.bytes.ptr));
+}
