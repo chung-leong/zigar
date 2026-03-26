@@ -259,6 +259,25 @@ pub const ArgumentIterator = struct {
             self.len += 1;
         }
     }
+
+    pub fn extractNamedArguments(self: *@This(), set: anytype, using: anytype) void {
+        if (self.named_params == null) return;
+        const ht = getValueHashTable(&self.named_params.?) catch unreachable;
+        const T = @TypeOf(set.*);
+        inline for (comptime std.meta.fieldNames(T)) |name| {
+            if (@field(using, name)) {
+                if (getHashEntry(ht, name)) |value| {
+                    @field(set, name) = value;
+                    _ = removeHashEntry(ht, name);
+                } else |_| {}
+            }
+        }
+        // if all named arguments were taken out, shrink the argument list
+        if (ht.nNumOfElements == 0) {
+            self.named_params = null;
+            self.len -= 1;
+        }
+    }
 };
 
 fn TransformPointer(comptime T: type) type {
@@ -742,7 +761,7 @@ pub fn setPropertyRef(object: *Value, key: anytype, value: *Value) !void {
 
 pub fn deleteProperty(object: *Value, key: anytype) !void {
     const ht = try getValueHashTable(object);
-    try deleteHashEntry(ht, key);
+    deleteHashEntry(ht, key);
 }
 
 pub fn addElement(array: *Value, element: *Value) !void {
@@ -939,7 +958,7 @@ pub fn appendHashEntry(ht: *HashTable, value: *const Value) usize {
     return php_h.zend_hash_num_elements(ht);
 }
 
-pub fn removeHashEntry(ht: *HashTable, key: anytype) !bool {
+pub fn removeHashEntry(ht: *HashTable, key: anytype) bool {
     const KT = @TypeOf(key);
     ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
     const result = if (comptime isStringContent(KT))
@@ -953,8 +972,8 @@ pub fn removeHashEntry(ht: *HashTable, key: anytype) !bool {
     return result == SUCCESS;
 }
 
-pub fn deleteHashEntry(ht: *HashTable, key: anytype) !void {
-    _ = try removeHashEntry(ht, key);
+pub fn deleteHashEntry(ht: *HashTable, key: anytype) void {
+    _ = removeHashEntry(ht, key);
 }
 
 pub fn hasHashEntry(ht: *HashTable, key: anytype) bool {

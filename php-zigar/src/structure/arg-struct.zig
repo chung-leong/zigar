@@ -5,6 +5,7 @@ const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const Closure = @import("../closure.zig").Closure;
+const Generator = @import("../generator.zig").Generator;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const FiberTransfer = php.FiberTransfer;
@@ -22,7 +23,7 @@ pub fn ArgStruct(variadic: bool) type {
             has_promise: bool = false,
             has_callback: bool = false,
             has_generator: bool = false,
-            has_abort_controller: bool = false,
+            has_abort_signal: bool = false,
         } align(@alignOf(*anyopaque)) = .{},
         table: Value = undefined,
         buffer: *ByteBuffer = undefined,
@@ -36,8 +37,7 @@ pub fn ArgStruct(variadic: bool) type {
             allocator: ?*ZigClassEntry.Member = null,
             promise: ?*ZigClassEntry.Member = null,
             generator: ?*ZigClassEntry.Member = null,
-            abort_controller: ?*ZigClassEntry.Member = null,
-            callback: ?*Object = null,
+            abort_signal: ?*ZigClassEntry.Member = null,
 
             pub fn init(self: *@This(), class_obj: *Object) !void {
                 const class = ZigClassEntry.fromObject(class_obj);
@@ -59,21 +59,8 @@ pub fn ArgStruct(variadic: bool) type {
                 var index: usize = 0;
                 while (iter.next()) |member| {
                     switch (member.class.purpose) {
-                        .allocator => {
-                            self.allocator = member;
-                        },
-                        .promise => if (self.callback == null) {
-                            self.promise = member;
-                            const closure = Promise.getHandler();
-                            const cb_member = try member.class.getMember(.instance, "callback");
-                            if (cb_member.class.type != .pointer) return error.Unexpected;
-                            const cb_obj = try cb_member.class.obtainNewObject();
-                            const cb_struct = ZigObject(structure.Pointer).fromObject(cb_obj).structure();
-                            try cb_struct.writeSelf(&closure);
-                            self.callback = cb_obj;
-                        },
-                        .generator => if (self.callback == null) {
-                            self.generator = member;
+                        inline .allocator, .promise, .generator, .abort_signal => |t| {
+                            @field(self, @tagName(t)) = member;
                         },
                         else => {
                             self.arg_accessors[index] = &member.accessors;
@@ -85,13 +72,19 @@ pub fn ArgStruct(variadic: bool) type {
 
             pub fn deinit(self: *@This()) void {
                 php.allocator.free(self.arg_accessors);
-                if (self.callback) |cb| php.release(cb);
             }
         };
 
         pub fn copyArguments(self: *@This(), arg_iter: *php.ArgumentIterator) !void {
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
+            // take out initializers for special arguments
+            var special_args: structure.Struct.SpecialArgs = .{};
+            arg_iter.extractNamedArguments(&special_args, .{
+                .allocator = static.allocator != null,
+                .callback = static.promise != null or static.generator != null,
+                .abort_signal = static.abort_signal != null,
+            });
             if (arg_iter.len != static.arg_accessors.len) return error.IncorrectArgumentCount;
             // use accessors to write into the argument struct
             var index: usize = 0;
@@ -99,37 +92,16 @@ pub fn ArgStruct(variadic: bool) type {
                 const acc = static.arg_accessors[index];
                 try acc.set(self, arg);
             }
-            // set special arguments
-            if (static.allocator) |m| {
-                const allocator_value = try m.accessors.get(self);
-                const allocator_obj = try php.getValueObject(&allocator_value);
-                defer php.release(allocator_obj);
-                const allocator_struct = ZigObject(structure.Struct).fromObject(allocator_obj).structure();
-                const allocator_class = ZigClassEntry.fromObject(allocator_obj);
-                if (allocator_class.type != .@"struct" or allocator_class.purpose != .allocator) {
-                    return error.Unexpected;
+            // initialize special arguments
+            inline for (.{ .allocator, .promise, .generator, .abort_signal }) |t| {
+                if (@field(static, @tagName(t))) |m| {
+                    const value = try m.accessors.get(self);
+                    const obj = try php.getValueObject(&value);
+                    defer php.release(obj);
+                    const a_struct = ZigObject(structure.Struct).fromObject(obj).structure();
+                    try a_struct.initSpecial(t, special_args);
+                    @field(self.flags, "has_" ++ @tagName(t)) = true;
                 }
-                const allocator_byte_ptr: [*]u8 = @ptrCast(&class.host.allocator);
-                const allocator_bytes = allocator_byte_ptr[0..@sizeOf(std.mem.Allocator)];
-                try allocator_struct.buffer.copyBytes(allocator_bytes);
-                self.flags.has_allocator = true;
-            }
-            if (static.promise) |m| {
-                const promise = try Promise.create();
-                const promise_value = try m.accessors.get(self);
-                const promise_obj = try php.getValueObject(&promise_value);
-                defer php.release(promise_obj);
-                const promise_struct = ZigObject(structure.Struct).fromObject(promise_obj).structure();
-                const promise_class = ZigClassEntry.fromObject(promise_obj);
-                const ptr_member = try promise_class.getMember(.instance, php.persistent("ptr"));
-                const opaque_class = try ptr_member.class.getPointerTarget();
-                const opaque_obj = try opaque_class.createObjectFromBuffer(promise.buffer, null);
-                defer php.release(opaque_obj);
-                const opaque_value = php.createValueObject(opaque_obj);
-                try promise_struct.writeMember(php.persistent("ptr"), &opaque_value, null);
-                const callback_value = php.createValueObject(static.callback.?);
-                try promise_struct.writeMember(php.persistent("callback"), &callback_value, null);
-                self.flags.has_promise = true;
             }
         }
 

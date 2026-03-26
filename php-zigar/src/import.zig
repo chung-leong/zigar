@@ -249,7 +249,7 @@ pub const StructureImporter = struct {
             const value = self.dereference(vh);
             php.setHashEntryRef(&self.structure_map, key, value);
         } else {
-            try php.deleteHashEntry(&self.structure_map, key);
+            php.deleteHashEntry(&self.structure_map, key);
         }
     }
 

@@ -5,6 +5,7 @@ const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const Closure = @import("../closure.zig").Closure;
+const Generator = @import("../generator.zig").Generator;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const ArgumentIterator = php.ArgumentIterator;
@@ -113,14 +114,25 @@ pub const Function = struct {
                     var retval = try arg_struct.getReturnValue();
                     if (arg_struct.flags.has_promise) {
                         const promise_struct = try arg_struct.getSpecialArgument(.promise);
-                        const promise = try promise_struct.getOpaquePointer(Promise, php.persistent("ptr"));
+                        const promise = try promise_struct.getSpecialContext(.promise);
                         defer promise.release();
-                        if (php.isNull(&retval)) {
-                            retval = try promise.await();
+                        promise.transform = self.transform;
+                        if (!php.isNull(&retval)) {
+                            // if the return value isn't null, we assume the function chooses to not be async
+                            try self.transform.apply(&retval);
+                            break :run retval;
                         }
+                        break :run try promise.await();
+                    } else if (arg_struct.flags.has_generator) {
+                        const generator_struct = try arg_struct.getSpecialArgument(.generator);
+                        const generator = try generator_struct.getSpecialContext(.generator);
+                        generator.transform = self.transform;
+                        const generator_obj = ZigObject(structure.Struct).fromStructure(generator_struct).object();
+                        break :run php.createValueObject(generator_obj);
+                    } else {
+                        try self.transform.apply(&retval);
+                        break :run retval;
                     }
-                    try self.transform.apply(&retval);
-                    break :run retval;
                 },
                 else => unreachable,
             };

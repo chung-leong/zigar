@@ -3,6 +3,7 @@ const std = @import("std");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const ModuleHost = @import("host.zig").ModuleHost;
+const ObjectTransform = @import("accessor.zig").ObjectTransform;
 const php = @import("php.zig");
 const ArgumentIterator = php.ArgumentIterator;
 const ExecuteData = php.ExecuteData;
@@ -19,15 +20,21 @@ pub const Promise = struct {
     status: enum { unresolved, waiting, resolved } = .unresolved,
     fiber: Value = undefined,
     result: Value,
+    callback: ?Value,
+    transform: ObjectTransform = .to_value,
     buffer: *ByteBuffer,
 
-    pub fn create() !*@This() {
+    pub fn create(callback: ?*const Value) !*@This() {
         const alignment: std.mem.Alignment = .fromByteUnits(@alignOf(@This()));
         const buf = try ByteBuffer.createNew(@sizeOf(@This()), alignment, false);
         const self: *@This() = @ptrCast(@alignCast(buf.bytes.ptr));
         self.* = .{
             .buffer = buf,
             .result = php.createValueNull(),
+            .callback = if (callback) |cb| init: {
+                php.addRef(cb);
+                break :init cb.*;
+            } else null,
         };
         return self;
     }
@@ -55,8 +62,9 @@ pub const Promise = struct {
         return self.result;
     }
 
-    pub fn resolve(self: *@This(), value: *Value) void {
+    pub fn resolve(self: *@This(), value: *Value) !void {
         self.result = value.*;
+        try self.transform.apply(&self.result);
         if (self.status == .waiting) {
             CallDispatcher.event_loop.resumeFiberAfterward(&self.fiber);
         }
@@ -77,13 +85,9 @@ pub const Promise = struct {
         const slice_value = try ptr_struct.readSelf(.to_value);
         const slice_obj = php.getValueObject(&slice_value) catch unreachable;
         const slice_struct = ZigObject(structure.Slice).fromObject(slice_obj).structure();
-        const promise: *Promise = @ptrCast(@alignCast(slice_struct.buffer.bytes.ptr));
+        const promise: *@This() = @ptrCast(@alignCast(slice_struct.buffer.bytes.ptr));
         const result = arg_iter.next() orelse return error.Unexpected;
-        promise.resolve(result);
-        const eg = php.getExecutorGlobals();
-        if (eg.exception) |_| {
-            std.debug.print("Exception\n", .{});
-        }
+        try promise.resolve(result);
         return_value.* = php.createValueNull();
     }
 };
