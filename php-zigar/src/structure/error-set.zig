@@ -64,19 +64,20 @@ pub const ErrorSet = struct {
                 php.addRef(self.error_set);
             } else {
                 self.error_set = php.createArray();
-                // loop through static members and add errors to error set, keyed by value,
-                // name, and error message
-                const static_table = class.static.template.table orelse return error.MissingTable;
-                var iter = class.getMemberIterator(.static);
-                while (iter.next()) |static_member| {
-                    const slot = static_member.slot orelse continue;
-                    const err = try php.getProperty(static_table, slot);
-                    const err_obj = try php.getValueObject(err);
-                    if (ZigClassEntry.fromObject(err_obj).type != .error_set) continue;
-                    const name = iter.currentName() orelse return error.MissingName;
-                    try self.addCanonical(name, err_obj);
-                    // decrement ref count on class (since the class holds a ref on the error)
-                    class.release();
+                if (class.static.template.table) |static_table| {
+                    // loop through static members and add errors to error set, keyed by value,
+                    // name, and error message
+                    var iter = class.getMemberIterator(.static);
+                    while (iter.next()) |static_member| {
+                        const slot = static_member.slot orelse continue;
+                        const err = try php.getProperty(static_table, slot);
+                        const err_obj = try php.getValueObject(err);
+                        if (ZigClassEntry.fromObject(err_obj).type != .error_set) continue;
+                        const name = iter.currentName() orelse return error.MissingName;
+                        try self.addCanonical(name, err_obj);
+                        // decrement ref count on class (since the class holds a ref on the error)
+                        class.release();
+                    }
                 }
             }
             var failed_index: usize = undefined;

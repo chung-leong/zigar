@@ -472,6 +472,13 @@ pub const ZigClassEntry = struct {
                 buffer[count] = php.getInterface(.throwable);
                 count += 1;
             },
+            .@"struct" => switch (self.purpose) {
+                .generator, .iterator => {
+                    buffer[count] = php.getInterface(.traversable);
+                    count += 1;
+                },
+                else => {},
+            },
             else => {},
         }
         if (count == 0) return &.{};

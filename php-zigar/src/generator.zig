@@ -43,6 +43,10 @@ pub const Generator = struct {
         return self;
     }
 
+    pub fn addRef(self: *@This()) void {
+        self.buffer.addRef();
+    }
+
     pub fn release(self: *@This()) void {
         if (self.status == .finished) {
             self.buffer.release();
@@ -52,49 +56,27 @@ pub const Generator = struct {
         }
     }
 
-    pub fn current(_: *anyopaque, arg_iter: *ArgumentIterator) !?Value {
-        const self = try getSelf(arg_iter);
-        return if (self.status == .resolved)
-            self.result
-        else
-            php.createValueNull();
-    }
-
-    pub fn key(_: *anyopaque, arg_iter: *ArgumentIterator) !?Value {
-        const self = try getSelf(arg_iter);
-        return if (self.status == .resolved and self.index <= std.math.maxInt(c_long))
-            php.createValueLong(@truncate(self.index))
-        else
-            php.createValueNull();
-    }
-
-    pub fn next(_: *anyopaque, arg_iter: *ArgumentIterator) !?Value {
-        const self = try getSelf(arg_iter);
-        self.status = .waiting;
-        self.index += 1;
-        try CallDispatcher.event_loop.suspendFiber(&self.fiber);
-        return php.createValueNull();
-    }
-
-    pub fn rewind(_: *anyopaque, arg_iter: *ArgumentIterator) !?Value {
-        const self = try getSelf(arg_iter);
-        if (self.status == .unresolved) {
-            self.fiber = try CallDispatcher.event_loop.getFiber();
+    pub fn moveForward(self: *@This()) !bool {
+        if (self.status != .finished) {
             self.status = .waiting;
             try CallDispatcher.event_loop.suspendFiber(&self.fiber);
+            return true;
+        } else {
+            return false;
         }
-        return php.createValueNull();
     }
 
-    pub fn valid(_: *anyopaque, arg_iter: *ArgumentIterator) !?Value {
-        const self = try getSelf(arg_iter);
-        return php.createValueBool(self.status == .resolved);
+    pub fn rewind(self: *@This()) !bool {
+        if (self.status == .unresolved) {
+            self.fiber = try CallDispatcher.event_loop.getFiber();
+            return try self.moveForward();
+        } else {
+            return false;
+        }
     }
 
-    fn getSelf(arg_iter: *ArgumentIterator) !*@This() {
-        const obj = try php.getValueObject(arg_iter.this);
-        const generator_struct = ZigObject(structure.Struct).fromObject(obj).structure();
-        return try generator_struct.getSpecialContext(@This());
+    pub fn isValid(self: *@This()) bool {
+        return self.status == .resolved;
     }
 
     pub fn getHandler() Value {

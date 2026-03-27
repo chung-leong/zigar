@@ -229,12 +229,9 @@ pub const CallDispatcher = struct {
             const cb = self.findCallback(call.fn_id) orelse return .FAULT;
             const arg_ptr: [*]u8 = @ptrFromInt(call.arg_address);
             const arg_bytes = arg_ptr[0..call.arg_size];
-            // need to make copy, since arg_bytes are on the stack
-            const arg_buffer = try ByteBuffer.createCopy(arg_bytes, cb.class.alignment);
-            defer arg_buffer.release();
             // use the function structure's static method to run the callback
             const fn_static = cb.class.getStaticData(structure.Function);
-            try fn_static.runCallback(&cb.callable, arg_buffer);
+            try fn_static.runCallback(&cb.callable, arg_bytes);
             return .SUCCESS;
         } else {
             var futex: Futex = undefined;

@@ -41,18 +41,19 @@ pub const Enum = struct {
             // loop through static members and add them to a hash table, keyed by
             // their integer values and names
             self.available_tags = php.createHashTable(php.destructor.value);
-            const static_table = class.static.template.table orelse return error.MissingTable;
-            var iter = class.getMemberIterator(.static);
-            while (iter.next()) |static_member| {
-                const slot = static_member.slot orelse continue;
-                const tag = try php.getProperty(static_table, slot);
-                const tag_obj = try php.getValueObject(tag);
-                // enums can have methods so we need to check the structure type
-                if (ZigClassEntry.fromObject(tag_obj).type != .@"enum") continue;
-                const name = iter.currentName() orelse return error.MissingName;
-                try self.addCanonical(name, tag_obj);
-                // decrement ref count on class (since the class holds a ref on the tag)
-                class.release();
+            if (class.static.template.table) |static_table| {
+                var iter = class.getMemberIterator(.static);
+                while (iter.next()) |static_member| {
+                    const slot = static_member.slot orelse continue;
+                    const tag = try php.getProperty(static_table, slot);
+                    const tag_obj = try php.getValueObject(tag);
+                    // enums can have methods so we need to check the structure type
+                    if (ZigClassEntry.fromObject(tag_obj).type != .@"enum") continue;
+                    const name = iter.currentName() orelse return error.MissingName;
+                    try self.addCanonical(name, tag_obj);
+                    // decrement ref count on class (since the class holds a ref on the tag)
+                    class.release();
+                }
             }
             // because methods are really static functions, we need to maintain a ref on the class object
             self.class_obj = class_obj;

@@ -9,12 +9,9 @@ $m = zigar_load_module("/tmp/scratch.zigar");
 
 $m->startup();
 try {
-    $retval = $m->get(1234);
-    echo "retval = $retval\n";
-    $retval = $m->get(12345);
-    echo "retval = $retval\n";
-    $retval = $m->get(0);
-    echo "retval = $retval\n";
+    foreach($m->get() as $item) {
+        echo "item = $item\n";
+    }
 } catch (Throwable $e) {
     echo $e->getMessage(), "\n";
 } finally {

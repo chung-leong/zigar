@@ -1091,6 +1091,9 @@ pub fn HashTableObjectIterator(comptime T: type) type {
     };
 }
 
+pub const initializeIterator = php_h.zend_iterator_init;
+pub const freeIterator = php_h.zend_iterator_dtor;
+
 pub fn readObjectProperty(obj: *const Object, name: *const String) Value {
     var value: Value = createValueNull();
     _ = php_h.zend_read_property_ex(obj.ce, @constCast(obj), @constCast(name), true, &value);
@@ -1141,8 +1144,9 @@ pub fn invokeFunction(callable: *const Value, arguments: []const Value) !Value {
     var retval: Value = undefined;
     const args = @constCast(arguments.ptr);
     const len: u32 = @intCast(arguments.len);
-    if (php_h._call_user_function_impl(null, @constCast(callable), &retval, len, args, null) != php_h.SUCCESS)
+    if (php_h._call_user_function_impl(null, @constCast(callable), &retval, len, args, null) != php_h.SUCCESS) {
         return error.Failure;
+    }
     return retval;
 }
 

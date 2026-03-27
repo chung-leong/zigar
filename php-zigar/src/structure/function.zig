@@ -47,9 +47,13 @@ pub const Function = struct {
             }
         }
 
-        pub fn runCallback(self: *@This(), callable: *Value, arg_buffer: *ByteBuffer) !void {
+        pub fn runCallback(self: *@This(), callable: *Value, arg_bytes: []u8) !void {
+            // need to make copy, since arg_bytes are on the stack
+            const arg_buffer = try ByteBuffer.createCopy(arg_bytes, self.argument_class.alignment);
+            defer arg_buffer.release();
             const arg_obj = try self.argument_class.createObjectFromBuffer(arg_buffer, null);
-            defer php.release(arg_obj);
+            // TODO: releasing the object causes segfault
+            // defer php.release(arg_obj);
             const arg_struct = ZigObject(structure.ArgStruct(false)).fromObject(arg_obj).structure();
             var args_on_stack: [16]Value = undefined;
             var args_allocated = false;
@@ -63,6 +67,14 @@ pub const Function = struct {
             defer for (args) |*arg| php.release(arg);
             const result = try php.invokeFunction(callable, args);
             defer php.release(&result);
+            // replace buffer so the retval gets written into the stack
+            var stack_buffer: ByteBuffer = .{
+                .bytes = arg_bytes,
+                .alignment = arg_buffer.alignment,
+                .ref_count = std.math.maxInt(u32),
+            };
+            arg_buffer.release();
+            arg_struct.buffer = &stack_buffer;
             try arg_struct.setReturnValue(&result);
         }
     };
@@ -127,6 +139,7 @@ pub const Function = struct {
                         const generator = try generator_struct.getSpecialContext(Generator);
                         generator.transform = self.transform;
                         const generator_obj = ZigObject(structure.Struct).fromStructure(generator_struct).object();
+                        php.addRef(generator_obj);
                         break :run php.createValueObject(generator_obj);
                     } else {
                         try self.transform.apply(&retval);

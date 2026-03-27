@@ -5,15 +5,17 @@ const Error = accessor.Error;
 const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
-const Closure = @import("../closure.zig").Closure;
 const StructurePurpose = @import("../enums.zig").StructurePurpose;
 const Generator = @import("../generator.zig").Generator;
+const GeneratorIterator = @import("../iterator.zig").GeneratorIterator;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const ArgumentIterator = php.ArgumentIterator;
+const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
 const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
+const ObjectIterator = php.ObjectIterator;
 const String = php.String;
 const Value = php.Value;
 const Promise = @import("../promise.zig").Promise;
@@ -30,19 +32,11 @@ pub const Struct = struct {
     };
 
     const Super = structure.StructLike(@This());
-    const GeneratorClosures = struct {
-        current: *Closure,
-        key: *Closure,
-        next: *Closure,
-        rewind: *Closure,
-        valid: *Closure,
-    };
 
     pub const Static = struct {
         required_field_count: usize = 0,
         class_obj: *Object = undefined,
         callback: ?*Object = null,
-        generator_closures: ?*GeneratorClosures = null,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -66,21 +60,6 @@ pub const Struct = struct {
                     const cb_struct = ZigObject(structure.Pointer).fromObject(cb_obj).structure();
                     try cb_struct.writeSelf(&closure);
                     self.callback = cb_obj;
-                    if (p == .generator) {
-                        const closures = try php.allocator.create(GeneratorClosures);
-                        errdefer php.allocator.destroy(closures);
-                        var failed_index: usize = undefined;
-                        errdefer inline for (comptime std.meta.fieldNames(GeneratorClosures), 0..) |name, i| {
-                            if (i == failed_index) break;
-                            @field(closures, name).release();
-                        };
-                        inline for (comptime std.meta.fieldNames(GeneratorClosures), 0..) |name, i| {
-                            errdefer failed_index = i;
-                            const handler = @field(Generator, name);
-                            @field(closures, name) = try Closure.create(self, handler, name);
-                        }
-                        self.generator_closures = closures;
-                    }
                 },
                 else => {},
             }
@@ -89,13 +68,6 @@ pub const Struct = struct {
         pub fn deinit(self: *@This()) void {
             php.release(self.class_obj);
             if (self.callback) |cb| php.release(cb);
-            if (self.generator_closures) |closures| {
-                inline for (comptime std.meta.fieldNames(GeneratorClosures)) |name| {
-                    const closure = @field(closures, name);
-                    closure.release();
-                }
-                php.allocator.destroy(closures);
-            }
         }
     };
     pub const constructor_args = "an array as argument or named arguments";
@@ -174,35 +146,33 @@ pub const Struct = struct {
         const self = fromObject(obj);
         // release the promise/generator context
         switch (class.purpose) {
-            .promise => {
-                if (self.getSpecialContext(Promise)) |ctx| ctx.release() else |_| {}
-            },
-            .generator => {
-                if (self.getSpecialContext(Generator)) |ctx| ctx.release() else |_| {}
+            inline .promise, .generator => |t| {
+                const T = switch (t) {
+                    .promise => Promise,
+                    .generator => Generator,
+                    else => {},
+                };
+                if (self.getSpecialContext(T)) |ctx| ctx.release() else |_| {}
             },
             else => {},
         }
         Super.freeObject(obj);
     }
 
-    pub fn getMethod(obj_ptr: *[*c]Object, name: *String, key: *const Value) !?*php.Function {
-        const obj = obj_ptr.*;
+    pub fn getIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
+        const obj = try php.getValueObject(this);
         const class = ZigClassEntry.fromObject(obj);
-        const static = class.getStaticData(@This());
-        if (static.generator_closures) |closures| {
-            const name_s = php.getStringContent(name);
-            inline for (std.meta.fields(GeneratorClosures)) |field| {
-                if (std.mem.eql(u8, name_s, field.name))
-                    return @field(closures, field.name).function();
-            }
+        if (class.purpose == .generator) {
+            return try GeneratorIterator.create(obj);
         }
-        return Super.getMethod(obj_ptr, name, key);
+        return null;
     }
 
     pub const setStorage = Super.setStorage;
     pub const writeSelf = Super.writeSelf;
     pub const getExtent = Super.getExtent;
     pub const castObject = Super.castObject;
+    pub const getMethod = Super.getMethod;
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
