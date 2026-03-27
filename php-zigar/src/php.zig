@@ -489,6 +489,7 @@ pub fn createValueReference(target: *const Value) Value {
     const ref: *Reference = @ptrCast(@alignCast(debugAlloc(@sizeOf(Reference), 1)));
     ref.gc = .{ .refcount = 1, .u = .{ .type_info = php_h.GC_REFERENCE } };
     ref.val = target.*;
+    ref.sources = .{ .ptr = null };
     result.value.ref = ref;
     result.u1.type_info = php_h.IS_REFERENCE_EX;
     return result;
