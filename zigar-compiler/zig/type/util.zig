@@ -205,10 +205,20 @@ test "isIteratorAllocating" {
     try expectEqual(false, result1);
 }
 
-pub fn getInternalType(comptime OT: ?type) ?@TypeOf(.enum_literal) {
+pub const InternalType = enum {
+    abort_signal,
+    promise,
+    generator,
+};
+
+pub fn getInternalType(comptime OT: ?type) ?InternalType {
     if (OT) |T| {
         if (@typeInfo(T) == .@"struct") {
-            if (@hasDecl(T, "internal_type")) return T.internal_type;
+            if (@hasDecl(T, "internal_type")) {
+                if (@TypeOf(T.internal_type) == InternalType) {
+                    return T.internal_type;
+                }
+            }
         }
     }
     return null;

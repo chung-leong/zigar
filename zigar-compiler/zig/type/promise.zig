@@ -10,7 +10,7 @@ pub fn Promise(comptime T: type) type {
         callback: *const fn (?*anyopaque, T) void,
 
         pub const payload = T;
-        pub const internal_type = .promise;
+        pub const internal_type: util.InternalType = .promise;
 
         pub fn init(ptr: ?*const anyopaque, cb: anytype) @This() {
             return .{

@@ -71,7 +71,6 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .promise => .promise,
                         .generator => .generator,
                         .abort_signal => .abort_signal,
-                        else => unreachable,
                     };
                     break :get .unknown;
                 },
@@ -125,7 +124,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                                 // retval
                                 if (@typeInfo(field.type) == .error_union) break true;
                             } else {
-                                if (util.getInternalType(field.type)) |it| {
+                                if (comptime util.getInternalType(field.type)) |it| {
                                     if (it == .promise or it == .generator) {
                                         switch (@typeInfo(field.type.payload)) {
                                             .error_union => break true,
@@ -378,7 +377,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 // add static variables and functions, excluding internal util and problematic namespaces
                 const ignore = switch (T) {
                     std.fs.File, std.fs.Dir => true,
-                    else => util.getInternalType(T) != null,
+                    else => comptime util.getInternalType(T) != null,
                 };
                 if (!ignore) {
                     try setProperties(static, .{
