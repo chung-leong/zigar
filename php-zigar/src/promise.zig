@@ -74,6 +74,7 @@ pub const Promise = struct {
             else => {},
         }
         self.result = value.*;
+        php.addRef(&self.result);
         try self.transform.apply(&self.result);
         self.status = .resolved;
     }

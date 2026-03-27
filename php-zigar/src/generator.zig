@@ -95,6 +95,7 @@ pub const Generator = struct {
             else => {},
         }
         self.result = value.*;
+        php.addRef(&self.result);
         try self.transform.apply(&self.result);
         if (!php.isNull(&self.result)) {
             self.status = .resolved;

@@ -94,7 +94,6 @@ pub const GeneratorIterator = struct {
 
     pub fn destroy(iter: *ObjectIterator) void {
         const self = fromIter(iter);
-        php.freeIterator(&self.iter);
         self.generator.release();
     }
 

@@ -53,7 +53,7 @@ pub const Function = struct {
             defer arg_buffer.release();
             const arg_obj = try self.argument_class.createObjectFromBuffer(arg_buffer, null);
             // TODO: releasing the object causes segfault
-            // defer php.release(arg_obj);
+            defer php.release(arg_obj);
             const arg_struct = ZigObject(structure.ArgStruct(false)).fromObject(arg_obj).structure();
             var args_on_stack: [16]Value = undefined;
             var args_allocated = false;
