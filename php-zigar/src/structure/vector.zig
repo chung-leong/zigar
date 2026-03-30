@@ -36,7 +36,7 @@ pub const Vector = struct {
         return class.length.?;
     }
 
-    pub fn getElement(self: *@This(), index: usize) !Value {
+    pub fn getElement(self: *@This(), index: usize, comptime _: bool) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         return try static.value_acc.getElement(self, index);
@@ -50,6 +50,7 @@ pub const Vector = struct {
 
     pub const getExtent = Super.getExtent;
     pub const initialize = Super.initialize;
+    pub const externalize = Super.Super.externalize;
     pub const checkArguments = Super.checkArguments;
     pub const readSelf = Super.readSelf;
     pub const writeSelf = Super.writeSelf;

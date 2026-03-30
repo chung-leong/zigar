@@ -33,7 +33,7 @@ pub const ByteBuffer = struct {
 
     pub fn create(alignment: std.mem.Alignment) !*@This() {
         const self = try php.allocator.create(@This());
-        self.* = .{ .alignment = alignment, .flags = .{ .is_freed = true } };
+        self.* = .{ .alignment = alignment, .flags = .{ .is_freed = true, .is_allocated = true } };
         return self;
     }
 
@@ -46,6 +46,7 @@ pub const ByteBuffer = struct {
             const byte_ptr = al.rawAlloc(len, self.alignment, 0) orelse return error.OutOfMemory;
             self.bytes = byte_ptr[0..len];
             self.source = .{ .allocator = al };
+            self.flags.is_allocated = true;
         } else {
             self.bytes = &.{};
         }
@@ -65,8 +66,15 @@ pub const ByteBuffer = struct {
         self.flags.is_freed = false;
     }
 
-    pub fn externalize(self: *@This()) void {
-        self.source = .{ .void = {} };
+    pub fn externalize(self: *@This()) bool {
+        switch (self.source) {
+            .allocator => |al| if (al != &php.allocator) {
+                self.source = .{ .none = {} };
+                return true;
+            },
+            else => {},
+        }
+        return false;
     }
 
     pub fn slice(self: *@This(), offset: usize, len: usize) !*@This() {
@@ -139,10 +147,13 @@ pub const ByteBuffer = struct {
     }
 
     pub fn free(self: *@This()) void {
-        if (self.source == .allocator) {
-            php.allocator.rawFree(self.bytes, self.alignment, 0);
-            self.flags.is_freed = true;
-            self.source = .{ .none = {} };
+        switch (self.source) {
+            .allocator => |al| {
+                al.rawFree(self.bytes, self.alignment, 0);
+                self.flags.is_freed = true;
+                self.source = .{ .none = {} };
+            },
+            else => {},
         }
     }
 

@@ -40,29 +40,14 @@ pub const Slice = struct {
         const class = ZigClassEntry.fromStructure(self);
         if (initializer) |value| {
             const len: usize = get: {
-                if (class.flags.slice.is_string) {
-                    if (php.getValueString(value)) |str| {
-                        break :get str.len;
-                    } else |_| {}
-                }
+                const element_size = class.byte_size orelse 1;
                 if (php.getValueArray(value)) |arr| {
-                    break :get arr.nNumOfElements;
-                } else |_| {}
-                // let writeSelf() throw an error
-                break :get 0;
-            };
-            // the target of *anyopaque is represented by a slice with no element size
-            if (class.byte_size) |byte_size| {
-                const remainder = @rem(len, byte_size);
-                if (remainder != 0) {
-                    return php.throwExceptionFmt("'{s}'' has elements that are {d} byte{s} in length, received {d}", .{
-                        class.getName(),
-                        byte_size,
-                        if (byte_size != 1) "s" else "",
-                        len,
-                    });
+                    break :get element_size * arr.nNumOfElements;
+                } else |_| {
+                    // let writeSelf() throw an error
+                    break :get 0;
                 }
-            }
+            };
             try self.buffer.allocate(allocator, len);
             try self.writeSelf(value);
             try class.registerObject(ZigObject(@This()).fromStructure(self).object());
@@ -88,11 +73,13 @@ pub const Slice = struct {
             len / static.element_size;
     }
 
-    pub fn getElement(self: *@This(), index: usize) !Value {
+    pub fn getElement(self: *@This(), index: usize, comptime use_perform: bool) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         var value = try static.value_acc.getElement(self, index);
-        if (static.value_transform) |ot| try ot.apply(&value);
+        if (use_perform) {
+            if (static.value_transform) |ot| try ot.apply(&value);
+        }
         return value;
     }
 
@@ -103,6 +90,7 @@ pub const Slice = struct {
     }
 
     pub const checkArguments = Super.checkArguments;
+    pub const externalize = Super.externalize;
     pub const readSelf = Super.readSelf;
     pub const writeSelf = Super.writeSelf;
     pub const readElement = Super.readElement;

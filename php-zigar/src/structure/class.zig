@@ -88,8 +88,8 @@ pub fn Class(comptime S: type) type {
             const arg = arg_iter.next() orelse null;
             try this_struct.initialize(custom_allocator, arg);
             if (custom_allocator != null) {
-                // TODO: make allocated buffer external
-                // try this_struct.externalize();
+                // make buffers allocated from custom allocator external
+                _ = try this_struct.externalize();
             }
         }
 

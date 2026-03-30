@@ -64,8 +64,6 @@ pub fn enumName(comptime S: type) []const u8 {
 
 pub fn Parent(comptime S: type) type {
     return struct {
-        const scope: ZigClassEntry.ScopeType = if (@hasDecl(S, "scope")) S.scope else .instance;
-
         pub const CacheEntry = extern struct {
             class: ?*const ZigClassEntry,
             member: *const ZigClassEntry.Member,
@@ -74,6 +72,7 @@ pub fn Parent(comptime S: type) type {
             address: usize,
             len: usize = 1,
         };
+        pub const scope: ZigClassEntry.ScopeType = if (@hasDecl(S, "scope")) S.scope else .instance;
 
         pub fn object(self: *S) *Object {
             return &ZigObject(S).fromStructure(self).php_portion;
@@ -105,6 +104,13 @@ pub fn Parent(comptime S: type) type {
                     try self.writeSelf(value);
                 } else @panic("Not implemented");
             }
+        }
+
+        pub fn externalize(self: *S) accessor.Error!bool {
+            if (@hasField(S, "buffer")) {
+                return self.buffer.externalize();
+            }
+            return false;
         }
 
         pub fn checkArguments(self: *S, arg_iter: *php.ArgumentIterator) !void {
@@ -300,14 +306,13 @@ pub fn Parent(comptime S: type) type {
 
 pub fn StructLike(comptime S: type) type {
     return struct {
-        const Super = Parent(S);
-        const scope = Super.scope;
-
+        pub const Super = Parent(S);
         pub const CacheEntry = extern struct {
             class: ?*const ZigClassEntry,
             member: *const ZigClassEntry.Member,
         };
         pub const ByteExtent = Super.ByteExtent;
+        pub const scope = Super.scope;
 
         pub fn readSelf(self: *S, transform: ObjectTransform) !Value {
             return switch (transform) {
@@ -455,6 +460,7 @@ pub fn StructLike(comptime S: type) type {
         pub const fromObject = Super.fromObject;
         pub const getExtent = Super.getExtent;
         pub const initialize = Super.initialize;
+        pub const externalize = Super.externalize;
         pub const checkArguments = Super.checkArguments;
         pub const copySelf = Super.copySelf;
         pub const returnSelf = Super.returnSelf;
@@ -470,10 +476,27 @@ pub fn StructLike(comptime S: type) type {
 
 pub fn ArrayLike(comptime S: type) type {
     return struct {
-        const Super = Parent(S);
-        const scope = Super.scope;
-
+        pub const Super = Parent(S);
         pub const ByteExtent = Super.ByteExtent;
+        pub const scope = Super.scope;
+
+        pub fn externalize(self: *S) accessor.Error!bool {
+            if (try Super.externalize(self)) {
+                const class = ZigClassEntry.fromStructure(self);
+                if (class.flags.common.has_pointer) {
+                    const len = self.getLength();
+                    for (0..len) |index| {
+                        const value = try self.getElement(index, false);
+                        defer php.release(&value);
+                        if (php.getValueObject(&value)) |obj| {
+                            _ = try invokeMethod(obj, "externalize", .{});
+                        } else |_| {}
+                    }
+                }
+                return true;
+            }
+            return false;
+        }
 
         pub fn readSelf(self: *S, transform: ObjectTransform) !Value {
             return switch (transform) {
@@ -482,7 +505,7 @@ pub fn ArrayLike(comptime S: type) type {
                     const len = self.getLength();
                     const ht = php.createArray();
                     for (0..len) |i| {
-                        var value = try self.getElement(i);
+                        var value = try self.getElement(i, true);
                         try transform.apply(&value);
                         _ = php.appendHashEntry(ht, &value);
                     }
@@ -530,7 +553,7 @@ pub fn ArrayLike(comptime S: type) type {
             const len = self.getLength();
             // need bound check needed here because element might be zero-bit
             if (index >= len) return error.OutOfBound;
-            retval.* = try self.getElement(index);
+            retval.* = try self.getElement(index, true);
             return retval;
         }
 
@@ -568,7 +591,7 @@ pub fn ArrayLike(comptime S: type) type {
             const ht = php.createArray();
             const len = self.getLength();
             for (0..len) |i| {
-                var value = try self.getElement(i);
+                var value = try self.getElement(i, true);
                 _ = php.appendHashEntry(ht, &value);
             }
             // zero-count hash table expected

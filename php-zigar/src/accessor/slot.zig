@@ -7,7 +7,6 @@ const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
 const Value = php.Value;
 const structure = @import("../structure.zig");
-const invokeMethod = structure.invokeMethod;
 
 pub const Attributes = struct {
     type: accessor.SlotAccessorType,
@@ -144,7 +143,7 @@ const single_slot_prebaked = struct {
 
 fn write(entry: *Value, value: *const Value, comptime prebaked: bool) Error!void {
     if (php.getValueObject(entry)) |obj| {
-        try invokeMethod(obj, "writeSelf", .{value});
+        try structure.invokeMethod(obj, "writeSelf", .{value});
     } else |_| {
         const msg = switch (prebaked) {
             true => "cannot create comptime object",

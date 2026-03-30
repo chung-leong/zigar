@@ -37,11 +37,13 @@ pub const Array = struct {
         return class.length.?;
     }
 
-    pub fn getElement(self: *@This(), index: usize) !Value {
+    pub fn getElement(self: *@This(), index: usize, comptime use_perform: bool) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         var value = try static.value_acc.getElement(self, index);
-        if (static.value_transform) |ot| try ot.apply(&value);
+        if (use_perform) {
+            if (static.value_transform) |ot| try ot.apply(&value);
+        }
         return value;
     }
 
@@ -52,6 +54,7 @@ pub const Array = struct {
     }
 
     pub const initialize = Super.initialize;
+    pub const externalize = Super.externalize;
     pub const checkArguments = Super.checkArguments;
     pub const readSelf = Super.readSelf;
     pub const writeSelf = Super.writeSelf;

@@ -53,17 +53,6 @@ pub fn ZigObject(comptime S: type) type {
 
         pub fn setStorage(self: *@This(), buffer: *ByteBuffer, table: *const Value) !void {
             if (@hasField(S, "buffer")) {
-                // TODO: this needs to happen somewhere else
-                // if (class.byte_size) |byte_size| {
-                //     if (byte_size != buffer.bytes.len) {
-                //         return php.throwExceptionFmt("{s} has {d} byte{s}, received {d}", .{
-                //             class.getName(),
-                //             byte_size,
-                //             if (byte_size != 1) "s" else "",
-                //             buffer.bytes.len,
-                //         });
-                //     }
-                // }
                 self.zig_portion.buffer = buffer;
                 buffer.addRef();
                 if (@hasDecl(S, "getExtent")) {

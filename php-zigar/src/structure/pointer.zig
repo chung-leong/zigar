@@ -88,6 +88,16 @@ pub const Pointer = struct {
         }
     };
 
+    pub fn externalize(self: *@This()) accessor.Error!bool {
+        if (try Super.externalize(self)) {
+            if (php.getValueObject(&self.table)) |obj| {
+                _ = try structure.invokeMethod(obj, "externalize", .{});
+            } else |_| {}
+            return true;
+        }
+        return false;
+    }
+
     pub fn readSelf(self: *@This(), transform: ObjectTransform) accessor.Error!Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
@@ -103,28 +113,39 @@ pub const Pointer = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const target_obj = init: {
+            // using the allocator associated with the pointer for autovivification new target,
+            const allocator = self.buffer.getSourceAllocator();
+            const target_class = static.target_class;
             switch (php.getType(value)) {
                 .object => {
                     const obj = php.getValueObject(value) catch unreachable;
-                    if (php.instanceOf(obj.ce, static.target_class.entry())) {
+                    if (php.instanceOf(obj.ce, target_class.entry())) {
                         // point to existing object
                         php.addRef(obj);
                         break :init obj;
                     }
                 },
                 .string => {
-                    if (static.target_class.type != .function) {
-                        // autocast from string
+                    if (target_class.type != .function) {
                         const str = php.getValueString(value) catch unreachable;
-                        const buf = try ByteBuffer.create(static.target_class.alignment);
-                        buf.referenceString(str);
-                        const new_obj = try class.createPreinitializedObject(buf, null);
-                        try class.registerObject(new_obj);
+                        try target_class.checkByteLength(str.len);
+                        const buf = try ByteBuffer.create(target_class.alignment);
+                        if (allocator != null) {
+                            // allocate
+                            const sc = php.getStringContent(str);
+                            try buf.allocate(allocator, sc.len);
+                            try buf.copyBytes(sc);
+                        } else {
+                            // autocast from string when there's no allocator
+                            buf.referenceString(str);
+                        }
+                        const new_obj = try target_class.createPreinitializedObject(buf, null);
+                        try target_class.registerObject(new_obj);
                         break :init new_obj;
                     }
                 },
                 .pointer => {
-                    if (static.target_class.type == .slice and static.target_class.flags.slice.is_opaque) {
+                    if (static.target_class.type == .slice and target_class.flags.slice.is_opaque) {
                         const ptr = php.getValuePointer(*anyopaque, value) catch unreachable;
                         const address = @intFromPtr(ptr);
                         try static.setAddress(self, address);
@@ -133,9 +154,8 @@ pub const Pointer = struct {
                 },
                 else => {},
             }
-            // autovivificate new target, using the allocator associated with the pointer
-            const allocator = self.buffer.getSourceAllocator();
-            break :init try static.target_class.createObject(allocator, value);
+            // autovivificate new target,
+            break :init try target_class.createObject(allocator, value);
         };
         try static.saveTarget(self, target_obj);
     }

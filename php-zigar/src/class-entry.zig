@@ -436,6 +436,30 @@ pub const ZigClassEntry = struct {
         }
     }
 
+    pub fn checkByteLength(self: *@This(), len: usize) !void {
+        const element_size = self.byte_size orelse return;
+        if (self.type == .slice) {
+            const remainder = @rem(len, element_size);
+            if (remainder != 0) {
+                return php.throwExceptionFmt("'{s}'' has elements that are {d} byte{s} in length, received {d}", .{
+                    self.getName(),
+                    element_size,
+                    if (element_size != 1) "s" else "",
+                    len,
+                });
+            }
+        } else {
+            if (element_size != len) {
+                return php.throwExceptionFmt("{s} has {d} byte{s}, received {d}", .{
+                    self.getName(),
+                    element_size,
+                    if (element_size != 1) "s" else "",
+                    len,
+                });
+            }
+        }
+    }
+
     pub fn getPointerTarget(self: *@This()) !*@This() {
         return switch (self.type) {
             .pointer => get: {
@@ -698,6 +722,7 @@ pub const ZigClassEntry = struct {
     pub fn createUninitializedObject(ce: *ClassEntry) !*Object {
         const self = fromEntry(ce);
         const buf = try ByteBuffer.create(self.alignment);
+        defer buf.release();
         return try self.createPreinitializedObject(buf, null);
     }
 
