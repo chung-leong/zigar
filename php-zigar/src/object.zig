@@ -52,7 +52,34 @@ pub fn ZigObject(comptime S: type) type {
         }
 
         pub fn setStorage(self: *@This(), buffer: *ByteBuffer, table: *const Value) !void {
-            return try self.zig_portion.setStorage(buffer, table);
+            if (@hasField(S, "buffer")) {
+                // TODO: this needs to happen somewhere else
+                // if (class.byte_size) |byte_size| {
+                //     if (byte_size != buffer.bytes.len) {
+                //         return php.throwExceptionFmt("{s} has {d} byte{s}, received {d}", .{
+                //             class.getName(),
+                //             byte_size,
+                //             if (byte_size != 1) "s" else "",
+                //             buffer.bytes.len,
+                //         });
+                //     }
+                // }
+                self.zig_portion.buffer = buffer;
+                buffer.addRef();
+                if (@hasDecl(S, "getExtent")) {
+                    if (!buffer.flags.is_freed) {
+                        const class = ZigClassEntry.fromObject(self.object());
+                        try class.registerObject(self.object());
+                    }
+                }
+            }
+            if (@hasField(S, "table")) {
+                self.zig_portion.table = table.*;
+                php.addRef(table);
+            }
+            if (@hasDecl(S, "finalize")) {
+                try self.zig_portion.finalize();
+            }
         }
 
         pub fn isInstance(obj: *Object) bool {
@@ -103,7 +130,9 @@ pub const ObjectMap = struct {
     }
 
     pub fn add(self: *@This(), obj: *Object) !void {
-        try self.map.add(obj, obj);
+        const buf = getObjectBuffer(obj);
+        std.debug.assert(!buf.flags.is_freed);
+        try self.map.add(obj);
     }
 
     pub fn insert(self: *@This(), result: SearchResult, obj: *Object) !void {
@@ -111,6 +140,8 @@ pub const ObjectMap = struct {
     }
 
     pub fn remove(self: *@This(), obj: *Object) void {
+        const buf = getObjectBuffer(obj);
+        std.debug.assert(!buf.flags.is_freed);
         self.map.remove(obj);
     }
 
@@ -174,7 +205,7 @@ pub const ObjectMap = struct {
         };
     }
 
-    fn getObjectBuffer(obj: *const Object) *ByteBuffer {
+    inline fn getObjectBuffer(obj: *const Object) *ByteBuffer {
         const ptr: *const GenericObject = @fieldParentPtr("php_portion", obj);
         return ptr.buffer;
     }

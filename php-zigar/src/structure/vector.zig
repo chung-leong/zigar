@@ -48,9 +48,9 @@ pub const Vector = struct {
         try static.value_acc.setElement(self, index, value);
     }
 
-    pub const setStorage = Super.setStorage;
     pub const getExtent = Super.getExtent;
-    pub const copyArguments = Super.copyArguments;
+    pub const initialize = Super.initialize;
+    pub const checkArguments = Super.checkArguments;
     pub const readSelf = Super.readSelf;
     pub const writeSelf = Super.writeSelf;
     pub const readElement = Super.readElement;

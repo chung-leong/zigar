@@ -83,45 +83,37 @@ pub fn Parent(comptime S: type) type {
             return &ZigObject(S).fromObject(obj).zig_portion;
         }
 
-        pub fn setStorage(self: *S, buffer: *ByteBuffer, table: *const Value) !void {
-            if (@hasField(S, "buffer")) {
-                const class = ZigClassEntry.fromStructure(self);
-                if (class.byte_size) |byte_size| {
-                    if (byte_size != buffer.bytes.len) {
-                        return php.throwExceptionFmt("{s} has {d} byte{s}, received {d}", .{
-                            class.getName(),
-                            byte_size,
-                            if (byte_size != 1) "s" else "",
-                            buffer.bytes.len,
-                        });
-                    }
-                }
-                self.buffer = buffer;
-                self.buffer.addRef();
-            }
-            if (@hasField(S, "table")) {
-                self.table = table.*;
-                php.addRef(&self.table);
-            }
-        }
-
         pub fn getExtent(self: *S) ByteExtent {
             return .{ .address = @intFromPtr(self.buffer.bytes.ptr) };
         }
 
-        pub fn copyArguments(self: *S, arg_iter: *php.ArgumentIterator) !void {
-            if (arg_iter.len != 1) {
-                const arg_desc = switch (@hasDecl(S, "constructor_args")) {
-                    true => @field(S, "constructor_args"),
-                    false => "one argument",
-                };
+        pub fn initialize(self: *S, allocator: ?*const std.mem.Allocator, initializer: ?*const Value) !void {
+            if (@hasField(S, "buffer")) {
                 const class = ZigClassEntry.fromStructure(self);
-                return php.throwExceptionFmt("{s} constructor expects " ++ arg_desc, .{
+                const len = class.byte_size.?;
+                try self.buffer.allocate(allocator, len);
+                if (class.instance.template.buffer) |def| {
+                    // copy default values from template
+                    try self.buffer.copy(def);
+                } else {
+                    try self.buffer.clear();
+                }
+                try class.registerObject(ZigObject(S).fromStructure(self).object());
+            }
+            if (initializer) |value| {
+                if (@hasDecl(S, "writeSelf")) {
+                    try self.writeSelf(value);
+                } else @panic("Not implemented");
+            }
+        }
+
+        pub fn checkArguments(self: *S, arg_iter: *php.ArgumentIterator) !void {
+            if (arg_iter.len != 1) {
+                const class = ZigClassEntry.fromStructure(self);
+                return php.throwExceptionFmt("{s} constructor expects one argument", .{
                     class.getStructureName(),
                 });
             }
-            const arg = arg_iter.next() orelse unreachable;
-            return try self.writeSelf(arg);
         }
 
         pub fn readSelf(self: *S, transform: ObjectTransform) !Value {
@@ -225,12 +217,18 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn freeObject(obj: *Object) void {
+            const self = fromObject(obj);
             const class = ZigClassEntry.fromObject(obj);
             defer class.release();
             // only structure that a pointer can points to implement getExtent()
-            if (@hasDecl(S, "getExtent")) class.unmapObject(obj);
-            const self = fromObject(obj);
-            if (@hasField(S, "buffer")) self.buffer.release();
+            if (@hasField(S, "buffer")) {
+                self.buffer.release();
+                if (@hasDecl(S, "getExtent")) {
+                    if (!self.buffer.flags.is_freed) {
+                        class.unregisterObject(obj);
+                    }
+                }
+            }
             if (@hasField(S, "table")) php.release(&self.table);
         }
 
@@ -455,9 +453,9 @@ pub fn StructLike(comptime S: type) type {
 
         pub const object = Super.object;
         pub const fromObject = Super.fromObject;
-        pub const setStorage = Super.setStorage;
         pub const getExtent = Super.getExtent;
-        pub const copyArguments = Super.copyArguments;
+        pub const initialize = Super.initialize;
+        pub const checkArguments = Super.checkArguments;
         pub const copySelf = Super.copySelf;
         pub const returnSelf = Super.returnSelf;
         pub const returnBytes = Super.returnBytes;
@@ -584,9 +582,9 @@ pub fn ArrayLike(comptime S: type) type {
         }
 
         pub const fromObject = Super.fromObject;
-        pub const setStorage = Super.setStorage;
         pub const getExtent = Super.getExtent;
-        pub const copyArguments = Super.copyArguments;
+        pub const initialize = Super.initialize;
+        pub const checkArguments = Super.checkArguments;
         pub const copySelf = Super.copySelf;
         pub const returnSelf = Super.returnSelf;
         pub const returnBytes = Super.returnBytes;

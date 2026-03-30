@@ -9,17 +9,18 @@ const Value = php.Value;
 const RelativePosition = @import("memory-map.zig").RelativePosition;
 
 pub const ByteBuffer = struct {
-    bytes: []u8,
-    alignment: std.mem.Alignment,
+    bytes: []u8 = undefined,
+    alignment: std.mem.Alignment = .@"1",
     ref_count: u32 = 1,
     flags: packed struct {
+        is_allocated: bool = false,
         is_read_only: bool = false,
         is_freed: bool = false,
     } = .{},
     source: union(enum) {
         buffer: *ByteBuffer,
         string: *String,
-        allocator: void,
+        allocator: *const std.mem.Allocator,
         none: void,
     } = .{ .none = {} },
 
@@ -30,49 +31,42 @@ pub const ByteBuffer = struct {
         return self.bytes;
     }
 
-    pub fn createNew(len: usize, alignment: std.mem.Alignment, init: bool) !*@This() {
+    pub fn create(alignment: std.mem.Alignment) !*@This() {
         const self = try php.allocator.create(@This());
+        self.* = .{ .alignment = alignment, .flags = .{ .is_freed = true } };
+        return self;
+    }
+
+    pub fn allocate(self: *@This(), allocator: ?*const std.mem.Allocator, len: usize) !void {
         if (len > 0) {
-            const byte_ptr = php.allocator.rawAlloc(len, alignment, 0) orelse return error.OutOfMemory;
-            self.* = .{
-                .bytes = byte_ptr[0..len],
-                .alignment = alignment,
-                .source = .{ .allocator = {} },
-            };
-            if (init) @memset(self.bytes, 0);
+            if (allocator == null) {
+                // TODO: allocate a string instead if possible
+            }
+            const al = allocator orelse &php.allocator;
+            const byte_ptr = al.rawAlloc(len, self.alignment, 0) orelse return error.OutOfMemory;
+            self.bytes = byte_ptr[0..len];
+            self.source = .{ .allocator = al };
         } else {
-            self.* = .{
-                .bytes = &.{},
-                .alignment = alignment,
-            };
+            self.bytes = &.{};
         }
-        return self;
+        self.flags.is_freed = false;
     }
 
-    pub fn createCopy(bytes: []const u8, alignment: std.mem.Alignment) !*@This() {
-        const self = try createNew(bytes.len, alignment, false);
-        @memcpy(self.bytes, bytes);
-        return self;
-    }
-
-    pub fn createStringRef(str: *String, alignment: std.mem.Alignment) !*@This() {
-        const self = try php.allocator.create(@This());
-        self.* = .{
-            .bytes = @constCast(php.getStringContent(str)),
-            .alignment = alignment,
-            .source = .{ .string = str },
-        };
+    pub fn referenceString(self: *@This(), str: *String) void {
+        const sc = php.getStringContent(str);
+        self.bytes = @constCast(sc);
+        self.source = .{ .string = str };
         php.addRef(str);
-        return self;
+        self.flags.is_freed = false;
     }
 
-    pub fn createExternal(bytes: []u8, alignment: std.mem.Alignment) !*@This() {
-        const self = try php.allocator.create(@This());
-        self.* = .{
-            .bytes = bytes,
-            .alignment = alignment,
-        };
-        return self;
+    pub fn referencExternal(self: *@This(), bytes: []const u8) void {
+        self.bytes = @constCast(bytes);
+        self.flags.is_freed = false;
+    }
+
+    pub fn externalize(self: *@This()) void {
+        self.source = .{ .void = {} };
     }
 
     pub fn slice(self: *@This(), offset: usize, len: usize) !*@This() {
@@ -126,16 +120,18 @@ pub const ByteBuffer = struct {
     }
 
     pub fn addRef(self: *@This()) void {
+        if (!self.flags.is_allocated) return;
         self.ref_count += 1;
     }
 
     pub fn release(self: *@This()) void {
+        if (!self.flags.is_allocated) return;
         self.ref_count -= 1;
         if (self.ref_count == 0) {
             switch (self.source) {
                 .buffer => |buf| buf.release(),
                 .string => |str| php.release(str),
-                .allocator => php.allocator.rawFree(self.bytes, self.alignment, 0),
+                .allocator => |al| al.rawFree(self.bytes, self.alignment, 0),
                 .none => {},
             }
             php.allocator.destroy(self);
@@ -148,6 +144,14 @@ pub const ByteBuffer = struct {
             self.flags.is_freed = true;
             self.source = .{ .none = {} };
         }
+    }
+
+    pub fn getSourceAllocator(self: *const @This()) ?*const std.mem.Allocator {
+        return switch (self.source) {
+            .allocator => |a| a,
+            .buffer => |b| b.getSourceAllocator(),
+            else => null,
+        };
     }
 
     pub fn compare(a: *const @This(), b: *const @This()) RelativePosition {
@@ -187,9 +191,11 @@ pub const BufferMap = struct {
     }
 
     pub fn add(self: *@This(), len: usize, alignment: std.mem.Alignment) !*ByteBuffer {
-        const buf = try ByteBuffer.createNew(len, alignment, true);
+        const buf = try ByteBuffer.create(alignment);
+        try buf.allocate(null, len);
         errdefer buf.release();
         try self.map.add(buf);
+        try buf.clear();
         return buf;
     }
 

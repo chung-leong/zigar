@@ -48,11 +48,12 @@ pub const Function = struct {
         }
 
         pub fn runCallback(self: *@This(), callable: *Value, arg_bytes: []u8) !void {
-            // need to make copy, since arg_bytes are on the stack
-            const arg_buffer = try ByteBuffer.createCopy(arg_bytes, self.argument_class.alignment);
+            // need to make a copy of the arguments, since arg_bytes are on the stack
+            const arg_buffer = try ByteBuffer.create(self.argument_class.alignment);
+            try arg_buffer.allocate(null, arg_bytes.len);
+            try arg_buffer.copyBytes(arg_bytes);
             defer arg_buffer.release();
-            const arg_obj = try self.argument_class.createObjectFromBuffer(arg_buffer, null);
-            // TODO: releasing the object causes segfault
+            const arg_obj = try self.argument_class.createPreinitializedObject(arg_buffer, null);
             defer php.release(arg_obj);
             const arg_struct = ZigObject(structure.ArgStruct(false)).fromObject(arg_obj).structure();
             var args_on_stack: [16]Value = undefined;
@@ -68,19 +69,14 @@ pub const Function = struct {
             const result = try php.invokeFunction(callable, args);
             defer php.release(&result);
             // replace buffer so the retval gets written into the stack
-            var stack_buffer: ByteBuffer = .{
-                .bytes = arg_bytes,
-                .alignment = arg_buffer.alignment,
-                .ref_count = std.math.maxInt(u32),
-            };
+            var stack_buffer: ByteBuffer = .{ .bytes = arg_bytes };
             arg_buffer.release();
             arg_struct.buffer = &stack_buffer;
             try arg_struct.setReturnValue(&result);
         }
     };
 
-    pub fn setStorage(self: *@This(), buffer: *ByteBuffer, table: *const Value) !void {
-        try Super.setStorage(self, buffer, table);
+    pub fn finalize(self: *@This()) !void {
         self.closure = try Closure.create(self, invokeThunk, "run");
     }
 
@@ -112,7 +108,9 @@ pub const Function = struct {
                 break :init false;
             };
             if (is_method_call) arg_iter.makeThisFirst();
-            const arg = try ZigClassEntry.createObject(static.argument_class.entry());
+            var sfa = std.heap.stackFallback(8 * 1024, php.allocator);
+            const allocator = sfa.get();
+            const arg = try static.argument_class.createObject(&allocator, null);
             defer php.release(arg);
             return switch (static.argument_class.type) {
                 inline .arg_struct, .variadic_struct => |t| run: {
@@ -167,7 +165,9 @@ pub const Function = struct {
         Super.freeObject(obj);
     }
 
+    pub const initialize = Super.initialize;
     pub const getExtent = Super.getExtent;
+    pub const checkArguments = Super.checkArguments;
     pub const castObject = Super.castObject;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;

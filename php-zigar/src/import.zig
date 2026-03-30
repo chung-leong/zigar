@@ -139,23 +139,20 @@ pub const StructureImporter = struct {
     }
 
     pub fn createView(self: *@This(), bytes: ?[*]const u8, len: usize, copying: bool, _: usize, alignment: usize) !Handle {
-        var buffer: *ByteBuffer = undefined;
+        if (!std.math.isPowerOfTwo(alignment)) return error.InvalidAlignment;
+        const buffer = try ByteBuffer.create(std.mem.Alignment.fromByteUnits(alignment));
         if (bytes) |b| {
             const slice = b[0..len];
-            if (!std.math.isPowerOfTwo(alignment)) {
-                return error.InvalidAlignment;
-            }
-            const align_enum = std.mem.Alignment.fromByteUnits(alignment);
             if (copying) {
-                buffer = try ByteBuffer.createCopy(slice, align_enum);
-                buffer.protect();
+                try buffer.allocate(null, len);
+                try buffer.copyBytes(slice);
             } else {
-                buffer = try ByteBuffer.createExternal(@constCast(slice), align_enum);
+                buffer.referencExternal(slice);
             }
         } else {
-            buffer = try ByteBuffer.createExternal(&.{}, .@"1");
-            if (copying) buffer.protect();
+            buffer.referencExternal(&.{});
         }
+        if (copying) buffer.protect();
         const value = php.createValuePointer(buffer);
         return self.allocateValue(value);
     }
@@ -166,9 +163,9 @@ pub const StructureImporter = struct {
         const class_obj = try php.getValueObject(class_value);
         const class = ZigClassEntry.fromObject(class_obj);
         const memory = self.dereference(dv_h);
-        const bytes = try php.getValuePointer(*ByteBuffer, memory);
+        const buf = try php.getValuePointer(*ByteBuffer, memory);
         const prefilled_slots = if (prefilled_slots_h) |vh| self.dereference(vh) else null;
-        const instance = try class.obtainObjectFromBuffer(bytes, prefilled_slots);
+        const instance = try class.createPreinitializedObject(buf, prefilled_slots);
         try self.instance_list.append(php.allocator, instance);
         const value = php.createValueObject(instance);
         return self.allocateValue(value);

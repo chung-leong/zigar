@@ -28,7 +28,7 @@ pub const Comptime = struct {
         }
     };
 
-    pub fn copyArguments(_: *@This(), _: *php.ArgumentIterator) !void {
+    pub fn checkArguments(_: *@This(), _: *php.ArgumentIterator) !void {
         return error.CannotCreateComptimeObject;
     }
 
@@ -50,7 +50,7 @@ pub const Comptime = struct {
         return try static.value_acc.set(self, value);
     }
 
-    pub const setStorage = Super.setStorage;
+    pub const initialize = Super.initialize;
     pub const freeObject = Super.freeObject;
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;

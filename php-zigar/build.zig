@@ -44,6 +44,7 @@ pub fn build(b: *std.Build) !void {
     //     .argv = &.{
     //         "tar",
     //         "-h", // follow symlink
+    //         "--exclude=.zig-cache", // ignore cache folder
     //         "-I zstd -19", // use zstd, max compression level
     //         "-cf", // create archive, specifying filename
     //         "./src/zig.tar.zstd",

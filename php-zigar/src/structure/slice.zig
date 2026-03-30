@@ -4,6 +4,7 @@ const accessor = @import("../accessor.zig");
 const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
@@ -35,24 +36,39 @@ pub const Slice = struct {
         }
     };
 
-    pub fn setStorage(self: *@This(), buffer: *ByteBuffer, table: *const Value) !void {
+    pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value) !void {
         const class = ZigClassEntry.fromStructure(self);
-        // the target of *anyopaque is represented by a slice with no element size
-        if (class.byte_size) |byte_size| {
-            const remainder = @rem(buffer.bytes.len, byte_size);
-            if (remainder != 0) {
-                return php.throwExceptionFmt("'{s}'' has elements that are {d} byte{s} in length, received {d}", .{
-                    class.getName(),
-                    byte_size,
-                    if (byte_size != 1) "s" else "",
-                    buffer.bytes.len,
-                });
+        if (initializer) |value| {
+            const len: usize = get: {
+                if (class.flags.slice.is_string) {
+                    if (php.getValueString(value)) |str| {
+                        break :get str.len;
+                    } else |_| {}
+                }
+                if (php.getValueArray(value)) |arr| {
+                    break :get arr.nNumOfElements;
+                } else |_| {}
+                // let writeSelf() throw an error
+                break :get 0;
+            };
+            // the target of *anyopaque is represented by a slice with no element size
+            if (class.byte_size) |byte_size| {
+                const remainder = @rem(len, byte_size);
+                if (remainder != 0) {
+                    return php.throwExceptionFmt("'{s}'' has elements that are {d} byte{s} in length, received {d}", .{
+                        class.getName(),
+                        byte_size,
+                        if (byte_size != 1) "s" else "",
+                        len,
+                    });
+                }
             }
+            try self.buffer.allocate(allocator, len);
+            try self.writeSelf(value);
+            try class.registerObject(ZigObject(@This()).fromStructure(self).object());
+        } else {
+            try self.buffer.allocate(allocator, 0);
         }
-        self.buffer = buffer;
-        self.buffer.addRef();
-        self.table = table.*;
-        php.addRef(&self.table);
     }
 
     pub fn getExtent(self: *@This()) Super.ByteExtent {
@@ -86,7 +102,7 @@ pub const Slice = struct {
         try static.value_acc.setElement(self, index, value);
     }
 
-    pub const copyArguments = Super.copyArguments;
+    pub const checkArguments = Super.checkArguments;
     pub const readSelf = Super.readSelf;
     pub const writeSelf = Super.writeSelf;
     pub const readElement = Super.readElement;

@@ -116,7 +116,11 @@ pub const Pointer = struct {
                     if (static.target_class.type != .function) {
                         // autocast from string
                         const str = php.getValueString(value) catch unreachable;
-                        break :init try static.target_class.obtainObjectFromString(str);
+                        const buf = try ByteBuffer.create(static.target_class.alignment);
+                        buf.referenceString(str);
+                        const new_obj = try class.createPreinitializedObject(buf, null);
+                        try class.registerObject(new_obj);
+                        break :init new_obj;
                     }
                 },
                 .pointer => {
@@ -129,18 +133,16 @@ pub const Pointer = struct {
                 },
                 else => {},
             }
-            // autovivificate new target
-            const new_obj = try static.target_class.obtainNewObject();
-            errdefer php.release(new_obj);
-            try invokeFunction(new_obj, "writeSelf", .{value});
-            break :init new_obj;
+            // autovivificate new target, using the allocator associated with the pointer
+            const allocator = self.buffer.getSourceAllocator();
+            break :init try static.target_class.createObject(allocator, value);
         };
         try static.saveTarget(self, target_obj);
     }
 
-    pub const setStorage = Super.setStorage;
     pub const getExtent = Super.getExtent;
-    pub const copyArguments = Super.copyArguments;
+    pub const initialize = Super.initialize;
+    pub const checkArguments = Super.checkArguments;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
     pub const readProperty = Super.readProperty;

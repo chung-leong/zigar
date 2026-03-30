@@ -40,9 +40,9 @@ pub const Primitive = struct {
         return try static.value_acc.set(self.buffer, value);
     }
 
-    pub const setStorage = Super.setStorage;
     pub const getExtent = Super.getExtent;
-    pub const copyArguments = Super.copyArguments;
+    pub const initialize = Super.initialize;
+    pub const checkArguments = Super.checkArguments;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
     pub const readProperty = Super.readProperty;

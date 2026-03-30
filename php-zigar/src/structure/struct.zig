@@ -26,9 +26,9 @@ pub const Struct = struct {
     buffer: *ByteBuffer = undefined,
 
     pub const SpecialArgs = struct {
-        allocator: ?*Value = null,
-        callback: ?*Value = null,
-        abort_signal: ?*Value = null,
+        allocator: ?Value = null,
+        callback: ?Value = null,
+        abort_signal: ?Value = null,
     };
 
     const Super = structure.StructLike(@This());
@@ -56,9 +56,7 @@ pub const Struct = struct {
                     };
                     const cb_member = try class.getMember(.instance, "callback");
                     if (cb_member.class.type != .pointer) return error.Unexpected;
-                    const cb_obj = try cb_member.class.obtainNewObject();
-                    const cb_struct = ZigObject(structure.Pointer).fromObject(cb_obj).structure();
-                    try cb_struct.writeSelf(&closure);
+                    const cb_obj = try cb_member.class.createObject(null, &closure);
                     self.callback = cb_obj;
                 },
                 else => {},
@@ -70,17 +68,18 @@ pub const Struct = struct {
             if (self.callback) |cb| php.release(cb);
         }
     };
-    pub const constructor_args = "an array as argument or named arguments";
 
-    pub fn copyArguments(self: *@This(), arg_iter: *php.ArgumentIterator) !void {
-        if (arg_iter.len == 0) {
+    pub fn checkArguments(self: *@This(), arg_iter: *php.ArgumentIterator) !void {
+        if (arg_iter.len != 1) {
             // check if the struct has default values for all fields
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
-            if (static.required_field_count == 0) return;
-            // let the parent implementation throw an exception
+            if (arg_iter.len != 0 or static.required_field_count != 0) {
+                return php.throwExceptionFmt("{s} constructor expects an array as argument or named arguments", .{
+                    class.getStructureName(),
+                });
+            }
         }
-        return try Super.copyArguments(self, arg_iter);
     }
 
     pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
@@ -101,7 +100,7 @@ pub const Struct = struct {
         switch (T) {
             std.mem.Allocator => {
                 if (args.allocator) |av| {
-                    const src_obj = try php.getValueObject(av);
+                    const src_obj = try php.getValueObject(&av);
                     const src_class = ZigClassEntry.fromObject(src_obj);
                     if (src_class.type != .@"struct" or src_class.purpose != .allocator) {
                         return error.NotAllocator;
@@ -118,7 +117,7 @@ pub const Struct = struct {
                 const ctx = try T.create(args.callback);
                 const ptr_member = try class.getMember(.instance, php.persistent("ptr"));
                 const opaque_class = try ptr_member.class.getPointerTarget();
-                const opaque_obj = try opaque_class.createObjectFromBuffer(ctx.buffer, null);
+                const opaque_obj = try opaque_class.createPreinitializedObject(ctx.buffer, null);
                 defer php.release(opaque_obj);
                 const opaque_value = php.createValueObject(opaque_obj);
                 try self.writeMember(php.persistent("ptr"), &opaque_value, null);
@@ -168,9 +167,9 @@ pub const Struct = struct {
         return null;
     }
 
-    pub const setStorage = Super.setStorage;
-    pub const writeSelf = Super.writeSelf;
     pub const getExtent = Super.getExtent;
+    pub const initialize = Super.initialize;
+    pub const writeSelf = Super.writeSelf;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;
     pub const readProperty = Super.readProperty;

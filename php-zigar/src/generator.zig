@@ -28,16 +28,17 @@ pub const Generator = struct {
     transform: ObjectTransform = .to_value,
     buffer: *ByteBuffer,
 
-    pub fn create(callback: ?*const Value) !*@This() {
+    pub fn create(callback: ?Value) !*@This() {
         const alignment: std.mem.Alignment = .fromByteUnits(@alignOf(@This()));
-        const buf = try ByteBuffer.createNew(@sizeOf(@This()), alignment, false);
+        const buf = try ByteBuffer.create(alignment);
+        try buf.allocate(null, @sizeOf(@This()));
         const self: *@This() = @ptrCast(@alignCast(buf.bytes.ptr));
         self.* = .{
             .buffer = buf,
             .result = php.createValueNull(),
             .callback = if (callback) |cb| init: {
-                php.addRef(cb);
-                break :init cb.*;
+                php.addRef(&cb);
+                break :init cb;
             } else null,
         };
         return self;

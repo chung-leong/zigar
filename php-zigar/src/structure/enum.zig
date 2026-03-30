@@ -102,9 +102,10 @@ pub const Enum = struct {
                     } else |err| {
                         if (class.flags.@"enum".is_open_ended) {
                             // create new item
-                            const tag_obj = try class.obtainNewObject();
-                            const bytes = ZigObject(Enum).fromObject(tag_obj).structure().buffer;
-                            try self.value_acc.transform(null).set(bytes, key);
+                            const buf = try ByteBuffer.create(class.alignment);
+                            try buf.allocate(null, class.byte_size.?);
+                            const tag_obj = try class.createPreinitializedObject(buf, null);
+                            try self.value_acc.transform(null).set(buf, key);
                             var buffer: [48]u8 = undefined;
                             const text = std.fmt.bufPrint(&buffer, "@enumFromInt({d})", .{tag_code}) catch unreachable;
                             const name = php.createString(text);
@@ -139,9 +140,10 @@ pub const Enum = struct {
                         } else |err| {
                             if (class.flags.@"enum".is_open_ended) {
                                 // create new item
-                                const tag_obj = try class.obtainNewObject();
-                                const bytes = ZigObject(Enum).fromObject(tag_obj).structure().buffer;
-                                try self.value_acc.transform(null).set(bytes, key);
+                                const buf = try ByteBuffer.create(class.alignment);
+                                try buf.allocate(null, class.byte_size.?);
+                                try self.value_acc.transform(null).set(buf, key);
+                                const tag_obj = try class.createPreinitializedObject(buf, null);
                                 const text = try std.fmt.allocPrint(php.allocator, "@enumFromInt({s})", .{
                                     php.getStringContent(tag_code_str),
                                 });
@@ -258,9 +260,9 @@ pub const Enum = struct {
         }
     }
 
-    pub const setStorage = Super.setStorage;
     pub const getExtent = Super.getExtent;
-    pub const copyArguments = Super.copyArguments;
+    pub const initialize = Super.initialize;
+    pub const checkArguments = Super.checkArguments;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;
     pub const readProperty = Super.readProperty;

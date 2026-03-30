@@ -16,7 +16,6 @@ const Promise = @import("../promise.zig").Promise;
 const structure = @import("../structure.zig");
 
 pub fn ArgStruct(variadic: bool) type {
-    _ = variadic;
     return struct {
         flags: packed struct {
             has_allocator: bool = false,
@@ -75,6 +74,16 @@ pub fn ArgStruct(variadic: bool) type {
             }
         };
 
+        pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, _: ?*const Value) !void {
+            const class = ZigClassEntry.fromStructure(self);
+            var len = class.byte_size.?;
+            if (variadic) {
+                _ = &len;
+                // TODO: add length of extra arguments
+            }
+            try self.buffer.allocate(allocator, len);
+        }
+
         pub fn copyArguments(self: *@This(), arg_iter: *php.ArgumentIterator) !void {
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
@@ -85,6 +94,11 @@ pub fn ArgStruct(variadic: bool) type {
                 .callback = static.promise != null or static.generator != null,
                 .abort_signal = static.abort_signal != null,
             });
+            defer {
+                inline for (comptime std.meta.fieldNames(structure.Struct.SpecialArgs)) |name| {
+                    if (@field(special_args, name)) |v| php.release(&v);
+                }
+            }
             if (arg_iter.len != static.arg_accessors.len) return error.IncorrectArgumentCount;
             // use accessors to write into the argument struct
             var index: usize = 0;
@@ -159,7 +173,6 @@ pub fn ArgStruct(variadic: bool) type {
             return ZigObject(structure.Struct).fromObject(obj).structure();
         }
 
-        pub const setStorage = Super.setStorage;
         pub const readSelf = Super.readSelf;
         pub const freeObject = Super.freeObject;
         pub const getReferencedObjects = Super.getReferencedObjects;

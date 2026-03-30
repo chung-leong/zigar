@@ -28,6 +28,7 @@ pub const Error = error{
     LengthMismatch,
     Missing,
     NegativeIndex,
+    NotAllocator,
     NotArray,
     NotArrayOrObject,
     NotBoolean,

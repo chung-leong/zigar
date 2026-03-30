@@ -252,7 +252,7 @@ pub const ZigClassEntry = struct {
                 .parent = self.getParentClass(),
             },
             .unnamed_1 = .{
-                .create_object = php.transform(createObject),
+                .create_object = php.transform(createUninitializedObject),
             },
             .unnamed_2 = .{
                 .interfaces = if (interfaces.len > 0) @ptrCast(interfaces.ptr) else null,
@@ -338,13 +338,13 @@ pub const ZigClassEntry = struct {
         }
         // set table of class object
         const table = try self.createTable(.static, null);
-        defer php.release(&table);
+        // php.release(&table);
         switch (self.type) {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
                 const C = structure.Class(S);
                 const class_zobj = ZigObject(C).fromObject(class_obj);
-                try class_zobj.zig_portion.setStorage(undefined, &table);
+                try class_zobj.setStorage(undefined, &table);
             },
         }
         // initialize static data
@@ -352,7 +352,6 @@ pub const ZigClassEntry = struct {
             inline else => |t| {
                 const name = @tagName(t);
                 if (@FieldType(StaticData, name) != void) {
-                    errdefer std.debug.print("Unable to initialize: {}\n", .{@FieldType(StaticData, name)});
                     self.static_data = @unionInit(StaticData, name, .{});
                     const data = &@field(self.static_data, name);
                     try data.init(class_obj);
@@ -555,7 +554,7 @@ pub const ZigClassEntry = struct {
         return template;
     }
 
-    fn createTable(self: *const @This(), comptime scope_type: ScopeType, prefilled: ?*const Value) !Value {
+    pub fn createTable(self: *const @This(), comptime scope_type: ScopeType, prefilled: ?*const Value) !Value {
         const scope = &@field(self, @tagName(scope_type));
         var new_table: Value = switch (scope.slot_count) {
             // if type only uses one slot, we don't need a hash table--a zval will do
@@ -587,6 +586,14 @@ pub const ZigClassEntry = struct {
         return new_table;
     }
 
+    pub fn registerObject(self: *@This(), obj: *Object) !void {
+        try self.host.object_map.add(obj);
+    }
+
+    pub fn unregisterObject(self: *@This(), obj: *Object) void {
+        self.host.object_map.remove(obj);
+    }
+
     pub fn obtainObjectAtOffset(self: *@This(), parent_buf: *ByteBuffer, offset: usize, len: usize) !*Object {
         const parent_bytes = try parent_buf.data(offset + len, false);
         const bytes = parent_bytes[offset .. offset + len];
@@ -597,10 +604,11 @@ pub const ZigClassEntry = struct {
             php.addRef(obj);
             return obj;
         } else {
+            // need to create the object
             const buf = try parent_buf.slice(offset, len);
-            const obj = try self.createObjectFromBuffer(buf, null);
+            const obj = try self.createPreinitializedObject(buf, null);
             errdefer php.release(obj);
-            try self.host.object_map.insert(result, obj);
+            try self.registerObject(obj);
             return obj;
         }
     }
@@ -608,7 +616,7 @@ pub const ZigClassEntry = struct {
     pub fn obtainObjectAtAddress(self: *@This(), address: usize, len: usize, is_const: bool) !*Object {
         const byte_ptr: [*]u8 = @ptrFromInt(address);
         const bytes = byte_ptr[0..len];
-        // see if there's an existing object
+        // look for an existing object at that memory location
         const result = self.host.object_map.search(bytes, self.entry(), is_const);
         if (result.match == .yes) {
             const obj = result.value();
@@ -624,72 +632,49 @@ pub const ZigClassEntry = struct {
                     // use a buffer that's attached to an existing object
                     break :get buf;
                 } else {
-                    // assume memory is valid; it's just sitting somewhere
-                    const buf = try ByteBuffer.createExternal(bytes, self.alignment);
+                    // assume addresss is valid, pointing to memory somewhere inside the app's address space
+                    const buf = try ByteBuffer.create(self.alignment);
+                    buf.referencExternal(bytes);
                     if (is_const) buf.protect();
                     break :get buf;
                 }
             };
             defer buf.release();
-            const obj = try self.createObjectFromBuffer(buf, null);
+            const obj = try self.createPreinitializedObject(buf, null);
             errdefer php.release(obj);
-            try self.host.object_map.insert(result, obj);
+            try self.registerObject(obj);
             return obj;
         }
     }
 
-    pub fn obtainObjectFromString(self: *@This(), str: *String) !*Object {
-        const buf = try ByteBuffer.createStringRef(str, self.alignment);
-        defer buf.release();
-        return try self.obtainObjectFromBuffer(buf, null);
-    }
-
-    pub fn obtainNewObject(self: *@This()) !*Object {
-        const len = self.byte_size orelse return error.Unexpected;
-        const buf = if (self.instance.template.buffer) |def|
-            try ByteBuffer.createCopy(def.bytes, self.alignment)
-        else
-            try ByteBuffer.createNew(len, self.alignment, true);
-        defer buf.release();
-        return try self.obtainObjectFromBuffer(buf, null);
-    }
-
-    pub fn obtainObjectFromBuffer(self: *@This(), buf: *ByteBuffer, prefilled: ?*const Value) !*Object {
-        const is_mapped = switch (self.type) {
-            inline else => |t| check: {
-                const S = @field(structure.by_enum, @tagName(t));
-                break :check @hasDecl(S, "getExtent");
-            },
-        };
-        if (!is_mapped) return try self.createObjectFromBuffer(buf, prefilled);
-        const result = self.host.object_map.search(buf.bytes, self.entry(), buf.flags.is_read_only);
-        if (result.match == .yes) {
-            const obj = result.value();
-            php.addRef(obj);
-            return obj;
-        } else {
-            const obj = try self.createObjectFromBuffer(buf, prefilled);
-            errdefer php.release(obj);
-            try self.host.object_map.insert(result, obj);
-            return obj;
-        }
-    }
-
-    pub fn createObjectFromBuffer(self: *@This(), buf: *ByteBuffer, prefilled: ?*const Value) !*Object {
+    pub fn createPreinitializedObject(self: *@This(), buf: *ByteBuffer, prefilled: ?*const Value) !*Object {
+        // the byte buffer may or may not be initialized at this point
         switch (self.type) {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
-                const zig_obj = try ZigObject(S).create(self);
                 const table = try self.createTable(.instance, prefilled);
                 defer php.release(&table);
+                const zig_obj = try ZigObject(S).create(self);
                 try zig_obj.setStorage(buf, &table);
                 return zig_obj.object();
             },
         }
     }
 
-    pub fn unmapObject(self: *@This(), obj: *Object) void {
-        self.host.object_map.remove(obj);
+    pub fn createObject(self: *@This(), allocator: ?*const std.mem.Allocator, value: ?*const Value) !*Object {
+        switch (self.type) {
+            inline else => |t| {
+                const S = @field(structure.by_enum, @tagName(t));
+                const table = try self.createTable(.instance, null);
+                const buf = try ByteBuffer.create(self.alignment);
+                defer php.release(&table);
+                const zig_obj = try ZigObject(S).create(self);
+                try zig_obj.setStorage(buf, &table);
+                const obj_struct = zig_obj.structure();
+                try obj_struct.initialize(allocator, value);
+                return zig_obj.object();
+            },
+        }
     }
 
     pub fn enableCallback(self: *@This(), template: *Value, member_flags: *Value) !void {
@@ -710,9 +695,10 @@ pub const ZigClassEntry = struct {
         }
     }
 
-    pub fn createObject(ce: *ClassEntry) !*Object {
+    pub fn createUninitializedObject(ce: *ClassEntry) !*Object {
         const self = fromEntry(ce);
-        return try self.obtainNewObject();
+        const buf = try ByteBuffer.create(self.alignment);
+        return try self.createPreinitializedObject(buf, null);
     }
 
     fn getAccessors(self: @This(), scope: *Scope, member: *Member) !accessor.Any {

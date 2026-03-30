@@ -139,11 +139,12 @@ pub const ErrorSet = struct {
                         return err.*;
                     } else |_| {
                         // create new error
-                        const err_obj = try class.obtainNewObject();
-                        const bytes = ZigObject(ErrorSet).fromObject(err_obj).structure().buffer;
-                        try self.value_acc.transform(null).set(bytes, value);
-                        var buffer: [64]u8 = undefined;
-                        const text = std.fmt.bufPrint(&buffer, "UnknownError #{d}", .{err_code}) catch unreachable;
+                        const buf = try ByteBuffer.create(class.alignment);
+                        try buf.allocate(null, class.byte_size.?);
+                        const err_obj = try class.createPreinitializedObject(buf, null);
+                        try self.value_acc.transform(null).set(buf, value);
+                        var text_buffer: [64]u8 = undefined;
+                        const text = std.fmt.bufPrint(&text_buffer, "UnknownError #{d}", .{err_code}) catch unreachable;
                         const name = php.createString(text);
                         try self.addCanonical(name, err_obj);
                         // err_obj has refcount = 2 at this point, which is correct
@@ -393,9 +394,9 @@ pub const ErrorSet = struct {
         return self.canonical.?;
     }
 
-    pub const setStorage = Super.setStorage;
     pub const getExtent = Super.getExtent;
-    pub const copyArguments = Super.copyArguments;
+    pub const initialize = Super.initialize;
+    pub const checkArguments = Super.checkArguments;
     pub const castObject = Super.castObject;
     pub const hasProperty = Super.hasProperty;
     pub const getReferencedObjects = Super.getReferencedObjects;

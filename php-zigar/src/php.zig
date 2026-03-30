@@ -267,7 +267,8 @@ pub const ArgumentIterator = struct {
         inline for (comptime std.meta.fieldNames(T)) |name| {
             if (@field(using, name)) {
                 if (getHashEntry(ht, name)) |value| {
-                    @field(set, name) = value;
+                    @field(set, name) = value.*;
+                    addRef(value);
                     _ = removeHashEntry(ht, name);
                 } else |_| {}
             }

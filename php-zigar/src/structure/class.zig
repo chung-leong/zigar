@@ -18,23 +18,27 @@ const Value = php.Value;
 const structure = @import("../structure.zig");
 
 const Closures = struct {
-    constructor: ?*Closure = null,
-    cast: ?*Closure = null,
-    __tostring: ?*Closure = null,
+    constructor: ?*Closure,
+    cast: ?*Closure,
+    __tostring: ?*Closure,
+
+    pub fn release(self: *@This()) void {
+        inline for (comptime std.meta.fieldNames(@This())) |name| {
+            if (@field(self, name)) |c| c.release();
+        }
+    }
 };
 
 pub fn Class(comptime S: type) type {
     return struct {
-        // these needs to be initialized, since setStorage() isn't called immediately
-        closures: Closures = .{},
-        table: Value = .{},
+        closures: Closures = undefined,
+        table: Value = undefined,
 
         pub const scope: ZigClassEntry.ScopeType = .static;
 
         const Super = structure.StructLike(@This());
 
-        pub fn setStorage(self: *@This(), buffer: *ByteBuffer, table: *const Value) !void {
-            try Super.setStorage(self, buffer, table);
+        pub fn finalize(self: *@This()) !void {
             self.closures.constructor = try Closure.create(self, construct, "constructor");
             self.closures.cast = try Closure.create(self, cast, "cast");
             self.closures.__tostring = try Closure.create(self, stringify, "stringify");
@@ -42,10 +46,7 @@ pub fn Class(comptime S: type) type {
 
         pub fn freeObject(obj: *Object) void {
             const self = fromObject(obj);
-            inline for (comptime std.meta.fields(@TypeOf(self.closures))) |field| {
-                if (@field(self.closures, field.name)) |c| c.release();
-            }
-            php.release(&self.table);
+            self.closures.release();
             Super.freeObject(obj);
         }
 
@@ -79,12 +80,33 @@ pub fn Class(comptime S: type) type {
         }
 
         pub fn construct(_: *@This(), arg_iter: *ArgumentIterator) !void {
+            if (!@hasDecl(S, "checkArguments")) unreachable;
             const this_struct = try getThis(arg_iter);
-            if (@hasDecl(S, "copyArguments")) {
-                try this_struct.copyArguments(arg_iter);
-            } else {
-                @panic("copyArguments() is not implemented: " ++ @typeName(S));
+            // see if an allocator is specified
+            const custom_allocator = try extractAllocator(arg_iter);
+            try this_struct.checkArguments(arg_iter);
+            const arg = arg_iter.next() orelse null;
+            try this_struct.initialize(custom_allocator, arg);
+            if (custom_allocator != null) {
+                // TODO: make allocated buffer external
+                // try this_struct.externalize();
             }
+        }
+
+        fn extractAllocator(arg_iter: *ArgumentIterator) !?*std.mem.Allocator {
+            var special_args: struct {
+                allocator: ?Value = null,
+            } = .{};
+            arg_iter.extractNamedArguments(&special_args, .{ .allocator = true });
+            defer if (special_args.allocator) |a| php.release(&a);
+            const src_value = special_args.allocator orelse return null;
+            const src_obj = try php.getValueObject(&src_value);
+            const src_class = ZigClassEntry.fromObject(src_obj);
+            if (src_class.type != .@"struct" or src_class.purpose != .allocator) {
+                return error.NotAllocator;
+            }
+            const src_struct = ZigObject(structure.Struct).fromObject(src_obj).structure();
+            return @ptrCast(@alignCast(src_struct.buffer.bytes.ptr));
         }
 
         pub fn cast(self: *@This(), arg_iter: *ArgumentIterator) !?Value {
@@ -120,7 +142,10 @@ pub fn Class(comptime S: type) type {
                     str.len,
                 });
             }
-            const new_obj = try class.obtainObjectFromString(str);
+            const buf = try ByteBuffer.create(class.alignment);
+            buf.referenceString(str);
+            const new_obj = try class.createPreinitializedObject(buf, null);
+            try class.registerObject(new_obj);
             return php.createValueObject(new_obj);
         }
 

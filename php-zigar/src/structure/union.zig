@@ -88,7 +88,6 @@ pub const Union = struct {
             return try sel.accessors.get(union_struct.buffer);
         }
     };
-    pub const constructor_args = "an array as argument or one named argument";
 
     pub fn writeSelf(self: *@This(), value: *const Value) Error!void {
         if (try self.copySelf(value)) return;
@@ -217,10 +216,10 @@ pub const Union = struct {
         }
     }
 
-    pub const setStorage = Super.setStorage;
-    pub const readSelf = Super.readSelf;
     pub const getExtent = Super.getExtent;
-    pub const copyArguments = Super.copyArguments;
+    pub const initialize = Super.initialize;
+    pub const checkArguments = Super.checkArguments;
+    pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;
