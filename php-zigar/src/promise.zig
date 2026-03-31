@@ -1,20 +1,16 @@
 const std = @import("std");
 
 const accessor = @import("accessor.zig");
+const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
-const ModuleHost = @import("host.zig").ModuleHost;
-const ObjectTransform = @import("accessor.zig").ObjectTransform;
 const php = @import("php.zig");
 const ArgumentIterator = php.ArgumentIterator;
 const ExecuteData = php.ExecuteData;
 const Fiber = php.Fiber;
 const Object = php.Object;
-const FiberTransfer = php.FiberTransfer;
 const Value = php.Value;
 const structure = @import("structure.zig");
-const invokeMethod = structure.invokeMethod;
-const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigObject = @import("object.zig").ZigObject;
 
 pub const Promise = struct {
@@ -60,7 +56,7 @@ pub const Promise = struct {
         // std.debug.print("Promise.await() resumed\n", .{});
         if (php.getType(&self.result) == .object) {
             const result_obj = php.getValueObject(&self.result) catch unreachable;
-            self.result = try invokeMethod(result_obj, "readSelf", .{.to_value});
+            self.result = try structure.invokeMethod(result_obj, "readSelf", .{.to_value});
         }
         return self.result;
     }

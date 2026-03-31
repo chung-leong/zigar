@@ -51,8 +51,6 @@ pub const Enum = struct {
                     if (ZigClassEntry.fromObject(tag_obj).type != .@"enum") continue;
                     const name = iter.currentName() orelse return error.MissingName;
                     try self.addCanonical(name, tag_obj);
-                    // decrement ref count on class (since the class holds a ref on the tag)
-                    class.release();
                 }
             }
             // because methods are really static functions, we need to maintain a ref on the class object
@@ -104,7 +102,7 @@ pub const Enum = struct {
                             // create new item
                             const buf = try ByteBuffer.create(class.alignment);
                             try buf.allocate(null, class.byte_size.?);
-                            const tag_obj = try class.createPreinitializedObject(buf, null);
+                            const tag_obj = try class.createObjectFromBuffer(buf, null);
                             try self.value_acc.transform(null).set(buf, key);
                             var buffer: [48]u8 = undefined;
                             const text = std.fmt.bufPrint(&buffer, "@enumFromInt({d})", .{tag_code}) catch unreachable;
@@ -143,7 +141,7 @@ pub const Enum = struct {
                                 const buf = try ByteBuffer.create(class.alignment);
                                 try buf.allocate(null, class.byte_size.?);
                                 try self.value_acc.transform(null).set(buf, key);
-                                const tag_obj = try class.createPreinitializedObject(buf, null);
+                                const tag_obj = try class.createObjectFromBuffer(buf, null);
                                 const text = try std.fmt.allocPrint(php.allocator, "@enumFromInt({s})", .{
                                     php.getStringContent(tag_code_str),
                                 });
@@ -250,14 +248,10 @@ pub const Enum = struct {
 
     pub fn freeObject(obj: *Object) void {
         const self = fromObject(obj);
-        self.buffer.release();
-        if (self.canonical == null or self.canonical.?.unknown) {
-            const class = ZigClassEntry.fromObject(obj);
-            class.release();
-        }
         if (self.canonical) |props| {
             props.release();
         }
+        Super.freeObject(obj);
     }
 
     pub const getExtent = Super.getExtent;

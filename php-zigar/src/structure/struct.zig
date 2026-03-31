@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const AbortSignal = @import("../abort-signal.zig").AbortSignal;
 const accessor = @import("../accessor.zig");
 const Error = accessor.Error;
 const ObjectTransform = accessor.ObjectTransform;
@@ -28,7 +29,8 @@ pub const Struct = struct {
     pub const SpecialArgs = struct {
         allocator: ?Value = null,
         callback: ?Value = null,
-        abort_signal: ?Value = null,
+        signal: ?Value = null,
+        timeout: ?Value = null,
     };
 
     const Super = structure.StructLike(@This());
@@ -47,6 +49,7 @@ pub const Struct = struct {
             // because methods are really static functions, we need to maintain a ref on the class object
             self.class_obj = class_obj;
             php.addRef(self.class_obj);
+            // create callback function for
             switch (class.purpose) {
                 inline .promise, .generator => |p| {
                     const closure = switch (p) {
@@ -68,6 +71,17 @@ pub const Struct = struct {
             if (self.callback) |cb| php.release(cb);
         }
     };
+
+    pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value) !void {
+        try Super.initialize(self, allocator, initializer);
+        const class = ZigClassEntry.fromStructure(self);
+        switch (class.purpose) {
+            .unknown => {},
+            // clear the buffer of special purpose structs to ensure their pointers are null
+            // during clean-up after an initialization error
+            else => try self.buffer.clear(),
+        }
+    }
 
     pub fn externalize(self: *@This()) accessor.Error!bool {
         if (try Super.externalize(self)) {
@@ -133,12 +147,8 @@ pub const Struct = struct {
             },
             Promise, Generator => {
                 const ctx = try T.create(args.callback);
-                const ptr_member = try class.getMember(.instance, php.persistent("ptr"));
-                const opaque_class = try ptr_member.class.getPointerTarget();
-                const opaque_obj = try opaque_class.createPreinitializedObject(ctx.buffer, null);
-                defer php.release(opaque_obj);
-                const opaque_value = php.createValueObject(opaque_obj);
-                try self.writeMember(php.persistent("ptr"), &opaque_value, null);
+                const ptr_value = php.createValuePointer(ctx.buffer.bytes.ptr);
+                try self.writeMember(php.persistent("ptr"), &ptr_value, null);
                 const callback_value = php.createValueObject(static.callback.?);
                 try self.writeMember(php.persistent("callback"), &callback_value, null);
                 if (class.getMember(.instance, php.persistent("allocator"))) |m| {
@@ -148,6 +158,16 @@ pub const Struct = struct {
                     const allocator_struct = ZigObject(structure.Struct).fromObject(allocator_obj).structure();
                     try allocator_struct.initSpecial(std.mem.Allocator, args);
                 } else |_| {}
+            },
+            AbortSignal => {
+                const signal = if (args.signal) |av| get: {
+                    const signal_obj = php.getValueObject(&av) catch return error.NotAbortSignal;
+                    if (signal_obj.ce != ZigClassEntry.abort_signal_class) return error.NotAbortSignal;
+                    php.addRef(signal_obj);
+                    break :get AbortSignal.fromObject(signal_obj);
+                } else try AbortSignal.create(args.timeout);
+                const ptr_value = php.createValuePointer(&signal.value);
+                try self.writeMember(php.persistent("ptr"), &ptr_value, null);
             },
             else => {},
         }
@@ -161,22 +181,25 @@ pub const Struct = struct {
     pub fn freeObject(obj: *Object) void {
         const class = ZigClassEntry.fromObject(obj);
         const self = fromObject(obj);
-        // release the promise/generator context
+        // release special context object
         switch (class.purpose) {
-            inline .promise, .generator => |t| {
-                const T = switch (t) {
+            inline else => |t| {
+                const ctx_type: ?type = switch (t) {
                     .promise => Promise,
                     .generator => Generator,
-                    else => {},
+                    // ptr points to an i32, but it's the first field of AbortSignal
+                    .abort_signal => AbortSignal,
+                    else => null,
                 };
-                if (self.getSpecialContext(T)) |ctx| ctx.release() else |_| {}
+                if (ctx_type) |T| {
+                    if (self.getSpecialContext(T)) |ctx| ctx.release() else |_| {}
+                }
             },
-            else => {},
         }
         Super.freeObject(obj);
     }
 
-    pub fn getIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
+    pub fn handleGetIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
         const obj = try php.getValueObject(this);
         const class = ZigClassEntry.fromObject(obj);
         if (class.purpose == .generator) {
@@ -186,7 +209,6 @@ pub const Struct = struct {
     }
 
     pub const getExtent = Super.getExtent;
-    pub const initialize = Super.initialize;
     pub const writeSelf = Super.writeSelf;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;

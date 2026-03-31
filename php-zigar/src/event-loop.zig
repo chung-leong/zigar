@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const AbortSignal = @import("abort-signal.zig").AbortSignal;
 const php = @import("php.zig");
 const String = php.String;
 const ExecuteData = php.ExecuteData;
@@ -11,6 +12,13 @@ pub fn EventLoop(comptime cb: fn () void) type {
         fiber: Value,
         stream: *const Value,
         terminated: bool,
+        timer: std.time.Timer,
+        timeouts: std.ArrayList(Timeout),
+
+        const Timeout = struct {
+            end: u64,
+            signal: *AbortSignal,
+        };
 
         pub fn init(self: *@This(), stream: *const Value) !void {
             // create closure for loop fiber
@@ -25,8 +33,10 @@ pub fn EventLoop(comptime cb: fn () void) type {
             errdefer php.release(&self.fiber);
             self.stream = stream;
             self.terminated = false;
+            self.timer = try .start();
+            self.timeouts = .empty;
             // star the loop fiber
-            const method = php.createValuePersistentString("start");
+            const method = php.createValueString(php.persistent("start"));
             _ = try php.invokeMethod(&self.fiber, &method, &.{});
         }
 
@@ -54,13 +64,53 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         pub fn suspendLoop(self: *@This()) !void {
-            const method = php.createValuePersistentString("suspend");
+            const method = php.createValueString(php.persistent("suspend"));
             _ = try php.invokeMethod(&self.fiber, &method, &.{});
         }
 
         pub fn resumeLoop(self: *@This()) !void {
-            const method = php.createValuePersistentString("resume");
+            const method = php.createValueString(php.persistent("resume"));
             _ = try php.invokeMethod(&self.fiber, &method, &.{});
+        }
+
+        pub fn addTimeout(self: *@This(), seconds: f64, signal: *AbortSignal) !void {
+            const duration: u64 = @intFromFloat(seconds * 1_000_000_000.0);
+            if (self.timeouts.items.len == 0) self.timer.reset();
+            try self.timeouts.append(std.heap.c_allocator, .{
+                .end = self.timer.read() + duration,
+                .signal = signal,
+            });
+            signal.addRef();
+        }
+
+        fn updateTimouts(self: *@This()) std.meta.Tuple(&.{ Value, Value }) {
+            const now = self.timer.read();
+            const len = self.timeouts.items.len;
+            var pause: ?u64 = null;
+            for (0..len) |i| {
+                const index = len - i - 1;
+                var item = self.timeouts.items[index];
+                if (now >= item.end) {
+                    // set the abort signal and remove it from the list
+                    item.signal.abort();
+                    item.signal.release();
+                    _ = self.timeouts.swapRemove(index);
+                } else {
+                    // choose the smallest duration
+                    const diff = item.end - now;
+                    if (pause == null or pause.? > diff) {
+                        pause = diff;
+                    }
+                }
+            }
+            if (pause) |nanosecs| {
+                const s_u64 = @min(std.math.maxInt(c_long), nanosecs / 1_000_000_000);
+                const s: c_long = @intCast(s_u64);
+                const us: c_long = @intCast(((nanosecs - s_u64 * 1_000_000_000) + 999) / 1000);
+                return .{ php.createValueLong(s), php.createValueLong(us) };
+            } else {
+                return .{ php.createValueNull(), php.createValueNull() };
+            }
         }
 
         pub fn runLoop(ed: *ExecuteData, _: *Value) void {
@@ -72,10 +122,11 @@ pub fn EventLoop(comptime cb: fn () void) type {
             defer php.release(&write_fds);
             const except_fds = php.createValueReference(&php.createValueNull());
             defer php.release(&except_fds);
-            const timeout = php.createValueNull();
             // wait for activation by main fiber
             self.suspendLoop() catch unreachable;
             while (!self.terminated) {
+                // update or update timeouts and get the duration to the closest one
+                const timeout_s, const timeout_us = self.updateTimouts();
                 // halt thread until stream is ready to be read
                 const fd_array_ref = php.getValueReference(&read_fds) catch unreachable;
                 const fd_array = php.getValueArray(&fd_array_ref.val) catch unreachable;
@@ -84,11 +135,14 @@ pub fn EventLoop(comptime cb: fn () void) type {
                     read_fds,
                     write_fds,
                     except_fds,
-                    timeout,
+                    timeout_s,
+                    timeout_us,
                 }) catch @panic("Unable to run stream_select()");
                 // invoke the callback if the stream is ready
                 const count = php.getValueLong(&result) catch 0;
-                if (count == 1) cb();
+                if (count == 1) {
+                    cb();
+                }
             }
         }
     };
@@ -101,13 +155,13 @@ pub fn EventLoop(comptime cb: fn () void) type {
             var func = php.createFunction(&handler, "onReadable", 0, false);
             const closure = php.createValueClosure(&func, null, null, null);
             errdefer php.release(&closure);
-            const method = php.createValuePersistentString("onReadable");
-            self.class_path = php.createValuePersistentString("Revolt\\EventLoop");
+            const method = php.createValueString(php.persistent("onReadable"));
+            self.class_path = php.createValueString(php.persistent("Revolt\\EventLoop"));
             self.handler_id = try php.invokeMethod(&self.class_path, &method, &.{ stream.*, closure });
         }
 
         pub fn deinit(self: *@This()) void {
-            const method = php.createValuePersistentString("cancel");
+            const method = php.createValueString(php.persistent("cancel"));
             _ = php.invokeMethod(&self.class_path, &method, &.{self.handler_id}) catch {};
             php.release(&self.handler_id);
         }
@@ -115,7 +169,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
         pub fn getFiber(self: *@This()) !Value {
             std.debug.print("EventLoop.getFiber() called\n", .{});
             errdefer std.debug.print("EventLoop.getFiber() failed\n", .{});
-            const method = php.createValuePersistentString("getSuspension");
+            const method = php.createValueString(php.persistent("getSuspension"));
             return php.invokeMethod(&self.class_path, &method, &.{});
         }
 
@@ -123,7 +177,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             std.debug.print("EventLoop.suspendFiber() called\n", .{});
             errdefer std.debug.print("EventLoop.suspendFiber() failed\n", .{});
             defer std.debug.print("EventLoop.suspendFiber() resumed\n", .{});
-            const method = php.createValuePersistentString("suspend");
+            const method = php.createValueString(php.persistent("suspend"));
             _ = try php.invokeMethod(fiber, &method, &.{});
         }
 
@@ -131,14 +185,31 @@ pub fn EventLoop(comptime cb: fn () void) type {
             std.debug.print("EventLoop.resumeFiber() called\n", .{});
             errdefer std.debug.print("EventLoop.resumeFiber() failed\n", .{});
             defer std.debug.print("EventLoop.resumeFiber() resumed\n", .{});
-            const method = php.createValuePersistentString("resume");
+            const method = php.createValueString(php.persistent("resume"));
             _ = try php.invokeMethod(fiber, &method, &.{});
+        }
+
+        pub fn addTimeout(self: *@This(), seconds: f64, signal: *AbortSignal) !void {
+            const handler = php.transform(onDelayFinished);
+            var func = php.createFunction(&handler, "onDelayFinished", 0, false);
+            var signal_value = php.createValueObject(signal.object());
+            const closure = php.createValueClosure(&func, null, null, &signal_value);
+            const method = php.createValueString(php.persistent("onReadable"));
+            const timeout = php.createValueDouble(seconds);
+            self.class_path = php.createValueString(php.persistent("Revolt\\EventLoop"));
+            self.handler_id = try php.invokeMethod(&self.class_path, &method, &.{ timeout, closure });
         }
 
         pub fn onReadable(_: *ExecuteData, _: *Value) void {
             std.debug.print("EventLoop.onReadable() called\n", .{});
             defer std.debug.print("EventLoop.onReadable() resumed\n", .{});
             cb();
+        }
+
+        pub fn onDelayFinished(ed: *ExecuteData, _: *Value) !void {
+            const obj = try php.getValueObject(&ed.This);
+            const signal = AbortSignal.fromObject(obj);
+            signal.abort();
         }
     };
     return struct {
@@ -196,7 +267,10 @@ pub fn EventLoop(comptime cb: fn () void) type {
             }
             self.stream = stream.*;
             switch (self.type) {
-                inline else => |t| try @field(self.loop, @tagName(t)).init(&self.stream),
+                inline else => |t| {
+                    const loop = &@field(self.loop, @tagName(t));
+                    try loop.init(&self.stream);
+                },
             }
             self.ready = true;
             php.addRef(&self.stream);
@@ -206,7 +280,10 @@ pub fn EventLoop(comptime cb: fn () void) type {
             if (!self.ready) return;
             self.ready = false;
             switch (self.type) {
-                inline else => |t| @field(self.loop, @tagName(t)).deinit(),
+                inline else => |t| {
+                    const loop = &@field(self.loop, @tagName(t));
+                    loop.deinit();
+                },
             }
             php.release(&self.stream);
         }
@@ -214,21 +291,30 @@ pub fn EventLoop(comptime cb: fn () void) type {
         pub fn getFiber(self: *@This()) !Value {
             if (!self.ready) return error.NoEventLoop;
             return switch (self.type) {
-                inline else => |t| @field(self.loop, @tagName(t)).getFiber(),
+                inline else => |t| get: {
+                    const loop = &@field(self.loop, @tagName(t));
+                    break :get loop.getFiber();
+                },
             };
         }
 
         pub fn suspendFiber(self: *@This(), fiber: *const Value) !void {
             if (!self.ready) return error.NoEventLoop;
             switch (self.type) {
-                inline else => |t| try @field(self.loop, @tagName(t)).suspendFiber(fiber),
+                inline else => |t| {
+                    const loop = &@field(self.loop, @tagName(t));
+                    try loop.suspendFiber(fiber);
+                },
             }
         }
 
         pub fn resumeFiber(self: *@This(), fiber: *const Value) void {
             if (!self.ready) @panic("No event loop");
             switch (self.type) {
-                inline else => |t| @field(self.loop, @tagName(t)).resumeFiber(fiber) catch {},
+                inline else => |t| {
+                    const loop = &@field(self.loop, @tagName(t));
+                    loop.resumeFiber(fiber) catch {};
+                },
             }
         }
 
@@ -240,6 +326,15 @@ pub fn EventLoop(comptime cb: fn () void) type {
             if (self.pendingFiber) |fiber| {
                 self.pendingFiber = null;
                 self.resumeFiber(fiber);
+            }
+        }
+
+        pub fn addTimeout(self: *@This(), seconds: f64, signal: *AbortSignal) !void {
+            switch (self.type) {
+                inline else => |t| {
+                    const loop = &@field(self.loop, @tagName(t));
+                    try loop.addTimeout(seconds, signal);
+                },
             }
         }
 

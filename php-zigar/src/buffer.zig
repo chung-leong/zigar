@@ -13,9 +13,10 @@ pub const ByteBuffer = struct {
     alignment: std.mem.Alignment = .@"1",
     ref_count: u32 = 1,
     flags: packed struct {
-        is_allocated: bool = false,
-        is_read_only: bool = false,
-        is_freed: bool = false,
+        allocated: bool = false,
+        initialized: bool = false,
+        read_only: bool = false,
+        temporary: bool = false,
     } = .{},
     source: union(enum) {
         buffer: *ByteBuffer,
@@ -25,16 +26,30 @@ pub const ByteBuffer = struct {
     } = .{ .none = {} },
 
     pub fn data(self: *const @This(), index: usize, write_access: bool) ![]u8 {
-        if (write_access and self.flags.is_read_only) return error.WriteProtected;
-        if (self.flags.is_freed) return error.AccessingDeallocatedMemory;
+        if (write_access and self.flags.read_only) return error.WriteProtected;
+        if (!self.flags.initialized) return error.AccessingDeallocatedMemory;
         if (index > self.bytes.len) return error.OutOfBound;
         return self.bytes;
     }
 
+    pub fn persistent(self: *@This()) bool {
+        return self.flags.initialized and !self.flags.temporary;
+    }
+
     pub fn create(alignment: std.mem.Alignment) !*@This() {
         const self = try php.allocator.create(@This());
-        self.* = .{ .alignment = alignment, .flags = .{ .is_freed = true, .is_allocated = true } };
+        self.* = .{ .alignment = alignment, .flags = .{ .allocated = true } };
         return self;
+    }
+
+    pub fn init(bytes: []u8) @This() {
+        return .{
+            .bytes = bytes,
+            .flags = .{
+                .initialized = true,
+                .temporary = true,
+            },
+        };
     }
 
     pub fn allocate(self: *@This(), allocator: ?*const std.mem.Allocator, len: usize) !void {
@@ -46,11 +61,10 @@ pub const ByteBuffer = struct {
             const byte_ptr = al.rawAlloc(len, self.alignment, 0) orelse return error.OutOfMemory;
             self.bytes = byte_ptr[0..len];
             self.source = .{ .allocator = al };
-            self.flags.is_allocated = true;
         } else {
             self.bytes = &.{};
         }
-        self.flags.is_freed = false;
+        self.flags.initialized = true;
     }
 
     pub fn referenceString(self: *@This(), str: *String) void {
@@ -58,12 +72,12 @@ pub const ByteBuffer = struct {
         self.bytes = @constCast(sc);
         self.source = .{ .string = str };
         php.addRef(str);
-        self.flags.is_freed = false;
+        self.flags.initialized = true;
     }
 
     pub fn referencExternal(self: *@This(), bytes: []const u8) void {
         self.bytes = @constCast(bytes);
-        self.flags.is_freed = false;
+        self.flags.initialized = true;
     }
 
     pub fn externalize(self: *@This()) bool {
@@ -109,7 +123,7 @@ pub const ByteBuffer = struct {
     }
 
     pub fn protect(self: *@This()) void {
-        self.flags.is_read_only = true;
+        self.flags.read_only = true;
     }
 
     pub fn copy(self: *@This(), other: *const @This()) !void {
@@ -128,12 +142,12 @@ pub const ByteBuffer = struct {
     }
 
     pub fn addRef(self: *@This()) void {
-        if (!self.flags.is_allocated) return;
+        if (!self.flags.allocated) return;
         self.ref_count += 1;
     }
 
     pub fn release(self: *@This()) void {
-        if (!self.flags.is_allocated) return;
+        if (!self.flags.allocated) return;
         self.ref_count -= 1;
         if (self.ref_count == 0) {
             switch (self.source) {
@@ -150,7 +164,7 @@ pub const ByteBuffer = struct {
         switch (self.source) {
             .allocator => |al| {
                 al.rawFree(self.bytes, self.alignment, 0);
-                self.flags.is_freed = true;
+                self.flags.initialized = false;
                 self.source = .{ .none = {} };
             },
             else => {},

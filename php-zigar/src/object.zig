@@ -45,8 +45,8 @@ pub fn ZigObject(comptime S: type) type {
             self.* = .{};
             const obj = self.object();
             obj.handlers = getHandlers();
-            php.initializeStandardObject(self.object(), class.entry());
-            php.initializeObjectProperties(self.object(), class.entry());
+            php.initializeStandardObject(obj, class.entry());
+            php.initializeObjectProperties(obj, class.entry());
             class.addRef();
             return self;
         }
@@ -56,7 +56,9 @@ pub fn ZigObject(comptime S: type) type {
                 self.zig_portion.buffer = buffer;
                 buffer.addRef();
                 if (@hasDecl(S, "getExtent")) {
-                    if (!buffer.flags.is_freed) {
+                    // register the object now if it has memory attached, otherwise that'll be
+                    // done by initialize()
+                    if (buffer.persistent()) {
                         const class = ZigClassEntry.fromObject(self.object());
                         try class.registerObject(self.object());
                     }
@@ -120,7 +122,7 @@ pub const ObjectMap = struct {
 
     pub fn add(self: *@This(), obj: *Object) !void {
         const buf = getObjectBuffer(obj);
-        std.debug.assert(!buf.flags.is_freed);
+        std.debug.assert(buf.flags.initialized);
         try self.map.add(obj);
     }
 
@@ -130,16 +132,16 @@ pub const ObjectMap = struct {
 
     pub fn remove(self: *@This(), obj: *Object) void {
         const buf = getObjectBuffer(obj);
-        std.debug.assert(!buf.flags.is_freed);
+        std.debug.assert(buf.flags.initialized);
         self.map.remove(obj);
     }
 
-    pub fn search(self: *@This(), bytes: []const u8, ce: ?*ClassEntry, is_read_only: bool) SearchResult {
+    pub fn search(self: *@This(), bytes: []const u8, ce: ?*ClassEntry, read_only: bool) SearchResult {
         var fake_buf: ByteBuffer = .{
             .bytes = @constCast(bytes),
             .alignment = undefined,
             .ref_count = undefined,
-            .flags = .{ .is_read_only = is_read_only },
+            .flags = .{ .read_only = read_only },
             .source = undefined,
         };
         var b: GenericObject = .{
@@ -170,16 +172,16 @@ pub const ObjectMap = struct {
         return getObjectBuffer(obj);
     }
 
-    pub fn acquireBuffer(self: *@This(), bytes: []const u8, is_read_only: bool) !?*ByteBuffer {
-        const result = self.search(bytes, null, is_read_only);
+    pub fn acquireBuffer(self: *@This(), bytes: []const u8, read_only: bool) !?*ByteBuffer {
+        const result = self.search(bytes, null, read_only);
         return switch (result.match) {
             .yes => use: {
                 var buf = getObjectBuffer(result.value());
-                if (buf.flags.is_read_only == is_read_only) {
+                if (buf.flags.read_only == read_only) {
                     buf.addRef();
                 } else {
                     buf = try buf.duplciate();
-                    if (is_read_only) buf.protect();
+                    if (read_only) buf.protect();
                 }
                 break :use buf;
             },
@@ -187,7 +189,7 @@ pub const ObjectMap = struct {
                 const parent_buf = getObjectBuffer(result.value());
                 const offset = @intFromPtr(bytes.ptr) - @intFromPtr(parent_buf.bytes.ptr);
                 const buf = try parent_buf.slice(offset, bytes.len);
-                if (is_read_only) buf.protect();
+                if (read_only) buf.protect();
                 break :slice buf;
             },
             else => null,
@@ -204,9 +206,9 @@ pub const ObjectMap = struct {
         const buf_b = getObjectBuffer(b);
         return switch (buf_a.compare(buf_b)) {
             .a_is_b => if (a.ce == b.ce or b.ce == null)
-                if (buf_a.flags.is_read_only == buf_b.flags.is_read_only)
+                if (buf_a.flags.read_only == buf_b.flags.read_only)
                     .a_is_b
-                else if (buf_b.flags.is_read_only)
+                else if (buf_b.flags.read_only)
                     .a_before_b
                 else
                     .b_before_a

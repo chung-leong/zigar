@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const AbortSignal = @import("abort-signal.zig").AbortSignal;
 const accessor = @import("accessor.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const Closure = @import("closure.zig").Closure;
@@ -252,7 +253,7 @@ pub const ZigClassEntry = struct {
                 .parent = self.getParentClass(),
             },
             .unnamed_1 = .{
-                .create_object = php.transform(createUninitializedObject),
+                .create_object = php.transform(handleCreateObject),
             },
             .unnamed_2 = .{
                 .interfaces = if (interfaces.len > 0) @ptrCast(interfaces.ptr) else null,
@@ -374,7 +375,9 @@ pub const ZigClassEntry = struct {
                     }
                 }
                 // set methods that are use direct callbacks
-                if (@hasDecl(S, "getIterator")) ce.get_iterator = php.transform(S.getIterator);
+                if (@hasDecl(S, "handleGetIterator")) {
+                    ce.get_iterator = php.transform(S.handleGetIterator);
+                }
             },
         }
         self.status.finalized = true;
@@ -622,7 +625,7 @@ pub const ZigClassEntry = struct {
         const parent_bytes = try parent_buf.data(offset + len, false);
         const bytes = parent_bytes[offset .. offset + len];
         // see if there's an existing object
-        const result = self.host.object_map.search(bytes, self.entry(), parent_buf.flags.is_read_only);
+        const result = self.host.object_map.search(bytes, self.entry(), parent_buf.flags.read_only);
         if (result.match == .yes) {
             const obj = result.value();
             php.addRef(obj);
@@ -630,9 +633,8 @@ pub const ZigClassEntry = struct {
         } else {
             // need to create the object
             const buf = try parent_buf.slice(offset, len);
-            const obj = try self.createPreinitializedObject(buf, null);
+            const obj = try self.createObjectFromBuffer(buf, null);
             errdefer php.release(obj);
-            try self.registerObject(obj);
             return obj;
         }
     }
@@ -664,14 +666,13 @@ pub const ZigClassEntry = struct {
                 }
             };
             defer buf.release();
-            const obj = try self.createPreinitializedObject(buf, null);
+            const obj = try self.createObjectFromBuffer(buf, null);
             errdefer php.release(obj);
-            try self.registerObject(obj);
             return obj;
         }
     }
 
-    pub fn createPreinitializedObject(self: *@This(), buf: *ByteBuffer, prefilled: ?*const Value) !*Object {
+    pub fn createObjectFromBuffer(self: *@This(), buf: *ByteBuffer, prefilled: ?*const Value) !*Object {
         // the byte buffer may or may not be initialized at this point
         switch (self.type) {
             inline else => |t| {
@@ -719,11 +720,11 @@ pub const ZigClassEntry = struct {
         }
     }
 
-    pub fn createUninitializedObject(ce: *ClassEntry) !*Object {
+    pub fn handleCreateObject(ce: *ClassEntry) !*Object {
         const self = fromEntry(ce);
         const buf = try ByteBuffer.create(self.alignment);
         defer buf.release();
-        return try self.createPreinitializedObject(buf, null);
+        return try self.createObjectFromBuffer(buf, null);
     }
 
     fn getAccessors(self: @This(), scope: *Scope, member: *Member) !accessor.Any {
@@ -994,7 +995,7 @@ pub const ZigClassEntry = struct {
             .error_set => switch (self.flags.error_set.is_global) {
                 false => get: {
                     defer counters.error_set += 1;
-                    break :get try std.fmt.allocPrint(allocator, "ES{d}", .{counters.@"union"});
+                    break :get try std.fmt.allocPrint(allocator, "ES{d}", .{counters.error_set});
                 },
                 true => "anyerror",
             },
@@ -1075,20 +1076,30 @@ pub const ZigClassEntry = struct {
 
     pub var global_class: *ClassEntry = undefined;
     pub var global_error_class: *ClassEntry = undefined;
+    pub var abort_signal_class: *ClassEntry = undefined;
 
     pub fn registerGlobalClasses() !void {
         var ce: ClassEntry = .{
-            .name = php.createPersistentString("ZigObject"),
+            .name = php.persistent("ZigObject"),
         };
         const parent_ce = php.getClassEntry(.standard);
-        global_class = php.registerInternalClass(&ce, parent_ce) orelse
+        global_class = php.registerInternalClass(&ce, parent_ce) orelse {
             return error.ClassRegistrationFailure;
+        };
         var error_ce: ClassEntry = .{
-            .name = php.createPersistentString("ZigError"),
+            .name = php.persistent("ZigError"),
         };
         const error_parent_ce = php.getClassEntry(.exception);
-        global_error_class = php.registerInternalClass(&error_ce, error_parent_ce) orelse
+        global_error_class = php.registerInternalClass(&error_ce, error_parent_ce) orelse {
             return error.ClassRegistrationFailure;
+        };
+        var signal_ce: ClassEntry = .{
+            .name = php.persistent("ZigAbortSignal"),
+        };
+        abort_signal_class = php.registerInternalClass(&signal_ce, parent_ce) orelse {
+            return error.ClassRegistrationFailure;
+        };
+        abort_signal_class.unnamed_1.create_object = php.transform(AbortSignal.handleCreateObject);
     }
 
     pub fn isZig(ce: *ClassEntry) bool {

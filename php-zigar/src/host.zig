@@ -69,7 +69,7 @@ pub const ModuleHost = struct {
         self.ref_count -= 1;
         // std.debug.print("release host (ref = {d})\n", .{self.ref_count});
         if (self.ref_count == 0) {
-            // std.debug.print("freeing host\n", .{});
+            std.debug.print("freeing host\n", .{});
             php.release(self.global_error_set);
             self.unclaimed_buffer_map.deinit();
             self.object_map.deinit();

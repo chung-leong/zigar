@@ -474,10 +474,6 @@ pub fn createValueStringContent(sc: []const u8) Value {
     return createValueString(createString(sc));
 }
 
-pub fn createValuePersistentString(comptime sc: []const u8) Value {
-    return createValueString(persistent(sc));
-}
-
 pub fn createValueObject(object: *Object) Value {
     var result: Value = .{};
     result.value.obj = object;

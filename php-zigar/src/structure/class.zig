@@ -144,8 +144,7 @@ pub fn Class(comptime S: type) type {
             }
             const buf = try ByteBuffer.create(class.alignment);
             buf.referenceString(str);
-            const new_obj = try class.createPreinitializedObject(buf, null);
-            try class.registerObject(new_obj);
+            const new_obj = try class.createObjectFromBuffer(buf, null);
             return php.createValueObject(new_obj);
         }
 

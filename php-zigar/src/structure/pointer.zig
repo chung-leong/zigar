@@ -139,18 +139,15 @@ pub const Pointer = struct {
                             // autocast from string when there's no allocator
                             buf.referenceString(str);
                         }
-                        const new_obj = try target_class.createPreinitializedObject(buf, null);
-                        try target_class.registerObject(new_obj);
+                        const new_obj = try target_class.createObjectFromBuffer(buf, null);
                         break :init new_obj;
                     }
                 },
                 .pointer => {
-                    if (static.target_class.type == .slice and target_class.flags.slice.is_opaque) {
-                        const ptr = php.getValuePointer(*anyopaque, value) catch unreachable;
-                        const address = @intFromPtr(ptr);
-                        try static.setAddress(self, address);
-                        return;
-                    }
+                    const ptr = php.getValuePointer(*anyopaque, value) catch unreachable;
+                    const address = @intFromPtr(ptr);
+                    try static.setAddress(self, address);
+                    return;
                 },
                 else => {},
             }

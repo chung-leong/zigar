@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const AbortSignal = @import("../abort-signal.zig").AbortSignal;
 const accessor = @import("../accessor.zig");
 const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
@@ -46,7 +47,7 @@ pub fn ArgStruct(variadic: bool) type {
                 _ = iter.next(); // first member is retval
                 while (iter.next()) |member| {
                     switch (member.class.purpose) {
-                        .allocator, .promise, .generator => {},
+                        .allocator, .promise, .generator, .abort_signal => {},
                         else => arg_count += 1,
                     }
                 }
@@ -92,7 +93,8 @@ pub fn ArgStruct(variadic: bool) type {
             arg_iter.extractNamedArguments(&special_args, .{
                 .allocator = static.allocator != null,
                 .callback = static.promise != null or static.generator != null,
-                .abort_signal = static.abort_signal != null,
+                .signal = static.abort_signal != null,
+                .timeout = static.abort_signal != null,
             });
             defer {
                 inline for (comptime std.meta.fieldNames(structure.Struct.SpecialArgs)) |name| {
@@ -117,7 +119,7 @@ pub fn ArgStruct(variadic: bool) type {
                         .allocator => std.mem.Allocator,
                         .promise => Promise,
                         .generator => Generator,
-                        .abort_signal => void,
+                        .abort_signal => AbortSignal,
                         else => unreachable,
                     };
                     try a_struct.initSpecial(T, special_args);

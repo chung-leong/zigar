@@ -50,7 +50,8 @@ pub const Slice = struct {
             };
             try self.buffer.allocate(allocator, len);
             try self.writeSelf(value);
-            try class.registerObject(ZigObject(@This()).fromStructure(self).object());
+            const obj = ZigObject(@This()).fromStructure(self).object();
+            try class.registerObject(obj);
         } else {
             try self.buffer.allocate(allocator, 0);
         }
@@ -100,11 +101,11 @@ pub const Slice = struct {
     pub const getProperties = Super.getProperties;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
-    pub const getIterator = Super.getIterator;
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
     pub const getReferencedObjects = Super.getReferencedObjects;
+    pub const handleGetIterator = Super.handleGetIterator;
     const fromObject = Super.fromObject;
     const getIndex = Super.getIndex;
 };

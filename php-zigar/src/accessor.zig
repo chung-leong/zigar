@@ -28,6 +28,7 @@ pub const Error = error{
     LengthMismatch,
     Missing,
     NegativeIndex,
+    NotAbortSignal,
     NotAllocator,
     NotArray,
     NotArrayOrObject,
@@ -428,9 +429,10 @@ pub fn WithBitOffset(comptime T: type, comptime bit_offset: ?u3) type {
 pub fn getOpaqueTarget(comptime T: type, value: *const Value) !*T {
     const obj = php.getValueObject(value) catch unreachable;
     const class = ZigClassEntry.fromObject(obj);
-    if (class.type != .slice or !class.flags.slice.is_opaque) {
+    if (class.type != .slice) {
         return error.NotOpaque;
     }
     const slice_struct = ZigObject(structure.Slice).fromObject(obj).structure();
+    if (@intFromPtr(slice_struct.buffer.bytes.ptr) == 0) return error.NullPointer;
     return @ptrCast(@alignCast(slice_struct.buffer.bytes.ptr));
 }

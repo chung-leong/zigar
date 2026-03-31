@@ -165,7 +165,7 @@ pub const StructureImporter = struct {
         const memory = self.dereference(dv_h);
         const buf = try php.getValuePointer(*ByteBuffer, memory);
         const prefilled_slots = if (prefilled_slots_h) |vh| self.dereference(vh) else null;
-        const instance = try class.createPreinitializedObject(buf, prefilled_slots);
+        const instance = try class.createObjectFromBuffer(buf, prefilled_slots);
         try self.instance_list.append(php.allocator, instance);
         const value = php.createValueObject(instance);
         return self.allocateValue(value);

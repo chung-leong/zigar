@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const AbortSignal = @import("../abort-signal.zig").AbortSignal;
 const accessor = @import("../accessor.zig");
 const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
@@ -53,7 +54,7 @@ pub const Function = struct {
             try arg_buffer.allocate(null, arg_bytes.len);
             try arg_buffer.copyBytes(arg_bytes);
             defer arg_buffer.release();
-            const arg_obj = try self.argument_class.createPreinitializedObject(arg_buffer, null);
+            const arg_obj = try self.argument_class.createObjectFromBuffer(arg_buffer, null);
             defer php.release(arg_obj);
             const arg_struct = ZigObject(structure.ArgStruct(false)).fromObject(arg_obj).structure();
             var args_on_stack: [16]Value = undefined;
@@ -69,7 +70,7 @@ pub const Function = struct {
             const result = try php.invokeFunction(callable, args);
             defer php.release(&result);
             // replace buffer so the retval gets written into the stack
-            var stack_buffer: ByteBuffer = .{ .bytes = arg_bytes };
+            var stack_buffer: ByteBuffer = .init(arg_bytes);
             arg_buffer.release();
             arg_struct.buffer = &stack_buffer;
             try arg_struct.setReturnValue(&result);

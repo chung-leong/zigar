@@ -47,6 +47,26 @@ pub const ErrorSet = struct {
         getTrace: *Closure,
         getTraceAsString: *Closure,
         getPrevious: *Closure,
+
+        fn init(self: *@This(), static: *Static) !void {
+            var failed_index: usize = undefined;
+            errdefer inline for (comptime std.meta.fieldNames(@This()), 0..) |name, i| {
+                // release previously allocated items on failure
+                if (i == failed_index) break;
+                @field(self, name).release();
+            };
+            inline for (comptime std.meta.fieldNames(@This()), 0..) |name, i| {
+                errdefer failed_index = i;
+                const handler = @field(ErrorSet, name);
+                @field(self, name) = try Closure.create(static, handler, name);
+            }
+        }
+
+        fn deinit(self: *@This()) void {
+            inline for (comptime std.meta.fieldNames(@This())) |name| {
+                @field(self, name).release();
+            }
+        }
     };
 
     pub const Static = struct {
@@ -75,30 +95,15 @@ pub const ErrorSet = struct {
                         if (ZigClassEntry.fromObject(err_obj).type != .error_set) continue;
                         const name = iter.currentName() orelse return error.MissingName;
                         try self.addCanonical(name, err_obj);
-                        // decrement ref count on class (since the class holds a ref on the error)
-                        class.release();
                     }
                 }
             }
-            var failed_index: usize = undefined;
-            errdefer inline for (comptime std.meta.fieldNames(Closures), 0..) |name, i| {
-                // release previously allocated items on failure
-                if (i == failed_index) break;
-                @field(self.closures, name).release();
-            };
-            inline for (comptime std.meta.fieldNames(Closures), 0..) |name, i| {
-                errdefer failed_index = i;
-                const handler = @field(ErrorSet, name);
-                @field(self.closures, name) = try Closure.create(self, handler, name);
-            }
+            try self.closures.init(self);
         }
 
         pub fn deinit(self: *@This()) void {
             php.release(self.error_set);
-            inline for (comptime std.meta.fieldNames(@TypeOf(self.closures))) |name| {
-                const closure = @field(self.closures, name);
-                closure.release();
-            }
+            self.closures.deinit();
         }
 
         pub fn castValue(self: *@This(), value: *Value) !?Value {
@@ -141,7 +146,8 @@ pub const ErrorSet = struct {
                         // create new error
                         const buf = try ByteBuffer.create(class.alignment);
                         try buf.allocate(null, class.byte_size.?);
-                        const err_obj = try class.createPreinitializedObject(buf, null);
+                        const err_obj = try class.createObjectFromBuffer(buf, null);
+                        std.debug.print("err_obj #{}\n", .{err_obj.handle});
                         try self.value_acc.transform(null).set(buf, value);
                         var text_buffer: [64]u8 = undefined;
                         const text = std.fmt.bufPrint(&text_buffer, "UnknownError #{d}", .{err_code}) catch unreachable;
@@ -158,7 +164,7 @@ pub const ErrorSet = struct {
                         if (ZigClassEntry.isZigError(err_obj.ce)) {
                             return value.*;
                         } else {
-                            const method = php.createValuePersistentString("resume");
+                            const method = php.createValueString(php.persistent("resume"));
                             const message = try php.invokeMethod(value, &method, &.{});
                             if (php.getHashEntry(self.error_set, &message)) |err| {
                                 php.addRef(err);
@@ -287,10 +293,6 @@ pub const ErrorSet = struct {
 
     pub fn freeObject(obj: *Object) void {
         const self = fromObject(obj);
-        if (self.canonical == null or self.canonical.?.unknown) {
-            const class = ZigClassEntry.fromObject(obj);
-            class.release();
-        }
         if (self.canonical) |props| {
             props.release();
         }

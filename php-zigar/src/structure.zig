@@ -94,10 +94,11 @@ pub fn Parent(comptime S: type) type {
                 if (class.instance.template.buffer) |def| {
                     // copy default values from template
                     try self.buffer.copy(def);
-                } else {
-                    try self.buffer.clear();
                 }
-                try class.registerObject(ZigObject(S).fromStructure(self).object());
+                const obj = ZigObject(S).fromStructure(self).object();
+                if (@hasDecl(S, "getExtent")) {
+                    try class.registerObject(obj);
+                }
             }
             if (initializer) |value| {
                 if (@hasDecl(S, "writeSelf")) {
@@ -228,12 +229,12 @@ pub fn Parent(comptime S: type) type {
             defer class.release();
             // only structure that a pointer can points to implement getExtent()
             if (@hasField(S, "buffer")) {
-                self.buffer.release();
                 if (@hasDecl(S, "getExtent")) {
-                    if (!self.buffer.flags.is_freed) {
+                    if (self.buffer.persistent()) {
                         class.unregisterObject(obj);
                     }
                 }
+                self.buffer.release();
             }
             if (@hasField(S, "table")) php.release(&self.table);
         }
@@ -599,7 +600,7 @@ pub fn ArrayLike(comptime S: type) type {
             return ht;
         }
 
-        pub fn getIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
+        pub fn handleGetIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
             const obj = try php.getValueObject(this);
             return try ArrayIterator(S).create(obj);
         }

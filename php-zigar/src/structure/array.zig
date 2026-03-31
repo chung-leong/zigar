@@ -68,8 +68,8 @@ pub const Array = struct {
     pub const getProperties = Super.getProperties;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
-    pub const getIterator = Super.getIterator;
     pub const getReferencedObjects = Super.getReferencedObjects;
+    pub const handleGetIterator = Super.handleGetIterator;
     const fromObject = Super.fromObject;
     const getIndex = Super.getIndex;
 };
