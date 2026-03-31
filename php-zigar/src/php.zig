@@ -1163,11 +1163,21 @@ pub inline fn createFunction(
             .type = php_h.ZEND_INTERNAL_FUNCTION,
             .function_name = createInternedString(name),
             .handler = func_ptr,
-            .num_args = 0,
+            .num_args = arg_count,
+            .required_num_args = arg_count,
             .arg_info = &arg_info,
             .fn_flags = fn_flags,
         },
     };
+}
+
+pub inline fn createTransformedFunction(
+    comptime func: anytype,
+    comptime name: []const u8,
+    comptime arg_count: usize,
+    comptime is_variadic: bool,
+) Function {
+    return createFunction(&transform(func), name, arg_count, is_variadic);
 }
 
 pub fn destroyFunction(func: *Function) void {

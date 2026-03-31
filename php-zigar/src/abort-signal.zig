@@ -117,16 +117,10 @@ pub const AbortSignal = struct {
 
     fn getMethods() *Methods {
         if (object_methods == null) {
-            const handlers = .{
-                .abort = handleAbort,
-                .timeout = handleTimeout,
+            object_methods = .{
+                .abort = php.createTransformedFunction(handleAbort, "abort", 0, false),
+                .timeout = php.createTransformedFunction(handleTimeout, "timeout", 1, false),
             };
-            var methods: Methods = undefined;
-            inline for (comptime std.meta.fieldNames(@TypeOf(handlers))) |name| {
-                const handler = php.transform(@field(handlers, name));
-                @field(methods, name) = php.createFunction(&handler, "abort", 0, false);
-            }
-            object_methods = methods;
         }
         return &object_methods.?;
     }

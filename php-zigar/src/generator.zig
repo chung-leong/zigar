@@ -75,8 +75,7 @@ pub const Generator = struct {
     }
 
     pub fn getHandler() Value {
-        const handler = php.transform(resolveGenerator);
-        var func = php.createFunction(handler, "output", 1, false);
+        var func = php.createTransformedFunction(handleResolve, "resolve", 2, false);
         return php.createValueClosure(&func, null, null, null);
     }
 
@@ -101,7 +100,7 @@ pub const Generator = struct {
         }
     }
 
-    pub fn resolveGenerator(ed: *ExecuteData, return_value: *Value) !void {
+    pub fn handleResolve(ed: *ExecuteData, return_value: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
         const ptr = arg_iter.next() orelse return error.Unexpected;
         const ptr_obj = php.getValueObject(ptr) catch unreachable;

@@ -22,8 +22,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
 
         pub fn init(self: *@This(), stream: *const Value) !void {
             // create closure for loop fiber
-            const handler = php.transform(runLoop);
-            var func = php.createFunction(&handler, "runLoop", 0, false);
+            var func = php.createTransformedFunction(handleLoop, "loop", 0, false);
             func.internal_function.reserved[0] = self;
             const closure = php.createValueClosure(&func, null, null, null);
             errdefer php.release(&closure);
@@ -113,7 +112,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             }
         }
 
-        pub fn runLoop(ed: *ExecuteData, _: *Value) void {
+        pub fn handleLoop(ed: *ExecuteData, _: *Value) void {
             const self: *@This() = @ptrCast(@alignCast(ed.func.*.internal_function.reserved[0]));
             const stream_select = php.createValueString(php.persistent("stream_select"));
             const read_fds = php.createValueReference(&php.createValueArray(null));
@@ -151,8 +150,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
         handler_id: Value,
 
         pub fn init(self: *@This(), stream: *const Value) !void {
-            const handler = php.transform(onReadable);
-            var func = php.createFunction(&handler, "onReadable", 0, false);
+            var func = php.createTransformedFunction(onReadable, "onReadable", 0, false);
             const closure = php.createValueClosure(&func, null, null, null);
             errdefer php.release(&closure);
             const method = php.createValueString(php.persistent("onReadable"));
@@ -190,8 +188,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         pub fn addTimeout(self: *@This(), seconds: f64, signal: *AbortSignal) !void {
-            const handler = php.transform(onDelayFinished);
-            var func = php.createFunction(&handler, "onDelayFinished", 0, false);
+            var func = php.createTransformedFunction(onDelayFinished, "onDelayFinished", 0, false);
             var signal_value = php.createValueObject(signal.object());
             const closure = php.createValueClosure(&func, null, null, &signal_value);
             const method = php.createValueString(php.persistent("onReadable"));
@@ -256,8 +253,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             if (self.ready) return;
             if (!self.registered) {
                 // register a shutdown function for the purpose of shutting down the loop
-                const handler = php.transform(shutdown);
-                var func = php.createFunction(&handler, "shutdown", 0, false);
+                var func = php.createTransformedFunction(handleShutdown, "shutdown", 0, false);
                 func.internal_function.reserved[0] = self;
                 const closure = php.createValueClosure(&func, null, null, null);
                 errdefer php.release(&closure);
@@ -338,7 +334,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             }
         }
 
-        pub fn shutdown(ed: *ExecuteData, _: *Value) void {
+        pub fn handleShutdown(ed: *ExecuteData, _: *Value) void {
             const self: *@This() = @ptrCast(@alignCast(ed.func.*.internal_function.reserved[0]));
             self.deinit();
         }
