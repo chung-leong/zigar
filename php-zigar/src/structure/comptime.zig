@@ -50,8 +50,11 @@ pub const Comptime = struct {
         return try static.value_acc.set(self, value);
     }
 
+    pub const setStorage = Super.setStorage;
     pub const initialize = Super.initialize;
-    pub const visitChildren = Super.visitChildren;
+    pub const finalize = Super.finalize;
+    pub const externalize = Super.externalize;
+    pub const visitPointers = Super.visitPointers;
     pub const freeObject = Super.freeObject;
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;

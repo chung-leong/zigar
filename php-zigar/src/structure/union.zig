@@ -89,6 +89,29 @@ pub const Union = struct {
         }
     };
 
+    pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value) !void {
+        const class = ZigClassEntry.fromStructure(self);
+        if (class.flags.@"union".has_inaccessible) {
+            // allocate structure without copying initializer
+            try Super.initialize(self, allocator, null);
+            // mark pointers as inaccessible
+            try self.visitPointers(structure.Pointer.restrictAccess, .{}, .{ .include_inactive = true });
+            // now we can copy
+            if (initializer) |value| try self.writeSelf(value);
+        } else {
+            try Super.initialize(self, allocator, initializer);
+        }
+    }
+
+    pub fn finalize(self: *@This(), init_called: bool) !void {
+        if (!init_called) {
+            const class = ZigClassEntry.fromStructure(self);
+            if (class.flags.@"union".has_inaccessible) {
+                try self.visitPointers(structure.Pointer.restrictAccess, .{}, .{ .include_inactive = true });
+            }
+        }
+    }
+
     pub fn writeSelf(self: *@This(), value: *const Value) Error!void {
         if (try self.copySelf(value)) return;
         const ht = try php.getValueHashTable(value);
@@ -101,7 +124,7 @@ pub const Union = struct {
         const field_value = iter.next().?;
         const name = iter.currentName() orelse return error.KeyIsNotString;
         self.writeMember(name, field_value, null) catch |err| {
-            return self.throwFieldError(name, err);
+            return self.throwFieldException(name, .write, err);
         };
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
@@ -111,25 +134,29 @@ pub const Union = struct {
         }
     }
 
-    pub fn visitChildren(self: *@This(), cb: fn (anytype) bool) accessor.Error!void {
-        if (cb(self)) {
-            const class = ZigClassEntry.fromStructure(self);
-            if (class.flags.common.has_slot) {
-                const static = class.getStaticData(@This());
-                const selector = static.selector orelse return error.Unexpected;
-                const active_sel_value = try selector.accessors.get(self.buffer);
-                var iter = class.getMemberIterator(.instance);
-                while (iter.next()) |member| {
-                    if (iter.currentName()) |name| {
-                        const sel_value = try php.getHashEntry(&selector.possible_values, name);
-                        if (compareSelectors(sel_value, &active_sel_value)) {
-                            if (member.accessors != .primitive) {
-                                const value = try member.accessors.get(self);
-                                defer php.release(&value);
-                                const obj = php.getValueObject(&value) catch continue;
-                                try structure.invokeMethod(obj, "visitChildren", .{cb});
-                            }
-                            break;
+    pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) accessor.Error!void {
+        const class = ZigClassEntry.fromStructure(self);
+        if (class.flags.common.has_pointer) {
+            const static = class.getStaticData(@This());
+            const selector = static.selector orelse return error.Unexpected;
+            const active_sel_value = switch (options.include_inactive) {
+                false => try selector.accessors.get(self.buffer),
+                true => undefined,
+            };
+            var iter = class.getMemberIterator(.instance);
+            while (iter.next()) |member| {
+                if (iter.currentName()) |name| {
+                    if (member.accessors != .primitive) {
+                        const run = options.include_inactive or match: {
+                            const sel_value = try php.getHashEntry(&selector.possible_values, name);
+                            break :match compareSelectors(sel_value, &active_sel_value);
+                        };
+                        if (run) {
+                            const value = try member.accessors.get(self);
+                            defer php.release(&value);
+                            const obj = php.getValueObject(&value) catch continue;
+                            try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
+                            if (!options.include_inactive) break;
                         }
                     }
                 }
@@ -146,7 +173,7 @@ pub const Union = struct {
                 // when the union is untagged, it isn't possible to determine programmatically
                 // whether a field is set or not when optimize is release; the selector is only
                 // available for debug purpose; throwing an error because the operation is illegal
-                const es = self.throwFieldError(name, err);
+                const es = self.throwFieldException(name, .read, err);
                 _ = &es;
             }
             return retval;
@@ -157,7 +184,7 @@ pub const Union = struct {
     pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
         const self = fromObject(obj);
         self.checkSelector(name) catch |err| {
-            return self.throwFieldError(name, err);
+            return self.throwFieldException(name, .write, err);
         };
         return Super.writeProperty(obj, name, value, cache_slot);
     }
@@ -188,6 +215,7 @@ pub const Union = struct {
             while (iter.next()) |member| {
                 if (iter.currentName()) |name| {
                     var value = try member.accessors.get(self);
+                    errdefer php.release(&value);
                     if (member.objectTransform()) |ot| try ot.apply(&value);
                     php.setHashEntry(ht, name, &value);
                 }
@@ -217,7 +245,7 @@ pub const Union = struct {
         };
     }
 
-    fn throwFieldError(self: *@This(), name: *String, err: anytype) error{ExceptionThrown} {
+    fn throwFieldException(self: *@This(), name: *String, access: accessor.FieldAccess, err: anytype) error{ExceptionThrown} {
         const member = self.findMember(name, null) catch null;
         if (member != null and err == error.InactiveField) {
             const active_name = find: {
@@ -237,12 +265,13 @@ pub const Union = struct {
                 php.getStringContent(active_name),
             });
         } else {
-            return Super.throwFieldError(self, name, err);
+            return Super.throwFieldException(self, name, access, err);
         }
     }
 
+    pub const setStorage = Super.setStorage;
+    pub const externalize = Super.externalize;
     pub const getExtent = Super.getExtent;
-    pub const initialize = Super.initialize;
     pub const checkArguments = Super.checkArguments;
     pub const readSelf = Super.readSelf;
     pub const freeObject = Super.freeObject;

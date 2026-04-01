@@ -108,16 +108,16 @@ pub const Struct = struct {
         return Super.readSelf(self, transform);
     }
 
-    pub fn visitChildren(self: *@This(), cb: fn (anytype) bool) accessor.Error!void {
-        if (cb(self)) {
-            const class = ZigClassEntry.fromStructure(self);
-            if (class.flags.common.has_slot) {
-                var iter = class.getMemberIterator(.instance);
-                while (iter.next()) |member| {
+    pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) accessor.Error!void {
+        const class = ZigClassEntry.fromStructure(self);
+        if (class.flags.common.has_pointer) {
+            var iter = class.getMemberIterator(.instance);
+            while (iter.next()) |member| {
+                if (member.accessors != .primitive) {
                     const value = try member.accessors.get(self);
                     defer php.release(&value);
                     const obj = php.getValueObject(&value) catch continue;
-                    try structure.invokeMethod(obj, "visitChildren", .{cb});
+                    try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
                 }
             }
         }
@@ -205,6 +205,9 @@ pub const Struct = struct {
         return null;
     }
 
+    pub const setStorage = Super.setStorage;
+    pub const finalize = Super.finalize;
+    pub const externalize = Super.externalize;
     pub const getExtent = Super.getExtent;
     pub const writeSelf = Super.writeSelf;
     pub const castObject = Super.castObject;

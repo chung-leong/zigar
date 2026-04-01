@@ -530,6 +530,13 @@ pub fn createValueArray(arr: ?*Array) Value {
     return result;
 }
 
+pub fn createValueException() ?Value {
+    const eg = getExecutorGlobals();
+    const ex = eg.exception orelse return null;
+    eg.exception = null;
+    return createValueObject(ex);
+}
+
 pub fn persistent(comptime s: []const u8) *String {
     const static = struct {
         comptime text: []const u8 = s,

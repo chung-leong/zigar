@@ -9,7 +9,7 @@ const php = @import("../php.zig");
 const Object = php.Object;
 const Value = php.Value;
 const structure = @import("../structure.zig");
-const invokeFunction = structure.invokeMethod;
+const invokeMethod = structure.invokeMethod;
 
 pub const Pointer = struct {
     last_address: usize = 0,
@@ -63,7 +63,7 @@ pub const Pointer = struct {
         pub fn saveTarget(self: *@This(), pointer: *Pointer, target_obj: *Object) !void {
             php.release(&pointer.table);
             pointer.table = php.createValueObject(target_obj);
-            const extent = try invokeFunction(target_obj, "getExtent", .{});
+            const extent = try invokeMethod(target_obj, "getExtent", .{});
             try self.setAddress(pointer, extent.address);
             try self.setLength(pointer, extent.len);
             pointer.last_address = extent.address;
@@ -89,6 +89,7 @@ pub const Pointer = struct {
     };
 
     pub fn readSelf(self: *@This(), transform: ObjectTransform) accessor.Error!Value {
+        if (self.buffer.flags.inaccessible) return self.throwExceptionInaccessible();
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         try static.loadTarget(self);
@@ -100,6 +101,9 @@ pub const Pointer = struct {
 
     pub fn writeSelf(self: *@This(), value: *const Value) accessor.Error!void {
         if (try Super.copySelf(self, value)) return;
+        if (self.buffer.flags.inaccessible) {
+            if (!php.isNull(value)) return self.throwExceptionInaccessible();
+        }
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const target_obj = init: {
@@ -139,6 +143,12 @@ pub const Pointer = struct {
                     try static.setAddress(self, address);
                     return;
                 },
+                .null => {
+                    php.release(&self.table);
+                    self.table = php.createValueNull();
+                    try static.setAddress(self, 0);
+                    return;
+                },
                 else => {},
             }
             // autovivificate new target,
@@ -147,15 +157,31 @@ pub const Pointer = struct {
         try static.saveTarget(self, target_obj);
     }
 
-    pub fn visitChildren(self: *@This(), cb: fn (anytype) bool) accessor.Error!void {
-        if (cb(self)) {
-            const obj = php.getValueObject(&self.table) catch return;
-            try structure.invokeMethod(obj, "visitChildren", .{cb});
-        }
+    pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime _: structure.VisitOptions) accessor.Error!void {
+        try @call(.auto, cb, .{self} ++ args);
+    }
+
+    pub fn externalizeTarget(self: *@This()) accessor.Error!void {
+        const obj = php.getValueObject(&self.table) catch return;
+        try invokeMethod(obj, "externalize", .{});
+    }
+
+    pub fn restrictAccess(self: *@This()) !void {
+        self.buffer.flags.inaccessible = true;
+    }
+
+    fn throwExceptionInaccessible(self: *@This()) error{ExceptionThrown} {
+        const class = ZigClassEntry.fromStructure(self);
+        return php.throwExceptionFmt("pointer '{s}' is inaccessible because it's in an untagged union", .{
+            class.getName(),
+        });
     }
 
     pub const getExtent = Super.getExtent;
+    pub const setStorage = Super.setStorage;
     pub const initialize = Super.initialize;
+    pub const finalize = Super.finalize;
+    pub const externalize = Super.externalize;
     pub const checkArguments = Super.checkArguments;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;

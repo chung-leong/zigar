@@ -17,6 +17,7 @@ pub const ByteBuffer = struct {
         initialized: bool = false,
         read_only: bool = false,
         temporary: bool = false,
+        inaccessible: bool = false,
     } = .{},
     source: union(enum) {
         buffer: *ByteBuffer,

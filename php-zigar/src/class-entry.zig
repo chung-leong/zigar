@@ -343,8 +343,9 @@ pub const ZigClassEntry = struct {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
                 const C = structure.Class(S);
-                const class_zobj = ZigObject(C).fromObject(class_obj);
-                try class_zobj.setStorage(undefined, &table);
+                const class_struct = ZigObject(C).fromObject(class_obj).structure();
+                try class_struct.setStorage(undefined, &table);
+                try class_struct.finalize(false);
             },
         }
         // initialize static data
@@ -675,7 +676,9 @@ pub const ZigClassEntry = struct {
                 const table = try self.createTable(.instance, prefilled);
                 defer php.release(&table);
                 const zig_obj = try ZigObject(S).create(self);
-                try zig_obj.setStorage(buf, &table);
+                const obj_struct = zig_obj.structure();
+                try obj_struct.setStorage(buf, &table);
+                try obj_struct.finalize(false);
                 return zig_obj.object();
             },
         }
@@ -689,9 +692,10 @@ pub const ZigClassEntry = struct {
                 const buf = try ByteBuffer.create(self.alignment);
                 defer php.release(&table);
                 const zig_obj = try ZigObject(S).create(self);
-                try zig_obj.setStorage(buf, &table);
                 const obj_struct = zig_obj.structure();
+                try obj_struct.setStorage(buf, &table);
                 try obj_struct.initialize(allocator, value);
+                try obj_struct.finalize(true);
                 return zig_obj.object();
             },
         }

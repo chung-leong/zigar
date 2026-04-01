@@ -79,11 +79,12 @@ pub const Function = struct {
         php_portion: php.Function,
     };
 
-    pub fn finalize(self: *@This()) !void {
+    pub fn finalize(self: *@This(), init_called: bool) !void {
         self.closure = .{
             .self = self,
             .php_portion = php.createTransformedFunction(handleCall, "call", 0, true),
         };
+        try Super.finalize(self, init_called);
     }
 
     pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
@@ -172,10 +173,12 @@ pub const Function = struct {
         return php.SUCCESS;
     }
 
+    pub const setStorage = Super.setStorage;
     pub const initialize = Super.initialize;
+    pub const externalize = Super.externalize;
     pub const getExtent = Super.getExtent;
     pub const checkArguments = Super.checkArguments;
-    pub const visitChildren = Super.visitChildren;
+    pub const visitPointers = Super.visitPointers;
     pub const castObject = Super.castObject;
     pub const freeObject = Super.freeObject;
     pub const getReferencedObjects = Super.getReferencedObjects;

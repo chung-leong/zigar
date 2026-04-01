@@ -49,11 +49,14 @@ pub const Vector = struct {
     }
 
     pub const getExtent = Super.getExtent;
+    pub const setStorage = Super.setStorage;
     pub const initialize = Super.initialize;
+    pub const finalize = Super.finalize;
+    pub const externalize = Super.externalize;
     pub const checkArguments = Super.checkArguments;
     pub const readSelf = Super.readSelf;
     pub const writeSelf = Super.writeSelf;
-    pub const visitChildren = Super.Super.visitChildren;
+    pub const visitPointers = Super.Super.visitPointers;
     pub const readElement = Super.readElement;
     pub const writeElement = Super.writeElement;
     pub const hasElement = Super.hasElement;

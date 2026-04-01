@@ -84,6 +84,8 @@ pub fn ArgStruct(variadic: bool) type {
             try self.buffer.allocate(allocator, len);
         }
 
+        pub fn finalize(_: *@This(), _: bool) !void {}
+
         pub fn copyArguments(self: *@This(), arg_iter: *php.ArgumentIterator) !void {
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
@@ -174,6 +176,7 @@ pub fn ArgStruct(variadic: bool) type {
             return ZigObject(structure.Struct).fromObject(obj).structure();
         }
 
+        pub const setStorage = Super.setStorage;
         pub const readSelf = Super.readSelf;
         pub const freeObject = Super.freeObject;
         pub const getReferencedObjects = Super.getReferencedObjects;

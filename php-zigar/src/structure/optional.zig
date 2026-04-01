@@ -31,22 +31,6 @@ pub const Optional = struct {
         }
     };
 
-    pub fn visitChildren(self: *@This(), cb: fn (anytype) bool) accessor.Error!void {
-        if (cb(self)) {
-            const class = ZigClassEntry.fromStructure(self);
-            if (class.flags.common.has_pointer) {
-                const static = class.getStaticData(@This());
-                const present = try static.present_acc.get(self.buffer);
-                if (try php.getValueLong(&present) != 0) {
-                    const value = try static.payload_acc.get(self);
-                    defer php.release(&value);
-                    const obj = php.getValueObject(&value) catch return;
-                    try structure.invokeMethod(obj, "visitChildren", .{cb});
-                }
-            }
-        }
-    }
-
     pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
@@ -82,8 +66,25 @@ pub const Optional = struct {
         }
     }
 
+    pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) accessor.Error!void {
+        const class = ZigClassEntry.fromStructure(self);
+        if (class.flags.common.has_pointer) {
+            const static = class.getStaticData(@This());
+            const present = try static.present_acc.get(self.buffer);
+            if (try php.getValueLong(&present) != 0) {
+                const value = try static.payload_acc.get(self);
+                defer php.release(&value);
+                const obj = php.getValueObject(&value) catch return;
+                try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
+            }
+        }
+    }
+
     pub const getExtent = Super.getExtent;
+    pub const setStorage = Super.setStorage;
     pub const initialize = Super.initialize;
+    pub const finalize = Super.finalize;
+    pub const externalize = Super.externalize;
     pub const checkArguments = Super.checkArguments;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;

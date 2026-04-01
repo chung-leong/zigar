@@ -55,6 +55,9 @@ pub const RefStatus = packed struct {
     checked: bool = false,
     broken: bool = false,
 };
+pub const VisitOptions = packed struct {
+    include_inactive: bool = false,
+};
 
 pub fn enumName(comptime S: type) []const u8 {
     return inline for (comptime std.meta.fields(@TypeOf(by_enum))) |field| {
@@ -86,6 +89,17 @@ pub fn Parent(comptime S: type) type {
             return .{ .address = @intFromPtr(self.buffer.bytes.ptr) };
         }
 
+        pub fn setStorage(self: *S, buffer: *ByteBuffer, table: *const Value) !void {
+            if (@hasField(S, "buffer")) {
+                self.buffer = buffer;
+                buffer.addRef();
+            }
+            if (@hasField(S, "table")) {
+                self.table = table.*;
+                php.addRef(table);
+            }
+        }
+
         pub fn initialize(self: *S, allocator: ?*const std.mem.Allocator, initializer: ?*const Value) !void {
             if (@hasField(S, "buffer")) {
                 const class = ZigClassEntry.fromStructure(self);
@@ -107,8 +121,28 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
-        pub fn visitChildren(self: *S, cb: fn (anytype) bool) accessor.Error!void {
-            _ = cb(self);
+        pub fn finalize(self: *S, init_called: bool) !void {
+            _ = init_called;
+            if (@hasDecl(S, "buffer")) {
+                const obj = ZigObject(S).fromStructure(self).object();
+                const class = ZigClassEntry.fromObject(obj);
+                try class.registerObject(self.object());
+            }
+        }
+
+        pub fn externalize(self: *S) !void {
+            if (@hasField(S, "buffer")) {
+                if (self.buffer.externalize()) {
+                    try self.visitPointers(Pointer.externalizeTarget, .{}, .{});
+                }
+            }
+        }
+
+        pub fn visitPointers(self: *S, cb: anytype, args: anytype, comptime options: VisitOptions) accessor.Error!void {
+            _ = self;
+            _ = cb;
+            _ = args;
+            _ = options;
         }
 
         pub fn checkArguments(self: *S, arg_iter: *php.ArgumentIterator) !void {
@@ -198,11 +232,11 @@ pub fn Parent(comptime S: type) type {
             return &func.closure.php_portion;
         }
 
-        pub fn throwFieldError(self: *S, name: *String, err: anytype) error{ExceptionThrown} {
+        pub fn throwFieldException(self: *S, name: *String, access: accessor.FieldAccess, err: anytype) error{ExceptionThrown} {
             const class = ZigClassEntry.fromStructure(self);
             const E = @TypeOf(err);
-            return if (isPartOf(error.Missing, E) and err == error.Missing)
-                switch (scope) {
+            if (isPartOf(error.Missing, E) and err == error.Missing) {
+                return switch (scope) {
                     .instance => php.throwExceptionFmt("no field named '{s}' in {s} '{s}' (zig)", .{
                         php.getStringContent(name),
                         class.getStructureName(),
@@ -213,11 +247,18 @@ pub fn Parent(comptime S: type) type {
                         class.getName(),
                         php.getStringContent(name),
                     }),
+                };
+            } else {
+                if (!isPartOf(error.ExceptionThrown, E) or err != error.ExceptionThrown) {
+                    _ = &php.throwError(err);
                 }
-            else if (!isPartOf(error.ExceptionThrown, E) or err != error.ExceptionThrown)
-                php.throwError(err)
-            else
-                error.ExceptionThrown;
+                return php.throwExceptionFmt("unable to {s} field '{s}' in {s} '{s}' (zig)", .{
+                    @tagName(access),
+                    php.getStringContent(name),
+                    class.getStructureName(),
+                    class.getName(),
+                });
+            }
         }
 
         pub fn freeObject(obj: *Object) void {
@@ -267,7 +308,7 @@ pub fn Parent(comptime S: type) type {
             if (readMember(self, name)) |value| {
                 retval.* = value;
             } else |err| {
-                _ = &throwFieldError(self, name, err);
+                _ = &throwFieldException(self, name, .read, err);
             }
             return retval;
         }
@@ -276,7 +317,7 @@ pub fn Parent(comptime S: type) type {
             _ = cache_slot;
             const self = fromObject(obj);
             writeMember(self, name, value) catch |err| {
-                return throwFieldError(self, name, err);
+                return throwFieldException(self, name, .write, err);
             };
             return value;
         }
@@ -343,7 +384,7 @@ pub fn StructLike(comptime S: type) type {
             while (iter.next()) |field_value| {
                 const name = iter.currentName() orelse return error.KeyIsNotString;
                 writeMember(self, name, field_value, null) catch |err| {
-                    return throwFieldError(self, name, err);
+                    return throwFieldException(self, name, .write, err);
                 };
             }
         }
@@ -394,7 +435,8 @@ pub fn StructLike(comptime S: type) type {
             if (readMember(self, name, cache_slot)) |value| {
                 retval.* = value;
             } else |err| {
-                _ = &throwFieldError(self, name, err);
+                retval.* = php.createValueNull();
+                _ = &throwFieldException(self, name, .read, err);
             }
             return retval;
         }
@@ -402,7 +444,7 @@ pub fn StructLike(comptime S: type) type {
         pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
             const self = fromObject(obj);
             writeMember(self, name, value, cache_slot) catch |err| {
-                return throwFieldError(self, name, err);
+                return throwFieldException(self, name, .write, err);
             };
             return value;
         }
@@ -422,6 +464,7 @@ pub fn StructLike(comptime S: type) type {
             while (iter.next()) |member| {
                 if (iter.currentName()) |name| {
                     var value = try member.accessors.get(self);
+                    errdefer php.release(&value);
                     if (member.objectTransform()) |ot| try ot.apply(&value);
                     if (is_tuple) {
                         _ = php.appendHashEntry(ht, &value);
@@ -457,13 +500,16 @@ pub fn StructLike(comptime S: type) type {
         pub const object = Super.object;
         pub const fromObject = Super.fromObject;
         pub const getExtent = Super.getExtent;
+        pub const setStorage = Super.setStorage;
         pub const initialize = Super.initialize;
+        pub const finalize = Super.finalize;
+        pub const externalize = Super.externalize;
         pub const checkArguments = Super.checkArguments;
         pub const copySelf = Super.copySelf;
         pub const returnSelf = Super.returnSelf;
         pub const returnBytes = Super.returnBytes;
-        pub const visitChildren = Super.visitChildren;
-        pub const throwFieldError = Super.throwFieldError;
+        pub const visitPointers = Super.visitPointers;
+        pub const throwFieldException = Super.throwFieldException;
 
         pub const freeObject = Super.freeObject;
         pub const castObject = Super.castObject;
@@ -527,17 +573,15 @@ pub fn ArrayLike(comptime S: type) type {
             }
         }
 
-        pub fn visitChildren(self: *S, cb: fn (anytype) bool) accessor.Error!void {
-            if (cb(self)) {
-                const class = ZigClassEntry.fromStructure(self);
-                if (class.flags.common.has_slot) {
-                    const len = self.getLength();
-                    for (0..len) |index| {
-                        const value = try self.getElement(index, false);
-                        defer php.release(&value);
-                        const obj = php.getValueObject(&value) catch return;
-                        try invokeMethod(obj, "visitChildren", .{cb});
-                    }
+        pub fn visitPointers(self: *S, cb: anytype, args: anytype, comptime options: VisitOptions) accessor.Error!void {
+            const class = ZigClassEntry.fromStructure(self);
+            if (class.flags.common.has_pointer) {
+                const len = self.getLength();
+                for (0..len) |index| {
+                    const value = try self.getElement(index, false);
+                    defer php.release(&value);
+                    const obj = php.getValueObject(&value) catch return;
+                    try invokeMethod(obj, "visitPointers", .{ cb, args, options });
                 }
             }
         }
@@ -601,7 +645,10 @@ pub fn ArrayLike(comptime S: type) type {
 
         pub const fromObject = Super.fromObject;
         pub const getExtent = Super.getExtent;
+        pub const setStorage = Super.setStorage;
         pub const initialize = Super.initialize;
+        pub const finalize = Super.finalize;
+        pub const externalize = Super.externalize;
         pub const checkArguments = Super.checkArguments;
         pub const copySelf = Super.copySelf;
         pub const returnSelf = Super.returnSelf;

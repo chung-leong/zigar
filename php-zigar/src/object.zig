@@ -51,28 +51,6 @@ pub fn ZigObject(comptime S: type) type {
             return self;
         }
 
-        pub fn setStorage(self: *@This(), buffer: *ByteBuffer, table: *const Value) !void {
-            if (@hasField(S, "buffer")) {
-                self.zig_portion.buffer = buffer;
-                buffer.addRef();
-                if (@hasDecl(S, "getExtent")) {
-                    // register the object now if it has memory attached, otherwise that'll be
-                    // done by initialize()
-                    if (buffer.persistent()) {
-                        const class = ZigClassEntry.fromObject(self.object());
-                        try class.registerObject(self.object());
-                    }
-                }
-            }
-            if (@hasField(S, "table")) {
-                self.zig_portion.table = table.*;
-                php.addRef(table);
-            }
-            if (@hasDecl(S, "finalize")) {
-                try self.zig_portion.finalize();
-            }
-        }
-
         pub fn isInstance(obj: *Object) bool {
             return obj.handlers == getHandlers();
         }

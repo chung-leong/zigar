@@ -255,9 +255,12 @@ pub const Enum = struct {
     }
 
     pub const getExtent = Super.getExtent;
+    pub const setStorage = Super.setStorage;
     pub const initialize = Super.initialize;
+    pub const finalize = Super.finalize;
+    pub const externalize = Super.externalize;
     pub const checkArguments = Super.checkArguments;
-    pub const visitChildren = Super.visitChildren;
+    pub const visitPointers = Super.visitPointers;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;
     pub const readProperty = Super.readProperty;

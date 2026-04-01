@@ -35,7 +35,7 @@ pub fn Class(comptime S: type) type {
 
         var methods: ?Methods = null;
 
-        pub fn finalize(self: *@This()) !void {
+        pub fn finalize(self: *@This(), _: bool) !void {
             self.closure = .{
                 .self = self,
                 .php_portion = php.createTransformedFunction(handleCast, "cast", 1, false),
@@ -150,25 +150,12 @@ pub fn Class(comptime S: type) type {
             try this_struct.checkArguments(&arg_iter);
             const arg = arg_iter.next() orelse null;
             try this_struct.initialize(custom_allocator, arg);
+            if (@hasDecl(S, "finalize")) {
+                try this_struct.finalize(true);
+            }
             if (custom_allocator != null) {
-                const ns = struct {
-                    fn externalize(self: anytype) bool {
-                        const T = @TypeOf(self.*);
-                        const class = ZigClassEntry.fromStructure(self);
-                        const flags = class.getFlags(T);
-                        if (@hasField(T, "buffer")) {
-                            if (self.buffer.externalize()) {
-                                if (T == structure.Pointer) {}
-                                if (!@hasField(@TypeOf(flags), "has_tag") or flags.has_tag) {
-                                    return flags.has_pointer;
-                                }
-                            }
-                        }
-                        return false;
-                    }
-                };
                 // make buffers allocated from custom allocator external
-                _ = try this_struct.visitChildren(ns.externalize);
+                try this_struct.externalize();
             }
         }
 
@@ -182,6 +169,7 @@ pub fn Class(comptime S: type) type {
             return ZigObject(S).fromObject(obj).structure();
         }
 
+        pub const setStorage = Super.setStorage;
         pub const readSelf = Super.readSelf;
         pub const freeObject = Super.freeObject;
         pub const readProperty = Super.readProperty;

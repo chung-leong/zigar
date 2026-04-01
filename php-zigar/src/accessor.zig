@@ -17,6 +17,7 @@ const invokeMethod = structure.invokeMethod;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigObject = @import("object.zig").ZigObject;
 
+pub const FieldAccess = enum { read, write };
 pub const Error = error{
     AccessingDeallocatedMemory,
     CannotCreateObject,
