@@ -11,9 +11,7 @@ $m->startup();
 try {
     $signal = new ZigAbortSignal();
     $signal->timeout(0.25);
-    echo "running\n";
     $m->run(signal: $signal);
-    echo "done\n";
 } catch (Throwable $e) {
     echo $e->getMessage(), "\n";
 } finally {

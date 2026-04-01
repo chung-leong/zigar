@@ -16,3 +16,5 @@ const worker = struct {
         }
     }
 };
+
+pub const Int32 = i32;

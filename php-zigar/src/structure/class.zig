@@ -4,7 +4,6 @@ const accessor = @import("../accessor.zig");
 const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
-const Closure = @import("../closure.zig").Closure;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const ArgumentIterator = php.ArgumentIterator;
@@ -17,37 +16,30 @@ const String = php.String;
 const Value = php.Value;
 const structure = @import("../structure.zig");
 
-const Closures = struct {
-    constructor: ?*Closure,
-    cast: ?*Closure,
-    __tostring: ?*Closure,
-
-    pub fn release(self: *@This()) void {
-        inline for (comptime std.meta.fieldNames(@This())) |name| {
-            if (@field(self, name)) |c| c.release();
-        }
-    }
-};
-
 pub fn Class(comptime S: type) type {
     return struct {
-        closures: Closures = undefined,
+        closure: Closure = undefined,
         table: Value = undefined,
 
         pub const scope: ZigClassEntry.ScopeType = .static;
+        pub const Super = structure.StructLike(@This());
+        pub const Methods = struct {
+            constructor: Function,
+            __tostring: Function,
+        };
+        pub const Self = @This();
+        pub const Closure = struct {
+            self: *Self,
+            php_portion: Function,
+        };
 
-        const Super = structure.StructLike(@This());
+        var methods: ?Methods = null;
 
         pub fn finalize(self: *@This()) !void {
-            self.closures.constructor = try Closure.create(self, construct, "constructor");
-            self.closures.cast = try Closure.create(self, cast, "cast");
-            self.closures.__tostring = try Closure.create(self, stringify, "stringify");
-        }
-
-        pub fn freeObject(obj: *Object) void {
-            const self = fromObject(obj);
-            self.closures.release();
-            Super.freeObject(obj);
+            self.closure = .{
+                .self = self,
+                .php_portion = php.createTransformedFunction(handleCast, "cast", 1, false),
+            };
         }
 
         pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: ?*const Value) !?*Function {
@@ -59,11 +51,11 @@ pub fn Class(comptime S: type) type {
             const field_class = ZigClassEntry.fromObject(field_obj);
             if (field_class.type == .function) {
                 const func = ZigObject(structure.Function).fromObject(field_obj).structure();
-                return func.closure.function();
+                return &func.closure.php_portion;
             } else if (field_obj.handlers.*.get_closure != php.std_object_handlers.get_closure) {
                 // aside from Function, only Class implements getClosure()
                 const class_struct = fromObject(field_obj);
-                if (class_struct.closures.cast) |c| return c.function();
+                return &class_struct.closure.php_portion;
             }
             return null;
         }
@@ -71,26 +63,8 @@ pub fn Class(comptime S: type) type {
         pub fn getClosure(obj: *Object, _: *[*c]ClassEntry, fn_ptr: *[*c]Function, _: *[*c]Object, _: bool) c_int {
             // the class reference object functions as a casting operator when called
             const self = fromObject(obj);
-            if (self.closures.cast) |c| {
-                fn_ptr.* = c.function();
-                return php.SUCCESS;
-            } else {
-                return php.FAILURE;
-            }
-        }
-
-        pub fn construct(_: *@This(), arg_iter: *ArgumentIterator) !void {
-            if (!@hasDecl(S, "checkArguments")) unreachable;
-            const this_struct = try getThis(arg_iter);
-            // see if an allocator is specified
-            const custom_allocator = try extractAllocator(arg_iter);
-            try this_struct.checkArguments(arg_iter);
-            const arg = arg_iter.next() orelse null;
-            try this_struct.initialize(custom_allocator, arg);
-            if (custom_allocator != null) {
-                // make buffers allocated from custom allocator external
-                _ = try this_struct.externalize();
-            }
+            fn_ptr.* = &self.closure.php_portion;
+            return php.SUCCESS;
         }
 
         fn extractAllocator(arg_iter: *ArgumentIterator) !?*std.mem.Allocator {
@@ -109,9 +83,23 @@ pub fn Class(comptime S: type) type {
             return @ptrCast(@alignCast(src_struct.buffer.bytes.ptr));
         }
 
-        pub fn cast(self: *@This(), arg_iter: *ArgumentIterator) !?Value {
+        pub fn getMethods() *Methods {
+            if (methods == null) {
+                methods = .{
+                    .constructor = php.createTransformedFunction(handleConstructor, "__construct", 1, false),
+                    .__tostring = php.createTransformedFunction(handleToString, "__toString", 0, false),
+                };
+            }
+            return &methods.?;
+        }
+
+        pub fn handleCast(ed: *ExecuteData, return_value: *Value) !void {
+            const func: *Function = @ptrCast(ed.func);
+            const closure: *Closure = @fieldParentPtr("php_portion", func);
+            const self: *@This() = closure.self;
             const class = ZigClassEntry.fromStructure(self);
             const byte_size = class.byte_size orelse return error.InvalidType;
+            var arg_iter: ArgumentIterator = .init(ed);
             if (arg_iter.len != 1) {
                 return php.throwExceptionFmt("casting operation expects 1 argument, received {d}", .{
                     arg_iter.total,
@@ -122,9 +110,13 @@ pub fn Class(comptime S: type) type {
             const Static = @TypeOf(static.*);
             // certain types like enum can cast from other types
             if (@hasDecl(Static, "castValue")) {
-                if (try static.castValue(arg)) |value| return value;
+                if (try static.castValue(arg)) |value| {
+                    return_value.* = value;
+                    return;
+                }
             }
             const str = php.getValueString(arg) catch {
+                // TODO: refactor this
                 const cast_args = switch (@hasDecl(Static, "cast_args")) {
                     true => static.getCastArgs(),
                     false => "a string",
@@ -145,20 +137,36 @@ pub fn Class(comptime S: type) type {
             const buf = try ByteBuffer.create(class.alignment);
             buf.referenceString(str);
             const new_obj = try class.createObjectFromBuffer(buf, null);
-            return php.createValueObject(new_obj);
+            return_value.* = php.createValueObject(new_obj);
         }
 
-        pub fn stringify(_: *@This(), arg_iter: *ArgumentIterator) !?Value {
-            const this_struct = try getThis(arg_iter);
-            return try this_struct.readSelf(.to_string);
+        pub fn handleConstructor(ed: *ExecuteData, _: *Value) !void {
+            if (!@hasDecl(S, "checkArguments")) unreachable;
+            const this_struct = try getThis(&ed.This);
+            // see if an allocator is specified
+            var arg_iter: ArgumentIterator = .init(ed);
+            const custom_allocator = try extractAllocator(&arg_iter);
+            try this_struct.checkArguments(&arg_iter);
+            const arg = arg_iter.next() orelse null;
+            try this_struct.initialize(custom_allocator, arg);
+            if (custom_allocator != null) {
+                // make buffers allocated from custom allocator external
+                _ = try this_struct.externalize();
+            }
         }
 
-        fn getThis(arg_iter: *ArgumentIterator) !*S {
-            const obj = try php.getValueObject(arg_iter.this);
-            return &ZigObject(S).fromObject(obj).zig_portion;
+        pub fn handleToString(ed: *ExecuteData, return_value: *Value) !void {
+            const this_struct = try getThis(&ed.This);
+            return_value.* = try this_struct.readSelf(.to_string);
+        }
+
+        fn getThis(value: *const Value) !*S {
+            const obj = try php.getValueObject(value);
+            return ZigObject(S).fromObject(obj).structure();
         }
 
         pub const readSelf = Super.readSelf;
+        pub const freeObject = Super.freeObject;
         pub const readProperty = Super.readProperty;
         pub const writeProperty = Super.writeProperty;
         pub const hasProperty = Super.hasProperty;

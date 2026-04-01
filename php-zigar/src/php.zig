@@ -474,6 +474,10 @@ pub fn createValueStringContent(sc: []const u8) Value {
     return createValueString(createString(sc));
 }
 
+pub inline fn createValuePersistentString(sc: []const u8) Value {
+    return createValueString(persistent(sc));
+}
+
 pub fn createValueObject(object: *Object) Value {
     var result: Value = .{};
     result.value.obj = object;
@@ -1148,24 +1152,45 @@ pub fn invokeFunction(callable: *const Value, arguments: []const Value) !Value {
     return retval;
 }
 
-pub inline fn createFunction(
+pub fn emptyArgInfo(comptime count: usize) []const ArgInfo {
+    const rem = @rem(count, 8);
+    if (rem > 0) {
+        const larger = emptyArgInfo(count + (8 - rem));
+        return larger[0..count];
+    } else {
+        const ns = struct {
+            const array = std.mem.zeroes([count]ArgInfo);
+        };
+        return &ns.array;
+    }
+}
+
+pub fn createFunction(
     func_ptr: php_h.zif_handler,
     comptime name: []const u8,
     comptime arg_count: usize,
     comptime is_variadic: bool,
 ) Function {
-    const arg_info_count = arg_count + if (is_variadic) 1 else 0;
-    var arg_info = std.mem.zeroes([arg_info_count]ArgInfo);
+    return createFunctionEx(func_ptr, persistent(name), arg_count, is_variadic);
+}
+
+pub fn createFunctionEx(
+    func_ptr: php_h.zif_handler,
+    name: *String,
+    comptime arg_count: usize,
+    comptime is_variadic: bool,
+) Function {
+    const arg_info = emptyArgInfo(arg_count + if (is_variadic) 1 else 0);
     var fn_flags: u32 = php_h.ZEND_ACC_PUBLIC;
     if (is_variadic) fn_flags |= php_h.ZEND_ACC_VARIADIC;
     return .{
         .internal_function = .{
             .type = php_h.ZEND_INTERNAL_FUNCTION,
-            .function_name = createInternedString(name),
+            .function_name = name,
             .handler = func_ptr,
             .num_args = arg_count,
             .required_num_args = arg_count,
-            .arg_info = &arg_info,
+            .arg_info = @constCast(arg_info.ptr),
             .fn_flags = fn_flags,
         },
     };
@@ -1173,9 +1198,9 @@ pub inline fn createFunction(
 
 pub inline fn createTransformedFunction(
     comptime func: anytype,
-    comptime name: []const u8,
-    comptime arg_count: usize,
-    comptime is_variadic: bool,
+    name: []const u8,
+    arg_count: usize,
+    is_variadic: bool,
 ) Function {
     return createFunction(&transform(func), name, arg_count, is_variadic);
 }

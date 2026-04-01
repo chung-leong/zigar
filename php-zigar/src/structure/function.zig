@@ -5,7 +5,6 @@ const accessor = @import("../accessor.zig");
 const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
-const Closure = @import("../closure.zig").Closure;
 const Generator = @import("../generator.zig").Generator;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
@@ -18,12 +17,11 @@ const Promise = @import("../promise.zig").Promise;
 const structure = @import("../structure.zig");
 
 pub const Function = struct {
-    closure: *Closure = undefined,
+    closure: Closure = undefined,
     transform: ObjectTransform align(@alignOf(*ByteBuffer)) = .to_value, // force bytes to be the last field
     buffer: *ByteBuffer = undefined,
 
-    const Super = structure.Parent(@This());
-
+    pub const Super = structure.Parent(@This());
     pub const Static = struct {
         thunk_address: usize = undefined,
         controller_address: usize = 0,
@@ -76,9 +74,16 @@ pub const Function = struct {
             try arg_struct.setReturnValue(&result);
         }
     };
+    pub const Closure = struct {
+        self: *Function,
+        php_portion: php.Function,
+    };
 
     pub fn finalize(self: *@This()) !void {
-        self.closure = try Closure.create(self, invokeThunk, "run");
+        self.closure = .{
+            .self = self,
+            .php_portion = php.createTransformedFunction(handleCall, "call", 0, true),
+        };
     }
 
     pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
@@ -95,75 +100,76 @@ pub const Function = struct {
         self.buffer.bytes = ptr[0..0];
     }
 
-    pub fn invokeThunk(self: *@This(), arg_iter: *ArgumentIterator) !?Value {
+    pub fn handleCall(ed: *ExecuteData, return_value: *Value) !void {
+        const func: *php.Function = @ptrCast(ed.func);
+        const closure: *Closure = @fieldParentPtr("php_portion", func);
+        const self: *@This() = closure.self;
         const fn_addr = @intFromPtr(self.buffer.bytes.ptr);
-        if (fn_addr != 0) {
-            const class = ZigClassEntry.fromStructure(self);
-            const static = class.getStaticData(Function);
-            const is_method_call = init: {
-                if (static.first_arg_ce) |ce| {
-                    if (php.getValueObject(arg_iter.this)) |obj| {
-                        break :init obj.ce == ce;
-                    } else |_| {}
+        if (fn_addr == 0) {
+            // why would the address be zero?
+            @panic("TODO");
+        }
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        var arg_iter: ArgumentIterator = .init(ed);
+        const is_method_call = init: {
+            if (static.first_arg_ce) |ce| {
+                if (php.getValueObject(arg_iter.this)) |obj| {
+                    break :init obj.ce == ce;
+                } else |_| {}
+            }
+            break :init false;
+        };
+        // the this variable is the first argument per Zig convention
+        if (is_method_call) arg_iter.makeThisFirst();
+        const arg = try static.argument_class.createObject(null, null);
+        defer php.release(arg);
+        switch (static.argument_class.type) {
+            inline .arg_struct, .variadic_struct => |t| {
+                const S = @field(structure.by_enum, @tagName(t));
+                const arg_struct = ZigObject(S).fromObject(arg).structure();
+                const arg_addr = @intFromPtr(arg_struct.buffer.bytes.ptr);
+                try arg_struct.copyArguments(&arg_iter);
+                if (t == .arg_struct) {
+                    try class.host.runThunk(static.thunk_address, fn_addr, arg_addr);
                 }
-                break :init false;
-            };
-            if (is_method_call) arg_iter.makeThisFirst();
-            var sfa = std.heap.stackFallback(8 * 1024, php.allocator);
-            const allocator = sfa.get();
-            const arg = try static.argument_class.createObject(&allocator, null);
-            defer php.release(arg);
-            return switch (static.argument_class.type) {
-                inline .arg_struct, .variadic_struct => |t| run: {
-                    const S = @field(structure.by_enum, @tagName(t));
-                    const arg_struct = ZigObject(S).fromObject(arg).structure();
-                    const arg_addr = @intFromPtr(arg_struct.buffer.bytes.ptr);
-                    try arg_struct.copyArguments(arg_iter);
-                    if (t == .arg_struct) {
-                        try class.host.runThunk(static.thunk_address, fn_addr, arg_addr);
-                    }
+                return_value.* = get: {
                     var retval = try arg_struct.getReturnValue();
                     if (arg_struct.flags.has_promise) {
                         const promise_struct = try arg_struct.getSpecialArgument(Promise);
                         const promise = try promise_struct.getSpecialContext(Promise);
-                        promise.transform = self.transform;
                         if (!php.isNull(&retval)) {
                             // if the return value isn't null, we assume the function is choosing to not be async
                             try self.transform.apply(&retval);
-                            break :run retval;
+                            break :get retval;
                         }
-                        break :run try promise.await();
+                        // wait for promise to resolve
+                        promise.transform = self.transform;
+                        break :get try promise.await();
                     } else if (arg_struct.flags.has_generator) {
                         const generator_struct = try arg_struct.getSpecialArgument(Generator);
                         const generator = try generator_struct.getSpecialContext(Generator);
                         generator.transform = self.transform;
+                        // return generator
                         const generator_obj = ZigObject(structure.Struct).fromStructure(generator_struct).object();
                         php.addRef(generator_obj);
-                        break :run php.createValueObject(generator_obj);
+                        break :get php.createValueObject(generator_obj);
                     } else {
                         try self.transform.apply(&retval);
-                        break :run retval;
+                        break :get retval;
                     }
-                },
-                else => unreachable,
-            };
-        } else {
-            @panic("TODO");
+                };
+            },
+            else => unreachable,
         }
     }
 
     pub fn getClosure(obj: *Object, ce: *[*c]ClassEntry, func: *[*c]php.Function, this: ?*[*c]Object, _: bool) c_int {
         const self = Super.fromObject(obj);
-        func.* = self.closure.function();
+        func.* = &self.closure.php_portion;
         ce.* = obj.ce;
         if (this) |ptr| ptr.* = null;
         return php.SUCCESS;
-    }
-
-    pub fn freeObject(obj: *Object) void {
-        const self = Super.fromObject(obj);
-        self.closure.release();
-        Super.freeObject(obj);
     }
 
     pub const initialize = Super.initialize;
@@ -171,6 +177,7 @@ pub const Function = struct {
     pub const getExtent = Super.getExtent;
     pub const checkArguments = Super.checkArguments;
     pub const castObject = Super.castObject;
+    pub const freeObject = Super.freeObject;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
     const returnSelf = Super.returnSelf;

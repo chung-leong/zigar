@@ -3,7 +3,6 @@ const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
-const Closure = @import("closure.zig").Closure;
 const EventLoop = @import("event-loop.zig").EventLoop;
 const interface = @import("module/native/interface.zig");
 const Jscall = interface.Jscall;

@@ -77,7 +77,7 @@ pub const Promise = struct {
     }
 
     pub fn getHandler() Value {
-        var func = php.createTransformedFunction(handleResolve, "resolve", 2, false);
+        var func = php.createTransformedFunction(handleResolve, "resolvep", 2, false);
         return php.createValueClosure(&func, null, null, null);
     }
 

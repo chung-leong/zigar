@@ -3,7 +3,6 @@ const std = @import("std");
 const AbortSignal = @import("abort-signal.zig").AbortSignal;
 const accessor = @import("accessor.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
-const Closure = @import("closure.zig").Closure;
 const enums = @import("enums.zig");
 const MemberFlags = enums.MemberFlags;
 const MemberType = enums.MemberType;
@@ -365,16 +364,12 @@ pub const ZigClassEntry = struct {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
                 const C = structure.Class(S);
-                const class_struct = ZigObject(C).fromObject(class_obj).structure();
-                const closures = class_struct.closures;
-                // set methods that are implemented as function objects
-                inline for (comptime std.meta.fields(@TypeOf(closures))) |field| {
-                    if (@hasField(ClassEntry, field.name)) {
-                        if (@field(closures, field.name)) |closure|
-                            @field(ce, field.name) = closure.function();
-                    }
+                // methods that are implemented as function objects
+                const methods = C.getMethods();
+                inline for (comptime std.meta.fieldNames(C.Methods)) |name| {
+                    @field(ce, name) = &@field(methods, name);
                 }
-                // set methods that are use direct callbacks
+                // methods that use direct callbacks
                 if (@hasDecl(S, "handleGetIterator")) {
                     ce.get_iterator = php.transform(S.handleGetIterator);
                 }

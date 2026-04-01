@@ -35,7 +35,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             self.timer = try .start();
             self.timeouts = .empty;
             // star the loop fiber
-            const method = php.createValueString(php.persistent("start"));
+            const method = php.createValuePersistentString("start");
             _ = try php.invokeMethod(&self.fiber, &method, &.{});
         }
 
@@ -63,12 +63,12 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         pub fn suspendLoop(self: *@This()) !void {
-            const method = php.createValueString(php.persistent("suspend"));
+            const method = php.createValuePersistentString("suspend");
             _ = try php.invokeMethod(&self.fiber, &method, &.{});
         }
 
         pub fn resumeLoop(self: *@This()) !void {
-            const method = php.createValueString(php.persistent("resume"));
+            const method = php.createValuePersistentString("resume");
             _ = try php.invokeMethod(&self.fiber, &method, &.{});
         }
 
@@ -114,7 +114,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
 
         pub fn handleLoop(ed: *ExecuteData, _: *Value) void {
             const self: *@This() = @ptrCast(@alignCast(ed.func.*.internal_function.reserved[0]));
-            const stream_select = php.createValueString(php.persistent("stream_select"));
+            const stream_select = php.createValuePersistentString("stream_select");
             const read_fds = php.createValueReference(&php.createValueArray(null));
             defer php.release(&read_fds);
             const write_fds = php.createValueReference(&php.createValueNull());
@@ -153,13 +153,13 @@ pub fn EventLoop(comptime cb: fn () void) type {
             var func = php.createTransformedFunction(onReadable, "onReadable", 0, false);
             const closure = php.createValueClosure(&func, null, null, null);
             errdefer php.release(&closure);
-            const method = php.createValueString(php.persistent("onReadable"));
-            self.class_path = php.createValueString(php.persistent("Revolt\\EventLoop"));
+            const method = php.createValuePersistentString("onReadable");
+            self.class_path = php.createValuePersistentString("Revolt\\EventLoop");
             self.handler_id = try php.invokeMethod(&self.class_path, &method, &.{ stream.*, closure });
         }
 
         pub fn deinit(self: *@This()) void {
-            const method = php.createValueString(php.persistent("cancel"));
+            const method = php.createValuePersistentString("cancel");
             _ = php.invokeMethod(&self.class_path, &method, &.{self.handler_id}) catch {};
             php.release(&self.handler_id);
         }
@@ -167,7 +167,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
         pub fn getFiber(self: *@This()) !Value {
             std.debug.print("EventLoop.getFiber() called\n", .{});
             errdefer std.debug.print("EventLoop.getFiber() failed\n", .{});
-            const method = php.createValueString(php.persistent("getSuspension"));
+            const method = php.createValuePersistentString("getSuspension");
             return php.invokeMethod(&self.class_path, &method, &.{});
         }
 
@@ -175,7 +175,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             std.debug.print("EventLoop.suspendFiber() called\n", .{});
             errdefer std.debug.print("EventLoop.suspendFiber() failed\n", .{});
             defer std.debug.print("EventLoop.suspendFiber() resumed\n", .{});
-            const method = php.createValueString(php.persistent("suspend"));
+            const method = php.createValuePersistentString("suspend");
             _ = try php.invokeMethod(fiber, &method, &.{});
         }
 
@@ -183,7 +183,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             std.debug.print("EventLoop.resumeFiber() called\n", .{});
             errdefer std.debug.print("EventLoop.resumeFiber() failed\n", .{});
             defer std.debug.print("EventLoop.resumeFiber() resumed\n", .{});
-            const method = php.createValueString(php.persistent("resume"));
+            const method = php.createValuePersistentString("resume");
             _ = try php.invokeMethod(fiber, &method, &.{});
         }
 
@@ -191,9 +191,9 @@ pub fn EventLoop(comptime cb: fn () void) type {
             var func = php.createTransformedFunction(onDelayFinished, "onDelayFinished", 0, false);
             var signal_value = php.createValueObject(signal.object());
             const closure = php.createValueClosure(&func, null, null, &signal_value);
-            const method = php.createValueString(php.persistent("onReadable"));
+            const method = php.createValuePersistentString("onReadable");
             const timeout = php.createValueDouble(seconds);
-            self.class_path = php.createValueString(php.persistent("Revolt\\EventLoop"));
+            self.class_path = php.createValuePersistentString("Revolt\\EventLoop");
             self.handler_id = try php.invokeMethod(&self.class_path, &method, &.{ timeout, closure });
         }
 
@@ -257,7 +257,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
                 func.internal_function.reserved[0] = self;
                 const closure = php.createValueClosure(&func, null, null, null);
                 errdefer php.release(&closure);
-                const register = php.createValueString(php.persistent("register_shutdown_function"));
+                const register = php.createValuePersistentString("register_shutdown_function");
                 _ = try php.invokeFunction(&register, &.{closure});
                 self.registered = true;
             }

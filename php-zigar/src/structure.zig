@@ -198,7 +198,7 @@ pub fn Parent(comptime S: type) type {
             const field_class = ZigClassEntry.fromObject(field_obj);
             if (field_class.type != .function) return null;
             const func = ZigObject(Function).fromObject(field_obj).structure();
-            return func.closure.function();
+            return &func.closure.php_portion;
         }
 
         pub fn throwFieldError(self: *S, name: *String, err: anytype) error{ExceptionThrown} {

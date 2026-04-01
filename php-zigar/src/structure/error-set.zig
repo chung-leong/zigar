@@ -150,7 +150,7 @@ pub const ErrorSet = struct {
                         if (ZigClassEntry.isZigError(err_obj.ce)) {
                             return value.*;
                         } else {
-                            const method = php.createValueString(php.persistent("resume"));
+                            const method = php.createValuePersistentString("resume");
                             const message = try php.invokeMethod(value, &method, &.{});
                             if (php.getHashEntry(self.error_set, &message)) |err| {
                                 php.addRef(err);

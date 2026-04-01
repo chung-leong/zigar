@@ -3,7 +3,6 @@ const std = @import("std");
 const accessor = @import("accessor.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
-const Closure = @import("closure.zig").Closure;
 const ModuleHost = @import("host.zig").ModuleHost;
 const ObjectTransform = @import("accessor.zig").ObjectTransform;
 const php = @import("php.zig");
