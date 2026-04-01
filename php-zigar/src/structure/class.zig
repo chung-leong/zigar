@@ -86,7 +86,8 @@ pub fn Class(comptime S: type) type {
         pub fn getMethods() *Methods {
             if (methods == null) {
                 methods = .{
-                    .constructor = php.createTransformedFunction(handleConstructor, "__construct", 1, false),
+                    // constructor needs to be variadic since it can accept named arguments in lieu of an array
+                    .constructor = php.createTransformedFunction(handleConstructor, "__construct", 1, true),
                     .__tostring = php.createTransformedFunction(handleToString, "__toString", 0, false),
                 };
             }
@@ -150,8 +151,24 @@ pub fn Class(comptime S: type) type {
             const arg = arg_iter.next() orelse null;
             try this_struct.initialize(custom_allocator, arg);
             if (custom_allocator != null) {
+                const ns = struct {
+                    fn externalize(self: anytype) bool {
+                        const T = @TypeOf(self.*);
+                        const class = ZigClassEntry.fromStructure(self);
+                        const flags = class.getFlags(T);
+                        if (@hasField(T, "buffer")) {
+                            if (self.buffer.externalize()) {
+                                if (T == structure.Pointer) {}
+                                if (!@hasField(@TypeOf(flags), "has_tag") or flags.has_tag) {
+                                    return flags.has_pointer;
+                                }
+                            }
+                        }
+                        return false;
+                    }
+                };
                 // make buffers allocated from custom allocator external
-                _ = try this_struct.externalize();
+                _ = try this_struct.visitChildren(ns.externalize);
             }
         }
 

@@ -47,8 +47,8 @@ pub const Opaque = struct {
 
     pub const getExtent = Super.getExtent;
     pub const initialize = Super.initialize;
-    pub const externalize = Super.externalize;
     pub const checkArguments = Super.checkArguments;
+    pub const visitChildren = Super.visitChildren;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;

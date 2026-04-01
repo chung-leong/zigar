@@ -31,8 +31,8 @@ pub const Optional = struct {
         }
     };
 
-    pub fn externalize(self: *@This()) accessor.Error!bool {
-        if (try Super.externalize(self)) {
+    pub fn visitChildren(self: *@This(), cb: fn (anytype) bool) accessor.Error!void {
+        if (cb(self)) {
             const class = ZigClassEntry.fromStructure(self);
             if (class.flags.common.has_pointer) {
                 const static = class.getStaticData(@This());
@@ -40,14 +40,11 @@ pub const Optional = struct {
                 if (try php.getValueLong(&present) != 0) {
                     const value = try static.payload_acc.get(self);
                     defer php.release(&value);
-                    if (php.getValueObject(&value)) |obj| {
-                        _ = try structure.invokeMethod(obj, "externalize", .{});
-                    } else |_| {}
+                    const obj = php.getValueObject(&value) catch return;
+                    try structure.invokeMethod(obj, "visitChildren", .{cb});
                 }
             }
-            return true;
         }
-        return false;
     }
 
     pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {

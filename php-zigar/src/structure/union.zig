@@ -89,33 +89,6 @@ pub const Union = struct {
         }
     };
 
-    pub fn externalize(self: *@This()) accessor.Error!bool {
-        if (try Super.externalize(self)) {
-            const class = ZigClassEntry.fromStructure(self);
-            const static = class.getStaticData(@This());
-            if (class.flags.common.has_pointer and class.flags.@"union".has_tag) {
-                const selector = static.selector orelse return error.Unexpected;
-                const active_sel_value = try selector.accessors.get(self.buffer);
-                var iter = class.getMemberIterator(.instance);
-                while (iter.next()) |member| {
-                    if (iter.currentName()) |name| {
-                        const sel_value = try php.getHashEntry(&selector.possible_values, name);
-                        if (compareSelectors(sel_value, &active_sel_value)) {
-                            const value = try member.accessors.get(self);
-                            defer php.release(&value);
-                            if (php.getValueObject(&value)) |obj| {
-                                _ = try structure.invokeMethod(obj, "externalize", .{});
-                            } else |_| {}
-                            break;
-                        }
-                    }
-                }
-            }
-            return true;
-        }
-        return false;
-    }
-
     pub fn writeSelf(self: *@This(), value: *const Value) Error!void {
         if (try self.copySelf(value)) return;
         const ht = try php.getValueHashTable(value);
@@ -135,6 +108,32 @@ pub const Union = struct {
         if (static.selector) |selector| {
             const sel_value = try php.getHashEntry(&selector.possible_values, name);
             try selector.accessors.set(self.buffer, sel_value);
+        }
+    }
+
+    pub fn visitChildren(self: *@This(), cb: fn (anytype) bool) accessor.Error!void {
+        if (cb(self)) {
+            const class = ZigClassEntry.fromStructure(self);
+            if (class.flags.common.has_slot) {
+                const static = class.getStaticData(@This());
+                const selector = static.selector orelse return error.Unexpected;
+                const active_sel_value = try selector.accessors.get(self.buffer);
+                var iter = class.getMemberIterator(.instance);
+                while (iter.next()) |member| {
+                    if (iter.currentName()) |name| {
+                        const sel_value = try php.getHashEntry(&selector.possible_values, name);
+                        if (compareSelectors(sel_value, &active_sel_value)) {
+                            if (member.accessors != .primitive) {
+                                const value = try member.accessors.get(self);
+                                defer php.release(&value);
+                                const obj = php.getValueObject(&value) catch continue;
+                                try structure.invokeMethod(obj, "visitChildren", .{cb});
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
         }
     }
 

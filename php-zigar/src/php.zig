@@ -1159,7 +1159,13 @@ pub fn emptyArgInfo(comptime count: usize) []const ArgInfo {
         return larger[0..count];
     } else {
         const ns = struct {
-            const array = std.mem.zeroes([count]ArgInfo);
+            const array = init: {
+                var buffer: [count]ArgInfo = undefined;
+                for (&buffer) |*ptr| ptr.* = .{
+                    .name = "",
+                };
+                break :init buffer;
+            };
         };
         return &ns.array;
     }

@@ -387,8 +387,8 @@ pub const ErrorSet = struct {
 
     pub const getExtent = Super.getExtent;
     pub const initialize = Super.initialize;
-    pub const externalize = Super.externalize;
     pub const checkArguments = Super.checkArguments;
+    pub const visitChildren = Super.visitChildren;
     pub const castObject = Super.castObject;
     pub const hasProperty = Super.hasProperty;
     pub const getReferencedObjects = Super.getReferencedObjects;

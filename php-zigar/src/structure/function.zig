@@ -173,9 +173,9 @@ pub const Function = struct {
     }
 
     pub const initialize = Super.initialize;
-    pub const externalize = Super.externalize;
     pub const getExtent = Super.getExtent;
     pub const checkArguments = Super.checkArguments;
+    pub const visitChildren = Super.visitChildren;
     pub const castObject = Super.castObject;
     pub const freeObject = Super.freeObject;
     pub const getReferencedObjects = Super.getReferencedObjects;

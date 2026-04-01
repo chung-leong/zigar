@@ -54,10 +54,10 @@ pub const Array = struct {
     }
 
     pub const initialize = Super.initialize;
-    pub const externalize = Super.externalize;
     pub const checkArguments = Super.checkArguments;
     pub const readSelf = Super.readSelf;
     pub const writeSelf = Super.writeSelf;
+    pub const visitChildren = Super.visitChildren;
     pub const readElement = Super.readElement;
     pub const writeElement = Super.writeElement;
     pub const hasElement = Super.hasElement;

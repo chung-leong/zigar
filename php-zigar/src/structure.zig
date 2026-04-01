@@ -107,11 +107,8 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
-        pub fn externalize(self: *S) accessor.Error!bool {
-            if (@hasField(S, "buffer")) {
-                return self.buffer.externalize();
-            }
-            return false;
+        pub fn visitChildren(self: *S, cb: fn (anytype) bool) accessor.Error!void {
+            _ = cb(self);
         }
 
         pub fn checkArguments(self: *S, arg_iter: *php.ArgumentIterator) !void {
@@ -461,11 +458,11 @@ pub fn StructLike(comptime S: type) type {
         pub const fromObject = Super.fromObject;
         pub const getExtent = Super.getExtent;
         pub const initialize = Super.initialize;
-        pub const externalize = Super.externalize;
         pub const checkArguments = Super.checkArguments;
         pub const copySelf = Super.copySelf;
         pub const returnSelf = Super.returnSelf;
         pub const returnBytes = Super.returnBytes;
+        pub const visitChildren = Super.visitChildren;
         pub const throwFieldError = Super.throwFieldError;
 
         pub const freeObject = Super.freeObject;
@@ -480,24 +477,6 @@ pub fn ArrayLike(comptime S: type) type {
         pub const Super = Parent(S);
         pub const ByteExtent = Super.ByteExtent;
         pub const scope = Super.scope;
-
-        pub fn externalize(self: *S) accessor.Error!bool {
-            if (try Super.externalize(self)) {
-                const class = ZigClassEntry.fromStructure(self);
-                if (class.flags.common.has_pointer) {
-                    const len = self.getLength();
-                    for (0..len) |index| {
-                        const value = try self.getElement(index, false);
-                        defer php.release(&value);
-                        if (php.getValueObject(&value)) |obj| {
-                            _ = try invokeMethod(obj, "externalize", .{});
-                        } else |_| {}
-                    }
-                }
-                return true;
-            }
-            return false;
-        }
 
         pub fn readSelf(self: *S, transform: ObjectTransform) !Value {
             return switch (transform) {
@@ -545,6 +524,21 @@ pub fn ArrayLike(comptime S: type) type {
                 const index: usize = @intCast(key);
                 if (index >= len) return error.OutOfBound;
                 try self.setElement(index, field_value);
+            }
+        }
+
+        pub fn visitChildren(self: *S, cb: fn (anytype) bool) accessor.Error!void {
+            if (cb(self)) {
+                const class = ZigClassEntry.fromStructure(self);
+                if (class.flags.common.has_slot) {
+                    const len = self.getLength();
+                    for (0..len) |index| {
+                        const value = try self.getElement(index, false);
+                        defer php.release(&value);
+                        const obj = php.getValueObject(&value) catch return;
+                        try invokeMethod(obj, "visitChildren", .{cb});
+                    }
+                }
             }
         }
 

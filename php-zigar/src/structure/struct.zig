@@ -83,24 +83,6 @@ pub const Struct = struct {
         }
     }
 
-    pub fn externalize(self: *@This()) accessor.Error!bool {
-        if (try Super.externalize(self)) {
-            const class = ZigClassEntry.fromStructure(self);
-            if (class.flags.common.has_pointer) {
-                var iter = class.getMemberIterator(.instance);
-                while (iter.next()) |member| {
-                    const value = try member.accessors.get(self);
-                    defer php.release(&value);
-                    if (php.getValueObject(&value)) |obj| {
-                        _ = try structure.invokeMethod(obj, "externalize", .{});
-                    } else |_| {}
-                }
-            }
-            return true;
-        }
-        return false;
-    }
-
     pub fn checkArguments(self: *@This(), arg_iter: *php.ArgumentIterator) !void {
         if (arg_iter.len != 1) {
             // check if the struct has default values for all fields
@@ -124,6 +106,21 @@ pub const Struct = struct {
             }
         }
         return Super.readSelf(self, transform);
+    }
+
+    pub fn visitChildren(self: *@This(), cb: fn (anytype) bool) accessor.Error!void {
+        if (cb(self)) {
+            const class = ZigClassEntry.fromStructure(self);
+            if (class.flags.common.has_slot) {
+                var iter = class.getMemberIterator(.instance);
+                while (iter.next()) |member| {
+                    const value = try member.accessors.get(self);
+                    defer php.release(&value);
+                    const obj = php.getValueObject(&value) catch continue;
+                    try structure.invokeMethod(obj, "visitChildren", .{cb});
+                }
+            }
+        }
     }
 
     pub fn initSpecial(self: *@This(), comptime T: type, args: SpecialArgs) !void {

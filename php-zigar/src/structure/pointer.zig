@@ -88,16 +88,6 @@ pub const Pointer = struct {
         }
     };
 
-    pub fn externalize(self: *@This()) accessor.Error!bool {
-        if (try Super.externalize(self)) {
-            if (php.getValueObject(&self.table)) |obj| {
-                _ = try structure.invokeMethod(obj, "externalize", .{});
-            } else |_| {}
-            return true;
-        }
-        return false;
-    }
-
     pub fn readSelf(self: *@This(), transform: ObjectTransform) accessor.Error!Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
@@ -155,6 +145,13 @@ pub const Pointer = struct {
             break :init try target_class.createObject(allocator, value);
         };
         try static.saveTarget(self, target_obj);
+    }
+
+    pub fn visitChildren(self: *@This(), cb: fn (anytype) bool) accessor.Error!void {
+        if (cb(self)) {
+            const obj = php.getValueObject(&self.table) catch return;
+            try structure.invokeMethod(obj, "visitChildren", .{cb});
+        }
     }
 
     pub const getExtent = Super.getExtent;

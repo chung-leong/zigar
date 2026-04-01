@@ -51,7 +51,7 @@ pub const Comptime = struct {
     }
 
     pub const initialize = Super.initialize;
-    pub const externalize = Super.externalize;
+    pub const visitChildren = Super.visitChildren;
     pub const freeObject = Super.freeObject;
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;

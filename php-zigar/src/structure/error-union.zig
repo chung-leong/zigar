@@ -37,25 +37,6 @@ pub const ErrorUnion = struct {
         }
     };
 
-    pub fn externalize(self: *@This()) accessor.Error!bool {
-        if (try Super.externalize(self)) {
-            const class = ZigClassEntry.fromStructure(self);
-            if (class.flags.common.has_pointer) {
-                const static = class.getStaticData(@This());
-                const err = try static.error_acc.get(self.buffer);
-                if (php.getType(&err) != .object) {
-                    const value = try static.payload_acc.get(self);
-                    defer php.release(&value);
-                    if (php.getValueObject(&value)) |obj| {
-                        _ = try structure.invokeMethod(obj, "externalize", .{});
-                    } else |_| {}
-                }
-            }
-            return true;
-        }
-        return false;
-    }
-
     pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
@@ -97,6 +78,22 @@ pub const ErrorUnion = struct {
         } else {
             try static.error_acc.set(self.buffer, &null_value);
             try static.payload_acc.set(self, value);
+        }
+    }
+
+    pub fn visitChildren(self: *@This(), cb: fn (anytype) bool) accessor.Error!void {
+        if (cb(self)) {
+            const class = ZigClassEntry.fromStructure(self);
+            if (class.flags.common.has_slot) {
+                const static = class.getStaticData(@This());
+                const err = try static.error_acc.get(self.buffer);
+                if (php.getType(&err) != .object) {
+                    const value = try static.payload_acc.get(self);
+                    defer php.release(&value);
+                    const obj = php.getValueObject(&value) catch return;
+                    try structure.invokeMethod(obj, "visitChildren", .{cb});
+                }
+            }
         }
     }
 

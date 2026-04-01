@@ -91,9 +91,9 @@ pub const Slice = struct {
     }
 
     pub const checkArguments = Super.checkArguments;
-    pub const externalize = Super.externalize;
     pub const readSelf = Super.readSelf;
     pub const writeSelf = Super.writeSelf;
+    pub const visitChildren = Super.visitChildren;
     pub const readElement = Super.readElement;
     pub const writeElement = Super.writeElement;
     pub const hasElement = Super.hasElement;
