@@ -187,7 +187,8 @@ pub fn Parent(comptime S: type) type {
 
         pub fn returnBytes(self: *S) !Value {
             if (!@hasField(S, "buffer")) return error.Unsupported;
-            return php.createValueStringContent(self.buffer.bytes);
+            const str = try self.buffer.getString();
+            return php.createValueString(str);
         }
 
         pub fn readMember(self: *S, name: *String) !Value {
@@ -268,7 +269,7 @@ pub fn Parent(comptime S: type) type {
             // only structure that a pointer can points to implement getExtent()
             if (@hasField(S, "buffer")) {
                 if (@hasDecl(S, "getExtent")) {
-                    if (self.buffer.persistent()) {
+                    if (!self.buffer.flags.uninitialized and !self.buffer.flags.temporary) {
                         class.unregisterObject(obj);
                     }
                 }

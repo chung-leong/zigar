@@ -798,6 +798,10 @@ pub fn createString(s: []const u8) *String {
     };
 }
 
+pub fn dupliateString(str: *String) *String {
+    return php_h.zend_string_dup(str, false);
+}
+
 pub fn createStringWithLength(len: usize) *String {
     const zs = switch (len) {
         0 => php_h.zend_empty_string,

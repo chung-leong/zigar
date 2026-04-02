@@ -152,7 +152,7 @@ pub const StructureImporter = struct {
         } else {
             buffer.referencExternal(&.{});
         }
-        if (copying) buffer.protect();
+        if (copying) buffer.protect(true);
         const value = php.createValuePointer(buffer);
         return self.allocateValue(value);
     }

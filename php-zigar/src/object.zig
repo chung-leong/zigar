@@ -100,7 +100,7 @@ pub const ObjectMap = struct {
 
     pub fn add(self: *@This(), obj: *Object) !void {
         const buf = getObjectBuffer(obj);
-        std.debug.assert(buf.flags.initialized);
+        std.debug.assert(!buf.flags.uninitialized and !buf.flags.temporary);
         try self.map.add(obj);
     }
 
@@ -110,7 +110,7 @@ pub const ObjectMap = struct {
 
     pub fn remove(self: *@This(), obj: *Object) void {
         const buf = getObjectBuffer(obj);
-        std.debug.assert(buf.flags.initialized);
+        std.debug.assert(!buf.flags.uninitialized and !buf.flags.temporary);
         self.map.remove(obj);
     }
 
@@ -150,7 +150,7 @@ pub const ObjectMap = struct {
         return getObjectBuffer(obj);
     }
 
-    pub fn acquireBuffer(self: *@This(), bytes: []const u8, read_only: bool) !?*ByteBuffer {
+    pub fn acquireBuffer(self: *@This(), bytes: []const u8, alignment: std.mem.Alignment, read_only: bool) !?*ByteBuffer {
         const result = self.search(bytes, null, read_only);
         return switch (result.match) {
             .yes => use: {
@@ -159,15 +159,15 @@ pub const ObjectMap = struct {
                     buf.addRef();
                 } else {
                     buf = try buf.duplciate();
-                    if (read_only) buf.protect();
+                    buf.protect(read_only);
                 }
                 break :use buf;
             },
             .outside => slice: {
                 const parent_buf = getObjectBuffer(result.value());
                 const offset = @intFromPtr(bytes.ptr) - @intFromPtr(parent_buf.bytes.ptr);
-                const buf = try parent_buf.slice(offset, bytes.len);
-                if (read_only) buf.protect();
+                const buf = try parent_buf.slice(offset, bytes.len, alignment);
+                buf.protect(read_only);
                 break :slice buf;
             },
             else => null,

@@ -628,7 +628,7 @@ pub const ZigClassEntry = struct {
             return obj;
         } else {
             // need to create the object
-            const buf = try parent_buf.slice(offset, len);
+            const buf = try parent_buf.slice(offset, len, self.alignment);
             const obj = try self.createObjectFromBuffer(buf, null);
             errdefer php.release(obj);
             return obj;
@@ -648,16 +648,16 @@ pub const ZigClassEntry = struct {
             const buf = get: {
                 if (self.host.unclaimed_buffer_map.claim(bytes)) |buf| {
                     // use a buffer that has just been allocated
-                    if (is_const) buf.protect();
+                    if (is_const) buf.protect(true);
                     break :get buf;
-                } else if (try self.host.object_map.acquireBuffer(bytes, is_const)) |buf| {
+                } else if (try self.host.object_map.acquireBuffer(bytes, self.alignment, is_const)) |buf| {
                     // use a buffer that's attached to an existing object
                     break :get buf;
                 } else {
                     // assume addresss is valid, pointing to memory somewhere inside the app's address space
                     const buf = try ByteBuffer.create(self.alignment);
                     buf.referencExternal(bytes);
-                    if (is_const) buf.protect();
+                    if (is_const) buf.protect(true);
                     break :get buf;
                 }
             };

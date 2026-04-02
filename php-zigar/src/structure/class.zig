@@ -87,7 +87,7 @@ pub fn Class(comptime S: type) type {
             if (methods == null) {
                 methods = .{
                     // constructor needs to be variadic since it can accept named arguments in lieu of an array
-                    .constructor = php.createTransformedFunction(handleConstructor, "__construct", 1, true),
+                    .constructor = php.createTransformedFunction(handleConstructor, "__construct", 0, true),
                     .__tostring = php.createTransformedFunction(handleToString, "__toString", 0, false),
                 };
             }
