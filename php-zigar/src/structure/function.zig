@@ -26,7 +26,7 @@ pub const Function = struct {
         thunk_address: usize = undefined,
         controller_address: usize = 0,
         argument_class: *ZigClassEntry = undefined,
-        first_arg_ce: ?*ClassEntry = null,
+        first_arg_class: ?*ZigClassEntry = null,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -39,11 +39,41 @@ pub const Function = struct {
                     self.argument_class = arg_member.class;
                     if (arg_count > 0) {
                         const arg = try arg_member.class.getMember(.instance, "0");
-                        self.first_arg_ce = arg.class.entry();
+                        switch (arg.class.type) {
+                            .@"struct", .@"union", .@"enum", .@"opaque", .pointer => {
+                                self.first_arg_class = arg.class;
+                            },
+                            else => {},
+                        }
                     }
                 },
                 else => return error.Unexpected,
             }
+        }
+
+        pub fn matchFirstArgument(self: *@This(), value: *const Value) bool {
+            var arg_class = self.first_arg_class orelse return false;
+            if (arg_class.type == .pointer) {
+                const target_member = arg_class.getMember(.instance, 0) catch unreachable;
+                switch (target_member.class.type) {
+                    .@"struct", .@"union", .@"enum", .@"opaque" => {
+                        arg_class = target_member.class;
+                        self.first_arg_class = arg_class;
+                    },
+                    else => {
+                        self.first_arg_class = null;
+                        return false;
+                    },
+                }
+            }
+            var obj = php.getValueObject(value) catch return false;
+            if (!ZigClassEntry.isZig(obj.ce)) return false;
+            if (ZigObject(structure.Pointer).isInstance(obj)) {
+                const pointer = ZigObject(structure.Pointer).fromObject(obj).structure();
+                const target = pointer.readSelf(.to_value) catch return false;
+                obj = php.getValueObject(&target) catch return false;
+            }
+            return obj.ce == arg_class.entry();
         }
 
         pub fn runCallback(self: *@This(), callable: *Value, arg_bytes: []u8) !void {
@@ -113,16 +143,10 @@ pub const Function = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         var arg_iter: ArgumentIterator = .init(ed);
-        const is_method_call = init: {
-            if (static.first_arg_ce) |ce| {
-                if (php.getValueObject(arg_iter.this)) |obj| {
-                    break :init obj.ce == ce;
-                } else |_| {}
-            }
-            break :init false;
-        };
-        // the this variable is the first argument per Zig convention
-        if (is_method_call) arg_iter.makeThisFirst();
+        if (static.matchFirstArgument(arg_iter.this)) {
+            // the this variable is the first argument per Zig convention
+            arg_iter.makeThisFirst();
+        }
         const arg = try static.argument_class.createObject(null, null);
         defer php.release(arg);
         switch (static.argument_class.type) {

@@ -1145,22 +1145,18 @@ pub fn isCallable(callable: *const Value) bool {
     return php_h.zend_is_callable(@constCast(callable), php_h.IS_CALLABLE_CHECK_SILENT, null);
 }
 
-pub fn invokeMethod(container: *const Value, fn_name: *const Value, arguments: []const Value) !Value {
-    var callable = createValueArray(null);
-    defer release(&callable);
-    setPropertyRef(&callable, 0, @constCast(container)) catch unreachable;
-    setPropertyRef(&callable, 1, @constCast(fn_name)) catch unreachable;
-    return invokeFunction(&callable, arguments);
-}
-
-pub fn invokeFunction(callable: *const Value, arguments: []const Value) !Value {
+pub fn invokeMethod(container: ?*const Value, fn_name: *const Value, arguments: []const Value) !Value {
     var retval: Value = undefined;
     const args = @constCast(arguments.ptr);
     const len: u32 = @intCast(arguments.len);
-    if (php_h._call_user_function_impl(null, @constCast(callable), &retval, len, args, null) != php_h.SUCCESS) {
+    if (php_h._call_user_function_impl(@constCast(container), @constCast(fn_name), &retval, len, args, null) != php_h.SUCCESS) {
         return error.Failure;
     }
     return retval;
+}
+
+pub fn invokeFunction(callable: *const Value, arguments: []const Value) !Value {
+    return try invokeMethod(null, callable, arguments);
 }
 
 pub fn emptyArgInfo(comptime count: usize) []const ArgInfo {

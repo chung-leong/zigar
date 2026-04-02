@@ -157,6 +157,13 @@ pub const ZigClassEntry = struct {
         return php.instanceOf(self.entry(), interface_ce);
     }
 
+    pub fn hasMethods(self: *@This()) bool {
+        return switch (self.type) {
+            .@"struct", .@"union", .@"enum", .@"opaque" => true,
+            else => false,
+        };
+    }
+
     pub fn addRef(self: *@This()) void {
         self.php_portion.refcount += 1;
     }

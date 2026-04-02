@@ -2,10 +2,10 @@ const std = @import("std");
 
 const accessor = @import("accessor.zig");
 const ObjectTransform = accessor.ObjectTransform;
-const ArrayIterator = @import("iterator.zig").ArrayIterator;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const enums = @import("enums.zig");
 const StructureType = enums.StructureType;
+const iterator = @import("iterator.zig");
 const php = @import("php.zig");
 const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
@@ -330,7 +330,7 @@ pub fn Parent(comptime S: type) type {
             return if (hasMember(self, name)) 1 else 0;
         }
 
-        pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: *const Value) !?*php.Function {
+        pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: ?*const Value) !?*php.Function {
             const obj = obj_ptr.*;
             const self = fromObject(obj);
             return try findMethod(self, name);
@@ -641,7 +641,7 @@ pub fn ArrayLike(comptime S: type) type {
 
         pub fn handleGetIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
             const obj = try php.getValueObject(this);
-            return try ArrayIterator(S).create(obj);
+            return try iterator.ArrayIterator(S).create(obj);
         }
 
         pub const fromObject = Super.fromObject;

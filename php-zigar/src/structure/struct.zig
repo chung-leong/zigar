@@ -8,7 +8,7 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const StructurePurpose = @import("../enums.zig").StructurePurpose;
 const Generator = @import("../generator.zig").Generator;
-const GeneratorIterator = @import("../iterator.zig").GeneratorIterator;
+const iterator = @import("../iterator.zig");
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const ArgumentIterator = php.ArgumentIterator;
@@ -196,13 +196,14 @@ pub const Struct = struct {
         Super.freeObject(obj);
     }
 
-    pub fn handleGetIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
+    pub fn handleGetIterator(ce: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
         const obj = try php.getValueObject(this);
-        const class = ZigClassEntry.fromObject(obj);
-        if (class.purpose == .generator) {
-            return try GeneratorIterator.create(obj);
-        }
-        return null;
+        const class = ZigClassEntry.fromEntry(ce);
+        return switch (class.purpose) {
+            .iterator => try iterator.IteratorIterator.create(obj),
+            .generator => try iterator.GeneratorIterator.create(obj),
+            else => null,
+        };
     }
 
     pub const setStorage = Super.setStorage;

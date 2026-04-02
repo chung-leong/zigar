@@ -4,7 +4,6 @@ const accessor = @import("../accessor.zig");
 const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
-const Iterator = @import("../iterator.zig").Iterator;
 const php = @import("../php.zig");
 const ClassEntry = php.ClassEntry;
 const HashTableIterator = php.HashTableIterator;

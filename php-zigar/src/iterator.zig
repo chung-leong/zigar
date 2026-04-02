@@ -29,7 +29,7 @@ pub fn ArrayIterator(comptime S: type) type {
             php.initializeIterator(&self.iter);
             self.object = obj;
             self.len = @intCast(count);
-            self.iter.funcs = &functions;
+            self.iter.funcs = &methods;
             return &self.iter;
         }
 
@@ -54,21 +54,14 @@ pub fn ArrayIterator(comptime S: type) type {
             key_ptr.* = php.createValueLong(@intCast(iter.index));
         }
 
-        pub fn moveForward(iter: *ObjectIterator) void {
-            iter.index += 1;
-        }
+        pub fn moveForward(_: *ObjectIterator) void {}
 
-        pub fn rewind(iter: *ObjectIterator) void {
-            iter.index = 0;
-        }
-
-        const functions: ObjectIteratorFunctions = .{
+        const methods: ObjectIteratorFunctions = .{
             .dtor = php.transform(destroy),
             .valid = php.transform(isValid),
             .get_current_data = php.transform(getCurrentData),
             .get_current_key = php.transform(getCurrentKey),
             .move_forward = php.transform(moveForward),
-            .rewind = php.transform(rewind),
         };
     };
 }
@@ -88,7 +81,7 @@ pub const GeneratorIterator = struct {
         generator.addRef();
         php.initializeIterator(&self.iter);
         self.generator = generator;
-        self.iter.funcs = &functions;
+        self.iter.funcs = &methods;
         return &self.iter;
     }
 
@@ -115,19 +108,101 @@ pub const GeneratorIterator = struct {
 
     pub fn moveForward(iter: *ObjectIterator) !void {
         const self = fromIter(iter);
-        if (try self.generator.moveForward()) {
-            iter.index += 1;
+        try self.generator.moveForward();
+    }
+
+    pub fn rewind(iter: *ObjectIterator) !void {
+        const self = fromIter(iter);
+        try self.generator.rewind();
+    }
+
+    const methods: ObjectIteratorFunctions = .{
+        .dtor = php.transform(destroy),
+        .valid = php.transform(isValid),
+        .get_current_data = php.transform(getCurrentData),
+        .get_current_key = php.transform(getCurrentKey),
+        .move_forward = php.transform(moveForward),
+        .rewind = php.transform(rewind),
+    };
+};
+
+pub const IteratorIterator = struct {
+    iter: ObjectIterator,
+    iter_object: *Object,
+    flags: packed struct {
+        moved: bool = false,
+        valid: bool = false,
+    },
+
+    fn fromIter(iter: *ObjectIterator) *@This() {
+        return @fieldParentPtr("iter", iter);
+    }
+
+    pub fn create(obj: *Object) !*ObjectIterator {
+        const self = try php.allocator.create(@This());
+        php.addRef(obj);
+        php.initializeIterator(&self.iter);
+        self.iter_object = obj;
+        self.iter.funcs = &methods;
+        self.flags = .{};
+        return &self.iter;
+    }
+
+    pub fn destroy(iter: *ObjectIterator) void {
+        const self = fromIter(iter);
+        php.release(self.iter_object);
+    }
+
+    pub fn isValid(iter: *ObjectIterator) !c_int {
+        const self = fromIter(iter);
+        return if (self.flags.valid) php.SUCCESS else php.FAILURE;
+    }
+
+    pub fn getCurrentData(iter: *ObjectIterator) !*Value {
+        php.addRef(&iter.data);
+        return &iter.data;
+    }
+
+    pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {
+        key_ptr.* = php.createValueLong(@intCast(iter.index));
+    }
+
+    pub fn moveForward(iter: *ObjectIterator) !void {
+        const self = fromIter(iter);
+        defer self.flags.moved = true;
+        if (self.flags.valid) {
+            php.release(&self.iter.data);
+            self.flags.valid = false;
+        }
+        if (self.call("next")) |result| {
+            if (!php.isNull(&result)) {
+                self.iter.data = result;
+                self.flags.valid = true;
+            }
+        } else |err| {
+            return err;
         }
     }
 
     pub fn rewind(iter: *ObjectIterator) !void {
         const self = fromIter(iter);
-        if (try self.generator.rewind()) {
-            iter.index += 0;
+        if (self.flags.moved) {
+            if (self.call("reset")) |_| {
+                self.flags.moved = false;
+            } else |_| {
+                return;
+            }
         }
+        try moveForward(iter);
     }
 
-    const functions: ObjectIteratorFunctions = .{
+    fn call(self: *@This(), comptime method: []const u8) !Value {
+        const obj_value = php.createValueObject(self.iter_object);
+        const method_value = php.createValuePersistentString(method);
+        return php.invokeMethod(&obj_value, &method_value, &.{});
+    }
+
+    const methods: ObjectIteratorFunctions = .{
         .dtor = php.transform(destroy),
         .valid = php.transform(isValid),
         .get_current_data = php.transform(getCurrentData),

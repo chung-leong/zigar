@@ -67,22 +67,6 @@ pub fn Class(comptime S: type) type {
             return php.SUCCESS;
         }
 
-        fn extractAllocator(arg_iter: *ArgumentIterator) !?*std.mem.Allocator {
-            var special_args: struct {
-                allocator: ?Value = null,
-            } = .{};
-            arg_iter.extractNamedArguments(&special_args, .{ .allocator = true });
-            defer if (special_args.allocator) |a| php.release(&a);
-            const src_value = special_args.allocator orelse return null;
-            const src_obj = try php.getValueObject(&src_value);
-            const src_class = ZigClassEntry.fromObject(src_obj);
-            if (src_class.type != .@"struct" or src_class.purpose != .allocator) {
-                return error.NotAllocator;
-            }
-            const src_struct = ZigObject(structure.Struct).fromObject(src_obj).structure();
-            return @ptrCast(@alignCast(src_struct.buffer.bytes.ptr));
-        }
-
         pub fn getMethods() *Methods {
             if (methods == null) {
                 methods = .{
@@ -167,6 +151,22 @@ pub fn Class(comptime S: type) type {
         fn getThis(value: *const Value) !*S {
             const obj = try php.getValueObject(value);
             return ZigObject(S).fromObject(obj).structure();
+        }
+
+        fn extractAllocator(arg_iter: *ArgumentIterator) !?*std.mem.Allocator {
+            var special_args: struct {
+                allocator: ?Value = null,
+            } = .{};
+            arg_iter.extractNamedArguments(&special_args, .{ .allocator = true });
+            defer if (special_args.allocator) |a| php.release(&a);
+            const src_value = special_args.allocator orelse return null;
+            const src_obj = try php.getValueObject(&src_value);
+            const src_class = ZigClassEntry.fromObject(src_obj);
+            if (src_class.type != .@"struct" or src_class.purpose != .allocator) {
+                return error.NotAllocator;
+            }
+            const src_struct = ZigObject(structure.Struct).fromObject(src_obj).structure();
+            return @ptrCast(@alignCast(src_struct.buffer.bytes.ptr));
         }
 
         pub const setStorage = Super.setStorage;

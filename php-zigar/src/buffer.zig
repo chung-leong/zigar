@@ -167,16 +167,8 @@ pub const ByteBuffer = struct {
     }
 
     pub fn getString(self: *@This()) !*String {
-        return switch (self.source) {
-            .string => |str| use: {
-                php.addRef(str);
-                break :use str;
-            },
-            else => create: {
-                const sc = try self.data(0, false);
-                break :create php.createString(sc);
-            },
-        };
+        const sc = try self.data(0, false);
+        return php.createString(sc);
     }
 
     pub fn getSourceAllocator(self: *const @This()) ?*const std.mem.Allocator {

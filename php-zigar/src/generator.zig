@@ -51,22 +51,17 @@ pub const Generator = struct {
         }
     }
 
-    pub fn moveForward(self: *@This()) !bool {
+    pub fn moveForward(self: *@This()) !void {
         if (self.status != .finished) {
             self.status = .waiting;
             try CallDispatcher.event_loop.suspendFiber(&self.fiber);
-            return true;
-        } else {
-            return false;
         }
     }
 
-    pub fn rewind(self: *@This()) !bool {
+    pub fn rewind(self: *@This()) !void {
         if (self.status == .unresolved) {
             self.fiber = try CallDispatcher.event_loop.getFiber();
             return try self.moveForward();
-        } else {
-            return false;
         }
     }
 
