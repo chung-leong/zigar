@@ -4,8 +4,12 @@ const accessor = @import("../accessor.zig");
 const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const iterator = @import("../iterator.zig");
 const php = @import("../php.zig");
+const ClassEntry = php.ClassEntry;
 const Object = php.Object;
+const ObjectIterator = php.ObjectIterator;
+const String = php.String;
 const Value = php.Value;
 const structure = @import("../structure.zig");
 
@@ -15,9 +19,14 @@ pub const Opaque = struct {
     const Super = structure.Parent(@This());
 
     pub const Static = struct {
+        prop_names: []*String = undefined,
         class_obj: *Object = undefined,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
+            // opaques can have getters and setters
+            var prop_count: usize = 0;
+            _ = &prop_count;
+            self.prop_names = try php.allocator.alloc(*String, prop_count);
             // because methods are really static functions, we need to maintain a ref on the class object
             self.class_obj = class_obj;
             php.addRef(self.class_obj);
@@ -25,17 +34,25 @@ pub const Opaque = struct {
 
         pub fn deinit(self: *@This()) void {
             php.release(self.class_obj);
+            php.allocator.free(self.prop_names);
         }
     };
 
-    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
+    pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
         if (transform == .to_bytes) return try self.returnBytes();
         return self.throwException();
     }
 
-    pub fn writeSelf(self: *@This(), value: *const Value) !void {
+    pub fn setValue(self: *@This(), value: *const Value) !void {
         _ = value;
         return self.throwException();
+    }
+
+    pub fn handleGetIterator(ce: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
+        const obj = try php.getValueObject(this);
+        const class = ZigClassEntry.fromEntry(ce);
+        const static = class.getStaticData(@This());
+        return try iterator.PropertyIterator(@This()).create(obj, static.prop_names);
     }
 
     fn throwException(self: *@This()) error{ExceptionThrown} {

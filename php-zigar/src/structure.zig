@@ -67,9 +67,21 @@ pub fn enumName(comptime S: type) []const u8 {
 
 pub fn Parent(comptime S: type) type {
     return struct {
-        pub const CacheEntry = extern struct {
-            class: ?*const ZigClassEntry,
-            member: *const ZigClassEntry.Member,
+        pub const TransformCacheEntry = struct {
+            id: usize,
+            transform: ObjectTransform,
+
+            const name = "transform";
+
+            pub inline fn find(cache_slot: ?[*]?*anyopaque) ?ObjectTransform {
+                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
+                return if (self.id == @intFromPtr(name)) self.transform else null;
+            }
+
+            pub inline fn set(cache_slot: ?[*]?*anyopaque, transform: ObjectTransform) void {
+                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return;
+                self.* = .{ .id = @intFromPtr(name), .transform = transform };
+            }
         };
         pub const ByteExtent = struct {
             address: usize,
@@ -115,8 +127,8 @@ pub fn Parent(comptime S: type) type {
                 }
             }
             if (initializer) |value| {
-                if (@hasDecl(S, "writeSelf")) {
-                    try self.writeSelf(value);
+                if (@hasDecl(S, "setValue")) {
+                    try self.setValue(value);
                 } else @panic("Not implemented");
             }
         }
@@ -154,7 +166,7 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
-        pub fn readSelf(self: *S, transform: ObjectTransform) !Value {
+        pub fn getValue(self: *S, transform: ObjectTransform) !Value {
             if (transform != .to_value) return error.Unsupported;
             return try returnSelf(self);
         }
@@ -191,30 +203,39 @@ pub fn Parent(comptime S: type) type {
             return php.createValueString(str);
         }
 
-        pub fn readMember(self: *S, name: *String) !Value {
-            const transform = ObjectTransform.fromPropName(name) orelse return error.Missing;
-            return self.readSelf(transform) catch |err| {
-                const E = @TypeOf(err);
-                return if (isPartOf(error.Unsupported, E) and err == error.Unsupported)
-                    error.Missing
-                else
-                    err;
+        pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !Value {
+            const transform = findTransform(name, cache_slot) orelse return error.Missing;
+            return self.getValue(transform) catch |err| switch (matchError(err, error.Unsupported)) {
+                true => error.Missing,
+                false => err,
             };
         }
 
-        pub fn writeMember(self: *S, name: *String, value: *const Value) accessor.Error!void {
-            if (php.matchString(name, "__value")) {
-                try self.writeSelf(value);
-            } else if (@hasField(S, "buffer") and php.matchString(name, "__bytes")) {
-                const sc = try php.getValueStringContent(value);
-                try self.buffer.copyBytes(sc);
-            } else {
-                return error.NotFound;
-            }
+        pub fn setProperty(self: *S, name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {
+            const transform = findTransform(name, cache_slot) orelse return error.Missing;
+            _ = transform;
+            return self.setValue(value) catch |err| switch (matchError(err, error.Unsupported)) {
+                true => error.Missing,
+                false => err,
+            };
         }
 
-        pub fn hasMember(_: *S, name: *String) bool {
-            return ObjectTransform.fromPropName(name) != null;
+        pub fn findTransform(name: *String, cache_slot: ?[*]?*anyopaque) ?ObjectTransform {
+            if (TransformCacheEntry.find(cache_slot)) |t| return t;
+            const transforms = .{
+                .__plain = .to_plain,
+                .__value = .to_value,
+                .__string = .to_string,
+                .__int = .to_integer,
+                .__bytes = .to_bytes,
+            };
+            return inline for (std.meta.fields(@TypeOf(transforms))) |field| {
+                if (php.matchString(name, field.name)) {
+                    const transform = @field(transforms, field.name);
+                    TransformCacheEntry.set(cache_slot, transform);
+                    break transform;
+                }
+            } else null;
         }
 
         pub fn findMethod(self: *S, name: *String) !?*php.Function {
@@ -235,8 +256,7 @@ pub fn Parent(comptime S: type) type {
 
         pub fn throwFieldException(self: *S, name: *String, access: accessor.FieldAccess, err: anytype) error{ExceptionThrown} {
             const class = ZigClassEntry.fromStructure(self);
-            const E = @TypeOf(err);
-            if (isPartOf(error.Missing, E) and err == error.Missing) {
+            if (matchError(err, error.Missing)) {
                 return switch (scope) {
                     .instance => php.throwExceptionFmt("no field named '{s}' in {s} '{s}' (zig)", .{
                         php.getStringContent(name),
@@ -250,7 +270,8 @@ pub fn Parent(comptime S: type) type {
                     }),
                 };
             } else {
-                if (!isPartOf(error.ExceptionThrown, E) or err != error.ExceptionThrown) {
+                // throw the error as well if it's other than ExceptionThrown
+                if (!matchError(err, error.ExceptionThrown)) {
                     _ = &php.throwError(err);
                 }
                 return php.throwExceptionFmt("unable to {s} field '{s}' in {s} '{s}' (zig)", .{
@@ -282,10 +303,10 @@ pub fn Parent(comptime S: type) type {
             const desired_type = try php.Type.fromInt(type_id);
             const self = fromObject(obj);
             switch (desired_type) {
-                .string => retval.* = self.readSelf(.to_string) catch return php.FAILURE,
-                .long => retval.* = self.readSelf(.to_integer) catch return php.FAILURE,
+                .string => retval.* = self.getValue(.to_string) catch return php.FAILURE,
+                .long => retval.* = self.getValue(.to_integer) catch return php.FAILURE,
                 .boolean, .double => {
-                    retval.* = try self.readSelf(.to_value);
+                    retval.* = try self.getValue(.to_value);
                     if (php.getValueObject(retval)) |value_obj| {
                         defer php.release(value_obj);
                         if (desired_type == .boolean) {
@@ -306,9 +327,8 @@ pub fn Parent(comptime S: type) type {
             // unlike readElement(), PHP does not expect this function to return a null pointer;
             // we cannot therefore return an error union;
             _ = prop_type;
-            _ = cache_slot;
             const self = fromObject(obj);
-            if (readMember(self, name)) |value| {
+            if (getProperty(self, name, cache_slot)) |value| {
                 retval.* = value;
             } else |err| {
                 retval.* = php.createValueNull();
@@ -318,19 +338,18 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
-            _ = cache_slot;
             const self = fromObject(obj);
-            writeMember(self, name, value) catch |err| {
+            setProperty(self, name, value, cache_slot) catch |err| {
                 return throwFieldException(self, name, .write, err);
             };
             return value;
         }
 
         pub fn hasProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) c_int {
+            _ = obj;
             _ = prop_type;
-            _ = cache_slot;
-            const self = fromObject(obj);
-            return if (hasMember(self, name)) 1 else 0;
+            const transform = findTransform(name, cache_slot);
+            return if (transform) |_| 1 else 0;
         }
 
         pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: ?*const Value) !?*php.Function {
@@ -350,14 +369,32 @@ pub fn Parent(comptime S: type) type {
 pub fn StructLike(comptime S: type) type {
     return struct {
         pub const Super = Parent(S);
-        pub const CacheEntry = extern struct {
-            class: ?*const ZigClassEntry,
+        pub const MemberCacheEntry = struct {
+            id: usize,
             member: *const ZigClassEntry.Member,
+            extra: ?*anyopaque = null,
+
+            const this_type = "member";
+
+            pub inline fn find(cache_slot: ?[*]?*anyopaque, class: *ZigClassEntry) ?*const ZigClassEntry.Member {
+                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
+                return if (self.id == @intFromPtr(class)) self.member else null;
+            }
+
+            pub inline fn findSelf(cache_slot: ?[*]?*anyopaque, class: *ZigClassEntry) ?*@This() {
+                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
+                return if (self.id == @intFromPtr(class)) self else null;
+            }
+
+            pub inline fn set(cache_slot: ?[*]?*anyopaque, class: *ZigClassEntry, member: *const ZigClassEntry.Member) void {
+                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return;
+                self.* = .{ .id = @intFromPtr(class), .member = member };
+            }
         };
         pub const ByteExtent = Super.ByteExtent;
         pub const scope = Super.scope;
 
-        pub fn readSelf(self: *S, transform: ObjectTransform) !Value {
+        pub fn getValue(self: *S, transform: ObjectTransform) !Value {
             return switch (transform) {
                 .to_value => returnSelf(self),
                 .to_plain => create: {
@@ -381,63 +418,55 @@ pub fn StructLike(comptime S: type) type {
         }
 
         // error set cannot be inferred due to recursion
-        pub fn writeSelf(self: *S, value: *const Value) accessor.Error!void {
+        pub fn setValue(self: *S, value: *const Value) accessor.Error!void {
             if (try copySelf(self, value)) return;
             const ht = try php.getValueHashTable(value);
             var iter: HashTableIterator = .init(ht, .{});
             while (iter.next()) |field_value| {
                 const name = iter.currentName() orelse return error.KeyIsNotString;
-                writeMember(self, name, field_value, null) catch |err| {
+                setProperty(self, name, field_value, null) catch |err| {
                     return throwFieldException(self, name, .write, err);
                 };
             }
         }
 
-        pub fn readMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !Value {
+        pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !Value {
             if (findMember(self, name, cache_slot)) |member| {
                 var value = try member.accessors.get(self);
                 if (member.objectTransform()) |ot| try ot.apply(&value);
                 return value;
-            } else |_| {
-                return Super.readMember(self, name);
+            } else if (scope == .instance) {
+                return Super.getProperty(self, name, cache_slot);
+            } else {
+                return error.Missing;
             }
         }
 
-        pub fn writeMember(self: *S, name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) !void {
+        pub fn setProperty(self: *S, name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) !void {
             if (findMember(self, name, cache_slot)) |member| {
                 try member.accessors.set(self, value);
-            } else |_| {
-                if (scope == .instance) try Super.writeMember(self, name, value);
+            } else if (scope == .instance) {
+                try Super.setProperty(self, name, value, cache_slot);
+            } else {
+                return error.Missing;
             }
         }
 
-        pub fn hasMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) bool {
-            if (findMember(self, name, cache_slot)) |_| {
-                return true;
-            } else |_| {
-                return Super.hasMember(self, name);
-            }
-        }
-
-        pub fn findMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !*const ZigClassEntry.Member {
+        pub fn findMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) ?*const ZigClassEntry.Member {
             const class = ZigClassEntry.fromStructure(self);
-            const cache_entry: ?*CacheEntry = @ptrCast(cache_slot);
-            if (cache_entry) |cached| {
-                if (cached.class == class) return cached.member;
-            }
-            const member = try class.getMember(scope, name);
-            if (cache_entry) |cached| {
-                cached.class = class;
-                cached.member = member;
-            }
+            if (MemberCacheEntry.find(cache_slot, class)) |m| return m;
+            const member = class.getMember(scope, name) catch return null;
+            MemberCacheEntry.set(cache_slot, class, member);
             return member;
         }
 
         pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
             // this function cannot return an error union (see comment in Parent.readProperty())
             _ = prop_type;
+            const eg = php.getExecutorGlobals();
+            _ = eg;
             const self = fromObject(obj);
-            if (readMember(self, name, cache_slot)) |value| {
+            if (getProperty(self, name, cache_slot)) |value| {
                 retval.* = value;
             } else |err| {
                 retval.* = php.createValueNull();
@@ -448,7 +477,7 @@ pub fn StructLike(comptime S: type) type {
 
         pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
             const self = fromObject(obj);
-            writeMember(self, name, value, cache_slot) catch |err| {
+            setProperty(self, name, value, cache_slot) catch |err| {
                 return throwFieldException(self, name, .write, err);
             };
             return value;
@@ -457,7 +486,8 @@ pub fn StructLike(comptime S: type) type {
         pub fn hasProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) c_int {
             _ = prop_type;
             const self = fromObject(obj);
-            return if (hasMember(self, name, cache_slot)) 1 else 0;
+            const member = findMember(self, name, cache_slot);
+            return if (member != null) 1 else 0;
         }
 
         pub fn getProperties(obj: *Object) !*HashTable {
@@ -520,6 +550,7 @@ pub fn StructLike(comptime S: type) type {
         pub const castObject = Super.castObject;
         pub const getReferencedObjects = Super.getReferencedObjects;
         pub const getMethod = Super.getMethod;
+        pub const findTransform = Super.findTransform;
     };
 }
 
@@ -529,7 +560,7 @@ pub fn ArrayLike(comptime S: type) type {
         pub const ByteExtent = Super.ByteExtent;
         pub const scope = Super.scope;
 
-        pub fn readSelf(self: *S, transform: ObjectTransform) !Value {
+        pub fn getValue(self: *S, transform: ObjectTransform) !Value {
             return switch (transform) {
                 .to_value => returnSelf(self),
                 .to_plain => create: {
@@ -564,7 +595,7 @@ pub fn ArrayLike(comptime S: type) type {
             };
         }
 
-        pub fn writeSelf(self: *S, value: *const Value) !void {
+        pub fn setValue(self: *S, value: *const Value) !void {
             if (try copySelf(self, value)) return;
             const ht = try php.getValueArray(value);
             const len = self.getLength();
@@ -738,9 +769,8 @@ fn Payload(comptime RT: type) type {
     };
 }
 
-fn isPartOf(comptime err: anytype, comptime Set: anytype) bool {
-    const errors = @typeInfo(Set).error_set orelse return true;
-    return inline for (errors) |e| {
-        if (std.mem.eql(u8, @errorName(err), e.name)) break true;
-    } else false;
+fn matchError(err: anyerror, other_err: anyerror) bool {
+    const Error = @TypeOf(err);
+    const OtherError = @TypeOf(other_err);
+    return (Error || OtherError == Error and err == other_err);
 }

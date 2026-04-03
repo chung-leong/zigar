@@ -143,7 +143,7 @@ const single_slot_prebaked = struct {
 
 fn write(entry: *Value, value: *const Value, comptime prebaked: bool) Error!void {
     if (php.getValueObject(entry)) |obj| {
-        try structure.invokeMethod(obj, "writeSelf", .{value});
+        try structure.invokeMethod(obj, "setValue", .{value});
     } else |_| {
         const msg = switch (prebaked) {
             true => "cannot create comptime object",

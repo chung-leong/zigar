@@ -4,6 +4,7 @@ const accessor = @import("../accessor.zig");
 const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const iterator = @import("../iterator.zig");
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const ArgumentIterator = php.ArgumentIterator;
@@ -20,6 +21,7 @@ pub fn Class(comptime S: type) type {
     return struct {
         closure: Closure = undefined,
         table: Value = undefined,
+        prop_names: []*String = undefined,
 
         pub const scope: ZigClassEntry.ScopeType = .static;
         pub const Super = structure.StructLike(@This());
@@ -36,16 +38,25 @@ pub fn Class(comptime S: type) type {
         var methods: ?Methods = null;
 
         pub fn finalize(self: *@This(), _: bool) !void {
+            var prop_count: usize = 0;
+            _ = &prop_count;
+            self.prop_names = try php.allocator.alloc(*String, prop_count);
             self.closure = .{
                 .self = self,
                 .php_portion = php.createTransformedFunction(handleCast, "cast", 1, false),
             };
         }
 
+        pub fn freeObject(obj: *Object) void {
+            const self = fromObject(obj);
+            php.allocator.free(self.prop_names);
+            Super.freeObject(obj);
+        }
+
         pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: ?*const Value) !?*Function {
             const obj = obj_ptr.*;
             const self = fromObject(obj);
-            const field = self.readMember(name, null) catch return null;
+            const field = self.getProperty(name, null) catch return null;
             defer php.release(&field);
             const field_obj = php.getValueObject(&field) catch return null;
             const field_class = ZigClassEntry.fromObject(field_obj);
@@ -145,7 +156,13 @@ pub fn Class(comptime S: type) type {
 
         pub fn handleToString(ed: *ExecuteData, return_value: *Value) !void {
             const this_struct = try getThis(&ed.This);
-            return_value.* = try this_struct.readSelf(.to_string);
+            return_value.* = try this_struct.getValue(.to_string);
+        }
+
+        pub fn handleGetIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
+            const obj = try php.getValueObject(this);
+            const self = fromObject(obj);
+            return try iterator.PropertyIterator(@This()).create(obj, self.prop_names);
         }
 
         fn getThis(value: *const Value) !*S {
@@ -170,8 +187,7 @@ pub fn Class(comptime S: type) type {
         }
 
         pub const setStorage = Super.setStorage;
-        pub const readSelf = Super.readSelf;
-        pub const freeObject = Super.freeObject;
+        pub const getValue = Super.getValue;
         pub const readProperty = Super.readProperty;
         pub const writeProperty = Super.writeProperty;
         pub const hasProperty = Super.hasProperty;
@@ -180,6 +196,6 @@ pub fn Class(comptime S: type) type {
         pub const getReferencedObjects = Super.getReferencedObjects;
         const fromObject = Super.fromObject;
         const object = Super.object;
-        const readMember = Super.readMember;
+        const getProperty = Super.getProperty;
     };
 }

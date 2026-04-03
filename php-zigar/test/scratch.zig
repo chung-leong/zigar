@@ -15,7 +15,12 @@ pub fn get() Iterator {
 
 pub const array: [4]i32 = .{ 1, 2, 3, 4 };
 
-pub const object: struct {
+pub const struct_instance: struct {
     number1: i32 = 123,
     number2: i32 = 456,
 } = .{};
+
+pub const union_instance: union(enum) {
+    number1: i32,
+    number2: i32,
+} = .{ .number2 = 123 };

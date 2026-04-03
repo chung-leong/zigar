@@ -36,7 +36,7 @@ pub const Struct = struct {
     const Super = structure.StructLike(@This());
 
     pub const Static = struct {
-        member_names: []*String = undefined,
+        prop_names: []*String = undefined,
         required_field_count: usize = 0,
         class_obj: *Object = undefined,
         callback: ?*Object = null,
@@ -44,22 +44,22 @@ pub const Struct = struct {
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             var iter = class.getMemberIterator(.instance);
-            var member_count: usize = 0;
+            // count the number of named members
+            var prop_count: usize = 0;
             while (iter.next()) |member| {
-                // count the number of named members
                 if (iter.currentName() != null) {
-                    member_count += 1;
+                    prop_count += 1;
                     // and the number of required ones
                     if (member.flags.is_required) self.required_field_count += 1;
                 }
             }
             // create a list of property names for use by iterator
-            self.member_names = try php.allocator.alloc(*String, member_count);
+            self.prop_names = try php.allocator.alloc(*String, prop_count);
             iter.reset();
             var index: usize = 0;
             while (iter.next()) |_| {
                 if (iter.currentName()) |name| {
-                    self.member_names[index] = name;
+                    self.prop_names[index] = name;
                     index += 1;
                 }
             }
@@ -86,7 +86,7 @@ pub const Struct = struct {
         pub fn deinit(self: *@This()) void {
             php.release(self.class_obj);
             if (self.callback) |cb| php.release(cb);
-            php.allocator.free(self.member_names);
+            php.allocator.free(self.prop_names);
         }
     };
 
@@ -114,7 +114,7 @@ pub const Struct = struct {
         }
     }
 
-    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
+    pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         if (transform == .to_integer) {
             const flags = class.getFlags(@This());
@@ -123,7 +123,7 @@ pub const Struct = struct {
                 @panic("TODO");
             }
         }
-        return Super.readSelf(self, transform);
+        return Super.getValue(self, transform);
     }
 
     pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) accessor.Error!void {
@@ -163,9 +163,9 @@ pub const Struct = struct {
             Promise, Generator => {
                 const ctx = try T.create(args.callback);
                 const ptr_value = php.createValuePointer(ctx.buffer.bytes.ptr);
-                try self.writeMember(php.persistent("ptr"), &ptr_value, null);
+                try self.setProperty(php.persistent("ptr"), &ptr_value, null);
                 const callback_value = php.createValueObject(static.callback.?);
-                try self.writeMember(php.persistent("callback"), &callback_value, null);
+                try self.setProperty(php.persistent("callback"), &callback_value, null);
                 if (class.getMember(.instance, php.persistent("allocator"))) |m| {
                     const allocator_value = try m.accessors.get(self);
                     const allocator_obj = try php.getValueObject(&allocator_value);
@@ -182,14 +182,14 @@ pub const Struct = struct {
                     break :get AbortSignal.fromObject(signal_obj);
                 } else try AbortSignal.create(args.timeout);
                 const ptr_value = php.createValuePointer(&signal.value);
-                try self.writeMember(php.persistent("ptr"), &ptr_value, null);
+                try self.setProperty(php.persistent("ptr"), &ptr_value, null);
             },
             else => {},
         }
     }
 
     pub fn getSpecialContext(self: *@This(), comptime T: type) !*T {
-        const target = try self.readMember(php.persistent("ptr"), null);
+        const target = try self.getProperty(php.persistent("ptr"), null);
         return accessor.getOpaqueTarget(T, &target);
     }
 
@@ -221,7 +221,7 @@ pub const Struct = struct {
         return switch (class.purpose) {
             .iterator => try iterator.IteratorIterator.create(obj),
             .generator => try iterator.GeneratorIterator.create(obj),
-            else => try iterator.PropertyIterator(@This()).create(obj, static.member_names),
+            else => try iterator.PropertyIterator(@This()).create(obj, static.prop_names),
         };
     }
 
@@ -229,7 +229,9 @@ pub const Struct = struct {
     pub const finalize = Super.finalize;
     pub const externalize = Super.externalize;
     pub const getExtent = Super.getExtent;
-    pub const writeSelf = Super.writeSelf;
+    pub const setValue = Super.setValue;
+    pub const getProperty = Super.getProperty;
+    pub const setProperty = Super.setProperty;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;
     pub const readProperty = Super.readProperty;
@@ -239,6 +241,4 @@ pub const Struct = struct {
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
-    const readMember = Super.readMember;
-    const writeMember = Super.writeMember;
 };

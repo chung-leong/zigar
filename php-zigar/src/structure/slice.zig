@@ -44,12 +44,12 @@ pub const Slice = struct {
                 if (php.getValueArray(value)) |arr| {
                     break :get element_size * arr.nNumOfElements;
                 } else |_| {
-                    // let writeSelf() throw an error
+                    // let setValue() throw an error
                     break :get 0;
                 }
             };
             try self.buffer.allocate(allocator, len);
-            try self.writeSelf(value);
+            try self.setValue(value);
             const obj = ZigObject(@This()).fromStructure(self).object();
             try class.registerObject(obj);
         } else {
@@ -94,8 +94,8 @@ pub const Slice = struct {
     pub const finalize = Super.finalize;
     pub const externalize = Super.externalize;
     pub const checkArguments = Super.checkArguments;
-    pub const readSelf = Super.readSelf;
-    pub const writeSelf = Super.writeSelf;
+    pub const getValue = Super.getValue;
+    pub const setValue = Super.setValue;
     pub const visitPointers = Super.visitPointers;
     pub const readElement = Super.readElement;
     pub const writeElement = Super.writeElement;

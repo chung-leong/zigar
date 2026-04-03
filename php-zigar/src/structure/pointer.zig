@@ -88,7 +88,7 @@ pub const Pointer = struct {
         }
     };
 
-    pub fn readSelf(self: *@This(), transform: ObjectTransform) accessor.Error!Value {
+    pub fn getValue(self: *@This(), transform: ObjectTransform) accessor.Error!Value {
         if (self.buffer.flags.inaccessible) return self.throwExceptionInaccessible();
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
@@ -99,7 +99,7 @@ pub const Pointer = struct {
         return value;
     }
 
-    pub fn writeSelf(self: *@This(), value: *const Value) accessor.Error!void {
+    pub fn setValue(self: *@This(), value: *const Value) accessor.Error!void {
         if (try Super.copySelf(self, value)) return;
         if (self.buffer.flags.inaccessible) {
             if (!php.isNull(value)) return self.throwExceptionInaccessible();

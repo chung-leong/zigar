@@ -4,10 +4,13 @@ const accessor = @import("../accessor.zig");
 const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const iterator = @import("../iterator.zig");
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
+const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
 const Object = php.Object;
+const ObjectIterator = php.ObjectIterator;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("../structure.zig");
@@ -29,6 +32,7 @@ pub const Enum = struct {
     const Super = structure.Parent(@This());
 
     pub const Static = struct {
+        prop_names: []*String = undefined,
         value_acc: *accessor.Primitive = undefined,
         available_tags: HashTable = undefined,
         class_obj: *Object = undefined,
@@ -53,6 +57,10 @@ pub const Enum = struct {
                     try self.addCanonical(name, tag_obj);
                 }
             }
+            // enum can have getters (and possibly setters)
+            var prop_count: usize = 0;
+            _ = &prop_count;
+            self.prop_names = try php.allocator.alloc(*String, prop_count);
             // because methods are really static functions, we need to maintain a ref on the class object
             self.class_obj = class_obj;
             php.addRef(self.class_obj);
@@ -220,7 +228,7 @@ pub const Enum = struct {
         }
     };
 
-    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
+    pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const enum_value = try static.value_acc.get(self.buffer);
@@ -239,7 +247,7 @@ pub const Enum = struct {
         };
     }
 
-    pub fn writeSelf(self: *@This(), value: *const Value) !void {
+    pub fn setValue(self: *@This(), value: *const Value) !void {
         if (try self.copySelf(value)) return;
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
@@ -252,6 +260,13 @@ pub const Enum = struct {
             props.release();
         }
         Super.freeObject(obj);
+    }
+
+    pub fn handleGetIterator(ce: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
+        const obj = try php.getValueObject(this);
+        const class = ZigClassEntry.fromEntry(ce);
+        const static = class.getStaticData(@This());
+        return try iterator.PropertyIterator(@This()).create(obj, static.prop_names);
     }
 
     pub const getExtent = Super.getExtent;

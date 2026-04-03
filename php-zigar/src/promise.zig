@@ -56,7 +56,7 @@ pub const Promise = struct {
         // std.debug.print("Promise.await() resumed\n", .{});
         if (php.getType(&self.result) == .object) {
             const result_obj = php.getValueObject(&self.result) catch unreachable;
-            self.result = try structure.invokeMethod(result_obj, "readSelf", .{.to_value});
+            self.result = try structure.invokeMethod(result_obj, "getValue", .{.to_value});
         }
         return self.result;
     }
@@ -86,7 +86,7 @@ pub const Promise = struct {
         const ptr = arg_iter.next() orelse return error.Unexpected;
         const ptr_obj = php.getValueObject(ptr) catch unreachable;
         const ptr_struct = ZigObject(structure.Optional).fromObject(ptr_obj).structure();
-        const target = try ptr_struct.readSelf(.to_value);
+        const target = try ptr_struct.getValue(.to_value);
         const self = try accessor.getOpaqueTarget(@This(), &target);
         const result = arg_iter.next() orelse return error.Unexpected;
         try self.resolve(result);

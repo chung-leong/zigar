@@ -165,7 +165,7 @@ pub const ObjectTransform = enum {
             const obj = php.getValueObject(value) catch unreachable;
             if (ZigClassEntry.isZig(obj.ce) or ZigClassEntry.isZigError(obj.ce)) {
                 defer php.release(obj);
-                value.* = try invokeMethod(obj, "readSelf", .{self});
+                value.* = try invokeMethod(obj, "getValue", .{self});
                 return;
             } else if (php.isGMP(obj)) {
                 // leave GMP object as is
@@ -178,19 +178,6 @@ pub const ObjectTransform = enum {
             .to_bytes => return error.Unsupported,
             else => {},
         }
-    }
-
-    pub fn fromPropName(name: *const php.String) ?@This() {
-        const transforms = .{
-            .__plain = .to_plain,
-            .__value = .to_value,
-            .__string = .to_string,
-            .__int = .to_integer,
-            .__bytes = .to_bytes,
-        };
-        return inline for (std.meta.fields(@TypeOf(transforms))) |field| {
-            if (php.matchString(name, field.name)) break @field(transforms, field.name);
-        } else null;
     }
 };
 

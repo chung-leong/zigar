@@ -37,7 +37,7 @@ pub const ErrorUnion = struct {
         }
     };
 
-    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
+    pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const err = try static.error_acc.get(self.buffer);
@@ -58,7 +58,7 @@ pub const ErrorUnion = struct {
         }
     }
 
-    pub fn writeSelf(self: *@This(), value: *const Value) !void {
+    pub fn setValue(self: *@This(), value: *const Value) !void {
         if (try self.copySelf(value)) return;
         const class = ZigClassEntry.fromStructure(self);
         var static = class.getStaticData(@This());

@@ -31,7 +31,7 @@ pub const Optional = struct {
         }
     };
 
-    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
+    pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const present = try static.present_acc.get(self.buffer);
@@ -47,7 +47,7 @@ pub const Optional = struct {
         return value;
     }
 
-    pub fn writeSelf(self: *@This(), value: *const Value) !void {
+    pub fn setValue(self: *@This(), value: *const Value) !void {
         if (try self.copySelf(value)) return;
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());

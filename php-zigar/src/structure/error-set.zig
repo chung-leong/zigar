@@ -209,7 +209,7 @@ pub const ErrorSet = struct {
         }
     };
 
-    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
+    pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const err_value = try static.value_acc.get(self.buffer);
@@ -260,7 +260,7 @@ pub const ErrorSet = struct {
         };
     }
 
-    pub fn writeSelf(self: *@This(), value: *const Value) !void {
+    pub fn setValue(self: *@This(), value: *const Value) !void {
         if (try self.copySelf(value)) return;
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
@@ -396,7 +396,7 @@ pub const ErrorSet = struct {
     fn getProperties(obj: *Object) !*Canonical {
         const self = fromObject(obj);
         if (self.canonical) |c| return c;
-        const err_value = try self.readSelf(.to_value);
+        const err_value = try self.getValue(.to_value);
         const err_obj = try php.getValueObject(&err_value);
         const err_struct = fromObject(err_obj);
         return err_struct.canonical.?;

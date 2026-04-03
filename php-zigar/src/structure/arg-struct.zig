@@ -177,7 +177,7 @@ pub fn ArgStruct(variadic: bool) type {
         }
 
         pub const setStorage = Super.setStorage;
-        pub const readSelf = Super.readSelf;
+        pub const getValue = Super.getValue;
         pub const freeObject = Super.freeObject;
         pub const getReferencedObjects = Super.getReferencedObjects;
         const fromObject = Super.fromObject;

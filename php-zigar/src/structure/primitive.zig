@@ -25,7 +25,7 @@ pub const Primitive = struct {
         }
     };
 
-    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
+    pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
         if (transform == .to_bytes) return try self.returnBytes();
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
@@ -34,7 +34,7 @@ pub const Primitive = struct {
         return value;
     }
 
-    pub fn writeSelf(self: *@This(), value: *const Value) !void {
+    pub fn setValue(self: *@This(), value: *const Value) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         return try static.value_acc.set(self.buffer, value);

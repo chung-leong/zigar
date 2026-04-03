@@ -70,7 +70,7 @@ pub const Function = struct {
             if (!ZigClassEntry.isZig(obj.ce)) return false;
             if (ZigObject(structure.Pointer).isInstance(obj)) {
                 const pointer = ZigObject(structure.Pointer).fromObject(obj).structure();
-                const target = pointer.readSelf(.to_value) catch return false;
+                const target = pointer.getValue(.to_value) catch return false;
                 obj = php.getValueObject(&target) catch return false;
             }
             return obj.ce == arg_class.entry();
@@ -117,12 +117,12 @@ pub const Function = struct {
         try Super.finalize(self, init_called);
     }
 
-    pub fn readSelf(self: *@This(), transform: ObjectTransform) !Value {
+    pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
         self.transform = transform;
         return self.returnSelf();
     }
 
-    pub fn writeSelf(self: *@This(), value: *const Value) !void {
+    pub fn setValue(self: *@This(), value: *const Value) !void {
         if (try Super.copySelf(self, value)) return;
         const class = ZigClassEntry.fromStructure(self);
         if (!php.isCallable(value)) return error.NotCallable;

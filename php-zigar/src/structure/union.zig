@@ -5,11 +5,14 @@ const ObjectTransform = accessor.ObjectTransform;
 const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const iterator = @import("../iterator.zig");
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
+const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
 const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
+const ObjectIterator = php.ObjectIterator;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("../structure.zig");
@@ -20,8 +23,10 @@ pub const Union = struct {
     buffer: *ByteBuffer = undefined,
 
     const Super = structure.StructLike(@This());
+    const MemberCacheEntry = Super.MemberCacheEntry;
 
     pub const Static = struct {
+        prop_names: []*String = undefined,
         selector: ?struct {
             class: *ZigClassEntry,
             accessors: *accessor.Primitive,
@@ -63,6 +68,9 @@ pub const Union = struct {
                     .possible_values = sel_ht,
                 };
             }
+            var prop_count: usize = 0;
+            _ = &prop_count;
+            self.prop_names = try php.allocator.alloc(*String, prop_count);
             // because methods are really static functions, we need to maintain a ref on the class object
             self.class_obj = class_obj;
             php.addRef(self.class_obj);
@@ -73,6 +81,7 @@ pub const Union = struct {
                 php.destroyHashTable(&selector.possible_values);
             }
             php.release(self.class_obj);
+            php.allocator.free(self.prop_names);
         }
 
         pub fn getEnumClass(self: *@This()) ?*ZigClassEntry {
@@ -97,7 +106,7 @@ pub const Union = struct {
             // mark pointers as inaccessible
             try self.visitPointers(structure.Pointer.restrictAccess, .{}, .{ .include_inactive = true });
             // now we can copy
-            if (initializer) |value| try self.writeSelf(value);
+            if (initializer) |value| try self.setValue(value);
         } else {
             try Super.initialize(self, allocator, initializer);
         }
@@ -112,7 +121,7 @@ pub const Union = struct {
         }
     }
 
-    pub fn writeSelf(self: *@This(), value: *const Value) Error!void {
+    pub fn setValue(self: *@This(), value: *const Value) Error!void {
         if (try self.copySelf(value)) return;
         const ht = try php.getValueHashTable(value);
         var iter: HashTableIterator = .init(ht, .{});
@@ -123,7 +132,7 @@ pub const Union = struct {
         }
         const field_value = iter.next().?;
         const name = iter.currentName() orelse return error.KeyIsNotString;
-        self.writeMember(name, field_value, null) catch |err| {
+        self.setProperty(name, field_value, null) catch |err| {
             return self.throwFieldException(name, .write, err);
         };
         const class = ZigClassEntry.fromStructure(self);
@@ -166,7 +175,7 @@ pub const Union = struct {
 
     pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
         const self = fromObject(obj);
-        self.checkSelector(name) catch |err| {
+        self.checkSelector(name, cache_slot) catch |err| {
             const class = ZigClassEntry.fromObject(obj);
             retval.* = php.createValueNull();
             if (err != error.InactiveField or !class.flags.@"union".has_tag) {
@@ -182,7 +191,7 @@ pub const Union = struct {
 
     pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
         const self = fromObject(obj);
-        self.checkSelector(name) catch |err| {
+        self.checkSelector(name, cache_slot) catch |err| {
             return self.throwFieldException(name, .write, err);
         };
         return Super.writeProperty(obj, name, value, cache_slot);
@@ -225,12 +234,24 @@ pub const Union = struct {
         return ht;
     }
 
-    fn checkSelector(self: *@This(), name: *String) !void {
+    fn checkSelector(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const selector = static.selector orelse return;
-        const sel_value = php.getHashEntry(&selector.possible_values, name) catch |err| {
-            return if (ObjectTransform.fromPropName(name) != null) {} else err;
+        // don't check if the name is a special property
+        if (findTransform(name, cache_slot)) |_| return;
+        const sel_value: *Value = get: {
+            // look for cache entry left by Super.readProperty() or Super.writeProperty()
+            const entry = MemberCacheEntry.findSelf(cache_slot, class);
+            if (entry) |e| {
+                // the selector value is stored in the extra pointer
+                if (e.extra) |ptr| break :get @ptrCast(@alignCast(ptr));
+            }
+            const value = try php.getHashEntry(&selector.possible_values, name);
+            if (entry) |e| {
+                e.extra = value;
+            }
+            break :get value;
         };
         const active_sel_value = try selector.accessors.get(self.buffer);
         if (!compareSelectors(sel_value, &active_sel_value)) return error.InactiveField;
@@ -245,7 +266,7 @@ pub const Union = struct {
     }
 
     fn throwFieldException(self: *@This(), name: *String, access: accessor.FieldAccess, err: anytype) error{ExceptionThrown} {
-        const member = self.findMember(name, null) catch null;
+        const member = self.findMember(name, null);
         if (member != null and err == error.InactiveField) {
             const active_name = find: {
                 const class = ZigClassEntry.fromStructure(self);
@@ -268,11 +289,19 @@ pub const Union = struct {
         }
     }
 
+    pub fn handleGetIterator(ce: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
+        const obj = try php.getValueObject(this);
+        const class = ZigClassEntry.fromEntry(ce);
+        const static = class.getStaticData(@This());
+        return try iterator.PropertyIterator(@This()).create(obj, static.prop_names);
+    }
+
     pub const setStorage = Super.setStorage;
     pub const externalize = Super.externalize;
     pub const getExtent = Super.getExtent;
     pub const checkArguments = Super.checkArguments;
-    pub const readSelf = Super.readSelf;
+    pub const getValue = Super.getValue;
+    pub const setProperty = Super.setProperty;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;
@@ -283,6 +312,6 @@ pub const Union = struct {
     const copySelf = Super.copySelf;
     const returnSelf = Super.returnSelf;
     const returnBytes = Super.returnBytes;
-    const writeMember = Super.writeMember;
     const findMember = Super.findMember;
+    const findTransform = Super.findTransform;
 };
