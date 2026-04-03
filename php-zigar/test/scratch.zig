@@ -29,3 +29,11 @@ pub const bare_union_instance: union {
     number1: i32,
     number2: i32,
 } = .{ .number2 = 123 };
+
+pub const namespace = struct {
+    pub const number1: i32 = 123;
+    pub const number2: i32 = 456;
+    pub const number3: i32 = 789;
+
+    pub fn foo() void {}
+};

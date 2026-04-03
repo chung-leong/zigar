@@ -75,14 +75,16 @@ pub const Union = struct {
             php.addRef(self.class_obj);
             if (!class.flags.@"union".has_tag) {
                 // all fields are available in untagged union
-                const prop_count: usize = iter.len;
-                self.prop_names = try php.allocator.alloc(*String, prop_count);
-                iter.reset();
-                var index: usize = 0;
-                while (iter.next()) |_| {
-                    if (iter.currentName()) |name| {
-                        self.prop_names[index] = name;
-                        index += 1;
+                const prop_count: usize = if (selector_member != null) iter.len - 1 else iter.len;
+                if (prop_count > 0) {
+                    self.prop_names = try php.allocator.alloc(*String, prop_count);
+                    iter.reset();
+                    var index: usize = 0;
+                    while (iter.next()) |member| {
+                        if (!member.flags.is_selector) {
+                            self.prop_names[index] = iter.currentName() orelse return error.Unexpected;
+                            index += 1;
+                        }
                     }
                 }
             }
@@ -93,7 +95,8 @@ pub const Union = struct {
                 php.destroyHashTable(&selector.possible_values);
             }
             php.release(self.class_obj);
-            php.allocator.free(self.prop_names);
+            if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
+            if (self.getter_names.len > 0) php.allocator.free(self.getter_names);
         }
 
         pub fn getEnumClass(self: *@This()) ?*ZigClassEntry {
@@ -237,9 +240,8 @@ pub const Union = struct {
         return ht;
     }
 
-    pub fn handleGetIterator(ce: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
-        const obj = try php.getValueObject(this);
-        const class = ZigClassEntry.fromEntry(ce);
+    pub fn getIterator(obj: *Object) !?*ObjectIterator {
+        const class = ZigClassEntry.fromObject(obj);
         const static = class.getStaticData(@This());
         const self = fromObject(obj);
         const prop_names = switch (class.flags.@"union".has_tag) {

@@ -65,6 +65,7 @@ pub const Enum = struct {
         pub fn deinit(self: *@This()) void {
             php.destroyHashTable(&self.available_tags);
             php.release(self.class_obj);
+            if (self.getter_names.len > 0) php.allocator.free(self.getter_names);
         }
 
         pub fn castValue(self: *@This(), value: *Value) !?Value {
@@ -258,9 +259,8 @@ pub const Enum = struct {
         Super.freeObject(obj);
     }
 
-    pub fn handleGetIterator(ce: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
-        const obj = try php.getValueObject(this);
-        const class = ZigClassEntry.fromEntry(ce);
+    pub fn getIterator(obj: *Object) !?*ObjectIterator {
+        const class = ZigClassEntry.fromObject(obj);
         const static = class.getStaticData(@This());
         return try iterator.PropertyIterator(@This()).create(obj, &.{}, static.getter_names);
     }

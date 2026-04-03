@@ -19,6 +19,7 @@ const HashTable = php.HashTable;
 const HashTableIterator = php.HashTableIterator;
 const HashTableObjectIterator = php.HashTableObjectIterator;
 const Object = php.Object;
+const ObjectIterator = php.ObjectIterator;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("structure.zig");
@@ -378,8 +379,8 @@ pub const ZigClassEntry = struct {
                     @field(ce, name) = &@field(methods, name);
                 }
                 // methods that use direct callbacks
-                if (@hasDecl(S, "handleGetIterator")) {
-                    ce.get_iterator = php.transform(S.handleGetIterator);
+                if (@hasDecl(S, "getIterator")) {
+                    ce.get_iterator = getIteratorHandler(S);
                 }
             },
         }
@@ -731,6 +732,21 @@ pub const ZigClassEntry = struct {
         const buf = try ByteBuffer.create(self.alignment);
         defer buf.release();
         return try self.createObjectFromBuffer(buf, null);
+    }
+
+    pub fn getIteratorHandler(comptime S: type) *const fn ([*c]ClassEntry, [*c]Value, c_int) callconv(.c) [*c]ObjectIterator {
+        const ns = struct {
+            pub fn handleGetIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
+                const obj = try php.getValueObject(this);
+                // because class objects has the same class entry as instance objects, we need to
+                // distinguish between the two using ZigObject.isInstance() (which compares the handlers)
+                return switch (ZigObject(structure.Class(S)).isInstance(obj)) {
+                    true => structure.Class(S).getIterator(obj),
+                    false => S.getIterator(obj),
+                };
+            }
+        };
+        return php.transform(ns.handleGetIterator);
     }
 
     fn getAccessors(self: @This(), scope: *Scope, member: *Member) !accessor.Any {

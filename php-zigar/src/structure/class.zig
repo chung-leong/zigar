@@ -21,7 +21,7 @@ pub fn Class(comptime S: type) type {
     return struct {
         closure: Closure = undefined,
         table: Value = undefined,
-        prop_names: []*String = undefined,
+        prop_names: []*String = &.{},
         getter_names: []*String = &.{},
 
         pub const scope: ZigClassEntry.ScopeType = .static;
@@ -39,9 +39,31 @@ pub fn Class(comptime S: type) type {
         var methods: ?Methods = null;
 
         pub fn finalize(self: *@This(), _: bool) !void {
-            var prop_count: usize = 0;
-            _ = &prop_count;
-            self.prop_names = try php.allocator.alloc(*String, prop_count);
+            const obj = ZigObject(Class(S)).fromStructure(self).object();
+            const class = ZigClassEntry.fromEntry(obj.ce);
+            switch (class.type) {
+                .@"struct", .@"union", .@"enum", .@"opaque" => {
+                    // create list of property names
+                    var prop_count: usize = 0;
+                    var iter = class.getMemberIterator(scope);
+                    while (iter.next()) |member| {
+                        if (member.class.type != .function) prop_count += 1;
+                    }
+                    if (prop_count > 0) {
+                        self.prop_names = try php.allocator.alloc(*String, prop_count);
+                        iter.reset();
+                        var index: usize = 0;
+                        while (iter.next()) |member| {
+                            if (member.class.type != .function) {
+                                self.prop_names[index] = iter.currentName() orelse return error.Unexpected;
+                                index += 1;
+                            }
+                        }
+                    }
+                },
+                else => {},
+            }
+            // create closure for casting string to Zig object
             self.closure = .{
                 .self = self,
                 .php_portion = php.createTransformedFunction(handleCast, "cast", 1, false),
@@ -50,7 +72,8 @@ pub fn Class(comptime S: type) type {
 
         pub fn freeObject(obj: *Object) void {
             const self = fromObject(obj);
-            php.allocator.free(self.prop_names);
+            if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
+            if (self.getter_names.len > 0) php.allocator.free(self.getter_names);
             Super.freeObject(obj);
         }
 
@@ -160,8 +183,7 @@ pub fn Class(comptime S: type) type {
             return_value.* = try this_struct.getValue(.to_string);
         }
 
-        pub fn handleGetIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
-            const obj = try php.getValueObject(this);
+        pub fn getIterator(obj: *Object) !?*ObjectIterator {
             const self = fromObject(obj);
             return try iterator.PropertyIterator(@This()).create(obj, self.prop_names, self.getter_names);
         }

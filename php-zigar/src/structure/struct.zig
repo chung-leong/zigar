@@ -36,7 +36,7 @@ pub const Struct = struct {
     const Super = structure.StructLike(@This());
 
     pub const Static = struct {
-        prop_names: []*String = undefined,
+        prop_names: []*String = &.{},
         getter_names: []*String = &.{},
         backing_int: ?struct {
             class: *ZigClassEntry,
@@ -66,13 +66,15 @@ pub const Struct = struct {
             }
             // create a list of property names for use by iterator
             const prop_count = if (backing_int_member != null) iter.len - 1 else iter.len;
-            self.prop_names = try php.allocator.alloc(*String, prop_count);
-            iter.reset();
-            var index: usize = 0;
-            while (iter.next()) |_| {
-                if (iter.currentName()) |name| {
-                    self.prop_names[index] = name;
-                    index += 1;
+            if (prop_count > 0) {
+                self.prop_names = try php.allocator.alloc(*String, prop_count);
+                iter.reset();
+                var index: usize = 0;
+                while (iter.next()) |member| {
+                    if (!member.flags.is_backing_int) {
+                        self.prop_names[index] = iter.currentName() orelse return error.Unexpected;
+                        index += 1;
+                    }
                 }
             }
             // because methods are really static functions, we need to maintain a ref on the class object
@@ -98,7 +100,8 @@ pub const Struct = struct {
         pub fn deinit(self: *@This()) void {
             php.release(self.class_obj);
             if (self.callback) |cb| php.release(cb);
-            php.allocator.free(self.prop_names);
+            if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
+            if (self.getter_names.len > 0) php.allocator.free(self.getter_names);
         }
     };
 
@@ -226,9 +229,8 @@ pub const Struct = struct {
         Super.freeObject(obj);
     }
 
-    pub fn handleGetIterator(ce: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
-        const obj = try php.getValueObject(this);
-        const class = ZigClassEntry.fromEntry(ce);
+    pub fn getIterator(obj: *Object) !?*ObjectIterator {
+        const class = ZigClassEntry.fromObject(obj);
         const static = class.getStaticData(@This());
         return switch (class.purpose) {
             .iterator => try iterator.IteratorIterator.create(obj),

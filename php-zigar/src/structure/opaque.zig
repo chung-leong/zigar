@@ -30,7 +30,7 @@ pub const Opaque = struct {
 
         pub fn deinit(self: *@This()) void {
             php.release(self.class_obj);
-            php.allocator.free(self.getter_names);
+            if (self.getter_names.len > 0) php.allocator.free(self.getter_names);
         }
     };
 
@@ -44,9 +44,8 @@ pub const Opaque = struct {
         return self.throwException();
     }
 
-    pub fn handleGetIterator(ce: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
-        const obj = try php.getValueObject(this);
-        const class = ZigClassEntry.fromEntry(ce);
+    pub fn getIterator(obj: *Object) !?*ObjectIterator {
+        const class = ZigClassEntry.fromObject(obj);
         const static = class.getStaticData(@This());
         return try iterator.PropertyIterator(@This()).create(obj, &.{}, static.getter_names);
     }
