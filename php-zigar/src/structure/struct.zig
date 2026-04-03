@@ -36,6 +36,7 @@ pub const Struct = struct {
     const Super = structure.StructLike(@This());
 
     pub const Static = struct {
+        member_names: []*String = undefined,
         required_field_count: usize = 0,
         class_obj: *Object = undefined,
         callback: ?*Object = null,
@@ -43,13 +44,29 @@ pub const Struct = struct {
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             var iter = class.getMemberIterator(.instance);
+            var member_count: usize = 0;
             while (iter.next()) |member| {
-                if (member.flags.is_required) self.required_field_count += 1;
+                // count the number of named members
+                if (iter.currentName() != null) {
+                    member_count += 1;
+                    // and the number of required ones
+                    if (member.flags.is_required) self.required_field_count += 1;
+                }
+            }
+            // create a list of property names for use by iterator
+            self.member_names = try php.allocator.alloc(*String, member_count);
+            iter.reset();
+            var index: usize = 0;
+            while (iter.next()) |_| {
+                if (iter.currentName()) |name| {
+                    self.member_names[index] = name;
+                    index += 1;
+                }
             }
             // because methods are really static functions, we need to maintain a ref on the class object
             self.class_obj = class_obj;
             php.addRef(self.class_obj);
-            // create callback function for
+            // create callback function for promise or generator
             switch (class.purpose) {
                 inline .promise, .generator => |p| {
                     const closure = switch (p) {
@@ -69,6 +86,7 @@ pub const Struct = struct {
         pub fn deinit(self: *@This()) void {
             php.release(self.class_obj);
             if (self.callback) |cb| php.release(cb);
+            php.allocator.free(self.member_names);
         }
     };
 
@@ -199,10 +217,11 @@ pub const Struct = struct {
     pub fn handleGetIterator(ce: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
         const obj = try php.getValueObject(this);
         const class = ZigClassEntry.fromEntry(ce);
+        const static = class.getStaticData(@This());
         return switch (class.purpose) {
             .iterator => try iterator.IteratorIterator.create(obj),
             .generator => try iterator.GeneratorIterator.create(obj),
-            else => null,
+            else => try iterator.PropertyIterator(@This()).create(obj, static.member_names),
         };
     }
 

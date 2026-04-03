@@ -285,7 +285,7 @@ pub const ErrorSet = struct {
         Super.freeObject(obj);
     }
 
-    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
+    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
         if (!readErrorProperty(obj, name, retval)) {
             return Super.readProperty(obj, name, prop_type, cache_slot, retval);
         }

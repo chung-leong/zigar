@@ -303,11 +303,11 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
+            // unlike readElement(), PHP does not expect this function to return a null pointer;
+            // we cannot therefore return an error union;
             _ = prop_type;
             _ = cache_slot;
             const self = fromObject(obj);
-            // unlike readElement(), PHP does not expect this function to return a null pointer;
-            // we cannot therefore return an error union;
             if (readMember(self, name)) |value| {
                 retval.* = value;
             } else |err| {
@@ -433,7 +433,8 @@ pub fn StructLike(comptime S: type) type {
             return member;
         }
 
-        pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
+        pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
+            // this function cannot return an error union (see comment in Parent.readProperty())
             _ = prop_type;
             const self = fromObject(obj);
             if (readMember(self, name, cache_slot)) |value| {

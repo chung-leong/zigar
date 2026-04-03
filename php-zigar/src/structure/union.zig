@@ -164,7 +164,7 @@ pub const Union = struct {
         }
     }
 
-    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
+    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
         const self = fromObject(obj);
         self.checkSelector(name) catch |err| {
             const class = ZigClassEntry.fromObject(obj);
@@ -173,8 +173,7 @@ pub const Union = struct {
                 // when the union is untagged, it isn't possible to determine programmatically
                 // whether a field is set or not when optimize is release; the selector is only
                 // available for debug purpose; throwing an error because the operation is illegal
-                const es = self.throwFieldException(name, .read, err);
-                _ = &es;
+                _ = &self.throwFieldException(name, .read, err);
             }
             return retval;
         };
