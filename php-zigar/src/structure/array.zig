@@ -37,11 +37,11 @@ pub const Array = struct {
         return class.length.?;
     }
 
-    pub fn getElement(self: *@This(), index: usize, comptime use_perform: bool) !Value {
+    pub fn getElement(self: *@This(), index: usize, comptime use_transform: bool) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         var value = try static.value_acc.getElement(self, index);
-        if (use_perform) {
+        if (use_transform) {
             if (static.value_transform) |ot| try ot.apply(&value);
         }
         return value;

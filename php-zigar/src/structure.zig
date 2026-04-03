@@ -302,13 +302,16 @@ pub fn Parent(comptime S: type) type {
             return php.SUCCESS;
         }
 
-        pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) !*Value {
+        pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
             _ = prop_type;
             _ = cache_slot;
             const self = fromObject(obj);
+            // unlike readElement(), PHP does not expect this function to return a null pointer;
+            // we cannot therefore return an error union;
             if (readMember(self, name)) |value| {
                 retval.* = value;
             } else |err| {
+                retval.* = php.createValueNull();
                 _ = &throwFieldException(self, name, .read, err);
             }
             return retval;
@@ -587,29 +590,25 @@ pub fn ArrayLike(comptime S: type) type {
             }
         }
 
-        pub fn readElement(obj: *Object, key: *Value, _: c_int, retval: *Value) !?*Value {
+        pub fn readElement(obj: *Object, key: *Value, _: c_int, retval: *Value) !*Value {
             const self = fromObject(obj);
-            const index = try getIndex(key);
             const len = self.getLength();
-            // need bound check needed here because element might be zero-bit
-            if (index >= len) return error.OutOfBound;
+            const index = try getIndex(key, len);
             retval.* = try self.getElement(index, true);
             return retval;
         }
 
         pub fn writeElement(obj: *Object, key: *Value, value: *Value) !void {
             const self = fromObject(obj);
-            const index = try getIndex(key);
             const len = self.getLength();
-            if (index >= len) return error.OutOfBound;
+            const index = try getIndex(key, len);
             try self.setElement(index, value);
         }
 
         pub fn hasElement(obj: *Object, key: *Value, _: c_int) !c_int {
             const self = fromObject(obj);
-            const index = getIndex(key) catch return 0;
             const len = self.getLength();
-            return if (index < len) 1 else 0;
+            return if (getIndex(key, len)) |_| 1 else |_| 0;
         }
 
         pub fn countElements(obj: *Object, count: *php.Long) !c_int {
@@ -620,10 +619,14 @@ pub fn ArrayLike(comptime S: type) type {
             return php.SUCCESS;
         }
 
-        pub fn getIndex(key: *Value) !usize {
+        pub fn getIndex(key: *Value, len: usize) !usize {
             const key_long = try php.getValueLong(key);
             if (key_long < 0) return error.NegativeIndex;
-            return @intCast(key_long);
+            const index: usize = @intCast(key_long);
+            // need bound check needed even though the ByteBuffer performs bound check because
+            // element might be zero-bit
+            if (index >= len) return error.OutOfBound;
+            return index;
         }
 
         pub fn getProperties(obj: *Object) !*HashTable {

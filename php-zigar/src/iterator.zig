@@ -4,9 +4,11 @@ const Generator = @import("generator.zig").Generator;
 const php = @import("php.zig");
 const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
+const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
 const ObjectIterator = php.ObjectIterator;
 const ObjectIteratorFunctions = php.ObjectIteratorFunctions;
+const String = php.String;
 const Value = php.Value;
 const structure = @import("structure.zig");
 const ZigObject = @import("object.zig").ZigObject;
@@ -43,10 +45,11 @@ pub fn ArrayIterator(comptime S: type) type {
             return if (iter.index < self.len) php.SUCCESS else php.FAILURE;
         }
 
-        pub fn getCurrentData(iter: *ObjectIterator) !*Value {
+        pub fn getCurrentData(iter: *ObjectIterator) *Value {
             const self = fromIter(iter);
             var key = php.createValueLong(@intCast(iter.index));
-            _ = try S.readElement(self.object, &key, 0, &iter.data);
+            // readElement() returns an error union, hence the need for &
+            _ = &S.readElement(self.object, &key, 0, &iter.data);
             return &iter.data;
         }
 
@@ -62,6 +65,77 @@ pub fn ArrayIterator(comptime S: type) type {
             .get_current_data = php.transform(getCurrentData),
             .get_current_key = php.transform(getCurrentKey),
             .move_forward = php.transform(moveForward),
+        };
+    };
+}
+
+pub fn PropertyIterator(comptime S: type) type {
+    return struct {
+        iter: ObjectIterator,
+        member_iter: HashTableIterator,
+        current_key: *String,
+        object: *Object,
+        flags: packed struct {
+            valid: bool = false,
+        },
+
+        fn fromIter(iter: *ObjectIterator) *@This() {
+            return @fieldParentPtr("iter", iter);
+        }
+
+        pub fn create(obj: *Object, members: *HashTable) !*ObjectIterator {
+            const self = try php.allocator.create(@This());
+            php.initializeIterator(&self.iter);
+            self.object = obj;
+            self.member_iter = .init(members, .{});
+            self.flags = .{};
+            self.iter.funcs = &methods;
+            return &self.iter;
+        }
+
+        pub fn destroy(iter: *ObjectIterator) void {
+            const self = fromIter(iter);
+            php.release(self.member_iter.ht);
+            php.release(self.object);
+        }
+
+        pub fn isValid(iter: *ObjectIterator) !c_int {
+            const self = fromIter(iter);
+            return if (iter.index < self.member_iter.len) php.SUCCESS else php.FAILURE;
+        }
+
+        pub fn getCurrentData(iter: *ObjectIterator) *Value {
+            const self = fromIter(iter);
+            php.release(iter.data);
+            S.readProperty(self.object, self.current_key, 0, null, &iter.data) catch {};
+            return &iter.data;
+        }
+
+        pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {
+            const self = fromIter(iter);
+            key_ptr.* = php.createValueString(self.current_key);
+        }
+
+        pub fn moveForward(iter: *ObjectIterator) void {
+            const self = fromIter(iter);
+            const key_value = self.member_iter.next().?;
+            self.current_key = php.getValueString(key_value) catch unreachable;
+            php.addRef(self.current_key);
+        }
+
+        pub fn rewind(iter: *ObjectIterator) void {
+            const self = fromIter(iter);
+            self.member_iter.reset();
+            moveForward(iter);
+        }
+
+        const methods: ObjectIteratorFunctions = .{
+            .dtor = php.transform(destroy),
+            .valid = php.transform(isValid),
+            .get_current_data = php.transform(getCurrentData),
+            .get_current_key = php.transform(getCurrentKey),
+            .move_forward = php.transform(moveForward),
+            .rewind = php.transform(rewind),
         };
     };
 }
