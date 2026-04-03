@@ -32,7 +32,7 @@ pub const Enum = struct {
     const Super = structure.Parent(@This());
 
     pub const Static = struct {
-        prop_names: []*String = undefined,
+        getter_names: []*String = &.{},
         value_acc: *accessor.Primitive = undefined,
         available_tags: HashTable = undefined,
         class_obj: *Object = undefined,
@@ -57,10 +57,6 @@ pub const Enum = struct {
                     try self.addCanonical(name, tag_obj);
                 }
             }
-            // enum can have getters (and possibly setters)
-            var prop_count: usize = 0;
-            _ = &prop_count;
-            self.prop_names = try php.allocator.alloc(*String, prop_count);
             // because methods are really static functions, we need to maintain a ref on the class object
             self.class_obj = class_obj;
             php.addRef(self.class_obj);
@@ -266,7 +262,7 @@ pub const Enum = struct {
         const obj = try php.getValueObject(this);
         const class = ZigClassEntry.fromEntry(ce);
         const static = class.getStaticData(@This());
-        return try iterator.PropertyIterator(@This()).create(obj, static.prop_names);
+        return try iterator.PropertyIterator(@This()).create(obj, &.{}, static.getter_names);
     }
 
     pub const getExtent = Super.getExtent;
@@ -275,6 +271,8 @@ pub const Enum = struct {
     pub const finalize = Super.finalize;
     pub const externalize = Super.externalize;
     pub const checkArguments = Super.checkArguments;
+    pub const getProperty = Super.getProperty;
+    pub const setProperty = Super.setProperty;
     pub const visitPointers = Super.visitPointers;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;

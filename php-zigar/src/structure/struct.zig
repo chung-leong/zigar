@@ -37,6 +37,11 @@ pub const Struct = struct {
 
     pub const Static = struct {
         prop_names: []*String = undefined,
+        getter_names: []*String = &.{},
+        backing_int: ?struct {
+            class: *ZigClassEntry,
+            accessors: *accessor.Primitive,
+        } = null,
         required_field_count: usize = 0,
         class_obj: *Object = undefined,
         callback: ?*Object = null,
@@ -44,16 +49,23 @@ pub const Struct = struct {
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             var iter = class.getMemberIterator(.instance);
-            // count the number of named members
-            var prop_count: usize = 0;
+            // look for backing int
+            const backing_int_member = while (iter.next()) |member| {
+                if (member.flags.is_backing_int) break member;
+            } else null;
+            if (backing_int_member) |bim| {
+                if (bim.accessors != .primitive) return error.InvalidAccessor;
+                self.backing_int = .{
+                    .class = bim.class,
+                    .accessors = &bim.accessors.primitive,
+                };
+            }
+            // count the number of required arguments
             while (iter.next()) |member| {
-                if (iter.currentName() != null) {
-                    prop_count += 1;
-                    // and the number of required ones
-                    if (member.flags.is_required) self.required_field_count += 1;
-                }
+                if (member.flags.is_required) self.required_field_count += 1;
             }
             // create a list of property names for use by iterator
+            const prop_count = if (backing_int_member != null) iter.len - 1 else iter.len;
             self.prop_names = try php.allocator.alloc(*String, prop_count);
             iter.reset();
             var index: usize = 0;
@@ -221,7 +233,7 @@ pub const Struct = struct {
         return switch (class.purpose) {
             .iterator => try iterator.IteratorIterator.create(obj),
             .generator => try iterator.GeneratorIterator.create(obj),
-            else => try iterator.PropertyIterator(@This()).create(obj, static.prop_names),
+            else => try iterator.PropertyIterator(@This()).create(obj, static.prop_names, static.getter_names),
         };
     }
 

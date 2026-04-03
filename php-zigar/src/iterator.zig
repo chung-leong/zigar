@@ -46,9 +46,11 @@ pub fn ArrayIterator(comptime S: type) type {
 
         pub fn getCurrentData(iter: *ObjectIterator) *Value {
             const self = fromIter(iter);
-            var key = php.createValueLong(@intCast(iter.index));
-            // readElement() returns an error union, hence the need for &
-            _ = &S.readElement(self.object, &key, 0, &iter.data);
+            const container = ZigObject(S).fromObject(self.object).structure();
+            iter.data = container.getElement(iter.index, true) catch |err| init: {
+                _ = &err;
+                break :init php.createValueNull();
+            };
             return &iter.data;
         }
 
@@ -71,18 +73,21 @@ pub fn ArrayIterator(comptime S: type) type {
 pub fn PropertyIterator(comptime S: type) type {
     return struct {
         iter: ObjectIterator,
-        names: []*String,
+        lists: [2][]*String,
+        len: usize,
         object: *Object,
 
         fn fromIter(iter: *ObjectIterator) *@This() {
             return @fieldParentPtr("iter", iter);
         }
 
-        pub fn create(obj: *Object, names: []*String) !*ObjectIterator {
+        pub fn create(obj: *Object, prop_names: []*String, getter_names: []*String) !*ObjectIterator {
             const self = try php.allocator.create(@This());
             php.initializeIterator(&self.iter);
+            php.addRef(obj);
             self.object = obj;
-            self.names = names;
+            self.lists = .{ prop_names, getter_names };
+            self.len = prop_names.len + getter_names.len;
             self.iter.funcs = &methods;
             self.iter.data = php.createValueNull();
             return &self.iter;
@@ -96,25 +101,41 @@ pub fn PropertyIterator(comptime S: type) type {
 
         pub fn isValid(iter: *ObjectIterator) !c_int {
             const self = fromIter(iter);
-            return if (iter.index < self.names.len) php.SUCCESS else php.FAILURE;
+            return if (iter.index < self.len) php.SUCCESS else php.FAILURE;
         }
 
         pub fn getCurrentData(iter: *ObjectIterator) *Value {
             const self = fromIter(iter);
             php.release(&iter.data);
-            const name = self.names[self.iter.index];
-            _ = S.readProperty(self.object, name, 0, null, &iter.data);
+            const name = self.getCurrentName();
+            const container = ZigObject(S).fromObject(self.object).structure();
+            iter.data = container.getProperty(name, null) catch |err| init: {
+                _ = &err;
+                break :init php.createValueNull();
+            };
             return &iter.data;
         }
 
         pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {
             const self = fromIter(iter);
-            const name = self.names[self.iter.index];
+            const name = self.getCurrentName();
             php.addRef(name);
             key_ptr.* = php.createValueString(name);
         }
 
         pub fn moveForward(_: *ObjectIterator) void {}
+
+        pub fn getCurrentName(self: *@This()) *String {
+            var index = self.iter.index;
+            const active_list = for (self.lists) |list| {
+                if (index >= list.len) {
+                    index -= list.len;
+                } else {
+                    break list;
+                }
+            } else unreachable;
+            return active_list[index];
+        }
 
         const methods: ObjectIteratorFunctions = .{
             .dtor = php.transform(destroy),

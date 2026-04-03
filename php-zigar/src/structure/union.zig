@@ -26,7 +26,8 @@ pub const Union = struct {
     const MemberCacheEntry = Super.MemberCacheEntry;
 
     pub const Static = struct {
-        prop_names: []*String = undefined,
+        prop_names: []*String = &.{},
+        getter_names: []*String = &.{},
         selector: ?struct {
             class: *ZigClassEntry,
             accessors: *accessor.Primitive,
@@ -37,6 +38,7 @@ pub const Union = struct {
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             var iter = class.getMemberIterator(.instance);
+            // look for selector
             const selector_member = while (iter.next()) |member| {
                 if (member.flags.is_selector) break member;
             } else null;
@@ -68,12 +70,22 @@ pub const Union = struct {
                     .possible_values = sel_ht,
                 };
             }
-            var prop_count: usize = 0;
-            _ = &prop_count;
-            self.prop_names = try php.allocator.alloc(*String, prop_count);
             // because methods are really static functions, we need to maintain a ref on the class object
             self.class_obj = class_obj;
             php.addRef(self.class_obj);
+            if (!class.flags.@"union".has_tag) {
+                // all fields are available in untagged union
+                const prop_count: usize = iter.len;
+                self.prop_names = try php.allocator.alloc(*String, prop_count);
+                iter.reset();
+                var index: usize = 0;
+                while (iter.next()) |_| {
+                    if (iter.currentName()) |name| {
+                        self.prop_names[index] = name;
+                        index += 1;
+                    }
+                }
+            }
         }
 
         pub fn deinit(self: *@This()) void {
@@ -200,24 +212,15 @@ pub const Union = struct {
     pub fn getProperties(obj: *Object) !*HashTable {
         const class = ZigClassEntry.fromObject(obj);
         const self = fromObject(obj);
-        const static = class.getStaticData(@This());
         const ht = php.createArray();
         var iter = class.getMemberIterator(.instance);
         if (class.flags.@"union".has_tag) {
             // tagged unions return only the active member
-            const selector = static.selector orelse return error.Unexpected;
-            const active_sel_value = try selector.accessors.get(self.buffer);
-            while (iter.next()) |member| {
-                if (iter.currentName()) |name| {
-                    const sel_value = try php.getHashEntry(&selector.possible_values, name);
-                    if (compareSelectors(sel_value, &active_sel_value)) {
-                        var value = try member.accessors.get(self);
-                        if (member.objectTransform()) |ot| try ot.apply(&value);
-                        php.setHashEntry(ht, name, &value);
-                        break;
-                    }
-                }
-            }
+            const tag_name = try self.getActiveTagName();
+            const member = try class.getMember(.instance, tag_name);
+            var value = try member.accessors.get(self);
+            if (member.objectTransform()) |ot| try ot.apply(&value);
+            php.setHashEntry(ht, tag_name, &value);
         } else {
             // where as untagged ones return all members
             while (iter.next()) |member| {
@@ -232,6 +235,37 @@ pub const Union = struct {
         // caller seem to expect a hash table with zero refcount
         ht.gc.refcount = 0;
         return ht;
+    }
+
+    pub fn handleGetIterator(ce: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
+        const obj = try php.getValueObject(this);
+        const class = ZigClassEntry.fromEntry(ce);
+        const static = class.getStaticData(@This());
+        const self = fromObject(obj);
+        const prop_names = switch (class.flags.@"union".has_tag) {
+            true => try self.getActiveTagNameList(),
+            false => static.prop_names,
+        };
+        return try iterator.PropertyIterator(@This()).create(obj, prop_names, static.getter_names);
+    }
+
+    fn getActiveTagNameList(self: *@This()) ![]*String {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        const selector = static.selector orelse return error.Unexpected;
+        const active_sel_value = try selector.accessors.get(self.buffer);
+        const tag_obj = try php.getValueObject(&active_sel_value);
+        const tag_class = ZigClassEntry.fromObject(tag_obj);
+        if (tag_class.type != .@"enum") return error.Unexpected;
+        const tag_struct = ZigObject(structure.Enum).fromObject(tag_obj).structure();
+        const props = tag_struct.canonical orelse return error.Unexpected;
+        const name_many_ptr: [*]*String = @ptrCast(&props.name);
+        return name_many_ptr[0..1];
+    }
+
+    fn getActiveTagName(self: *@This()) !*String {
+        const list = try self.getActiveTagNameList();
+        return list[0];
     }
 
     fn checkSelector(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !void {
@@ -268,17 +302,8 @@ pub const Union = struct {
     fn throwFieldException(self: *@This(), name: *String, access: accessor.FieldAccess, err: anytype) error{ExceptionThrown} {
         const member = self.findMember(name, null);
         if (member != null and err == error.InactiveField) {
-            const active_name = find: {
-                const class = ZigClassEntry.fromStructure(self);
-                const static = class.getStaticData(@This());
-                const selector = static.selector.?;
-                const active_sel_value = selector.accessors.get(self.buffer) catch unreachable;
-                var iter: HashTableIterator = .init(&selector.possible_values, .{});
-                break :find while (iter.next()) |sel_value| {
-                    if (compareSelectors(sel_value, &active_sel_value)) {
-                        break iter.currentName().?;
-                    }
-                } else unreachable;
+            const active_name = self.getActiveTagName() catch |tag_err| {
+                return php.throwError(tag_err);
             };
             return php.throwExceptionFmt("access of union field '{s}' while field '{s}' is active", .{
                 php.getStringContent(name),
@@ -289,18 +314,12 @@ pub const Union = struct {
         }
     }
 
-    pub fn handleGetIterator(ce: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
-        const obj = try php.getValueObject(this);
-        const class = ZigClassEntry.fromEntry(ce);
-        const static = class.getStaticData(@This());
-        return try iterator.PropertyIterator(@This()).create(obj, static.prop_names);
-    }
-
     pub const setStorage = Super.setStorage;
     pub const externalize = Super.externalize;
     pub const getExtent = Super.getExtent;
     pub const checkArguments = Super.checkArguments;
     pub const getValue = Super.getValue;
+    pub const getProperty = Super.getProperty;
     pub const setProperty = Super.setProperty;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;

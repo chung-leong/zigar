@@ -24,3 +24,8 @@ pub const union_instance: union(enum) {
     number1: i32,
     number2: i32,
 } = .{ .number2 = 123 };
+
+pub const bare_union_instance: union {
+    number1: i32,
+    number2: i32,
+} = .{ .number2 = 123 };

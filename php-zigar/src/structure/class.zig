@@ -22,6 +22,7 @@ pub fn Class(comptime S: type) type {
         closure: Closure = undefined,
         table: Value = undefined,
         prop_names: []*String = undefined,
+        getter_names: []*String = &.{},
 
         pub const scope: ZigClassEntry.ScopeType = .static;
         pub const Super = structure.StructLike(@This());
@@ -162,7 +163,7 @@ pub fn Class(comptime S: type) type {
         pub fn handleGetIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
             const obj = try php.getValueObject(this);
             const self = fromObject(obj);
-            return try iterator.PropertyIterator(@This()).create(obj, self.prop_names);
+            return try iterator.PropertyIterator(@This()).create(obj, self.prop_names, self.getter_names);
         }
 
         fn getThis(value: *const Value) !*S {
@@ -188,6 +189,8 @@ pub fn Class(comptime S: type) type {
 
         pub const setStorage = Super.setStorage;
         pub const getValue = Super.getValue;
+        pub const getProperty = Super.getProperty;
+        pub const setProperty = Super.setProperty;
         pub const readProperty = Super.readProperty;
         pub const writeProperty = Super.writeProperty;
         pub const hasProperty = Super.hasProperty;
@@ -196,6 +199,5 @@ pub fn Class(comptime S: type) type {
         pub const getReferencedObjects = Super.getReferencedObjects;
         const fromObject = Super.fromObject;
         const object = Super.object;
-        const getProperty = Super.getProperty;
     };
 }
