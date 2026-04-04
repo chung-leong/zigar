@@ -77,6 +77,16 @@ pub const Struct = struct {
                     }
                 }
             }
+            // find getters
+            var getter_iter = class.getGetterIterator(.instance);
+            if (getter_iter.len > 0) {
+                self.getter_names = try php.allocator.alloc(*String, getter_iter.len);
+                var index: usize = 0;
+                while (getter_iter.next()) |_| {
+                    self.getter_names[index] = php.createString(getter_iter.currentName());
+                    index += 1;
+                }
+            }
             // because methods are really static functions, we need to maintain a ref on the class object
             self.class_obj = class_obj;
             php.addRef(self.class_obj);
@@ -101,7 +111,11 @@ pub const Struct = struct {
             php.release(self.class_obj);
             if (self.callback) |cb| php.release(cb);
             if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
-            if (self.getter_names.len > 0) php.allocator.free(self.getter_names);
+            if (self.getter_names.len > 0) {
+                // getter names are new strings so we need to release them
+                for (self.getter_names) |n| php.release(n);
+                php.allocator.free(self.getter_names);
+            }
         }
     };
 

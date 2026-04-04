@@ -95,6 +95,81 @@ pub const ZigClassEntry = struct {
             }
         }
     };
+    pub const GetSetterIterator = struct {
+        member_iter: HashTableObjectIterator(*Member),
+        scope: ScopeType,
+        prefix: []const u8,
+        arg_count: usize,
+        len: usize = undefined,
+        name: []const u8 = undefined,
+
+        pub fn init(
+            class: *ZigClassEntry,
+            scope: ScopeType,
+            access: enum { get, set },
+        ) @This() {
+            var self: @This() = .{
+                // all functions--including methods--are attached to structure as static members
+                .member_iter = class.getMemberIterator(.static),
+                .scope = scope,
+                .prefix = switch (access) {
+                    inline else => |t| @tagName(t),
+                },
+                .arg_count = switch (access) {
+                    .get => switch (scope) {
+                        .instance => 1,
+                        .static => 0,
+                    },
+                    .set => switch (scope) {
+                        .instance => 2,
+                        .static => 1,
+                    },
+                },
+            };
+            var count: usize = 0;
+            while (self.next()) |_| count += 1;
+            self.len = count;
+            self.scope = scope;
+            self.member_iter.reset();
+            return self;
+        }
+
+        pub fn currentName(self: *@This()) []const u8 {
+            return self.name;
+        }
+
+        pub fn next(self: *@This()) ?*Member {
+            return while (self.member_iter.next()) |member| {
+                if (member.class.type != .function) continue;
+                if (member.class.length != self.arg_count) continue;
+                const name = self.member_iter.currentName() orelse continue;
+                const name_c = php.getStringContent(name);
+                if (name_c.len > self.prefix.len + 1) {
+                    // look for prefix
+                    if (std.mem.eql(u8, name_c[0..self.prefix.len], self.prefix)) {
+                        // jump over white-spaces
+                        const ws_count = for (name_c[self.prefix.len..], 0..) |c, i| {
+                            if (!std.ascii.isWhitespace(c)) break i;
+                        } else continue;
+                        // get length of name
+                        const name_len = for (name_c[self.prefix.len + ws_count ..], 0..) |c, i| {
+                            if (std.ascii.isWhitespace(c)) break i;
+                        } else name_c.len - self.prefix.len - ws_count;
+                        if (name_len > 0) {
+                            const si = self.prefix.len + ws_count;
+                            const ei = si + name_len;
+                            self.name = name_c[si..ei];
+                            break member;
+                        }
+                    }
+                }
+            } else null;
+        }
+
+        pub fn reset(self: *@This()) void {
+            self.member_iter.reset();
+        }
+    };
     const Scope = struct {
         members: HashTable = undefined,
         template: Template = undefined,
@@ -434,6 +509,26 @@ pub const ZigClassEntry = struct {
         }
     }
 
+    pub fn getGetter(self: *@This(), comptime scope: ScopeType, name: *const String) !*Member {
+        return self.getGetSetter(scope, name, .get);
+    }
+
+    pub fn getSetter(self: *@This(), comptime scope: ScopeType, name: *const String) !*Member {
+        return self.getGetSetter(scope, name, .set);
+    }
+
+    fn getGetSetter(
+        self: *@This(),
+        comptime scope: ScopeType,
+        name: *const String,
+        comptime access: @TypeOf(.enum_literal),
+    ) !*Member {
+        var iter = self.getGetSetterIterator(scope, access);
+        return while (iter.next()) |member| {
+            if (php.matchString(name, iter.currentKey())) break member;
+        } else error.Missing;
+    }
+
     pub fn getMemberIterator(self: *@This(), comptime scope: ScopeType) HashTableObjectIterator(*Member) {
         switch (scope) {
             inline else => |s| {
@@ -441,6 +536,22 @@ pub const ZigClassEntry = struct {
                 return .init(&container.members, .{});
             },
         }
+    }
+
+    pub fn getGetterIterator(self: *@This(), comptime scope: ScopeType) GetSetterIterator {
+        return self.getGetSetterIterator(scope, .get);
+    }
+
+    pub fn getSetterIterator(self: *@This(), comptime scope: ScopeType) GetSetterIterator {
+        return self.getGetSetterIterator(scope, .set);
+    }
+
+    fn getGetSetterIterator(
+        self: *@This(),
+        comptime scope: ScopeType,
+        comptime access: @TypeOf(.enum_literal),
+    ) GetSetterIterator {
+        return .init(self, scope, access);
     }
 
     pub fn checkByteLength(self: *@This(), len: usize) !void {

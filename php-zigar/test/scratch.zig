@@ -27,6 +27,18 @@ pub const slice: []const i32 = &array;
 pub const struct_instance: struct {
     number1: i32 = 123,
     number2: i32 = 456,
+
+    pub fn @"get chicken"(_: *@This()) i32 {
+        return 777;
+    }
+
+    pub fn @"get\t \tduck"(_: *@This()) i32 {
+        return 778;
+    }
+
+    pub fn @"get\t\nquail "(_: *@This()) i32 {
+        return 779;
+    }
 } = .{};
 
 pub const Union = union(enum) {
