@@ -674,8 +674,7 @@ pub fn ArrayLike(comptime S: type) type {
             return ht;
         }
 
-        pub fn handleGetIterator(_: *ClassEntry, this: *Value, _: c_int) !?*ObjectIterator {
-            const obj = try php.getValueObject(this);
+        pub fn getIterator(obj: *Object) !?*ObjectIterator {
             return try iterator.ArrayIterator(S).create(obj);
         }
 

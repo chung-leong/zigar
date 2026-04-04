@@ -16,7 +16,7 @@ pub fn ArrayIterator(comptime S: type) type {
     return struct {
         iter: ObjectIterator,
         object: *Object,
-        len: c_ulong,
+        len: php.Long,
 
         fn fromIter(iter: *ObjectIterator) *@This() {
             return @fieldParentPtr("iter", iter);
@@ -24,12 +24,11 @@ pub fn ArrayIterator(comptime S: type) type {
 
         pub fn create(obj: *Object) !*ObjectIterator {
             const self = try php.allocator.create(@This());
-            var count: c_long = undefined;
-            _ = try S.countElements(obj, &count);
-            php.addRef(obj);
+            const array = ZigObject(S).fromObject(obj).structure();
             php.initializeIterator(&self.iter);
+            php.addRef(obj);
             self.object = obj;
-            self.len = @intCast(count);
+            self.len = @intCast(array.getLength());
             self.iter.funcs = &methods;
             return &self.iter;
         }

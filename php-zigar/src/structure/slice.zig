@@ -108,7 +108,7 @@ pub const Slice = struct {
     pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
     pub const getReferencedObjects = Super.getReferencedObjects;
-    pub const handleGetIterator = Super.handleGetIterator;
+    pub const getIterator = Super.getIterator;
     const fromObject = Super.fromObject;
     const getIndex = Super.getIndex;
 };

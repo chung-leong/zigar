@@ -7,6 +7,7 @@ const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const Object = php.Object;
+const ObjectIterator = php.ObjectIterator;
 const Value = php.Value;
 const structure = @import("../structure.zig");
 const invokeMethod = structure.invokeMethod;
@@ -168,6 +169,18 @@ pub const Pointer = struct {
 
     pub fn restrictAccess(self: *@This()) !void {
         self.buffer.flags.inaccessible = true;
+    }
+
+    pub fn getIterator(obj: *Object) !?*ObjectIterator {
+        const self = fromObject(obj);
+        var target = try self.getValue(.to_value);
+        const target_obj = php.getValueObject(&target) catch return null;
+        if (ZigClassEntry.isZig(target_obj.ce)) {
+            if (target_obj.ce.*.get_iterator) |f| {
+                return f(target_obj.ce, &target, 0);
+            }
+        }
+        return null;
     }
 
     fn throwExceptionInaccessible(self: *@This()) error{ExceptionThrown} {

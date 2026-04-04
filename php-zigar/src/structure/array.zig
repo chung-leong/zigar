@@ -72,7 +72,7 @@ pub const Array = struct {
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
     pub const getReferencedObjects = Super.getReferencedObjects;
-    pub const handleGetIterator = Super.handleGetIterator;
+    pub const getIterator = Super.getIterator;
     const fromObject = Super.fromObject;
     const getIndex = Super.getIndex;
 };
