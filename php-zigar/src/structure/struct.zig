@@ -102,6 +102,15 @@ pub const Struct = struct {
         }
     };
 
+    pub fn setStorage(self: *@This(), buffer: *ByteBuffer, table: *const Value) !void {
+        try Super.setStorage(self, buffer, table);
+        const class = ZigClassEntry.fromStructure(self);
+        if (class.flags.@"struct".is_packed) {
+            // mark buffer as packed so that child fields that are vectors are correctly handled
+            buffer.markPackedData();
+        }
+    }
+
     pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value) !void {
         try Super.initialize(self, allocator, initializer);
         const class = ZigClassEntry.fromStructure(self);
@@ -236,7 +245,6 @@ pub const Struct = struct {
         };
     }
 
-    pub const setStorage = Super.setStorage;
     pub const finalize = Super.finalize;
     pub const externalize = Super.externalize;
     pub const getExtent = Super.getExtent;

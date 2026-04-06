@@ -784,12 +784,10 @@ pub const ZigClassEntry = struct {
         };
         const for_scalar = member.bit_offset != null;
         const byte_offset: usize = if (member.bit_offset) |bit_offset| bit_offset / 8 else 0;
-        const bit_offset_mod8: ?u3 = if (member.bit_offset) |bit_offset|
-            // when byte size is given the field is byte-aligned; there's no need to adjust for
-            // use a bit-shifting accrossor
-            if (member.byte_size != null) null else @intCast(bit_offset % 8)
-        else
-            null;
+        // when byte size is given the field is byte-aligned; there's no need to adjust for
+        // use a bit-shifting accrossor
+        const use_bit_offset = member.byte_size == null and member.bit_offset != null;
+        const bit_offset: u3 = if (use_bit_offset) @intCast(member.bit_offset.? % 8) else undefined;
         const has_size = member.byte_size != null;
         var accessors: accessor.Any = inline for (comptime std.meta.fields(accessor.Any)) |field| {
             const Acc = field.type;
@@ -809,9 +807,25 @@ pub const ZigClassEntry = struct {
                         else => unreachable,
                     };
                     if (for_scalar and member.type == primitive_type) {
-                        if (!@hasField(@TypeOf(acc.attributes), "bit_size") or member.bit_size == acc.attributes.bit_size) {
-                            if (bit_offset_mod8 == acc.attributes.bit_offset) {
+                        if (acc.attributes.use_bit_offset == use_bit_offset) {
+                            const match = check: {
+                                // accessors handle one particular bit sizes
+                                if (@hasField(@TypeOf(acc.attributes), "bit_size")) {
+                                    break :check member.bit_size == acc.attributes.bit_size;
+                                } else {
+                                    if (acc.type == .bool) break :check true;
+                                    if (acc.type == .gmp and member.bit_size > 64) {
+                                        // accessors can handle different bit sizes
+                                        break :check true;
+                                    }
+                                    break :check false;
+                                }
+                            };
+                            if (match) {
                                 acc.byte_offset = byte_offset;
+                                if (@hasField(Acc, "bit_offset")) {
+                                    acc.bit_offset = bit_offset;
+                                }
                                 break @unionInit(accessor.Any, field.name, acc);
                             }
                         }
@@ -856,15 +870,24 @@ pub const ZigClassEntry = struct {
                     if (member.type == primitive_type) {
                         switch (acc.attributes) {
                             inline else => |child_attrs| {
-                                if (@hasField(Acc, "bit_size")) {
-                                    // accessors can handle different bit sizes
-                                    acc.bit_size = member.bit_offset orelse return error.Unexpected;
-                                    break @unionInit(accessor.Any, field.name, acc);
-                                } else {
-                                    // accessors handle one particular bit sizes
-                                    if (!@hasField(@TypeOf(child_attrs), "bit_size") or member.bit_size == child_attrs.bit_size) {
-                                        break @unionInit(accessor.Any, field.name, acc);
+                                const match = check: {
+                                    if (@hasField(@TypeOf(child_attrs), "bit_size")) {
+                                        // accessors handle one particular bit sizes
+                                        break :check member.bit_size == child_attrs.bit_size;
+                                    } else {
+                                        if (acc.attributes == .bool) break :check true;
+                                        if (acc.attributes == .gmp and member.bit_size > 64) {
+                                            // accessors can handle different bit sizes
+                                            break :check true;
+                                        }
+                                        break :check false;
                                     }
+                                };
+                                if (match) {
+                                    if (@hasField(Acc, "bit_size")) {
+                                        acc.bit_size = member.bit_size;
+                                    }
+                                    break @unionInit(accessor.Any, field.name, acc);
                                 }
                             },
                         }

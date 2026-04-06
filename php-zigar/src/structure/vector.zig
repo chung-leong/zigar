@@ -30,6 +30,16 @@ pub const Vector = struct {
         }
     };
 
+    pub fn setStorage(self: *@This(), buffer: *ByteBuffer, table: *const Value) !void {
+        try Super.setStorage(self, buffer, table);
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        if (static.value_acc.getType() == .bool) {
+            // boolean vectors are always packed
+            buffer.markPackedData();
+        }
+    }
+
     pub fn getLength(self: *@This()) usize {
         const class = ZigClassEntry.fromStructure(self);
         return class.length.?;
@@ -48,7 +58,6 @@ pub const Vector = struct {
     }
 
     pub const getExtent = Super.getExtent;
-    pub const setStorage = Super.setStorage;
     pub const initialize = Super.initialize;
     pub const finalize = Super.finalize;
     pub const externalize = Super.externalize;
