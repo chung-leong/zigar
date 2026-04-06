@@ -22,17 +22,24 @@ pub const Pointer = struct {
 
     pub const Static = struct {
         target_class: *ZigClassEntry = undefined,
-        address_acc: *accessor.Any = undefined,
-        length_acc: ?*accessor.Any = null,
+        address_acc: *accessor.Int(.{ .bit_size = @bitSizeOf(usize), .signedness = .unsigned }) = undefined,
+        length_acc: ?*accessor.Int(.{ .bit_size = @bitSizeOf(usize), .signedness = .unsigned }) = null,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             const target_member = try class.getMember(.instance, 0);
             self.target_class = target_member.class;
             const address_member = try class.getMember(.instance, 1);
-            self.address_acc = &address_member.accessors;
+            const usize_tag = switch (@bitSizeOf(usize)) {
+                64 => .u64,
+                32 => .u32,
+                else => @compileError("Unsupported pointer size"),
+            };
+            if (address_member.accessors != usize_tag) return error.Unexpected;
+            self.address_acc = &@field(address_member.accessors, @tagName(usize_tag));
             if (class.getMember(.instance, 2)) |length_member| {
-                self.length_acc = &length_member.accessors;
+                if (length_member.accessors != usize_tag) return error.Unexpected;
+                self.length_acc = &@field(length_member.accessors, @tagName(usize_tag));
             } else |_| {}
         }
 

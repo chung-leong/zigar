@@ -153,6 +153,7 @@ pub const Any = union(enum) {
         return switch (self) {
             inline else => |acc| {
                 const A = @TypeOf(acc);
+                if (S == ByteBuffer) @compileError("Calling accessor with buffer");
                 const args = try comptime validate(S, A, "get");
                 // const arg_count = switch (args) {
                 //     .both => 3,
@@ -183,6 +184,7 @@ pub const Any = union(enum) {
         return switch (self) {
             inline else => |acc| {
                 const A = @TypeOf(acc);
+                if (S == ByteBuffer) @compileError("Calling accessor with buffer");
                 const args = try comptime validate(S, A, "set");
                 // const arg_count = switch (args) {
                 //     .both => 4,
@@ -213,6 +215,7 @@ pub const Any = union(enum) {
         return switch (self) {
             inline else => |acc| {
                 const A = @TypeOf(acc);
+                if (S == ByteBuffer) @compileError("Calling accessor with buffer");
                 const args = try comptime validate(S, A, "getElement");
                 // const arg_count = switch (args) {
                 //     .both => 4,
@@ -243,6 +246,7 @@ pub const Any = union(enum) {
         return switch (self) {
             inline else => |acc| {
                 const A = @TypeOf(acc);
+                if (S == ByteBuffer) @compileError("Calling accessor with buffer");
                 const args = try comptime validate(S, A, "setElement");
                 // const arg_count = switch (args) {
                 //     .both => 5,
@@ -297,9 +301,7 @@ pub const Any = union(enum) {
         if (!@hasDecl(A, method)) return error.InvalidOperation;
         const need_buffer = hasArg(A, method, *ByteBuffer);
         const need_table = hasArg(A, method, *Value);
-        if (need_buffer and !@hasField(S, "buffer")) {
-            return error.InvalidOperation;
-        }
+        if (need_buffer and !@hasField(S, "buffer")) return error.InvalidOperation;
         if (need_table and !@hasField(S, "table")) return error.InvalidOperation;
         return switch (need_buffer) {
             true => switch (need_table) {

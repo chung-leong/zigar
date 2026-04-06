@@ -778,10 +778,10 @@ pub const ZigClassEntry = struct {
 
     fn getAccessors(self: *@This(), scope: *Scope, member: *Member) !accessor.Any {
         @setEvalBranchQuota(2000000);
-        const for_vector = switch (self.type) {
+        const for_vector = if (scope == &self.instance) switch (self.type) {
             .array, .slice, .vector => true,
             else => false,
-        };
+        } else false;
         const for_scalar = member.bit_offset != null;
         const byte_offset: usize = if (member.bit_offset) |bit_offset| bit_offset / 8 else 0;
         // when byte size is given the field is byte-aligned; there's no need to adjust for
@@ -899,6 +899,10 @@ pub const ZigClassEntry = struct {
                 .constant, .inaccessible => {},
             }
         } else .{ .inaccessible = .{} };
+        if (accessors == .inaccessible) {
+            std.debug.print("no accessors\n", .{});
+            std.debug.print("member type = {}\n", .{member.type});
+        }
         if (member.type == .int or member.type == .uint) {
             if (!member.flags.is_missing_class) {
                 if (member.class.type == .@"enum" or member.class.type == .error_set) {

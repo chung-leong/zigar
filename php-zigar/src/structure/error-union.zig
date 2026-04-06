@@ -39,7 +39,7 @@ pub const ErrorUnion = struct {
     pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        const err = try static.error_acc.get(self.buffer);
+        const err = try static.error_acc.get(self);
         if (php.getType(&err) == .object) {
             const err_obj = php.getValueObject(&err) catch unreachable;
             const err_struct = ZigObject(ErrorSet).fromObject(err_obj).structure();
@@ -72,11 +72,11 @@ pub const ErrorUnion = struct {
         };
         const null_value = php.createValueNull();
         if (err_maybe) |err| {
-            try static.error_acc.set(self.buffer, err);
+            try static.error_acc.set(self, err);
             try static.payload_acc.set(self, &null_value);
         } else {
             try static.payload_acc.set(self, value);
-            try static.error_acc.set(self.buffer, &null_value);
+            try static.error_acc.set(self, &null_value);
         }
     }
 
@@ -85,7 +85,7 @@ pub const ErrorUnion = struct {
         if (class.flags.common.has_slot) {
             const static = class.getStaticData(@This());
             const run = options.include_inactive or check: {
-                const err = try static.error_acc.get(self.buffer);
+                const err = try static.error_acc.get(self);
                 break :check php.getType(&err) != .object;
             };
             if (run) {

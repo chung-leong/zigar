@@ -106,7 +106,7 @@ pub const Union = struct {
         pub fn getEnum(self: *@This(), obj: *Object) !Value {
             const sel = self.selector orelse return error.Unexpected;
             const union_struct = ZigObject(Union).fromObject(obj).structure();
-            return try sel.accessors.get(union_struct.buffer);
+            return try sel.accessors.get(union_struct);
         }
     };
 
@@ -151,7 +151,7 @@ pub const Union = struct {
         const static = class.getStaticData(@This());
         if (static.selector) |selector| {
             const sel_value = try php.getHashEntry(&selector.possible_values, name);
-            try selector.accessors.set(self.buffer, sel_value);
+            try selector.accessors.set(self, sel_value);
         }
     }
 
@@ -161,7 +161,7 @@ pub const Union = struct {
             const static = class.getStaticData(@This());
             const selector = static.selector orelse return error.Unexpected;
             const active_sel_value = switch (options.include_inactive) {
-                false => try selector.accessors.get(self.buffer),
+                false => try selector.accessors.get(self),
                 true => undefined,
             };
             var iter = class.getMemberIterator(.instance);
@@ -252,7 +252,7 @@ pub const Union = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const selector = static.selector orelse return error.Unexpected;
-        const active_sel_value = try selector.accessors.get(self.buffer);
+        const active_sel_value = try selector.accessors.get(self);
         const tag_obj = try php.getValueObject(&active_sel_value);
         const tag_class = ZigClassEntry.fromObject(tag_obj);
         if (tag_class.type != .@"enum") return error.Unexpected;
@@ -286,7 +286,7 @@ pub const Union = struct {
             }
             break :get value;
         };
-        const active_sel_value = try selector.accessors.get(self.buffer);
+        const active_sel_value = try selector.accessors.get(self);
         if (!compareSelectors(sel_value, &active_sel_value)) return error.InactiveField;
     }
 

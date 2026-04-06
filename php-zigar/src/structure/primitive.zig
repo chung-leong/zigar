@@ -28,7 +28,7 @@ pub const Primitive = struct {
         if (transform == .to_bytes) return try self.returnBytes();
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        var value = try static.value_acc.get(self.buffer);
+        var value = try static.value_acc.get(self);
         try transform.apply(&value);
         return value;
     }
@@ -36,7 +36,7 @@ pub const Primitive = struct {
     pub fn setValue(self: *@This(), value: *const Value) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        return try static.value_acc.set(self.buffer, value);
+        return try static.value_acc.set(self, value);
     }
 
     pub const getExtent = Super.getExtent;
