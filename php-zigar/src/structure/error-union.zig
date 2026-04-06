@@ -22,7 +22,7 @@ pub const ErrorUnion = struct {
     pub const Static = struct {
         payload_acc: *accessor.Any = undefined,
         payload_transform: ?ObjectTransform = null,
-        error_acc: *accessor.Primitive = undefined,
+        error_acc: *accessor.Any = undefined,
         error_class: *ZigClassEntry = undefined,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
@@ -31,8 +31,7 @@ pub const ErrorUnion = struct {
             self.payload_acc = &member0.accessors;
             self.payload_transform = member0.objectTransform();
             const member1 = try class.getMember(.instance, 1);
-            if (member1.accessors != .primitive) return error.InvalidAccessor;
-            self.error_acc = &member1.accessors.primitive;
+            self.error_acc = &member1.accessors;
             self.error_class = member1.class;
         }
     };

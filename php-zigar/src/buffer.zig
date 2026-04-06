@@ -17,6 +17,7 @@ pub const ByteBuffer = struct {
         read_only: bool = false,
         temporary: bool = false,
         inaccessible: bool = false,
+        contains_packed_data: bool = false,
     } = .{},
     source: union(enum) {
         buffer: *ByteBuffer,
@@ -119,6 +120,10 @@ pub const ByteBuffer = struct {
 
     pub fn protect(self: *@This(), read_only: bool) void {
         self.flags.read_only = read_only;
+    }
+
+    pub fn markPackedData(self: *@This()) void {
+        self.flags.contains_packed_data = true;
     }
 
     pub fn copy(self: *@This(), other: *const @This()) !void {

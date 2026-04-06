@@ -47,15 +47,15 @@ pub const ErrorSet = struct {
     };
 
     pub const Static = struct {
-        value_acc: *accessor.Primitive = undefined,
+        constant_acc: *accessor.Constant = undefined,
         error_set: *HashTable = undefined,
         methods: *Methods = undefined,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             const member = try class.getMember(.instance, 0);
-            if (member.accessors != .primitive) return error.InvalidAccessor;
-            self.value_acc = &member.accessors.primitive;
+            if (member.accessors != .constant) return error.Unexpected;
+            self.constant_acc = &member.accessors.constant;
             if (class.flags.error_set.is_global) {
                 self.error_set = class.host.global_error_set;
                 php.addRef(self.error_set);
@@ -130,11 +130,9 @@ pub const ErrorSet = struct {
                         return err.*;
                     } else |_| {
                         // create new error
-                        const buf = try ByteBuffer.create(class.alignment);
-                        try buf.allocate(null, class.byte_size.?);
-                        const err_obj = try class.createObjectFromBuffer(buf, null);
-                        std.debug.print("err_obj #{}\n", .{err_obj.handle});
-                        try self.value_acc.transform(null).set(buf, value);
+                        const err_obj = try class.createObject(null, null);
+                        const err_struct = fromObject(err_obj);
+                        try self.constant_acc.int.set(err_struct, value);
                         var text_buffer: [64]u8 = undefined;
                         const text = std.fmt.bufPrint(&text_buffer, "UnknownError #{d}", .{err_code}) catch unreachable;
                         const name = php.createString(text);
@@ -184,7 +182,7 @@ pub const ErrorSet = struct {
         fn addCanonical(self: *@This(), name: *String, err_obj: *Object) !void {
             const class = ZigClassEntry.fromStatic(self);
             const err_struct = fromObject(err_obj);
-            const err_value = try self.value_acc.transform(null).get(err_struct.buffer);
+            const err_value = try self.constant_acc.int.get(err_struct);
             // reference err by integer value
             const err_code = try php.getValueLong(&err_value);
             const err, const is_new = if (php.getHashEntry(class.host.global_error_set, err_code)) |e_ptr|
@@ -212,7 +210,7 @@ pub const ErrorSet = struct {
     pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        const err_value = try static.value_acc.get(self.buffer);
+        const err_value = try static.constant_acc.get(self.buffer);
         if (transform == .to_value) return err_value;
         const err_obj = try php.getValueObject(&err_value);
         defer php.release(err_obj);
@@ -255,7 +253,7 @@ pub const ErrorSet = struct {
                 defer php.allocator.free(text);
                 break :create php.createValueStringContent(text);
             },
-            .to_integer => try static.value_acc.transform(null).get(err_struct.buffer),
+            .to_integer => try static.constant_acc.int.get(err_struct),
             .to_bytes => try self.returnBytes(),
         };
     }
@@ -264,7 +262,7 @@ pub const ErrorSet = struct {
         if (try self.copySelf(value)) return;
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        try static.value_acc.set(self.buffer, value);
+        try static.constant_acc.set(self.buffer, value);
     }
 
     pub fn acquireDebugInfo(self: *@This()) !void {
@@ -323,7 +321,7 @@ pub const ErrorSet = struct {
         const self = fromObject(obj);
         const class = ZigClassEntry.fromObject(obj);
         const static = class.getStaticData(@This());
-        return_value.* = try static.value_acc.get(self.buffer);
+        return_value.* = try static.constant_acc.get(self.buffer);
     }
 
     pub fn handleGetFile(ed: *ExecuteData, return_value: *Value) !void {

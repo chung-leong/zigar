@@ -60,6 +60,9 @@ pub const ZigClassEntry = struct {
             if (!member.flags.is_self_referencing and !member.flags.is_missing_class) {
                 member.class.release();
             }
+            if (member.accessors == .constant) {
+                member.accessors.constant.deinit();
+            }
             php.allocator.destroy(member);
         }
 
@@ -74,14 +77,6 @@ pub const ZigClassEntry = struct {
             else
                 null;
         }
-
-        pub fn primitiveTransform(self: *@This()) ?accessor.PrimitiveTransform {
-            if (self.flags.is_missing_class) return null;
-            return switch (self.class.type) {
-                inline .@"enum", .error_set => .{ .class = self.class },
-                else => null,
-            };
-        }
     };
     pub const Template = struct {
         buffer: ?*ByteBuffer = null,
@@ -93,81 +88,6 @@ pub const ZigClassEntry = struct {
                 php.release(t);
                 php.allocator.destroy(t);
             }
-        }
-    };
-    pub const GetSetterIterator = struct {
-        member_iter: HashTableObjectIterator(*Member),
-        scope: ScopeType,
-        prefix: []const u8,
-        arg_count: usize,
-        len: usize = undefined,
-        name: []const u8 = undefined,
-
-        pub fn init(
-            class: *ZigClassEntry,
-            scope: ScopeType,
-            access: enum { get, set },
-        ) @This() {
-            var self: @This() = .{
-                // all functions--including methods--are attached to structure as static members
-                .member_iter = class.getMemberIterator(.static),
-                .scope = scope,
-                .prefix = switch (access) {
-                    inline else => |t| @tagName(t),
-                },
-                .arg_count = switch (access) {
-                    .get => switch (scope) {
-                        .instance => 1,
-                        .static => 0,
-                    },
-                    .set => switch (scope) {
-                        .instance => 2,
-                        .static => 1,
-                    },
-                },
-            };
-            var count: usize = 0;
-            while (self.next()) |_| count += 1;
-            self.len = count;
-            self.scope = scope;
-            self.member_iter.reset();
-            return self;
-        }
-
-        pub fn currentName(self: *@This()) []const u8 {
-            return self.name;
-        }
-
-        pub fn next(self: *@This()) ?*Member {
-            return while (self.member_iter.next()) |member| {
-                if (member.class.type != .function) continue;
-                if (member.class.length != self.arg_count) continue;
-                const name = self.member_iter.currentName() orelse continue;
-                const name_c = php.getStringContent(name);
-                if (name_c.len > self.prefix.len + 1) {
-                    // look for prefix
-                    if (std.mem.eql(u8, name_c[0..self.prefix.len], self.prefix)) {
-                        // jump over white-spaces
-                        const ws_count = for (name_c[self.prefix.len..], 0..) |c, i| {
-                            if (!std.ascii.isWhitespace(c)) break i;
-                        } else continue;
-                        // get length of name
-                        const name_len = for (name_c[self.prefix.len + ws_count ..], 0..) |c, i| {
-                            if (std.ascii.isWhitespace(c)) break i;
-                        } else name_c.len - self.prefix.len - ws_count;
-                        if (name_len > 0) {
-                            const si = self.prefix.len + ws_count;
-                            const ei = si + name_len;
-                            self.name = name_c[si..ei];
-                            break member;
-                        }
-                    }
-                }
-            } else null;
-        }
-
-        pub fn reset(self: *@This()) void {
-            self.member_iter.reset();
         }
     };
     const Scope = struct {
@@ -372,24 +292,56 @@ pub const ZigClassEntry = struct {
         errdefer self.instance.release();
         self.static = try self.extractScope(info, "static");
         errdefer self.static.release();
-        if (self.type == .pointer) {
-            // add implicit members for pointer
-            const byte_size = self.byte_size orelse return error.Unexpected;
-            const count = byte_size / @sizeOf(usize);
-            for (0..count) |i| {
-                const member = try php.allocator.create(Member);
-                errdefer php.allocator.destroy(member);
-                member.* = .{
-                    .type = MemberType.uint,
-                    .flags = .{ .is_missing_class = true },
-                    .bit_offset = @bitSizeOf(usize) * i,
-                    .bit_size = @bitSizeOf(usize),
-                    .byte_size = @sizeOf(usize),
-                    .slot = null,
-                };
-                var member_ptr = php.createValuePointer(member);
-                php.setHashEntry(&self.instance.members, 1 + i, &member_ptr);
-            }
+        switch (self.type) {
+            // .@"struct", .@"union", .@"enum", .@"opaque" => {
+            //     // add entries for getters and setters, which are functions attached to structure as static members
+            //     var iter: HashTableObjectIterator(*Member) = .init(.static);
+            //     while (self.member_iter.next()) |member| {
+            //         if (member.class.type != .function) continue;
+            //         if (member.class.length != self.arg_count) continue;
+            //         const name = self.member_iter.currentName() orelse continue;
+            //         const name_c = php.getStringContent(name);
+            //         if (name_c.len > 5 and std.ascii.isWhitespace(name_c[3])) {
+            //             // look for prefix
+            //             if (std.mem.eql(u8, name_c[0..self.prefix.len], self.prefix)) {
+            //                 // jump over white-spaces
+            //                 const ws_count = for (name_c[self.prefix.len..], 0..) |c, i| {
+            //                     if (!std.ascii.isWhitespace(c)) break i;
+            //                 } else continue;
+            //                 // get length of name
+            //                 const name_len = for (name_c[self.prefix.len + ws_count ..], 0..) |c, i| {
+            //                     if (std.ascii.isWhitespace(c)) break i;
+            //                 } else name_c.len - self.prefix.len - ws_count;
+            //                 if (name_len > 0) {
+            //                     const si = self.prefix.len + ws_count;
+            //                     const ei = si + name_len;
+            //                     self.name = name_c[si..ei];
+            //                     break member;
+            //                 }
+            //             }
+            //         }
+            //     }
+            // },
+            .pointer => {
+                // add implicit members for pointer
+                const byte_size = self.byte_size orelse return error.Unexpected;
+                const count = byte_size / @sizeOf(usize);
+                for (0..count) |i| {
+                    const member = try php.allocator.create(Member);
+                    errdefer php.allocator.destroy(member);
+                    member.* = .{
+                        .type = MemberType.uint,
+                        .flags = .{ .is_missing_class = true },
+                        .bit_offset = @bitSizeOf(usize) * i,
+                        .bit_size = @bitSizeOf(usize),
+                        .byte_size = @sizeOf(usize),
+                        .slot = null,
+                    };
+                    var member_ptr = php.createValuePointer(member);
+                    php.setHashEntry(&self.instance.members, 1 + i, &member_ptr);
+                }
+            },
+            else => {},
         }
         inline for (.{ .static, .instance }) |scope_type| {
             const scope = &@field(self, @tagName(scope_type));
@@ -509,26 +461,6 @@ pub const ZigClassEntry = struct {
         }
     }
 
-    pub fn getGetter(self: *@This(), comptime scope: ScopeType, name: *const String) !*Member {
-        return self.getGetSetter(scope, name, .get);
-    }
-
-    pub fn getSetter(self: *@This(), comptime scope: ScopeType, name: *const String) !*Member {
-        return self.getGetSetter(scope, name, .set);
-    }
-
-    fn getGetSetter(
-        self: *@This(),
-        comptime scope: ScopeType,
-        name: *const String,
-        comptime access: @TypeOf(.enum_literal),
-    ) !*Member {
-        var iter = self.getGetSetterIterator(scope, access);
-        return while (iter.next()) |member| {
-            if (php.matchString(name, iter.currentKey())) break member;
-        } else error.Missing;
-    }
-
     pub fn getMemberIterator(self: *@This(), comptime scope: ScopeType) HashTableObjectIterator(*Member) {
         switch (scope) {
             inline else => |s| {
@@ -536,22 +468,6 @@ pub const ZigClassEntry = struct {
                 return .init(&container.members, .{});
             },
         }
-    }
-
-    pub fn getGetterIterator(self: *@This(), comptime scope: ScopeType) GetSetterIterator {
-        return self.getGetSetterIterator(scope, .get);
-    }
-
-    pub fn getSetterIterator(self: *@This(), comptime scope: ScopeType) GetSetterIterator {
-        return self.getGetSetterIterator(scope, .set);
-    }
-
-    fn getGetSetterIterator(
-        self: *@This(),
-        comptime scope: ScopeType,
-        comptime access: @TypeOf(.enum_literal),
-    ) GetSetterIterator {
-        return .init(self, scope, access);
     }
 
     pub fn checkByteLength(self: *@This(), len: usize) !void {
@@ -860,9 +776,12 @@ pub const ZigClassEntry = struct {
         return php.transform(ns.handleGetIterator);
     }
 
-    fn getAccessors(self: @This(), scope: *Scope, member: *Member) !accessor.Any {
+    fn getAccessors(self: *@This(), scope: *Scope, member: *Member) !accessor.Any {
         @setEvalBranchQuota(2000000);
-        // array accessors don't have an offset
+        const for_vector = switch (self.type) {
+            .array, .slice, .vector => true,
+            else => false,
+        };
         const for_scalar = member.bit_offset != null;
         const byte_offset: usize = if (member.bit_offset) |bit_offset| bit_offset / 8 else 0;
         const bit_offset_mod8: ?u3 = if (member.bit_offset) |bit_offset|
@@ -871,200 +790,104 @@ pub const ZigClassEntry = struct {
             if (member.byte_size != null) null else @intCast(bit_offset % 8)
         else
             null;
-        switch (member.type) {
-            .bool => {
-                if (for_scalar) {
-                    // iterate through all possible bit offsets
-                    inline for (.{ null, 0, 1, 2, 3, 4, 5, 6, 7 }) |offset| {
-                        if (bit_offset_mod8 == offset) {
-                            const primitive = accessor.boolean.get(.{
-                                .bit_offset = offset,
-                            }, .{
-                                .byte_offset = byte_offset,
-                            });
-                            return .{ .primitive = primitive };
-                        }
-                    }
-                } else {
-                    // TODO: deal with vectors inside packed struct
-                    const is_vector = self.type == .vector;
-                    return inline for (.{ false, true }) |is_packed| {
-                        if (is_vector == is_packed) {
-                            const vector = accessor.vector.get(.{
-                                .child = .{ .bool = .{} },
-                                .is_packed = is_packed,
-                            }, .{});
-                            break .{ .vector = vector };
-                        }
-                    } else unreachable;
-                }
-            },
-            inline .int, .uint => |t| inline for (0..65) |bits| {
-                const signedness = if (t == .int) .signed else .unsigned;
-                if (member.bit_size == bits) {
-                    if (for_scalar) {
-                        inline for (.{ null, 0, 1, 2, 3, 4, 5, 6, 7 }) |offset| {
-                            if (bit_offset_mod8 == offset) {
-                                const primitive = accessor.int.get(.{
-                                    .signedness = signedness,
-                                    .bit_size = bits,
-                                    .bit_offset = offset,
-                                }, .{
-                                    .byte_offset = byte_offset,
-                                    .transform = member.primitiveTransform(),
-                                });
-                                return .{ .primitive = primitive };
+        const has_size = member.byte_size != null;
+        var accessors: accessor.Any = inline for (comptime std.meta.fields(accessor.Any)) |field| {
+            const Acc = field.type;
+            var acc: Acc = undefined;
+            switch (acc.type) {
+                .void => if (member.type == .void) {
+                    break @unionInit(accessor.Any, field.name, acc);
+                },
+                .bool, .int, .float, .gmp => {
+                    const primitive_type: MemberType = comptime switch (acc.type) {
+                        .bool => .bool,
+                        .int, .gmp => switch (acc.attributes.signedness) {
+                            .signed => .int,
+                            .unsigned => .uint,
+                        },
+                        .float => .float,
+                        else => unreachable,
+                    };
+                    if (for_scalar and member.type == primitive_type) {
+                        if (!@hasField(@TypeOf(acc.attributes), "bit_size") or member.bit_size == acc.attributes.bit_size) {
+                            if (bit_offset_mod8 == acc.attributes.bit_offset) {
+                                acc.byte_offset = byte_offset;
+                                break @unionInit(accessor.Any, field.name, acc);
                             }
                         }
-                    } else {
-                        const vector = accessor.vector.get(.{
-                            .child = .{
-                                .int = .{
-                                    .signedness = signedness,
-                                    .bit_size = bits,
-                                },
+                    }
+                },
+                .slot => if (member.type == .object or member.type == .literal or member.type == .type) {
+                    if (acc.attributes.prebaked == !has_size) {
+                        const slots: @TypeOf(acc.attributes.slots) = switch (scope.slot_count > 1) {
+                            true => .multiple,
+                            false => .single,
+                        };
+                        const index: @TypeOf(acc.attributes.index) = switch (for_vector) {
+                            true => .use,
+                            false => .none,
+                        };
+                        if (acc.attributes.slots == slots and acc.attributes.index == index) {
+                            if (@hasField(Acc, "slot")) {
+                                acc.slot = member.slot orelse return error.Unexpected;
+                            }
+                            if (@hasField(Acc, "byte_size")) {
+                                acc.byte_size = member.byte_size.?;
+                            }
+                            if (@hasField(Acc, "byte_offset")) {
+                                acc.byte_offset = byte_offset;
+                            }
+                            if (@hasField(Acc, "class")) {
+                                acc.class = member.class;
+                            }
+                            break @unionInit(accessor.Any, field.name, acc);
+                        }
+                    }
+                },
+                .vector => {
+                    const primitive_type: MemberType = comptime switch (acc.attributes) {
+                        .bool => .bool,
+                        inline .int, .gmp => |child_attrs| switch (child_attrs.signedness) {
+                            .signed => .int,
+                            .unsigned => .uint,
+                        },
+                        .float => .float,
+                    };
+                    if (member.type == primitive_type) {
+                        switch (acc.attributes) {
+                            inline else => |child_attrs| {
+                                if (@hasField(Acc, "bit_size")) {
+                                    // accessors can handle different bit sizes
+                                    acc.bit_size = member.bit_offset orelse return error.Unexpected;
+                                    break @unionInit(accessor.Any, field.name, acc);
+                                } else {
+                                    // accessors handle one particular bit sizes
+                                    if (!@hasField(@TypeOf(child_attrs), "bit_size") or member.bit_size == child_attrs.bit_size) {
+                                        break @unionInit(accessor.Any, field.name, acc);
+                                    }
+                                }
                             },
-                            .is_packed = false,
-                        }, .{
-                            .transform = member.primitiveTransform(),
-                        });
-                        return .{ .vector = vector };
-                    }
-                    break;
-                }
-            } else {
-                const signedness = if (t == .int) .signed else .unsigned;
-                if (for_scalar) {
-                    inline for (.{ null, 0, 1, 2, 3, 4, 5, 6, 7 }) |offset| {
-                        if (bit_offset_mod8 == offset) {
-                            const primitive = accessor.gmp.get(.{
-                                .signedness = signedness,
-                                .bit_offset = offset,
-                            }, .{
-                                .byte_offset = byte_offset,
-                                .bit_size = member.bit_size,
-                                .transform = member.primitiveTransform(),
-                            });
-                            return .{ .primitive = primitive };
                         }
                     }
-                } else {
-                    const vector = accessor.vector.get(.{
-                        .child = .{ .gmp = .{ .signedness = signedness } },
-                        .is_packed = false,
-                    }, .{
-                        .bit_size = member.bit_size,
-                        .transform = member.primitiveTransform(),
-                    });
-                    return .{ .vector = vector };
-                }
-            },
-            .float => inline for (.{ 16, 32, 64, 80, 128 }) |bits| {
-                if (member.bit_size == bits) {
-                    if (for_scalar) {
-                        inline for (.{ null, 0, 1, 2, 3, 4, 5, 6, 7 }) |offset| {
-                            if (bit_offset_mod8 == offset) {
-                                const primitive = accessor.float.get(.{
-                                    .bit_size = bits,
-                                    .bit_offset = offset,
-                                }, .{
-                                    .byte_offset = byte_offset,
-                                });
-                                return .{ .primitive = primitive };
-                            }
-                        }
-                    } else {
-                        const vector = accessor.vector.get(.{
-                            .child = .{ .float = .{ .bit_size = bits } },
-                            .is_packed = false,
-                        }, .{});
-                        return .{ .vector = vector };
-                    }
-                }
-            },
-            .void => {
-                if (for_scalar) {
-                    const primitive = accessor.void.get(.{}, .{
-                        .byte_offset = byte_offset,
-                    });
-                    return .{ .primitive = primitive };
-                } else {
-                    const vector = accessor.vector.get(.{
-                        .child = .{ .void = .{} },
-                        .is_packed = false,
-                    }, .{});
-                    return .{ .vector = vector };
-                }
-            },
-            .object, .literal => {
-                if (member.byte_size) |byte_size| {
-                    // compound types like structs and unions are represented by objects
-                    // these are stored in the tables of their parent objects and are created lazily
-                    if (for_scalar) {
-                        return if (scope.slot_count > 1) .{
-                            .multi_slot = accessor.slot.get(.{
-                                .type = .multi_slot,
-                            }, .{
-                                .class = member.class,
-                                .byte_offset = byte_offset,
-                                .byte_size = byte_size,
-                                .slot = member.slot orelse return error.MissingSlot,
-                            }),
-                        } else .{
-                            .single_slot = accessor.slot.get(.{
-                                .type = .single_slot,
-                            }, .{
-                                .class = member.class,
-                                .byte_offset = byte_offset,
-                                .byte_size = byte_size,
-                            }),
-                        };
-                    } else {
-                        return .{
-                            .array_slot = accessor.slot.get(.{
-                                .type = .array_slot,
-                            }, .{
-                                .class = member.class,
-                                .byte_size = byte_size,
-                            }),
-                        };
-                    }
-                } else {
-                    // static members don't have a size since they're already-made objects
-                    // that sit in the template table; this is applicable to comptime fields as well
-                    return if (scope.slot_count > 1) .{
-                        .multi_slot_prebaked = accessor.slot.get(.{
-                            .type = .multi_slot_prebaked,
-                        }, .{
-                            .slot = member.slot orelse return error.MissingSlot,
-                        }),
-                    } else .{
-                        .single_slot_prebaked = accessor.slot.get(.{
-                            .type = .single_slot_prebaked,
-                        }, .{}),
+                },
+                .null => if (member.type == .null or member.type == .undefined) {
+                    break @unionInit(accessor.Any, field.name, acc);
+                },
+                .constant, .inaccessible => {},
+            }
+        } else .{ .inaccessible = .{} };
+        if (member.type == .int or member.type == .uint) {
+            if (!member.flags.is_missing_class) {
+                if (member.class.type == .@"enum" or member.class.type == .error_set) {
+                    // use constant accessor to translate integers to enum and error set objects
+                    const int_accessors = accessors;
+                    accessors = .{
+                        .constant = try .init(int_accessors, member.class),
                     };
                 }
-            },
-            .type => {
-                return if (scope.slot_count > 1) .{
-                    .multi_slot_prebaked = accessor.slot.get(.{
-                        .type = .multi_slot_prebaked,
-                    }, .{
-                        .slot = member.slot orelse return error.MissingSlot,
-                    }),
-                } else .{
-                    .single_slot_prebaked = accessor.slot.get(.{
-                        .type = .single_slot_prebaked,
-                    }, .{}),
-                };
-            },
-            .null, .undefined => {
-                return .{ .null = accessor.null.get(.{}, .{}) };
-            },
-            else => {},
+            }
         }
-        std.debug.print("No accessor for {}\n", .{member.type});
-        return .{ .missing = {} };
+        return accessors;
     }
 
     fn inferName(self: *@This()) !*String {

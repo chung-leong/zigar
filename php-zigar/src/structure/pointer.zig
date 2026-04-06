@@ -22,19 +22,17 @@ pub const Pointer = struct {
 
     pub const Static = struct {
         target_class: *ZigClassEntry = undefined,
-        address_acc: *accessor.Primitive = undefined,
-        length_acc: ?*accessor.Primitive = null,
+        address_acc: *accessor.Any = undefined,
+        length_acc: ?*accessor.Any = null,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             const target_member = try class.getMember(.instance, 0);
             self.target_class = target_member.class;
             const address_member = try class.getMember(.instance, 1);
-            if (address_member.accessors != .primitive) return error.InvalidAccessor;
-            self.address_acc = &address_member.accessors.primitive;
+            self.address_acc = &address_member.accessors;
             if (class.getMember(.instance, 2)) |length_member| {
-                if (length_member.accessors != .primitive) return error.InvalidAccessor;
-                self.length_acc = &length_member.accessors.primitive;
+                self.length_acc = &length_member.accessors;
             } else |_| {}
         }
 

@@ -22,7 +22,6 @@ pub fn Class(comptime S: type) type {
         closure: Closure = undefined,
         table: Value = undefined,
         prop_names: []*String = &.{},
-        getter_names: []*String = &.{},
 
         pub const scope: ZigClassEntry.ScopeType = .static;
         pub const Super = structure.StructLike(@This());
@@ -73,7 +72,6 @@ pub fn Class(comptime S: type) type {
         pub fn freeObject(obj: *Object) void {
             const self = fromObject(obj);
             if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
-            if (self.getter_names.len > 0) php.allocator.free(self.getter_names);
             Super.freeObject(obj);
         }
 
@@ -185,7 +183,7 @@ pub fn Class(comptime S: type) type {
 
         pub fn getIterator(obj: *Object) !?*ObjectIterator {
             const self = fromObject(obj);
-            return try iterator.PropertyIterator(@This()).create(obj, self.prop_names, self.getter_names);
+            return try iterator.PropertyIterator(@This()).create(obj, self.prop_names);
         }
 
         fn getThis(value: *const Value) !*S {

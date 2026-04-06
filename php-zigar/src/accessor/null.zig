@@ -6,17 +6,17 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const php = @import("../php.zig");
 const Value = php.Value;
 
-pub const Attributes = struct {};
+const Attributes = struct {};
 
-pub fn get(comptime _: Attributes, params: accessor.Null.Parameters) accessor.Null {
-    const ns = struct {
-        pub fn get(_: *const accessor.Null) Error!Value {
-            return php.createValueNull();
-        }
+pub const Null = struct {
+    comptime type: accessor.Type = .null,
+    comptime attributes: Attributes = .{},
 
-        pub fn set(_: *const accessor.Null, value: *const Value) Error!void {
-            try php.getValueNull(value);
-        }
-    };
-    return .{ .getter = &ns.get, .setter = &ns.set, .params = params };
-}
+    pub fn get(_: @This()) Error!Value {
+        return php.createValueNull();
+    }
+
+    pub fn set(_: @This(), value: *const Value) Error!void {
+        try php.getValueNull(value);
+    }
+};

@@ -15,13 +15,12 @@ pub const Primitive = struct {
     const Super = structure.Parent(@This());
 
     pub const Static = struct {
-        value_acc: *accessor.Primitive = undefined,
+        value_acc: *accessor.Any = undefined,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             const member = try class.getMember(.instance, 0);
-            if (member.accessors != .primitive) return error.InvalidAccessor;
-            self.value_acc = &member.accessors.primitive;
+            self.value_acc = &member.accessors;
         }
     };
 

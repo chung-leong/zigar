@@ -19,7 +19,7 @@ pub const Opaque = struct {
     const Super = structure.Parent(@This());
 
     pub const Static = struct {
-        getter_names: []*String = &.{},
+        prop_names: []*String = &.{},
         class_obj: *Object = undefined,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
@@ -30,7 +30,7 @@ pub const Opaque = struct {
 
         pub fn deinit(self: *@This()) void {
             php.release(self.class_obj);
-            if (self.getter_names.len > 0) php.allocator.free(self.getter_names);
+            if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
         }
     };
 
@@ -47,7 +47,7 @@ pub const Opaque = struct {
     pub fn getIterator(obj: *Object) !?*ObjectIterator {
         const class = ZigClassEntry.fromObject(obj);
         const static = class.getStaticData(@This());
-        return try iterator.PropertyIterator(@This()).create(obj, &.{}, static.getter_names);
+        return try iterator.PropertyIterator(@This()).create(obj, static.prop_names);
     }
 
     fn throwException(self: *@This()) error{ExceptionThrown} {

@@ -37,10 +37,9 @@ pub const Struct = struct {
 
     pub const Static = struct {
         prop_names: []*String = &.{},
-        getter_names: []*String = &.{},
         backing_int: ?struct {
             class: *ZigClassEntry,
-            accessors: *accessor.Primitive,
+            accessors: *accessor.Any,
         } = null,
         required_field_count: usize = 0,
         class_obj: *Object = undefined,
@@ -54,10 +53,9 @@ pub const Struct = struct {
                 if (member.flags.is_backing_int) break member;
             } else null;
             if (backing_int_member) |bim| {
-                if (bim.accessors != .primitive) return error.InvalidAccessor;
                 self.backing_int = .{
                     .class = bim.class,
-                    .accessors = &bim.accessors.primitive,
+                    .accessors = &bim.accessors,
                 };
             }
             // count the number of required arguments
@@ -75,16 +73,6 @@ pub const Struct = struct {
                         self.prop_names[index] = iter.currentName() orelse return error.Unexpected;
                         index += 1;
                     }
-                }
-            }
-            // find getters
-            var getter_iter = class.getGetterIterator(.instance);
-            if (getter_iter.len > 0) {
-                self.getter_names = try php.allocator.alloc(*String, getter_iter.len);
-                var index: usize = 0;
-                while (getter_iter.next()) |_| {
-                    self.getter_names[index] = php.createString(getter_iter.currentName());
-                    index += 1;
                 }
             }
             // because methods are really static functions, we need to maintain a ref on the class object
@@ -111,11 +99,6 @@ pub const Struct = struct {
             php.release(self.class_obj);
             if (self.callback) |cb| php.release(cb);
             if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
-            if (self.getter_names.len > 0) {
-                // getter names are new strings so we need to release them
-                for (self.getter_names) |n| php.release(n);
-                php.allocator.free(self.getter_names);
-            }
         }
     };
 
@@ -160,7 +143,7 @@ pub const Struct = struct {
         if (class.flags.common.has_pointer) {
             var iter = class.getMemberIterator(.instance);
             while (iter.next()) |member| {
-                if (member.accessors != .primitive) {
+                if (member.accessors.isType(.slot)) {
                     const value = try member.accessors.get(self);
                     defer php.release(&value);
                     const obj = php.getValueObject(&value) catch continue;
@@ -249,7 +232,7 @@ pub const Struct = struct {
         return switch (class.purpose) {
             .iterator => try iterator.IteratorIterator.create(obj),
             .generator => try iterator.GeneratorIterator.create(obj),
-            else => try iterator.PropertyIterator(@This()).create(obj, static.prop_names, static.getter_names),
+            else => try iterator.PropertyIterator(@This()).create(obj, static.prop_names),
         };
     }
 

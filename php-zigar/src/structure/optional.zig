@@ -18,7 +18,7 @@ pub const Optional = struct {
     pub const Static = struct {
         payload_acc: *accessor.Any = undefined,
         payload_transform: ?ObjectTransform = null,
-        present_acc: *accessor.Primitive = undefined,
+        present_acc: *accessor.Any = undefined,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -26,8 +26,7 @@ pub const Optional = struct {
             self.payload_acc = &member0.accessors;
             self.payload_transform = member0.objectTransform();
             const member1 = try class.getMember(.instance, 1);
-            if (member1.accessors != .primitive) return error.InvalidAccessor;
-            self.present_acc = &member1.accessors.primitive;
+            self.present_acc = &member1.accessors;
         }
     };
 

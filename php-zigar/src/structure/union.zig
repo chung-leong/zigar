@@ -27,10 +27,9 @@ pub const Union = struct {
 
     pub const Static = struct {
         prop_names: []*String = &.{},
-        getter_names: []*String = &.{},
         selector: ?struct {
             class: *ZigClassEntry,
-            accessors: *accessor.Primitive,
+            accessors: *accessor.Any,
             possible_values: HashTable,
         } = null,
         class_obj: *Object = undefined,
@@ -43,7 +42,6 @@ pub const Union = struct {
                 if (member.flags.is_selector) break member;
             } else null;
             if (selector_member) |sm| {
-                if (sm.accessors != .primitive) return error.InvalidAccessor;
                 const sel_slots = switch (sm.class.type) {
                     .@"enum" => sm.class.getStaticData(structure.Enum).available_tags,
                     else => null,
@@ -65,7 +63,7 @@ pub const Union = struct {
                     index += 1;
                 }
                 self.selector = .{
-                    .accessors = &sm.accessors.primitive,
+                    .accessors = &sm.accessors,
                     .class = sm.class,
                     .possible_values = sel_ht,
                 };
@@ -96,7 +94,6 @@ pub const Union = struct {
             }
             php.release(self.class_obj);
             if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
-            if (self.getter_names.len > 0) php.allocator.free(self.getter_names);
         }
 
         pub fn getEnumClass(self: *@This()) ?*ZigClassEntry {
@@ -170,7 +167,7 @@ pub const Union = struct {
             var iter = class.getMemberIterator(.instance);
             while (iter.next()) |member| {
                 if (iter.currentName()) |name| {
-                    if (member.accessors != .primitive) {
+                    if (member.accessors.isType(.slot)) {
                         const run = options.include_inactive or match: {
                             const sel_value = try php.getHashEntry(&selector.possible_values, name);
                             break :match compareSelectors(sel_value, &active_sel_value);
@@ -248,7 +245,7 @@ pub const Union = struct {
             true => try self.getActiveTagNameList(),
             false => static.prop_names,
         };
-        return try iterator.PropertyIterator(@This()).create(obj, prop_names, static.getter_names);
+        return try iterator.PropertyIterator(@This()).create(obj, prop_names);
     }
 
     fn getActiveTagNameList(self: *@This()) ![]*String {

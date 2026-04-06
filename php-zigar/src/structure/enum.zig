@@ -32,16 +32,24 @@ pub const Enum = struct {
     const Super = structure.Parent(@This());
 
     pub const Static = struct {
-        getter_names: []*String = &.{},
-        value_acc: *accessor.Primitive = undefined,
+        prop_names: []*String = &.{},
+        constant_acc: *accessor.Constant = undefined,
         available_tags: HashTable = undefined,
         class_obj: *Object = undefined,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             const member = try class.getMember(.instance, 0);
-            if (member.accessors != .primitive) return error.InvalidAccessor;
-            self.value_acc = &member.accessors.primitive;
+            if (member.accessors != .constant) {
+                std.debug.print("member type = {}\n", .{member.type});
+                std.debug.print("bit size = {}\n", .{member.bit_size});
+                std.debug.print("byte size = {?}\n", .{member.byte_size});
+                std.debug.print("bit offset = {?}\n", .{member.bit_offset});
+                std.debug.print("structure type = {}\n", .{member.class.type});
+                std.debug.print("access type = {}\n", .{member.accessors.getType()});
+                return error.Unexpected;
+            }
+            self.constant_acc = &member.accessors.constant;
             // loop through static members and add them to a hash table, keyed by
             // their integer values and names
             self.available_tags = php.createHashTable(php.destructor.value);
@@ -65,7 +73,7 @@ pub const Enum = struct {
         pub fn deinit(self: *@This()) void {
             php.destroyHashTable(&self.available_tags);
             php.release(self.class_obj);
-            if (self.getter_names.len > 0) php.allocator.free(self.getter_names);
+            if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
         }
 
         pub fn castValue(self: *@This(), value: *Value) !?Value {
@@ -105,10 +113,9 @@ pub const Enum = struct {
                     } else |err| {
                         if (class.flags.@"enum".is_open_ended) {
                             // create new item
-                            const buf = try ByteBuffer.create(class.alignment);
-                            try buf.allocate(null, class.byte_size.?);
-                            const tag_obj = try class.createObjectFromBuffer(buf, null);
-                            try self.value_acc.transform(null).set(buf, key);
+                            const tag_obj = try class.createObject(null, null);
+                            const tag_struct = fromObject(tag_obj);
+                            try self.constant_acc.int.set(tag_struct, key);
                             var buffer: [48]u8 = undefined;
                             const text = std.fmt.bufPrint(&buffer, "@enumFromInt({d})", .{tag_code}) catch unreachable;
                             const name = php.createString(text);
@@ -143,10 +150,9 @@ pub const Enum = struct {
                         } else |err| {
                             if (class.flags.@"enum".is_open_ended) {
                                 // create new item
-                                const buf = try ByteBuffer.create(class.alignment);
-                                try buf.allocate(null, class.byte_size.?);
-                                try self.value_acc.transform(null).set(buf, key);
-                                const tag_obj = try class.createObjectFromBuffer(buf, null);
+                                const tag_obj = try class.createObject(null, null);
+                                const tag_struct = fromObject(tag_obj);
+                                try self.constant_acc.int.set(tag_struct, key);
                                 const text = try std.fmt.allocPrint(php.allocator, "@enumFromInt({s})", .{
                                     php.getStringContent(tag_code_str),
                                 });
@@ -197,7 +203,7 @@ pub const Enum = struct {
         fn addCanonical(self: *@This(), name: *String, tag_obj: *Object) !void {
             const tag_struct = fromObject(tag_obj);
             // reference tag by integer value
-            var tag_value = try self.value_acc.transform(null).get(tag_struct.buffer);
+            var tag_value = try self.constant_acc.int.get(tag_struct);
             // tag_value might contain a GMP object, so we need to release it
             defer php.release(&tag_value);
             const tag = php.createValueObject(tag_obj);
@@ -228,7 +234,7 @@ pub const Enum = struct {
     pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        const enum_value = try static.value_acc.get(self.buffer);
+        const enum_value = try static.constant_acc.get(self.buffer);
         if (transform == .to_value) return enum_value;
         const enum_obj = try php.getValueObject(&enum_value);
         defer php.release(enum_obj);
@@ -239,7 +245,7 @@ pub const Enum = struct {
                 const props = enum_struct.canonical orelse return error.Unexpected;
                 break :create php.createValueString(props.name);
             },
-            .to_integer => try static.value_acc.transform(null).get(enum_struct.buffer),
+            .to_integer => try static.constant_acc.int.get(enum_struct),
             .to_bytes => try self.returnBytes(),
         };
     }
@@ -248,7 +254,7 @@ pub const Enum = struct {
         if (try self.copySelf(value)) return;
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        try static.value_acc.set(self.buffer, value);
+        try static.constant_acc.set(self.buffer, value);
     }
 
     pub fn freeObject(obj: *Object) void {
@@ -262,7 +268,7 @@ pub const Enum = struct {
     pub fn getIterator(obj: *Object) !?*ObjectIterator {
         const class = ZigClassEntry.fromObject(obj);
         const static = class.getStaticData(@This());
-        return try iterator.PropertyIterator(@This()).create(obj, &.{}, static.getter_names);
+        return try iterator.PropertyIterator(@This()).create(obj, static.prop_names);
     }
 
     pub const getExtent = Super.getExtent;
