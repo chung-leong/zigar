@@ -29,7 +29,7 @@ pub const Enum = struct {
         }
     };
 
-    const Super = structure.Parent(@This());
+    const Super = structure.StructLike(@This());
 
     pub const Static = struct {
         prop_names: []*String = &.{},
@@ -68,6 +68,8 @@ pub const Enum = struct {
             // because methods are really static functions, we need to maintain a ref on the class object
             self.class_obj = class_obj;
             php.addRef(self.class_obj);
+            // create a list of property names for use by iterator
+            self.prop_names = try class.createPropertyList(.instance);
         }
 
         pub fn deinit(self: *@This()) void {
@@ -268,7 +270,7 @@ pub const Enum = struct {
     pub fn getIterator(obj: *Object) !?*ObjectIterator {
         const class = ZigClassEntry.fromObject(obj);
         const static = class.getStaticData(@This());
-        return try iterator.PropertyIterator(@This()).create(obj, static.prop_names);
+        return try iterator.PropertyIterator(@This()).create(obj, static.prop_names, &.{});
     }
 
     pub const getExtent = Super.getExtent;
@@ -285,6 +287,7 @@ pub const Enum = struct {
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
+    pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;

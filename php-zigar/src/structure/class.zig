@@ -46,14 +46,14 @@ pub fn Class(comptime S: type) type {
                     var prop_count: usize = 0;
                     var iter = class.getMemberIterator(scope);
                     while (iter.next()) |member| {
-                        if (member.class.type != .function) prop_count += 1;
+                        if (member.flags.is_missing_class or member.class.type != .function) prop_count += 1;
                     }
                     if (prop_count > 0) {
                         self.prop_names = try php.allocator.alloc(*String, prop_count);
                         iter.reset();
                         var index: usize = 0;
                         while (iter.next()) |member| {
-                            if (member.class.type != .function) {
+                            if (member.flags.is_missing_class or member.class.type != .function) {
                                 self.prop_names[index] = iter.currentName() orelse return error.Unexpected;
                                 index += 1;
                             }
@@ -183,7 +183,7 @@ pub fn Class(comptime S: type) type {
 
         pub fn getIterator(obj: *Object) !?*ObjectIterator {
             const self = fromObject(obj);
-            return try iterator.PropertyIterator(@This()).create(obj, self.prop_names);
+            return try iterator.PropertyIterator(@This()).create(obj, self.prop_names, &.{});
         }
 
         fn getThis(value: *const Value) !*S {

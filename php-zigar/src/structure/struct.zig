@@ -63,18 +63,7 @@ pub const Struct = struct {
                 if (member.flags.is_required) self.required_field_count += 1;
             }
             // create a list of property names for use by iterator
-            const prop_count = if (backing_int_member != null) iter.len - 1 else iter.len;
-            if (prop_count > 0) {
-                self.prop_names = try php.allocator.alloc(*String, prop_count);
-                iter.reset();
-                var index: usize = 0;
-                while (iter.next()) |member| {
-                    if (!member.flags.is_backing_int) {
-                        self.prop_names[index] = iter.currentName() orelse return error.Unexpected;
-                        index += 1;
-                    }
-                }
-            }
+            self.prop_names = try class.createPropertyList(.instance);
             // because methods are really static functions, we need to maintain a ref on the class object
             self.class_obj = class_obj;
             php.addRef(self.class_obj);
@@ -241,7 +230,7 @@ pub const Struct = struct {
         return switch (class.purpose) {
             .iterator => try iterator.IteratorIterator.create(obj),
             .generator => try iterator.GeneratorIterator.create(obj),
-            else => try iterator.PropertyIterator(@This()).create(obj, static.prop_names),
+            else => try iterator.PropertyIterator(@This()).create(obj, static.prop_names, &.{}),
         };
     }
 

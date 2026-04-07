@@ -69,7 +69,7 @@ pub const StructureImporter = struct {
         // initially, the host holds references to ZigClassEntry objects through the "class"
         // property in the structure arrays; prior to destroying these we need to flip the
         // relationship so that these objects own the host instead
-        for (self.class_list.items) |class_obj| try ZigClassEntry.activate(class_obj);
+        for (self.class_list.items) |class_obj| ZigClassEntry.activate(class_obj);
         // the exporter uses structure arrays to refer to types, since their class object
         // (i.e. their constructor) would have been created yet when a struct has a pointer
         // to its own kind; we're going to fix that here
@@ -240,11 +240,15 @@ pub const StructureImporter = struct {
         return self.allocateValue(structure.*);
     }
 
-    pub fn setStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize, value_h: ?Handle) !void {
+    pub fn setStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize, handle: ?Handle) !void {
         const key = key_bytes[0..key_len];
-        if (value_h) |vh| {
-            const value = self.dereference(vh);
-            php.setHashEntryRef(&self.structure_map, key, value);
+        if (handle) |structure_h| {
+            const structure = self.dereference(structure_h);
+            php.setHashEntryRef(&self.structure_map, key, structure);
+            const class_obj = try ZigClassEntry.create(self.host, structure);
+            var class_value = php.createValueObject(class_obj);
+            try php.setProperty(structure, php.persistent("class"), &class_value);
+            try self.class_list.append(php.allocator, class_obj);
         } else {
             php.deleteHashEntry(&self.structure_map, key);
         }
@@ -252,17 +256,16 @@ pub const StructureImporter = struct {
 
     pub fn beginStructure(self: *@This(), structure_h: Handle) !void {
         const structure = self.dereference(structure_h);
-        const class_obj = try ZigClassEntry.define(self.host, structure);
-        var class_value = php.createValueObject(class_obj);
-        try php.setProperty(structure, php.persistent("class"), &class_value);
-        try self.class_list.append(php.allocator, class_obj);
+        const class_value = try php.getProperty(structure, php.persistent("class"));
+        const class_obj = try php.getValueObject(class_value);
+        try ZigClassEntry.defineStructure(class_obj, structure);
     }
 
     pub fn finishStructure(self: *@This(), structure_h: Handle) !void {
         const structure = self.dereference(structure_h);
         const class_value = try php.getProperty(structure, php.persistent("class"));
         const class_obj = try php.getValueObject(class_value);
-        try ZigClassEntry.finalize(class_obj, structure);
+        try ZigClassEntry.finalizeStructure(class_obj, structure);
     }
 
     pub fn enableCallback(self: *@This(), structure_h: Handle, template_h: Handle, member_flags_h: Handle) !void {

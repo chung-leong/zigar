@@ -52,6 +52,7 @@ pub const Union = struct {
                 iter.reset();
                 while (iter.next()) |member| {
                     if (member.flags.is_selector) continue;
+                    if (member.accessors == .property) continue;
                     const member_name = iter.currentName().?;
                     if (sel_slots) |*ht| {
                         const enum_value = try php.getHashEntry(ht, member_name);
@@ -71,21 +72,8 @@ pub const Union = struct {
             // because methods are really static functions, we need to maintain a ref on the class object
             self.class_obj = class_obj;
             php.addRef(self.class_obj);
-            if (!class.flags.@"union".has_tag) {
-                // all fields are available in untagged union
-                const prop_count: usize = if (selector_member != null) iter.len - 1 else iter.len;
-                if (prop_count > 0) {
-                    self.prop_names = try php.allocator.alloc(*String, prop_count);
-                    iter.reset();
-                    var index: usize = 0;
-                    while (iter.next()) |member| {
-                        if (!member.flags.is_selector) {
-                            self.prop_names[index] = iter.currentName() orelse return error.Unexpected;
-                            index += 1;
-                        }
-                    }
-                }
-            }
+            // create list of prop names
+            self.prop_names = try class.createPropertyList(.instance);
         }
 
         pub fn deinit(self: *@This()) void {
@@ -241,15 +229,13 @@ pub const Union = struct {
         const class = ZigClassEntry.fromObject(obj);
         const static = class.getStaticData(@This());
         const self = fromObject(obj);
-        const prop_names = switch (class.flags.@"union".has_tag) {
-            true => try self.getActiveTagNameList(),
-            false => static.prop_names,
-        };
-        return try iterator.PropertyIterator(@This()).create(obj, prop_names);
+        const active_list = try self.getActiveTagNameList();
+        return try iterator.PropertyIterator(@This()).create(obj, active_list, static.prop_names);
     }
 
     fn getActiveTagNameList(self: *@This()) ![]*String {
         const class = ZigClassEntry.fromStructure(self);
+        if (!class.flags.@"union".has_tag) return &.{};
         const static = class.getStaticData(@This());
         const selector = static.selector orelse return error.Unexpected;
         const active_sel_value = try selector.accessors.get(self);
@@ -273,21 +259,24 @@ pub const Union = struct {
         const selector = static.selector orelse return;
         // don't check if the name is a special property
         if (findTransform(name, cache_slot)) |_| return;
-        const sel_value: *Value = get: {
-            // look for cache entry left by Super.readProperty() or Super.writeProperty()
-            const entry = MemberCacheEntry.findSelf(cache_slot, class);
-            if (entry) |e| {
-                // the selector value is stored in the extra pointer
-                if (e.extra) |ptr| break :get @ptrCast(@alignCast(ptr));
-            }
-            const value = try php.getHashEntry(&selector.possible_values, name);
-            if (entry) |e| {
-                e.extra = value;
-            }
-            break :get value;
-        };
-        const active_sel_value = try selector.accessors.get(self);
-        if (!compareSelectors(sel_value, &active_sel_value)) return error.InactiveField;
+        if (self.findMember(name, cache_slot)) |member| {
+            if (member.accessors == .property) return;
+            const sel_value: *Value = get: {
+                // look for cache entry left by findMember()
+                const entry = MemberCacheEntry.findSelf(cache_slot, class);
+                if (entry) |e| {
+                    // the selector value is stored in the extra pointer
+                    if (e.extra) |ptr| break :get @ptrCast(@alignCast(ptr));
+                }
+                const value = try php.getHashEntry(&selector.possible_values, name);
+                if (entry) |e| {
+                    e.extra = value;
+                }
+                break :get value;
+            };
+            const active_sel_value = try selector.accessors.get(self);
+            if (!compareSelectors(sel_value, &active_sel_value)) return error.InactiveField;
+        }
     }
 
     fn compareSelectors(sel1: *const Value, sel2: *const Value) bool {

@@ -25,7 +25,7 @@ pub const Property = struct {
 
     pub fn set(self: @This(), obj: *Object, value: *const Value) Error!void {
         const container_value = php.createValueObject(obj);
-        const method_name = self.getter orelse return error.WriteOnly;
+        const method_name = self.setter orelse return error.WriteProtected;
         const method_value = php.createValueString(method_name);
         _ = try php.invokeMethod(&container_value, &method_value, &.{value.*});
     }

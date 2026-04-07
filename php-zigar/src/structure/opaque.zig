@@ -16,7 +16,7 @@ const structure = @import("../structure.zig");
 pub const Opaque = struct {
     buffer: *ByteBuffer = undefined,
 
-    const Super = structure.Parent(@This());
+    const Super = structure.StructLike(@This());
 
     pub const Static = struct {
         prop_names: []*String = &.{},
@@ -26,6 +26,9 @@ pub const Opaque = struct {
             // because methods are really static functions, we need to maintain a ref on the class object
             self.class_obj = class_obj;
             php.addRef(self.class_obj);
+            // create a list of property names for use by iterator
+            const class = ZigClassEntry.fromObject(class_obj);
+            self.prop_names = try class.createPropertyList(.instance);
         }
 
         pub fn deinit(self: *@This()) void {
@@ -47,7 +50,7 @@ pub const Opaque = struct {
     pub fn getIterator(obj: *Object) !?*ObjectIterator {
         const class = ZigClassEntry.fromObject(obj);
         const static = class.getStaticData(@This());
-        return try iterator.PropertyIterator(@This()).create(obj, static.prop_names);
+        return try iterator.PropertyIterator(@This()).create(obj, static.prop_names, &.{});
     }
 
     fn throwException(self: *@This()) error{ExceptionThrown} {
@@ -71,6 +74,9 @@ pub const Opaque = struct {
     pub const getMethod = Super.getMethod;
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
+    pub const hasProperty = Super.hasProperty;
+    pub const getProperties = Super.getProperties;
+    pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getReferencedObjects = Super.getReferencedObjects;
     const returnBytes = Super.returnBytes;
 };
