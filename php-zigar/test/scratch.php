@@ -51,18 +51,17 @@ foreach($ptr as $key => $value) {
     echo "$key = $value\n";
 }
 
+echo "Opaque pointer:\n";
+foreach($m->opaque_ptr as $key => $value) {
+    echo "$key = $value\n";
+}
+
+echo "Enum:\n";
+foreach($m->Enum->cow as $key => $value) {
+    echo "$key = $value\n";
+}
+
 echo "Namespace:\n";
 foreach($m->namespace as $key => $value) {
     echo "$key = $value\n";
 }
-echo "world = {$m->namespace->hello}\n";
-$m->namespace->hello += 25;
-echo "world = {$m->namespace->hello}\n";
-
-echo "value = {$m->opaque_ptr->number}\n";
-$m->opaque_ptr->number += 11;
-echo "value = {$m->opaque_ptr->number}\n";
-
-echo "value = {$m->Enum->cow->number}\n";
-$m->Enum->pig->number += 11;
-echo "value = {$m->Enum->pig->number}\n";
