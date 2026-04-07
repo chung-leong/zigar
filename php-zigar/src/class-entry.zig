@@ -292,57 +292,6 @@ pub const ZigClassEntry = struct {
         errdefer self.instance.release();
         self.static = try self.extractScope(info, "static");
         errdefer self.static.release();
-        switch (self.type) {
-            // .@"struct", .@"union", .@"enum", .@"opaque" => {
-            //     // add entries for getters and setters, which are functions attached to structure as static members
-            //     var iter: HashTableObjectIterator(*Member) = .init(.static);
-            //     while (self.member_iter.next()) |member| {
-            //         if (member.class.type != .function) continue;
-            //         if (member.class.length != self.arg_count) continue;
-            //         const name = self.member_iter.currentName() orelse continue;
-            //         const name_c = php.getStringContent(name);
-            //         if (name_c.len > 5 and std.ascii.isWhitespace(name_c[3])) {
-            //             // look for prefix
-            //             if (std.mem.eql(u8, name_c[0..self.prefix.len], self.prefix)) {
-            //                 // jump over white-spaces
-            //                 const ws_count = for (name_c[self.prefix.len..], 0..) |c, i| {
-            //                     if (!std.ascii.isWhitespace(c)) break i;
-            //                 } else continue;
-            //                 // get length of name
-            //                 const name_len = for (name_c[self.prefix.len + ws_count ..], 0..) |c, i| {
-            //                     if (std.ascii.isWhitespace(c)) break i;
-            //                 } else name_c.len - self.prefix.len - ws_count;
-            //                 if (name_len > 0) {
-            //                     const si = self.prefix.len + ws_count;
-            //                     const ei = si + name_len;
-            //                     self.name = name_c[si..ei];
-            //                     break member;
-            //                 }
-            //             }
-            //         }
-            //     }
-            // },
-            .pointer => {
-                // add implicit members for pointer
-                const byte_size = self.byte_size orelse return error.Unexpected;
-                const count = byte_size / @sizeOf(usize);
-                for (0..count) |i| {
-                    const member = try php.allocator.create(Member);
-                    errdefer php.allocator.destroy(member);
-                    member.* = .{
-                        .type = MemberType.uint,
-                        .flags = .{ .is_missing_class = true },
-                        .bit_offset = @bitSizeOf(usize) * i,
-                        .bit_size = @bitSizeOf(usize),
-                        .byte_size = @sizeOf(usize),
-                        .slot = null,
-                    };
-                    var member_ptr = php.createValuePointer(member);
-                    php.setHashEntry(&self.instance.members, 1 + i, &member_ptr);
-                }
-            },
-            else => {},
-        }
         inline for (.{ .static, .instance }) |scope_type| {
             const scope = &@field(self, @tagName(scope_type));
             // attach count the number of slots used
@@ -368,6 +317,91 @@ pub const ZigClassEntry = struct {
             },
             .slice => if (self.flags.slice.has_slot) {
                 self.instance.slot_count = std.math.maxInt(usize);
+            },
+            .@"struct", .@"union", .@"enum", .@"opaque" => {
+                // add getters/setters;
+                var iter: HashTableObjectIterator(*Member) = .init(&self.static.members, .{});
+                while (iter.next()) |member| {
+                    if (member.flags.is_missing_class) continue;
+                    if (member.class.type != .function) continue;
+                    const name = iter.currentName() orelse continue;
+                    const name_c = php.getStringContent(name);
+                    if (name_c.len < 5 or !std.ascii.isWhitespace(name_c[3])) continue;
+                    // jump over white-spaces
+                    const ws_count = for (name_c[4..], 0..) |c, i| {
+                        if (!std.ascii.isWhitespace(c)) break i + 1;
+                    } else continue;
+                    // get length of name
+                    const name_len = for (name_c[3 + ws_count ..], 0..) |c, i| {
+                        if (std.ascii.isWhitespace(c)) break i;
+                    } else name_c.len - 3 - ws_count;
+                    if (name_len == 0) continue;
+                    const access_name = name_c[0..3];
+                    const access: accessor.FieldAccess = if (std.mem.eql(u8, access_name, "get"))
+                        .read
+                    else if (std.mem.eql(u8, access_name, "set"))
+                        .write
+                    else
+                        continue;
+                    const si = 3 + ws_count;
+                    const ei = si + name_len;
+                    const prop_name = php.createString(name_c[si..ei]);
+                    defer php.release(prop_name);
+                    const expected_arg_count: usize = switch (access) {
+                        .read => if (member.flags.is_method) 1 else 0,
+                        .write => if (member.flags.is_method) 2 else 1,
+                    };
+                    if (member.class.length != expected_arg_count) continue;
+                    const scope = switch (member.flags.is_method) {
+                        true => &self.instance,
+                        false => &self.static,
+                    };
+                    const prop_acc: *accessor.Property = get: {
+                        if (php.getHashEntry(&scope.members, prop_name)) |value| {
+                            const existing_member = try php.getValuePointer(*Member, value);
+                            if (existing_member.accessors == .property) {
+                                break :get &existing_member.accessors.property;
+                            }
+                        } else |_| {}
+                        const new_member = try php.allocator.create(Member);
+                        new_member.* = .{
+                            .type = .void,
+                            .flags = .{ .is_missing_class = true },
+                            .bit_offset = 0,
+                            .bit_size = 0,
+                            .byte_size = null,
+                            .slot = null,
+                            .accessors = .{ .property = .{} },
+                        };
+                        const new_member_value = php.createValuePointer(new_member);
+                        php.setHashEntry(&scope.members, prop_name, &new_member_value);
+                        break :get &new_member.accessors.property;
+                    };
+                    switch (access) {
+                        .read => prop_acc.getter = name,
+                        .write => prop_acc.setter = name,
+                    }
+                }
+            },
+            .pointer => {
+                // add implicit members for pointer
+                const byte_size = self.byte_size orelse return error.Unexpected;
+                const count = byte_size / @sizeOf(usize);
+                for (0..count) |i| {
+                    const member = try php.allocator.create(Member);
+                    errdefer php.allocator.destroy(member);
+                    member.* = .{
+                        .type = MemberType.uint,
+                        .flags = .{ .is_missing_class = true },
+                        .bit_offset = @bitSizeOf(usize) * i,
+                        .bit_size = @bitSizeOf(usize),
+                        .byte_size = @sizeOf(usize),
+                        .slot = null,
+                    };
+                    var member_ptr = php.createValuePointer(member);
+                    php.setHashEntry(&self.instance.members, 1 + i, &member_ptr);
+                    member.accessors = try self.getAccessors(&self.instance, member);
+                }
             },
             else => {},
         }
@@ -896,7 +930,7 @@ pub const ZigClassEntry = struct {
                 .null => if (member.type == .null or member.type == .undefined) {
                     break @unionInit(accessor.Any, field.name, acc);
                 },
-                .constant, .inaccessible => {},
+                .constant, .property, .inaccessible => {},
             }
         } else .{ .inaccessible = .{} };
         if (accessors == .inaccessible) {

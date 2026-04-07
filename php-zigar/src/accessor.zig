@@ -7,12 +7,14 @@ pub const Gmp = @import("accessor/gmp.zig").Gmp;
 pub const Inaccessible = @import("accessor/inaccessible.zig").Inaccessible;
 pub const Int = @import("accessor/int.zig").Int;
 pub const Null = @import("accessor/null.zig").Null;
+pub const Property = @import("accessor/property.zig").Property;
 pub const Slot = @import("accessor/slot.zig").Slot;
 pub const Vector = @import("accessor/vector.zig").Vector;
 pub const Void = @import("accessor/void.zig").Void;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
+const Object = php.Object;
 const Value = php.Value;
 const structure = @import("structure.zig");
 const invokeMethod = structure.invokeMethod;
@@ -54,6 +56,7 @@ pub const Error = error{
     ReadOnlyProperty,
     Unexpected,
     Unsupported,
+    WriteOnly,
     WriteProtected,
 };
 pub const Type = enum {
@@ -66,6 +69,7 @@ pub const Type = enum {
     vector,
     constant,
     null,
+    property,
     inaccessible,
 };
 
@@ -173,6 +177,7 @@ pub const Any = union(enum) {
                     .buffer => try acc.get(source.buffer),
                     .table => try acc.get(&source.table),
                     .none => try acc.get(),
+                    .object => try acc.get(ZigObject(S).fromStructure(source).object()),
                 };
             },
         };
@@ -203,6 +208,7 @@ pub const Any = union(enum) {
                     .both => try acc.set(source.buffer, &source.table, value),
                     .buffer => try acc.set(source.buffer, value),
                     .table => try acc.set(&source.table, value),
+                    .object => try acc.set(ZigObject(S).fromStructure(source).object(), value),
                     .none => try acc.set(value),
                 };
             },
@@ -234,6 +240,7 @@ pub const Any = union(enum) {
                     .both => try acc.getElement(source.buffer, &source.table, index),
                     .buffer => try acc.getElement(source.buffer, index),
                     .table => try acc.getElement(&source.table, index),
+                    .object => try acc.getElement(ZigObject(S).fromStructure(source).object(), index),
                     .none => try acc.getElement(index),
                 };
             },
@@ -265,6 +272,7 @@ pub const Any = union(enum) {
                     .both => try acc.setElement(source.buffer, &source.table, index, value),
                     .buffer => try acc.setElement(source.buffer, index, value),
                     .table => try acc.setElement(&source.table, index, value),
+                    .object => try acc.setElement(ZigObject(S).fromStructure(source).object(), index, value),
                     .none => try acc.setElement(index, value),
                 };
             },
@@ -296,9 +304,12 @@ pub const Any = union(enum) {
         both,
         buffer,
         table,
+        object,
         none,
     } {
         if (!@hasDecl(A, method)) return error.InvalidOperation;
+        const need_object = hasArg(A, method, *Object);
+        if (need_object and !@hasDecl(S, "setStorage")) return error.InvalidOperation;
         const need_buffer = hasArg(A, method, *ByteBuffer);
         const need_table = hasArg(A, method, *Value);
         if (need_buffer and !@hasField(S, "buffer")) return error.InvalidOperation;
@@ -310,7 +321,10 @@ pub const Any = union(enum) {
             },
             false => switch (need_table) {
                 true => .table,
-                false => .none,
+                false => switch (need_object) {
+                    true => .object,
+                    false => .none,
+                },
             },
         };
     }
@@ -322,6 +336,7 @@ pub const Any = union(enum) {
     multi_slot_prebaked: Slot(.{ .prebaked = true }),
     single_slot_prebaked: Slot(.{ .slots = .single, .prebaked = true }),
     constant: Constant,
+    property: Property,
     // null and void
     null: Null,
     void: Void,
