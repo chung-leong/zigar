@@ -35,15 +35,12 @@ pub const Pointer = struct {
                 32 => .u32,
                 else => @compileError("Unsupported pointer size"),
             };
-            if (address_member.accessors != usize_tag) {
-                std.debug.print("unexpected = {}\n", .{address_member.accessors.getType()});
-                return error.Unexpected;
-            }
+            if (address_member.accessors != usize_tag) return error.Unexpected;
             self.address_acc = &@field(address_member.accessors, @tagName(usize_tag));
-            if (class.getMember(.instance, 2)) |length_member| {
+            if (class.getMember(.instance, 2) catch null) |length_member| {
                 if (length_member.accessors != usize_tag) return error.Unexpected;
                 self.length_acc = &@field(length_member.accessors, @tagName(usize_tag));
-            } else |_| {}
+            }
         }
 
         pub fn loadTarget(self: *@This(), pointer: *Pointer) !void {

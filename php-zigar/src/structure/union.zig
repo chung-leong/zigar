@@ -32,7 +32,6 @@ pub const Union = struct {
             accessors: *accessor.Any,
             possible_values: HashTable,
         } = null,
-        class_obj: *Object = undefined,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -69,9 +68,6 @@ pub const Union = struct {
                     .possible_values = sel_ht,
                 };
             }
-            // because methods are really static functions, we need to maintain a ref on the class object
-            self.class_obj = class_obj;
-            php.addRef(self.class_obj);
             // create list of prop names
             self.prop_names = try class.createPropertyList(.instance);
         }
@@ -80,7 +76,6 @@ pub const Union = struct {
             if (self.selector) |*selector| {
                 php.destroyHashTable(&selector.possible_values);
             }
-            php.release(self.class_obj);
             if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
         }
 

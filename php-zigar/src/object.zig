@@ -38,16 +38,16 @@ pub fn ZigObject(comptime S: type) type {
         pub fn create(class: *ZigClassEntry) !*@This() {
             const prop_size = php.getObjectPropertySize(class.entry());
             const size: usize = @intCast(@sizeOf(@This()) + prop_size);
-            // we can't use the allocator here, since freeing is done by PHP itself
+            // we can't use allocator here, since freeing is done by PHP itself
             const mem = php.emalloc(size) orelse return error.OutOfMemory;
             errdefer php.efree(mem);
             const self: *@This() = @ptrCast(@alignCast(mem));
             self.* = .{};
+            // initialize the PHP portion
             const obj = self.object();
             obj.handlers = getHandlers();
             php.initializeStandardObject(obj, class.entry());
             php.initializeObjectProperties(obj, class.entry());
-            class.addRef();
             return self;
         }
 

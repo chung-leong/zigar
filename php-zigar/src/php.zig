@@ -266,11 +266,11 @@ pub const ArgumentIterator = struct {
         const T = @TypeOf(set.*);
         inline for (comptime std.meta.fieldNames(T)) |name| {
             if (@field(using, name)) {
-                if (getHashEntry(ht, name)) |value| {
+                if (getHashEntry(ht, name) catch null) |value| {
                     @field(set, name) = value.*;
                     addRef(value);
                     _ = removeHashEntry(ht, name);
-                } else |_| {}
+                }
             }
         }
         // if all named arguments were taken out, shrink the argument list
@@ -965,6 +965,10 @@ pub fn setHashEntryRef(ht: *HashTable, key: anytype, value: *const Value) void {
     addRef(value);
 }
 
+pub fn getHashNextKey(ht: *HashTable) Long {
+    return ht.nNextFreeElement;
+}
+
 pub fn appendHashEntry(ht: *HashTable, value: *const Value) usize {
     ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
     _ = php_h.zend_hash_next_index_insert(ht, @constCast(value));
@@ -1335,6 +1339,9 @@ fn debugAlloc(size: usize, call_depth: usize) ?*anyopaque {
             return php_h._emalloc(size, caller.file, caller.line, null, 0);
         } else {
             const ptr = php_h._emalloc(size, "unknown", 0, null, 0);
+            if (@intFromPtr(ptr) == 0x00007ffff514b100) {
+                @breakpoint();
+            }
             return ptr;
         }
     } else {
@@ -1347,9 +1354,9 @@ fn debugFree(ptr: ?*anyopaque, call_depth: usize) void {
         var buffer: [4096]u8 = undefined;
         var fba: std.heap.FixedBufferAllocator = .{ .buffer = &buffer, .end_index = 0 };
         if (debug.getCaller(fba.allocator(), call_depth)) |caller| {
-            return php_h._efree(ptr, caller.file, caller.line, null, 0);
+            php_h._efree(ptr, caller.file, caller.line, null, 0);
         } else {
-            return php_h._efree(ptr, "unknown", 0, null, 0);
+            php_h._efree(ptr, "unknown", 0, null, 0);
         }
     } else {
         php_h.efree(ptr);

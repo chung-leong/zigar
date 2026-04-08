@@ -20,19 +20,14 @@ pub const Opaque = struct {
 
     pub const Static = struct {
         prop_names: []*String = &.{},
-        class_obj: *Object = undefined,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
-            // because methods are really static functions, we need to maintain a ref on the class object
-            self.class_obj = class_obj;
-            php.addRef(self.class_obj);
             // create a list of property names for use by iterator
             const class = ZigClassEntry.fromObject(class_obj);
             self.prop_names = try class.createPropertyList(.instance);
         }
 
         pub fn deinit(self: *@This()) void {
-            php.release(self.class_obj);
             if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
         }
     };

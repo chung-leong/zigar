@@ -66,32 +66,27 @@ pub const StructureImporter = struct {
     }
 
     pub fn activateStructures(self: *@This()) !*Object {
-        // initially, the host holds references to ZigClassEntry objects through the "class"
-        // property in the structure arrays; prior to destroying these we need to flip the
-        // relationship so that these objects own the host instead
-        for (self.class_list.items) |class_obj| ZigClassEntry.activate(class_obj);
-        // the exporter uses structure arrays to refer to types, since their class object
-        // (i.e. their constructor) would have been created yet when a struct has a pointer
-        // to its own kind; we're going to fix that here
-        for (self.instance_list.items) |instance_obj| {
-            const class = ZigClassEntry.fromObject(instance_obj);
-            if (class.type == .@"comptime") {
-                const ct_struct = ZigObject(Comptime).fromObject(instance_obj).structure();
-                // comptime only uses one slot; so if slots is an array, it's a structure array
-                const arr = php.getValueArray(&ct_struct.table) catch continue;
-                // replace the array with the class ref and release it
-                const class_value = try php.getHashEntry(arr, php.persistent("class"));
-                ct_struct.table = class_value.*;
-                php.addRef(class_value);
-                php.release(arr);
-                // TODO: find out why there's an extra reference on the array
-                // php.release(arr);
-            }
-        }
         // the last class to get finalized is the root namespace
         if (self.class_list.items.len == 0) return error.NoRoot;
         const root = self.class_list.items[0];
         php.addRef(root);
+        // initially, the host holds references to class objects through the "class"
+        // property in the structure arrays; prior to destroying these we need to flip the
+        // relationship so that these objects own the host instead
+        for (self.class_list.items) |class_obj| ZigClassEntry.activate(class_obj);
+        // the exporter uses structure arrays to refer to types, replace them with class objects
+        for (self.instance_list.items) |instance_obj| {
+            const class = ZigClassEntry.fromObject(instance_obj);
+            if (class.type == .@"comptime") {
+                const ct_struct = ZigObject(Comptime).fromObject(instance_obj).structure();
+                // comptime only uses one slot; so if table is an array, it's a structure array
+                const arr = php.getValueArray(&ct_struct.table) catch continue;
+                // replace the array with the class ref and release it
+                const class_value = try php.getHashEntry(arr, php.persistent("class"));
+                ct_struct.table = class_value.*;
+                php.release(arr);
+            }
+        }
         return root;
     }
 

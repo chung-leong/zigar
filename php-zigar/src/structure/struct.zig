@@ -42,7 +42,6 @@ pub const Struct = struct {
             accessors: *accessor.Any,
         } = null,
         required_field_count: usize = 0,
-        class_obj: *Object = undefined,
         callback: ?*Object = null,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
@@ -64,9 +63,6 @@ pub const Struct = struct {
             }
             // create a list of property names for use by iterator
             self.prop_names = try class.createPropertyList(.instance);
-            // because methods are really static functions, we need to maintain a ref on the class object
-            self.class_obj = class_obj;
-            php.addRef(self.class_obj);
             // create callback function for promise or generator
             switch (class.purpose) {
                 inline .promise, .generator => |p| {
@@ -85,7 +81,6 @@ pub const Struct = struct {
         }
 
         pub fn deinit(self: *@This()) void {
-            php.release(self.class_obj);
             if (self.callback) |cb| php.release(cb);
             if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
         }
@@ -176,13 +171,13 @@ pub const Struct = struct {
                 try self.setProperty(php.persistent("ptr"), &ptr_value, null);
                 const callback_value = php.createValueObject(static.callback.?);
                 try self.setProperty(php.persistent("callback"), &callback_value, null);
-                if (class.getMember(.instance, php.persistent("allocator"))) |m| {
+                if (class.getMember(.instance, php.persistent("allocator")) catch null) |m| {
                     const allocator_value = try m.accessors.get(self);
                     const allocator_obj = try php.getValueObject(&allocator_value);
                     defer php.release(allocator_obj);
                     const allocator_struct = ZigObject(structure.Struct).fromObject(allocator_obj).structure();
                     try allocator_struct.initSpecial(std.mem.Allocator, args);
-                } else |_| {}
+                }
             },
             AbortSignal => {
                 const signal = if (args.signal) |av| get: {
@@ -217,7 +212,7 @@ pub const Struct = struct {
                     else => null,
                 };
                 if (ctx_type) |T| {
-                    if (self.getSpecialContext(T)) |ctx| ctx.release() else |_| {}
+                    if (self.getSpecialContext(T) catch null) |ctx| ctx.release();
                 }
             },
         }

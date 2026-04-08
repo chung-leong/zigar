@@ -2137,10 +2137,10 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             const flags_int: @typeInfo(O).@"struct".backing_integer.? = @bitCast(flags);
             if (redirector.open(path, flags_int, 0, &result)) {
                 if (result > 0) {
-                    if (c_allocator.create(RedirectedDir)) |dir| {
+                    if (c_allocator.create(RedirectedDir) catch null) |dir| {
                         dir.* = .{ .fd = result };
                         return @ptrCast(dir);
-                    } else |_| {}
+                    }
                 }
                 return null;
             }
@@ -3420,10 +3420,10 @@ pub fn LibcSubstituteWindows(comptime redirector: type) type {
                     var result: c_int = undefined;
                     if (redirector.open(path, flags_int, 0, &result)) {
                         if (result > 0) {
-                            if (c_allocator.create(RedirectedDir)) |dir| {
+                            if (c_allocator.create(RedirectedDir) catch null) |dir| {
                                 dir.* = .{ .fd = result };
                                 return @bitCast(@intFromPtr(dir));
-                            } else |_| {}
+                            }
                         }
                         return -1;
                     }
@@ -4921,9 +4921,9 @@ pub fn Win32SubstituteNonIO(comptime redirector: type) type {
             var len: usize = undefined;
             if (redirector.environ(&list, &bytes, &count, &len)) {
                 const bytes_s = bytes[0..len];
-                if (std.unicode.wtf8ToWtf16LeAlloc(c_allocator, bytes_s)) |bytes_w| {
+                if (std.unicode.wtf8ToWtf16LeAlloc(c_allocator, bytes_s) catch null) |bytes_w| {
                     return @ptrCast(bytes_w.ptr);
-                } else |_| {}
+                }
                 return null;
             }
             return Original.GetEnvironmentStringsW();

@@ -35,7 +35,6 @@ pub const Enum = struct {
         prop_names: []*String = &.{},
         constant_acc: *accessor.Constant = undefined,
         available_tags: HashTable = undefined,
-        class_obj: *Object = undefined,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -52,8 +51,8 @@ pub const Enum = struct {
             self.constant_acc = &member.accessors.constant;
             // loop through static members and add them to a hash table, keyed by
             // their integer values and names
-            self.available_tags = php.createHashTable(php.destructor.value);
-            if (class.static.template.table) |static_table| {
+            self.available_tags = php.createHashTable(null);
+            if (class.static.template.table) |*static_table| {
                 var iter = class.getMemberIterator(.static);
                 while (iter.next()) |static_member| {
                     const slot = static_member.slot orelse continue;
@@ -65,16 +64,12 @@ pub const Enum = struct {
                     try self.addCanonical(name, tag_obj);
                 }
             }
-            // because methods are really static functions, we need to maintain a ref on the class object
-            self.class_obj = class_obj;
-            php.addRef(self.class_obj);
             // create a list of property names for use by iterator
             self.prop_names = try class.createPropertyList(.instance);
         }
 
         pub fn deinit(self: *@This()) void {
             php.destroyHashTable(&self.available_tags);
-            php.release(self.class_obj);
             if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
         }
 
@@ -123,7 +118,15 @@ pub const Enum = struct {
                             const name = php.createString(text);
                             defer php.release(name);
                             try self.addCanonical(name, tag_obj);
-                            // tag_obj has refcount = 2 at this point, which is correct
+                            // add object to template table, which owns the other items as well
+                            var tag_value = php.createValueObject(tag_obj);
+                            var table = class.static.template.table orelse init: {
+                                const new_table = php.createValueArray(null);
+                                class.static.template.table = new_table;
+                                break :init new_table;
+                            };
+                            try php.addElementRef(&table, &tag_value);
+                            // tag_obj should have refcount = 2 at this point
                             return php.createValueObject(tag_obj);
                         } else {
                             return err;
@@ -197,6 +200,7 @@ pub const Enum = struct {
                     else => err,
                 };
             };
+            defer php.release(&tag);
             const tag_obj = try php.getValueObject(&tag);
             const tag_struct = fromObject(tag_obj);
             return tag_struct.buffer;
@@ -213,18 +217,18 @@ pub const Enum = struct {
             switch (php.getType(&tag_value)) {
                 .long => {
                     const tag_code = try php.getValueLong(&tag_value);
-                    php.setHashEntryRef(&self.available_tags, tag_code, &tag);
+                    php.setHashEntry(&self.available_tags, tag_code, &tag);
                 },
                 .object => {
                     // GMP object
                     try php.convertValue(&tag_value, .string);
                     const tag_code_str = try php.getValueString(&tag_value);
-                    php.setHashEntryRef(&self.available_tags, tag_code_str, &tag);
+                    php.setHashEntry(&self.available_tags, tag_code_str, &tag);
                 },
                 else => return error.Unexpected,
             }
             // reference tag by name
-            php.setHashEntryRef(&self.available_tags, name, &tag);
+            php.setHashEntry(&self.available_tags, name, &tag);
             // attach canonical info to tag
             const props = try php.allocator.create(Canonical);
             props.* = .{ .name = name };

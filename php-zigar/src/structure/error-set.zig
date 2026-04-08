@@ -58,10 +58,11 @@ pub const ErrorSet = struct {
             self.constant_acc = &member.accessors.constant;
             if (class.flags.error_set.is_global) {
                 self.error_set = class.host.global_error_set;
-                php.addRef(self.error_set);
             } else {
-                self.error_set = php.createArray();
-                if (class.static.template.table) |static_table| {
+                const ht_bytes = php.emalloc(@sizeOf(HashTable)) orelse return error.OutOfMemory;
+                self.error_set = @ptrCast(@alignCast(ht_bytes));
+                self.error_set.* = php.createHashTable(null);
+                if (class.static.template.table) |*static_table| {
                     // loop through static members and add errors to error set, keyed by value,
                     // name, and error message
                     var iter = class.getMemberIterator(.static);
@@ -88,7 +89,10 @@ pub const ErrorSet = struct {
         }
 
         pub fn deinit(self: *@This()) void {
-            php.release(self.error_set);
+            const class = ZigClassEntry.fromStructure(self);
+            if (self.error_set != class.host.global_error_set) {
+                php.release(self.error_set);
+            }
             php.allocator.destroy(self.methods);
         }
 
@@ -137,7 +141,16 @@ pub const ErrorSet = struct {
                         const text = std.fmt.bufPrint(&text_buffer, "UnknownError #{d}", .{err_code}) catch unreachable;
                         const name = php.createString(text);
                         try self.addCanonical(name, err_obj);
-                        // err_obj has refcount = 2 at this point, which is correct
+
+                        // add object to template table, which owns the other items as well
+                        var err_value = php.createValueObject(err_obj);
+                        var table = class.static.template.table orelse init: {
+                            const new_table = php.createValueArray(null);
+                            class.static.template.table = new_table;
+                            break :init new_table;
+                        };
+                        try php.addElementRef(&table, &err_value);
+                        // err_obj should have refcount = 2 at this point
                         return php.createValueObject(err_obj);
                     }
                 },
@@ -185,20 +198,25 @@ pub const ErrorSet = struct {
             const err_value = try self.constant_acc.int.get(err_struct);
             // reference err by integer value
             const err_code = try php.getValueLong(&err_value);
-            const err, const is_new = if (php.getHashEntry(class.host.global_error_set, err_code)) |e_ptr|
+            const global_error_set = class.host.global_error_set;
+            const err, const is_new = if (php.getHashEntry(global_error_set, err_code)) |e_ptr|
                 .{ e_ptr.*, false }
             else |_|
                 .{ php.createValueObject(err_obj), true };
-            php.setHashEntryRef(self.error_set, err_code, &err);
-            // reference err by name
-            php.setHashEntryRef(self.error_set, name, &err);
-            // reference err by message
             const message = createDecamelizedMessage(name);
-            php.setHashEntryRef(self.error_set, message, &err);
+            if (self.error_set != global_error_set) {
+                php.setHashEntry(self.error_set, err_code, &err);
+                // reference err by name
+                php.setHashEntry(self.error_set, name, &err);
+                // reference err by message
+                php.setHashEntry(self.error_set, message, &err);
+            }
             if (is_new) {
-                php.setHashEntryRef(class.host.global_error_set, name, &err);
-                php.setHashEntryRef(class.host.global_error_set, err_code, &err);
-                php.setHashEntryRef(class.host.global_error_set, message, &err);
+                // add error to global error setl; it maintains strong references on the items it hold
+                // so we need to bump the ref count
+                php.setHashEntryRef(global_error_set, name, &err);
+                php.setHashEntryRef(global_error_set, err_code, &err);
+                php.setHashEntryRef(global_error_set, message, &err);
                 // attach canonical info to err
                 const props = try php.allocator.create(Canonical);
                 props.* = .{ .message = message };

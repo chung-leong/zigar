@@ -241,10 +241,9 @@ pub fn Parent(comptime S: type) type {
         pub fn findMethod(self: *S, name: *String) !?*php.Function {
             // methods are actually static functions with self as the first argument
             const class = ZigClassEntry.fromStructure(self);
-            const static = class.getStaticData(S);
             const member = try class.getMember(.static, name);
             if (!member.flags.is_method) return null;
-            const class_struct = ZigObject(Class(S)).fromObject(static.class_obj).structure();
+            const class_struct = ZigObject(Class(S)).fromObject(class.object).structure();
             var field = try member.accessors.get(class_struct);
             defer php.release(&field);
             const field_obj = php.getValueObject(&field) catch return null;
@@ -286,7 +285,6 @@ pub fn Parent(comptime S: type) type {
         pub fn freeObject(obj: *Object) void {
             const self = fromObject(obj);
             const class = ZigClassEntry.fromObject(obj);
-            defer class.release();
             // only structure that a pointer can points to implement getExtent()
             if (@hasField(S, "buffer")) {
                 if (@hasDecl(S, "getExtent")) {
@@ -297,6 +295,7 @@ pub fn Parent(comptime S: type) type {
                 self.buffer.release();
             }
             if (@hasField(S, "table")) php.release(&self.table);
+            class.destroyObject(obj);
         }
 
         pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {

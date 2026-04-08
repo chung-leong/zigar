@@ -419,7 +419,7 @@ pub const Options = struct {
         var self: @This() = .{};
         const ht = try php.getValueHashTable(options orelse return self);
         inline for (comptime std.meta.fields(@This())) |field| {
-            if (php.getHashEntry(ht, field.name)) |value| {
+            if (php.getHashEntry(ht, field.name) catch null) |value| {
                 const T = @FieldType(@This(), field.name);
                 @field(self, field.name) = extract(T, value) catch |err| {
                     const vt = php.getType(value);
@@ -438,7 +438,7 @@ pub const Options = struct {
                         }),
                     };
                 };
-            } else |_| {}
+            }
         }
         return self;
     }

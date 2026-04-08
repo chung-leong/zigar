@@ -32,6 +32,7 @@ const util = @import("type/util.zig");
 const fn_transform = @import("zigft/fn-transform.zig");
 
 pub const Value = *opaque {};
+pub const Unsupported = opaque {};
 
 fn Factory(comptime host: type, comptime module: type) type {
     return struct {
@@ -479,6 +480,23 @@ fn Factory(comptime host: type, comptime module: type) type {
                 .slot = 0,
                 .structure = target_structure,
             });
+            const usize_structure = try self.getStructure(usize);
+            try appendList(list, .{
+                .type = getMemberType(usize, false),
+                .bitOffset = 0,
+                .bitSize = bit_size.get(usize),
+                .byteSize = byte_size.get(usize),
+                .structure = usize_structure,
+            });
+            if (@typeInfo(T).pointer.size == .slice) {
+                try appendList(list, .{
+                    .type = getMemberType(usize, false),
+                    .bitOffset = @bitSizeOf(usize),
+                    .bitSize = bit_size.get(usize),
+                    .byteSize = byte_size.get(usize),
+                    .structure = usize_structure,
+                });
+            }
             if (@typeInfo(TT) == .@"fn" and !@typeInfo(TT).@"fn".is_var_args) {
                 // add thunk controller to enable callback
                 const FT = TT;
@@ -542,6 +560,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 const can_be_plain = comptime !is_string and !is_typed_array and !is_clamped_array and canBePlain(field.type);
                 const is_plain = comptime can_be_plain and meta.call("isFieldPlain", .{ T, field_enum });
                 const is_packed = @typeInfo(T).@"struct".layout == .@"packed";
+                const FT = if (comptime supported.is(field.type)) field.type else Unsupported;
                 try appendList(list, .{
                     .name = field.name,
                     .type = getMemberType(field.type, field.is_comptime),
@@ -557,7 +576,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .bitSize = if (is_actual) bit_size.get(field.type) else null,
                     .byteSize = if (is_actual and !is_packed) byte_size.get(field.type) else null,
                     .slot = index,
-                    .structure = if (supported.is(field.type)) try self.getStructure(field.type) else null,
+                    .structure = try self.getStructure(FT),
                 });
             }
             if (@typeInfo(T).@"struct".backing_integer) |IT| {
@@ -585,6 +604,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 const is_typed_array = comptime can_be_typed_array and meta.call("isFieldTypedArray", .{ T, field_enum });
                 const can_be_plain = comptime !is_string and !is_typed_array and !is_clamped_array and canBePlain(field.type);
                 const is_plain = comptime can_be_plain and meta.call("isFieldPlain", .{ T, field_enum });
+                const FT = if (comptime supported.is(field.type)) field.type else Unsupported;
                 try appendList(list, .{
                     .name = field.name,
                     .type = getMemberType(field.type, false),
@@ -599,7 +619,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                     .bitSize = bit_size.get(field.type),
                     .byteSize = byte_size.get(field.type),
                     .slot = index,
-                    .structure = if (supported.is(field.type)) try self.getStructure(field.type) else null,
+                    .structure = try self.getStructure(FT),
                 });
             }
             if (selector.get(T)) |ST| {

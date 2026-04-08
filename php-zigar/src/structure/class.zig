@@ -46,14 +46,14 @@ pub fn Class(comptime S: type) type {
                     var prop_count: usize = 0;
                     var iter = class.getMemberIterator(scope);
                     while (iter.next()) |member| {
-                        if (member.flags.is_missing_class or member.class.type != .function) prop_count += 1;
+                        if (member.class.type != .function) prop_count += 1;
                     }
                     if (prop_count > 0) {
                         self.prop_names = try php.allocator.alloc(*String, prop_count);
                         iter.reset();
                         var index: usize = 0;
                         while (iter.next()) |member| {
-                            if (member.flags.is_missing_class or member.class.type != .function) {
+                            if (member.class.type != .function) {
                                 self.prop_names[index] = iter.currentName() orelse return error.Unexpected;
                                 index += 1;
                             }
@@ -71,8 +71,11 @@ pub fn Class(comptime S: type) type {
 
         pub fn freeObject(obj: *Object) void {
             const self = fromObject(obj);
+            php.release(&self.table);
             if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
-            Super.freeObject(obj);
+            // destroy the class entry
+            const class = ZigClassEntry.fromObject(obj);
+            class.destroy();
         }
 
         pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: ?*const Value) !?*Function {

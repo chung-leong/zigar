@@ -71,7 +71,7 @@ pub const CallDispatcher = struct {
         callable: Value,
 
         pub fn deinit(self: *@This()) void {
-            self.class.release();
+            php.release(self.class.object);
             php.release(&self.callable);
         }
     };
@@ -194,7 +194,7 @@ pub const CallDispatcher = struct {
             .callable = callable.*,
         });
         php.addRef(callable);
-        class.addRef();
+        php.addRef(class.object);
         return fn_id;
     }
 
