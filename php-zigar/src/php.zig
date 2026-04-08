@@ -1338,11 +1338,7 @@ fn debugAlloc(size: usize, call_depth: usize) ?*anyopaque {
         if (debug.getCaller(fba.allocator(), call_depth)) |caller| {
             return php_h._emalloc(size, caller.file, caller.line, null, 0);
         } else {
-            const ptr = php_h._emalloc(size, "unknown", 0, null, 0);
-            if (@intFromPtr(ptr) == 0x00007ffff514b100) {
-                @breakpoint();
-            }
-            return ptr;
+            return php_h._emalloc(size, "unknown", 0, null, 0);
         }
     } else {
         return php_h._emalloc(size);

@@ -62,14 +62,12 @@ pub const ModuleHost = struct {
 
     pub fn addRef(self: *@This()) void {
         self.ref_count += 1;
-        // std.debug.print("reference host (ref = {d})\n", .{self.ref_count});
     }
 
     pub fn release(self: *@This()) void {
         self.ref_count -= 1;
-        // std.debug.print("release host (ref = {d})\n", .{self.ref_count});
         if (self.ref_count == 0) {
-            std.debug.print("freeing host\n", .{});
+            // std.debug.print("freeing host\n", .{});
             php.release(self.global_error_set);
             self.unclaimed_buffer_map.deinit();
             self.object_map.deinit();

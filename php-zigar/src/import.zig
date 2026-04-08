@@ -84,6 +84,8 @@ pub const StructureImporter = struct {
                 // replace the array with the class ref and release it
                 const class_value = try php.getHashEntry(arr, php.persistent("class"));
                 ct_struct.table = class_value.*;
+                // need to add ref since the class object is still in the array and will get released
+                php.addRef(class_value);
                 php.release(arr);
             }
         }

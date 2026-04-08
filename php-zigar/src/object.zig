@@ -36,7 +36,8 @@ pub fn ZigObject(comptime S: type) type {
         }
 
         pub fn create(class: *ZigClassEntry) !*@This() {
-            const prop_size = php.getObjectPropertySize(class.entry());
+            const ce = class.entry();
+            const prop_size = php.getObjectPropertySize(ce);
             const size: usize = @intCast(@sizeOf(@This()) + prop_size);
             // we can't use allocator here, since freeing is done by PHP itself
             const mem = php.emalloc(size) orelse return error.OutOfMemory;
@@ -46,8 +47,8 @@ pub fn ZigObject(comptime S: type) type {
             // initialize the PHP portion
             const obj = self.object();
             obj.handlers = getHandlers();
-            php.initializeStandardObject(obj, class.entry());
-            php.initializeObjectProperties(obj, class.entry());
+            php.initializeStandardObject(obj, ce);
+            php.initializeObjectProperties(obj, ce);
             return self;
         }
 

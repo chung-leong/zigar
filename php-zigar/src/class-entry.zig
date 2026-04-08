@@ -387,8 +387,7 @@ pub const ZigClassEntry = struct {
         }
         // set table of class object
         const table = try self.createTable(.static, null);
-        // TODO this should be here
-        // php.release(&table);
+        defer php.release(&table);
         switch (self.type) {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
@@ -611,8 +610,6 @@ pub const ZigClassEntry = struct {
                     .class = class,
                 };
                 if (class != self) php.addRef(class.object);
-                const z_obj = ZigObject(structure.Struct).fromObject(class.object);
-                _ = z_obj;
                 const member_ptr = php.createValuePointer(member);
                 if (php.getHashEntry(member_ht, "name")) |n| {
                     const key = try php.getValueString(n);
@@ -776,8 +773,6 @@ pub const ZigClassEntry = struct {
                 };
                 defer if (!@hasField(Params, "buffer")) buf.release();
                 const zig_obj = try ZigObject(S).create(self);
-                const z_obj = ZigObject(structure.Struct).fromObject(self.object);
-                _ = z_obj;
                 // add reference to class object
                 php.addRef(self.object);
                 const obj_struct = zig_obj.structure();
