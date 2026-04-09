@@ -275,7 +275,7 @@ pub const Union = struct {
     }
 
     fn compareSelectors(sel1: *const Value, sel2: *const Value) bool {
-        return switch (php.getType(sel1)) {
+        return switch (php.getValueType(sel1)) {
             .long => sel1.value.lval == sel2.value.lval,
             .object => sel1.value.obj == sel2.value.obj,
             else => unreachable,
@@ -309,7 +309,7 @@ pub const Union = struct {
     pub const getMethod = Super.getMethod;
     pub const hasProperty = Super.hasProperty;
     pub const getPropertyPointer = Super.getPropertyPointer;
-    pub const getReferencedObjects = Super.getReferencedObjects;
+    pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;
     const returnSelf = Super.returnSelf;

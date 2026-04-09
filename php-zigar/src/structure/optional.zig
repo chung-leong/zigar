@@ -91,7 +91,7 @@ pub const Optional = struct {
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
-    pub const getReferencedObjects = Super.getReferencedObjects;
+    pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;
 };

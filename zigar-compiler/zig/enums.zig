@@ -1,5 +1,5 @@
-pub const StructureType = enum(u32) {
-    primitive = 0,
+pub const StructureType = enum {
+    primitive,
     array,
     @"struct",
     @"union",
@@ -17,7 +17,7 @@ pub const StructureType = enum(u32) {
     @"comptime",
 };
 
-pub const StructurePurpose = enum(u32) {
+pub const StructurePurpose = enum {
     unknown,
     promise,
     generator,
@@ -199,8 +199,8 @@ pub const StructureFlags = packed union {
     pub const Comptime = Common;
 };
 
-pub const MemberType = enum(u32) {
-    void = 0,
+pub const MemberType = enum {
+    void,
     bool,
     int,
     uint,

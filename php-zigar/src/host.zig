@@ -3,9 +3,8 @@ const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
 const BufferMap = @import("buffer.zig").BufferMap;
-const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
-const getObjectBytes = @import("object.zig").getObjectBytes;
+const GarbageCollectionBuffer = @import("gc.zig").GarbageCollectionBuffer;
 const ModuleGeneric = @import("module/native/interface.zig").Module;
 const ObjectMap = @import("object.zig").ObjectMap;
 const php = @import("php.zig");
@@ -28,6 +27,7 @@ pub const ModuleHost = struct {
     allocator: std.mem.Allocator = undefined,
     unclaimed_buffer_map: BufferMap = .{},
     object_map: ObjectMap = .{},
+    gc_buffer: GarbageCollectionBuffer = .empty,
 
     const Module = ModuleGeneric(StructureImporter.Handle);
 
@@ -72,6 +72,7 @@ pub const ModuleHost = struct {
             self.unclaimed_buffer_map.deinit();
             self.object_map.deinit();
             self.dispatcher.deinit();
+            self.gc_buffer.deinit();
             if (self.library) |*lib| lib.close();
             php.allocator.destroy(self);
         }

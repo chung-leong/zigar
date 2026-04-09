@@ -172,7 +172,7 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn copySelf(self: *S, value: *const Value) !bool {
-            switch (php.getType(value)) {
+            switch (php.getValueType(value)) {
                 .object => {
                     const obj = php.getValueObject(value) catch unreachable;
                     const class = ZigClassEntry.fromStructure(self);
@@ -285,6 +285,7 @@ pub fn Parent(comptime S: type) type {
         pub fn freeObject(obj: *Object) void {
             const self = fromObject(obj);
             const class = ZigClassEntry.fromObject(obj);
+            // std.debug.print("freeObject: {s} {s} ({d})\n", .{ class.getStructureName(), class.getName(), obj.handle });
             // only structure that a pointer can points to implement getExtent()
             if (@hasField(S, "buffer")) {
                 if (@hasDecl(S, "getExtent")) {
@@ -299,7 +300,7 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
-            const desired_type = try php.Type.fromInt(type_id);
+            const desired_type = try php.ValueType.fromInt(type_id);
             const self = fromObject(obj);
             switch (desired_type) {
                 .string => retval.* = self.getValue(.to_string) catch return php.FAILURE,
@@ -357,9 +358,15 @@ pub fn Parent(comptime S: type) type {
             return try findMethod(self, name);
         }
 
-        pub fn getReferencedObjects(_: *Object, table: *[*c]Value, n: *c_int) ?*HashTable {
-            table.* = null;
-            n.* = 0;
+        pub fn getGarbageCollection(obj: *Object, table: *[*c]Value, n: *c_int) !?*HashTable {
+            const self = fromObject(obj);
+            const class = ZigClassEntry.fromObject(obj);
+            const gc_buffer = class.getGarbageCollectionBuffer();
+            try gc_buffer.add(class.object);
+            if (@hasField(S, "table")) {
+                try gc_buffer.add(&self.table);
+            }
+            gc_buffer.use(table, n);
             return null;
         }
     };
@@ -401,7 +408,7 @@ pub fn StructLike(comptime S: type) type {
                     var iter: HashTableIterator = .init(ht, .{});
                     while (iter.next()) |value| {
                         // make child objects plain too
-                        if (php.getType(value) == .object) {
+                        if (php.getValueType(value) == .object) {
                             try transform.apply(value);
                         }
                     }
@@ -547,7 +554,7 @@ pub fn StructLike(comptime S: type) type {
 
         pub const freeObject = Super.freeObject;
         pub const castObject = Super.castObject;
-        pub const getReferencedObjects = Super.getReferencedObjects;
+        pub const getGarbageCollection = Super.getGarbageCollection;
         pub const getMethod = Super.getMethod;
         pub const findTransform = Super.findTransform;
     };
@@ -693,7 +700,7 @@ pub fn ArrayLike(comptime S: type) type {
         pub const hasProperty = Super.hasProperty;
         pub const freeObject = Super.freeObject;
         pub const castObject = Super.castObject;
-        pub const getReferencedObjects = Super.getReferencedObjects;
+        pub const getGarbageCollection = Super.getGarbageCollection;
     };
 }
 

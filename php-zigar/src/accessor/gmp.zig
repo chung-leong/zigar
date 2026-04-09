@@ -245,14 +245,14 @@ pub fn Gmp(comptime attrs: Attributes) type {
 
 fn gmpFromString(str: *String, negate: bool, comptime signedness: std.builtin.Signedness) !Value {
     const str_value = php.createValueString(str);
-    if (php.getType(&gmp_import) != .string) {
+    if (php.getValueType(&gmp_import) != .string) {
         const name = php.createPersistentString("gmp_import");
         gmp_import = php.createValueString(name);
     }
     if (signedness == .signed and negate) {
         const pos_value = try php.invokeFunction(&gmp_import, &.{str_value});
         defer php.release(&pos_value);
-        if (php.getType(&gmp_neg) != .string) {
+        if (php.getValueType(&gmp_neg) != .string) {
             const name = php.createPersistentString("gmp_neg");
             gmp_neg = php.createValueString(name);
         }
@@ -263,13 +263,13 @@ fn gmpFromString(str: *String, negate: bool, comptime signedness: std.builtin.Si
 }
 
 fn stringFromGmp(value: *const Value) !std.meta.Tuple(&.{ *String, bool }) {
-    const gmp_value = switch (php.getType(value)) {
+    const gmp_value = switch (php.getValueType(value)) {
         .object => use: {
             php.addRef(@constCast(value));
             break :use value.*;
         },
         else => convert: {
-            if (php.getType(&gmp_init) != .string) {
+            if (php.getValueType(&gmp_init) != .string) {
                 const name = php.createPersistentString("gmp_init");
                 gmp_init = php.createValueString(name);
             }
@@ -281,13 +281,13 @@ fn stringFromGmp(value: *const Value) !std.meta.Tuple(&.{ *String, bool }) {
         },
     };
     defer php.release(&gmp_value);
-    if (php.getType(&gmp_sign) != .string) {
+    if (php.getValueType(&gmp_sign) != .string) {
         const name = php.createPersistentString("gmp_sign");
         gmp_sign = php.createValueString(name);
     }
     const sign_value = try php.invokeFunction(&gmp_sign, &.{value.*});
     const sign = try php.getValueLong(&sign_value);
-    if (php.getType(&gmp_export) != .string) {
+    if (php.getValueType(&gmp_export) != .string) {
         const name = php.createPersistentString("gmp_export");
         gmp_export = php.createValueString(name);
     }

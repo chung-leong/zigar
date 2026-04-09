@@ -40,7 +40,7 @@ pub const ErrorUnion = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const err = try static.error_acc.get(self);
-        if (php.getType(&err) == .object) {
+        if (php.getValueType(&err) == .object) {
             const err_obj = php.getValueObject(&err) catch unreachable;
             const err_struct = ZigObject(ErrorSet).fromObject(err_obj).structure();
             try err_struct.acquireDebugInfo();
@@ -61,7 +61,7 @@ pub const ErrorUnion = struct {
         if (try self.copySelf(value)) return;
         const class = ZigClassEntry.fromStructure(self);
         var static = class.getStaticData(@This());
-        const err_maybe = switch (php.getType(value)) {
+        const err_maybe = switch (php.getValueType(value)) {
             .object => check: {
                 // see if value is an Throwable
                 const obj = php.getValueObject(value) catch unreachable;
@@ -86,7 +86,7 @@ pub const ErrorUnion = struct {
             const static = class.getStaticData(@This());
             const run = options.include_inactive or check: {
                 const err = try static.error_acc.get(self);
-                break :check php.getType(&err) != .object;
+                break :check php.getValueType(&err) != .object;
             };
             if (run) {
                 const value = try static.payload_acc.get(self);
@@ -108,7 +108,7 @@ pub const ErrorUnion = struct {
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
-    pub const getReferencedObjects = Super.getReferencedObjects;
+    pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;
 };

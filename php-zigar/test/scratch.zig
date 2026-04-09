@@ -1,7 +1,7 @@
 const std = @import("std");
 
 pub const Struct = struct {
-    number1: i32 = 1234,
-    number2: i32 = 4567,
+    number: i32,
+    next: *@This(),
 };
-pub const something: Struct = .{};
+// pub const something: Enum = .cow;

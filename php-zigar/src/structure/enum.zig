@@ -74,7 +74,7 @@ pub const Enum = struct {
         }
 
         pub fn castValue(self: *@This(), value: *Value) !?Value {
-            switch (php.getType(value)) {
+            switch (php.getValueType(value)) {
                 .long => return self.findCanonical(value) catch php.createValueNull(),
                 .object => {
                     const obj = php.getValueObject(value) catch unreachable;
@@ -101,7 +101,7 @@ pub const Enum = struct {
 
         pub fn findCanonical(self: *@This(), key: *const Value) !Value {
             const class = ZigClassEntry.fromStatic(self);
-            switch (php.getType(key)) {
+            switch (php.getValueType(key)) {
                 .long => {
                     const tag_code = php.getValueLong(key) catch unreachable;
                     if (php.getHashEntry(&self.available_tags, tag_code)) |tag| {
@@ -186,7 +186,7 @@ pub const Enum = struct {
             const tag = self.findCanonical(value) catch |err| {
                 const class = ZigClassEntry.fromStatic(self);
                 return switch (err) {
-                    error.NotFound => switch (php.getType(value)) {
+                    error.NotFound => switch (php.getValueType(value)) {
                         .string => php.throwExceptionFmt("enum '{s}' has no tag named '{s}' (zig)", .{
                             class.getName(),
                             php.getValueStringContent(value) catch unreachable,
@@ -214,7 +214,7 @@ pub const Enum = struct {
             defer php.release(&tag_value);
             const tag = php.createValueObject(tag_obj);
             // reference tag by value
-            switch (php.getType(&tag_value)) {
+            switch (php.getValueType(&tag_value)) {
                 .long => {
                     const tag_code = try php.getValueLong(&tag_value);
                     php.setHashEntry(&self.available_tags, tag_code, &tag);
@@ -292,7 +292,7 @@ pub const Enum = struct {
     pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
     pub const getPropertyPointer = Super.getPropertyPointer;
-    pub const getReferencedObjects = Super.getReferencedObjects;
+    pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;
     const returnBytes = Super.returnBytes;

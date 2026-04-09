@@ -377,7 +377,7 @@ pub fn findClassEntry(comptime name: []const u8) ?*ClassEntry {
     return php_h.zend_lookup_class(persistent(name));
 }
 
-pub const Type = enum(u8) {
+pub const ValueType = enum(u8) {
     undefined = php_h.IS_UNDEF, // 0
     null = php_h.IS_NULL, // 1
     false = php_h.IS_FALSE, // 2
@@ -411,13 +411,24 @@ pub const Type = enum(u8) {
     }
 };
 
+// pub const GarbageCollectionColor = enum(u2) {
+//     black,
+//     white,
+//     grey,
+//     purple,
+
+//     pub fn get(obj: *Object) @This() {
+//         return @enumFromInt(obj.gc.u.type_info >> 30);
+//     }
+// };
+
 pub fn isGMP(obj: *Object) bool {
     const name_str = obj.ce.*.name orelse return false;
     const name = getStringContent(name_str);
     return std.mem.eql(u8, name, "GMP");
 }
 
-pub fn getType(value: *const Value) Type {
+pub fn getValueType(value: *const Value) ValueType {
     return @enumFromInt(value.u1.v.type);
 }
 
@@ -563,7 +574,7 @@ pub fn createValueClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*
     return result;
 }
 
-pub fn convertValue(value: *Value, desired_type: Type) !void {
+pub fn convertValue(value: *Value, desired_type: ValueType) !void {
     switch (desired_type) {
         .boolean => php_h.convert_to_boolean(value),
         .long => php_h.convert_to_long(value),
@@ -876,7 +887,7 @@ pub fn destroyHashTable(ht: *HashTable) void {
 pub fn getHashEntry(ht: *const HashTable, key: anytype) !*Value {
     const KT = @TypeOf(key);
     if (KT == *Value or KT == *const Value) {
-        return switch (getType(key)) {
+        return switch (getValueType(key)) {
             .long => getHashEntry(ht, key.value.lval),
             .string => getHashEntry(ht, key.value.str),
             else => @panic("Invalid key"),
@@ -938,7 +949,7 @@ pub fn getHashEntryWithType(comptime T: type, ht: *const HashTable, key: anytype
 pub fn insertHashEntry(ht: *HashTable, key: anytype, value: *const Value) *Value {
     const KT = @TypeOf(key);
     if (KT == *Value or KT == *const Value) {
-        return switch (getType(key)) {
+        return switch (getValueType(key)) {
             .long => insertHashEntry(ht, key.value.lval, value),
             .string => insertHashEntry(ht, key.value.str, value),
             else => @panic("Invalid key"),
@@ -1059,7 +1070,7 @@ pub const HashTableIterator = struct {
             php_h.zend_hash_get_current_key_zval_ex(self.ht, &key, &self.pos);
             self.key = key;
             // don't increment the key's refcount
-            if (getType(&key) == .string) release(&key);
+            if (getValueType(&key) == .string) release(&key);
         }
         return &self.key.?;
     }

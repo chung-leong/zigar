@@ -11,6 +11,7 @@ const ArgumentIterator = php.ArgumentIterator;
 const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
 const Function = php.Function;
+const HashTable = php.HashTable;
 const Object = php.Object;
 const ObjectIterator = php.ObjectIterator;
 const String = php.String;
@@ -71,10 +72,11 @@ pub fn Class(comptime S: type) type {
 
         pub fn freeObject(obj: *Object) void {
             const self = fromObject(obj);
+            const class = ZigClassEntry.fromObject(obj);
+            // std.debug.print("freeObject: {s} Class({s}) ({d})\n", .{ class.getStructureName(), class.getName(), obj.handle });
             php.release(&self.table);
             if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
             // destroy the class entry
-            const class = ZigClassEntry.fromObject(obj);
             class.destroy();
         }
 
@@ -114,6 +116,32 @@ pub fn Class(comptime S: type) type {
             return &methods.?;
         }
 
+        pub fn getGarbageCollection(obj: *Object, table: *[*c]Value, n: *c_int) !?*HashTable {
+            const class = ZigClassEntry.fromObject(obj);
+            // std.debug.print("getGarbageCollection: {s} {s} ({d})\n", .{ class.getStructureName(), class.getName(), obj.handle });
+            const gc_buffer = class.getGarbageCollectionBuffer();
+            var member_iter = class.getMemberIterator(.instance);
+            while (member_iter.next()) |member| {
+                // ignore properties, since the return type of getters are already reachable via their function object
+                if (member.accessors == .property) continue;
+                if (member.class == class) continue;
+                try gc_buffer.add(member.class.object);
+            }
+            if (class.instance.template.table) |*tbl| {
+                try gc_buffer.add(tbl);
+            }
+            if (class.static.template.table) |*tbl| {
+                try gc_buffer.add(tbl);
+            }
+            gc_buffer.use(table, n);
+            return null;
+        }
+
+        pub fn getIterator(obj: *Object) !?*ObjectIterator {
+            const self = fromObject(obj);
+            return try iterator.PropertyIterator(@This()).create(obj, self.prop_names, &.{});
+        }
+
         pub fn handleCast(ed: *ExecuteData, return_value: *Value) !void {
             const func: *Function = @ptrCast(ed.func);
             const closure: *Closure = @fieldParentPtr("php_portion", func);
@@ -144,7 +172,7 @@ pub fn Class(comptime S: type) type {
                 };
                 return php.throwExceptionFmt("casting operation expects {s} as argument, received {s}", .{
                     cast_args,
-                    @tagName(php.getType(arg)),
+                    @tagName(php.getValueType(arg)),
                 });
             };
             if (str.len != byte_size) {
@@ -184,11 +212,6 @@ pub fn Class(comptime S: type) type {
             return_value.* = try this_struct.getValue(.to_string);
         }
 
-        pub fn getIterator(obj: *Object) !?*ObjectIterator {
-            const self = fromObject(obj);
-            return try iterator.PropertyIterator(@This()).create(obj, self.prop_names, &.{});
-        }
-
         fn getThis(value: *const Value) !*S {
             const obj = try php.getValueObject(value);
             return ZigObject(S).fromObject(obj).structure();
@@ -219,7 +242,6 @@ pub fn Class(comptime S: type) type {
         pub const hasProperty = Super.hasProperty;
         pub const getProperties = Super.getProperties;
         pub const getPropertyPointer = Super.getPropertyPointer;
-        pub const getReferencedObjects = Super.getReferencedObjects;
         const fromObject = Super.fromObject;
         const object = Super.object;
     };

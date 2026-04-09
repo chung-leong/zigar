@@ -422,7 +422,7 @@ pub const Options = struct {
             if (php.getHashEntry(ht, field.name) catch null) |value| {
                 const T = @FieldType(@This(), field.name);
                 @field(self, field.name) = extract(T, value) catch |err| {
-                    const vt = php.getType(value);
+                    const vt = php.getValueType(value);
                     return switch (err) {
                         error.NotBoolean => php.throwExceptionFmt("option '{s}' is a boolean, received {}", .{ field.name, vt }),
                         error.NotInteger => php.throwExceptionFmt("option '{s}' is an integer, received {}", .{ field.name, vt }),

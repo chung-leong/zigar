@@ -97,7 +97,7 @@ pub const ErrorSet = struct {
         }
 
         pub fn castValue(self: *@This(), value: *Value) !?Value {
-            switch (php.getType(value)) {
+            switch (php.getValueType(value)) {
                 .long => return self.findCanonical(value) catch php.createValueNull(),
                 else => {},
             }
@@ -125,7 +125,7 @@ pub const ErrorSet = struct {
 
         pub fn findCanonical(self: *@This(), value: *const Value) !Value {
             const class = ZigClassEntry.fromStatic(self);
-            return switch (php.getType(value)) {
+            return switch (php.getValueType(value)) {
                 .long => {
                     const err_code = php.getValueLong(value) catch unreachable;
                     if (err_code == 0) return php.createValueNull();
@@ -432,7 +432,7 @@ pub const ErrorSet = struct {
     pub const visitPointers = Super.visitPointers;
     pub const castObject = Super.castObject;
     pub const hasProperty = Super.hasProperty;
-    pub const getReferencedObjects = Super.getReferencedObjects;
+    pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;
     const returnBytes = Super.returnBytes;

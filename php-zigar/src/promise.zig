@@ -54,7 +54,7 @@ pub const Promise = struct {
             try CallDispatcher.event_loop.suspendFiber(&self.fiber);
         }
         // std.debug.print("Promise.await() resumed\n", .{});
-        if (php.getType(&self.result) == .object) {
+        if (php.getValueType(&self.result) == .object) {
             const result_obj = php.getValueObject(&self.result) catch unreachable;
             self.result = try structure.invokeMethod(result_obj, "getValue", .{.to_value});
         }

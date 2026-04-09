@@ -50,7 +50,7 @@ pub const Primitive = struct {
     pub const castObject = Super.castObject;
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
-    pub const getReferencedObjects = Super.getReferencedObjects;
+    pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
     const returnBytes = Super.returnBytes;
 };

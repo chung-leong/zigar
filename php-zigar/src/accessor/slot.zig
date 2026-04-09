@@ -97,7 +97,7 @@ pub fn Slot(comptime attrs: Attributes) type {
                 }
 
                 fn vivicateSlot(self: @This(), buffer: *ByteBuffer, table: *Value) Error!*Value {
-                    if (php.getType(table) == .null) {
+                    if (php.getValueType(table) == .null) {
                         const offset = self.byte_offset;
                         const len = self.byte_size;
                         const new_obj = try self.class.obtainObjectAtOffset(buffer, offset, len);

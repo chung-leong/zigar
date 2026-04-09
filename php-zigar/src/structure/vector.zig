@@ -75,7 +75,7 @@ pub const Vector = struct {
     pub const getProperties = Super.getProperties;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
-    pub const getReferencedObjects = Super.getReferencedObjects;
+    pub const getGarbageCollection = Super.getGarbageCollection;
     pub const getIterator = Super.getIterator;
     const getIndex = Super.getIndex;
 };

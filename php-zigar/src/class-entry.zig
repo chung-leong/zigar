@@ -9,6 +9,7 @@ const MemberType = enums.MemberType;
 const StructureFlags = enums.StructureFlags;
 const StructurePurpose = enums.StructurePurpose;
 const StructureType = enums.StructureType;
+const GarbageCollectionBuffer = @import("gc.zig").GarbageCollectionBuffer;
 const Host = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
 const ArgumentIterator = php.ArgumentIterator;
@@ -26,6 +27,7 @@ const structure = @import("structure.zig");
 const ZigObject = @import("object.zig").ZigObject;
 
 pub const ZigClassEntry = struct {
+    object: *Object,
     host: *Host,
     type: StructureType,
     purpose: StructurePurpose,
@@ -41,8 +43,12 @@ pub const ZigClassEntry = struct {
         finalized: bool = false,
         activated: bool = false,
     } = .{},
+    slot_usage: packed struct {
+        static: SlotUsage = .none,
+        instance: SlotUsage = .none,
+    } = .{},
     static_data: StaticData = undefined,
-    object: *Object,
+    // gc_buffer: ?[]Value = null,
     php_portion: ClassEntry = undefined,
 
     pub const ScopeType = enum { instance, static };
@@ -75,10 +81,8 @@ pub const ZigClassEntry = struct {
     const Scope = struct {
         members: HashTable,
         template: Template,
-        slot_count: usize,
 
         pub fn deinit(self: *@This(), class: *ZigClassEntry) void {
-            php.destroyHashTable(&self.members);
             var iter: HashTableObjectIterator(*Member) = .init(&self.members, .{});
             while (iter.next()) |member| {
                 if (member.class != class) {
@@ -89,10 +93,12 @@ pub const ZigClassEntry = struct {
                 }
                 php.allocator.destroy(member);
             }
+            php.destroyHashTable(&self.members);
             if (self.template.buffer) |b| b.release();
             if (self.template.table) |*t| php.release(t);
         }
     };
+    const SlotUsage = enum(u2) { none, single, multiple };
     const StaticData = define: {
         const fields = std.meta.fields(@TypeOf(structure.by_enum));
         var new_fields: [fields.len]std.builtin.Type.UnionField = undefined;
@@ -268,6 +274,7 @@ pub const ZigClassEntry = struct {
                 },
             }
         }
+        // if (self.gc_buffer) |buf| php.allocator.free(buf);
         const ce = self.entry();
         if (ce.name) |n| php.release(n);
         if (ce.info.user.filename) |f| php.release(f);
@@ -285,14 +292,8 @@ pub const ZigClassEntry = struct {
         try self.extractScope(info, .instance);
         errdefer self.instance.deinit(self);
         switch (self.type) {
-            .array => if (self.flags.array.has_slot) {
-                self.instance.slot_count = self.length orelse return error.Unexpected;
-            },
-            .vector => if (self.flags.vector.has_slot) {
-                self.instance.slot_count = self.length orelse return error.Unexpected;
-            },
-            .slice => if (self.flags.slice.has_slot) {
-                self.instance.slot_count = std.math.maxInt(usize);
+            .array, .slice => if (self.flags.common.has_slot) {
+                self.slot_usage.instance = .multiple;
             },
             else => {},
         }
@@ -458,12 +459,6 @@ pub const ZigClassEntry = struct {
         return php.getStringContent(self.php_portion.name);
     }
 
-    pub fn getSlotCount(self: *@This(), comptime scope: ScopeType) usize {
-        return switch (scope) {
-            inline else => |s| @field(self, @tagName(s)).slot_count,
-        };
-    }
-
     pub fn getMember(self: *@This(), comptime scope: ScopeType, key: anytype) !*Member {
         switch (scope) {
             inline else => |s| {
@@ -481,6 +476,11 @@ pub const ZigClassEntry = struct {
                 return .init(&container.members, .{});
             },
         }
+    }
+
+    pub fn getGarbageCollectionBuffer(self: *@This()) *GarbageCollectionBuffer {
+        self.host.gc_buffer.reset();
+        return &self.host.gc_buffer;
     }
 
     pub fn createPropertyList(self: *@This(), comptime scope: ScopeType) ![]*String {
@@ -589,13 +589,16 @@ pub const ZigClassEntry = struct {
         var slot_count: usize = 0;
         var members = php.createHashTable(null);
         errdefer php.destroyHashTable(&members);
+        // std.debug.print("extractScope: {s} {}\n", .{
+        //     self.getStructureName(),
+        //     scope,
+        // });
         if (php.getProperty(scope_info, "members") catch null) |member_list| {
             const member_list_ht = try php.getValueHashTable(member_list);
             var iter: HashTableIterator = .init(member_list_ht, .{});
             while (iter.next()) |member_info| {
                 const member_ht = try php.getValueHashTable(member_info);
-                const struct_info = try php.getHashEntry(member_ht, "structure");
-                const class_value = try php.getProperty(struct_info, "class");
+                const class_value = try php.getHashEntry(member_ht, "structure");
                 const class_obj = try php.getValueObject(class_value);
                 const class = fromObject(class_obj);
                 const member = try php.allocator.create(Member);
@@ -609,7 +612,7 @@ pub const ZigClassEntry = struct {
                     .slot = try php.getHashEntryWithType(?usize, member_ht, "slot"),
                     .class = class,
                 };
-                if (class != self) php.addRef(class.object);
+                if (class != self) php.addRef(class_obj);
                 const member_ptr = php.createValuePointer(member);
                 if (php.getHashEntry(member_ht, "name")) |n| {
                     const key = try php.getValueString(n);
@@ -623,17 +626,22 @@ pub const ZigClassEntry = struct {
                 }
             }
         }
+        const slot_usage: SlotUsage = switch (slot_count) {
+            0 => .none,
+            1 => .single,
+            else => .multiple,
+        };
         // attach accessors to members
         var iter: HashTableObjectIterator(*Member) = .init(&members, .{});
         while (iter.next()) |member| {
-            member.accessors = try self.getAccessors(member, scope, slot_count);
+            member.accessors = try self.getAccessors(member, scope, slot_usage);
         }
         const template_info = php.getProperty(scope_info, "template") catch null;
         const template = try createTemplate(template_info);
+        @field(self.slot_usage, @tagName(scope)) = slot_usage;
         @field(self, @tagName(scope)) = .{
             .members = members,
             .template = template,
-            .slot_count = slot_count,
         };
     }
 
@@ -646,8 +654,15 @@ pub const ZigClassEntry = struct {
                 template.buffer = buf;
             }
             if (php.getProperty(info, "table") catch null) |value| {
-                php.addRef(value);
-                template.table = value.*;
+                const src_ht = try php.getValueArray(value);
+                var iter: HashTableIterator = .init(src_ht, .{});
+                if (iter.len > 0) {
+                    const new_ht = php.createArray();
+                    while (iter.next()) |slot_value| {
+                        php.setHashEntryRef(new_ht, iter.currentIndex().?, slot_value);
+                    }
+                    template.table = php.createValueArray(new_ht);
+                }
             }
         }
         return template;
@@ -655,33 +670,34 @@ pub const ZigClassEntry = struct {
 
     pub fn createTable(self: *const @This(), comptime scope_type: ScopeType, prefilled: ?*const Value) !Value {
         const scope = &@field(self, @tagName(scope_type));
-        var new_table: Value = switch (scope.slot_count) {
+        const slot_usage = @field(self.slot_usage, @tagName(scope_type));
+        var new_table: Value, const new_ht = switch (slot_usage) {
             // if type only uses one slot, we don't need a hash table--a zval will do
-            0, 1 => php.createValueNull(),
-            else => php.createValueArray(null),
+            .none, .single => .{ php.createValueNull(), undefined },
+            .multiple => init: {
+                const array = php.createArray();
+                break :init .{ php.createValueArray(array), array };
+            },
         };
-        if (scope.slot_count > 0) {
-            const sources: [2]?*const Value = .{
-                if (scope.template.table) |*t| t else null,
-                prefilled,
-            };
-            const new_ht = switch (scope.slot_count) {
-                1 => undefined,
-                else => php.getValueHashTable(&new_table) catch unreachable,
-            };
-            for (sources) |src| {
-                const src_table = src orelse continue;
-                const src_ht = try php.getValueHashTable(src_table);
-                var iter: HashTableIterator = .init(src_ht, .{});
-                while (iter.next()) |value| {
-                    if (scope.slot_count == 1) {
-                        php.release(&new_table);
+        const sources: [2]?*const Value = .{
+            if (scope.template.table) |*t| t else null,
+            prefilled,
+        };
+        for (sources) |src| {
+            const src_table = src orelse continue;
+            const src_ht = try php.getValueHashTable(src_table);
+            var iter: HashTableIterator = .init(src_ht, .{});
+            while (iter.next()) |value| {
+                switch (slot_usage) {
+                    .none => {},
+                    .single => {
                         new_table = value.*;
                         php.addRef(value);
                         break;
-                    } else {
+                    },
+                    .multiple => {
                         php.setHashEntryRef(new_ht, iter.currentIndex().?, value);
-                    }
+                    },
                 }
             }
         }
@@ -833,7 +849,7 @@ pub const ZigClassEntry = struct {
         return php.transform(ns.handleGetIterator);
     }
 
-    fn getAccessors(self: *@This(), member: *Member, scope: ScopeType, slot_count: usize) !accessor.Any {
+    fn getAccessors(self: *@This(), member: *Member, scope: ScopeType, slot_usage: SlotUsage) !accessor.Any {
         @setEvalBranchQuota(2000000);
         const for_vector = if (scope == .instance) switch (self.type) {
             .array, .slice, .vector => true,
@@ -890,9 +906,9 @@ pub const ZigClassEntry = struct {
                 },
                 .slot => if (member.type == .object or member.type == .literal or member.type == .type) {
                     if (acc.attributes.prebaked == !has_size) {
-                        const slots: @TypeOf(acc.attributes.slots) = switch (slot_count > 1) {
-                            true => .multiple,
-                            false => .single,
+                        const slots: @TypeOf(acc.attributes.slots) = switch (slot_usage) {
+                            .multiple => .multiple,
+                            else => .single,
                         };
                         const index: @TypeOf(acc.attributes.index) = switch (for_vector) {
                             true => .use,
@@ -988,7 +1004,7 @@ pub const ZigClassEntry = struct {
                         false => try std.fmt.allocPrint(allocator, "i{d}", .{member.bit_size}),
                     },
                     .uint => switch (self.flags.primitive.is_size) {
-                        true => "isize",
+                        true => "usize",
                         false => try std.fmt.allocPrint(allocator, "u{d}", .{member.bit_size}),
                     },
                     .float => try std.fmt.allocPrint(allocator, "u{d}", .{member.bit_size}),

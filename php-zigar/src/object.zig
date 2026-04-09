@@ -222,7 +222,7 @@ const object_handler_mapping = .{
     .get_closure = "getClosure",
     .get_class_name = "getClassName",
     .get_debug_info = "getDebugInfo",
-    .get_gc = "getReferencedObjects",
+    .get_gc = "getGarbageCollection",
     .compare = "compare",
     .do_operation = "doOperation",
 };

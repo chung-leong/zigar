@@ -116,7 +116,7 @@ pub const Pointer = struct {
             // using the allocator associated with the pointer for autovivification new target,
             const allocator = self.buffer.getSourceAllocator();
             const target_class = static.target_class;
-            switch (php.getType(value)) {
+            switch (php.getValueType(value)) {
                 .object => {
                     const obj = php.getValueObject(value) catch unreachable;
                     if (php.instanceOf(obj.ce, target_class.entry())) {
@@ -206,6 +206,6 @@ pub const Pointer = struct {
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
-    pub const getReferencedObjects = Super.getReferencedObjects;
+    pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
 };

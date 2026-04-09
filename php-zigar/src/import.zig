@@ -17,7 +17,6 @@ const ZigObject = @import("object.zig").ZigObject;
 
 pub const StructureImporter = struct {
     value_list: std.ArrayList(Value),
-    instance_list: std.ArrayList(*Object),
     class_list: std.ArrayList(*Object),
     structure_map: HashTable,
     counters: struct {
@@ -38,30 +37,32 @@ pub const StructureImporter = struct {
         errdefer value_list.deinit(php.allocator);
         var class_list: std.ArrayList(*Object) = try .initCapacity(php.allocator, 32);
         errdefer class_list.deinit(php.allocator);
-        var instance_list: std.ArrayList(*Object) = try .initCapacity(php.allocator, 32);
-        errdefer instance_list.deinit(php.allocator);
         self.* = .{
             .value_list = value_list,
-            .instance_list = instance_list,
             .class_list = class_list,
-            .structure_map = php.createHashTable(php.destructor.value),
+            .structure_map = php.createHashTable(null),
             .host = host,
         };
         return self;
     }
 
     pub fn deinit(self: *@This()) void {
-        php.destroyHashTable(&self.structure_map);
         for (self.value_list.items) |*item| {
             if (php.getValuePointer(*ByteBuffer, item)) |b| {
                 b.release();
             } else |_| {
+                // if (php.getValueArray(item) catch null) |arr| {
+                //     std.debug.print("array {x}: ref_count = {d}\n", .{ @intFromPtr(arr), arr.gc.refcount });
+                // }
                 php.release(item);
             }
         }
+        for (self.class_list.items) |class_obj| {
+            php.release(class_obj);
+        }
         self.value_list.deinit(php.allocator);
-        self.instance_list.deinit(php.allocator);
         self.class_list.deinit(php.allocator);
+        php.destroyHashTable(&self.structure_map);
         php.allocator.destroy(self);
     }
 
@@ -70,25 +71,10 @@ pub const StructureImporter = struct {
         if (self.class_list.items.len == 0) return error.NoRoot;
         const root = self.class_list.items[0];
         php.addRef(root);
-        // initially, the host holds references to class objects through the "class"
-        // property in the structure arrays; prior to destroying these we need to flip the
-        // relationship so that these objects own the host instead
+        // initially, the host holds references to class objects through class_list
+        // prior to destroying that list we need to flip the relationship so that
+        // these objects own the host instead
         for (self.class_list.items) |class_obj| ZigClassEntry.activate(class_obj);
-        // the exporter uses structure arrays to refer to types, replace them with class objects
-        for (self.instance_list.items) |instance_obj| {
-            const class = ZigClassEntry.fromObject(instance_obj);
-            if (class.type == .@"comptime") {
-                const ct_struct = ZigObject(Comptime).fromObject(instance_obj).structure();
-                // comptime only uses one slot; so if table is an array, it's a structure array
-                const arr = php.getValueArray(&ct_struct.table) catch continue;
-                // replace the array with the class ref and release it
-                const class_value = try php.getHashEntry(arr, php.persistent("class"));
-                ct_struct.table = class_value.*;
-                // need to add ref since the class object is still in the array and will get released
-                php.addRef(class_value);
-                php.release(arr);
-            }
-        }
         return root;
     }
 
@@ -154,16 +140,15 @@ pub const StructureImporter = struct {
         return self.allocateValue(value);
     }
 
-    pub fn createInstance(self: *@This(), structure_h: Handle, dv_h: Handle, prefilled_slots_h: ?Handle) !Handle {
+    pub fn createInstance(self: *@This(), structure_h: Handle, dv_h: Handle, prefilled_table_h: ?Handle) !Handle {
         const structure = self.dereference(structure_h);
         const class_value = try php.getProperty(structure, php.persistent("class"));
         const class_obj = try php.getValueObject(class_value);
         const class = ZigClassEntry.fromObject(class_obj);
         const memory = self.dereference(dv_h);
         const buf = try php.getValuePointer(*ByteBuffer, memory);
-        const prefilled_slots = if (prefilled_slots_h) |vh| self.dereference(vh) else null;
-        const instance = try class.createObjectFromBuffer(buf, prefilled_slots);
-        try self.instance_list.append(php.allocator, instance);
+        const prefilled_table = if (prefilled_table_h) |vh| self.dereference(vh) else null;
+        const instance = try class.createObjectFromBuffer(buf, prefilled_table);
         const value = php.createValueObject(instance);
         return self.allocateValue(value);
     }
@@ -172,46 +157,52 @@ pub const StructureImporter = struct {
         var value: Value = php.createValueArray(null);
         if (dv_h) |vh| {
             const dv = self.dereference(vh);
-            try php.setPropertyRef(&value, php.persistent("buffer"), dv);
+            try php.setProperty(&value, php.persistent("buffer"), dv);
         }
         if (slots_h) |vh| {
             const slots = self.dereference(vh);
-            try php.setPropertyRef(&value, php.persistent("table"), slots);
+            try php.setProperty(&value, php.persistent("table"), slots);
         }
         return self.allocateValue(value);
     }
 
     pub fn createList(self: *@This()) !Handle {
-        const value = php.createValueArray(null);
-        return self.allocateValue(value);
+        return self.createObject();
     }
 
     pub fn createObject(self: *@This()) !Handle {
-        const value = php.createValueArray(null);
+        const bytes = php.emalloc(@sizeOf(HashTable));
+        const ht: *HashTable = @ptrCast(@alignCast(bytes));
+        ht.* = php.createHashTable(null);
+        const value = php.createValueArray(ht);
         return self.allocateValue(value);
     }
 
     pub fn appendList(self: *@This(), list_h: Handle, element_h: Handle) !void {
         const list = self.dereference(list_h);
         const element = self.dereference(element_h);
-        try php.addElementRef(list, element);
+        try php.addElement(list, element);
     }
 
     pub fn getProperty(self: *@This(), object_h: Handle, key_bytes: [*]const u8, key_len: usize) !Handle {
+        const key = key_bytes[0..key_len];
+        const key_str = php.createInternedString(key);
         const object = self.dereference(object_h);
-        const key = php.createInternedString(key_bytes[0..key_len]);
-        const value = try php.getProperty(object, key);
+        const value = try php.getProperty(object, key_str);
         return self.allocateValue(value.*);
     }
 
     pub fn setProperty(self: *@This(), object_h: Handle, key_bytes: [*]const u8, key_len: usize, value_h: ?Handle) !void {
-        const key = php.createInternedString(key_bytes[0..key_len]);
+        const key = key_bytes[0..key_len];
+        const key_str = php.createInternedString(key);
         const object = self.dereference(object_h);
         if (value_h) |vh| {
             const value = self.dereference(vh);
-            try php.setPropertyRef(object, key, value);
+            // the exporter uses structure arrays to refer to types, replace them with class objects
+            const actual_value = php.getProperty(value, "class") catch value;
+            try php.setProperty(object, key_str, actual_value);
         } else {
-            try php.deleteProperty(object, key);
+            try php.deleteProperty(object, key_str);
         }
     }
 
@@ -225,7 +216,8 @@ pub const StructureImporter = struct {
         const object = self.dereference(object_h);
         if (value_h) |vh| {
             const value = self.dereference(vh);
-            try php.setPropertyRef(object, slot, value);
+            const actual_value = php.getProperty(value, "class") catch value;
+            try php.setProperty(object, slot, actual_value);
         } else {
             try php.deleteProperty(object, slot);
         }
@@ -233,21 +225,23 @@ pub const StructureImporter = struct {
 
     pub fn getStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize) !Handle {
         const key = key_bytes[0..key_len];
-        const structure = try php.getHashEntry(&self.structure_map, key);
+        const key_str = php.createInternedString(key);
+        const structure = try php.getHashEntry(&self.structure_map, key_str);
         return self.allocateValue(structure.*);
     }
 
     pub fn setStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize, handle: ?Handle) !void {
         const key = key_bytes[0..key_len];
+        const key_str = php.createInternedString(key);
         if (handle) |structure_h| {
             const structure = self.dereference(structure_h);
-            php.setHashEntryRef(&self.structure_map, key, structure);
+            php.setHashEntry(&self.structure_map, key_str, structure);
             const class_obj = try ZigClassEntry.create(self.host, structure);
             var class_value = php.createValueObject(class_obj);
             try php.setProperty(structure, php.persistent("class"), &class_value);
             try self.class_list.append(php.allocator, class_obj);
         } else {
-            php.deleteHashEntry(&self.structure_map, key);
+            php.deleteHashEntry(&self.structure_map, key_str);
         }
     }
 

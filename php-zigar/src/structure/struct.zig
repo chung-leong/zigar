@@ -242,6 +242,6 @@ pub const Struct = struct {
     pub const hasProperty = Super.hasProperty;
     pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
-    pub const getReferencedObjects = Super.getReferencedObjects;
+    pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
 };
