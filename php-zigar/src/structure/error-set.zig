@@ -89,7 +89,7 @@ pub const ErrorSet = struct {
         }
 
         pub fn deinit(self: *@This()) void {
-            const class = ZigClassEntry.fromStructure(self);
+            const class = ZigClassEntry.fromStatic(self);
             if (self.error_set != class.host.global_error_set) {
                 php.release(self.error_set);
             }
@@ -237,23 +237,20 @@ pub const ErrorSet = struct {
             .to_value => unreachable,
             .to_plain => create: {
                 const props = err_struct.canonical.?;
-                const message = php.useString(props.message, "");
+                const message = props.message;
                 const message_value = php.createValueString(message);
                 const ht = php.createArray();
-                php.setHashEntry(ht, "message", &message_value);
+                php.setHashEntryRef(ht, "message", &message_value);
                 var value = php.createValueArray(ht);
                 try php.convertValue(&value, .object);
                 break :create value;
             },
             .to_string => create: {
                 const props = err_struct.canonical.?;
-                const message = php.useString(props.message, "");
-                defer php.release(message);
-                const file = php.useString(props.file, "(unknown)");
-                defer php.release(file);
-                const trace = php.useArray(props.trace);
-                defer php.release(trace);
-                const trace_str = php.traceToString(trace, true);
+                const message = props.message;
+                const file = props.file orelse php.persistent("unknown");
+                const trace = props.trace orelse php.empty_array;
+                const trace_str = php.traceToString(@constCast(trace), true);
                 defer php.release(trace_str);
                 const text = try std.fmt.allocPrint(
                     php.allocator,
@@ -302,7 +299,7 @@ pub const ErrorSet = struct {
     }
 
     pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
-        if (!readErrorProperty(obj, name, retval)) {
+        if (!readErrorProperty(obj, name, prop_type, retval)) {
             return Super.readProperty(obj, name, prop_type, cache_slot, retval);
         }
         return retval;
@@ -330,8 +327,7 @@ pub const ErrorSet = struct {
 
     pub fn handleGetMessage(ed: *ExecuteData, return_value: *Value) !void {
         const props = try getProperitiesFromValue(&ed.This);
-        const message = php.useString(props.message, "");
-        return_value.* = php.createValueString(message);
+        return_value.* = php.createValueString(props.message);
     }
 
     pub fn handleGetCode(ed: *ExecuteData, return_value: *Value) !void {
@@ -344,7 +340,7 @@ pub const ErrorSet = struct {
 
     pub fn handleGetFile(ed: *ExecuteData, return_value: *Value) !void {
         const props = try getProperitiesFromValue(&ed.This);
-        const file = php.useString(props.file, "(unknown)");
+        const file = props.file orelse php.persistent("unknown");
         return_value.* = php.createValueString(file);
     }
 
@@ -355,14 +351,15 @@ pub const ErrorSet = struct {
 
     pub fn handleGetTrace(ed: *ExecuteData, return_value: *Value) !void {
         const props = try getProperitiesFromValue(&ed.This);
-        const trace = php.useArray(props.trace);
-        return_value.* = php.createValueArray(trace);
+        const trace = props.trace orelse php.empty_array;
+        return_value.* = php.createValueArray(@constCast(trace));
+        php.addRef(return_value);
     }
 
     pub fn handleGetTraceAsString(ed: *ExecuteData, return_value: *Value) !void {
         const props = try getProperitiesFromValue(&ed.This);
-        const trace = php.useArray(props.trace);
-        const trace_str = php.traceToString(trace, true);
+        const trace = props.trace orelse php.empty_array;
+        const trace_str = php.traceToString(@constCast(trace), true);
         return_value.* = php.createValueString(trace_str);
     }
 
@@ -370,22 +367,22 @@ pub const ErrorSet = struct {
         return_value.* = php.createValueNull();
     }
 
-    fn readErrorProperty(obj: *Object, name: *String, retval: *Value) bool {
+    fn readErrorProperty(obj: *Object, name: *String, prop_type: c_int, retval: *Value) bool {
         const props = getProperties(obj) catch |err| {
             _ = &php.throwError(err);
             return true;
         };
         const name_c = php.getStringContent(name);
-        if (std.mem.eql(u8, name_c, "string")) {
-            const string = php.useString(props.string, "");
-            retval.* = php.createValueString(string);
-        } else if (std.mem.eql(u8, name_c, "file")) {
-            const file = php.useString(props.file, "(unknown)");
-            retval.* = php.createValueString(file);
-        } else if (std.mem.eql(u8, name_c, "line")) {
-            retval.* = php.createValueLong(@intCast(props.lineno));
-        } else {
+        retval.* = if (std.mem.eql(u8, name_c, "string"))
+            php.createValueString(props.string orelse php.createString(""))
+        else if (std.mem.eql(u8, name_c, "file"))
+            php.createValueString(props.file orelse php.persistent("unknown"))
+        else if (std.mem.eql(u8, name_c, "line"))
+            php.createValueLong(@intCast(props.lineno))
+        else
             return false;
+        if (prop_type != php.BP_VAR_IS) {
+            php.addRef(retval);
         }
         return true;
     }
@@ -413,6 +410,7 @@ pub const ErrorSet = struct {
         const self = fromObject(obj);
         if (self.canonical) |c| return c;
         const err_value = try self.getValue(.to_value);
+        defer php.release(&err_value);
         const err_obj = try php.getValueObject(&err_value);
         const err_struct = fromObject(err_obj);
         return err_struct.canonical.?;

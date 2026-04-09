@@ -78,6 +78,13 @@ pub const Value = php_h.zval;
 pub const SUCCESS = php_h.SUCCESS;
 pub const FAILURE = php_h.FAILURE;
 
+pub const BP_VAR_R = php_h.BP_VAR_R;
+pub const BP_VAR_W = php_h.BP_VAR_W;
+pub const BP_VAR_RW = php_h.BP_VAR_RW;
+pub const BP_VAR_IS = php_h.BP_VAR_IS;
+pub const BP_VAR_FUNC_ARG = php_h.BP_VAR_FUNC_ARG;
+pub const BP_VAR_UNSET = php_h.BP_VAR_UNSET;
+
 pub const MAY_BE_UNDEF = php_h.MAY_BE_UNDEF;
 pub const MAY_BE_NULL = php_h.MAY_BE_NULL;
 pub const MAY_BE_BOOL = php_h.MAY_BE_BOOL;
@@ -800,7 +807,6 @@ pub fn createString(s: []const u8) *String {
         1 => php_h.zend_one_char_string[s[0]],
         else => create: {
             const zs = php_h.zend_string_alloc(s.len, false);
-            if (@intFromPtr(zs) == 0x00007f8beb601c40) @breakpoint();
             const ds: [*]u8 = @ptrCast(&zs.*.val[0]);
             @memcpy(ds[0..s.len], s);
             ds[s.len] = '\x00';
@@ -845,24 +851,6 @@ pub fn compareStrings(s1: *const String, s2: *const String) bool {
 pub fn matchString(s: *const String, text: []const u8) bool {
     const sc = getStringContent(s);
     return std.mem.eql(u8, sc, text);
-}
-
-pub fn useString(str: ?*String, def: []const u8) *String {
-    if (str) |s| {
-        addRef(s);
-        return s;
-    } else {
-        return createString(def);
-    }
-}
-
-pub fn useArray(arr: ?*Array) *Array {
-    if (arr) |a| {
-        addRef(a);
-        return a;
-    } else {
-        return createArray();
-    }
 }
 
 pub fn createArray() *Array {

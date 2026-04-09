@@ -130,6 +130,7 @@ pub const Pointer = struct {
                         const str = php.getValueString(value) catch unreachable;
                         try target_class.checkByteLength(str.len);
                         const buf = try ByteBuffer.create(target_class.alignment);
+                        defer buf.release();
                         if (allocator != null) {
                             // allocate
                             const sc = php.getStringContent(str);
