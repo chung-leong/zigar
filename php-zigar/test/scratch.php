@@ -7,7 +7,10 @@ use Revolt\EventLoop;
 zigar_compile_module(__DIR__ . "/scratch.zig", "/tmp/scratch.zigar");
 $m = zigar_load_module("/tmp/scratch.zigar");
 
-// print_r($m->Enum->cow);
+$s = $m->get();
+echo $s->number, "\n";
+echo $s->next->number, "\n";
+
 $m = null;
 gc_collect_cycles();
 echo "gc finished\n";

@@ -95,13 +95,13 @@ pub const ByteBuffer = struct {
         while (src_buf.source == .buffer) {
             src_buf = src_buf.source.buffer;
         }
+        src_buf.addRef();
         new.* = .{
             .bytes = slice_bytes,
             .alignment = alignment,
             .flags = self.flags,
             .source = .{ .buffer = src_buf },
         };
-        self.addRef();
         return new;
     }
 

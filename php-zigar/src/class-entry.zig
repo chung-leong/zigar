@@ -724,6 +724,7 @@ pub const ZigClassEntry = struct {
         } else {
             // need to create the object
             const buf = try parent_buf.slice(offset, len, self.alignment);
+            defer buf.release();
             const obj = try self.createObjectFromBuffer(buf, null);
             errdefer php.release(obj);
             return obj;

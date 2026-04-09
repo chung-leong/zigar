@@ -1349,7 +1349,7 @@ fn debugAlloc(size: usize, call_depth: usize) ?*anyopaque {
         if (debug.getCaller(fba.allocator(), call_depth)) |caller| {
             return php_h._emalloc(size, caller.file, caller.line, null, 0);
         } else {
-            return php_h._emalloc(size, "unknown", 0, null, 0);
+            return php_h._emalloc(size, "zig", 0, null, 0);
         }
     } else {
         return php_h._emalloc(size);
@@ -1363,7 +1363,7 @@ fn debugFree(ptr: ?*anyopaque, call_depth: usize) void {
         if (debug.getCaller(fba.allocator(), call_depth)) |caller| {
             php_h._efree(ptr, caller.file, caller.line, null, 0);
         } else {
-            php_h._efree(ptr, "unknown", 0, null, 0);
+            php_h._efree(ptr, "zig", 0, null, 0);
         }
     } else {
         php_h.efree(ptr);
