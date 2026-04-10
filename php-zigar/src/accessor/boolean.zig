@@ -30,7 +30,7 @@ pub fn Boolean(comptime attrs: Attributes) type {
                 const bytes: []u8 = try buffer.data(self.byte_offset + byte_size, true);
                 if (self.byte_offset + byte_size > bytes.len) return error.OutOfBound;
                 const ptr: *align(1) T = @ptrCast(&bytes[self.byte_offset]);
-                ptr.* = switch (php.isNull(value)) {
+                ptr.* = switch (php.isValueNull(value)) {
                     false => try php.getValueBool(value),
                     true => false,
                 };
@@ -73,7 +73,7 @@ pub fn Boolean(comptime attrs: Attributes) type {
                 const bytes: []u8 = try buffer.data(self.byte_offset + byte_size, true);
                 if (self.byte_offset + byte_size > bytes.len) return error.OutOfBound;
                 const ptr: *align(1) AT = @ptrCast(&bytes[self.byte_offset]);
-                ptr.value = switch (php.isNull(value)) {
+                ptr.value = switch (php.isValueNull(value)) {
                     false => try php.getValueBool(value),
                     true => false,
                 };

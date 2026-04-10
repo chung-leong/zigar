@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const ObjectTransform = accessor.ObjectTransform;
+const Transform = accessor.Transform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const ZigObject = @import("../object.zig").ZigObject;
@@ -18,7 +18,6 @@ pub const Slice = struct {
     const Super = structure.ArrayLike(@This());
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
-        value_transform: ?ObjectTransform = null,
         element_size: usize = undefined,
         element_shift: ?u6 = undefined,
 
@@ -26,7 +25,6 @@ pub const Slice = struct {
             const class = ZigClassEntry.fromObject(class_obj);
             const member = try class.getMember(.instance, 0);
             self.value_acc = &member.accessors;
-            self.value_transform = member.objectTransform();
             self.element_size = class.byte_size orelse 1;
             self.element_shift = init: {
                 const shift = std.math.log2_int(usize, self.element_size);
@@ -49,7 +47,7 @@ pub const Slice = struct {
                 }
             };
             try self.buffer.allocate(allocator, len);
-            try self.setValue(value);
+            try self.setValue(value, .none);
             const obj = ZigObject(@This()).fromStructure(self).object();
             try class.registerObject(obj);
         } else {
@@ -74,14 +72,16 @@ pub const Slice = struct {
             len / static.element_size;
     }
 
-    pub fn getElement(self: *@This(), index: usize, comptime use_perform: bool) !Value {
+    pub fn getElement(self: *@This(), index: usize) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        var value = try static.value_acc.getElement(self, index);
-        if (use_perform) {
-            if (static.value_transform) |ot| try ot.apply(&value);
-        }
-        return value;
+        return try static.value_acc.getElement(self, index);
+    }
+
+    pub fn getElementEx(self: *@This(), index: usize, transform: ?Transform) !Value {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        return try static.value_acc.getElementEx(self, index, transform);
     }
 
     pub fn setElement(self: *@This(), index: usize, value: *Value) !void {

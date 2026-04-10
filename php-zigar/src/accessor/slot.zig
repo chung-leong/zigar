@@ -23,18 +23,24 @@ pub fn Slot(comptime attrs: Attributes) type {
                     byte_size: usize,
                     byte_offset: usize,
                     class: *ZigClassEntry,
+                    output: accessor.Output,
+                    transform: ?accessor.Transform,
                     comptime type: accessor.Type = .slot,
                     comptime attributes: Attributes = attrs,
 
                     pub fn get(self: @This(), buffer: *ByteBuffer, table: *Value) Error!Value {
                         const entry = try self.vivicateSlot(buffer, table);
-                        php.addRef(entry);
-                        return entry.*;
+                        return try getValue(entry, self.transform);
+                    }
+
+                    pub fn getEx(self: @This(), buffer: *ByteBuffer, table: *Value, transform: ?accessor.Transform) Error!Value {
+                        const entry = try self.vivicateSlot(buffer, table);
+                        return try getValueEx(entry, self.transform, transform);
                     }
 
                     pub fn set(self: @This(), buffer: *ByteBuffer, table: *Value, value: *const Value) Error!void {
                         const entry = try self.vivicateSlot(buffer, table);
-                        try write(entry, value, false);
+                        try setValue(entry, value, self.transform);
                     }
 
                     fn vivicateSlot(self: @This(), buffer: *ByteBuffer, table: *Value) Error!*Value {
@@ -51,18 +57,23 @@ pub fn Slot(comptime attrs: Attributes) type {
                 .use => struct {
                     byte_size: usize,
                     class: *ZigClassEntry,
+                    transform: ?accessor.Transform,
                     comptime type: accessor.Type = .slot,
                     comptime attributes: Attributes = attrs,
 
                     pub fn getElement(self: @This(), buffer: *ByteBuffer, table: *Value, index: usize) Error!Value {
                         const entry = try self.vivicateSlot(buffer, table, index);
-                        php.addRef(entry);
-                        return entry.*;
+                        return try getValue(entry, self.transform);
+                    }
+
+                    pub fn getElementEx(self: @This(), buffer: *ByteBuffer, table: *Value, index: usize, transform: ?accessor.Transform) Error!Value {
+                        const entry = try self.vivicateSlot(buffer, table, index);
+                        return try getValueEx(entry, self.transform, transform);
                     }
 
                     pub fn setElement(self: @This(), buffer: *ByteBuffer, table: *Value, index: usize, value: *const Value) Error!void {
                         const entry = try self.vivicateSlot(buffer, table, index);
-                        try write(entry, value, false);
+                        try setValue(entry, value, self.transform);
                     }
 
                     fn vivicateSlot(self: @This(), buffer: *ByteBuffer, table: *Value, index: usize) Error!*Value {
@@ -82,18 +93,23 @@ pub fn Slot(comptime attrs: Attributes) type {
                 byte_size: usize,
                 byte_offset: usize,
                 class: *ZigClassEntry,
+                transform: ?accessor.Transform,
                 comptime type: accessor.Type = .slot,
                 comptime attributes: Attributes = attrs,
 
                 pub fn get(self: @This(), buffer: *ByteBuffer, table: *Value) Error!Value {
                     const entry = try self.vivicateSlot(buffer, table);
-                    php.addRef(entry);
-                    return entry.*;
+                    return getValue(entry, self.transform);
+                }
+
+                pub fn getEx(self: @This(), buffer: *ByteBuffer, table: *Value, transform: ?accessor.Transform) Error!Value {
+                    const entry = try self.vivicateSlot(buffer, table);
+                    return getValue(entry, self.transform, transform);
                 }
 
                 pub fn set(self: @This(), buffer: *ByteBuffer, table: *Value, value: *const Value) Error!void {
                     const entry = try self.vivicateSlot(buffer, table);
-                    try write(entry, value, false);
+                    try setValue(entry, value, self.transform);
                 }
 
                 fn vivicateSlot(self: @This(), buffer: *ByteBuffer, table: *Value) Error!*Value {
@@ -110,47 +126,78 @@ pub fn Slot(comptime attrs: Attributes) type {
         true => switch (attrs.slots) {
             .multiple => struct {
                 slot: usize,
+                output: accessor.Output,
+                transform: ?accessor.Transform,
                 comptime type: accessor.Type = .slot,
                 comptime attributes: Attributes = attrs,
 
                 pub fn get(self: @This(), table: *Value) Error!Value {
                     const ht = try php.getValueHashTable(table);
                     const entry = try php.getHashEntry(ht, self.slot);
-                    php.addRef(entry);
-                    return entry.*;
+                    return try getValue(entry, self.transform);
+                }
+
+                pub fn getEx(self: @This(), table: *Value, transform: ?accessor.Transform) Error!Value {
+                    const ht = try php.getValueHashTable(table);
+                    const entry = try php.getHashEntry(ht, self.slot);
+                    return try getValueEx(entry, self.transform, transform);
                 }
 
                 pub fn set(self: @This(), table: *Value, value: *const Value) Error!void {
                     const ht = try php.getValueHashTable(table);
                     const entry = try php.getHashEntry(ht, self.slot);
-                    try write(entry, value, true);
+                    try setValue(entry, value, self.transform);
                 }
             },
             .single => struct {
+                transform: ?accessor.Transform,
                 comptime type: accessor.Type = .slot,
                 comptime attributes: Attributes = attrs,
 
-                pub fn get(_: @This(), table: *Value) Error!Value {
-                    php.addRef(table);
-                    return table.*;
+                pub fn get(self: @This(), table: *Value) Error!Value {
+                    return try getValue(table, self.transform);
                 }
 
-                pub fn set(_: @This(), table: *Value, value: *const Value) Error!void {
-                    try write(table, value, true);
+                pub fn getEx(self: @This(), table: *Value, transform: ?accessor.Transform) Error!Value {
+                    return try getValueEx(table, self.transform, transform);
+                }
+
+                pub fn set(self: @This(), table: *Value, value: *const Value) Error!void {
+                    try setValue(table, value, self.transform);
                 }
             },
         },
     };
 }
 
-fn write(entry: *Value, value: *const Value, comptime prebaked: bool) Error!void {
+fn getValue(entry: *Value, transform: ?accessor.Transform) Error!Value {
+    if (transform) |tm| {
+        if (php.getValueObject(entry) catch null) |obj| {
+            return try structure.invokeMethod(obj, "getValue", .{tm});
+        } else {
+            return error.NullPointer;
+        }
+    } else {
+        php.addRef(entry);
+        return entry.*;
+    }
+}
+
+fn getValueEx(entry: *Value, transform1: ?accessor.Transform, transform2: ?accessor.Transform) !Value {
+    // use the second if it's null or if the first is null or none
+    const transform = if (transform2 == null)
+        null
+    else if (transform1 == null or transform1 == .none)
+        transform2
+    else
+        transform1;
+    return getValue(entry, transform);
+}
+
+fn setValue(entry: *Value, value: *const Value, transform: ?accessor.Transform) Error!void {
     if (php.getValueObject(entry)) |obj| {
-        try structure.invokeMethod(obj, "setValue", .{value});
+        try structure.invokeMethod(obj, "setValue", .{ value, transform orelse .none });
     } else |_| {
-        const msg = switch (prebaked) {
-            true => "cannot create comptime object",
-            false => "attempt to write to null target",
-        };
-        return php.throwExceptionFmt("{s} (zig)", .{msg});
+        return error.NullPointer;
     }
 }

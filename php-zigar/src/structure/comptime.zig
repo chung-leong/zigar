@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const ObjectTransform = accessor.ObjectTransform;
+const Transform = accessor.Transform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
@@ -18,13 +18,11 @@ pub const Comptime = struct {
 
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
-        value_transform: ?ObjectTransform = null,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             const member = try class.getMember(.instance, 0);
             self.value_acc = &member.accessors;
-            self.value_transform = member.objectTransform();
         }
     };
 
@@ -32,22 +30,24 @@ pub const Comptime = struct {
         return error.CannotCreateComptimeObject;
     }
 
-    pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        var value = try static.value_acc.get(self);
-        if (static.value_transform) |ot| {
-            try ot.apply(&value);
+    pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
+        if (transform == .none) {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            return try static.value_acc.get(self);
         } else {
-            if (transform != .to_value) try transform.apply(&value);
+            return Super.getValue(self, transform);
         }
-        return value;
     }
 
-    pub fn setValue(self: *@This(), value: *const Value) !void {
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        return try static.value_acc.set(self, value);
+    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) !void {
+        if (transform == .none) {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            return try static.value_acc.set(self, value);
+        } else {
+            return Super.setValue(self, value, transform);
+        }
     }
 
     pub const setStorage = Super.setStorage;

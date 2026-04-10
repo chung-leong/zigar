@@ -36,7 +36,7 @@ pub fn Float(comptime attrs: Attributes) type {
                 const byte_size = (@bitSizeOf(T) + 7) / 8;
                 const bytes: []u8 = try buffer.data(self.byte_offset + byte_size, true);
                 const ptr: *align(1) T = @ptrCast(&bytes[self.byte_offset]);
-                ptr.* = switch (php.isNull(value)) {
+                ptr.* = switch (php.isValueNull(value)) {
                     false => @floatCast(try php.getValueDouble(value)),
                     true => 0.0,
                 };
@@ -78,7 +78,7 @@ pub fn Float(comptime attrs: Attributes) type {
                 const byte_size = (@bitSizeOf(AT) + 7) / 8;
                 const bytes: []u8 = try buffer.data(self.byte_offset + byte_size, true);
                 const ptr: *align(1) AT = @ptrCast(&bytes[self.byte_offset]);
-                ptr.value = switch (php.isNull(value)) {
+                ptr.value = switch (php.isValueNull(value)) {
                     false => @floatCast(try php.getValueDouble(value)),
                     true => 0.0,
                 };

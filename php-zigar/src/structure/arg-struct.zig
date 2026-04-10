@@ -2,7 +2,7 @@ const std = @import("std");
 
 const AbortSignal = @import("../abort-signal.zig").AbortSignal;
 const accessor = @import("../accessor.zig");
-const ObjectTransform = accessor.ObjectTransform;
+const Transform = accessor.Transform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const Generator = @import("../generator.zig").Generator;
@@ -32,7 +32,7 @@ pub fn ArgStruct(variadic: bool) type {
         pub const Static = struct {
             arg_accessors: []*accessor.Any = undefined,
             retval_accessors: *accessor.Any = undefined,
-            retval_transform: ?ObjectTransform = undefined,
+            retval_transform: ?Transform = undefined,
             allocator: ?*ZigClassEntry.Member = null,
             promise: ?*ZigClassEntry.Member = null,
             generator: ?*ZigClassEntry.Member = null,
@@ -54,7 +54,6 @@ pub fn ArgStruct(variadic: bool) type {
                 self.arg_accessors = try php.allocator.alloc(*accessor.Any, arg_count);
                 const retval_member = iter.next().?;
                 self.retval_accessors = &retval_member.accessors;
-                self.retval_transform = retval_member.objectTransform();
                 var index: usize = 0;
                 while (iter.next()) |member| {
                     switch (member.class.purpose) {

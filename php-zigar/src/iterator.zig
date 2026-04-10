@@ -46,7 +46,7 @@ pub fn ArrayIterator(comptime S: type) type {
         pub fn getCurrentData(iter: *ObjectIterator) *Value {
             const self = fromIter(iter);
             const container = ZigObject(S).fromObject(self.object).structure();
-            iter.data = container.getElement(iter.index, true) catch |err| init: {
+            iter.data = container.getElement(iter.index) catch |err| init: {
                 _ = &err;
                 break :init php.createValueNull();
             };
@@ -258,7 +258,7 @@ pub const IteratorIterator = struct {
             self.flags.valid = false;
         }
         if (self.call("next")) |result| {
-            if (!php.isNull(&result)) {
+            if (!php.isValueNull(&result)) {
                 self.iter.data = result;
                 self.flags.valid = true;
             }

@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const ObjectTransform = accessor.ObjectTransform;
+const Transform = accessor.Transform;
 const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
@@ -101,7 +101,7 @@ pub const Union = struct {
             // mark pointers as inaccessible
             try self.visitPointers(structure.Pointer.restrictAccess, .{}, .{ .include_inactive = true });
             // now we can copy
-            if (initializer) |value| try self.setValue(value);
+            if (initializer) |value| try self.setValue(value, .none);
         } else {
             try Super.initialize(self, allocator, initializer);
         }
@@ -116,25 +116,29 @@ pub const Union = struct {
         }
     }
 
-    pub fn setValue(self: *@This(), value: *const Value) Error!void {
-        if (try self.copySelf(value)) return;
-        const ht = try php.getValueHashTable(value);
-        var iter: HashTableIterator = .init(ht, .{});
-        if (iter.len != 1) {
-            return php.throwExceptionFmt("union can only have 1 active field, received {d} initializers", .{
-                iter.len,
-            });
-        }
-        const field_value = iter.next().?;
-        const name = iter.currentName() orelse return error.KeyIsNotString;
-        self.setProperty(name, field_value, null) catch |err| {
-            return self.throwFieldException(name, .write, err);
-        };
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        if (static.selector) |selector| {
-            const sel_value = try php.getHashEntry(&selector.possible_values, name);
-            try selector.accessors.set(self, sel_value);
+    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) Error!void {
+        if (transform == .none) {
+            if (try self.copySelf(value)) return;
+            const ht = try php.getValueHashTable(value);
+            var iter: HashTableIterator = .init(ht, .{});
+            if (iter.len != 1) {
+                return php.throwExceptionFmt("union can only have 1 active field, received {d} initializers", .{
+                    iter.len,
+                });
+            }
+            const field_value = iter.next().?;
+            const name = iter.currentName() orelse return error.KeyIsNotString;
+            self.setProperty(name, field_value, null) catch |err| {
+                return self.throwFieldException(name, .write, err);
+            };
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            if (static.selector) |selector| {
+                const sel_value = try php.getHashEntry(&selector.possible_values, name);
+                try selector.accessors.set(self, sel_value);
+            }
+        } else {
+            try Super.setValue(self, value, transform);
         }
     }
 
@@ -150,13 +154,13 @@ pub const Union = struct {
             var iter = class.getMemberIterator(.instance);
             while (iter.next()) |member| {
                 if (iter.currentName()) |name| {
-                    if (member.accessors.isType(.slot)) {
+                    if (member.class.flags.common.has_pointer) {
                         const run = options.include_inactive or match: {
                             const sel_value = try php.getHashEntry(&selector.possible_values, name);
                             break :match compareSelectors(sel_value, &active_sel_value);
                         };
                         if (run) {
-                            const value = try member.accessors.get(self);
+                            const value = try member.accessors.getEx(self, null);
                             defer php.release(&value);
                             const obj = php.getValueObject(&value) catch continue;
                             try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
@@ -201,8 +205,7 @@ pub const Union = struct {
             // tagged unions return only the active member
             const tag_name = try self.getActiveTagName();
             const member = try class.getMember(.instance, tag_name);
-            var value = try member.accessors.get(self);
-            if (member.objectTransform()) |ot| try ot.apply(&value);
+            const value = try member.accessors.get(self);
             php.setHashEntry(ht, tag_name, &value);
         } else {
             // where as untagged ones return all members
@@ -210,7 +213,6 @@ pub const Union = struct {
                 if (iter.currentName()) |name| {
                     var value = try member.accessors.get(self);
                     errdefer php.release(&value);
-                    if (member.objectTransform()) |ot| try ot.apply(&value);
                     php.setHashEntry(ht, name, &value);
                 }
             }

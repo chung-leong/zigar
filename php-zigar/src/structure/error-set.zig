@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
@@ -225,59 +224,61 @@ pub const ErrorSet = struct {
         }
     };
 
-    pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
+    pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        const err_value = try static.constant_acc.get(self.buffer);
-        if (transform == .to_value) return err_value;
-        const err_obj = try php.getValueObject(&err_value);
-        defer php.release(err_obj);
-        const err_struct = fromObject(err_obj);
-        return switch (transform) {
-            .to_value => unreachable,
-            .to_plain => create: {
+        switch (transform) {
+            .plain, .string => |t| {
+                const err_value = try static.constant_acc.get(self.buffer);
+                const err_obj = try php.getValueObject(&err_value);
+                defer php.release(err_obj);
+                const err_struct = fromObject(err_obj);
                 const props = err_struct.canonical.?;
                 const message = props.message;
                 const message_value = php.createValueString(message);
-                const ht = php.createArray();
-                php.setHashEntryRef(ht, "message", &message_value);
-                var value = php.createValueArray(ht);
-                try php.convertValue(&value, .object);
-                break :create value;
+                if (t == .plain) {
+                    const ht = php.createArray();
+                    php.setHashEntryRef(ht, "message", &message_value);
+                    var value = php.createValueArray(ht);
+                    try php.convertValue(&value, .object);
+                    return value;
+                } else if (t == .string) {
+                    const file = props.file orelse php.persistent("unknown");
+                    const trace = props.trace orelse php.empty_array;
+                    const trace_str = php.traceToString(@constCast(trace), true);
+                    defer php.release(trace_str);
+                    const text = try std.fmt.allocPrint(
+                        php.allocator,
+                        \\ZigError: {s} in {s}:{d}
+                        \\Stack trace:
+                        \\{s}
+                    ,
+                        .{
+                            php.getStringContent(message),
+                            php.getStringContent(file),
+                            props.lineno,
+                            php.getStringContent(trace_str),
+                        },
+                    );
+                    defer php.allocator.free(text);
+                    return php.createValueStringContent(text);
+                }
             },
-            .to_string => create: {
-                const props = err_struct.canonical.?;
-                const message = props.message;
-                const file = props.file orelse php.persistent("unknown");
-                const trace = props.trace orelse php.empty_array;
-                const trace_str = php.traceToString(@constCast(trace), true);
-                defer php.release(trace_str);
-                const text = try std.fmt.allocPrint(
-                    php.allocator,
-                    \\ZigError: {s} in {s}:{d}
-                    \\Stack trace:
-                    \\{s}
-                ,
-                    .{
-                        php.getStringContent(message),
-                        php.getStringContent(file),
-                        props.lineno,
-                        php.getStringContent(trace_str),
-                    },
-                );
-                defer php.allocator.free(text);
-                break :create php.createValueStringContent(text);
-            },
-            .to_integer => try static.constant_acc.int.get(err_struct),
-            .to_bytes => try self.returnBytes(),
-        };
+            .integer => return try static.constant_acc.int.get(self),
+            else => {},
+        }
+        return Super.getValue(self, transform);
     }
 
-    pub fn setValue(self: *@This(), value: *const Value) !void {
+    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) !void {
         if (try self.copySelf(value)) return;
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        try static.constant_acc.set(self.buffer, value);
+        if (transform == .none) {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            try static.constant_acc.set(self.buffer, value);
+        } else {
+            try Super.setValue(self, value, transform);
+        }
     }
 
     pub fn acquireDebugInfo(self: *@This()) !void {
@@ -409,7 +410,7 @@ pub const ErrorSet = struct {
     fn getProperties(obj: *Object) !*Canonical {
         const self = fromObject(obj);
         if (self.canonical) |c| return c;
-        const err_value = try self.getValue(.to_value);
+        const err_value = try self.getValue(.none);
         defer php.release(&err_value);
         const err_obj = try php.getValueObject(&err_value);
         const err_struct = fromObject(err_obj);

@@ -2,7 +2,6 @@ const std = @import("std");
 
 const AbortSignal = @import("../abort-signal.zig").AbortSignal;
 const accessor = @import("../accessor.zig");
-const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const Generator = @import("../generator.zig").Generator;
@@ -18,7 +17,8 @@ const structure = @import("../structure.zig");
 
 pub const Function = struct {
     closure: Closure = undefined,
-    transform: ObjectTransform align(@alignOf(*ByteBuffer)) = .to_value, // force bytes to be the last field
+    // force buffer to be the last field using alignment
+    transform: accessor.Transform align(@alignOf(*ByteBuffer)) = .none,
     buffer: *ByteBuffer = undefined,
 
     pub const Super = structure.Parent(@This());
@@ -70,7 +70,7 @@ pub const Function = struct {
             if (!ZigClassEntry.isZig(obj.ce)) return false;
             if (ZigObject(structure.Pointer).isInstance(obj)) {
                 const pointer = ZigObject(structure.Pointer).fromObject(obj).structure();
-                const target = pointer.getValue(.to_value) catch return false;
+                const target = pointer.getValue(.none) catch return false;
                 obj = php.getValueObject(&target) catch return false;
             }
             return obj.ce == arg_class.entry();
@@ -117,18 +117,22 @@ pub const Function = struct {
         try Super.finalize(self, init_called);
     }
 
-    pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
+    pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
         self.transform = transform;
-        return self.returnSelf();
+        return Super.getValue(self, .none);
     }
 
-    pub fn setValue(self: *@This(), value: *const Value) !void {
-        if (try Super.copySelf(self, value)) return;
-        const class = ZigClassEntry.fromStructure(self);
-        if (!php.isCallable(value)) return error.NotCallable;
-        const thunk_address = try class.host.dispatcher.createJsThunk(class, @constCast(value));
-        const ptr: [*]u8 = @ptrFromInt(thunk_address);
-        self.buffer.bytes = ptr[0..0];
+    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) !void {
+        if (transform == .none) {
+            if (try Super.copySelf(self, value)) return;
+            const class = ZigClassEntry.fromStructure(self);
+            if (!php.isCallable(value)) return error.NotCallable;
+            const thunk_address = try class.host.dispatcher.createJsThunk(class, @constCast(value));
+            const ptr: [*]u8 = @ptrFromInt(thunk_address);
+            self.buffer.bytes = ptr[0..0];
+        } else {
+            return error.Unsupported;
+        }
     }
 
     pub fn handleCall(ed: *ExecuteData, return_value: *Value) !void {
@@ -163,7 +167,7 @@ pub const Function = struct {
                     if (arg_struct.flags.has_promise) {
                         const promise_struct = try arg_struct.getSpecialArgument(Promise);
                         const promise = try promise_struct.getSpecialContext(Promise);
-                        if (!php.isNull(&retval)) {
+                        if (!php.isValueNull(&retval)) {
                             // if the return value isn't null, we assume the function is choosing to not be async
                             try self.transform.apply(&retval);
                             break :get retval;
@@ -207,5 +211,4 @@ pub const Function = struct {
     pub const freeObject = Super.freeObject;
     pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
-    const returnSelf = Super.returnSelf;
 };

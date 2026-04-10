@@ -608,7 +608,7 @@ pub fn compareValues(value1: *const Value, value2: *const Value) bool {
     };
 }
 
-pub fn isNull(value: *const Value) bool {
+pub fn isValueNull(value: *const Value) bool {
     return value.u1.v.type == php_h.IS_NULL;
 }
 

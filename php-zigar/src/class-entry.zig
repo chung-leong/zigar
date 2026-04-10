@@ -62,17 +62,6 @@ pub const ZigClassEntry = struct {
         slot: ?usize,
         class: *ZigClassEntry,
         accessors: accessor.Any = undefined,
-
-        pub fn objectTransform(self: *const @This()) ?accessor.ObjectTransform {
-            return if (self.flags.is_string or self.type == .literal)
-                .to_string
-            else if (self.flags.is_plain)
-                .to_plain
-            else if (self.class.flags.common.has_value or self.class.flags.common.has_proxy)
-                .to_value
-            else
-                null;
-        }
     };
     pub const Template = struct {
         buffer: ?*ByteBuffer = null,
@@ -916,6 +905,14 @@ pub const ZigClassEntry = struct {
                             false => .none,
                         };
                         if (acc.attributes.slots == slots and acc.attributes.index == index) {
+                            acc.transform = if (member.flags.is_string or member.type == .literal)
+                                .string
+                            else if (member.flags.is_plain)
+                                .plain
+                            else if (member.class.flags.common.has_value or member.class.flags.common.has_proxy)
+                                .none
+                            else
+                                null;
                             if (@hasField(Acc, "slot")) {
                                 acc.slot = member.slot orelse return error.Unexpected;
                             }

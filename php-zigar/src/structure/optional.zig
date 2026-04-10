@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
@@ -17,52 +16,52 @@ pub const Optional = struct {
 
     pub const Static = struct {
         payload_acc: *accessor.Any = undefined,
-        payload_transform: ?ObjectTransform = null,
         present_acc: *accessor.Int(.{ .bit_size = 8, .signedness = .unsigned }) = undefined,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             const member0 = try class.getMember(.instance, 0);
             self.payload_acc = &member0.accessors;
-            self.payload_transform = member0.objectTransform();
             const member1 = try class.getMember(.instance, 1);
             if (member1.accessors != .u8) return error.Unexpected;
             self.present_acc = &member1.accessors.u8;
         }
     };
 
-    pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        const present = try static.present_acc.get(self.buffer);
-        if (try php.getValueLong(&present) == 0) {
-            return php.createValueNull();
+    pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
+        if (transform == .none) {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            const present = try static.present_acc.get(self.buffer);
+            return switch (try php.getValueLong(&present)) {
+                0 => php.createValueNull(),
+                else => try static.payload_acc.get(self),
+            };
+        } else {
+            return Super.getValue(self, transform);
         }
-        var value = try static.payload_acc.get(self);
-        if (static.payload_transform) |ot| {
-            try ot.apply(&value);
-        } else if (transform != .to_value) {
-            try transform.apply(&value);
-        }
-        return value;
     }
 
-    pub fn setValue(self: *@This(), value: *const Value) !void {
-        if (try self.copySelf(value)) return;
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        const is_present = if (php.getValueNull(value)) false else |_| true;
-        if (is_present) {
-            try static.payload_acc.set(self, value);
-        } else {
-            const null_value = php.createValueNull();
-            try static.payload_acc.set(self, &null_value);
-        }
-        if (class.flags.optional.has_selector) {
+    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) !void {
+        if (transform == .none) {
+            if (try self.copySelf(value)) return;
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            const is_present = php.isValueNull(value);
+            if (is_present) {
+                try static.payload_acc.set(self, value);
+            } else {
+                const null_value = php.createValueNull();
+                try static.payload_acc.set(self, &null_value);
+            }
             // optionals of error sets and pointers don't use a separate present flag
-            // non-zero value indiciate whether a value is present or not
-            const present_flag = php.createValueLong(if (is_present) 1 else 0);
-            try static.present_acc.set(self.buffer, &present_flag);
+            // non-zero value indiciate whether a value is present
+            if (class.flags.optional.has_selector) {
+                const present = php.createValueLong(if (is_present) 1 else 0);
+                try static.present_acc.set(self.buffer, &present);
+            }
+        } else {
+            try Super.setValue(self, value, transform);
         }
     }
 

@@ -273,7 +273,7 @@ fn stringFromGmp(value: *const Value) !std.meta.Tuple(&.{ *String, bool }) {
                 const name = php.createPersistentString("gmp_init");
                 gmp_init = php.createValueString(name);
             }
-            const not_gmp = switch (php.isNull(value)) {
+            const not_gmp = switch (php.isValueNull(value)) {
                 false => value.*,
                 true => php.createValueLong(0),
             };

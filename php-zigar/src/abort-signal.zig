@@ -4,7 +4,6 @@ const accessor = @import("accessor.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const ModuleHost = @import("host.zig").ModuleHost;
-const ObjectTransform = @import("accessor.zig").ObjectTransform;
 const php = @import("php.zig");
 const ArgumentIterator = php.ArgumentIterator;
 const ClassEntry = php.ClassEntry;

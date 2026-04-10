@@ -3,7 +3,6 @@ const std = @import("std");
 const AbortSignal = @import("../abort-signal.zig").AbortSignal;
 const accessor = @import("../accessor.zig");
 const Error = accessor.Error;
-const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const StructurePurpose = @import("../enums.zig").StructurePurpose;
@@ -119,9 +118,9 @@ pub const Struct = struct {
         }
     }
 
-    pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
-        const class = ZigClassEntry.fromStructure(self);
-        if (transform == .to_integer) {
+    pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
+        if (transform == .integer) {
+            const class = ZigClassEntry.fromStructure(self);
             const flags = class.getFlags(@This());
             if (flags.is_packed) {
                 // TODO: handle packed struct
@@ -136,8 +135,8 @@ pub const Struct = struct {
         if (class.flags.common.has_pointer) {
             var iter = class.getMemberIterator(.instance);
             while (iter.next()) |member| {
-                if (member.accessors.isType(.slot)) {
-                    const value = try member.accessors.get(self);
+                if (member.class.flags.common.has_pointer) {
+                    const value = try member.accessors.getEx(self, null);
                     defer php.release(&value);
                     const obj = php.getValueObject(&value) catch continue;
                     try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });

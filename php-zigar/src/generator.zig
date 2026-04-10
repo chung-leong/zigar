@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("accessor.zig");
-const ObjectTransform = accessor.ObjectTransform;
+const Transform = accessor.Transform;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const php = @import("php.zig");
@@ -19,7 +19,7 @@ pub const Generator = struct {
     result: Value,
     callback: ?Value,
     index: isize = 0,
-    transform: ObjectTransform = .to_value,
+    transform: Transform = .none,
     buffer: *ByteBuffer,
 
     pub fn create(callback: ?Value) !*@This() {
@@ -86,7 +86,7 @@ pub const Generator = struct {
         self.result = value.*;
         php.addRef(&self.result);
         try self.transform.apply(&self.result);
-        if (!php.isNull(&self.result)) {
+        if (!php.isValueNull(&self.result)) {
             self.status = .resolved;
             return true;
         } else {
@@ -100,7 +100,7 @@ pub const Generator = struct {
         const ptr = arg_iter.next() orelse return error.Unexpected;
         const ptr_obj = php.getValueObject(ptr) catch unreachable;
         const ptr_struct = ZigObject(structure.Optional).fromObject(ptr_obj).structure();
-        const target = try ptr_struct.getValue(.to_value);
+        const target = try ptr_struct.getValue(.none);
         const self = try accessor.getOpaqueTarget(@This(), &target);
         const result = arg_iter.next() orelse return error.Unexpected;
         const more = try self.resolve(result);

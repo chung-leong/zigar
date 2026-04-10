@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const accessor = @import("accessor.zig");
-const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const enums = @import("enums.zig");
 const StructureType = enums.StructureType;
@@ -69,16 +68,16 @@ pub fn Parent(comptime S: type) type {
     return struct {
         pub const TransformCacheEntry = struct {
             id: usize,
-            transform: ObjectTransform,
+            transform: accessor.Transform,
 
             const name = "transform";
 
-            pub inline fn find(cache_slot: ?[*]?*anyopaque) ?ObjectTransform {
+            pub inline fn find(cache_slot: ?[*]?*anyopaque) ?accessor.Transform {
                 const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
                 return if (self.id == @intFromPtr(name)) self.transform else null;
             }
 
-            pub inline fn set(cache_slot: ?[*]?*anyopaque, transform: ObjectTransform) void {
+            pub inline fn set(cache_slot: ?[*]?*anyopaque, transform: accessor.Transform) void {
                 const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return;
                 self.* = .{ .id = @intFromPtr(name), .transform = transform };
             }
@@ -128,7 +127,7 @@ pub fn Parent(comptime S: type) type {
             }
             if (initializer) |value| {
                 if (@hasDecl(S, "setValue")) {
-                    try self.setValue(value);
+                    try self.setValue(value, .none);
                 } else @panic("Not implemented");
             }
         }
@@ -166,9 +165,52 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
-        pub fn getValue(self: *S, transform: ObjectTransform) !Value {
-            if (transform != .to_value) return error.Unsupported;
-            return try returnSelf(self);
+        pub fn getValue(self: *S, transform: accessor.Transform) accessor.Error!Value {
+            switch (transform) {
+                .string, .integer, .float, .boolean => |tm| {
+                    var value = try self.getValue(.none);
+                    try tm.apply(&value);
+                    return value;
+                },
+                .bytes, .base64 => |tm| {
+                    if (!@hasField(S, "buffer")) return error.Unsupported;
+                    const encoding: ?ByteBuffer.Encoding = switch (tm) {
+                        .bytes => null,
+                        .base64 => .base64,
+                        else => unreachable,
+                    };
+                    const str = try self.buffer.getString(encoding);
+                    return php.createValueString(str);
+                },
+                .plain => return error.Unsupported,
+                .none => {
+                    const obj = object(self);
+                    php.addRef(obj);
+                    return php.createValueObject(obj);
+                },
+            }
+        }
+
+        pub fn setValue(self: *S, value: *const Value, transform: accessor.Transform) accessor.Error!void {
+            switch (transform) {
+                .bytes, .base64 => |t| {
+                    if (!@hasField(S, "buffer")) return error.Unsupported;
+                    const str = try php.getValueString(value);
+                    const encoding: ?ByteBuffer.Encoding = switch (t) {
+                        .bytes => null,
+                        .base64 => .base64,
+                        else => unreachable,
+                    };
+                    try self.buffer.copyString(str, encoding);
+                },
+                .none => {
+                    if (@hasField(S, "buffer")) {
+                        if (try copySelf(self, value)) return;
+                    }
+                    return error.Unsupported;
+                },
+                else => return self.setValue(value, .none),
+            }
         }
 
         pub fn copySelf(self: *S, value: *const Value) !bool {
@@ -191,18 +233,6 @@ pub fn Parent(comptime S: type) type {
             return false;
         }
 
-        pub fn returnSelf(self: *S) !Value {
-            const obj = ZigObject(S).fromStructure(self).object();
-            php.addRef(obj);
-            return php.createValueObject(obj);
-        }
-
-        pub fn returnBytes(self: *S) !Value {
-            if (!@hasField(S, "buffer")) return error.Unsupported;
-            const str = try self.buffer.getString();
-            return php.createValueString(str);
-        }
-
         pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !Value {
             const transform = findTransform(name, cache_slot) orelse return error.Missing;
             return self.getValue(transform) catch |err| switch (matchError(err, error.Unsupported)) {
@@ -213,21 +243,21 @@ pub fn Parent(comptime S: type) type {
 
         pub fn setProperty(self: *S, name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {
             const transform = findTransform(name, cache_slot) orelse return error.Missing;
-            _ = transform;
-            return self.setValue(value) catch |err| switch (matchError(err, error.Unsupported)) {
+            return self.setValue(value, transform) catch |err| switch (matchError(err, error.Unsupported)) {
                 true => error.Missing,
                 false => err,
             };
         }
 
-        pub fn findTransform(name: *String, cache_slot: ?[*]?*anyopaque) ?ObjectTransform {
+        pub fn findTransform(name: *String, cache_slot: ?[*]?*anyopaque) ?accessor.Transform {
             if (TransformCacheEntry.find(cache_slot)) |t| return t;
             const transforms = .{
-                .__plain = .to_plain,
-                .__value = .to_value,
-                .__string = .to_string,
-                .__int = .to_integer,
-                .__bytes = .to_bytes,
+                .__value = .none,
+                .__plain = .plain,
+                .__string = .string,
+                .__int = .integer,
+                .__bytes = .bytes,
+                .__base64 = .base64,
             };
             return inline for (std.meta.fields(@TypeOf(transforms))) |field| {
                 if (php.matchString(name, field.name)) {
@@ -302,24 +332,14 @@ pub fn Parent(comptime S: type) type {
         pub fn castObject(obj: *Object, retval: *Value, type_id: c_int) !c_int {
             const desired_type = try php.ValueType.fromInt(type_id);
             const self = fromObject(obj);
-            switch (desired_type) {
-                .string => retval.* = self.getValue(.to_string) catch return php.FAILURE,
-                .long => retval.* = self.getValue(.to_integer) catch return php.FAILURE,
-                .boolean, .double => {
-                    retval.* = try self.getValue(.to_value);
-                    if (php.getValueObject(retval)) |value_obj| {
-                        defer php.release(value_obj);
-                        if (desired_type == .boolean) {
-                            retval.* = php.createValueBool(true);
-                        } else {
-                            return php.FAILURE;
-                        }
-                    } else |_| {
-                        try php.convertValue(retval, desired_type);
-                    }
-                },
+            const transform: accessor.Transform = switch (desired_type) {
+                .string => .string,
+                .long => .integer,
+                .double => .float,
+                .boolean => .boolean,
                 else => return php.FAILURE,
-            }
+            };
+            retval.* = try self.getValue(transform);
             return php.SUCCESS;
         }
 
@@ -400,47 +420,50 @@ pub fn StructLike(comptime S: type) type {
         pub const ByteExtent = Super.ByteExtent;
         pub const scope = Super.scope;
 
-        pub fn getValue(self: *S, transform: ObjectTransform) !Value {
-            return switch (transform) {
-                .to_value => returnSelf(self),
-                .to_plain => create: {
-                    const ht = try S.getProperties(object(self));
-                    var iter: HashTableIterator = .init(ht, .{});
-                    while (iter.next()) |value| {
-                        // make child objects plain too
-                        if (php.getValueType(value) == .object) {
-                            try transform.apply(value);
-                        }
-                    }
-                    php.addRef(ht);
-                    var value = php.createValueArray(ht);
-                    // don't convert if the struct is a tuple
-                    if (!isTuple(self)) try php.convertValue(&value, .object);
-                    break :create value;
+        pub fn getValue(self: *S, transform: accessor.Transform) !Value {
+            switch (transform) {
+                .string, .integer => return error.Unsupported,
+                .plain => {
+                    // TODO: rework this
+                    // const ht = try S.getProperties(object(self));
+                    // var iter: HashTableIterator = .init(ht, .{});
+                    // while (iter.next()) |value| {
+                    //     // make child objects plain too
+                    //     if (php.getValueType(value) == .object) {
+                    //         try transform.apply(value);
+                    //     }
+                    // }
+                    // php.addRef(ht);
+                    // var value = php.createValueArray(ht);
+                    // // don't convert if the struct is a tuple
+                    // if (!isTuple(self)) try php.convertValue(&value, .object);
+                    // return value;
+                    @panic("TODO");
                 },
-                .to_bytes => try returnBytes(self),
-                .to_string, .to_integer => error.Unsupported,
-            };
+                else => {},
+            }
+            return Super.getValue(self, transform);
         }
 
         // error set cannot be inferred due to recursion
-        pub fn setValue(self: *S, value: *const Value) accessor.Error!void {
-            if (try copySelf(self, value)) return;
-            const ht = try php.getValueHashTable(value);
-            var iter: HashTableIterator = .init(ht, .{});
-            while (iter.next()) |field_value| {
-                const name = iter.currentName() orelse return error.KeyIsNotString;
-                setProperty(self, name, field_value, null) catch |err| {
-                    return throwFieldException(self, name, .write, err);
-                };
+        pub fn setValue(self: *S, value: *const Value, transform: accessor.Transform) accessor.Error!void {
+            if (transform == .none) {
+                if (try copySelf(self, value)) return;
+                const ht = try php.getValueHashTable(value);
+                var iter: HashTableIterator = .init(ht, .{});
+                while (iter.next()) |field_value| {
+                    const name = iter.currentName() orelse return error.KeyIsNotString;
+                    setProperty(self, name, field_value, null) catch |err| {
+                        return throwFieldException(self, name, .write, err);
+                    };
+                }
             }
+            return Super.setValue(self, value, transform);
         }
 
         pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !Value {
             if (findMember(self, name, cache_slot)) |member| {
-                var value = try member.accessors.get(self);
-                if (member.objectTransform()) |ot| try ot.apply(&value);
-                return value;
+                return try member.accessors.get(self);
             } else if (scope == .instance) {
                 return Super.getProperty(self, name, cache_slot);
             } else {
@@ -506,7 +529,6 @@ pub fn StructLike(comptime S: type) type {
                 if (iter.currentName()) |name| {
                     var value = try member.accessors.get(self);
                     errdefer php.release(&value);
-                    if (member.objectTransform()) |ot| try ot.apply(&value);
                     if (is_tuple) {
                         _ = php.appendHashEntry(ht, &value);
                     } else {
@@ -547,8 +569,6 @@ pub fn StructLike(comptime S: type) type {
         pub const externalize = Super.externalize;
         pub const checkArguments = Super.checkArguments;
         pub const copySelf = Super.copySelf;
-        pub const returnSelf = Super.returnSelf;
-        pub const returnBytes = Super.returnBytes;
         pub const visitPointers = Super.visitPointers;
         pub const throwFieldException = Super.throwFieldException;
 
@@ -566,53 +586,62 @@ pub fn ArrayLike(comptime S: type) type {
         pub const ByteExtent = Super.ByteExtent;
         pub const scope = Super.scope;
 
-        pub fn getValue(self: *S, transform: ObjectTransform) !Value {
-            return switch (transform) {
-                .to_value => returnSelf(self),
-                .to_plain => create: {
+        pub fn getValue(self: *S, transform: accessor.Transform) !Value {
+            switch (transform) {
+                .plain => {
                     const len = self.getLength();
                     const ht = php.createArray();
                     for (0..len) |i| {
-                        var value = try self.getElement(i, true);
+                        var value = try self.getElement(i);
                         try transform.apply(&value);
                         _ = php.appendHashEntry(ht, &value);
                     }
-                    break :create php.createValueArray(ht);
+                    return php.createValueArray(ht);
                 },
-                .to_string => create: {
+                .string => {
                     const class = ZigClassEntry.fromStructure(self);
                     const flags = class.getFlags(S);
                     if (!@hasField(@TypeOf(flags), "is_string") or !flags.is_string) {
-                        break :create error.Unsupported;
+                        return error.Unsupported;
                     }
                     const len = self.getLength();
                     const byte_count = self.buffer.bytes.len;
                     if (byte_count == len) {
-                        break :create php.createValueStringContent(self.buffer.bytes);
+                        return php.createValueStringContent(self.buffer.bytes);
                     } else if (byte_count == len * 2) {
-                        // TODO: convert to UTF-8
+                        // TODO: convert from UTF-16 to UTF-8
                         @panic("TODO");
                     } else {
-                        break :create error.Unexpected;
+                        return error.Unexpected;
                     }
                 },
-                .to_integer => error.Unsupported,
-                .to_bytes => try returnBytes(self),
-            };
+                .integer => return error.Unsupported,
+                else => {},
+            }
+            return Super.getValue(self, transform);
         }
 
-        pub fn setValue(self: *S, value: *const Value) !void {
+        pub fn setValue(self: *S, value: *const Value, transform: accessor.Transform) accessor.Error!void {
             if (try copySelf(self, value)) return;
-            const ht = try php.getValueArray(value);
-            const len = self.getLength();
-            var iter: HashTableIterator = .init(ht, .{});
-            while (iter.next()) |field_value| {
-                const key = iter.currentIndex() orelse return error.KeyIsNotInteger;
-                if (key < 0) return error.NegativeIndex;
-                const index: usize = @intCast(key);
-                if (index >= len) return error.OutOfBound;
-                try self.setElement(index, field_value);
+            if (transform == .string) {
+                const class = ZigClassEntry.fromStructure(self);
+                const flags = class.getFlags(S);
+                if (!@hasField(@TypeOf(flags), "is_string") or !flags.is_string) {
+                    return error.Unsupported;
+                }
+            } else if (transform == .none) {
+                const ht = try php.getValueArray(value);
+                const len = self.getLength();
+                var iter: HashTableIterator = .init(ht, .{});
+                while (iter.next()) |field_value| {
+                    const key = iter.currentIndex() orelse return error.KeyIsNotInteger;
+                    if (key < 0) return error.NegativeIndex;
+                    const index: usize = @intCast(key);
+                    if (index >= len) return error.OutOfBound;
+                    try self.setElement(index, field_value);
+                }
             }
+            return Super.setValue(self, value, transform);
         }
 
         pub fn visitPointers(self: *S, cb: anytype, args: anytype, comptime options: VisitOptions) accessor.Error!void {
@@ -620,7 +649,7 @@ pub fn ArrayLike(comptime S: type) type {
             if (class.flags.common.has_pointer) {
                 const len = self.getLength();
                 for (0..len) |index| {
-                    const value = try self.getElement(index, false);
+                    const value = try self.getElementEx(index, null);
                     defer php.release(&value);
                     const obj = php.getValueObject(&value) catch return;
                     try invokeMethod(obj, "visitPointers", .{ cb, args, options });
@@ -632,7 +661,7 @@ pub fn ArrayLike(comptime S: type) type {
             const self = fromObject(obj);
             const len = self.getLength();
             const index = try getIndex(key, len);
-            retval.* = try self.getElement(index, true);
+            retval.* = try self.getElement(index);
             return retval;
         }
 
@@ -672,7 +701,7 @@ pub fn ArrayLike(comptime S: type) type {
             const ht = php.createArray();
             const len = self.getLength();
             for (0..len) |i| {
-                var value = try self.getElement(i, true);
+                var value = try self.getElement(i);
                 _ = php.appendHashEntry(ht, &value);
             }
             // zero-count hash table expected

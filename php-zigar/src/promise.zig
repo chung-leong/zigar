@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("accessor.zig");
-const ObjectTransform = accessor.ObjectTransform;
+const Transform = accessor.Transform;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const php = @import("php.zig");
@@ -18,7 +18,7 @@ pub const Promise = struct {
     fiber: Value = undefined,
     result: Value,
     callback: ?Value,
-    transform: ObjectTransform = .to_value,
+    transform: Transform = .none,
     buffer: *ByteBuffer,
 
     pub fn create(callback: ?Value) !*@This() {
@@ -56,7 +56,7 @@ pub const Promise = struct {
         // std.debug.print("Promise.await() resumed\n", .{});
         if (php.getValueType(&self.result) == .object) {
             const result_obj = php.getValueObject(&self.result) catch unreachable;
-            self.result = try structure.invokeMethod(result_obj, "getValue", .{.to_value});
+            self.result = try structure.invokeMethod(result_obj, "getValue", .{.none});
         }
         return self.result;
     }
@@ -86,7 +86,7 @@ pub const Promise = struct {
         const ptr = arg_iter.next() orelse return error.Unexpected;
         const ptr_obj = php.getValueObject(ptr) catch unreachable;
         const ptr_struct = ZigObject(structure.Optional).fromObject(ptr_obj).structure();
-        const target = try ptr_struct.getValue(.to_value);
+        const target = try ptr_struct.getValue(.none);
         const self = try accessor.getOpaqueTarget(@This(), &target);
         const result = arg_iter.next() orelse return error.Unexpected;
         try self.resolve(result);

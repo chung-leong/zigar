@@ -26,6 +26,8 @@ pub const ByteBuffer = struct {
         none: void,
     } = .{ .none = {} },
 
+    pub const Encoding = enum { base64 };
+
     pub fn data(self: *@This(), index: usize, write_access: bool) ![]u8 {
         if (self.flags.read_only and write_access) return error.WriteProtected;
         if (self.flags.uninitialized) return error.AccessingDeallocatedMemory;
@@ -171,9 +173,24 @@ pub const ByteBuffer = struct {
         }
     }
 
-    pub fn getString(self: *@This()) !*String {
-        const sc = try self.data(0, false);
-        return php.createString(sc);
+    pub fn getString(self: *@This(), encoding: ?Encoding) !*String {
+        var bytes = try self.data(0, false);
+        if (encoding) |ec| {
+            switch (ec) {
+                .base64 => {
+                    _ = &bytes;
+                    @panic("TODO");
+                },
+            }
+        }
+        return php.createString(bytes);
+    }
+
+    pub fn copyString(self: *@This(), str: *String, encoding: ?Encoding) !void {
+        _ = self;
+        _ = str;
+        _ = encoding;
+        @panic("TODO");
     }
 
     pub fn getSourceAllocator(self: *const @This()) ?*const std.mem.Allocator {

@@ -40,7 +40,7 @@ pub fn Int(comptime attrs: Attributes) type {
                 const bytes: []u8 = try buffer.data(self.byte_offset + byte_size, true);
                 if (comptime @bitSizeOf(T) == 0) return;
                 const ptr: *align(1) T = @ptrCast(&bytes[self.byte_offset]);
-                ptr.* = switch (php.isNull(value)) {
+                ptr.* = switch (php.isValueNull(value)) {
                     false => get: {
                         const long = try php.getValueLong(value);
                         break :get switch (attrs.signedness) {
@@ -90,7 +90,7 @@ pub fn Int(comptime attrs: Attributes) type {
                 const bytes: []u8 = try buffer.data(self.byte_offset + byte_size, true);
                 if (comptime @bitSizeOf(T) == 0) return;
                 const ptr: *align(1) AT = @ptrCast(&bytes[self.byte_offset]);
-                ptr.value = switch (php.isNull(value)) {
+                ptr.value = switch (php.isValueNull(value)) {
                     false => get: {
                         const long = try php.getValueLong(value);
                         break :get switch (attrs.signedness) {

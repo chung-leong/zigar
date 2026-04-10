@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const ZigObject = @import("../object.zig").ZigObject;
@@ -21,7 +20,6 @@ pub const ErrorUnion = struct {
 
     pub const Static = struct {
         payload_acc: *accessor.Any = undefined,
-        payload_transform: ?ObjectTransform = null,
         error_acc: *accessor.Any = undefined,
         error_class: *ZigClassEntry = undefined,
 
@@ -29,54 +27,54 @@ pub const ErrorUnion = struct {
             const class = ZigClassEntry.fromObject(class_obj);
             const member0 = try class.getMember(.instance, 0);
             self.payload_acc = &member0.accessors;
-            self.payload_transform = member0.objectTransform();
             const member1 = try class.getMember(.instance, 1);
             self.error_acc = &member1.accessors;
             self.error_class = member1.class;
         }
     };
 
-    pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        const err = try static.error_acc.get(self);
-        if (php.getValueType(&err) == .object) {
-            const err_obj = php.getValueObject(&err) catch unreachable;
-            const err_struct = ZigObject(ErrorSet).fromObject(err_obj).structure();
-            try err_struct.acquireDebugInfo();
-            _ = &php.throwExceptionObject(err_obj);
-            return php.createValueNull();
-        } else {
-            var value = try static.payload_acc.get(self);
-            if (static.payload_transform) |ot| {
-                try ot.apply(&value);
-            } else if (transform != .to_value) {
-                try transform.apply(&value);
+    pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
+        if (transform == .none) {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            const err = try static.error_acc.get(self);
+            if (php.getValueType(&err) == .object) {
+                const err_obj = php.getValueObject(&err) catch unreachable;
+                const err_struct = ZigObject(ErrorSet).fromObject(err_obj).structure();
+                try err_struct.acquireDebugInfo();
+                _ = &php.throwExceptionObject(err_obj);
+                return php.createValueNull();
             }
-            return value;
+            return try static.payload_acc.get(self);
+        } else {
+            return Super.getValue(self, transform);
         }
     }
 
-    pub fn setValue(self: *@This(), value: *const Value) !void {
-        if (try self.copySelf(value)) return;
-        const class = ZigClassEntry.fromStructure(self);
-        var static = class.getStaticData(@This());
-        const err_maybe = switch (php.getValueType(value)) {
-            .object => check: {
-                // see if value is an Throwable
-                const obj = php.getValueObject(value) catch unreachable;
-                const is_throwable = php.instanceOf(obj.ce, php.getInterface(.throwable));
-                break :check if (is_throwable) value else null;
-            },
-            else => null,
-        };
-        const null_value = php.createValueNull();
-        if (err_maybe) |err| {
-            try static.error_acc.set(self, err);
-            try static.payload_acc.set(self, &null_value);
+    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) !void {
+        if (transform == .none) {
+            if (try self.copySelf(value)) return;
+            const class = ZigClassEntry.fromStructure(self);
+            var static = class.getStaticData(@This());
+            const err_maybe = switch (php.getValueType(value)) {
+                .object => check: {
+                    // see if value is an Throwable
+                    const obj = php.getValueObject(value) catch unreachable;
+                    const is_throwable = php.instanceOf(obj.ce, php.getInterface(.throwable));
+                    break :check if (is_throwable) value else null;
+                },
+                else => null,
+            };
+            const null_value = php.createValueNull();
+            if (err_maybe) |err| {
+                try static.error_acc.set(self, err);
+                try static.payload_acc.set(self, &null_value);
+            } else {
+                try static.payload_acc.set(self, value);
+                try static.error_acc.set(self, &null_value);
+            }
         } else {
-            try static.payload_acc.set(self, value);
-            try static.error_acc.set(self, &null_value);
+            try Super.setValue(self, value, transform);
         }
     }
 

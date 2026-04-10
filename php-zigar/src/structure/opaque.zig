@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const iterator = @import("../iterator.zig");
@@ -32,16 +31,6 @@ pub const Opaque = struct {
         }
     };
 
-    pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
-        if (transform == .to_bytes) return try self.returnBytes();
-        return self.throwException();
-    }
-
-    pub fn setValue(self: *@This(), value: *const Value) !void {
-        _ = value;
-        return self.throwException();
-    }
-
     pub fn getIterator(obj: *Object) !?*ObjectIterator {
         const class = ZigClassEntry.fromObject(obj);
         const static = class.getStaticData(@This());
@@ -61,6 +50,8 @@ pub const Opaque = struct {
     pub const finalize = Super.finalize;
     pub const externalize = Super.externalize;
     pub const checkArguments = Super.checkArguments;
+    pub const getValue = Super.getValue;
+    pub const setValue = Super.setValue;
     pub const getProperty = Super.getProperty;
     pub const setProperty = Super.setProperty;
     pub const visitPointers = Super.visitPointers;
@@ -73,5 +64,4 @@ pub const Opaque = struct {
     pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getGarbageCollection = Super.getGarbageCollection;
-    const returnBytes = Super.returnBytes;
 };

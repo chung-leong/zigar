@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const ObjectTransform = accessor.ObjectTransform;
+const Transform = accessor.Transform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const iterator = @import("../iterator.zig");
@@ -237,30 +237,25 @@ pub const Enum = struct {
         }
     };
 
-    pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        const enum_value = try static.constant_acc.get(self.buffer);
-        if (transform == .to_value) return enum_value;
-        const enum_obj = try php.getValueObject(&enum_value);
-        defer php.release(enum_obj);
-        const enum_struct = fromObject(enum_obj);
-        return switch (transform) {
-            .to_value => unreachable,
-            .to_string, .to_plain => create: {
-                const props = enum_struct.canonical orelse return error.Unexpected;
-                break :create php.createValueString(props.name);
-            },
-            .to_integer => try static.constant_acc.int.get(enum_struct),
-            .to_bytes => try self.returnBytes(),
-        };
+    pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
+        if (transform == .none) {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            return try static.constant_acc.get(self.buffer);
+        } else {
+            return Super.getValue(self, transform);
+        }
     }
 
-    pub fn setValue(self: *@This(), value: *const Value) !void {
+    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) !void {
         if (try self.copySelf(value)) return;
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        try static.constant_acc.set(self.buffer, value);
+        if (transform == .none) {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            try static.constant_acc.set(self.buffer, value);
+        } else {
+            try Super.setValue(self, value, transform);
+        }
     }
 
     pub fn freeObject(obj: *Object) void {

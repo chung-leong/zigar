@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const ObjectTransform = accessor.ObjectTransform;
+const Transform = accessor.Transform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const iterator = @import("../iterator.zig");
@@ -209,7 +209,7 @@ pub fn Class(comptime S: type) type {
 
         pub fn handleToString(ed: *ExecuteData, return_value: *Value) !void {
             const this_struct = try getThis(&ed.This);
-            return_value.* = try this_struct.getValue(.to_string);
+            return_value.* = try this_struct.getValue(.string);
         }
 
         fn getThis(value: *const Value) !*S {

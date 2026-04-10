@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const ObjectTransform = accessor.ObjectTransform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
@@ -24,19 +23,24 @@ pub const Primitive = struct {
         }
     };
 
-    pub fn getValue(self: *@This(), transform: ObjectTransform) !Value {
-        if (transform == .to_bytes) return try self.returnBytes();
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        var value = try static.value_acc.get(self);
-        try transform.apply(&value);
-        return value;
+    pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
+        if (transform == .none) {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            return try static.value_acc.get(self);
+        } else {
+            return Super.getValue(self, transform);
+        }
     }
 
-    pub fn setValue(self: *@This(), value: *const Value) !void {
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        return try static.value_acc.set(self, value);
+    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) !void {
+        if (transform == .none) {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            try static.value_acc.set(self, value);
+        } else {
+            return Super.setValue(self, value, transform);
+        }
     }
 
     pub const getExtent = Super.getExtent;

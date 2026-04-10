@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const ObjectTransform = accessor.ObjectTransform;
+const Transform = accessor.Transform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
@@ -45,10 +45,16 @@ pub const Vector = struct {
         return class.length.?;
     }
 
-    pub fn getElement(self: *@This(), index: usize, comptime _: bool) !Value {
+    pub fn getElement(self: *@This(), index: usize) !Value {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         return try static.value_acc.getElement(self, index);
+    }
+
+    pub fn getElementEx(self: *@This(), index: usize, transform: ?accessor.Transform) !Value {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        return try static.value_acc.getElementEx(self, index, transform);
     }
 
     pub fn setElement(self: *@This(), index: usize, value: *Value) !void {
