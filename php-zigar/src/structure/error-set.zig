@@ -3,6 +3,7 @@ const std = @import("std");
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const failure = @import("../failure.zig");
 const php = @import("../php.zig");
 const Array = php.Array;
 const ClassEntry = php.ClassEntry;
@@ -168,14 +169,14 @@ pub const ErrorSet = struct {
                             } else |_| {
                                 const name = try self.createCanonicalName();
                                 defer php.allocator.free(name);
-                                return php.throwExceptionFmt("'{s}' does not correspond to an entry in {s} (zig)", .{
+                                return failure.report("'{s}' does not correspond to an entry in {s} (zig)", .{
                                     try php.getValueStringContent(&message),
                                     name,
                                 });
                             }
                         }
                     } else {
-                        return php.throwExceptionFmt("'{s}' does not implement throwable (zig)", .{
+                        return failure.report("'{s}' does not implement throwable (zig)", .{
                             php.getStringContent(err_obj.ce.*.name),
                         });
                     }
@@ -369,10 +370,7 @@ pub const ErrorSet = struct {
     }
 
     fn readErrorProperty(obj: *Object, name: *String, prop_type: c_int, retval: *Value) bool {
-        const props = getProperties(obj) catch |err| {
-            _ = &php.throwError(err);
-            return true;
-        };
+        const props = getProperties(obj) catch return false;
         const name_c = php.getStringContent(name);
         retval.* = if (std.mem.eql(u8, name_c, "string"))
             php.createValueString(props.string orelse php.createString(""))
@@ -389,10 +387,7 @@ pub const ErrorSet = struct {
     }
 
     fn writeErrorProperty(obj: *Object, name: *String, value: *Value) !bool {
-        const props = getProperties(obj) catch |err| {
-            _ = &php.throwError(err);
-            return true;
-        };
+        const props = getProperties(obj) catch return false;
         const name_c = php.getStringContent(name);
         if (std.mem.eql(u8, name_c, "string")) {
             const new_str = try php.getValueString(value);

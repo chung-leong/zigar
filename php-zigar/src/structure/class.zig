@@ -4,6 +4,7 @@ const accessor = @import("../accessor.zig");
 const Transform = accessor.Transform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const failure = @import("../failure.zig");
 const iterator = @import("../iterator.zig");
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
@@ -150,7 +151,7 @@ pub fn Class(comptime S: type) type {
             const byte_size = class.byte_size orelse return error.InvalidType;
             var arg_iter: ArgumentIterator = .init(ed);
             if (arg_iter.len != 1) {
-                return php.throwExceptionFmt("casting operation expects 1 argument, received {d}", .{
+                return failure.report("casting operation expects 1 argument, received {d}", .{
                     arg_iter.total,
                 });
             }
@@ -170,13 +171,13 @@ pub fn Class(comptime S: type) type {
                     true => static.getCastArgs(),
                     false => "a string",
                 };
-                return php.throwExceptionFmt("casting operation expects {s} as argument, received {s}", .{
+                return failure.report("casting operation expects {s} as argument, received {s}", .{
                     cast_args,
                     @tagName(php.getValueType(arg)),
                 });
             };
             if (str.len != byte_size) {
-                return php.throwExceptionFmt("{s} '{s}' expects {d} bytes, received a string with {d} bytes", .{
+                return failure.report("{s} '{s}' expects {d} bytes, received a string with {d} bytes", .{
                     class.getStructureName(),
                     class.getName(),
                     byte_size,

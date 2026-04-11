@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+const failure = @import("failure.zig");
 const php = @import("php.zig");
 const HashTable = php.HashTable;
 const Value = php.Value;
@@ -371,7 +372,7 @@ pub const ZigCompiler = struct {
         return switch (term) {
             .Exited => |exit_code| switch (exit_code) {
                 0 => {},
-                else => php.throwExceptionFmt("unable to create module '{s}':\n\n{s}", .{
+                else => failure.report("unable to create module '{s}':\n\n{s}", .{
                     self.module_name,
                     stderr.items,
                 }),
@@ -424,14 +425,14 @@ pub const Options = struct {
                 @field(self, field.name) = extract(T, value) catch |err| {
                     const vt = php.getValueType(value);
                     return switch (err) {
-                        error.NotBoolean => php.throwExceptionFmt("option '{s}' is a boolean, received {}", .{ field.name, vt }),
-                        error.NotInteger => php.throwExceptionFmt("option '{s}' is an integer, received {}", .{ field.name, vt }),
-                        error.NotString => php.throwExceptionFmt("option '{s}' is a string, received {}", .{ field.name, vt }),
-                        error.NegativeValue => php.throwExceptionFmt("option '{s}' is a positive integer, received {}", .{
+                        error.NotBoolean => failure.report("option '{s}' is a boolean, received {}", .{ field.name, vt }),
+                        error.NotInteger => failure.report("option '{s}' is an integer, received {}", .{ field.name, vt }),
+                        error.NotString => failure.report("option '{s}' is a string, received {}", .{ field.name, vt }),
+                        error.NegativeValue => failure.report("option '{s}' is a positive integer, received {}", .{
                             field.name,
                             php.getValueLong(value) catch unreachable,
                         }),
-                        error.NoMatching => php.throwExceptionFmt("'{s}' is not a valid option for '{s}'; it should be one of the following: {s}", .{
+                        error.NoMatching => failure.report("'{s}' is not a valid option for '{s}'; it should be one of the following: {s}", .{
                             php.getValueStringContent(value) catch unreachable,
                             field.name,
                             if (@typeInfo(T) == .@"enum") T.names() else unreachable,

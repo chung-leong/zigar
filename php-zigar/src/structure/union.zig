@@ -5,6 +5,7 @@ const Transform = accessor.Transform;
 const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const failure = @import("../failure.zig");
 const iterator = @import("../iterator.zig");
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
@@ -122,14 +123,14 @@ pub const Union = struct {
             const ht = try php.getValueHashTable(value);
             var iter: HashTableIterator = .init(ht, .{});
             if (iter.len != 1) {
-                return php.throwExceptionFmt("union can only have 1 active field, received {d} initializers", .{
+                return failure.report("union can only have 1 active field, received {d} initializers", .{
                     iter.len,
                 });
             }
             const field_value = iter.next().?;
             const name = iter.currentName() orelse return error.KeyIsNotString;
             self.setProperty(name, field_value, null) catch |err| {
-                return self.throwFieldException(name, .write, err);
+                return self.reportFieldError(name, .write, err);
             };
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
@@ -181,7 +182,7 @@ pub const Union = struct {
                 // when the union is untagged, it isn't possible to determine programmatically
                 // whether a field is set or not when optimize is release; the selector is only
                 // available for debug purpose; throwing an error because the operation is illegal
-                _ = &self.throwFieldException(name, .read, err);
+                _ = &self.reportFieldError(name, .read, err);
             }
             return retval;
         };
@@ -191,7 +192,7 @@ pub const Union = struct {
     pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
         const self = fromObject(obj);
         self.checkSelector(name, cache_slot) catch |err| {
-            return self.throwFieldException(name, .write, err);
+            return self.reportFieldError(name, .write, err);
         };
         return Super.writeProperty(obj, name, value, cache_slot);
     }
@@ -284,18 +285,16 @@ pub const Union = struct {
         };
     }
 
-    fn throwFieldException(self: *@This(), name: *String, access: accessor.FieldAccess, err: anytype) error{ExceptionThrown} {
+    fn reportFieldError(self: *@This(), name: *String, access: accessor.FieldAccess, err: anytype) error{ ExceptionThrown, Unexpected } {
         const member = self.findMember(name, null);
         if (member != null and err == error.InactiveField) {
-            const active_name = self.getActiveTagName() catch |tag_err| {
-                return php.throwError(tag_err);
-            };
-            return php.throwExceptionFmt("access of union field '{s}' while field '{s}' is active", .{
+            const active_name = self.getActiveTagName() catch return error.Unexpected;
+            return failure.report("access of union field '{s}' while field '{s}' is active", .{
                 php.getStringContent(name),
                 php.getStringContent(active_name),
             });
         } else {
-            return Super.throwFieldException(self, name, access, err);
+            return Super.reportFieldError(self, name, access, err);
         }
     }
 

@@ -3,6 +3,7 @@ const std = @import("std");
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const failure = @import("../failure.zig");
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const Object = php.Object;
@@ -94,7 +95,7 @@ pub const Pointer = struct {
     };
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) accessor.Error!Value {
-        if (self.buffer.flags.inaccessible) return self.throwExceptionInaccessible();
+        if (self.buffer.flags.inaccessible) return self.reportInaccessiblePointer();
         if (transform == .none) {
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
@@ -109,7 +110,7 @@ pub const Pointer = struct {
 
     pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) accessor.Error!void {
         if (self.buffer.flags.inaccessible) {
-            if (!php.isValueNull(value)) return self.throwExceptionInaccessible();
+            if (!php.isValueNull(value)) return self.reportInaccessiblePointer();
         }
         if (transform == .none) {
             if (try Super.copySelf(self, value)) return;
@@ -195,11 +196,8 @@ pub const Pointer = struct {
         return null;
     }
 
-    fn throwExceptionInaccessible(self: *@This()) error{ExceptionThrown} {
-        const class = ZigClassEntry.fromStructure(self);
-        return php.throwExceptionFmt("pointer '{s}' is inaccessible because it's in an untagged union", .{
-            class.getName(),
-        });
+    fn reportInaccessiblePointer(_: *@This()) error{Unexpected} {
+        return failure.report("pointer is inaccessible because it's in an untagged union", .{});
     }
 
     pub const getExtent = Super.getExtent;

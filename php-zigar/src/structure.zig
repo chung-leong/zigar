@@ -4,6 +4,7 @@ const accessor = @import("accessor.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const enums = @import("enums.zig");
 const StructureType = enums.StructureType;
+const failure = @import("failure.zig");
 const iterator = @import("iterator.zig");
 const php = @import("php.zig");
 const ClassEntry = php.ClassEntry;
@@ -159,7 +160,7 @@ pub fn Parent(comptime S: type) type {
         pub fn checkArguments(self: *S, arg_iter: *php.ArgumentIterator) !void {
             if (arg_iter.len != 1) {
                 const class = ZigClassEntry.fromStructure(self);
-                return php.throwExceptionFmt("{s} constructor expects one argument", .{
+                return failure.report("{s} constructor expects one argument", .{
                     class.getStructureName(),
                 });
             }
@@ -235,7 +236,7 @@ pub fn Parent(comptime S: type) type {
 
         pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !Value {
             const transform = findTransform(name, cache_slot) orelse return error.Missing;
-            return self.getValue(transform) catch |err| switch (matchError(err, error.Unsupported)) {
+            return self.getValue(transform) catch |err| switch (failure.match(err, error.Unsupported)) {
                 true => error.Missing,
                 false => err,
             };
@@ -243,7 +244,7 @@ pub fn Parent(comptime S: type) type {
 
         pub fn setProperty(self: *S, name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {
             const transform = findTransform(name, cache_slot) orelse return error.Missing;
-            return self.setValue(value, transform) catch |err| switch (matchError(err, error.Unsupported)) {
+            return self.setValue(value, transform) catch |err| switch (failure.match(err, error.Unsupported)) {
                 true => error.Missing,
                 false => err,
             };
@@ -283,26 +284,27 @@ pub fn Parent(comptime S: type) type {
             return &func.closure.php_portion;
         }
 
-        pub fn throwFieldException(self: *S, name: *String, access: accessor.FieldAccess, err: anytype) error{ExceptionThrown} {
+        pub fn reportFieldError(self: *S, name: *String, access: accessor.FieldAccess, err: anytype) error{ ExceptionThrown, Unexpected } {
             const class = ZigClassEntry.fromStructure(self);
-            if (matchError(err, error.Missing)) {
+            if (failure.match(err, error.Missing)) {
                 return switch (scope) {
-                    .instance => php.throwExceptionFmt("no field named '{s}' in {s} '{s}' (zig)", .{
+                    .instance => failure.report("no field named '{s}' in {s} '{s}' (zig)", .{
                         php.getStringContent(name),
                         class.getStructureName(),
                         class.getName(),
                     }),
-                    .static => php.throwExceptionFmt("{s} '{s}' has no member named '{s}' (zig)", .{
+                    .static => failure.report("{s} '{s}' has no member named '{s}' (zig)", .{
                         class.getStructureName(),
                         class.getName(),
                         php.getStringContent(name),
                     }),
                 };
-            } else if (matchError(err, error.ExceptionThrown)) {
+            } else if (failure.match(err, error.ExceptionThrown)) {
                 return error.ExceptionThrown;
             } else {
-                const message = php.getErrorMessage(@TypeOf(err), err);
-                return php.throwExceptionFmt("unable to {s} field '{s}' in {s} '{s}': {s} (zig)", .{
+                const message = failure.acquireMessage(err);
+                defer failure.freeMessage(message);
+                return failure.report("unable to {s} field '{s}' in {s} '{s}': {s} (zig)", .{
                     @tagName(access),
                     php.getStringContent(name),
                     class.getStructureName(),
@@ -352,7 +354,7 @@ pub fn Parent(comptime S: type) type {
                 retval.* = value;
             } else |err| {
                 retval.* = php.createValueNull();
-                _ = &throwFieldException(self, name, .read, err);
+                _ = &reportFieldError(self, name, .read, err);
             }
             return retval;
         }
@@ -360,7 +362,7 @@ pub fn Parent(comptime S: type) type {
         pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
             const self = fromObject(obj);
             setProperty(self, name, value, cache_slot) catch |err| {
-                return throwFieldException(self, name, .write, err);
+                return reportFieldError(self, name, .write, err);
             };
             return value;
         }
@@ -454,7 +456,7 @@ pub fn StructLike(comptime S: type) type {
                 while (iter.next()) |field_value| {
                     const name = iter.currentName() orelse return error.KeyIsNotString;
                     setProperty(self, name, field_value, null) catch |err| {
-                        return throwFieldException(self, name, .write, err);
+                        return reportFieldError(self, name, .write, err);
                     };
                 }
             }
@@ -499,7 +501,7 @@ pub fn StructLike(comptime S: type) type {
                 retval.* = value;
             } else |err| {
                 retval.* = php.createValueNull();
-                _ = &throwFieldException(self, name, .read, err);
+                _ = &reportFieldError(self, name, .read, err);
             }
             return retval;
         }
@@ -507,7 +509,7 @@ pub fn StructLike(comptime S: type) type {
         pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
             const self = fromObject(obj);
             setProperty(self, name, value, cache_slot) catch |err| {
-                return throwFieldException(self, name, .write, err);
+                return reportFieldError(self, name, .write, err);
             };
             return value;
         }
@@ -570,7 +572,7 @@ pub fn StructLike(comptime S: type) type {
         pub const checkArguments = Super.checkArguments;
         pub const copySelf = Super.copySelf;
         pub const visitPointers = Super.visitPointers;
-        pub const throwFieldException = Super.throwFieldException;
+        pub const reportFieldError = Super.reportFieldError;
 
         pub const freeObject = Super.freeObject;
         pub const castObject = Super.castObject;
@@ -640,11 +642,11 @@ pub fn ArrayLike(comptime S: type) type {
                 const str_bytes = try php.getValueStringContent(value);
                 if (bytes.len == len) {
                     const str_len = str_bytes.len;
-                    if (len != str_len) return throwLengthMismatch(self, len, str_len);
+                    if (len != str_len) return reportLengthMismatch(self, len, str_len);
                     @memcpy(bytes, str_bytes);
                 } else if (bytes.len == len * 2) {
                     const str_len = std.unicode.calcWtf16LeLen(str_bytes) catch return error.IncorrectEncoding;
-                    if (len != str_len) return throwLengthMismatch(self, len, str_len);
+                    if (len != str_len) return reportLengthMismatch(self, len, str_len);
                     const wtf16_ptr: [*]u16 = @ptrCast(@alignCast(bytes.ptr));
                     const wtf16_slice = wtf16_ptr[0..len];
                     _ = std.unicode.wtf8ToWtf16Le(wtf16_slice, str_bytes) catch return error.IncorrectEncoding;
@@ -743,9 +745,9 @@ pub fn ArrayLike(comptime S: type) type {
             return @hasField(@TypeOf(flags), "is_string") and flags.is_string;
         }
 
-        pub fn throwLengthMismatch(self: *S, expected: usize, received: usize) error{ExceptionThrown} {
+        pub fn reportLengthMismatch(self: *S, expected: usize, received: usize) error{Unexpected} {
             const class = ZigClassEntry.fromStructure(self);
-            return php.throwExceptionFmt("{s} '{s}' expects {d} bytes, received {d} (zig)", .{
+            return failure.report("{s} '{s}' expects {d} bytes, received {d} (zig)", .{
                 class.getStructureName(),
                 class.getName(),
                 expected,
@@ -761,8 +763,6 @@ pub fn ArrayLike(comptime S: type) type {
         pub const externalize = Super.externalize;
         pub const checkArguments = Super.checkArguments;
         pub const copySelf = Super.copySelf;
-        pub const returnSelf = Super.returnSelf;
-        pub const returnBytes = Super.returnBytes;
 
         pub const readProperty = Super.readProperty;
         pub const writeProperty = Super.writeProperty;
@@ -841,10 +841,4 @@ fn Payload(comptime RT: type) type {
         .error_union => |eu| eu.payload,
         else => RT,
     };
-}
-
-fn matchError(err: anyerror, other_err: anyerror) bool {
-    const Error = @TypeOf(err);
-    const OtherError = @TypeOf(other_err);
-    return (Error || OtherError == Error and err == other_err);
 }

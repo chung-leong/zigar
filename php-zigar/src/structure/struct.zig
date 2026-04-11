@@ -6,6 +6,7 @@ const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const StructurePurpose = @import("../enums.zig").StructurePurpose;
+const failure = @import("../failure.zig");
 const Generator = @import("../generator.zig").Generator;
 const iterator = @import("../iterator.zig");
 const ZigObject = @import("../object.zig").ZigObject;
@@ -111,7 +112,7 @@ pub const Struct = struct {
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
             if (arg_iter.len != 0 or static.required_field_count != 0) {
-                return php.throwExceptionFmt("{s} constructor expects an array as argument or named arguments", .{
+                return failure.report("{s} constructor expects an array as argument or named arguments", .{
                     class.getStructureName(),
                 });
             }

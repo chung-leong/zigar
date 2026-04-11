@@ -9,6 +9,7 @@ const MemberType = enums.MemberType;
 const StructureFlags = enums.StructureFlags;
 const StructurePurpose = enums.StructurePurpose;
 const StructureType = enums.StructureType;
+const failure = @import("failure.zig");
 const GarbageCollectionBuffer = @import("gc.zig").GarbageCollectionBuffer;
 const Host = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
@@ -504,7 +505,7 @@ pub const ZigClassEntry = struct {
         if (self.type == .slice) {
             const remainder = @rem(len, element_size);
             if (remainder != 0) {
-                return php.throwExceptionFmt("'{s}'' has elements that are {d} byte{s} in length, received {d}", .{
+                return failure.report("'{s}'' has elements that are {d} byte{s} in length, received {d}", .{
                     self.getName(),
                     element_size,
                     if (element_size != 1) "s" else "",
@@ -513,7 +514,7 @@ pub const ZigClassEntry = struct {
             }
         } else {
             if (element_size != len) {
-                return php.throwExceptionFmt("{s} has {d} byte{s}, received {d}", .{
+                return failure.report("{s} has {d} byte{s}, received {d}", .{
                     self.getName(),
                     element_size,
                     if (element_size != 1) "s" else "",

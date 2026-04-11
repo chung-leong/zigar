@@ -3,6 +3,7 @@ const std = @import("std");
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const failure = @import("../failure.zig");
 const iterator = @import("../iterator.zig");
 const php = @import("../php.zig");
 const ClassEntry = php.ClassEntry;
@@ -37,9 +38,9 @@ pub const Opaque = struct {
         return try iterator.PropertyIterator(@This()).create(obj, static.prop_names, &.{});
     }
 
-    fn throwException(self: *@This()) error{ExceptionThrown} {
+    fn throwException(self: *@This()) error{Unexpected} {
         const class = ZigClassEntry.fromStructure(self);
-        return php.throwExceptionFmt("cannot access opaque structure '{s}' (zig)", .{
+        return failure.report("cannot access opaque structure '{s}' (zig)", .{
             class.getName(),
         });
     }

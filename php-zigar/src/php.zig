@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const debug = @import("debug.zig");
+const failure = @import("failure.zig");
 const fn_transform = @import("zigft/fn-transform.zig");
 
 pub const php_h = @cImport({
@@ -352,7 +353,7 @@ pub fn removeError(retval: anytype) switch (@typeInfo(@TypeOf(retval))) {
 } {
     const retval_ne = switch (@typeInfo(@TypeOf(retval))) {
         .error_union => |eu| retval catch |err| report: {
-            if (err != error.ExceptionThrown) _ = &throwError(err);
+            throwError(err);
             break :report switch (eu.payload) {
                 bool => false,
                 void => {},
@@ -1291,46 +1292,18 @@ pub const PropPurpose = enum(c_uint) {
     }
 };
 
-pub fn throwError(err: anytype) error{ExceptionThrown} {
-    const ES = @TypeOf(err);
-    const msg = getErrorMessage(ES, err);
+fn throwError(err: anytype) void {
+    // if an exception has already been thrown then don't do anything
+    if (failure.match(err, error.ExceptionThrown)) return;
+    const msg = failure.acquireMessage(err);
+    defer failure.freeMessage(msg);
     _ = php_h.zend_throw_exception_ex(null, 0, "%s (zig)", msg.ptr);
-    return error.ExceptionThrown;
-}
-
-pub fn throwExceptionFmt(comptime fmt: []const u8, params: anytype) error{ExceptionThrown} {
-    if (std.fmt.allocPrintSentinel(allocator, fmt, params, 0)) |msg| {
-        defer allocator.free(msg);
-        _ = php_h.zend_throw_exception(null, msg.ptr, 0);
-        return error.ExceptionThrown;
-    } else |err| {
-        return throwError(err);
-    }
 }
 
 pub fn throwExceptionObject(obj: *Object) error{ExceptionThrown} {
     var value = createValueObject(obj);
     php_h.zend_throw_exception_object(&value);
     return error.ExceptionThrown;
-}
-
-pub fn catchException() ?*Object {
-    const eg = getExecutorGlobals();
-    if (eg.exception) |ex| {
-        eg.exception = null;
-        return ex;
-    }
-    return null;
-}
-
-pub fn getExceptionMessage(ex: *Object) ?*String {
-    const container = createValueObject(ex);
-    const method = createValuePersistentString("getMessage");
-    var result = invokeMethod(&container, &method, &.{}) catch return null;
-    defer release(&result);
-    const str = getValueString(&result) catch return null;
-    addRef(str);
-    return str;
 }
 
 pub fn getCurrentLine() u32 {
@@ -1493,51 +1466,6 @@ fn isInt(comptime T: type) bool {
     return switch (@typeInfo(T)) {
         .int, .comptime_int => true,
         else => false,
-    };
-}
-
-pub fn getErrorMessage(comptime ES: type, err: ES) [:0]const u8 {
-    @setEvalBranchQuota(2000000);
-    return switch (err) {
-        inline else => |possible_error| get: {
-            const msg = comptime decamelize: {
-                const name = @errorName(possible_error);
-                var buffer: [name.len * 2]u8 = undefined;
-                var len: usize = 0;
-                for (name, 0..) |c, i| {
-                    const conversion_needed = check: {
-                        var needed = false;
-                        if (std.ascii.isUpper(c)) {
-                            // previous letter is not uppercase
-                            if (i == 0 or !std.ascii.isUpper(name[i - 1])) {
-                                // next letter is not uppercase
-                                if (i == name.len - 1 or !std.ascii.isUpper(name[i + 1])) {
-                                    needed = true;
-                                }
-                            }
-                        }
-                        break :check needed;
-                    };
-                    if (conversion_needed) {
-                        if (i > 0) {
-                            buffer[len] = ' ';
-                            len += 1;
-                        }
-                        buffer[len] = std.ascii.toLower(c);
-                        len += 1;
-                    } else {
-                        buffer[len] = c;
-                        len += 1;
-                    }
-                }
-                buffer[len] = 0;
-                len += 1;
-                var array: [len]u8 = undefined;
-                @memcpy(&array, buffer[0..len]);
-                break :decamelize array;
-            };
-            break :get @ptrCast(&msg);
-        },
     };
 }
 

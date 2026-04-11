@@ -4,6 +4,7 @@ const accessor = @import("../accessor.zig");
 const Transform = accessor.Transform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const failure = @import("../failure.zig");
 const iterator = @import("../iterator.zig");
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
@@ -172,7 +173,7 @@ pub const Enum = struct {
                             }
                         }
                     } else {
-                        return php.throwExceptionFmt("'{s}' is not a tag of enum '{s}' (zig)", .{
+                        return failure.report("'{s}' is not a tag of enum '{s}' (zig)", .{
                             php.getStringContent(obj.ce.*.name),
                             class.getName(),
                         });
@@ -187,11 +188,11 @@ pub const Enum = struct {
                 const class = ZigClassEntry.fromStatic(self);
                 return switch (err) {
                     error.NotFound => switch (php.getValueType(value)) {
-                        .string => php.throwExceptionFmt("enum '{s}' has no tag named '{s}' (zig)", .{
+                        .string => failure.report("enum '{s}' has no tag named '{s}' (zig)", .{
                             class.getName(),
                             php.getValueStringContent(value) catch unreachable,
                         }),
-                        .long => php.throwExceptionFmt("enum '{s}' has no tag with value {d} (zig)", .{
+                        .long => failure.report("enum '{s}' has no tag with value {d} (zig)", .{
                             class.getName(),
                             php.getValueLong(value) catch unreachable,
                         }),
