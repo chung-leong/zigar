@@ -298,16 +298,16 @@ pub fn Parent(comptime S: type) type {
                         php.getStringContent(name),
                     }),
                 };
+            } else if (matchError(err, error.ExceptionThrown)) {
+                return error.ExceptionThrown;
             } else {
-                // throw the error as well if it's other than ExceptionThrown
-                if (!matchError(err, error.ExceptionThrown)) {
-                    _ = &php.throwError(err);
-                }
-                return php.throwExceptionFmt("unable to {s} field '{s}' in {s} '{s}' (zig)", .{
+                const message = php.getErrorMessage(@TypeOf(err), err);
+                return php.throwExceptionFmt("unable to {s} field '{s}' in {s} '{s}': {s} (zig)", .{
                     @tagName(access),
                     php.getStringContent(name),
                     class.getStructureName(),
                     class.getName(),
+                    message,
                 });
             }
         }
@@ -599,21 +599,31 @@ pub fn ArrayLike(comptime S: type) type {
                     return php.createValueArray(ht);
                 },
                 .string => {
-                    const class = ZigClassEntry.fromStructure(self);
-                    const flags = class.getFlags(S);
-                    if (!@hasField(@TypeOf(flags), "is_string") or !flags.is_string) {
-                        return error.Unsupported;
-                    }
+                    if (!isString(self)) return error.Unsupported;
                     const len = self.getLength();
-                    const byte_count = self.buffer.bytes.len;
-                    if (byte_count == len) {
+                    const bytes = try self.buffer.data(0, false);
+                    if (bytes.len == len) {
+                        switch (self.buffer.source) {
+                            .string => |str| {
+                                // return the original string if possible
+                                if (str.len == len) {
+                                    php.addRef(str);
+                                    return php.createValueString(str);
+                                }
+                            },
+                            else => {},
+                        }
                         return php.createValueStringContent(self.buffer.bytes);
-                    } else if (byte_count == len * 2) {
-                        // TODO: convert from UTF-16 to UTF-8
-                        @panic("TODO");
-                    } else {
-                        return error.Unexpected;
-                    }
+                    } else if (bytes.len == len * 2) {
+                        // convert from WTF-16 to WTF-8
+                        const wtf16_ptr: [*]u16 = @ptrCast(@alignCast(bytes.ptr));
+                        const wtf16_slice = wtf16_ptr[0..len];
+                        const wtf8_len = std.unicode.calcWtf8Len(wtf16_slice);
+                        const wtf8_str = php.createStringWithLength(wtf8_len);
+                        const wtf8_slice = @constCast(php.getStringContent(wtf8_str));
+                        _ = std.unicode.wtf16LeToWtf8(wtf8_slice, wtf16_slice);
+                        return php.createValueString(wtf8_str);
+                    } else unreachable;
                 },
                 .integer => return error.Unsupported,
                 else => {},
@@ -624,12 +634,26 @@ pub fn ArrayLike(comptime S: type) type {
         pub fn setValue(self: *S, value: *const Value, transform: accessor.Transform) accessor.Error!void {
             if (try copySelf(self, value)) return;
             if (transform == .string) {
-                const class = ZigClassEntry.fromStructure(self);
-                const flags = class.getFlags(S);
-                if (!@hasField(@TypeOf(flags), "is_string") or !flags.is_string) {
-                    return error.Unsupported;
-                }
+                if (!isString(self)) return error.Unsupported;
+                const len = self.getLength();
+                const bytes = try self.buffer.data(0, true);
+                const str_bytes = try php.getValueStringContent(value);
+                if (bytes.len == len) {
+                    const str_len = str_bytes.len;
+                    if (len != str_len) return throwLengthMismatch(self, len, str_len);
+                    @memcpy(bytes, str_bytes);
+                } else if (bytes.len == len * 2) {
+                    const str_len = std.unicode.calcWtf16LeLen(str_bytes) catch return error.IncorrectEncoding;
+                    if (len != str_len) return throwLengthMismatch(self, len, str_len);
+                    const wtf16_ptr: [*]u16 = @ptrCast(@alignCast(bytes.ptr));
+                    const wtf16_slice = wtf16_ptr[0..len];
+                    _ = std.unicode.wtf8ToWtf16Le(wtf16_slice, str_bytes) catch return error.IncorrectEncoding;
+                } else unreachable;
+                return;
             } else if (transform == .none) {
+                if (isString(self) and php.getValueType(value) == .string) {
+                    return self.setValue(value, .string);
+                }
                 const ht = try php.getValueArray(value);
                 const len = self.getLength();
                 var iter: HashTableIterator = .init(ht, .{});
@@ -711,6 +735,22 @@ pub fn ArrayLike(comptime S: type) type {
 
         pub fn getIterator(obj: *Object) !?*ObjectIterator {
             return try iterator.ArrayIterator(S).create(obj);
+        }
+
+        pub fn isString(self: *S) bool {
+            const class = ZigClassEntry.fromStructure(self);
+            const flags = class.getFlags(S);
+            return @hasField(@TypeOf(flags), "is_string") and flags.is_string;
+        }
+
+        pub fn throwLengthMismatch(self: *S, expected: usize, received: usize) error{ExceptionThrown} {
+            const class = ZigClassEntry.fromStructure(self);
+            return php.throwExceptionFmt("{s} '{s}' expects {d} bytes, received {d} (zig)", .{
+                class.getStructureName(),
+                class.getName(),
+                expected,
+                received,
+            });
         }
 
         pub const fromObject = Super.fromObject;

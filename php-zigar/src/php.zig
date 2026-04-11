@@ -1231,6 +1231,12 @@ pub const initializeObjectProperties = php_h.object_properties_init;
 pub const registerInternalClass = php_h.zend_register_internal_class_ex;
 pub const traceToString = php_h.zend_trace_to_string;
 
+pub fn getObjectProperty(obj: *Object, name: *String) ?Value {
+    var retval: Value = undefined;
+    _ = php_h.zend_std_read_property(obj, name, BP_VAR_R, null, &retval);
+    return retval;
+}
+
 pub fn getObjectPropertySize(ce: *ClassEntry) isize {
     return @bitCast(php_h.zend_object_properties_size(ce));
 }
@@ -1306,6 +1312,25 @@ pub fn throwExceptionObject(obj: *Object) error{ExceptionThrown} {
     var value = createValueObject(obj);
     php_h.zend_throw_exception_object(&value);
     return error.ExceptionThrown;
+}
+
+pub fn catchException() ?*Object {
+    const eg = getExecutorGlobals();
+    if (eg.exception) |ex| {
+        eg.exception = null;
+        return ex;
+    }
+    return null;
+}
+
+pub fn getExceptionMessage(ex: *Object) ?*String {
+    const container = createValueObject(ex);
+    const method = createValuePersistentString("getMessage");
+    var result = invokeMethod(&container, &method, &.{}) catch return null;
+    defer release(&result);
+    const str = getValueString(&result) catch return null;
+    addRef(str);
+    return str;
 }
 
 pub fn getCurrentLine() u32 {
@@ -1471,7 +1496,7 @@ fn isInt(comptime T: type) bool {
     };
 }
 
-fn getErrorMessage(comptime ES: type, err: ES) [:0]const u8 {
+pub fn getErrorMessage(comptime ES: type, err: ES) [:0]const u8 {
     @setEvalBranchQuota(2000000);
     return switch (err) {
         inline else => |possible_error| get: {

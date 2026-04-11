@@ -28,6 +28,7 @@ pub const Error = error{
     ExceptionThrown,
     Failure,
     Inaccessible,
+    IncorrectEncoding,
     IntegerOverflow,
     InvalidOperation,
     InvalidType,
