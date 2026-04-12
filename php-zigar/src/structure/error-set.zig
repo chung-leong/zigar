@@ -169,14 +169,14 @@ pub const ErrorSet = struct {
                             } else |_| {
                                 const name = try self.createCanonicalName();
                                 defer php.allocator.free(name);
-                                return failure.report("'{s}' does not correspond to an entry in {s} (zig)", .{
+                                return failure.report("'{s}' does not correspond to an entry in {s}", .{
                                     try php.getValueStringContent(&message),
                                     name,
                                 });
                             }
                         }
                     } else {
-                        return failure.report("'{s}' does not implement throwable (zig)", .{
+                        return failure.report("'{s}' does not implement throwable", .{
                             php.getStringContent(err_obj.ce.*.name),
                         });
                     }

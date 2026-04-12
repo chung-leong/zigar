@@ -288,12 +288,12 @@ pub fn Parent(comptime S: type) type {
             const class = ZigClassEntry.fromStructure(self);
             if (failure.match(err, error.Missing)) {
                 return switch (scope) {
-                    .instance => failure.report("no field named '{s}' in {s} '{s}' (zig)", .{
+                    .instance => failure.report("no field named '{s}' in {s} '{s}'", .{
                         php.getStringContent(name),
                         class.getStructureName(),
                         class.getName(),
                     }),
-                    .static => failure.report("{s} '{s}' has no member named '{s}' (zig)", .{
+                    .static => failure.report("{s} '{s}' has no member named '{s}'", .{
                         class.getStructureName(),
                         class.getName(),
                         php.getStringContent(name),
@@ -304,7 +304,7 @@ pub fn Parent(comptime S: type) type {
             } else {
                 const message = failure.acquireMessage(err);
                 defer failure.freeMessage(message);
-                return failure.report("unable to {s} field '{s}' in {s} '{s}': {s} (zig)", .{
+                return failure.report("unable to {s} field '{s}' in {s} '{s}': {s}", .{
                     @tagName(access),
                     php.getStringContent(name),
                     class.getStructureName(),
@@ -747,7 +747,7 @@ pub fn ArrayLike(comptime S: type) type {
 
         pub fn reportLengthMismatch(self: *S, expected: usize, received: usize) error{Unexpected} {
             const class = ZigClassEntry.fromStructure(self);
-            return failure.report("{s} '{s}' expects {d} bytes, received {d} (zig)", .{
+            return failure.report("{s} '{s}' expects {d} bytes, received {d}", .{
                 class.getStructureName(),
                 class.getName(),
                 expected,

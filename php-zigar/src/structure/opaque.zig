@@ -40,7 +40,7 @@ pub const Opaque = struct {
 
     fn throwException(self: *@This()) error{Unexpected} {
         const class = ZigClassEntry.fromStructure(self);
-        return failure.report("cannot access opaque structure '{s}' (zig)", .{
+        return failure.report("cannot access opaque structure '{s}'", .{
             class.getName(),
         });
     }
