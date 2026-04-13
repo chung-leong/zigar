@@ -759,8 +759,8 @@ pub const ZigClassEntry = struct {
         return self.createObjectFromParameters(.{ .buffer = buf, .prefilled = prefilled });
     }
 
-    pub fn createObject(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value) !*Object {
-        return self.createObjectFromParameters(.{ .allocator = allocator, .initializer = initializer });
+    pub fn createObject(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value, read_only: bool) !*Object {
+        return self.createObjectFromParameters(.{ .allocator = allocator, .initializer = initializer, .read_only = read_only });
     }
 
     fn createObjectFromParameters(self: *@This(), params: anytype) !*Object {
@@ -785,7 +785,7 @@ pub const ZigClassEntry = struct {
                 const obj_struct = zig_obj.structure();
                 try obj_struct.setStorage(buf, &table);
                 if (@hasField(Params, "initializer")) {
-                    try obj_struct.initialize(params.allocator, params.initializer);
+                    try obj_struct.initialize(params.allocator, params.initializer, params.read_only);
                 }
                 try obj_struct.finalize(@hasField(Params, "initializer"));
                 return zig_obj.object();
@@ -910,7 +910,7 @@ pub const ZigClassEntry = struct {
                                 .string
                             else if (member.flags.is_plain)
                                 .plain
-                            else if (member.class.flags.common.has_value or member.class.flags.common.has_proxy)
+                            else if (member.class.flags.common.has_value)
                                 .none
                             else
                                 null;

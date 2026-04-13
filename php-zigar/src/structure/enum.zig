@@ -111,9 +111,10 @@ pub const Enum = struct {
                     } else |err| {
                         if (class.flags.@"enum".is_open_ended) {
                             // create new item
-                            const tag_obj = try class.createObject(null, null);
+                            const tag_obj = try class.createObject(null, null, false);
                             const tag_struct = fromObject(tag_obj);
                             try self.constant_acc.int.set(tag_struct, key);
+                            tag_struct.buffer.protect(true);
                             var buffer: [48]u8 = undefined;
                             const text = std.fmt.bufPrint(&buffer, "@enumFromInt({d})", .{tag_code}) catch unreachable;
                             const name = php.createString(text);
@@ -156,9 +157,10 @@ pub const Enum = struct {
                         } else |err| {
                             if (class.flags.@"enum".is_open_ended) {
                                 // create new item
-                                const tag_obj = try class.createObject(null, null);
+                                const tag_obj = try class.createObject(null, null, false);
                                 const tag_struct = fromObject(tag_obj);
                                 try self.constant_acc.int.set(tag_struct, key);
+                                tag_struct.buffer.protect(true);
                                 const text = try std.fmt.allocPrint(php.allocator, "@enumFromInt({s})", .{
                                     php.getStringContent(tag_code_str),
                                 });

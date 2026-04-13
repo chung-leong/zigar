@@ -73,7 +73,7 @@ pub const Struct = struct {
                     };
                     const cb_member = try class.getMember(.instance, "callback");
                     if (cb_member.class.type != .pointer) return error.Unexpected;
-                    const cb_obj = try cb_member.class.createObject(null, &closure);
+                    const cb_obj = try cb_member.class.createObject(null, &closure, false);
                     self.callback = cb_obj;
                 },
                 else => {},
@@ -95,8 +95,8 @@ pub const Struct = struct {
         }
     }
 
-    pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value) !void {
-        try Super.initialize(self, allocator, initializer);
+    pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value, read_only: bool) !void {
+        try Super.initialize(self, allocator, initializer, read_only);
         const class = ZigClassEntry.fromStructure(self);
         switch (class.purpose) {
             .unknown => {},

@@ -506,7 +506,7 @@ pub fn createValueObject(object: *Object) Value {
 
 pub fn createValueReference(target: *const Value) Value {
     var result: Value = .{};
-    const ref: *Reference = @ptrCast(@alignCast(debugAlloc(@sizeOf(Reference), 1)));
+    const ref: *Reference = @ptrCast(@alignCast(emalloc(@sizeOf(Reference))));
     ref.gc = .{ .refcount = 1, .u = .{ .type_info = php_h.GC_REFERENCE } };
     ref.val = target.*;
     ref.sources = .{ .ptr = null };
@@ -1328,45 +1328,28 @@ pub fn getBacktrace() !*Array {
     return try getValueArray(&trace);
 }
 
-fn debugAlloc(size: usize, call_depth: usize) ?*anyopaque {
+pub fn emalloc(size: usize) ?*anyopaque {
     if (php_h.ZEND_DEBUG == 1) {
-        var buffer: [4096]u8 = undefined;
-        var fba: std.heap.FixedBufferAllocator = .{ .buffer = &buffer, .end_index = 0 };
-        if (debug.getCaller(fba.allocator(), call_depth)) |caller| {
-            return php_h._emalloc(size, caller.file, caller.line, null, 0);
-        } else {
-            return php_h._emalloc(size, "zig", 0, null, 0);
-        }
+        const ptr = php_h._emalloc(size, "zig", 0, null, 0);
+        // std.debug.print("allocate: {d} {x}\n", .{ size, @intFromPtr(ptr) });
+        return ptr;
     } else {
         return php_h._emalloc(size);
     }
 }
 
-fn debugFree(ptr: ?*anyopaque, call_depth: usize) void {
+pub fn efree(ptr: ?*anyopaque) void {
     if (php_h.ZEND_DEBUG == 1) {
-        var buffer: [4096]u8 = undefined;
-        var fba: std.heap.FixedBufferAllocator = .{ .buffer = &buffer, .end_index = 0 };
-        if (debug.getCaller(fba.allocator(), call_depth)) |caller| {
-            php_h._efree(ptr, caller.file, caller.line, null, 0);
-        } else {
-            php_h._efree(ptr, "zig", 0, null, 0);
-        }
+        // std.debug.print("free: {x}\n", .{@intFromPtr(ptr)});
+        php_h._efree(ptr, "zig", 0, null, 0);
     } else {
         php_h.efree(ptr);
     }
 }
 
-pub fn emalloc(size: usize) ?*anyopaque {
-    return debugAlloc(size, 1);
-}
-
-pub fn efree(ptr: ?*anyopaque) void {
-    return debugFree(ptr, 1);
-}
-
 pub fn estrdup(s: [*:0]const u8) [*:0]const u8 {
     if (php_h.ZEND_DEBUG == 1) {
-        return php_h._estrdup(s, "unknown", 0, null, 0);
+        return php_h._estrdup(s, "zig", 0, null, 0);
     } else {
         return php_h._estrdup(s);
     }
@@ -1393,7 +1376,7 @@ const allocator_impl = struct {
         _ = return_address;
         _ = alignment;
         std.debug.assert(len > 0);
-        return @ptrCast(debugAlloc(len, 2));
+        return @ptrCast(emalloc(len));
     }
 
     fn resize(
@@ -1434,7 +1417,7 @@ const allocator_impl = struct {
     ) void {
         _ = alignment;
         _ = return_address;
-        debugFree(memory.ptr, 2);
+        efree(memory.ptr);
     }
 };
 

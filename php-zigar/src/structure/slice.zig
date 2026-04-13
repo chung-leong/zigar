@@ -34,20 +34,37 @@ pub const Slice = struct {
         }
     };
 
-    pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value) !void {
+    pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value, read_only: bool) !void {
         const class = ZigClassEntry.fromStructure(self);
         if (initializer) |value| {
-            const len: usize = get: {
-                const element_size = class.byte_size orelse 1;
-                if (php.getValueArray(value)) |arr| {
-                    break :get element_size * arr.nNumOfElements;
-                } else |_| {
-                    // let setValue() throw an error
-                    break :get 0;
-                }
-            };
-            try self.buffer.allocate(allocator, len);
-            try self.setValue(value, .none);
+            // anyopaque is represented by a slice with no size
+            const element_size = class.byte_size orelse 1;
+            const value_type = php.getValueType(value);
+            if (value_type == .string and class.flags.slice.is_string) {
+                const str = php.getValueString(value) catch unreachable;
+                const str_bytes = php.getStringContent(str);
+                if (element_size == 1) {
+                    if (read_only) {
+                        self.buffer.referenceString(str);
+                    } else {
+                        try self.buffer.allocate(allocator, str_bytes.len);
+                        try self.buffer.copyBytes(str_bytes);
+                    }
+                } else if (element_size == 2) {
+                    const len = std.unicode.calcWtf16LeLen(str_bytes) catch return error.IncorrectEncoding;
+                    try self.buffer.allocate(allocator, len * 2);
+                    const bytes = try self.buffer.data(0, true);
+                    const wtf16_ptr: [*]u16 = @ptrCast(@alignCast(bytes.ptr));
+                    const wtf16_slice = wtf16_ptr[0..len];
+                    _ = std.unicode.wtf8ToWtf16Le(wtf16_slice, str_bytes) catch return error.IncorrectEncoding;
+                } else unreachable;
+            } else {
+                // initialize with an array, let setValue() throw an error if it's not an array
+                const len: usize = if (php.getValueArray(value)) |arr| element_size * arr.nNumOfElements else |_| 0;
+                try self.buffer.allocate(allocator, len);
+                try self.setValue(value, .none);
+            }
+            if (read_only) self.buffer.protect(true);
             const obj = ZigObject(@This()).fromStructure(self).object();
             try class.registerObject(obj);
         } else {

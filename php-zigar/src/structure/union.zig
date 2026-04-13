@@ -94,17 +94,17 @@ pub const Union = struct {
         }
     };
 
-    pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value) !void {
+    pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value, read_only: bool) !void {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.@"union".has_inaccessible) {
             // allocate structure without copying initializer
-            try Super.initialize(self, allocator, null);
+            try Super.initialize(self, allocator, null, read_only);
             // mark pointers as inaccessible
             try self.visitPointers(structure.Pointer.restrictAccess, .{}, .{ .include_inactive = true });
             // now we can copy
             if (initializer) |value| try self.setValue(value, .none);
         } else {
-            try Super.initialize(self, allocator, initializer);
+            try Super.initialize(self, allocator, initializer, read_only);
         }
     }
 

@@ -73,7 +73,7 @@ pub fn ArgStruct(variadic: bool) type {
             }
         };
 
-        pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, _: ?*const Value) !void {
+        pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, _: ?*const Value, _: bool) !void {
             const class = ZigClassEntry.fromStructure(self);
             var len = class.byte_size.?;
             if (variadic) {

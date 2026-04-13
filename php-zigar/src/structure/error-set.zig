@@ -134,14 +134,14 @@ pub const ErrorSet = struct {
                         return err.*;
                     } else |_| {
                         // create new error
-                        const err_obj = try class.createObject(null, null);
+                        const err_obj = try class.createObject(null, null, false);
                         const err_struct = fromObject(err_obj);
                         try self.constant_acc.int.set(err_struct, value);
+                        err_struct.buffer.protect(true);
                         var text_buffer: [64]u8 = undefined;
                         const text = std.fmt.bufPrint(&text_buffer, "UnknownError #{d}", .{err_code}) catch unreachable;
                         const name = php.createString(text);
                         try self.addCanonical(name, err_obj);
-
                         // add object to template table, which owns the other items as well
                         var err_value = php.createValueObject(err_obj);
                         var table = class.static.template.table orelse init: {

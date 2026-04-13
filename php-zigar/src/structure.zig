@@ -112,24 +112,22 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
-        pub fn initialize(self: *S, allocator: ?*const std.mem.Allocator, initializer: ?*const Value) !void {
-            if (@hasField(S, "buffer")) {
-                const class = ZigClassEntry.fromStructure(self);
-                const len = class.byte_size.?;
-                try self.buffer.allocate(allocator, len);
-                if (class.instance.template.buffer) |def| {
-                    // copy default values from template
-                    try self.buffer.copy(def);
-                }
-                const obj = ZigObject(S).fromStructure(self).object();
-                if (@hasDecl(S, "getExtent")) {
-                    try class.registerObject(obj);
-                }
+        pub fn initialize(self: *S, allocator: ?*const std.mem.Allocator, initializer: ?*const Value, read_only: bool) !void {
+            if (!@hasField(S, "buffer")) return;
+            const class = ZigClassEntry.fromStructure(self);
+            const len = class.byte_size.?;
+            try self.buffer.allocate(allocator, len);
+            if (class.instance.template.buffer) |def| {
+                // copy default values from template
+                try self.buffer.copy(def);
+            }
+            const obj = ZigObject(S).fromStructure(self).object();
+            if (@hasDecl(S, "getExtent")) {
+                try class.registerObject(obj);
             }
             if (initializer) |value| {
-                if (@hasDecl(S, "setValue")) {
-                    try self.setValue(value, .none);
-                } else @panic("Not implemented");
+                try self.setValue(value, .none);
+                if (read_only) self.buffer.protect(true);
             }
         }
 

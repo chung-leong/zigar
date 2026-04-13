@@ -48,7 +48,6 @@ pub fn ZigObject(comptime S: type) type {
             const obj = self.object();
             obj.handlers = getHandlers();
             php.initializeStandardObject(obj, ce);
-            php.initializeObjectProperties(obj, ce);
             return self;
         }
 

@@ -151,7 +151,7 @@ pub const Function = struct {
             // the this variable is the first argument per Zig convention
             arg_iter.makeThisFirst();
         }
-        const arg = try static.argument_class.createObject(null, null);
+        const arg = try static.argument_class.createObject(null, null, false);
         defer php.release(arg);
         switch (static.argument_class.type) {
             inline .arg_struct, .variadic_struct => |t| {

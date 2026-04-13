@@ -198,7 +198,7 @@ pub fn Class(comptime S: type) type {
             const custom_allocator = try extractAllocator(&arg_iter);
             try this_struct.checkArguments(&arg_iter);
             const arg = arg_iter.next() orelse null;
-            try this_struct.initialize(custom_allocator, arg);
+            try this_struct.initialize(custom_allocator, arg, false);
             if (@hasDecl(S, "finalize")) {
                 try this_struct.finalize(true);
             }

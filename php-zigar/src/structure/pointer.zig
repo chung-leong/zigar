@@ -96,15 +96,19 @@ pub const Pointer = struct {
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) accessor.Error!Value {
         if (self.buffer.flags.inaccessible) return self.reportInaccessiblePointer();
-        if (transform == .none) {
-            const class = ZigClassEntry.fromStructure(self);
-            const static = class.getStaticData(@This());
-            try static.loadTarget(self);
-            var value = self.table;
-            php.addRef(&value);
-            return value;
-        } else {
-            return Super.getValue(self, transform);
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        try static.loadTarget(self);
+        const value = self.table;
+        switch (transform) {
+            .none => {
+                php.addRef(&value);
+                return value;
+            },
+            else => {
+                const obj = php.getValueObject(&value) catch return error.NullPointer;
+                return try invokeMethod(obj, "getValue", .{transform});
+            },
         }
     }
 
@@ -129,25 +133,6 @@ pub const Pointer = struct {
                             break :init obj;
                         }
                     },
-                    .string => {
-                        if (target_class.type != .function) {
-                            const str = php.getValueString(value) catch unreachable;
-                            try target_class.checkByteLength(str.len);
-                            const buf = try ByteBuffer.create(target_class.alignment);
-                            defer buf.release();
-                            if (allocator != null) {
-                                // allocate
-                                const sc = php.getStringContent(str);
-                                try buf.allocate(allocator, sc.len);
-                                try buf.copyBytes(sc);
-                            } else {
-                                // autocast from string when there's no allocator
-                                buf.referenceString(str);
-                            }
-                            const new_obj = try target_class.createObjectFromBuffer(buf, null);
-                            break :init new_obj;
-                        }
-                    },
                     .pointer => {
                         const ptr = php.getValuePointer(*anyopaque, value) catch unreachable;
                         const address = @intFromPtr(ptr);
@@ -163,7 +148,8 @@ pub const Pointer = struct {
                     else => {},
                 }
                 // autovivificate new target,
-                break :init try target_class.createObject(allocator, value);
+                const read_only = class.flags.pointer.is_const;
+                break :init try target_class.createObject(allocator, value, read_only);
             };
             try static.saveTarget(self, target_obj);
         } else {
