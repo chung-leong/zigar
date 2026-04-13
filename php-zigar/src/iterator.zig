@@ -30,11 +30,13 @@ pub fn ArrayIterator(comptime S: type) type {
             self.object = obj;
             self.len = @intCast(array.getLength());
             self.iter.funcs = &methods;
+            self.iter.data = php.createValueNull();
             return &self.iter;
         }
 
         pub fn destroy(iter: *ObjectIterator) void {
             const self = fromIter(iter);
+            php.release(&iter.data);
             php.release(self.object);
         }
 
@@ -46,6 +48,7 @@ pub fn ArrayIterator(comptime S: type) type {
         pub fn getCurrentData(iter: *ObjectIterator) *Value {
             const self = fromIter(iter);
             const container = ZigObject(S).fromObject(self.object).structure();
+            php.release(&iter.data);
             iter.data = container.getElement(iter.index) catch |err| init: {
                 _ = &err;
                 break :init php.createValueNull();

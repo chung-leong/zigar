@@ -7,30 +7,15 @@ use Revolt\EventLoop;
 zigar_compile_module(__DIR__ . "/scratch.zig", "/tmp/scratch.zigar");
 $m = zigar_load_module("/tmp/scratch.zigar");
 
-echo $m->utf16, "\n";
-echo $m->utf16_slice, "\n";
-$m->utf16 = "hello";
-echo $m->utf16_slice, "\n";
-
-try {
-    $m->utf16 = "world!";
-} catch (Exception $err) {
-    echo $err->getMessage(), "\n";
+echo $m->print1(), "\n";
+print_r($m->array2);
+$m->array2 = [ 12, 34, 56, 78 ];
+echo $m->print2(), "\n";
+$m->array3 = [ 1234, 5678, 12345, 67890 ];
+for ($i = 0; $i < 4; $i++) {
+    echo $m->array3[$i], "\n";
 }
-echo $m->utf16_slice, "\n";
-
-try {
-    $m->utf16 = "Hello!";
-} catch (Exception $err) {
-    echo $err->getMessage(), "\n";
-}
-
-$m->utf16_slice = "część!";
-echo $m->utf16_slice, "\n";
-
-echo $m->utf8_slice, "\n";
-$m->utf8_slice = "część, świecie!";
-echo $m->utf8_slice, "\n";
+echo $m->print3(), "\n";
 
 $m = null;
 gc_collect_cycles();

@@ -344,15 +344,15 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
+            _ = prop_type;
             // unlike readElement(), PHP does not expect this function to return a null pointer;
             // we cannot therefore return an error union;
-            _ = prop_type;
             const self = fromObject(obj);
             if (getProperty(self, name, cache_slot)) |value| {
                 retval.* = value;
             } else |err| {
                 retval.* = php.createValueNull();
-                _ = &reportFieldError(self, name, .read, err);
+                php.throwError(reportFieldError(self, name, .read, err));
             }
             return retval;
         }
@@ -490,16 +490,14 @@ pub fn StructLike(comptime S: type) type {
         }
 
         pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
-            // this function cannot return an error union (see comment in Parent.readProperty())
             _ = prop_type;
-            const eg = php.getExecutorGlobals();
-            _ = eg;
+            // this function cannot return an error union (see comment in Parent.readProperty())
             const self = fromObject(obj);
             if (getProperty(self, name, cache_slot)) |value| {
                 retval.* = value;
             } else |err| {
                 retval.* = php.createValueNull();
-                _ = &reportFieldError(self, name, .read, err);
+                php.throwError(reportFieldError(self, name, .read, err));
             }
             return retval;
         }
@@ -664,6 +662,7 @@ pub fn ArrayLike(comptime S: type) type {
                     if (index >= len) return error.OutOfBound;
                     try self.setElement(index, field_value);
                 }
+                return;
             }
             return Super.setValue(self, value, transform);
         }

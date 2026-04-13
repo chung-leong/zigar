@@ -1,7 +1,17 @@
 const std = @import("std");
 
-pub var utf16: [5]u16 = .{ 0x43, 0x7a, 0x119, 0x15b, 0x107 };
+pub var array1: [4]u4 = .{ 1, 2, 3, 4 };
+pub var array2: [4]u8 = .{ 1, 2, 3, 4 };
+pub var array3: [4]u128 = .{ 1, 2, 3, 4 };
 
-pub var utf16_slice: []u16 = &utf16;
+pub fn print1() void {
+    std.debug.print("{any}\n", .{array1});
+}
 
-pub var utf8_slice: []const u8 = "Hello world";
+pub fn print2() void {
+    std.debug.print("{any}\n", .{array2});
+}
+
+pub fn print3() void {
+    std.debug.print("{any}\n", .{array3});
+}

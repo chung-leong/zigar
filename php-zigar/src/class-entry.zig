@@ -890,6 +890,9 @@ pub const ZigClassEntry = struct {
                                 if (@hasField(Acc, "bit_offset")) {
                                     acc.bit_offset = bit_offset;
                                 }
+                                if (@hasField(Acc, "bit_size")) {
+                                    acc.bit_size = member.bit_size;
+                                }
                                 break @unionInit(accessor.Any, field.name, acc);
                             }
                         }

@@ -182,7 +182,7 @@ pub const Union = struct {
                 // when the union is untagged, it isn't possible to determine programmatically
                 // whether a field is set or not when optimize is release; the selector is only
                 // available for debug purpose; throwing an error because the operation is illegal
-                _ = &self.reportFieldError(name, .read, err);
+                php.throwError(self.reportFieldError(name, .read, err));
             }
             return retval;
         };

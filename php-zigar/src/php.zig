@@ -1292,7 +1292,7 @@ pub const PropPurpose = enum(c_uint) {
     }
 };
 
-fn throwError(err: anytype) void {
+pub fn throwError(err: anytype) void {
     // if an exception has already been thrown then don't do anything
     if (failure.match(err, error.ExceptionThrown)) return;
     const msg = failure.acquireMessage(err);
