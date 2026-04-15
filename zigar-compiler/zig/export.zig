@@ -72,6 +72,9 @@ fn Factory(comptime host: type, comptime module: type) type {
                         .promise => .promise,
                         .generator => .generator,
                         .abort_signal => .abort_signal,
+                        .any_image => .any_image,
+                        .web_image => .web_image,
+                        .gd_image => .gd_image,
                     };
                     break :get .unknown;
                 },

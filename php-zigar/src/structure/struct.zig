@@ -7,6 +7,7 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const StructurePurpose = @import("../enums.zig").StructurePurpose;
 const failure = @import("../failure.zig");
+const gd = @import("../gd.zig");
 const Generator = @import("../generator.zig").Generator;
 const iterator = @import("../iterator.zig");
 const ZigObject = @import("../object.zig").ZigObject;
@@ -131,6 +132,22 @@ pub const Struct = struct {
         return Super.getValue(self, transform);
     }
 
+    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) accessor.Error!void {
+        const class = ZigClassEntry.fromStructure(self);
+        if (class.purpose == .gd_image) {
+            const ptr = gd.getPointer(value) orelse {
+                return failure.report("GD image object expected", .{});
+            };
+            const ptr_value = php.createValuePointer(ptr);
+            try self.setProperty(php.persistent("ptr"), &ptr_value, null);
+            php.release(&self.table);
+            self.table = value.*;
+            php.addRef(&self.table);
+            return;
+        }
+        return Super.setValue(self, value, transform);
+    }
+
     pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) accessor.Error!void {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.common.has_pointer) {
@@ -232,7 +249,6 @@ pub const Struct = struct {
     pub const finalize = Super.finalize;
     pub const externalize = Super.externalize;
     pub const getExtent = Super.getExtent;
-    pub const setValue = Super.setValue;
     pub const getProperty = Super.getProperty;
     pub const setProperty = Super.setProperty;
     pub const castObject = Super.castObject;

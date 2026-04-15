@@ -1,0 +1,357 @@
+const std = @import("std");
+const builtin = @import("builtin");
+
+const util = @import("util.zig");
+
+const is_wasm = builtin.target.cpu.arch.isWasm();
+
+pub const AnyImage = union(enum) {
+    web: WebImage,
+    gd: if (!is_wasm) GdImage else void,
+
+    pub const internal_type: util.InternalType = .any_image;
+};
+
+pub const WebImage = struct {
+    vectors: []@Vector(4, u8),
+    width: u32,
+    height: u32,
+    colorSpace: enum { srgb, @"display-p3" } = .srgb,
+
+    pub const internal_type: util.InternalType = .web_image;
+
+    pub fn getWidth(self: *const @This()) u32 {
+        return self.width;
+    }
+
+    pub fn getHeight(self: *const @This()) u32 {
+        return self.height;
+    }
+
+    pub fn getPixel(self: *const @This(), comptime T: type, x: u32, y: u32) T {
+        const E = Child(T);
+        const len = channels(T);
+        const index = (y * self.width) + x;
+        const int_vec = self.vectors[index];
+        const multiplier = comptime calc: {
+            const one: T = @splat(1.0);
+            const max: T = @splat(@floatFromInt(std.math.maxInt(u8)));
+            break :calc one / max;
+        };
+        const float_vec: T = switch (len) {
+            1 => @floatFromInt(@shuffle(E, int_vec, undefined, @Vector(1, i32){0})),
+            2 => @floatFromInt(@shuffle(E, int_vec, undefined, @Vector(2, i32){ 0, 3 })),
+            3 => @floatFromInt(@shuffle(E, int_vec, undefined, @Vector(3, i32){ 0, 1, 2 })),
+            4 => @floatFromInt(int_vec),
+            else => unreachable,
+        };
+        return float_vec * multiplier;
+    }
+
+    pub fn setPixel(self: *const @This(), comptime T: type, x: u32, y: u32, pixel: T) void {
+        const E = Child(T);
+        const len = channels(T);
+        const min: T = @splat(0.0);
+        const max: T = @splat(@floatFromInt(std.math.maxInt(T)));
+        // expand to int range (1.0 to 255.0)
+        const float_vec_wo_min_max = pixel * max;
+        // apply minimum constraint
+        const float_vec_wo_max = @select(E, float_vec_wo_min_max > min, float_vec_wo_min_max, min);
+        // apply maximum constraint
+        const float_vec = @select(E, float_vec_wo_max < max, float_vec_wo_max, max);
+        const int_vec: @Vector(4, u8) = switch (len) {
+            1 => @intFromFloat(@shuffle(E, float_vec, max, @Vector(4, i32){ 0, 0, 0, -1 })),
+            2 => @intFromFloat(@shuffle(E, float_vec, undefined, @Vector(4, i32){ 0, 0, 0, 1 })),
+            3 => @intFromFloat(@shuffle(E, float_vec, max, @Vector(4, i32){ 0, 1, 2, -1 })),
+            4 => @intFromFloat(float_vec),
+            else => unreachable,
+        };
+        const index = (y * self.width) + x;
+        self.data[index] = int_vec;
+    }
+
+    const Super = Parent(@This());
+
+    pub fn sampleNearest(self: *const @This(), comptime T: type, coord: Coord(T)) T {
+        return Super.sampleNearest(self, T, coord);
+    }
+
+    pub fn sampleLinear(self: *const @This(), comptime T: type, coord: Coord(T)) T {
+        return Super.sampleLinear(self, T, coord);
+    }
+};
+
+pub const GdImage = struct {
+    ptr: *anyopaque,
+
+    pub const internal_type: util.InternalType = .gd_image;
+
+    pub inline fn cast(self: *const @This()) *const GdStruct {
+        return @ptrCast(@alignCast(self.ptr));
+    }
+
+    pub fn getWidth(self: *const @This()) u32 {
+        const im = self.cast();
+        return @intCast(im.sx);
+    }
+
+    pub fn getHeight(self: *const @This()) u32 {
+        const im = self.cast();
+        return @intCast(im.sy);
+    }
+
+    pub fn getPixel(self: *const @This(), comptime T: type, x: u32, y: u32) T {
+        const im = self.cast();
+        const len = channels(T);
+        const E = Child(T);
+        const i: usize = y;
+        const j: usize = x;
+        const color = if (im.tpixels) |tpixels|
+            tpixels[i][j]
+        else if (im.pixels) |pixels|
+            self.getPaletteColor(pixels[i][j])
+        else
+            unreachable;
+        const color_u: c_uint = @bitCast(color);
+        const r: u8 = @truncate((color_u & 0x00FF0000) >> 16);
+        const g: u8 = @truncate((color_u & 0x0000FF00) >> 8);
+        const b: u8 = @truncate((color_u & 0x000000FF) >> 0);
+        const t: u8 = @truncate((color_u & 0x7F000000) >> 24);
+        const a: u8 = 127 - t;
+        const int_vec: @Vector(len, u8) = switch (len) {
+            1 => .{r},
+            2 => .{ r, a },
+            3 => .{ r, g, b },
+            4 => .{ r, g, b, a },
+            else => unreachable,
+        };
+        const float_vec: T = @floatFromInt(int_vec);
+        const multiplier = comptime calc: {
+            const max_u8: E = @floatFromInt(std.math.maxInt(u8));
+            const max_u7: E = @floatFromInt(std.math.maxInt(u7));
+            const max: T = switch (len) {
+                1 => .{max_u8},
+                2 => .{ max_u8, max_u7 }, // alpha channel is only 7-bit
+                3 => .{ max_u8, max_u8, max_u8 },
+                4 => .{ max_u8, max_u8, max_u8, max_u7 },
+                else => unreachable,
+            };
+            const one: T = @splat(1.0);
+            break :calc one / max;
+        };
+        return float_vec * multiplier;
+    }
+
+    pub fn setPixel(self: *const @This(), comptime T: type, x: u32, y: u32, pixel: T) void {
+        const im = self.cast();
+        const len = channels(T);
+        const E = Child(T);
+        const max_u8: E = @floatFromInt(std.math.maxInt(u8));
+        const max_u7: E = @floatFromInt(std.math.maxInt(u7));
+        const max: T = switch (len) {
+            1 => .{max_u8},
+            2 => .{ max_u8, max_u7 }, // alpha channel is only 7-bit
+            3 => .{ max_u8, max_u8, max_u8 },
+            4 => .{ max_u8, max_u8, max_u8, max_u7 },
+            else => unreachable,
+        };
+        // expand to int range (1.0 to 255.0)
+        const float_vec_wo_min_max = pixel * max;
+        // apply maximum constraint
+        const float_vec_wo_min = @select(E, float_vec_wo_min_max < max, float_vec_wo_min_max, max);
+        // apply minimum constraint
+        const min: T = @splat(0.0);
+        const float_vec = @select(E, float_vec_wo_min > min, float_vec_wo_min, min);
+        const int_vec: @Vector(4, u8) = switch (len) {
+            1 => @intFromFloat(@shuffle(E, float_vec, max, @Vector(4, i32){ 0, 0, 0, -1 })),
+            2 => @intFromFloat(@shuffle(E, float_vec, undefined, @Vector(4, i32){ 0, 0, 0, 1 })),
+            3 => @intFromFloat(@shuffle(E, float_vec, max, @Vector(4, i32){ 0, 1, 2, -1 })),
+            4 => @intFromFloat(float_vec),
+            else => unreachable,
+        };
+        const r: c_int = int_vec[0];
+        const g: c_int = int_vec[1];
+        const b: c_int = int_vec[2];
+        const a: c_int = int_vec[3];
+        const t: c_int = 127 - a;
+        const i: usize = y;
+        const j: usize = x;
+        if (im.tpixels) |tpixels| {
+            const color = (r << 16) | (g << 8) | (b << 0) | (t << 24);
+            tpixels[i][j] = color;
+        } else if (im.pixels) |pixels| {
+            const color_index = self.findClosestPaletteColor(r, g, b, t);
+            pixels[i][j] = color_index;
+        }
+    }
+
+    const Super = Parent(@This());
+
+    pub fn sampleNearest(self: *const @This(), comptime T: type, coord: Coord(T)) T {
+        return Super.sampleNearest(self, T, coord);
+    }
+
+    pub fn sampleLinear(self: *const @This(), comptime T: type, coord: Coord(T)) T {
+        return Super.sampleLinear(self, T, coord);
+    }
+
+    inline fn component(color: c_int, mask: c_uint, comptime shift: u6) u8 {
+        const value: c_uint = @bitCast(color);
+        return @truncate((value & mask) >> shift);
+    }
+
+    fn getPaletteColor(self: *const @This(), color_index: c_int) c_int {
+        const im = self.cast();
+        const index: usize = @intCast(color_index);
+        const r: c_int = im.red[index];
+        const g: c_int = im.green[index];
+        const b: c_int = im.blue[index];
+        const t: c_int = im.alpha[index];
+        return (r << 16) | (g << 8) | (b << 0) | (t << 24);
+    }
+
+    fn findClosestPaletteColor(self: *const @This(), r: c_int, g: c_int, b: c_int, a: c_int) u8 {
+        const im = self.cast();
+        var color_index: usize = undefined;
+        var min_dist: usize = undefined;
+        const len: usize = @intCast(im.colors_total);
+        for (0..len) |i| {
+            const rd = im.red[i] - r;
+            const gd = im.green[i] - g;
+            const bd = im.blue[i] - b;
+            const ad = im.alpha[i] - a;
+            const dist = rd * rd + gd * gd + bd * bd + ad * ad;
+            if (i == 0 or dist < min_dist) {
+                min_dist = dist;
+                color_index = i;
+            }
+        }
+        return @intCast(color_index);
+    }
+};
+
+const GdStruct = extern struct {
+    const AlphaBlend = enum(c_uint) { replace, alpha_blend, normal, overlay, multiply };
+    const Interlace = enum(c_uint) { no, use };
+    const Interpolation = enum(c_uint) {
+        default,
+        bell,
+        bessel,
+        bilinear_fixed,
+        bicubic,
+        bicubic_fixed,
+        blackman,
+        box,
+        bspline,
+        catmullrom,
+        gaussian,
+        generalized_cubic,
+        hermite,
+        hamming,
+        hanning,
+        mitchell,
+        nearest_neighbour,
+        power,
+        quadratic,
+        sinc,
+        triangle,
+        weighted4,
+    };
+    const InterpolationFn = ?*const fn (f64) callconv(.c) f64;
+    const SaveAlpha = enum(c_uint) { no, save };
+    const TrueColor = enum(c_uint) { palette, yes };
+    const max_colors = 256;
+
+    pixels: ?[*][*]u8,
+    sx: c_int,
+    sy: c_int,
+    colors_total: c_int,
+    red: [max_colors]c_int,
+    green: [max_colors]c_int,
+    blue: [max_colors]c_int,
+    open: [max_colors]c_int,
+    transparent: c_int,
+    poly_ints: ?[*]c_int,
+    poly_allocated: c_int,
+    brush: ?*@This(),
+    tile: ?*@This(),
+    brush_color_map: [max_colors]c_int,
+    tile_color_map: [max_colors]c_int,
+    style_length: c_int,
+    style_pos: c_int,
+    style: ?[*]c_int,
+    interlace: Interlace,
+    thick: c_int,
+    alpha: [max_colors]c_int,
+    true_color: TrueColor,
+    tpixels: ?[*][*]c_int,
+    alpha_blending: AlphaBlend,
+    save_alpha: SaveAlpha,
+    aa: c_int,
+    aa_color: c_int,
+    aa_dont_blend: c_int,
+    cx1: c_int,
+    cy1: c_int,
+    cx2: c_int,
+    cy2: c_int,
+    res_x: c_uint,
+    res_y: c_uint,
+    interpolation: Interpolation,
+    interpolation_fn: ?*const InterpolationFn,
+};
+
+fn Child(comptime T: type) type {
+    return @typeInfo(T).vector.child;
+}
+
+fn Coord(comptime T: type) type {
+    return @Vector(2, Child(T));
+}
+
+fn Parent(comptime Self: type) type {
+    return struct {
+        inline fn sampleNearest(self: *const Self, comptime T: type, coord: Coord(T)) T {
+            const width = self.getWidth();
+            const height = self.getHeight();
+            const coord_i: @Vector(2, i32) = @intFromFloat(@floor(coord));
+            // rely on integer overflow to filter out negative coordinates
+            const x, const y = @as(@Vector(2, u32), @bitCast(coord_i));
+            return switch (x < width and y < height) {
+                true => self.getPixel(T, x, y),
+                false => @splat(0),
+            };
+        }
+
+        inline fn sampleLinear(self: *const Self, comptime T: type, coord: Coord(T)) T {
+            const len = channels(T);
+            const c = coord - @as(Coord(T), @splat(0.5));
+            const c0 = @floor(c);
+            const f0 = c - c0;
+            const f1 = @as(Coord(T), @splat(1)) - f0;
+            const w: @Vector(4, f32) = .{ f1[0] * f1[1], f0[0] * f1[1], f1[0] * f0[1], f0[0] * f0[1] };
+            const p00 = self.sampleNearest(T, c0);
+            const p10 = self.sampleNearest(T, c0 + Coord(T){ 1, 0 });
+            const p01 = self.sampleNearest(T, c0 + Coord(T){ 0, 1 });
+            const p11 = self.sampleNearest(T, c0 + Coord(T){ 1, 1 });
+            var result: T = undefined;
+            inline for (0..len) |i| {
+                const p: @Vector(4, f32) = .{ p00[i], p10[i], p01[i], p11[i] };
+                result[i] = @reduce(.Add, p * w);
+            }
+            return result;
+        }
+    };
+}
+
+fn channels(comptime T: type) comptime_int {
+    switch (@typeInfo(T)) {
+        .vector => |ve| if (@typeInfo(ve.child) == .float) {
+            if (ve.len > 4) {
+                @compileError("Unsupported number of channels: " ++ ve.len);
+            }
+            return ve.len;
+        },
+        else => {},
+    }
+    @compileError("Expecting float vector type, received: " ++ @typeName(T));
+}

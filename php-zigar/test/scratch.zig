@@ -1,17 +1,15 @@
 const std = @import("std");
 
-pub var array1: [4]u4 = .{ 1, 2, 3, 4 };
-pub var array2: [4]u8 = .{ 1, 2, 3, 4 };
-pub var array3: [4]u128 = .{ 1, 2, 3, 4 };
+const zigar = @import("zigar");
 
-pub fn print1() void {
-    std.debug.print("{any}\n", .{array1});
-}
-
-pub fn print2() void {
-    std.debug.print("{any}\n", .{array2});
-}
-
-pub fn print3() void {
-    std.debug.print("{any}\n", .{array3});
+pub fn printInfo(image: zigar.image.Gd) void {
+    std.debug.print("Hello\n", .{});
+    const gd = image.cast();
+    _ = &gd;
+    std.debug.print("width = {d}, height = {d}\n", .{
+        image.getWidth(),
+        image.getHeight(),
+    });
+    const pixel = image.sampleLinear(@Vector(4, f32), @Vector(2, f32){ 100, 200 });
+    std.debug.print("pixel = {}\n", .{pixel});
 }

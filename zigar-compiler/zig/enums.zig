@@ -26,6 +26,9 @@ pub const StructurePurpose = enum {
     iterator,
     file,
     directory,
+    any_image,
+    web_image,
+    gd_image,
 
     pub fn isOptional(self: @This()) bool {
         return switch (self) {

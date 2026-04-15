@@ -11,6 +11,7 @@ const FunctionInfo = php.FunctionInfo;
 const ExecuteData = php.ExecuteData;
 const FunctionEntry = php.FunctionEntry;
 const ModuleEntry = php.ModuleEntry;
+const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
@@ -151,6 +152,27 @@ const functions = struct {
             var loop_type: *String = undefined;
             try php.parseArguments(ed, "S", .{&loop_type});
             try CallDispatcher.event_loop.use(loop_type);
+        }
+    };
+    pub const zigar_test = struct {
+        pub const arg_info = [_]ArgInfo{
+            .{
+                .name = "value",
+                .type = .{
+                    .type_mask = php.MAY_BE_OBJECT,
+                    .ptr = null,
+                },
+            },
+        };
+        pub const info = FunctionInfo{
+            .required_num_args = 1,
+        };
+
+        pub fn run(ed: *ExecuteData, _: *Value) !void {
+            var arg: *Value = undefined;
+            try php.parseArguments(ed, "O", .{&arg});
+            const obj: *Object = try php.getValueObject(arg);
+            _ = obj;
         }
     };
 };

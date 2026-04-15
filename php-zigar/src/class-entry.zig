@@ -618,7 +618,10 @@ pub const ZigClassEntry = struct {
         }
         const slot_usage: SlotUsage = switch (slot_count) {
             0 => .none,
-            1 => .single,
+            1 => switch (self.type) {
+                .array, .slice => .multiple,
+                else => .single,
+            },
             else => .multiple,
         };
         // attach accessors to members
@@ -975,8 +978,15 @@ pub const ZigClassEntry = struct {
             }
         } else .{ .inaccessible = .{} };
         if (accessors == .inaccessible) {
-            std.debug.print("no accessors\n", .{});
+            std.debug.print("no accessors: {s}\n", .{self.getStructureName()});
+            std.debug.print("slot usage = {}\n", .{slot_usage});
+            std.debug.print("for vector = {}\n", .{for_vector});
             std.debug.print("member type = {}\n", .{member.type});
+            std.debug.print("member bit size = {}\n", .{member.bit_size});
+            std.debug.print("member bit offset = {?}\n", .{member.bit_offset});
+            std.debug.print("member byte size = {?}\n", .{member.byte_size});
+            std.debug.print("member flags = {}\n", .{member.flags});
+            std.debug.print("member slot = {?}\n", .{member.slot});
         }
         if (member.type == .int or member.type == .uint) {
             if (member.class.type == .@"enum" or member.class.type == .error_set) {

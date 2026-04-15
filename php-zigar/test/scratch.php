@@ -7,16 +7,8 @@ use Revolt\EventLoop;
 zigar_compile_module(__DIR__ . "/scratch.zig", "/tmp/scratch.zigar");
 $m = zigar_load_module("/tmp/scratch.zigar");
 
-echo $m->print1(), "\n";
-print_r($m->array2);
-$m->array2 = [ 12, 34, 56, 78 ];
-echo $m->print2(), "\n";
-$m->array3 = [ 1234, 5678, 12345, 67890 ];
-for ($i = 0; $i < 4; $i++) {
-    echo $m->array3[$i], "\n";
-}
-echo $m->print3(), "\n";
+$img = imagecreatetruecolor(640, 480);
+$color = imagecolorallocatealpha($img, 0, 0xAA, 0xAA, 0x44);
+imagefilledrectangle($img, 0, 0, 600, 400, $color);
 
-$m = null;
-gc_collect_cycles();
-echo "gc finished\n";
+$m->printInfo($img);

@@ -1,6 +1,3 @@
-const std = @import("std");
-const host = @import("root").host;
-
 pub const function = struct {
     pub const release = host.releaseFunction;
 
@@ -23,3 +20,12 @@ pub const thread = struct {
 pub const io = struct {
     pub const redirect = host.redirectIO;
 };
+
+pub const image = struct {
+    pub const Any = host.image.AnyImage;
+    pub const Gd = host.image.GdImage;
+    pub const Web = host.image.WebImage;
+};
+
+const std = @import("std");
+const host = @import("root").host;

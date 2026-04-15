@@ -11,6 +11,7 @@ pub const AbortSignal = @import("../type/abort-signal.zig").AbortSignal;
 pub const Generator = @import("../type/generator.zig").Generator;
 pub const GeneratorOf = @import("../type/generator.zig").GeneratorOf;
 pub const GeneratorArgOf = @import("../type/generator.zig").GeneratorArgOf;
+pub const image = @import("../type/image.zig");
 pub const Promise = @import("../type/promise.zig").Promise;
 pub const PromiseOf = @import("../type/promise.zig").PromiseOf;
 pub const PromiseArgOf = @import("../type/promise.zig").PromiseArgOf;

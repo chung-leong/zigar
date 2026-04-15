@@ -120,6 +120,16 @@ pub const Union = struct {
     pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) Error!void {
         if (transform == .none) {
             if (try self.copySelf(value)) return;
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            if (class.purpose == .any_image) {
+                const selector = static.selector orelse return error.Unexpected;
+                const name = php.persistent("gd");
+                try self.setProperty(name, value, null);
+                const sel_value = try php.getHashEntry(&selector.possible_values, name);
+                try selector.accessors.set(self, sel_value);
+                return;
+            }
             const ht = try php.getValueHashTable(value);
             var iter: HashTableIterator = .init(ht, .{});
             if (iter.len != 1) {
@@ -132,8 +142,6 @@ pub const Union = struct {
             self.setProperty(name, field_value, null) catch |err| {
                 return self.reportFieldError(name, .write, err);
             };
-            const class = ZigClassEntry.fromStructure(self);
-            const static = class.getStaticData(@This());
             if (static.selector) |selector| {
                 const sel_value = try php.getHashEntry(&selector.possible_values, name);
                 try selector.accessors.set(self, sel_value);
