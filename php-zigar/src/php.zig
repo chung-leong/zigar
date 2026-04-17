@@ -419,16 +419,16 @@ pub const ValueType = enum(u8) {
     }
 };
 
-// pub const GarbageCollectionColor = enum(u2) {
-//     black,
-//     white,
-//     grey,
-//     purple,
+pub const GarbageCollectionColor = enum(u2) {
+    black,
+    white,
+    grey,
+    purple,
 
-//     pub fn get(obj: *Object) @This() {
-//         return @enumFromInt(obj.gc.u.type_info >> 30);
-//     }
-// };
+    pub fn get(obj: *Object) @This() {
+        return @enumFromInt(obj.gc.u.type_info >> 30);
+    }
+};
 
 pub fn isGMP(obj: *Object) bool {
     const name_str = obj.ce.*.name orelse return false;
@@ -961,8 +961,8 @@ pub fn setHashEntry(ht: *HashTable, key: anytype, value: *const Value) void {
 }
 
 pub fn setHashEntryRef(ht: *HashTable, key: anytype, value: *const Value) void {
+    defer addRef(value);
     setHashEntry(ht, key, value);
-    addRef(value);
 }
 
 pub fn getHashNextKey(ht: *HashTable) Long {
@@ -973,6 +973,11 @@ pub fn appendHashEntry(ht: *HashTable, value: *const Value) usize {
     ht.*.u.flags |= php_h.HASH_FLAG_ALLOW_COW_VIOLATION;
     _ = php_h.zend_hash_next_index_insert(ht, @constCast(value));
     return php_h.zend_hash_num_elements(ht);
+}
+
+pub fn appendHashEntryRef(ht: *HashTable, value: *const Value) usize {
+    defer addRef(value);
+    return appendHashEntry(ht, value);
 }
 
 pub fn removeHashEntry(ht: *HashTable, key: anytype) bool {
@@ -1143,6 +1148,10 @@ pub fn release(value: anytype) void {
         *HashTable, [*c]HashTable => php_h.zend_hash_release(value),
         else => @compileError("Unexpected type: " ++ @typeName(T)),
     }
+}
+
+pub fn isObjectFreed(obj: *Object) bool {
+    return (obj.gc.u.type_info & php_h.IS_OBJ_FREE_CALLED) != 0;
 }
 
 pub fn isCallable(callable: *const Value) bool {

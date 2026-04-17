@@ -133,10 +133,10 @@ pub fn Parent(comptime S: type) type {
 
         pub fn finalize(self: *S, init_called: bool) !void {
             _ = init_called;
-            if (@hasDecl(S, "buffer")) {
+            if (@hasField(S, "buffer")) {
                 const obj = ZigObject(S).fromStructure(self).object();
                 const class = ZigClassEntry.fromObject(obj);
-                try class.registerObject(self.object());
+                try class.registerObject(obj);
             }
         }
 
@@ -315,7 +315,7 @@ pub fn Parent(comptime S: type) type {
         pub fn freeObject(obj: *Object) void {
             const self = fromObject(obj);
             const class = ZigClassEntry.fromObject(obj);
-            // std.debug.print("freeObject: {s} {s} ({d})\n", .{ class.getStructureName(), class.getName(), obj.handle });
+            // std.debug.print("freeObject: {}, object {d}, {x}\n", .{ S, obj.handle, @intFromPtr(self) });
             // only structure that a pointer can points to implement getExtent()
             if (@hasField(S, "buffer")) {
                 if (@hasDecl(S, "getExtent")) {
@@ -381,6 +381,12 @@ pub fn Parent(comptime S: type) type {
         pub fn getGarbageCollection(obj: *Object, table: *[*c]Value, n: *c_int) !?*HashTable {
             const self = fromObject(obj);
             const class = ZigClassEntry.fromObject(obj);
+            // std.debug.print("getGarbageCollection: {}, object {d}, refcount = {d} ({})\n", .{
+            //     class.type,
+            //     obj.handle,
+            //     obj.gc.refcount,
+            //     php.GarbageCollectionColor.get(obj),
+            // });
             const gc_buffer = class.getGarbageCollectionBuffer();
             try gc_buffer.add(class.object);
             if (@hasField(S, "table")) {
@@ -518,20 +524,15 @@ pub fn StructLike(comptime S: type) type {
         }
 
         pub fn getProperties(obj: *Object) !*HashTable {
+            var iter: iterator.PropertyIterator(S) = .init(obj);
             const self = fromObject(obj);
-            const class = ZigClassEntry.fromObject(obj);
             const ht = php.createArray();
-            var iter = class.getMemberIterator(scope);
             const is_tuple = isTuple(self);
-            while (iter.next()) |member| {
-                if (iter.currentName()) |name| {
-                    var value = try member.accessors.get(self);
-                    errdefer php.release(&value);
-                    if (is_tuple) {
-                        _ = php.appendHashEntry(ht, &value);
-                    } else {
-                        php.setHashEntry(ht, name, &value);
-                    }
+            while (iter.next()) |value| {
+                if (is_tuple) {
+                    _ = php.appendHashEntryRef(ht, value);
+                } else {
+                    php.setHashEntryRef(ht, iter.current_name.?, value);
                 }
             }
             // caller seem to expect a hash table with zero refcount

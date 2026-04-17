@@ -13,6 +13,7 @@ const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
 const Function = php.Function;
 const HashTable = php.HashTable;
+const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
 const ObjectIterator = php.ObjectIterator;
 const String = php.String;
@@ -23,7 +24,6 @@ pub fn Class(comptime S: type) type {
     return struct {
         closure: Closure = undefined,
         table: Value = undefined,
-        prop_names: []*String = &.{},
 
         pub const scope: ZigClassEntry.ScopeType = .static;
         pub const Super = structure.StructLike(@This());
@@ -40,30 +40,6 @@ pub fn Class(comptime S: type) type {
         var methods: ?Methods = null;
 
         pub fn finalize(self: *@This(), _: bool) !void {
-            const obj = ZigObject(Class(S)).fromStructure(self).object();
-            const class = ZigClassEntry.fromEntry(obj.ce);
-            switch (class.type) {
-                .@"struct", .@"union", .@"enum", .@"opaque" => {
-                    // create list of property names
-                    var prop_count: usize = 0;
-                    var iter = class.getMemberIterator(scope);
-                    while (iter.next()) |member| {
-                        if (member.class.type != .function) prop_count += 1;
-                    }
-                    if (prop_count > 0) {
-                        self.prop_names = try php.allocator.alloc(*String, prop_count);
-                        iter.reset();
-                        var index: usize = 0;
-                        while (iter.next()) |member| {
-                            if (member.class.type != .function) {
-                                self.prop_names[index] = iter.currentName() orelse return error.Unexpected;
-                                index += 1;
-                            }
-                        }
-                    }
-                },
-                else => {},
-            }
             // create closure for casting string to Zig object
             self.closure = .{
                 .self = self,
@@ -71,12 +47,14 @@ pub fn Class(comptime S: type) type {
             };
         }
 
+        pub fn setStorage(self: *@This(), table: *const Value) !void {
+            // class objects reference the static template table
+            self.table = table.*;
+        }
+
         pub fn freeObject(obj: *Object) void {
-            const self = fromObject(obj);
             const class = ZigClassEntry.fromObject(obj);
-            // std.debug.print("freeObject: {s} Class({s}) ({d})\n", .{ class.getStructureName(), class.getName(), obj.handle });
-            php.release(&self.table);
-            if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
+            // std.debug.print("freeObject: Class({}), object {d}, {x}\n", .{ S, obj.handle, @intFromPtr(self) });
             // destroy the class entry
             class.destroy();
         }
@@ -119,28 +97,29 @@ pub fn Class(comptime S: type) type {
 
         pub fn getGarbageCollection(obj: *Object, table: *[*c]Value, n: *c_int) !?*HashTable {
             const class = ZigClassEntry.fromObject(obj);
-            // std.debug.print("getGarbageCollection: {s} {s} ({d})\n", .{ class.getStructureName(), class.getName(), obj.handle });
             const gc_buffer = class.getGarbageCollectionBuffer();
+            // std.debug.print("getGarbageCollection: Class({}), object {d}, refcount = {d} ({})\n", .{
+            //     class.type,
+            //     obj.handle,
+            //     obj.gc.refcount,
+            //     php.GarbageCollectionColor.get(obj),
+            // });
             var member_iter = class.getMemberIterator(.instance);
             while (member_iter.next()) |member| {
-                // ignore properties, since the return type of getters are already reachable via their function object
+                // ignore properties, as the return type of getters are already reachable via their function object
+                // finalizeStructure() in class-entry.zig doesn't put a reference on the member class
                 if (member.accessors == .property) continue;
                 if (member.class == class) continue;
                 try gc_buffer.add(member.class.object);
             }
-            if (class.instance.template.table) |*tbl| {
-                try gc_buffer.add(tbl);
-            }
-            if (class.static.template.table) |*tbl| {
-                try gc_buffer.add(tbl);
-            }
+            try gc_buffer.add(&class.instance.template.table);
+            try gc_buffer.add(&class.static.template.table);
             gc_buffer.use(table, n);
             return null;
         }
 
         pub fn getIterator(obj: *Object) !?*ObjectIterator {
-            const self = fromObject(obj);
-            return try iterator.PropertyIterator(@This()).create(obj, self.prop_names, &.{});
+            return try iterator.PropertyIterator(@This()).create(obj);
         }
 
         pub fn handleCast(ed: *ExecuteData, return_value: *Value) !void {
@@ -159,20 +138,14 @@ pub fn Class(comptime S: type) type {
             const static = class.getStaticData(S);
             const Static = @TypeOf(static.*);
             // certain types like enum can cast from other types
-            if (@hasDecl(Static, "castValue")) {
+            if (@typeInfo(Static) == .@"struct" and @hasDecl(Static, "castValue")) {
                 if (try static.castValue(arg)) |value| {
                     return_value.* = value;
                     return;
                 }
             }
             const str = php.getValueString(arg) catch {
-                // TODO: refactor this
-                const cast_args = switch (@hasDecl(Static, "cast_args")) {
-                    true => static.getCastArgs(),
-                    false => "a string",
-                };
-                return failure.report("casting operation expects {s} as argument, received {s}", .{
-                    cast_args,
+                return failure.report("casting operation expects a string as argument, received {s}", .{
                     @tagName(php.getValueType(arg)),
                 });
             };
@@ -234,7 +207,6 @@ pub fn Class(comptime S: type) type {
             return @ptrCast(@alignCast(src_struct.buffer.bytes.ptr));
         }
 
-        pub const setStorage = Super.setStorage;
         pub const getValue = Super.getValue;
         pub const getProperty = Super.getProperty;
         pub const setProperty = Super.setProperty;

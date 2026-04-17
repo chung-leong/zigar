@@ -27,7 +27,6 @@ pub const Union = struct {
     const MemberCacheEntry = Super.MemberCacheEntry;
 
     pub const Static = struct {
-        prop_names: []*String = &.{},
         selector: ?struct {
             class: *ZigClassEntry,
             accessors: *accessor.Any,
@@ -69,15 +68,12 @@ pub const Union = struct {
                     .possible_values = sel_ht,
                 };
             }
-            // create list of prop names
-            self.prop_names = try class.createPropertyList(.instance);
         }
 
         pub fn deinit(self: *@This()) void {
             if (self.selector) |*selector| {
                 php.destroyHashTable(&selector.possible_values);
             }
-            if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
         }
 
         pub fn getEnumClass(self: *@This()) ?*ZigClassEntry {
@@ -151,6 +147,15 @@ pub const Union = struct {
         }
     }
 
+    pub fn isMemberActive(self: *@This(), name: *String, member: *ZigClassEntry.Member) bool {
+        const class = ZigClassEntry.fromStructure(self);
+        if (class.flags.@"union".has_tag) {
+            if (member.accessors == .property) return true;
+            self.checkSelector(name, null) catch return false;
+        }
+        return true;
+    }
+
     pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) accessor.Error!void {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.common.has_pointer) {
@@ -205,38 +210,8 @@ pub const Union = struct {
         return Super.writeProperty(obj, name, value, cache_slot);
     }
 
-    pub fn getProperties(obj: *Object) !*HashTable {
-        const class = ZigClassEntry.fromObject(obj);
-        const self = fromObject(obj);
-        const ht = php.createArray();
-        var iter = class.getMemberIterator(.instance);
-        if (class.flags.@"union".has_tag) {
-            // tagged unions return only the active member
-            const tag_name = try self.getActiveTagName();
-            const member = try class.getMember(.instance, tag_name);
-            const value = try member.accessors.get(self);
-            php.setHashEntry(ht, tag_name, &value);
-        } else {
-            // where as untagged ones return all members
-            while (iter.next()) |member| {
-                if (iter.currentName()) |name| {
-                    var value = try member.accessors.get(self);
-                    errdefer php.release(&value);
-                    php.setHashEntry(ht, name, &value);
-                }
-            }
-        }
-        // caller seem to expect a hash table with zero refcount
-        ht.gc.refcount = 0;
-        return ht;
-    }
-
     pub fn getIterator(obj: *Object) !?*ObjectIterator {
-        const class = ZigClassEntry.fromObject(obj);
-        const static = class.getStaticData(@This());
-        const self = fromObject(obj);
-        const active_list = try self.getActiveTagNameList();
-        return try iterator.PropertyIterator(@This()).create(obj, active_list, static.prop_names);
+        return try iterator.PropertyIterator(@This()).create(obj);
     }
 
     fn getActiveTagNameList(self: *@This()) ![]*String {
@@ -317,12 +292,11 @@ pub const Union = struct {
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;
     pub const hasProperty = Super.hasProperty;
+    pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;
-    const returnSelf = Super.returnSelf;
-    const returnBytes = Super.returnBytes;
     const findMember = Super.findMember;
     const findTransform = Super.findTransform;
 };

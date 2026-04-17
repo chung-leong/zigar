@@ -37,7 +37,6 @@ pub const Struct = struct {
     const Super = structure.StructLike(@This());
 
     pub const Static = struct {
-        prop_names: []*String = &.{},
         backing_int: ?struct {
             class: *ZigClassEntry,
             accessors: *accessor.Any,
@@ -62,8 +61,6 @@ pub const Struct = struct {
             while (iter.next()) |member| {
                 if (member.flags.is_required) self.required_field_count += 1;
             }
-            // create a list of property names for use by iterator
-            self.prop_names = try class.createPropertyList(.instance);
             // create callback function for promise or generator
             switch (class.purpose) {
                 inline .promise, .generator => |p| {
@@ -83,7 +80,6 @@ pub const Struct = struct {
 
         pub fn deinit(self: *@This()) void {
             if (self.callback) |cb| php.release(cb);
-            if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
         }
     };
 
@@ -238,11 +234,10 @@ pub const Struct = struct {
 
     pub fn getIterator(obj: *Object) !?*ObjectIterator {
         const class = ZigClassEntry.fromObject(obj);
-        const static = class.getStaticData(@This());
         return switch (class.purpose) {
             .iterator => try iterator.IteratorIterator.create(obj),
             .generator => try iterator.GeneratorIterator.create(obj),
-            else => try iterator.PropertyIterator(@This()).create(obj, static.prop_names, &.{}),
+            else => try iterator.PropertyIterator(@This()).create(obj),
         };
     }
 

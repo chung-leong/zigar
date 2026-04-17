@@ -33,22 +33,13 @@ pub const Enum = struct {
     const Super = structure.StructLike(@This());
 
     pub const Static = struct {
-        prop_names: []*String = &.{},
         constant_acc: *accessor.Constant = undefined,
         available_tags: HashTable = undefined,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             const member = try class.getMember(.instance, 0);
-            if (member.accessors != .constant) {
-                std.debug.print("member type = {}\n", .{member.type});
-                std.debug.print("bit size = {}\n", .{member.bit_size});
-                std.debug.print("byte size = {?}\n", .{member.byte_size});
-                std.debug.print("bit offset = {?}\n", .{member.bit_offset});
-                std.debug.print("structure type = {}\n", .{member.class.type});
-                std.debug.print("access type = {}\n", .{member.accessors.getType()});
-                return error.Unexpected;
-            }
+            if (member.accessors != .constant) return error.Unexpected;
             self.constant_acc = &member.accessors.constant;
             // loop through static members and add them to a hash table, keyed by
             // their integer values and names
@@ -65,13 +56,10 @@ pub const Enum = struct {
                     try self.addCanonical(name, tag_obj);
                 }
             }
-            // create a list of property names for use by iterator
-            self.prop_names = try class.createPropertyList(.instance);
         }
 
         pub fn deinit(self: *@This()) void {
             php.destroyHashTable(&self.available_tags);
-            if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
         }
 
         pub fn castValue(self: *@This(), value: *Value) !?Value {
@@ -91,9 +79,12 @@ pub const Enum = struct {
                         return self.findCanonical(value) catch php.createValueNull();
                     }
                 },
+                .string => return null,
                 else => {},
             }
-            return null;
+            return failure.report("casting operation expects an interger, a string, or a tagged union as argument, received {s}", .{
+                @tagName(php.getValueType(value)),
+            });
         }
 
         pub fn getCastArgs(_: *@This()) []const u8 {
@@ -185,7 +176,7 @@ pub const Enum = struct {
             }
         }
 
-        pub fn findCanonicalBytes(self: *@This(), value: *const Value) !*ByteBuffer {
+        pub fn findCanonicalInt(self: *@This(), value: *const Value) !Value {
             const tag = self.findCanonical(value) catch |err| {
                 const class = ZigClassEntry.fromStatic(self);
                 return switch (err) {
@@ -206,7 +197,7 @@ pub const Enum = struct {
             defer php.release(&tag);
             const tag_obj = try php.getValueObject(&tag);
             const tag_struct = fromObject(tag_obj);
-            return tag_struct.buffer;
+            return self.constant_acc.int.get(tag_struct);
         }
 
         fn addCanonical(self: *@This(), name: *String, tag_obj: *Object) !void {
@@ -270,9 +261,7 @@ pub const Enum = struct {
     }
 
     pub fn getIterator(obj: *Object) !?*ObjectIterator {
-        const class = ZigClassEntry.fromObject(obj);
-        const static = class.getStaticData(@This());
-        return try iterator.PropertyIterator(@This()).create(obj, static.prop_names, &.{});
+        return try iterator.PropertyIterator(@This()).create(obj);
     }
 
     pub const getExtent = Super.getExtent;
@@ -289,9 +278,9 @@ pub const Enum = struct {
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
+    pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;
-    const returnBytes = Super.returnBytes;
 };

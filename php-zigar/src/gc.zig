@@ -36,12 +36,12 @@ pub const GarbageCollectionBuffer = struct {
                 },
                 else => {},
             },
+            ?Value => if (arg.*) |*v| try self.add(v),
             Object => {
-                // const color: GarbageCollectionColor = .get(arg);
-                // std.debug.print("handle = {d}, ref_count = {d}, color = {}\n", .{
+                // std.debug.print("adding object {d}, refcount = {d}, ({})\n", .{
                 //     arg.handle,
                 //     arg.gc.refcount,
-                //     color,
+                //     php.GarbageCollectionColor.get(arg),
                 // });
                 const value = php.createValueObject(arg);
                 try self.list.append(php.allocator, value);

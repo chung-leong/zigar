@@ -18,24 +18,8 @@ pub const Opaque = struct {
 
     const Super = structure.StructLike(@This());
 
-    pub const Static = struct {
-        prop_names: []*String = &.{},
-
-        pub fn init(self: *@This(), class_obj: *Object) !void {
-            // create a list of property names for use by iterator
-            const class = ZigClassEntry.fromObject(class_obj);
-            self.prop_names = try class.createPropertyList(.instance);
-        }
-
-        pub fn deinit(self: *@This()) void {
-            if (self.prop_names.len > 0) php.allocator.free(self.prop_names);
-        }
-    };
-
     pub fn getIterator(obj: *Object) !?*ObjectIterator {
-        const class = ZigClassEntry.fromObject(obj);
-        const static = class.getStaticData(@This());
-        return try iterator.PropertyIterator(@This()).create(obj, static.prop_names, &.{});
+        return try iterator.PropertyIterator(@This()).create(obj);
     }
 
     fn throwException(self: *@This()) error{Unexpected} {

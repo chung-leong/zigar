@@ -99,9 +99,12 @@ pub const ErrorSet = struct {
         pub fn castValue(self: *@This(), value: *Value) !?Value {
             switch (php.getValueType(value)) {
                 .long => return self.findCanonical(value) catch php.createValueNull(),
+                .string => return null,
                 else => {},
             }
-            return null;
+            return failure.report("casting operation expects an interger or a string as argument, received {s}", .{
+                @tagName(php.getValueType(value)),
+            });
         }
 
         pub fn createCanonicalName(self: *@This()) ![]const u8 {
@@ -185,11 +188,11 @@ pub const ErrorSet = struct {
             };
         }
 
-        pub fn findCanonicalBytes(self: *@This(), value: *const Value) !*ByteBuffer {
+        pub fn findCanonicalInt(self: *@This(), value: *const Value) !Value {
             const err = try self.findCanonical(value);
             const err_obj = try php.getValueObject(&err);
             const err_struct = fromObject(err_obj);
-            return err_struct.buffer;
+            return self.constant_acc.int.get(err_struct);
         }
 
         fn addCanonical(self: *@This(), name: *String, err_obj: *Object) !void {

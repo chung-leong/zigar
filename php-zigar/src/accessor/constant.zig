@@ -41,14 +41,13 @@ pub const Constant = struct {
     }
 
     pub fn set(self: @This(), buffer: *ByteBuffer, value: *const Value) Error!void {
-        const int_buf = inline for (.{ .@"enum", .error_set }) |t| {
+        const int_value = inline for (.{ .@"enum", .error_set }) |t| {
             if (self.class.type == t) {
                 const S = @field(structure.by_enum, @tagName(t));
                 const static = self.class.getStaticData(S);
-                break try static.findCanonicalBytes(value);
+                break try static.findCanonicalInt(value);
             }
         } else unreachable;
-        const int_value = try self.get(int_buf);
         var source = .{ .buffer = buffer };
         try self.int.set(&source, &int_value);
     }
