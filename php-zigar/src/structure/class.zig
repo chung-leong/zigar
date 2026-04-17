@@ -54,6 +54,7 @@ pub fn Class(comptime S: type) type {
 
         pub fn freeObject(obj: *Object) void {
             const class = ZigClassEntry.fromObject(obj);
+            // const self = fromObject(obj);
             // std.debug.print("freeObject: Class({}), object {d}, {x}\n", .{ S, obj.handle, @intFromPtr(self) });
             // destroy the class entry
             class.destroy();
@@ -165,7 +166,8 @@ pub fn Class(comptime S: type) type {
 
         pub fn handleConstructor(ed: *ExecuteData, _: *Value) !void {
             if (!@hasDecl(S, "checkArguments")) unreachable;
-            const this_struct = try getThis(&ed.This);
+            const this_obj = try php.getValueObject(&ed.This);
+            const this_struct = ZigObject(S).fromObject(this_obj).structure();
             // see if an allocator is specified
             var arg_iter: ArgumentIterator = .init(ed);
             const custom_allocator = try extractAllocator(&arg_iter);
@@ -182,13 +184,18 @@ pub fn Class(comptime S: type) type {
         }
 
         pub fn handleToString(ed: *ExecuteData, return_value: *Value) !void {
-            const this_struct = try getThis(&ed.This);
-            return_value.* = try this_struct.getValue(.string);
-        }
-
-        fn getThis(value: *const Value) !*S {
-            const obj = try php.getValueObject(value);
-            return ZigObject(S).fromObject(obj).structure();
+            const this_obj = try php.getValueObject(&ed.This);
+            if (ZigObject(S).isInstance(this_obj)) {
+                const this_struct = ZigObject(S).fromObject(this_obj).structure();
+                return_value.* = try this_struct.getValue(.string);
+            } else {
+                return_value.* = php.createValueNull();
+                const class = ZigClassEntry.fromObject(this_obj);
+                return failure.report("cannot convert {s} '{s}' to a string", .{
+                    class.getStructureName(),
+                    class.getName(),
+                });
+            }
         }
 
         fn extractAllocator(arg_iter: *ArgumentIterator) !?*std.mem.Allocator {

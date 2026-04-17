@@ -135,6 +135,7 @@ pub const Enum = struct {
                 .object => {
                     const obj = php.getValueObject(key) catch unreachable;
                     if (obj.ce == class.entry()) {
+                        php.addRef(obj);
                         return key.*;
                     } else if (php.isGMP(obj)) {
                         var key_copy = key.*;
@@ -232,13 +233,21 @@ pub const Enum = struct {
     };
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
-        if (transform == .none) {
-            const class = ZigClassEntry.fromStructure(self);
-            const static = class.getStaticData(@This());
-            return try static.constant_acc.get(self.buffer);
-        } else {
-            return Super.getValue(self, transform);
-        }
+        return switch (transform) {
+            .none, .string => |t| get: {
+                const class = ZigClassEntry.fromStructure(self);
+                const static = class.getStaticData(@This());
+                const value = try static.constant_acc.get(self.buffer);
+                if (t == .none) break :get value;
+                const obj = try php.getValueObject(&value);
+                defer php.release(obj);
+                const enum_struct = fromObject(obj);
+                const str = enum_struct.canonical.?.name;
+                php.addRef(str);
+                break :get php.createValueString(str);
+            },
+            else => Super.getValue(self, transform),
+        };
     }
 
     pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) !void {
