@@ -8,6 +8,7 @@ const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const Object = php.Object;
 const ObjectIterator = php.ObjectIterator;
+const String = php.String;
 const Value = php.Value;
 const structure = @import("../structure.zig");
 const invokeMethod = structure.invokeMethod;
@@ -19,6 +20,8 @@ pub const Pointer = struct {
     buffer: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
+    const target_prop_name = "__target";
+    const target_prop_alias = "*";
 
     pub const Static = struct {
         target_class: *ZigClassEntry = undefined,
@@ -93,21 +96,40 @@ pub const Pointer = struct {
             }
         }
     };
+    pub const TargetCacheEntry = struct {
+        id: usize,
+
+        const name = target_prop_name[2..];
+
+        pub inline fn find(cache_slot: ?[*]?*anyopaque) ?bool {
+            const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
+            return if (self.id == @intFromPtr(name))
+                true
+            else if (self.id != 0)
+                false
+            else
+                null;
+        }
+
+        pub inline fn set(cache_slot: ?[*]?*anyopaque) void {
+            const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return;
+            self.* = .{ .id = @intFromPtr(name) };
+        }
+    };
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) accessor.Error!Value {
         if (self.buffer.flags.inaccessible) return self.reportInaccessiblePointer();
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         try static.loadTarget(self);
-        const value = self.table;
+        const target_obj = php.getValueObject(&self.table) catch return error.NullPointer;
         switch (transform) {
             .none => {
-                php.addRef(&value);
-                return value;
+                php.addRef(target_obj);
+                return php.createValueObject(target_obj);
             },
             else => {
-                const obj = php.getValueObject(&value) catch return error.NullPointer;
-                return try invokeMethod(obj, "getValue", .{transform});
+                return try invokeMethod(target_obj, "getValue", .{transform});
             },
         }
     }
@@ -161,6 +183,60 @@ pub const Pointer = struct {
         try @call(.auto, cb, .{self} ++ args);
     }
 
+    pub fn getProperty(self: *@This(), name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) !Value {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        try static.loadTarget(self);
+        const target_obj = php.getValueObject(&self.table) catch return error.NullPointer;
+        if (matchTarget(name, cache_slot)) {
+            php.addRef(target_obj);
+            return php.createValueObject(target_obj);
+        } else {
+            if (static.target_class.type == .pointer) {
+                return self.reportNoAutoDereference();
+            }
+            var retval: Value = undefined;
+            const handler = target_obj.handlers.*.read_property.?;
+            _ = handler(target_obj, name, prop_type, cache_slot, &retval);
+            return retval;
+        }
+    }
+
+    pub fn setProperty(self: *@This(), name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !void {
+        if (matchTarget(name, cache_slot)) {
+            return try self.setValue(value, .none);
+        } else {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            try static.loadTarget(self);
+            const target_obj = php.getValueObject(&self.table) catch return error.NullPointer;
+            if (static.target_class.type == .pointer) {
+                return self.reportNoAutoDereference();
+            }
+            const handler = target_obj.handlers.*.write_property.?;
+            _ = handler(target_obj, name, value, cache_slot);
+        }
+    }
+
+    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
+        const self = fromObject(obj);
+        if (self.getProperty(name, prop_type, cache_slot)) |value| {
+            retval.* = value;
+        } else |err| {
+            retval.* = php.createValueNull();
+            php.throwError(reportFieldError(self, name, .read, err));
+        }
+        return retval;
+    }
+
+    pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
+        const self = fromObject(obj);
+        self.setProperty(name, value, cache_slot) catch |err| {
+            return reportFieldError(self, name, .write, err);
+        };
+        return value;
+    }
+
     pub fn externalizeTarget(self: *@This()) accessor.Error!void {
         const obj = php.getValueObject(&self.table) catch return;
         try invokeMethod(obj, "externalize", .{});
@@ -186,6 +262,22 @@ pub const Pointer = struct {
         return failure.report("pointer is inaccessible because it's in an untagged union", .{});
     }
 
+    fn reportNoAutoDereference(self: *@This()) error{Unexpected} {
+        const class = ZigClassEntry.fromStructure(self);
+        return failure.report("cannot access properties through pointer '{s}', only one level of automatic dereferencing", .{
+            class.getName(),
+        });
+    }
+
+    fn matchTarget(name: *String, cache_slot: ?[*]?*anyopaque) bool {
+        if (TargetCacheEntry.find(cache_slot)) |match| return match;
+        if (php.matchString(name, target_prop_name) or php.matchString(name, target_prop_alias)) {
+            TargetCacheEntry.set(cache_slot);
+            return true;
+        }
+        return false;
+    }
+
     pub const getExtent = Super.getExtent;
     pub const setStorage = Super.setStorage;
     pub const initialize = Super.initialize;
@@ -194,9 +286,8 @@ pub const Pointer = struct {
     pub const checkArguments = Super.checkArguments;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
-    pub const readProperty = Super.readProperty;
-    pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
     pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
+    const reportFieldError = Super.reportFieldError;
 };

@@ -16,15 +16,14 @@ pub const Optional = struct {
 
     pub const Static = struct {
         payload_acc: *accessor.Any = undefined,
-        present_acc: *accessor.Int(.{ .bit_size = 8, .signedness = .unsigned }) = undefined,
+        present_acc: *accessor.Any = undefined,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             const member0 = try class.getMember(.instance, 0);
             self.payload_acc = &member0.accessors;
             const member1 = try class.getMember(.instance, 1);
-            if (member1.accessors != .u8) return error.Unexpected;
-            self.present_acc = &member1.accessors.u8;
+            self.present_acc = &member1.accessors;
         }
     };
 
@@ -32,7 +31,7 @@ pub const Optional = struct {
         if (transform == .none) {
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
-            const present = try static.present_acc.get(self.buffer);
+            const present = try static.present_acc.get(self);
             return switch (try php.getValueLong(&present)) {
                 0 => php.createValueNull(),
                 else => try static.payload_acc.get(self),
@@ -56,9 +55,9 @@ pub const Optional = struct {
             }
             // optionals of error sets and pointers don't use a separate present flag
             // non-zero value indiciate whether a value is present
-            if (class.flags.optional.has_selector) {
+            if (static.present_acc.* == .u8) {
                 const present = php.createValueLong(if (is_present) 1 else 0);
-                try static.present_acc.set(self.buffer, &present);
+                try static.present_acc.set(self, &present);
             }
         } else {
             try Super.setValue(self, value, transform);
@@ -69,7 +68,7 @@ pub const Optional = struct {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.common.has_pointer) {
             const static = class.getStaticData(@This());
-            const present = try static.present_acc.get(self.buffer);
+            const present = try static.present_acc.get(self);
             if (try php.getValueLong(&present) != 0) {
                 const value = try static.payload_acc.get(self);
                 defer php.release(&value);

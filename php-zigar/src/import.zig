@@ -47,7 +47,13 @@ pub const StructureImporter = struct {
     }
 
     pub fn deinit(self: *@This()) void {
-        for (self.value_list.items) |*item| {
+        const ptr_ptr: **anyopaque = @ptrFromInt(0x00007ffff51a7960);
+        for (self.value_list.items, 0..) |*item, i| {
+            defer {
+                if (@intFromPtr(ptr_ptr.*) == 0x7ffff51a789f) {
+                    std.debug.print("i == {d}\n", .{i});
+                }
+            }
             if (php.getValuePointer(*ByteBuffer, item)) |b| {
                 b.release();
             } else |_| {
@@ -78,9 +84,9 @@ pub const StructureImporter = struct {
         return root;
     }
 
-    fn allocateValue(self: *@This(), value: Value) Handle {
+    fn allocateHandle(self: *@This(), value: Value) Handle {
         const handle_value = for (self.value_list.items, 0..) |*item, i| {
-            if (item.u1.type_info == value.u1.type_info and item.value.ptr == value.value.ptr)
+            if (item.u1.v.type == value.u1.v.type and item.value.ptr == value.value.ptr)
                 break i + 1;
         } else insert: {
             self.value_list.append(php.allocator, value) catch
@@ -97,7 +103,7 @@ pub const StructureImporter = struct {
 
     pub fn createBool(self: *@This(), initializer: bool) !Handle {
         const value = php.createValueBool(initializer);
-        return self.allocateValue(value);
+        return self.allocateHandle(value);
     }
 
     pub fn createInteger(self: *@This(), initializer: i32, unsigned: bool) !Handle {
@@ -105,7 +111,7 @@ pub const StructureImporter = struct {
             php.createValueAnyInt(@as(u32, @bitCast(initializer)))
         else
             php.createValueAnyInt(initializer);
-        return self.allocateValue(value);
+        return self.allocateHandle(value);
     }
 
     pub fn createBigInteger(self: *@This(), initializer: i64, unsigned: bool) !Handle {
@@ -113,12 +119,12 @@ pub const StructureImporter = struct {
             php.createValueAnyInt(@as(u64, @bitCast(initializer)))
         else
             php.createValueAnyInt(initializer);
-        return self.allocateValue(value);
+        return self.allocateHandle(value);
     }
 
     pub fn createString(self: *@This(), bytes: [*]const u8, len: usize) !Handle {
         const value = php.createValueStringContent(bytes[0..len]);
-        return self.allocateValue(value);
+        return self.allocateHandle(value);
     }
 
     pub fn createView(self: *@This(), bytes: ?[*]const u8, len: usize, copying: bool, _: usize, alignment: usize) !Handle {
@@ -137,7 +143,7 @@ pub const StructureImporter = struct {
         }
         if (copying) buffer.protect(true);
         const value = php.createValuePointer(buffer);
-        return self.allocateValue(value);
+        return self.allocateHandle(value);
     }
 
     pub fn createInstance(self: *@This(), structure_h: Handle, dv_h: Handle, prefilled_table_h: ?Handle) !Handle {
@@ -150,20 +156,23 @@ pub const StructureImporter = struct {
         const prefilled_table = if (prefilled_table_h) |vh| self.dereference(vh) else null;
         const instance = try class.createObjectFromBuffer(buf, prefilled_table);
         const value = php.createValueObject(instance);
-        return self.allocateValue(value);
+        return self.allocateHandle(value);
     }
 
     pub fn createTemplate(self: *@This(), dv_h: ?Handle, slots_h: ?Handle) !Handle {
-        var value: Value = php.createValueArray(null);
+        const bytes = php.emalloc(@sizeOf(HashTable));
+        const ht: *HashTable = @ptrCast(@alignCast(bytes));
+        ht.* = php.createHashTable(null);
         if (dv_h) |vh| {
             const dv = self.dereference(vh);
-            try php.setProperty(&value, php.persistent("buffer"), dv);
+            php.setHashEntry(ht, php.persistent("buffer"), dv);
         }
         if (slots_h) |vh| {
             const slots = self.dereference(vh);
-            try php.setProperty(&value, php.persistent("table"), slots);
+            php.setHashEntry(ht, php.persistent("table"), slots);
         }
-        return self.allocateValue(value);
+        const value: Value = php.createValueArray(ht);
+        return self.allocateHandle(value);
     }
 
     pub fn createList(self: *@This()) !Handle {
@@ -175,7 +184,7 @@ pub const StructureImporter = struct {
         const ht: *HashTable = @ptrCast(@alignCast(bytes));
         ht.* = php.createHashTable(null);
         const value = php.createValueArray(ht);
-        return self.allocateValue(value);
+        return self.allocateHandle(value);
     }
 
     pub fn appendList(self: *@This(), list_h: Handle, element_h: Handle) !void {
@@ -189,7 +198,7 @@ pub const StructureImporter = struct {
         const key_str = php.createInternedString(key);
         const object = self.dereference(object_h);
         const value = try php.getProperty(object, key_str);
-        return self.allocateValue(value.*);
+        return self.allocateHandle(value.*);
     }
 
     pub fn setProperty(self: *@This(), object_h: Handle, key_bytes: [*]const u8, key_len: usize, value_h: ?Handle) !void {
@@ -209,7 +218,7 @@ pub const StructureImporter = struct {
     pub fn getSlotValue(self: *@This(), object_h: Handle, slot: usize) !Handle {
         const object = self.dereference(object_h);
         const value = try php.getProperty(object, slot);
-        return self.allocateValue(value.*);
+        return self.allocateHandle(value.*);
     }
 
     pub fn setSlotValue(self: *@This(), object_h: Handle, slot: usize, value_h: ?Handle) !void {
@@ -227,7 +236,7 @@ pub const StructureImporter = struct {
         const key = key_bytes[0..key_len];
         const key_str = php.createInternedString(key);
         const structure = try php.getHashEntry(&self.structure_map, key_str);
-        return self.allocateValue(structure.*);
+        return self.allocateHandle(structure.*);
     }
 
     pub fn setStructure(self: *@This(), key_bytes: [*]const u8, key_len: usize, handle: ?Handle) !void {

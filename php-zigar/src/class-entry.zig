@@ -293,7 +293,9 @@ pub const ZigClassEntry = struct {
 
     pub fn finalizeStructure(class_obj: *Object, info: *Value) !void {
         // when this function is called, the static info has become available
-        errdefer |err| std.debug.print("finalizeStructure => {}\n", .{err});
+        errdefer {
+            std.debug.print("finalizeStructure => {d}\n", .{class_obj.handle});
+        }
         const self = fromObject(class_obj);
         try self.extractScope(info, .static);
         errdefer self.static.deinit(self, .static);
