@@ -2,6 +2,7 @@ const std = @import("std");
 
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
+const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
 const ZigObject = @import("../object.zig").ZigObject;
@@ -27,28 +28,7 @@ pub const Pointer = struct {
         address_acc: *accessor.Int(.{ .bit_size = @bitSizeOf(usize), .signedness = .unsigned }) = undefined,
         length_acc: ?*accessor.Int(.{ .bit_size = @bitSizeOf(usize), .signedness = .unsigned }) = null,
 
-        pub const StaticPropId = enum { child };
-        pub const StaticPropCacheEntry = struct {
-            id: usize,
-            prop_id: StaticPropId,
-
-            const name = "static:pointer";
-
-            pub inline fn find(cache_slot: ?[*]?*anyopaque) !?StaticPropId {
-                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
-                return if (self.id == @intFromPtr(name))
-                    self.prop_id
-                else if (self.id != 0)
-                    error.ForAnotherCache
-                else
-                    null;
-            }
-
-            pub inline fn set(cache_slot: ?[*]?*anyopaque, prop_id: StaticPropId) void {
-                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return;
-                self.* = .{ .id = @intFromPtr(name), .prop_id = prop_id };
-            }
-        };
+        pub const StaticPropCache = cache.IdCache(.{.child}, .{});
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -119,7 +99,7 @@ pub const Pointer = struct {
         }
 
         pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
-            if (findStaticPropId(name, cache_slot)) |id| {
+            if (StaticPropCache.idFromString(name, cache_slot)) |id| {
                 const prop_obj = switch (id) {
                     .child => self.target_class.object,
                 };
@@ -131,43 +111,10 @@ pub const Pointer = struct {
         }
 
         pub fn staticPropertyExists(_: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
-            return findStaticPropId(name, cache_slot) != null;
-        }
-
-        fn findStaticPropId(name: *String, cache_slot: ?[*]?*anyopaque) ?StaticPropId {
-            if (StaticPropCacheEntry.find(cache_slot) catch return null) |id| return id;
-            inline for (std.meta.fields(StaticPropId)) |field| {
-                if (php.matchString(name, "__" ++ field.name)) {
-                    const id = @field(StaticPropId, field.name);
-                    StaticPropCacheEntry.set(cache_slot, id);
-                    return id;
-                }
-            }
-            return null;
+            return StaticPropCache.idFromString(name, cache_slot) != null;
         }
     };
-    pub const PropId = enum { target };
-    pub const PropCacheEntry = struct {
-        id: usize,
-        prop_id: PropId,
-
-        const name = "pointer";
-
-        pub inline fn find(cache_slot: ?[*]?*anyopaque) !?PropId {
-            const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
-            return if (self.id == @intFromPtr(name))
-                self.prop_id
-            else if (self.id != 0)
-                error.ForAnotherCache
-            else
-                null;
-        }
-
-        pub inline fn set(cache_slot: ?[*]?*anyopaque, prop_id: PropId) void {
-            const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return;
-            self.* = .{ .id = @intFromPtr(name), .prop_id = prop_id };
-        }
-    };
+    pub const PropCache = cache.IdCache(.{.target}, .{ .@"*" = .target });
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) accessor.Error!Value {
         if (self.buffer.flags.inaccessible) return self.reportInaccessiblePointer();
@@ -237,7 +184,7 @@ pub const Pointer = struct {
 
     pub fn getProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
         const target_obj = try self.getTarget();
-        if (findPropId(name, cache_slot)) |id| {
+        if (PropCache.idFromString(name, cache_slot)) |id| {
             const prop_obj = switch (id) {
                 .target => target_obj,
             };
@@ -250,7 +197,7 @@ pub const Pointer = struct {
     }
 
     pub fn setProperty(self: *@This(), name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {
-        if (findPropId(name, cache_slot)) |id| {
+        if (PropCache.idFromString(name, cache_slot)) |id| {
             switch (id) {
                 .target => try self.setValue(value, .none),
             }
@@ -262,7 +209,7 @@ pub const Pointer = struct {
     }
 
     pub fn propertyExists(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
-        return findPropId(name, cache_slot) != null or check: {
+        return PropCache.idFromString(name, cache_slot) != null or check: {
             const target_obj = self.getTarget() catch return false;
             self.checkDoubleReference() catch return false;
             break :check invokeMethod(target_obj, "propertyExists", .{ name, cache_slot }) catch unreachable;
@@ -314,25 +261,6 @@ pub const Pointer = struct {
         return failure.report("cannot access properties through pointer '{s}', only one level of automatic dereferencing", .{
             class.getName(),
         });
-    }
-
-    fn findPropId(name: *String, cache_slot: ?[*]?*anyopaque) ?PropId {
-        if (PropCacheEntry.find(cache_slot) catch return null) |id| return id;
-        inline for (std.meta.fields(PropId)) |field| {
-            if (php.matchString(name, "__" ++ field.name)) {
-                const id = @field(PropId, field.name);
-                PropCacheEntry.set(cache_slot, id);
-                return id;
-            }
-        }
-        inline for (std.meta.fields(@TypeOf(prop_id_aliases))) |field| {
-            if (php.matchString(name, field.name)) {
-                const id = @field(prop_id_aliases, field.name);
-                PropCacheEntry.set(cache_slot, id);
-                return id;
-            }
-        }
-        return null;
     }
 
     pub const getExtent = Super.getExtent;

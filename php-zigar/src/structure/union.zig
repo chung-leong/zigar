@@ -4,6 +4,7 @@ const accessor = @import("../accessor.zig");
 const Transform = accessor.Transform;
 const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
+const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
 const iterator = @import("../iterator.zig");
@@ -23,8 +24,10 @@ pub const Union = struct {
     table: Value = undefined,
     buffer: *ByteBuffer = undefined,
 
-    const Super = structure.StructLike(@This());
-    const MemberCacheEntry = Super.MemberCacheEntry;
+    pub const Super = structure.StructLike(@This());
+
+    const MemberCache = cache.MemberCache;
+    const TransformCache = cache.TransformCache;
 
     pub const Static = struct {
         selector: ?struct {
@@ -239,12 +242,12 @@ pub const Union = struct {
         const static = class.getStaticData(@This());
         const selector = static.selector orelse return;
         // don't check if the name is a special property
-        if (findTransform(name, cache_slot)) |_| return;
+        if (TransformCache.idFromString(name, cache_slot)) |_| return;
         if (self.findMember(name, cache_slot)) |member| {
             if (member.accessors == .property) return;
             const sel_value: *Value = get: {
                 // look for cache entry left by findMember()
-                const entry = MemberCacheEntry.findSelf(cache_slot, class);
+                const entry = MemberCache.findSelf(cache_slot, class);
                 if (entry) |e| {
                     // the selector value is stored in the extra pointer
                     if (e.extra) |ptr| break :get @ptrCast(@alignCast(ptr));
@@ -299,5 +302,4 @@ pub const Union = struct {
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;
     const findMember = Super.findMember;
-    const findTransform = Super.findTransform;
 };

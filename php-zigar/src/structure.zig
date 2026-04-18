@@ -2,6 +2,7 @@ const std = @import("std");
 
 const accessor = @import("accessor.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
+const cache = @import("cache.zig");
 const enums = @import("enums.zig");
 const StructureType = enums.StructureType;
 const failure = @import("failure.zig");
@@ -67,32 +68,13 @@ pub fn enumName(comptime S: type) []const u8 {
 
 pub fn Parent(comptime S: type) type {
     return struct {
-        pub const TransformCacheEntry = struct {
-            id: usize,
-            transform: accessor.Transform,
-
-            const name = "transform";
-
-            pub inline fn find(cache_slot: ?[*]?*anyopaque) !?accessor.Transform {
-                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
-                return if (self.id == @intFromPtr(name))
-                    self.transform
-                else if (self.id != 0)
-                    error.ForAnotherCache
-                else
-                    null;
-            }
-
-            pub inline fn set(cache_slot: ?[*]?*anyopaque, transform: accessor.Transform) void {
-                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return;
-                self.* = .{ .id = @intFromPtr(name), .transform = transform };
-            }
-        };
         pub const ByteExtent = struct {
             address: usize,
             len: usize = 1,
         };
         pub const scope: ZigClassEntry.ScopeType = if (@hasDecl(S, "scope")) S.scope else .instance;
+
+        const TransformCache = cache.TransformCache;
 
         pub fn object(self: *S) *Object {
             return &ZigObject(S).fromStructure(self).php_portion;
@@ -238,37 +220,17 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
-            const transform = findTransform(name, cache_slot) orelse return error.Missing;
+            const transform = TransformCache.idFromString(name, cache_slot) orelse return error.Missing;
             return try self.getValue(transform);
         }
 
         pub fn setProperty(self: *S, name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {
-            const transform = findTransform(name, cache_slot) orelse return error.Missing;
+            const transform = TransformCache.idFromString(name, cache_slot) orelse return error.Missing;
             return try self.setValue(value, transform);
         }
 
         pub fn propertyExists(_: *S, name: *String, cache_slot: ?[*]?*anyopaque) bool {
-            return findTransform(name, cache_slot) != null;
-        }
-
-        pub fn findTransform(name: *String, cache_slot: ?[*]?*anyopaque) ?accessor.Transform {
-            if (TransformCacheEntry.find(cache_slot) catch return null) |t| return t;
-            const transforms = .{
-                .__value = .none,
-                .__plain = .plain,
-                .__string = .string,
-                .__int = .integer,
-                .__bytes = .bytes,
-                .__base64 = .base64,
-                .@"$" = .plain,
-            };
-            return inline for (std.meta.fields(@TypeOf(transforms))) |field| {
-                if (php.matchString(name, field.name)) {
-                    const transform = @field(transforms, field.name);
-                    TransformCacheEntry.set(cache_slot, transform);
-                    break transform;
-                }
-            } else null;
+            return TransformCache.idFromString(name, cache_slot) != null;
         }
 
         pub fn findMethod(self: *S, name: *String) !?*php.Function {
@@ -404,35 +366,10 @@ pub fn Parent(comptime S: type) type {
 pub fn StructLike(comptime S: type) type {
     return struct {
         pub const Super = Parent(S);
-        pub const MemberCacheEntry = struct {
-            id: usize,
-            member: *const ZigClassEntry.Member,
-            extra: ?*anyopaque = null,
-
-            const this_type = "member";
-
-            pub inline fn find(cache_slot: ?[*]?*anyopaque, class: *ZigClassEntry) !?*const ZigClassEntry.Member {
-                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
-                return if (self.id == @intFromPtr(class))
-                    self.member
-                else if (self.id != 0)
-                    error.ForAnotherCache
-                else
-                    null;
-            }
-
-            pub inline fn findSelf(cache_slot: ?[*]?*anyopaque, class: *ZigClassEntry) ?*@This() {
-                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
-                return if (self.id == @intFromPtr(class)) self else null;
-            }
-
-            pub inline fn set(cache_slot: ?[*]?*anyopaque, class: *ZigClassEntry, member: *const ZigClassEntry.Member) void {
-                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return;
-                self.* = .{ .id = @intFromPtr(class), .member = member };
-            }
-        };
         pub const ByteExtent = Super.ByteExtent;
         pub const scope = Super.scope;
+
+        const MemberCache = cache.MemberCache;
 
         pub fn getValue(self: *S, transform: accessor.Transform) !Value {
             switch (transform) {
@@ -503,9 +440,9 @@ pub fn StructLike(comptime S: type) type {
 
         pub fn findMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) ?*const ZigClassEntry.Member {
             const class = ZigClassEntry.fromStructure(self);
-            if (MemberCacheEntry.find(cache_slot, class) catch return null) |m| return m;
+            if (MemberCache.find(cache_slot, class) catch return null) |m| return m;
             const member = class.getMember(scope, name) catch return null;
-            MemberCacheEntry.set(cache_slot, class, member);
+            MemberCache.set(cache_slot, class, member);
             return member;
         }
 
@@ -564,7 +501,6 @@ pub fn StructLike(comptime S: type) type {
         pub const castObject = Super.castObject;
         pub const getGarbageCollection = Super.getGarbageCollection;
         pub const getMethod = Super.getMethod;
-        pub const findTransform = Super.findTransform;
     };
 }
 

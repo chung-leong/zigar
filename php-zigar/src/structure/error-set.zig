@@ -2,6 +2,7 @@ const std = @import("std");
 
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
+const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
 const php = @import("../php.zig");
@@ -19,33 +20,7 @@ pub const ErrorSet = struct {
     canonical: ?*Canonical = null,
     buffer: *ByteBuffer = undefined,
 
-    const Super = structure.Parent(@This());
-    const Canonical = struct {
-        message: *String,
-        string: ?*String = null,
-        file: ?*String = null,
-        lineno: u32 = 0,
-        trace: ?*Array = null,
-        unknown: bool = false,
-
-        pub fn release(self: *@This()) void {
-            php.release(self.message);
-            if (self.string) |s| php.release(s);
-            if (self.file) |s| php.release(s);
-            if (self.trace) |a| php.release(a);
-            php.allocator.destroy(self);
-        }
-    };
-    const Methods = struct {
-        getMessage: Function,
-        getCode: Function,
-        getFile: Function,
-        getLine: Function,
-        getTrace: Function,
-        getTraceAsString: Function,
-        getPrevious: Function,
-    };
-
+    pub const Super = structure.Parent(@This());
     pub const Static = struct {
         constant_acc: *accessor.Constant = undefined,
         error_set: *HashTable = undefined,
@@ -227,7 +202,33 @@ pub const ErrorSet = struct {
             }
         }
     };
-    pub const PropId = enum { string, file, line };
+
+    const Canonical = struct {
+        message: *String,
+        string: ?*String = null,
+        file: ?*String = null,
+        lineno: u32 = 0,
+        trace: ?*Array = null,
+        unknown: bool = false,
+
+        pub fn release(self: *@This()) void {
+            php.release(self.message);
+            if (self.string) |s| php.release(s);
+            if (self.file) |s| php.release(s);
+            if (self.trace) |a| php.release(a);
+            php.allocator.destroy(self);
+        }
+    };
+    const Methods = struct {
+        getMessage: Function,
+        getCode: Function,
+        getFile: Function,
+        getLine: Function,
+        getTrace: Function,
+        getTraceAsString: Function,
+        getPrevious: Function,
+    };
+    const PropCache = cache.IdCache(.{ .string, .file, .line }, .{});
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
         const class = ZigClassEntry.fromStructure(self);
@@ -288,7 +289,7 @@ pub const ErrorSet = struct {
 
     pub fn getProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
         const canonical = try self.getCanonical();
-        if (findPropId(name, cache_slot)) |id| {
+        if (PropCache.idFromString(name, cache_slot)) |id| {
             const value = switch (id) {
                 .string => php.createValueString(canonical.string orelse php.createString("")),
                 .file => php.createValueString(canonical.file orelse php.persistent("unknown")),
@@ -303,7 +304,7 @@ pub const ErrorSet = struct {
 
     pub fn setProperty(self: *@This(), name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {
         const canonical = try self.getCanonical();
-        if (findPropId(name, cache_slot)) |id| {
+        if (PropCache.idFromString(name, cache_slot)) |id| {
             switch (id) {
                 .string => {
                     const new_str = try php.getValueString(value);
@@ -319,7 +320,7 @@ pub const ErrorSet = struct {
     }
 
     pub fn propertyExists(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
-        return findPropId(name, cache_slot) != null or Super.propertyExists(self, name, cache_slot);
+        return PropCache.idFromString(name, cache_slot) != null or Super.propertyExists(self, name, cache_slot);
     }
 
     pub fn acquireDebugInfo(self: *@This()) !void {
@@ -410,12 +411,6 @@ pub const ErrorSet = struct {
         return self.getCanonical();
     }
 
-    fn findPropId(name: *String, _: ?[*]?*anyopaque) ?PropId {
-        return inline for (comptime std.meta.fields(PropId)) |field| {
-            if (php.matchString(name, field.name)) break @field(PropId, field.name);
-        } else null;
-    }
-
     pub const getExtent = Super.getExtent;
     pub const setStorage = Super.setStorage;
     pub const initialize = Super.initialize;
@@ -430,7 +425,6 @@ pub const ErrorSet = struct {
     pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;
-    const returnBytes = Super.returnBytes;
 };
 
 fn createDecamelizedMessage(name_obj: *const String) *String {

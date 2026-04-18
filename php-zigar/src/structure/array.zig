@@ -3,6 +3,7 @@ const std = @import("std");
 const accessor = @import("../accessor.zig");
 const Transform = accessor.Transform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
+const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
 const ClassEntry = php.ClassEntry;
@@ -23,28 +24,7 @@ pub const Array = struct {
         value_acc: *accessor.Any = undefined,
         element_class: *ZigClassEntry = undefined,
 
-        pub const StaticPropId = enum { child };
-        pub const StaticPropCacheEntry = struct {
-            id: usize,
-            prop_id: StaticPropId,
-
-            const name = "static:array";
-
-            pub inline fn find(cache_slot: ?[*]?*anyopaque) !?StaticPropId {
-                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
-                return if (self.id == @intFromPtr(name))
-                    self.prop_id
-                else if (self.id != 0)
-                    error.ForAnotherCache
-                else
-                    null;
-            }
-
-            pub inline fn set(cache_slot: ?[*]?*anyopaque, prop_id: StaticPropId) void {
-                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return;
-                self.* = .{ .id = @intFromPtr(name), .prop_id = prop_id };
-            }
-        };
+        pub const StaticPropCache = cache.IdCache(.{.child}, .{});
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -55,7 +35,7 @@ pub const Array = struct {
         }
 
         pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
-            if (findStaticPropId(name, cache_slot)) |id| {
+            if (StaticPropCache.idFromString(name, cache_slot)) |id| {
                 const prop_obj = switch (id) {
                     .child => self.element_class.object,
                 };
@@ -67,19 +47,7 @@ pub const Array = struct {
         }
 
         pub fn staticPropertyExists(_: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
-            return findStaticPropId(name, cache_slot) != null;
-        }
-
-        fn findStaticPropId(name: *String, cache_slot: ?[*]?*anyopaque) ?StaticPropId {
-            if (StaticPropCacheEntry.find(cache_slot) catch return null) |id| return id;
-            inline for (std.meta.fields(StaticPropId)) |field| {
-                if (php.matchString(name, "__" ++ field.name)) {
-                    const id = @field(StaticPropId, field.name);
-                    StaticPropCacheEntry.set(cache_slot, id);
-                    return id;
-                }
-            }
-            return null;
+            return StaticPropCache.idFromString(name, cache_slot) != null;
         }
     };
 
