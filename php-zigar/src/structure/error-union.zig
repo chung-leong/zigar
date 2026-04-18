@@ -31,6 +31,7 @@ pub const ErrorUnion = struct {
             const class = ZigClassEntry.fromObject(class_obj);
             const member0 = try class.getMember(.instance, 0);
             self.payload_acc = &member0.accessors;
+            self.payload_class = member0.class;
             const member1 = try class.getMember(.instance, 1);
             self.error_acc = &member1.accessors;
             self.error_class = member1.class;

@@ -1,7 +1,3 @@
 const std = @import("std");
 
-pub const Test = struct {
-    number: i32,
-};
-
-pub const Pointer = *Test;
+pub const Type = error{Cow}!i32;

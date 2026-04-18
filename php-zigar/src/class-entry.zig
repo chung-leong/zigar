@@ -421,6 +421,9 @@ pub const ZigClassEntry = struct {
         const self = fromObject(obj);
         self.host.addRef();
         self.status.activated = true;
+        if (self.php_portion.name.*.len == 0) {
+            self.php_portion.name = self.inferName() catch php.persistent("Unknown");
+        }
     }
 
     pub fn getFlags(self: *@This(), comptime S: type) @FieldType(StructureFlags, structure.enumName(S)) {

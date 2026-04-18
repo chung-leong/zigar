@@ -24,7 +24,7 @@ pub const Array = struct {
         value_acc: *accessor.Any = undefined,
         element_class: *ZigClassEntry = undefined,
 
-        pub const StaticPropCache = cache.IdCache(.{.child}, .{});
+        pub const StaticPropCache = cache.IdCache(.{ .child, .len }, .{});
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -36,11 +36,14 @@ pub const Array = struct {
 
         pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
             if (StaticPropCache.idFromString(name, cache_slot)) |id| {
-                const prop_obj = switch (id) {
-                    .child => self.element_class.object,
+                const class = ZigClassEntry.fromStatic(self);
+                return switch (id) {
+                    .child => get: {
+                        php.addRef(self.element_class.object);
+                        break :get php.createValueObject(self.element_class.object);
+                    },
+                    .len => php.createValueAnyInt(class.length.?),
                 };
-                php.addRef(prop_obj);
-                return php.createValueObject(prop_obj);
             } else {
                 return error.Missing;
             }
