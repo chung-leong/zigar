@@ -20,13 +20,35 @@ pub const Pointer = struct {
     buffer: *ByteBuffer = undefined,
 
     const Super = structure.Parent(@This());
-    const target_prop_name = "__target";
-    const target_prop_alias = "*";
+    const prop_id_aliases = .{ .@"*" = .target };
 
     pub const Static = struct {
         target_class: *ZigClassEntry = undefined,
         address_acc: *accessor.Int(.{ .bit_size = @bitSizeOf(usize), .signedness = .unsigned }) = undefined,
         length_acc: ?*accessor.Int(.{ .bit_size = @bitSizeOf(usize), .signedness = .unsigned }) = null,
+
+        pub const StaticPropId = enum { child };
+        pub const StaticPropCacheEntry = struct {
+            id: usize,
+            prop_id: StaticPropId,
+
+            const name = "static:pointer";
+
+            pub inline fn find(cache_slot: ?[*]?*anyopaque) !?StaticPropId {
+                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
+                return if (self.id == @intFromPtr(name))
+                    self.prop_id
+                else if (self.id != 0)
+                    error.ForAnotherCache
+                else
+                    null;
+            }
+
+            pub inline fn set(cache_slot: ?[*]?*anyopaque, prop_id: StaticPropId) void {
+                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return;
+                self.* = .{ .id = @intFromPtr(name), .prop_id = prop_id };
+            }
+        };
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -95,25 +117,55 @@ pub const Pointer = struct {
                 try acc.set(pointer.buffer, &len_value);
             }
         }
+
+        pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
+            if (findStaticPropId(name, cache_slot)) |id| {
+                const prop_obj = switch (id) {
+                    .child => self.target_class.object,
+                };
+                php.addRef(prop_obj);
+                return php.createValueObject(prop_obj);
+            } else {
+                return error.Missing;
+            }
+        }
+
+        pub fn staticPropertyExists(_: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
+            return findStaticPropId(name, cache_slot) != null;
+        }
+
+        fn findStaticPropId(name: *String, cache_slot: ?[*]?*anyopaque) ?StaticPropId {
+            if (StaticPropCacheEntry.find(cache_slot) catch return null) |id| return id;
+            inline for (std.meta.fields(StaticPropId)) |field| {
+                if (php.matchString(name, "__" ++ field.name)) {
+                    const id = @field(StaticPropId, field.name);
+                    StaticPropCacheEntry.set(cache_slot, id);
+                    return id;
+                }
+            }
+            return null;
+        }
     };
-    pub const TargetCacheEntry = struct {
+    pub const PropId = enum { target };
+    pub const PropCacheEntry = struct {
         id: usize,
+        prop_id: PropId,
 
-        const name = target_prop_name[2..];
+        const name = "pointer";
 
-        pub inline fn find(cache_slot: ?[*]?*anyopaque) ?bool {
+        pub inline fn find(cache_slot: ?[*]?*anyopaque) !?PropId {
             const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
             return if (self.id == @intFromPtr(name))
-                true
+                self.prop_id
             else if (self.id != 0)
-                false
+                error.ForAnotherCache
             else
                 null;
         }
 
-        pub inline fn set(cache_slot: ?[*]?*anyopaque) void {
+        pub inline fn set(cache_slot: ?[*]?*anyopaque, prop_id: PropId) void {
             const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return;
-            self.* = .{ .id = @intFromPtr(name) };
+            self.* = .{ .id = @intFromPtr(name), .prop_id = prop_id };
         }
     };
 
@@ -183,58 +235,38 @@ pub const Pointer = struct {
         try @call(.auto, cb, .{self} ++ args);
     }
 
-    pub fn getProperty(self: *@This(), name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) !Value {
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        try static.loadTarget(self);
-        const target_obj = php.getValueObject(&self.table) catch return error.NullPointer;
-        if (matchTarget(name, cache_slot)) {
-            php.addRef(target_obj);
-            return php.createValueObject(target_obj);
+    pub fn getProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
+        const target_obj = try self.getTarget();
+        if (findPropId(name, cache_slot)) |id| {
+            const prop_obj = switch (id) {
+                .target => target_obj,
+            };
+            php.addRef(prop_obj);
+            return php.createValueObject(prop_obj);
         } else {
-            if (static.target_class.type == .pointer) {
-                return self.reportNoAutoDereference();
-            }
-            var retval: Value = undefined;
-            const handler = target_obj.handlers.*.read_property.?;
-            _ = handler(target_obj, name, prop_type, cache_slot, &retval);
-            return retval;
+            try self.checkDoubleReference();
+            return try invokeMethod(target_obj, "getProperty", .{ name, cache_slot });
         }
     }
 
-    pub fn setProperty(self: *@This(), name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !void {
-        if (matchTarget(name, cache_slot)) {
-            return try self.setValue(value, .none);
+    pub fn setProperty(self: *@This(), name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {
+        if (findPropId(name, cache_slot)) |id| {
+            switch (id) {
+                .target => try self.setValue(value, .none),
+            }
         } else {
-            const class = ZigClassEntry.fromStructure(self);
-            const static = class.getStaticData(@This());
-            try static.loadTarget(self);
-            const target_obj = php.getValueObject(&self.table) catch return error.NullPointer;
-            if (static.target_class.type == .pointer) {
-                return self.reportNoAutoDereference();
-            }
-            const handler = target_obj.handlers.*.write_property.?;
-            _ = handler(target_obj, name, value, cache_slot);
+            const target_obj = try self.getTarget();
+            try self.checkDoubleReference();
+            try invokeMethod(target_obj, "setProperty", .{ name, value, cache_slot });
         }
     }
 
-    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
-        const self = fromObject(obj);
-        if (self.getProperty(name, prop_type, cache_slot)) |value| {
-            retval.* = value;
-        } else |err| {
-            retval.* = php.createValueNull();
-            php.throwError(reportFieldError(self, name, .read, err));
-        }
-        return retval;
-    }
-
-    pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
-        const self = fromObject(obj);
-        self.setProperty(name, value, cache_slot) catch |err| {
-            return reportFieldError(self, name, .write, err);
+    pub fn propertyExists(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
+        return findPropId(name, cache_slot) != null or check: {
+            const target_obj = self.getTarget() catch return false;
+            self.checkDoubleReference() catch return false;
+            break :check invokeMethod(target_obj, "propertyExists", .{ name, cache_slot }) catch unreachable;
         };
-        return value;
     }
 
     pub fn externalizeTarget(self: *@This()) accessor.Error!void {
@@ -258,6 +290,21 @@ pub const Pointer = struct {
         return null;
     }
 
+    fn getTarget(self: *@This()) !*Object {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        try static.loadTarget(self);
+        return php.getValueObject(&self.table) catch return error.NullPointer;
+    }
+
+    fn checkDoubleReference(self: *@This()) !void {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        if (static.target_class.type == .pointer) {
+            return self.reportNoAutoDereference();
+        }
+    }
+
     fn reportInaccessiblePointer(_: *@This()) error{Unexpected} {
         return failure.report("pointer is inaccessible because it's in an untagged union", .{});
     }
@@ -269,13 +316,23 @@ pub const Pointer = struct {
         });
     }
 
-    fn matchTarget(name: *String, cache_slot: ?[*]?*anyopaque) bool {
-        if (TargetCacheEntry.find(cache_slot)) |match| return match;
-        if (php.matchString(name, target_prop_name) or php.matchString(name, target_prop_alias)) {
-            TargetCacheEntry.set(cache_slot);
-            return true;
+    fn findPropId(name: *String, cache_slot: ?[*]?*anyopaque) ?PropId {
+        if (PropCacheEntry.find(cache_slot) catch return null) |id| return id;
+        inline for (std.meta.fields(PropId)) |field| {
+            if (php.matchString(name, "__" ++ field.name)) {
+                const id = @field(PropId, field.name);
+                PropCacheEntry.set(cache_slot, id);
+                return id;
+            }
         }
-        return false;
+        inline for (std.meta.fields(@TypeOf(prop_id_aliases))) |field| {
+            if (php.matchString(name, field.name)) {
+                const id = @field(prop_id_aliases, field.name);
+                PropCacheEntry.set(cache_slot, id);
+                return id;
+            }
+        }
+        return null;
     }
 
     pub const getExtent = Super.getExtent;
@@ -286,6 +343,8 @@ pub const Pointer = struct {
     pub const checkArguments = Super.checkArguments;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
+    pub const readProperty = Super.readProperty;
+    pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
     pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;

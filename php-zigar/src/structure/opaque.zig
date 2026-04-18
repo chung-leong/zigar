@@ -39,6 +39,7 @@ pub const Opaque = struct {
     pub const setValue = Super.setValue;
     pub const getProperty = Super.getProperty;
     pub const setProperty = Super.setProperty;
+    pub const propertyExists = Super.propertyExists;
     pub const visitPointers = Super.visitPointers;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;

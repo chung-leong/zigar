@@ -246,6 +246,7 @@ pub const Struct = struct {
     pub const getExtent = Super.getExtent;
     pub const getProperty = Super.getProperty;
     pub const setProperty = Super.setProperty;
+    pub const propertyExists = Super.propertyExists;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;
     pub const readProperty = Super.readProperty;

@@ -281,6 +281,7 @@ pub const Enum = struct {
     pub const checkArguments = Super.checkArguments;
     pub const getProperty = Super.getProperty;
     pub const setProperty = Super.setProperty;
+    pub const propertyExists = Super.propertyExists;
     pub const visitPointers = Super.visitPointers;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;

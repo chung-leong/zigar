@@ -177,6 +177,7 @@ pub fn ArgStruct(variadic: bool) type {
 
         pub const setStorage = Super.setStorage;
         pub const getValue = Super.getValue;
+        pub const propertyExists = Super.propertyExists;
         pub const freeObject = Super.freeObject;
         pub const getGarbageCollection = Super.getGarbageCollection;
         const fromObject = Super.fromObject;

@@ -227,6 +227,7 @@ pub const ErrorSet = struct {
             }
         }
     };
+    pub const PropId = enum { string, file, line };
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
         const class = ZigClassEntry.fromStructure(self);
@@ -285,6 +286,42 @@ pub const ErrorSet = struct {
         }
     }
 
+    pub fn getProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
+        const canonical = try self.getCanonical();
+        if (findPropId(name, cache_slot)) |id| {
+            const value = switch (id) {
+                .string => php.createValueString(canonical.string orelse php.createString("")),
+                .file => php.createValueString(canonical.file orelse php.persistent("unknown")),
+                .line => php.createValueLong(@intCast(canonical.lineno)),
+            };
+            php.addRef(&value);
+            return value;
+        } else {
+            return Super.getProperty(self, name, cache_slot);
+        }
+    }
+
+    pub fn setProperty(self: *@This(), name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {
+        const canonical = try self.getCanonical();
+        if (findPropId(name, cache_slot)) |id| {
+            switch (id) {
+                .string => {
+                    const new_str = try php.getValueString(value);
+                    if (canonical.string) |s| php.release(s);
+                    canonical.string = new_str;
+                    php.addRef(new_str);
+                },
+                .file, .line => return error.WriteProtected,
+            }
+        } else {
+            return try Super.setProperty(self, name, value, cache_slot);
+        }
+    }
+
+    pub fn propertyExists(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
+        return findPropId(name, cache_slot) != null or Super.propertyExists(self, name, cache_slot);
+    }
+
     pub fn acquireDebugInfo(self: *@This()) !void {
         const props = self.canonical orelse return error.Unexpected;
         if (props.trace) |a| php.release(a);
@@ -303,20 +340,6 @@ pub const ErrorSet = struct {
         Super.freeObject(obj);
     }
 
-    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
-        if (!readErrorProperty(obj, name, prop_type, retval)) {
-            return Super.readProperty(obj, name, prop_type, cache_slot, retval);
-        }
-        return retval;
-    }
-
-    pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
-        if (!try writeErrorProperty(obj, name, value)) {
-            return try Super.writeProperty(obj, name, value, cache_slot);
-        }
-        return value;
-    }
-
     pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: ?*const Value) !?*Function {
         const obj = obj_ptr.*;
         const class = ZigClassEntry.fromObject(obj);
@@ -331,7 +354,7 @@ pub const ErrorSet = struct {
     }
 
     pub fn handleGetMessage(ed: *ExecuteData, return_value: *Value) !void {
-        const props = try getProperitiesFromValue(&ed.This);
+        const props = try getCanonicalFromValue(&ed.This);
         return_value.* = php.createValueString(props.message);
     }
 
@@ -344,25 +367,25 @@ pub const ErrorSet = struct {
     }
 
     pub fn handleGetFile(ed: *ExecuteData, return_value: *Value) !void {
-        const props = try getProperitiesFromValue(&ed.This);
+        const props = try getCanonicalFromValue(&ed.This);
         const file = props.file orelse php.persistent("unknown");
         return_value.* = php.createValueString(file);
     }
 
     pub fn handleGetLine(ed: *ExecuteData, return_value: *Value) !void {
-        const props = try getProperitiesFromValue(&ed.This);
+        const props = try getCanonicalFromValue(&ed.This);
         return_value.* = php.createValueLong(@intCast(props.lineno));
     }
 
     pub fn handleGetTrace(ed: *ExecuteData, return_value: *Value) !void {
-        const props = try getProperitiesFromValue(&ed.This);
+        const props = try getCanonicalFromValue(&ed.This);
         const trace = props.trace orelse php.empty_array;
         return_value.* = php.createValueArray(@constCast(trace));
         php.addRef(return_value);
     }
 
     pub fn handleGetTraceAsString(ed: *ExecuteData, return_value: *Value) !void {
-        const props = try getProperitiesFromValue(&ed.This);
+        const props = try getCanonicalFromValue(&ed.This);
         const trace = props.trace orelse php.empty_array;
         const trace_str = php.traceToString(@constCast(trace), true);
         return_value.* = php.createValueString(trace_str);
@@ -372,41 +395,7 @@ pub const ErrorSet = struct {
         return_value.* = php.createValueNull();
     }
 
-    fn readErrorProperty(obj: *Object, name: *String, prop_type: c_int, retval: *Value) bool {
-        const props = getProperties(obj) catch return false;
-        const name_c = php.getStringContent(name);
-        retval.* = if (std.mem.eql(u8, name_c, "string"))
-            php.createValueString(props.string orelse php.createString(""))
-        else if (std.mem.eql(u8, name_c, "file"))
-            php.createValueString(props.file orelse php.persistent("unknown"))
-        else if (std.mem.eql(u8, name_c, "line"))
-            php.createValueLong(@intCast(props.lineno))
-        else
-            return false;
-        if (prop_type != php.BP_VAR_IS) {
-            php.addRef(retval);
-        }
-        return true;
-    }
-
-    fn writeErrorProperty(obj: *Object, name: *String, value: *Value) !bool {
-        const props = getProperties(obj) catch return false;
-        const name_c = php.getStringContent(name);
-        if (std.mem.eql(u8, name_c, "string")) {
-            const new_str = try php.getValueString(value);
-            if (props.string) |s| php.release(s);
-            props.string = new_str;
-            php.addRef(new_str);
-        } else if (std.mem.eql(u8, name_c, "file") or std.mem.eql(u8, name_c, "line")) {
-            return error.WriteProtected;
-        } else {
-            return false;
-        }
-        return true;
-    }
-
-    fn getProperties(obj: *Object) !*Canonical {
-        const self = fromObject(obj);
+    fn getCanonical(self: *@This()) !*Canonical {
         if (self.canonical) |c| return c;
         const err_value = try self.getValue(.none);
         defer php.release(&err_value);
@@ -415,9 +404,16 @@ pub const ErrorSet = struct {
         return err_struct.canonical.?;
     }
 
-    fn getProperitiesFromValue(err: *Value) !*Canonical {
+    fn getCanonicalFromValue(err: *Value) !*Canonical {
         const obj = try php.getValueObject(err);
-        return getProperties(obj);
+        const self = fromObject(obj);
+        return self.getCanonical();
+    }
+
+    fn findPropId(name: *String, _: ?[*]?*anyopaque) ?PropId {
+        return inline for (comptime std.meta.fields(PropId)) |field| {
+            if (php.matchString(name, field.name)) break @field(PropId, field.name);
+        } else null;
     }
 
     pub const getExtent = Super.getExtent;
@@ -428,6 +424,8 @@ pub const ErrorSet = struct {
     pub const checkArguments = Super.checkArguments;
     pub const visitPointers = Super.visitPointers;
     pub const castObject = Super.castObject;
+    pub const readProperty = Super.readProperty;
+    pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
     pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;

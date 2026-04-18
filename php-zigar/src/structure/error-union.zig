@@ -20,8 +20,32 @@ pub const ErrorUnion = struct {
 
     pub const Static = struct {
         payload_acc: *accessor.Any = undefined,
+        payload_class: *ZigClassEntry = undefined,
         error_acc: *accessor.Any = undefined,
         error_class: *ZigClassEntry = undefined,
+
+        pub const StaticPropId = enum { payload, error_set };
+        pub const StaticPropCacheEntry = struct {
+            id: usize,
+            prop_id: StaticPropId,
+
+            const name = "static:error_set";
+
+            pub inline fn find(cache_slot: ?[*]?*anyopaque) !?StaticPropId {
+                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
+                return if (self.id == @intFromPtr(name))
+                    self.prop_id
+                else if (self.id != 0)
+                    error.ForAnotherCache
+                else
+                    null;
+            }
+
+            pub inline fn set(cache_slot: ?[*]?*anyopaque, prop_id: StaticPropId) void {
+                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return;
+                self.* = .{ .id = @intFromPtr(name), .prop_id = prop_id };
+            }
+        };
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -30,6 +54,35 @@ pub const ErrorUnion = struct {
             const member1 = try class.getMember(.instance, 1);
             self.error_acc = &member1.accessors;
             self.error_class = member1.class;
+        }
+
+        pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
+            if (findStaticPropId(name, cache_slot)) |id| {
+                const prop_obj = switch (id) {
+                    .payload => self.payload_class.object,
+                    .error_set => self.error_class.object,
+                };
+                php.addRef(prop_obj);
+                return php.createValueObject(prop_obj);
+            } else {
+                return error.Missing;
+            }
+        }
+
+        pub fn staticPropertyExists(_: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
+            return findStaticPropId(name, cache_slot) != null;
+        }
+
+        fn findStaticPropId(name: *String, cache_slot: ?[*]?*anyopaque) ?StaticPropId {
+            if (StaticPropCacheEntry.find(cache_slot) catch return null) |id| return id;
+            inline for (std.meta.fields(StaticPropId)) |field| {
+                if (php.matchString(name, "__" ++ field.name)) {
+                    const id = @field(StaticPropId, field.name);
+                    StaticPropCacheEntry.set(cache_slot, id);
+                    return id;
+                }
+            }
+            return null;
         }
     };
 
@@ -100,6 +153,9 @@ pub const ErrorUnion = struct {
     pub const initialize = Super.initialize;
     pub const finalize = Super.finalize;
     pub const externalize = Super.externalize;
+    pub const getProperty = Super.getProperty;
+    pub const setProperty = Super.setProperty;
+    pub const propertyExists = Super.propertyExists;
     pub const checkArguments = Super.checkArguments;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;

@@ -9,6 +9,7 @@ const ClassEntry = php.ClassEntry;
 const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
 const ObjectIterator = php.ObjectIterator;
+const String = php.String;
 const Value = php.Value;
 const structure = @import("../structure.zig");
 
@@ -20,6 +21,30 @@ pub const Vector = struct {
 
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
+        element_class: *ZigClassEntry = undefined,
+
+        pub const StaticPropId = enum { child };
+        pub const StaticPropCacheEntry = struct {
+            id: usize,
+            prop_id: StaticPropId,
+
+            const name = "static:vector";
+
+            pub inline fn find(cache_slot: ?[*]?*anyopaque) !?StaticPropId {
+                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
+                return if (self.id == @intFromPtr(name))
+                    self.prop_id
+                else if (self.id != 0)
+                    error.ForAnotherCache
+                else
+                    null;
+            }
+
+            pub inline fn set(cache_slot: ?[*]?*anyopaque, prop_id: StaticPropId) void {
+                const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return;
+                self.* = .{ .id = @intFromPtr(name), .prop_id = prop_id };
+            }
+        };
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -27,6 +52,35 @@ pub const Vector = struct {
             // fetch the accessor in advance since we know it can only be a of the vector type
             const member = try class.getMember(.instance, 0);
             self.value_acc = &member.accessors;
+            self.element_class = member.class;
+        }
+
+        pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
+            if (findStaticPropId(name, cache_slot)) |id| {
+                const prop_obj = switch (id) {
+                    .child => self.element_class.object,
+                };
+                php.addRef(prop_obj);
+                return php.createValueObject(prop_obj);
+            } else {
+                return error.Missing;
+            }
+        }
+
+        pub fn staticPropertyExists(_: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
+            return findStaticPropId(name, cache_slot) != null;
+        }
+
+        fn findStaticPropId(name: *String, cache_slot: ?[*]?*anyopaque) ?StaticPropId {
+            if (StaticPropCacheEntry.find(cache_slot) catch return null) |id| return id;
+            inline for (std.meta.fields(StaticPropId)) |field| {
+                if (php.matchString(name, "__" ++ field.name)) {
+                    const id = @field(StaticPropId, field.name);
+                    StaticPropCacheEntry.set(cache_slot, id);
+                    return id;
+                }
+            }
+            return null;
         }
     };
 
@@ -70,6 +124,9 @@ pub const Vector = struct {
     pub const checkArguments = Super.checkArguments;
     pub const getValue = Super.getValue;
     pub const setValue = Super.setValue;
+    pub const getProperty = Super.getProperty;
+    pub const setProperty = Super.setProperty;
+    pub const propertyExists = Super.propertyExists;
     pub const visitPointers = Super.Super.visitPointers;
     pub const readElement = Super.readElement;
     pub const writeElement = Super.writeElement;

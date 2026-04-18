@@ -172,11 +172,8 @@ pub fn Slot(comptime attrs: Attributes) type {
 
 fn getValue(entry: *Value, transform: ?accessor.Transform) Error!Value {
     if (transform) |tm| {
-        if (php.getValueObject(entry) catch null) |obj| {
-            return try structure.invokeMethod(obj, "getValue", .{tm});
-        } else {
-            return error.NullPointer;
-        }
+        const obj = php.getValueObject(entry) catch return error.NullPointer;
+        return try structure.invokeMethod(obj, "getValue", .{tm});
     } else {
         php.addRef(entry);
         return entry.*;
@@ -195,9 +192,6 @@ fn getValueEx(entry: *Value, transform1: ?accessor.Transform, transform2: ?acces
 }
 
 fn setValue(entry: *Value, value: *const Value, transform: ?accessor.Transform) Error!void {
-    if (php.getValueObject(entry)) |obj| {
-        try structure.invokeMethod(obj, "setValue", .{ value, transform orelse .none });
-    } else |_| {
-        return error.NullPointer;
-    }
+    const obj = php.getValueObject(entry) catch return error.NullPointer;
+    try structure.invokeMethod(obj, "setValue", .{ value, transform orelse .none });
 }

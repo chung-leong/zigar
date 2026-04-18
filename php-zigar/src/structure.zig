@@ -73,9 +73,14 @@ pub fn Parent(comptime S: type) type {
 
             const name = "transform";
 
-            pub inline fn find(cache_slot: ?[*]?*anyopaque) ?accessor.Transform {
+            pub inline fn find(cache_slot: ?[*]?*anyopaque) !?accessor.Transform {
                 const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
-                return if (self.id == @intFromPtr(name)) self.transform else null;
+                return if (self.id == @intFromPtr(name))
+                    self.transform
+                else if (self.id != 0)
+                    error.ForAnotherCache
+                else
+                    null;
             }
 
             pub inline fn set(cache_slot: ?[*]?*anyopaque, transform: accessor.Transform) void {
@@ -232,24 +237,22 @@ pub fn Parent(comptime S: type) type {
             return false;
         }
 
-        pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !Value {
+        pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
             const transform = findTransform(name, cache_slot) orelse return error.Missing;
-            return self.getValue(transform) catch |err| switch (failure.match(err, error.Unsupported)) {
-                true => error.Missing,
-                false => err,
-            };
+            return try self.getValue(transform);
         }
 
         pub fn setProperty(self: *S, name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {
             const transform = findTransform(name, cache_slot) orelse return error.Missing;
-            return self.setValue(value, transform) catch |err| switch (failure.match(err, error.Unsupported)) {
-                true => error.Missing,
-                false => err,
-            };
+            return try self.setValue(value, transform);
+        }
+
+        pub fn propertyExists(_: *S, name: *String, cache_slot: ?[*]?*anyopaque) bool {
+            return findTransform(name, cache_slot) != null;
         }
 
         pub fn findTransform(name: *String, cache_slot: ?[*]?*anyopaque) ?accessor.Transform {
-            if (TransformCacheEntry.find(cache_slot)) |t| return t;
+            if (TransformCacheEntry.find(cache_slot) catch return null) |t| return t;
             const transforms = .{
                 .__value = .none,
                 .__plain = .plain,
@@ -257,6 +260,7 @@ pub fn Parent(comptime S: type) type {
                 .__int = .integer,
                 .__bytes = .bytes,
                 .__base64 = .base64,
+                .@"$" = .plain,
             };
             return inline for (std.meta.fields(@TypeOf(transforms))) |field| {
                 if (php.matchString(name, field.name)) {
@@ -348,7 +352,7 @@ pub fn Parent(comptime S: type) type {
             // unlike readElement(), PHP does not expect this function to return a null pointer;
             // we cannot therefore return an error union;
             const self = fromObject(obj);
-            if (getProperty(self, name, cache_slot)) |value| {
+            if (self.getProperty(name, cache_slot)) |value| {
                 retval.* = value;
             } else |err| {
                 retval.* = php.createValueNull();
@@ -359,17 +363,16 @@ pub fn Parent(comptime S: type) type {
 
         pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
             const self = fromObject(obj);
-            setProperty(self, name, value, cache_slot) catch |err| {
+            self.setProperty(name, value, cache_slot) catch |err| {
                 return reportFieldError(self, name, .write, err);
             };
             return value;
         }
 
         pub fn hasProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) c_int {
-            _ = obj;
             _ = prop_type;
-            const transform = findTransform(name, cache_slot);
-            return if (transform) |_| 1 else 0;
+            const self = fromObject(obj);
+            return if (self.propertyExists(name, cache_slot)) 1 else 0;
         }
 
         pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: ?*const Value) !?*php.Function {
@@ -408,9 +411,14 @@ pub fn StructLike(comptime S: type) type {
 
             const this_type = "member";
 
-            pub inline fn find(cache_slot: ?[*]?*anyopaque, class: *ZigClassEntry) ?*const ZigClassEntry.Member {
+            pub inline fn find(cache_slot: ?[*]?*anyopaque, class: *ZigClassEntry) !?*const ZigClassEntry.Member {
                 const self: *@This() = if (cache_slot) |ptr| @ptrCast(ptr) else return null;
-                return if (self.id == @intFromPtr(class)) self.member else null;
+                return if (self.id == @intFromPtr(class))
+                    self.member
+                else if (self.id != 0)
+                    error.ForAnotherCache
+                else
+                    null;
             }
 
             pub inline fn findSelf(cache_slot: ?[*]?*anyopaque, class: *ZigClassEntry) ?*@This() {
@@ -467,17 +475,16 @@ pub fn StructLike(comptime S: type) type {
             return Super.setValue(self, value, transform);
         }
 
-        pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) !Value {
-            if (findMember(self, name, cache_slot)) |member| {
-                return try member.accessors.get(self);
-            } else if (scope == .instance) {
-                return Super.getProperty(self, name, cache_slot);
-            } else {
-                return error.Missing;
-            }
+        pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
+            return if (findMember(self, name, cache_slot)) |member|
+                try member.accessors.get(self)
+            else if (scope == .instance)
+                try Super.getProperty(self, name, cache_slot)
+            else
+                error.Missing;
         }
 
-        pub fn setProperty(self: *S, name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) !void {
+        pub fn setProperty(self: *S, name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {
             if (findMember(self, name, cache_slot)) |member| {
                 try member.accessors.set(self, value);
             } else if (scope == .instance) {
@@ -487,40 +494,19 @@ pub fn StructLike(comptime S: type) type {
             }
         }
 
+        pub fn propertyExists(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) bool {
+            return if (findMember(self, name, cache_slot)) |_|
+                true
+            else
+                Super.propertyExists(self, name, cache_slot);
+        }
+
         pub fn findMember(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) ?*const ZigClassEntry.Member {
             const class = ZigClassEntry.fromStructure(self);
-            if (MemberCacheEntry.find(cache_slot, class)) |m| return m;
+            if (MemberCacheEntry.find(cache_slot, class) catch return null) |m| return m;
             const member = class.getMember(scope, name) catch return null;
             MemberCacheEntry.set(cache_slot, class, member);
             return member;
-        }
-
-        pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
-            _ = prop_type;
-            // this function cannot return an error union (see comment in Parent.readProperty())
-            const self = fromObject(obj);
-            if (getProperty(self, name, cache_slot)) |value| {
-                retval.* = value;
-            } else |err| {
-                retval.* = php.createValueNull();
-                php.throwError(reportFieldError(self, name, .read, err));
-            }
-            return retval;
-        }
-
-        pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
-            const self = fromObject(obj);
-            setProperty(self, name, value, cache_slot) catch |err| {
-                return reportFieldError(self, name, .write, err);
-            };
-            return value;
-        }
-
-        pub fn hasProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) c_int {
-            _ = prop_type;
-            const self = fromObject(obj);
-            const member = findMember(self, name, cache_slot);
-            return if (member != null) 1 else 0;
         }
 
         pub fn getProperties(obj: *Object) !*HashTable {
@@ -571,6 +557,9 @@ pub fn StructLike(comptime S: type) type {
         pub const visitPointers = Super.visitPointers;
         pub const reportFieldError = Super.reportFieldError;
 
+        pub const readProperty = Super.readProperty;
+        pub const writeProperty = Super.writeProperty;
+        pub const hasProperty = Super.hasProperty;
         pub const freeObject = Super.freeObject;
         pub const castObject = Super.castObject;
         pub const getGarbageCollection = Super.getGarbageCollection;
@@ -759,6 +748,9 @@ pub fn ArrayLike(comptime S: type) type {
         pub const initialize = Super.initialize;
         pub const finalize = Super.finalize;
         pub const externalize = Super.externalize;
+        pub const getProperty = Super.getProperty;
+        pub const setProperty = Super.setProperty;
+        pub const propertyExists = Super.propertyExists;
         pub const checkArguments = Super.checkArguments;
         pub const copySelf = Super.copySelf;
 

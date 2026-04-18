@@ -288,6 +288,7 @@ pub const Union = struct {
     pub const getValue = Super.getValue;
     pub const getProperty = Super.getProperty;
     pub const setProperty = Super.setProperty;
+    pub const propertyExists = Super.propertyExists;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;

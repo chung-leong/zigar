@@ -60,6 +60,30 @@ pub fn Class(comptime S: type) type {
             class.destroy();
         }
 
+        pub fn getProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
+            return Super.getProperty(self, name, cache_slot) catch |err| get: {
+                if (@hasDecl(S, "Static") and @hasDecl(S.Static, "getStaticProperty")) {
+                    if (err == error.Missing) {
+                        const class = ZigClassEntry.fromObject(object(self));
+                        const static = class.getStaticData(S);
+                        break :get try static.getStaticProperty(name, cache_slot);
+                    }
+                }
+                break :get err;
+            };
+        }
+
+        pub fn propertyExists(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
+            return Super.propertyExists(self, name, cache_slot) or check: {
+                if (@hasDecl(S, "Static") and @hasDecl(S.Static, "staticPropertyExists")) {
+                    const class = ZigClassEntry.fromObject(object(self));
+                    const static = class.getStaticData(S);
+                    break :check static.staticPropertyExists(name, cache_slot);
+                }
+                break :check false;
+            };
+        }
+
         pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: ?*const Value) !?*Function {
             const obj = obj_ptr.*;
             const self = fromObject(obj);
@@ -215,7 +239,6 @@ pub fn Class(comptime S: type) type {
         }
 
         pub const getValue = Super.getValue;
-        pub const getProperty = Super.getProperty;
         pub const setProperty = Super.setProperty;
         pub const readProperty = Super.readProperty;
         pub const writeProperty = Super.writeProperty;
