@@ -154,7 +154,7 @@ pub const ErrorSet = struct {
                         if (ZigClassEntry.isZigError(err_obj.ce)) {
                             return value.*;
                         } else {
-                            const method = php.createValuePersistentString("resume");
+                            const method = php.createValuePersistentString("getMessage");
                             const message = try php.invokeMethod(value, &method, &.{});
                             if (php.getHashEntry(self.error_set, &message)) |err| {
                                 php.addRef(err);
@@ -179,6 +179,7 @@ pub const ErrorSet = struct {
         }
 
         pub fn findCanonicalInt(self: *@This(), value: *const Value) !Value {
+            if (php.isValueNull(value)) return php.createValueLong(0);
             const err = try self.findCanonical(value);
             const err_obj = try php.getValueObject(&err);
             const err_struct = fromObject(err_obj);
