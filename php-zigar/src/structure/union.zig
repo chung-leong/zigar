@@ -217,26 +217,6 @@ pub const Union = struct {
         return try iterator.PropertyIterator(@This()).create(obj);
     }
 
-    fn getActiveTagNameList(self: *@This()) ![]*String {
-        const class = ZigClassEntry.fromStructure(self);
-        if (!class.flags.@"union".has_tag) return &.{};
-        const static = class.getStaticData(@This());
-        const selector = static.selector orelse return error.Unexpected;
-        const active_sel_value = try selector.accessors.get(self);
-        const tag_obj = try php.getValueObject(&active_sel_value);
-        const tag_class = ZigClassEntry.fromObject(tag_obj);
-        if (tag_class.type != .@"enum") return error.Unexpected;
-        const tag_struct = ZigObject(structure.Enum).fromObject(tag_obj).structure();
-        const props = tag_struct.canonical orelse return error.Unexpected;
-        const name_many_ptr: [*]*String = @ptrCast(&props.name);
-        return name_many_ptr[0..1];
-    }
-
-    fn getActiveTagName(self: *@This()) !*String {
-        const list = try self.getActiveTagNameList();
-        return list[0];
-    }
-
     fn checkSelector(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
@@ -274,7 +254,18 @@ pub const Union = struct {
     fn reportFieldError(self: *@This(), name: *String, access: accessor.FieldAccess, err: anytype) error{ ExceptionThrown, Unexpected } {
         const member = self.findMember(name, null);
         if (member != null and err == error.InactiveField) {
-            const active_name = self.getActiveTagName() catch return error.Unexpected;
+            const active_name = find: {
+                const class = ZigClassEntry.fromStructure(self);
+                const static = class.getStaticData(@This());
+                const selector = static.selector.?;
+                const active_sel_value = selector.accessors.get(self) catch unreachable;
+                var iter: HashTableIterator = .init(&selector.possible_values, .{});
+                break :find while (iter.next()) |sel_value| {
+                    if (compareSelectors(sel_value, &active_sel_value)) {
+                        break iter.currentName().?;
+                    }
+                } else unreachable;
+            };
             return failure.report("access of union field '{s}' while field '{s}' is active", .{
                 php.getStringContent(name),
                 php.getStringContent(active_name),
