@@ -108,22 +108,19 @@ pub fn Parent(comptime S: type) type {
                 // copy default values from template
                 try self.buffer.copy(def);
             }
-            const obj = ZigObject(S).fromStructure(self).object();
-            if (@hasDecl(S, "getExtent")) {
-                try class.registerObject(obj);
-            }
             if (initializer) |value| {
                 try self.setValue(value, .none);
                 if (read_only) self.buffer.protect(true);
             }
         }
 
-        pub fn finalize(self: *S, init_called: bool) !void {
-            _ = init_called;
+        pub fn finalize(self: *S, _: bool) !void {
             if (@hasField(S, "buffer")) {
                 const obj = ZigObject(S).fromStructure(self).object();
                 const class = ZigClassEntry.fromObject(obj);
-                try class.registerObject(obj);
+                if (!self.buffer.flags.uninitialized) {
+                    try class.registerObject(obj);
+                }
             }
         }
 
@@ -408,6 +405,7 @@ pub fn StructLike(comptime S: type) type {
                         return reportFieldError(self, name, .write, err);
                     };
                 }
+                return;
             }
             return Super.setValue(self, value, transform);
         }

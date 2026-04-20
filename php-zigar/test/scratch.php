@@ -7,9 +7,13 @@ use Revolt\EventLoop;
 zigar_compile_module(__DIR__ . "/scratch.zig", "/tmp/scratch.zigar");
 $m = zigar_load_module("/tmp/scratch.zigar");
 
-print_r($m->Type->__payload);
-print_r($m->Type->__error_set);
+print_r($m->struct_a);
 
+$b = new $m->StructA([ 'number' => 500 ]);
+
+print_r($b);
+
+$b = null;
 $m = null;
 
 gc_collect_cycles();

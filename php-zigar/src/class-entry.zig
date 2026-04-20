@@ -241,10 +241,6 @@ pub const ZigClassEntry = struct {
 
     pub fn destroy(self: *@This()) void {
         // this method is only called by freeObject() of Class
-        // std.debug.print("freeing class {s} ({s})\n", .{
-        //     self.getName(),
-        //     self.getStructureName(),
-        // });
         if (self.status.activated) {
             self.host.release();
         }
@@ -293,9 +289,7 @@ pub const ZigClassEntry = struct {
 
     pub fn finalizeStructure(class_obj: *Object, info: *Value) !void {
         // when this function is called, the static info has become available
-        errdefer {
-            std.debug.print("finalizeStructure => {d}\n", .{class_obj.handle});
-        }
+        errdefer std.debug.print("finalizeStructure => {d}\n", .{class_obj.handle});
         const self = fromObject(class_obj);
         try self.extractScope(info, .static);
         errdefer self.static.deinit(self, .static);
@@ -547,10 +541,6 @@ pub const ZigClassEntry = struct {
         var slot_count: usize = 0;
         var members = php.createHashTable(null);
         errdefer php.destroyHashTable(&members);
-        // std.debug.print("extractScope: {s} {}\n", .{
-        //     self.getStructureName(),
-        //     scope,
-        // });
         if (php.getProperty(scope_info, "members") catch null) |member_list| {
             const member_list_ht = try php.getValueHashTable(member_list);
             var iter: HashTableIterator = .init(member_list_ht, .{});
@@ -673,12 +663,10 @@ pub const ZigClassEntry = struct {
     }
 
     pub fn registerObject(self: *@This(), obj: *Object) !void {
-        defer self.host.addRef();
         try self.host.object_map.add(obj);
     }
 
     pub fn unregisterObject(self: *@This(), obj: *Object) void {
-        defer self.host.release();
         self.host.object_map.remove(obj);
     }
 
@@ -743,6 +731,10 @@ pub const ZigClassEntry = struct {
         return self.createObjectFromParameters(.{ .allocator = allocator, .initializer = initializer, .read_only = read_only });
     }
 
+    pub fn createUninitializedObject(self: *@This()) !*Object {
+        return self.createObjectFromParameters(.{});
+    }
+
     fn createObjectFromParameters(self: *@This(), params: anytype) !*Object {
         const Params = @TypeOf(params);
         return switch (self.type) {
@@ -761,16 +753,22 @@ pub const ZigClassEntry = struct {
                 defer if (!@hasField(Params, "buffer")) buf.release();
                 const zig_obj = try ZigObject(S).create(self);
                 // add reference to class object
-                php.addRef(self.object);
+                self.retainClassObject();
                 const obj_struct = zig_obj.structure();
                 try obj_struct.setStorage(buf, &table);
                 if (@hasField(Params, "initializer")) {
                     try obj_struct.initialize(params.allocator, params.initializer, params.read_only);
+                    try obj_struct.finalize(true);
+                } else if (@hasField(Params, "buffer")) {
+                    try obj_struct.finalize(false);
                 }
-                try obj_struct.finalize(@hasField(Params, "initializer"));
                 return zig_obj.object();
             },
         };
+    }
+
+    fn retainClassObject(self: *@This()) void {
+        php.addRef(self.object);
     }
 
     fn releaseClassObject(self: *@This()) void {
@@ -807,9 +805,7 @@ pub const ZigClassEntry = struct {
 
     pub fn handleCreateObject(ce: *ClassEntry) !*Object {
         const self = fromEntry(ce);
-        const buf = try ByteBuffer.create(self.alignment);
-        defer buf.release();
-        return try self.createObjectFromBuffer(buf, null);
+        return try self.createUninitializedObject();
     }
 
     pub fn getIteratorHandler(comptime S: type) *const fn ([*c]ClassEntry, [*c]Value, c_int) callconv(.c) [*c]ObjectIterator {
@@ -920,7 +916,7 @@ pub const ZigClassEntry = struct {
                         }
                     }
                 },
-                .vector => {
+                .vector => if (for_vector) {
                     const primitive_type: MemberType = comptime switch (acc.attributes) {
                         .bool => .bool,
                         inline .int, .gmp => |child_attrs| switch (child_attrs.signedness) {
