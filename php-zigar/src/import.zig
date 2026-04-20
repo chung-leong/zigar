@@ -47,19 +47,10 @@ pub const StructureImporter = struct {
     }
 
     pub fn deinit(self: *@This()) void {
-        const ptr_ptr: **anyopaque = @ptrFromInt(0x00007ffff51a7960);
-        for (self.value_list.items, 0..) |*item, i| {
-            defer {
-                if (@intFromPtr(ptr_ptr.*) == 0x7ffff51a789f) {
-                    std.debug.print("i == {d}\n", .{i});
-                }
-            }
-            if (php.getValuePointer(*ByteBuffer, item)) |b| {
+        for (self.value_list.items) |*item| {
+            if (php.getValuePointer(*ByteBuffer, item) catch null) |b| {
                 b.release();
-            } else |_| {
-                // if (php.getValueArray(item) catch null) |arr| {
-                //     std.debug.print("array {x}: ref_count = {d}\n", .{ @intFromPtr(arr), arr.gc.refcount });
-                // }
+            } else {
                 php.release(item);
             }
         }
