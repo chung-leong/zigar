@@ -14,7 +14,7 @@ pub const Optional = struct {
     table: Value = undefined,
     buffer: *ByteBuffer = undefined,
 
-    const Super = structure.Parent(@This());
+    const Super = structure.OptionalLike(@This());
 
     pub const Static = struct {
         payload_acc: *accessor.Any = undefined,
@@ -114,7 +114,9 @@ pub const Optional = struct {
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
+    pub const getProperties = Super.getProperties;
     pub const getGarbageCollection = Super.getGarbageCollection;
+    pub const getIterator = Super.getIterator;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;
 };

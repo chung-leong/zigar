@@ -337,6 +337,12 @@ pub fn Parent(comptime S: type) type {
             return if (self.propertyExists(name, cache_slot)) 1 else 0;
         }
 
+        pub fn getProperties(_: *Object) !*HashTable {
+            const ht = php.createArray();
+            // caller seem to expect a hash table with zero refcount
+            ht.gc.refcount = 0;
+            return ht;
+        }
         pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: ?*const Value) !?*php.Function {
             const obj = obj_ptr.*;
             const self = fromObject(obj);
@@ -346,14 +352,8 @@ pub fn Parent(comptime S: type) type {
         pub fn getGarbageCollection(obj: *Object, table: *[*c]Value, n: *c_int) !?*HashTable {
             const self = fromObject(obj);
             const class = ZigClassEntry.fromObject(obj);
-            // std.debug.print("getGarbageCollection: {}, object {d}, refcount = {d} ({})\n", .{
-            //     class.type,
-            //     obj.handle,
-            //     obj.gc.refcount,
-            //     php.GarbageCollectionColor.get(obj),
-            // });
-            const gc_buffer = class.getGarbageCollectionBuffer();
-            try gc_buffer.add(class.object);
+            const gc_buffer = class.host.gc_buffer.start(obj);
+            try gc_buffer.addObject(class.object);
             if (@hasField(S, "table")) {
                 try gc_buffer.add(&self.table);
             }
@@ -448,6 +448,7 @@ pub fn StructLike(comptime S: type) type {
 
         pub fn getProperties(obj: *Object) !*HashTable {
             var iter: iterator.PropertyIterator(S) = .init(obj);
+            defer iter.deinit();
             const self = fromObject(obj);
             const ht = php.createArray();
             const is_tuple = isTuple(self);
@@ -689,6 +690,60 @@ pub fn ArrayLike(comptime S: type) type {
         pub const propertyExists = Super.propertyExists;
         pub const checkArguments = Super.checkArguments;
         pub const copySelf = Super.copySelf;
+
+        pub const readProperty = Super.readProperty;
+        pub const writeProperty = Super.writeProperty;
+        pub const hasProperty = Super.hasProperty;
+        pub const freeObject = Super.freeObject;
+        pub const castObject = Super.castObject;
+        pub const getGarbageCollection = Super.getGarbageCollection;
+    };
+}
+
+pub fn OptionalLike(comptime S: type) type {
+    return struct {
+        pub const Super = Parent(S);
+        pub const ByteExtent = Super.ByteExtent;
+        pub const scope = Super.scope;
+
+        pub fn getProperties(obj: *Object) !*HashTable {
+            const self = fromObject(obj);
+            const child = try self.getValue(.none);
+            if (php.getValueObject(&child) catch null) |child_obj| {
+                defer php.release(child_obj);
+                if (child_obj.handlers.*.get_properties) |f| {
+                    return f(child_obj);
+                }
+            }
+            return php.createArray();
+        }
+
+        pub fn getIterator(obj: *Object) !?*ObjectIterator {
+            const self = fromObject(obj);
+            var child = try self.getValue(.none);
+            if (php.getValueObject(&child) catch null) |child_obj| {
+                defer php.release(child_obj);
+                if (child_obj.ce.*.get_iterator) |f| {
+                    return f(child_obj.ce, &child, 0);
+                }
+            }
+            return null;
+        }
+
+        pub const fromObject = Super.fromObject;
+        pub const getExtent = Super.getExtent;
+        pub const setStorage = Super.setStorage;
+        pub const initialize = Super.initialize;
+        pub const finalize = Super.finalize;
+        pub const externalize = Super.externalize;
+        pub const getValue = Super.getValue;
+        pub const setValue = Super.setValue;
+        pub const getProperty = Super.getProperty;
+        pub const setProperty = Super.setProperty;
+        pub const propertyExists = Super.propertyExists;
+        pub const checkArguments = Super.checkArguments;
+        pub const copySelf = Super.copySelf;
+        pub const visitPointers = Super.visitPointers;
 
         pub const readProperty = Super.readProperty;
         pub const writeProperty = Super.writeProperty;

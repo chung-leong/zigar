@@ -31,8 +31,18 @@ pub const ErrorSet = struct {
             const member = try class.getMember(.instance, 0);
             if (member.accessors != .constant) return error.Unexpected;
             self.constant_acc = &member.accessors.constant;
+            const global_set = get: {
+                if (php.getValueArray(&class.host.global_error_set)) |ht| {
+                    php.addRef(ht);
+                    break :get ht;
+                } else |_| {
+                    const ht = php.createArray();
+                    class.host.global_error_set = php.createValueArray(ht);
+                    break :get ht;
+                }
+            };
             if (class.flags.error_set.is_global) {
-                self.error_set = class.host.global_error_set;
+                self.error_set = global_set;
             } else {
                 const ht_bytes = php.emalloc(@sizeOf(HashTable)) orelse return error.OutOfMemory;
                 self.error_set = @ptrCast(@alignCast(ht_bytes));
@@ -65,9 +75,14 @@ pub const ErrorSet = struct {
 
         pub fn deinit(self: *@This()) void {
             const class = ZigClassEntry.fromStatic(self);
-            if (self.error_set != class.host.global_error_set) {
+            const global_set = php.getValueArray(&class.host.global_error_set) catch unreachable;
+            if (global_set.gc.refcount == 1) {
+                class.host.global_error_set = php.createValueNull();
+            }
+            if (self.error_set != global_set) {
                 php.release(self.error_set);
             }
+            php.release(global_set);
             php.allocator.destroy(self.methods);
         }
 
@@ -176,13 +191,13 @@ pub const ErrorSet = struct {
             const err_value = try self.constant_acc.int.get(err_struct);
             // reference err by integer value
             const err_code = try php.getValueLong(&err_value);
-            const global_error_set = class.host.global_error_set;
-            const err, const is_new = if (php.getHashEntry(global_error_set, err_code)) |e_ptr|
+            const global_set = try php.getValueArray(&class.host.global_error_set);
+            const err, const is_new = if (php.getHashEntry(global_set, err_code)) |e_ptr|
                 .{ e_ptr.*, false }
             else |_|
                 .{ php.createValueObject(err_obj), true };
             const message = createDecamelizedMessage(name);
-            if (self.error_set != global_error_set) {
+            if (self.error_set != global_set) {
                 php.setHashEntry(self.error_set, err_code, &err);
                 // reference err by name
                 php.setHashEntry(self.error_set, name, &err);
@@ -192,9 +207,9 @@ pub const ErrorSet = struct {
             if (is_new) {
                 // add error to global error setl; it maintains strong references on the items it hold
                 // so we need to bump the ref count
-                php.setHashEntryRef(global_error_set, name, &err);
-                php.setHashEntryRef(global_error_set, err_code, &err);
-                php.setHashEntryRef(global_error_set, message, &err);
+                php.setHashEntryRef(global_set, name, &err);
+                php.setHashEntryRef(global_set, err_code, &err);
+                php.setHashEntryRef(global_set, message, &err);
                 // attach canonical info to err
                 const props = try php.allocator.create(Canonical);
                 props.* = .{ .message = message };
@@ -422,6 +437,7 @@ pub const ErrorSet = struct {
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
+    pub const getProperties = Super.getProperties;
     pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;

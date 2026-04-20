@@ -136,7 +136,6 @@ pub fn PropertyIterator(comptime S: type) type {
         pub fn moveForward(iter: *ObjectIterator) void {
             const self = fromIter(iter);
             php.release(&iter.data);
-            self.current_name = null;
             while (self.member_iter.next()) |member| {
                 if (self.member_iter.currentName()) |name| {
                     if (@hasDecl(S, "isMemberActive")) {
@@ -153,6 +152,9 @@ pub fn PropertyIterator(comptime S: type) type {
                         }
                     }
                 }
+            } else {
+                iter.data = php.createValueNull();
+                self.current_name = null;
             }
         }
 

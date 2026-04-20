@@ -14,7 +14,7 @@ const structure = @import("../structure.zig");
 pub const Comptime = struct {
     table: Value = undefined,
 
-    const Super = structure.Parent(@This());
+    const Super = structure.OptionalLike(@This());
 
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
@@ -62,6 +62,8 @@ pub const Comptime = struct {
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
+    pub const getProperties = Super.getProperties;
     pub const getGarbageCollection = Super.getGarbageCollection;
+    pub const getIterator = Super.getIterator;
     const fromObject = Super.fromObject;
 };

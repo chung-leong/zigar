@@ -122,23 +122,20 @@ pub fn Class(comptime S: type) type {
 
         pub fn getGarbageCollection(obj: *Object, table: *[*c]Value, n: *c_int) !?*HashTable {
             const class = ZigClassEntry.fromObject(obj);
-            const gc_buffer = class.getGarbageCollectionBuffer();
-            // std.debug.print("getGarbageCollection: Class({}), object {d}, refcount = {d} ({})\n", .{
-            //     class.type,
-            //     obj.handle,
-            //     obj.gc.refcount,
-            //     php.GarbageCollectionColor.get(obj),
-            // });
+            const gc_buffer = class.host.gc_buffer.start(obj);
             var member_iter = class.getMemberIterator(.instance);
             while (member_iter.next()) |member| {
                 // ignore properties, as the return type of getters are already reachable via their function object
                 // finalizeStructure() in class-entry.zig doesn't put a reference on the member class
                 if (member.accessors == .property) continue;
                 if (member.class == class) continue;
-                try gc_buffer.add(member.class.object);
+                try gc_buffer.addObject(member.class.object);
             }
-            try gc_buffer.add(&class.instance.template.table);
-            try gc_buffer.add(&class.static.template.table);
+            if (class.instance.template.table) |*tbl| try gc_buffer.add(tbl);
+            if (class.static.template.table) |*tbl| try gc_buffer.add(tbl);
+            if (class.type == .error_set) {
+                try gc_buffer.add(&class.host.global_error_set);
+            }
             gc_buffer.use(table, n);
             return null;
         }

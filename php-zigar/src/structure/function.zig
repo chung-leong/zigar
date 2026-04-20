@@ -212,6 +212,7 @@ pub const Function = struct {
     pub const visitPointers = Super.visitPointers;
     pub const castObject = Super.castObject;
     pub const freeObject = Super.freeObject;
+    pub const getProperties = Super.getProperties;
     pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
 };

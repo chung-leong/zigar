@@ -21,7 +21,7 @@ pub const ModuleHost = struct {
     ref_count: isize = 0,
     module: ?*Module = null,
     library: ?std.DynLib = null,
-    global_error_set: *HashTable,
+    global_error_set: Value,
     importer: *StructureImporter = undefined,
     dispatcher: *CallDispatcher = undefined,
     allocator: std.mem.Allocator = undefined,
@@ -40,7 +40,7 @@ pub const ModuleHost = struct {
         errdefer php.allocator.destroy(self);
         self.* = .{
             .module = module,
-            .global_error_set = php.createArray(),
+            .global_error_set = php.createValueNull(),
         };
         self.allocator = .{ .ptr = self, .vtable = &BufferAllocator.vtable };
         self.importer = try .init(self);
@@ -68,7 +68,6 @@ pub const ModuleHost = struct {
         self.ref_count -= 1;
         if (self.ref_count == 0) {
             // std.debug.print("freeing host\n", .{});
-            php.release(self.global_error_set);
             self.unclaimed_buffer_map.deinit();
             self.object_map.deinit();
             self.dispatcher.deinit();

@@ -7,6 +7,7 @@ const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
+const HashTable = php.HashTable;
 const Object = php.Object;
 const ObjectIterator = php.ObjectIterator;
 const String = php.String;
@@ -20,7 +21,7 @@ pub const Pointer = struct {
     table: Value = undefined,
     buffer: *ByteBuffer = undefined,
 
-    const Super = structure.Parent(@This());
+    const Super = structure.OptionalLike(@This());
     const prop_id_aliases = .{ .@"*" = .target };
 
     pub const Static = struct {
@@ -225,18 +226,6 @@ pub const Pointer = struct {
         self.buffer.flags.inaccessible = true;
     }
 
-    pub fn getIterator(obj: *Object) !?*ObjectIterator {
-        const self = fromObject(obj);
-        var target = try self.getValue(.none);
-        const target_obj = php.getValueObject(&target) catch return null;
-        if (ZigClassEntry.isZig(target_obj.ce)) {
-            if (target_obj.ce.*.get_iterator) |f| {
-                return f(target_obj.ce, &target, 0);
-            }
-        }
-        return null;
-    }
-
     fn getTarget(self: *@This()) !*Object {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
@@ -275,6 +264,7 @@ pub const Pointer = struct {
     pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
     pub const getGarbageCollection = Super.getGarbageCollection;
+    pub const getIterator = Super.getIterator;
     const fromObject = Super.fromObject;
     const reportFieldError = Super.reportFieldError;
 };

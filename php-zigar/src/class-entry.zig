@@ -468,11 +468,6 @@ pub const ZigClassEntry = struct {
         }
     }
 
-    pub fn getGarbageCollectionBuffer(self: *@This()) *GarbageCollectionBuffer {
-        self.host.gc_buffer.reset();
-        return &self.host.gc_buffer;
-    }
-
     pub fn checkByteLength(self: *@This(), len: usize) !void {
         const element_size = self.byte_size orelse return;
         if (self.type == .slice) {
