@@ -68,7 +68,7 @@ pub const Optional = struct {
             if (try self.copySelf(value)) return;
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
-            const is_present = php.isValueNull(value);
+            const is_present = !php.isValueNull(value);
             if (is_present) {
                 try static.payload_acc.set(self, value);
             } else {

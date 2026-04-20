@@ -162,11 +162,13 @@ final class BoolHandlingTest extends ZigarTestCase
     public function testHandleBoolInOptional(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
-        $this->expectOutputString("true\nnull\nfalse\n");
+        $this->expectOutputString("true\nnull\nfalse\ntrue\n");
         $m->print();
         $m->optional = null;
         $m->print();
         $m->optional = false;
+        $m->print();
+        $m->optional = true;
         $m->print();
     }
 
