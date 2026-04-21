@@ -23,6 +23,7 @@ pub const Vector = struct {
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
         element_class: *ZigClassEntry = undefined,
+        is_bool_element: bool = undefined,
 
         pub const StaticPropCache = cache.IdCache(.{ .child, .len }, .{});
 
@@ -33,6 +34,7 @@ pub const Vector = struct {
             const member = try class.getMember(.instance, 0);
             self.value_acc = &member.accessors;
             self.element_class = member.class;
+            self.is_bool_element = member.type == .bool;
         }
 
         pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
@@ -59,7 +61,7 @@ pub const Vector = struct {
         try Super.setStorage(self, buffer, table);
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        if (static.value_acc.getType() == .bool) {
+        if (static.is_bool_element) {
             // boolean vectors are always packed
             buffer.markPackedData();
         }

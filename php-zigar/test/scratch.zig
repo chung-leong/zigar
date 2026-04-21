@@ -1,8 +1,8 @@
-pub const TagType = enum { state, number };
+const std = @import("std");
 
-pub const UnionA = union(TagType) {
-    state: bool,
-    number: i32,
-};
+pub var vector: @Vector(4, bool) = .{ true, false, false, true };
+pub const vector_const: @Vector(4, bool) = .{ false, false, false, false };
 
-pub var union_a: UnionA = .{ .state = true };
+pub fn print() void {
+    std.debug.print("{any}\n", .{vector});
+}
