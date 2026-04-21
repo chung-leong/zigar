@@ -425,7 +425,7 @@ pub const GarbageCollectionColor = enum(u2) {
     grey,
     purple,
 
-    pub fn get(obj: *Object) @This() {
+    pub fn get(obj: anytype) @This() {
         return @enumFromInt(obj.gc.u.type_info >> 30);
     }
 };

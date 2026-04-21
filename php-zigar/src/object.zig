@@ -111,7 +111,7 @@ pub const ObjectMap = struct {
     pub fn remove(self: *@This(), obj: *Object) void {
         const buf = getObjectBuffer(obj);
         std.debug.assert(!buf.flags.uninitialized and !buf.flags.temporary);
-        self.map.remove(obj);
+        self.map.remove(obj) catch @panic("not registered");
     }
 
     pub fn search(self: *@This(), bytes: []const u8, ce: ?*ClassEntry, read_only: bool) SearchResult {

@@ -182,6 +182,7 @@ pub const ErrorSet = struct {
             if (php.isValueNull(value)) return php.createValueLong(0);
             const err = try self.findCanonical(value);
             const err_obj = try php.getValueObject(&err);
+            defer php.release(err_obj);
             const err_struct = fromObject(err_obj);
             return self.constant_acc.int.get(err_struct);
         }

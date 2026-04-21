@@ -664,10 +664,14 @@ pub const ZigClassEntry = struct {
 
     pub fn registerObject(self: *@This(), obj: *Object) !void {
         try self.host.object_map.add(obj);
+        // each instance needs a reference on the host, since the class object can be released
+        // ahead of the instances during gc
+        self.host.addRef();
     }
 
     pub fn unregisterObject(self: *@This(), obj: *Object) void {
         self.host.object_map.remove(obj);
+        self.host.release();
     }
 
     pub fn obtainObjectAtOffset(self: *@This(), parent_buf: *ByteBuffer, offset: usize, len: usize) !*Object {

@@ -195,8 +195,8 @@ pub const Enum = struct {
                     else => err,
                 };
             };
-            defer php.release(&tag);
             const tag_obj = try php.getValueObject(&tag);
+            defer php.release(tag_obj);
             const tag_struct = fromObject(tag_obj);
             return self.constant_acc.int.get(tag_struct);
         }

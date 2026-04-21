@@ -49,7 +49,7 @@ pub const Union = struct {
                     else => null,
                 };
                 // go through the list of members again and get the possible selector values
-                var sel_ht = php.createHashTable(php.destructor.value);
+                var sel_ht = php.createHashTable(null);
                 var index: c_long = 0;
                 iter.reset();
                 while (iter.next()) |member| {
@@ -114,6 +114,7 @@ pub const Union = struct {
                 try self.visitPointers(structure.Pointer.restrictAccess, .{}, .{ .include_inactive = true });
             }
         }
+        try Super.finalize(self, init_called);
     }
 
     pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) Error!void {
@@ -166,8 +167,9 @@ pub const Union = struct {
             const selector = static.selector orelse return error.Unexpected;
             const active_sel_value = switch (options.include_inactive) {
                 false => try selector.accessors.get(self),
-                true => undefined,
+                true => php.createValueNull(),
             };
+            defer php.release(&active_sel_value);
             var iter = class.getMemberIterator(.instance);
             while (iter.next()) |member| {
                 if (iter.currentName()) |name| {
@@ -239,6 +241,7 @@ pub const Union = struct {
                 break :get value;
             };
             const active_sel_value = try selector.accessors.get(self);
+            defer php.release(&active_sel_value);
             if (!compareSelectors(sel_value, &active_sel_value)) return error.InactiveField;
         }
     }
@@ -259,6 +262,7 @@ pub const Union = struct {
                 const static = class.getStaticData(@This());
                 const selector = static.selector.?;
                 const active_sel_value = selector.accessors.get(self) catch unreachable;
+                defer php.release(&active_sel_value);
                 var iter: HashTableIterator = .init(&selector.possible_values, .{});
                 break :find while (iter.next()) |sel_value| {
                     if (compareSelectors(sel_value, &active_sel_value)) {

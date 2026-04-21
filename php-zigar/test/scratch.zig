@@ -1,9 +1,8 @@
-const std = @import("std");
+pub const TagType = enum { state, number };
 
-pub const Error = error{ GoldfishDied, NoMoney };
+pub const UnionA = union(TagType) {
+    state: bool,
+    number: i32,
+};
 
-pub var error_union: Error!bool = true;
-
-pub fn print() void {
-    std.debug.print("{any}\n", .{error_union});
-}
+pub var union_a: UnionA = .{ .state = true };

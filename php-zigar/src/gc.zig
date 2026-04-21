@@ -45,6 +45,10 @@ pub const GarbageCollectionBuffer = struct {
             .array => {
                 const ht = php.getValueArray(value) catch unreachable;
                 var iter: HashTableIterator = .init(ht, .{});
+                std.debug.print("adding array, refcount = {d}, ({})\n", .{
+                    ht.gc.refcount,
+                    php.GarbageCollectionColor.get(ht),
+                });
                 while (iter.next()) |e| {
                     self.show(e);
                 }
