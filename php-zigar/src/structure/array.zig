@@ -77,6 +77,7 @@ pub const Array = struct {
         try static.value_acc.setElement(self, index, value);
     }
 
+    pub const getExtent = Super.getExtent;
     pub const setStorage = Super.setStorage;
     pub const initialize = Super.initialize;
     pub const externalize = Super.externalize;
