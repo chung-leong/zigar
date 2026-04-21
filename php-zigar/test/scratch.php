@@ -9,8 +9,13 @@ $m = zigar_load_module("/tmp/scratch.zigar");
 
 // print_r($m->union_a);
 
-print_r($m->vector);
+$a = new $m->Bool(true);
+echo (boolean) $a, "\n";
 
+$c = $m->Bool("\x00");
+
+$a = null;
+$c = null;
 $m = null;
 
 gc_collect_cycles();

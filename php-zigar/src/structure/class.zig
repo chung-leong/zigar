@@ -180,6 +180,7 @@ pub fn Class(comptime S: type) type {
                 });
             }
             const buf = try ByteBuffer.create(class.alignment);
+            defer buf.release();
             buf.referenceString(str);
             const new_obj = try class.createObjectFromBuffer(buf, null);
             return_value.* = php.createValueObject(new_obj);
