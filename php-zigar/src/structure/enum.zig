@@ -233,19 +233,23 @@ pub const Enum = struct {
     };
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
         return switch (transform) {
-            .none, .string => |t| get: {
-                const class = ZigClassEntry.fromStructure(self);
-                const static = class.getStaticData(@This());
-                const value = try static.constant_acc.get(self.buffer);
-                if (t == .none) break :get value;
-                const obj = try php.getValueObject(&value);
-                defer php.release(obj);
-                const enum_struct = fromObject(obj);
-                const str = enum_struct.canonical.?.name;
-                php.addRef(str);
-                break :get php.createValueString(str);
+            .none, .plain, .string => |t| get: {
+                var value = try static.constant_acc.get(self.buffer);
+                if (t != .none) {
+                    const obj = try php.getValueObject(&value);
+                    defer php.release(obj);
+                    const enum_struct = fromObject(obj);
+                    const str = enum_struct.canonical.?.name;
+                    php.addRef(str);
+                    value = php.createValueString(str);
+                }
+                break :get value;
             },
+            .integer => try static.constant_acc.int.get(self),
+            .boolean => php.createValueBool(true),
             else => Super.getValue(self, transform),
         };
     }
