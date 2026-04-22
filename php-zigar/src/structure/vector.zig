@@ -25,7 +25,7 @@ pub const Vector = struct {
         element_class: *ZigClassEntry = undefined,
         is_bool_element: bool = undefined,
 
-        pub const StaticPropCache = cache.IdCache(.{ .child, .len }, .{});
+        pub const StaticPropCache = cache.IdCache(.{ .child, .len }, "__", .{});
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);

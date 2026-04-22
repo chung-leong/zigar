@@ -5,8 +5,12 @@ abstract class ZigarTestCase extends TestCase
 {
 	protected function assertExceptionMessage(string $expectedMessage, callable $callback)
 	{
+		// make sure the callback gets gc'ed properly
+		$cb = $callback;
+		$callback = null;
 		try {
-			$callback();
+			$cb();
+			return;
 		} catch (\Exception $e) {
 			$class = get_class($e);
 			$message = $e->getMessage();

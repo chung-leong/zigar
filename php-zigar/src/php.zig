@@ -1137,8 +1137,9 @@ pub fn addRef(value: anytype) void {
     const T = @TypeOf(value);
     switch (T) {
         *Value, *const Value, [*c]Value => {
-            if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0)
+            if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0) {
                 _ = php_h.zval_addref_p(@constCast(value));
+            }
         },
         *String, [*c]String => {
             _ = php_h.zend_string_addref(value);
@@ -1147,6 +1148,21 @@ pub fn addRef(value: anytype) void {
             _ = php_h.GC_ADDREF(value);
         },
         else => @compileError("Unexpected type: " ++ @typeName(T)),
+    }
+}
+
+pub fn delRef(value: anytype) void {
+    const T = @TypeOf(value);
+    switch (T) {
+        *Value, *const Value, [*c]Value => {
+            if (value.u1.type_info & php_h.Z_TYPE_FLAGS_MASK != 0) {
+                _ = php_h.zval_delref_p(@constCast(value));
+            }
+        },
+        *String, [*c]String, *Object, [*c]Object, *HashTable, [*c]HashTable => {
+            _ = php_h.GC_DELREF(value);
+        },
+        else => {},
     }
 }
 

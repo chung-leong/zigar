@@ -23,7 +23,7 @@ pub fn IdFromTags(comptime tags: anytype) type {
     });
 }
 
-pub fn IdCache(comptime tags: anytype, comptime aliases: anytype) type {
+pub fn IdCache(comptime tags: anytype, comptime prefix: []const u8, comptime aliases: anytype) type {
     return struct {
         id_address: usize,
         value: Id,
@@ -50,7 +50,7 @@ pub fn IdCache(comptime tags: anytype, comptime aliases: anytype) type {
         pub fn idFromString(name: *String, cache_slot: ?[*]?*anyopaque) ?Id {
             if (find(cache_slot) catch return null) |value| return value;
             return inline for (tags) |tag| {
-                if (php.matchString(name, "__" ++ @tagName(tag))) {
+                if (php.matchString(name, prefix ++ @tagName(tag))) {
                     set(cache_slot, tag);
                     return tag;
                 }

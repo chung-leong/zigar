@@ -24,7 +24,7 @@ pub const Array = struct {
         value_acc: *accessor.Any = undefined,
         element_class: *ZigClassEntry = undefined,
 
-        pub const StaticPropCache = cache.IdCache(.{ .child, .len }, .{});
+        pub const StaticPropCache = cache.IdCache(.{ .child, .len }, "__", .{});
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);

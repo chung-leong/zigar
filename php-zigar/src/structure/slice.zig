@@ -24,7 +24,7 @@ pub const Slice = struct {
         element_size: usize = undefined,
         element_shift: ?u6 = undefined,
 
-        pub const StaticPropCache = cache.IdCache(.{.child}, .{});
+        pub const StaticPropCache = cache.IdCache(.{.child}, "__", .{});
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);

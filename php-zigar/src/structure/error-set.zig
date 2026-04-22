@@ -217,9 +217,9 @@ pub const ErrorSet = struct {
                 php.setHashEntryRef(global_set, err_code, &err);
                 php.setHashEntryRef(global_set, message, &err);
                 // attach canonical info to err
-                const props = try php.allocator.create(Canonical);
-                props.* = .{ .message = message };
-                err_struct.canonical = props;
+                const canonical = try php.allocator.create(Canonical);
+                canonical.* = .{ .message = message };
+                err_struct.canonical = canonical;
             }
         }
     };
@@ -249,7 +249,7 @@ pub const ErrorSet = struct {
         getTraceAsString: Function,
         getPrevious: Function,
     };
-    const PropCache = cache.IdCache(.{ .string, .file, .line }, .{});
+    const PropCache = cache.IdCache(.{ .string, .file, .line }, "", .{});
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
         const class = ZigClassEntry.fromStructure(self);
@@ -261,8 +261,8 @@ pub const ErrorSet = struct {
                     const err_obj = try php.getValueObject(&value);
                     defer php.release(err_obj);
                     const err_struct = fromObject(err_obj);
-                    const props = err_struct.canonical.?;
-                    const message = props.message;
+                    const canonical = err_struct.canonical.?;
+                    const message = canonical.message;
                     const message_value = php.createValueString(message);
                     if (t == .plain) {
                         const ht = php.createArray();
@@ -271,15 +271,15 @@ pub const ErrorSet = struct {
                         // convert to stdclass
                         try php.convertValue(&value, .object);
                     } else if (t == .string) {
-                        const file = props.file orelse php.persistent("unknown");
-                        const trace = props.trace orelse php.empty_array;
+                        const file = canonical.file orelse php.persistent("unknown");
+                        const trace = canonical.trace orelse php.empty_array;
                         const text = switch (trace.nNumOfElements) {
                             0 => try std.fmt.allocPrint(php.allocator,
                                 \\ZigError: {s} in {s}:{d}
                             , .{
                                 php.getStringContent(message),
                                 php.getStringContent(file),
-                                props.lineno,
+                                canonical.lineno,
                             }),
                             else => format: {
                                 const trace_str = php.traceToString(@constCast(trace), true);
@@ -291,7 +291,7 @@ pub const ErrorSet = struct {
                                 , .{
                                     php.getStringContent(message),
                                     php.getStringContent(file),
-                                    props.lineno,
+                                    canonical.lineno,
                                     php.getStringContent(trace_str),
                                 });
                             },
@@ -343,6 +343,7 @@ pub const ErrorSet = struct {
                     if (canonical.string) |s| php.release(s);
                     canonical.string = new_str;
                     php.addRef(new_str);
+                    return;
                 },
                 .file, .line => return error.WriteProtected,
             }
@@ -356,19 +357,19 @@ pub const ErrorSet = struct {
     }
 
     pub fn acquireDebugInfo(self: *@This()) !void {
-        const props = self.canonical orelse return error.Unexpected;
-        if (props.trace) |a| php.release(a);
-        errdefer props.trace = null;
-        props.trace = try php.getBacktrace();
-        if (props.file) |s| php.release(s);
-        props.file = php.getCurrentFile();
-        props.lineno = php.getCurrentLine();
+        const canonical = self.canonical orelse return error.Unexpected;
+        if (canonical.trace) |a| php.release(a);
+        errdefer canonical.trace = null;
+        canonical.trace = try php.getBacktrace();
+        if (canonical.file) |s| php.release(s);
+        canonical.file = php.getCurrentFile();
+        canonical.lineno = php.getCurrentLine();
     }
 
     pub fn freeObject(obj: *Object) void {
         const self = fromObject(obj);
-        if (self.canonical) |props| {
-            props.release();
+        if (self.canonical) |canonical| {
+            canonical.release();
         }
         Super.freeObject(obj);
     }
@@ -387,8 +388,8 @@ pub const ErrorSet = struct {
     }
 
     pub fn handleGetMessage(ed: *ExecuteData, return_value: *Value) !void {
-        const props = try getCanonicalFromValue(&ed.This);
-        return_value.* = php.createValueString(props.message);
+        const canonical = try getCanonicalFromValue(&ed.This);
+        return_value.* = php.createValueString(canonical.message);
     }
 
     pub fn handleGetCode(ed: *ExecuteData, return_value: *Value) !void {
@@ -400,26 +401,26 @@ pub const ErrorSet = struct {
     }
 
     pub fn handleGetFile(ed: *ExecuteData, return_value: *Value) !void {
-        const props = try getCanonicalFromValue(&ed.This);
-        const file = props.file orelse php.persistent("unknown");
+        const canonical = try getCanonicalFromValue(&ed.This);
+        const file = canonical.file orelse php.persistent("unknown");
         return_value.* = php.createValueString(file);
     }
 
     pub fn handleGetLine(ed: *ExecuteData, return_value: *Value) !void {
-        const props = try getCanonicalFromValue(&ed.This);
-        return_value.* = php.createValueLong(@intCast(props.lineno));
+        const canonical = try getCanonicalFromValue(&ed.This);
+        return_value.* = php.createValueLong(@intCast(canonical.lineno));
     }
 
     pub fn handleGetTrace(ed: *ExecuteData, return_value: *Value) !void {
-        const props = try getCanonicalFromValue(&ed.This);
-        const trace = props.trace orelse php.empty_array;
+        const canonical = try getCanonicalFromValue(&ed.This);
+        const trace = canonical.trace orelse php.empty_array;
         return_value.* = php.createValueArray(@constCast(trace));
         php.addRef(return_value);
     }
 
     pub fn handleGetTraceAsString(ed: *ExecuteData, return_value: *Value) !void {
-        const props = try getCanonicalFromValue(&ed.This);
-        const trace = props.trace orelse php.empty_array;
+        const canonical = try getCanonicalFromValue(&ed.This);
+        const trace = canonical.trace orelse php.empty_array;
         const trace_str = php.traceToString(@constCast(trace), true);
         return_value.* = php.createValueString(trace_str);
     }

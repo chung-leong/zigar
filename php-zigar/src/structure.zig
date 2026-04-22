@@ -307,12 +307,15 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
-            _ = prop_type;
             // unlike readElement(), PHP does not expect this function to return a null pointer;
             // we cannot therefore return an error union;
             const self = fromObject(obj);
             if (self.getProperty(name, cache_slot)) |value| {
                 retval.* = value;
+                if (prop_type == php.BP_VAR_IS) {
+                    // silent access doesn't increment refcount
+                    php.delRef(retval);
+                }
             } else |err| {
                 retval.* = php.createValueNull();
                 php.throwError(reportFieldError(self, name, .read, err));

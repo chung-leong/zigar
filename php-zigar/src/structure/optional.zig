@@ -21,7 +21,7 @@ pub const Optional = struct {
         payload_class: *ZigClassEntry = undefined,
         present_acc: *accessor.Any = undefined,
 
-        pub const StaticPropCache = cache.IdCache(.{.child}, .{});
+        pub const StaticPropCache = cache.IdCache(.{.child}, "__", .{});
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);

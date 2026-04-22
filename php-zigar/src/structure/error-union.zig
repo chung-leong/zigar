@@ -25,7 +25,7 @@ pub const ErrorUnion = struct {
         error_acc: *accessor.Any = undefined,
         error_class: *ZigClassEntry = undefined,
 
-        pub const StaticPropCache = cache.IdCache(.{ .payload, .error_set }, .{});
+        pub const StaticPropCache = cache.IdCache(.{ .payload, .error_set }, "__", .{});
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);

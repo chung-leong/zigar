@@ -29,7 +29,7 @@ pub const Pointer = struct {
         address_acc: *accessor.Int(.{ .bit_size = @bitSizeOf(usize), .signedness = .unsigned }) = undefined,
         length_acc: ?*accessor.Int(.{ .bit_size = @bitSizeOf(usize), .signedness = .unsigned }) = null,
 
-        pub const StaticPropCache = cache.IdCache(.{.child}, .{});
+        pub const StaticPropCache = cache.IdCache(.{.child}, "__", .{});
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -115,7 +115,7 @@ pub const Pointer = struct {
             return StaticPropCache.idFromString(name, cache_slot) != null;
         }
     };
-    pub const PropCache = cache.IdCache(.{.target}, .{ .@"*" = .target });
+    pub const PropCache = cache.IdCache(.{.target}, "__", .{ .@"*" = .target });
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) accessor.Error!Value {
         if (self.buffer.flags.inaccessible) return self.reportInaccessiblePointer();
