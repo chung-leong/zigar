@@ -127,7 +127,7 @@ pub const ObjectMap = struct {
             .php_portion = .{
                 .ce = ce,
                 .gc = undefined,
-                .handle = undefined,
+                .handle = 0,
                 .handlers = undefined,
                 .properties = undefined,
                 .properties_table = undefined,
@@ -180,22 +180,22 @@ pub const ObjectMap = struct {
     }
 
     fn compareObjects(a: *const Object, b: *const Object) RelativePosition {
+        if (a.handle == b.handle) return .a_is_b;
         const buf_a = getObjectBuffer(a);
         const buf_b = getObjectBuffer(b);
-        return switch (buf_a.compare(buf_b)) {
-            .a_is_b => if (a.ce == b.ce or b.ce == null)
-                if (buf_a.flags.read_only == buf_b.flags.read_only)
-                    .a_is_b
-                else if (buf_b.flags.read_only)
-                    .a_before_b
-                else
-                    .b_before_a
-            else if (a.ce < b.ce)
+        const pos = buf_a.compare(buf_b);
+        if (pos != .a_is_b) return pos;
+        return if (b.handle == 0 and (a.ce == b.ce or b.ce == null))
+            if (buf_a.flags.read_only == buf_b.flags.read_only)
+                .a_is_b
+            else if (buf_b.flags.read_only)
                 .a_before_b
             else
-                .b_before_a,
-            else => |pos| pos,
-        };
+                .b_before_a
+        else if (a.handle < b.handle)
+            .a_before_b
+        else
+            .b_before_a;
     }
 };
 
