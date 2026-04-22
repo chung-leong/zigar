@@ -25,6 +25,7 @@ pub const FieldAccess = enum { read, write };
 pub const Error = error{
     AccessingDeallocatedMemory,
     CannotCreateObject,
+    ComptimeValue,
     ExceptionThrown,
     Failure,
     Inaccessible,

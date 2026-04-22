@@ -44,7 +44,10 @@ pub const Comptime = struct {
         if (transform == .none) {
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
-            return try static.value_acc.set(self, value);
+            return static.value_acc.set(self, value) catch |err| switch (err) {
+                error.NullPointer => error.ComptimeValue,
+                else => err,
+            };
         } else {
             return Super.setValue(self, value, transform);
         }

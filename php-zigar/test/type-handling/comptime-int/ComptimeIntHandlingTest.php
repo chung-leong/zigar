@@ -87,7 +87,7 @@ final class ComptimeIntHandlingTest extends ZigarTestCase
         $b = new $m->UnionA(state: true);
         $this->assertSame([ 'state' => true ], (array) $b);
 
-        $this->assertExceptionMessage("cannot create comptime object (zig)", function() use($m) {
+        $this->assertExceptionMessage("comptime value", function() use($m) {
             $x = new $m->UnionA(number: 0);
         });
     }
