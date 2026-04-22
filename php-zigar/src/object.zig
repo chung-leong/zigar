@@ -108,10 +108,10 @@ pub const ObjectMap = struct {
         try self.map.insert(result, obj);
     }
 
-    pub fn remove(self: *@This(), obj: *Object) void {
+    pub fn remove(self: *@This(), obj: *Object) bool {
         const buf = getObjectBuffer(obj);
         std.debug.assert(!buf.flags.uninitialized and !buf.flags.temporary);
-        self.map.remove(obj) catch @panic("not registered");
+        return self.map.remove(obj);
     }
 
     pub fn search(self: *@This(), bytes: []const u8, ce: ?*ClassEntry, read_only: bool) SearchResult {

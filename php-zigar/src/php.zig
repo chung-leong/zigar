@@ -430,6 +430,10 @@ pub const GarbageCollectionColor = enum(u2) {
     }
 };
 
+pub fn isGarbage(arg: anytype) bool {
+    return php_h.GC_INFO(arg) != 0;
+}
+
 pub fn isGMP(obj: *Object) bool {
     const name_str = obj.ce.*.name orelse return false;
     const name = getStringContent(name_str);
@@ -856,6 +860,13 @@ pub fn matchString(s: *const String, text: []const u8) bool {
 
 pub fn createArray() *Array {
     return php_h._zend_new_array_0();
+}
+
+pub fn createNonDestructiveArray() *Array {
+    const bytes = emalloc(@sizeOf(HashTable));
+    const ht: *HashTable = @ptrCast(@alignCast(bytes));
+    php_h._zend_hash_init(ht, php_h.HT_MIN_SIZE, null, false);
+    return ht;
 }
 
 pub const destructor = struct {

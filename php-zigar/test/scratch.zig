@@ -1,8 +1,9 @@
 const std = @import("std");
 
-pub var array: [4]bool = .{ true, false, false, true };
-pub const array_const: [4]bool = .{ false, false, false, false };
+pub const Error = error{ GoldfishDied, NoMoney };
+
+pub var error_union: Error!bool = true;
 
 pub fn print() void {
-    std.debug.print("{any}\n", .{array});
+    std.debug.print("{any}\n", .{error_union});
 }

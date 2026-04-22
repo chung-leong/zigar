@@ -151,9 +151,7 @@ pub const StructureImporter = struct {
     }
 
     pub fn createTemplate(self: *@This(), dv_h: ?Handle, slots_h: ?Handle) !Handle {
-        const bytes = php.emalloc(@sizeOf(HashTable));
-        const ht: *HashTable = @ptrCast(@alignCast(bytes));
-        ht.* = php.createHashTable(null);
+        const ht = php.createNonDestructiveArray();
         if (dv_h) |vh| {
             const dv = self.dereference(vh);
             php.setHashEntry(ht, php.persistent("buffer"), dv);
@@ -171,9 +169,7 @@ pub const StructureImporter = struct {
     }
 
     pub fn createObject(self: *@This()) !Handle {
-        const bytes = php.emalloc(@sizeOf(HashTable));
-        const ht: *HashTable = @ptrCast(@alignCast(bytes));
-        ht.* = php.createHashTable(null);
+        const ht = php.createNonDestructiveArray();
         const value = php.createValueArray(ht);
         return self.allocateHandle(value);
     }

@@ -88,8 +88,6 @@ pub const Slice = struct {
                 try self.setValue(value, .none);
             }
             if (read_only) self.buffer.protect(true);
-            const obj = ZigObject(@This()).fromStructure(self).object();
-            try class.registerObject(obj);
         } else {
             try self.buffer.allocate(allocator, 0);
         }

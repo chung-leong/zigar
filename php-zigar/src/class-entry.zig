@@ -670,8 +670,9 @@ pub const ZigClassEntry = struct {
     }
 
     pub fn unregisterObject(self: *@This(), obj: *Object) void {
-        self.host.object_map.remove(obj);
-        self.host.release();
+        if (self.host.object_map.remove(obj)) {
+            self.host.release();
+        }
     }
 
     pub fn obtainObjectAtOffset(self: *@This(), parent_buf: *ByteBuffer, offset: usize, len: usize) !*Object {

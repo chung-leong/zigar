@@ -134,7 +134,7 @@ pub fn Class(comptime S: type) type {
             if (class.instance.template.table) |*tbl| try gc_buffer.add(tbl);
             if (class.static.template.table) |*tbl| try gc_buffer.add(tbl);
             if (class.type == .error_set) {
-                try gc_buffer.add(&class.host.global_error_set);
+                try gc_buffer.addArray(class.host.global_error_set.?);
             }
             gc_buffer.use(table, n);
             return null;

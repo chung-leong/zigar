@@ -28,12 +28,11 @@ pub fn MemoryMap(comptime T: type, comptime allocator: std.mem.Allocator, compti
             return try self.list.insert(allocator, result.index, value);
         }
 
-        pub fn remove(self: *@This(), value: T) !void {
+        pub fn remove(self: *@This(), value: T) bool {
             const result = self.search(value);
-            return switch (result.match) {
-                .yes => _ = self.list.orderedRemove(result.index),
-                else => error.NoFound,
-            };
+            if (result.match != .yes) return false;
+            _ = self.list.orderedRemove(result.index);
+            return true;
         }
 
         pub fn insert(self: *@This(), result: SearchResult, value: T) !void {

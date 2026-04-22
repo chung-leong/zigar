@@ -31,22 +31,22 @@ pub const ErrorSet = struct {
             const member = try class.getMember(.instance, 0);
             if (member.accessors != .constant) return error.Unexpected;
             self.constant_acc = &member.accessors.constant;
-            const global_set = get: {
-                if (php.getValueArray(&class.host.global_error_set)) |ht| {
-                    php.addRef(ht);
-                    break :get ht;
-                } else |_| {
-                    const ht = php.createArray();
-                    class.host.global_error_set = php.createValueArray(ht);
-                    break :get ht;
-                }
+            // all error set types references the global set (to check whether an error object has
+            // been created already for another set)
+            const global_set = if (class.host.global_error_set) |ht| use: {
+                php.addRef(ht);
+                break :use ht;
+            } else create: {
+                const ht = php.createArray();
+                class.host.global_error_set = ht;
+                break :create ht;
             };
             if (class.flags.error_set.is_global) {
                 self.error_set = global_set;
             } else {
-                const ht_bytes = php.emalloc(@sizeOf(HashTable)) orelse return error.OutOfMemory;
-                self.error_set = @ptrCast(@alignCast(ht_bytes));
-                self.error_set.* = php.createHashTable(null);
+                // since the static template table owns the error objects already, don't
+                // create additional references
+                self.error_set = php.createNonDestructiveArray();
                 if (class.static.template.table) |*static_table| {
                     // loop through static members and add errors to error set, keyed by value,
                     // name, and error message
@@ -75,14 +75,14 @@ pub const ErrorSet = struct {
 
         pub fn deinit(self: *@This()) void {
             const class = ZigClassEntry.fromStatic(self);
-            const global_set = php.getValueArray(&class.host.global_error_set) catch unreachable;
-            if (global_set.gc.refcount == 1) {
-                class.host.global_error_set = php.createValueNull();
-            }
+            const global_set = class.host.global_error_set.?;
             if (self.error_set != global_set) {
                 php.release(self.error_set);
             }
-            php.release(global_set);
+            // the global set should have been picked up by gc already
+            if (!php.isGarbage(global_set)) {
+                php.release(global_set);
+            }
             php.allocator.destroy(self.methods);
         }
 
@@ -149,9 +149,13 @@ pub const ErrorSet = struct {
                 },
                 .object => {
                     const err_obj = php.getValueObject(value) catch unreachable;
-                    if (err_obj.ce == class.entry()) return value.*;
+                    if (err_obj.ce == class.entry()) {
+                        php.addRef(err_obj);
+                        return value.*;
+                    }
                     if (php.instanceOf(err_obj.ce, php.getInterface(.throwable))) {
                         if (ZigClassEntry.isZigError(err_obj.ce)) {
+                            php.addRef(err_obj);
                             return value.*;
                         } else {
                             const method = php.createValuePersistentString("getMessage");
@@ -193,7 +197,7 @@ pub const ErrorSet = struct {
             const err_value = try self.constant_acc.int.get(err_struct);
             // reference err by integer value
             const err_code = try php.getValueLong(&err_value);
-            const global_set = try php.getValueArray(&class.host.global_error_set);
+            const global_set = class.host.global_error_set.?;
             const err, const is_new = if (php.getHashEntry(global_set, err_code)) |e_ptr|
                 .{ e_ptr.*, false }
             else |_|

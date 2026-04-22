@@ -2,7 +2,7 @@ const std = @import("std");
 
 const php = @import("php.zig");
 const GarbageCollectionColor = php.GarbageCollectionColor;
-const HashTable = php.HashTable;
+const Array = php.Array;
 const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
 const Value = php.Value;
@@ -64,6 +64,11 @@ pub const GarbageCollectionBuffer = struct {
 
     pub fn addObject(self: *@This(), obj: *Object) !void {
         const value = php.createValueObject(obj);
+        try self.add(&value);
+    }
+
+    pub fn addArray(self: *@This(), ht: *Array) !void {
+        const value = php.createValueArray(ht);
         try self.add(&value);
     }
 

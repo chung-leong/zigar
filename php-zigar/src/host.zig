@@ -8,8 +8,8 @@ const GarbageCollectionBuffer = @import("gc.zig").GarbageCollectionBuffer;
 const ModuleGeneric = @import("module/native/interface.zig").Module;
 const ObjectMap = @import("object.zig").ObjectMap;
 const php = @import("php.zig");
+const Array = php.Array;
 const ClassEntry = php.ClassEntry;
-const HashTable = php.HashTable;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
@@ -21,7 +21,7 @@ pub const ModuleHost = struct {
     ref_count: isize = 0,
     module: ?*Module = null,
     library: ?std.DynLib = null,
-    global_error_set: Value,
+    global_error_set: ?*Array = null,
     importer: *StructureImporter = undefined,
     dispatcher: *CallDispatcher = undefined,
     allocator: std.mem.Allocator = undefined,
@@ -38,10 +38,7 @@ pub const ModuleHost = struct {
         if (module.version != Module.current_version) return error.IncorrectVersion;
         var self: *@This() = try php.allocator.create(@This());
         errdefer php.allocator.destroy(self);
-        self.* = .{
-            .module = module,
-            .global_error_set = php.createValueNull(),
-        };
+        self.* = .{ .module = module };
         self.allocator = .{ .ptr = self, .vtable = &BufferAllocator.vtable };
         self.importer = try .init(self);
         defer self.importer.deinit();
