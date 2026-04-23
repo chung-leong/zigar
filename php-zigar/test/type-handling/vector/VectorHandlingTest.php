@@ -13,9 +13,16 @@ final class VectorHandlingTest extends ZigarTestCase
         $this->assertSame([ 4.0, 5.0, 6.0 ], $m->v2->__plain);
         $this->expectOutputString(<<<OUTPUT
         { 4, 5, 6 }
+        0: 1
+        1: 2
+        2: 3
+        3: 4
 
         OUTPUT);
         $m->print();
+        foreach ($m->v1 as $index => $value) {
+            echo "$index: $value\n";
+        }
 
         $this->assertSame([ 1.0, 2.0, 3.0, 4.0 ], $m->v3);
     }

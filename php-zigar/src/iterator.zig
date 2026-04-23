@@ -16,7 +16,8 @@ pub fn ArrayIterator(comptime S: type) type {
     return struct {
         iter: ObjectIterator,
         object: *Object,
-        len: php.Long,
+        len: usize,
+        index: usize,
 
         fn fromIter(iter: *ObjectIterator) *@This() {
             return @fieldParentPtr("iter", iter);
@@ -28,7 +29,8 @@ pub fn ArrayIterator(comptime S: type) type {
             php.initializeIterator(&self.iter);
             php.addRef(obj);
             self.object = obj;
-            self.len = @intCast(array.getLength());
+            self.len = array.getLength();
+            self.index = 0;
             self.iter.funcs = &methods;
             self.iter.data = php.createValueNull();
             return &self.iter;
@@ -42,14 +44,14 @@ pub fn ArrayIterator(comptime S: type) type {
 
         pub fn isValid(iter: *ObjectIterator) !c_int {
             const self = fromIter(iter);
-            return if (iter.index < self.len) php.SUCCESS else php.FAILURE;
+            return if (self.index < self.len) php.SUCCESS else php.FAILURE;
         }
 
         pub fn getCurrentData(iter: *ObjectIterator) *Value {
             const self = fromIter(iter);
             const container = ZigObject(S).fromObject(self.object).structure();
             php.release(&iter.data);
-            iter.data = container.getElement(iter.index) catch |err| init: {
+            iter.data = container.getElement(self.index) catch |err| init: {
                 _ = &err;
                 break :init php.createValueNull();
             };
@@ -57,10 +59,19 @@ pub fn ArrayIterator(comptime S: type) type {
         }
 
         pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {
-            key_ptr.* = php.createValueLong(@intCast(iter.index));
+            const self = fromIter(iter);
+            key_ptr.* = php.createValueAnyInt(self.index);
         }
 
-        pub fn moveForward(_: *ObjectIterator) void {}
+        pub fn moveForward(iter: *ObjectIterator) void {
+            const self = fromIter(iter);
+            self.index += 1;
+        }
+
+        pub fn rewind(iter: *ObjectIterator) !void {
+            const self = fromIter(iter);
+            self.index = 0;
+        }
 
         const methods: ObjectIteratorFunctions = .{
             .dtor = php.transform(destroy),
@@ -68,6 +79,7 @@ pub fn ArrayIterator(comptime S: type) type {
             .get_current_data = php.transform(getCurrentData),
             .get_current_key = php.transform(getCurrentKey),
             .move_forward = php.transform(moveForward),
+            .rewind = php.transform(rewind),
         };
     };
 }
@@ -158,6 +170,11 @@ pub fn PropertyIterator(comptime S: type) type {
             }
         }
 
+        pub fn rewind(iter: *ObjectIterator) !void {
+            const self = fromIter(iter);
+            self.member_iter.reset();
+        }
+
         pub fn next(self: *@This()) ?*Value {
             moveForward(&self.iter);
             return if (self.current_name != null) &self.iter.data else null;
@@ -169,6 +186,7 @@ pub fn PropertyIterator(comptime S: type) type {
             .get_current_data = php.transform(getCurrentData),
             .get_current_key = php.transform(getCurrentKey),
             .move_forward = php.transform(moveForward),
+            .rewind = php.transform(rewind),
         };
     };
 }
@@ -176,6 +194,7 @@ pub fn PropertyIterator(comptime S: type) type {
 pub const GeneratorIterator = struct {
     iter: ObjectIterator,
     generator: *Generator,
+    index: usize,
 
     fn fromIter(iter: *ObjectIterator) *@This() {
         return @fieldParentPtr("iter", iter);
@@ -188,6 +207,7 @@ pub const GeneratorIterator = struct {
         generator.addRef();
         php.initializeIterator(&self.iter);
         self.generator = generator;
+        self.index = 0;
         self.iter.funcs = &methods;
         return &self.iter;
     }
@@ -210,17 +230,20 @@ pub const GeneratorIterator = struct {
     }
 
     pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {
-        key_ptr.* = php.createValueLong(@intCast(iter.index));
+        const self = fromIter(iter);
+        key_ptr.* = php.createValueAnyInt(self.index);
     }
 
     pub fn moveForward(iter: *ObjectIterator) !void {
         const self = fromIter(iter);
         try self.generator.moveForward();
+        self.index += 1;
     }
 
     pub fn rewind(iter: *ObjectIterator) !void {
         const self = fromIter(iter);
         try self.generator.rewind();
+        self.index = 0;
     }
 
     const methods: ObjectIteratorFunctions = .{
@@ -236,6 +259,7 @@ pub const GeneratorIterator = struct {
 pub const IteratorIterator = struct {
     iter: ObjectIterator,
     iter_object: *Object,
+    index: usize,
     flags: packed struct {
         moved: bool = false,
         valid: bool = false,
@@ -251,6 +275,7 @@ pub const IteratorIterator = struct {
         php.initializeIterator(&self.iter);
         self.iter_object = obj;
         self.iter.funcs = &methods;
+        self.index = 0;
         self.flags = .{};
         return &self.iter;
     }
@@ -271,7 +296,8 @@ pub const IteratorIterator = struct {
     }
 
     pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {
-        key_ptr.* = php.createValueLong(@intCast(iter.index));
+        const self = fromIter(iter);
+        key_ptr.* = php.createValueAnyInt(self.index);
     }
 
     pub fn moveForward(iter: *ObjectIterator) !void {
@@ -284,6 +310,7 @@ pub const IteratorIterator = struct {
         if (self.call("next")) |result| {
             if (!php.isValueNull(&result)) {
                 self.iter.data = result;
+                self.index += 1;
                 self.flags.valid = true;
             }
         } else |err| {
