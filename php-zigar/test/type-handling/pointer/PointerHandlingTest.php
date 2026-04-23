@@ -212,5 +212,10 @@ final class PointerHandlingTest extends ZigarTestCase
     public function testConstructPointer(): void
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
+        $b = new $m->IntPtr(1234);
+        $this->assertSame(1234, $b->__value);
+        $c = new $m->IntPtr->__child(4567);
+        $d = new $m->IntPtr($c);
+        $this->assertSame(4567, $d->{'*'}->{'$'});
     }
 }

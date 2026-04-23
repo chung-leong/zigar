@@ -24,13 +24,14 @@ pub const Primitive = struct {
     };
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
-        if (transform == .none) {
-            const class = ZigClassEntry.fromStructure(self);
-            const static = class.getStaticData(@This());
-            return try static.value_acc.get(self);
-        } else {
-            return Super.getValue(self, transform);
-        }
+        return switch (transform) {
+            .none, .plain => get: {
+                const class = ZigClassEntry.fromStructure(self);
+                const static = class.getStaticData(@This());
+                break :get try static.value_acc.get(self);
+            },
+            else => Super.getValue(self, transform),
+        };
     }
 
     pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) !void {

@@ -973,6 +973,10 @@ pub const ZigClassEntry = struct {
             }
         } else .{ .inaccessible = .{} };
         if (accessors == .inaccessible) {
+            if (self.type == .vector and self.flags.common.has_pointer) {
+                self.type = .array;
+                return self.getAccessors(member, scope, .multiple);
+            }
             std.debug.print("no accessors: {s}\n", .{self.getStructureName()});
             std.debug.print("slot usage = {}\n", .{slot_usage});
             std.debug.print("for vector = {}\n", .{for_vector});

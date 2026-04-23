@@ -56,7 +56,7 @@ pub const Pointer = struct {
                 const value = try acc.get(pointer.buffer);
                 break :get @intCast(try php.getValueLong(&value));
             } else 1;
-            if (pointer.last_address != address and pointer.last_length != length) {
+            if (pointer.last_address != address or pointer.last_length != length) {
                 php.release(&pointer.table);
                 if (address >= 0) {
                     const class = ZigClassEntry.fromStatic(self);
@@ -135,24 +135,17 @@ pub const Pointer = struct {
             if (!php.isValueNull(value)) return self.reportInaccessiblePointer();
         }
         if (transform == .none) {
-            if (try Super.copySelf(self, value)) {
-                self.last_address = 0;
-                self.last_length = 0;
-                php.release(&self.table);
-                self.table = php.createValueNull();
-                return;
-            }
+            if (try Super.copySelf(self, value)) return;
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
             const target_obj = init: {
-                // using the allocator associated with the pointer for autovivification new target,
-                const allocator = self.buffer.getSourceAllocator();
                 const target_class = static.target_class;
                 switch (php.getValueType(value)) {
                     .object => {
                         const obj = php.getValueObject(value) catch unreachable;
                         if (php.instanceOf(obj.ce, target_class.entry())) {
                             // point to existing object
+                            // TODO: check read-only flag
                             php.addRef(obj);
                             break :init obj;
                         }
@@ -171,7 +164,8 @@ pub const Pointer = struct {
                     },
                     else => {},
                 }
-                // autovivificate new target,
+                // autovivificate new target, using the allocator associated with the pointer
+                const allocator = self.buffer.getSourceAllocator();
                 const read_only = class.flags.pointer.is_const;
                 break :init try target_class.createObject(allocator, value, read_only);
             };
