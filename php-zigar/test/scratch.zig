@@ -1,10 +1,16 @@
 const std = @import("std");
 
-pub const comptime_struct = struct {
-    pub const input = .{
-        .src = .{ .channels = 4 },
-        .params = .{ 0, 1, 2, 3 },
-    };
-};
+pub var optional: ?[]const u8 = "Hello";
+pub var alt_text: []const u8 = "World";
 
-pub const tuple = .{ 123, 3.14, .evil };
+pub fn print() void {
+    std.debug.print("{?s}\n", .{optional});
+}
+
+const Self = @This();
+
+pub const @"meta(zigar)" = struct {
+    pub fn isDeclString(comptime T: type, field: std.meta.DeclEnum(T)) bool {
+        return T == Self and field == .optional;
+    }
+};

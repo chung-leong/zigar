@@ -118,11 +118,7 @@ pub const Pointer = struct {
     pub const PropCache = cache.IdCache(.{.target}, "__", .{ .@"*" = .target });
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) accessor.Error!Value {
-        if (self.buffer.flags.inaccessible) return self.reportInaccessiblePointer();
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        try static.loadTarget(self);
-        const target_obj = php.getValueObject(&self.table) catch return error.NullPointer;
+        const target_obj = try self.getTarget();
         switch (transform) {
             .none => {
                 php.addRef(target_obj);
@@ -139,7 +135,13 @@ pub const Pointer = struct {
             if (!php.isValueNull(value)) return self.reportInaccessiblePointer();
         }
         if (transform == .none) {
-            if (try Super.copySelf(self, value)) return;
+            if (try Super.copySelf(self, value)) {
+                self.last_address = 0;
+                self.last_length = 0;
+                php.release(&self.table);
+                self.table = php.createValueNull();
+                return;
+            }
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
             const target_obj = init: {
@@ -227,6 +229,7 @@ pub const Pointer = struct {
     }
 
     fn getTarget(self: *@This()) !*Object {
+        if (self.buffer.flags.inaccessible) return self.reportInaccessiblePointer();
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         try static.loadTarget(self);
@@ -263,8 +266,8 @@ pub const Pointer = struct {
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
+    pub const getProperties = Super.getProperties;
     pub const getGarbageCollection = Super.getGarbageCollection;
     pub const getIterator = Super.getIterator;
     const fromObject = Super.fromObject;
-    const reportFieldError = Super.reportFieldError;
 };

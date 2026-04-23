@@ -99,11 +99,25 @@ final class StructHandlingTest extends ZigarTestCase
         $m->print();
     }
 
-    public function testFailWithStructInPackedStruct(): void
+    public function testHandleStructInPackedStruct(): void
     {
-        $this->assertExceptionMessage("unable to create module", function() {
-            $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
-        });
+        $m = ZigImporter::load(__DIR__ . '/in-packed-struct.zig');
+        $this->assertEquals((object) [
+            'struct1' => (object) [ 'number1' => 1, 'number2' => 2 ],
+            'struct2' => (object) [ 'number1' => 3, 'number2' => 4 ],
+            'number' => 200,
+            'struct3' => (object) [ 'number1' => 5, 'number2' => 6 ],
+        ], $m->struct_a->__plain);
+
+        $this->expectOutputString(<<<OUTPUT
+        .{ .struct1 = .{ .number1 = 1, .number2 = 2 }, .struct2 = .{ .number1 = 3, .number2 = 4 }, .number = 200, .struct3 = .{ .number1 = 5, .number2 = 6 } }
+        .{ .struct1 = .{ .number1 = 1, .number2 = 2 }, .struct2 = .{ .number1 = 3, .number2 = 4 }, .number = -3, .struct3 = .{ .number1 = 5, .number2 = -8 } }
+
+        OUTPUT);
+        $m->print();
+        $m->struct_a->number = -3;
+        $m->struct_a->struct3->number2 = -8;
+        $m->print();
     }
 
     public function testHandleStructAsComptimeField(): void

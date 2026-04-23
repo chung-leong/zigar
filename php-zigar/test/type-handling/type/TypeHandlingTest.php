@@ -141,8 +141,10 @@ final class TypeHandlingTest extends ZigarTestCase
     public function testConstructType(): void
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
-        $this->assertSame(false, is_callable([ $m, 'Type' ]));
-        $this->assertSame(false, isset($m->Type));
+        $this->assertSame(true, is_callable([ $m, 'Type' ]));
+        $this->assertExceptionMessage("cannot create comptime object", function() use($m) {
+            $type = new $m->Type();
+        });
     }
 }
 

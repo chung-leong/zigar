@@ -7,7 +7,7 @@ pub const Struct = packed struct {
 pub const StructA = packed struct {
     struct1: Struct = .{ .number1 = 10, .number2 = 20 },
     struct2: Struct = .{ .number1 = 11, .number2 = 21 },
-    number: u10 = 100,
+    number: i10 = 100,
     struct3: Struct = .{ .number1 = 12, .number2 = 22 },
 };
 

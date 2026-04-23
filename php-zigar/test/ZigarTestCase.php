@@ -10,7 +10,6 @@ abstract class ZigarTestCase extends TestCase
 		$callback = null;
 		try {
 			$cb();
-			return;
 		} catch (\Exception $e) {
 			$class = get_class($e);
 			$message = $e->getMessage();

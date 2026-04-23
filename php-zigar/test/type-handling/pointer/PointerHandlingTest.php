@@ -102,9 +102,9 @@ final class PointerHandlingTest extends ZigarTestCase
     public function testHandlePointerInBareUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
-        // $this->assertExceptionMessage('untagged union', function() use ($m) {
-        //     $x = $m->union_a->text->__string;
-        // });
+        $this->assertExceptionMessage('untagged union', function() use ($m) {
+            $x = $m->union_a->text->__string;
+        });
         if (ZigImporter::safetyCheck()) {
             $this->assertExceptionMessage("'text' is active", function() use($m) {
                 $x = $m->union_a->number;
@@ -114,11 +114,11 @@ final class PointerHandlingTest extends ZigarTestCase
         $b = new $m->UnionA(number: 123);
         $this->assertSame(123, $b->number);
         if (ZigImporter::safetyCheck()) {
-            $this->assertExceptionMessage("'number' is active", function() use($m) {
+            $this->assertExceptionMessage("'number' is active", function() use($b) {
                 $x = $b->text;
             });
         } else {
-            $this->assertExceptionMessage("untagged union", function() use($m) {
+            $this->assertExceptionMessage("untagged union", function() use($b) {
                 $x = $b->text;
             });
         }
@@ -162,12 +162,12 @@ final class PointerHandlingTest extends ZigarTestCase
     public function testHandlePointerInOptional(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
-        $this->assertSame('Hello', $m->optional->__string);
+        $this->assertSame('Hello', $m->optional);
 
         $this->expectOutputString(<<<OUTPUT
-        { 72, 101, 108, 108, 111 }
+        Hello
         null
-        { 87, 111, 114, 108, 100 }
+        World
 
         OUTPUT);
         $m->print();
@@ -176,7 +176,7 @@ final class PointerHandlingTest extends ZigarTestCase
         $m->optional = $m->alt_text;
         $m->print();
 
-        $this->assertSame('World', $m->optional->__string);
+        $this->assertSame('World', $m->optional);
     }
 
     public function testHandlePointerInErrorUnion(): void
