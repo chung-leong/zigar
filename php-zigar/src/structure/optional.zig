@@ -71,13 +71,10 @@ pub const Optional = struct {
             const is_present = !php.isValueNull(value);
             if (is_present) {
                 try static.payload_acc.set(self, value);
-            } else {
-                const null_value = php.createValueNull();
-                try static.payload_acc.set(self, &null_value);
             }
             // optionals of error sets and pointers don't use a separate present flag
             // non-zero value indiciate whether a value is present
-            if (static.present_acc.* == .u8) {
+            if (static.present_acc.* == .u8 or !is_present) {
                 const present = php.createValueLong(if (is_present) 1 else 0);
                 try static.present_acc.set(self, &present);
             }

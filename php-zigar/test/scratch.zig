@@ -1,18 +1,10 @@
 const std = @import("std");
 
-pub const StructA = packed struct {
-    vector1: @Vector(4, i32) = .{ 1, 2, 3, 4 },
-    vector2: @Vector(4, i4) = .{ 2, 3, 4, 5 },
-    number: u10 = 100,
-    vector3: @Vector(4, i12) = .{ 3, 4, 5, 6 },
+pub const comptime_struct = struct {
+    pub const input = .{
+        .src = .{ .channels = 4 },
+        .params = .{ 0, 1, 2, 3 },
+    };
 };
 
-pub var struct_a: StructA = .{
-    .vector1 = .{ 10, 20, 30, 40 },
-    .number = 200,
-    .vector3 = .{ 12, 22, 32, 42 },
-};
-
-pub fn print() void {
-    std.debug.print("{any}\n", .{struct_a});
-}
+pub const tuple = .{ 123, 3.14, .evil };

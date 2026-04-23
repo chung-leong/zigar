@@ -95,7 +95,7 @@ pub const Function = struct {
             defer if (args_allocated) php.allocator.free(args);
             try arg_struct.extractArguments(args);
             defer for (args) |*arg| php.release(arg);
-            const result = try php.invokeFunction(callable, args);
+            const result = try php.invokeMethod(null, callable, args);
             defer php.release(&result);
             // replace buffer so the retval gets written into the stack
             var stack_buffer: ByteBuffer = .init(arg_bytes);

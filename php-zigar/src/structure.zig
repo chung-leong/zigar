@@ -197,23 +197,12 @@ pub fn Parent(comptime S: type) type {
         }
 
         pub fn copySelf(self: *S, value: *const Value) !bool {
-            switch (php.getValueType(value)) {
-                .object => {
-                    const obj = php.getValueObject(value) catch unreachable;
-                    const class = ZigClassEntry.fromStructure(self);
-                    if (php.instanceOf(obj.ce, class.entry())) {
-                        const obj_struct = ZigObject(S).fromObject(obj).structure();
-                        try self.buffer.copy(obj_struct.buffer);
-                        return true;
-                    }
-                },
-                .null => {
-                    try self.buffer.clear();
-                    return true;
-                },
-                else => {},
-            }
-            return false;
+            const obj = php.getValueObject(value) catch return false;
+            const class = ZigClassEntry.fromStructure(self);
+            if (!php.instanceOf(obj.ce, class.entry())) return false;
+            const obj_struct = ZigObject(S).fromObject(obj).structure();
+            try self.buffer.copy(obj_struct.buffer);
+            return true;
         }
 
         pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
@@ -377,14 +366,19 @@ pub fn StructLike(comptime S: type) type {
                 .plain => {
                     var iter: iterator.PropertyIterator(S) = .init(ZigObject(S).fromStructure(self).object());
                     const ht = php.createArray();
+                    const is_tuple = isTuple(self);
                     while (iter.next()) |prop_value| {
-                        const name = iter.current_name.?;
                         try transform.apply(prop_value);
-                        php.setHashEntryRef(ht, name, prop_value);
+                        if (is_tuple) {
+                            _ = php.appendHashEntryRef(ht, prop_value);
+                        } else {
+                            const name = iter.current_name.?;
+                            php.setHashEntryRef(ht, name, prop_value);
+                        }
                     }
                     var value = php.createValueArray(ht);
                     // don't convert if the struct is a tuple
-                    if (!isTuple(self)) try php.convertValue(&value, .object);
+                    if (!is_tuple) try php.convertValue(&value, .object);
                     return value;
                 },
                 else => {},
@@ -412,10 +406,8 @@ pub fn StructLike(comptime S: type) type {
         pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
             return if (findMember(self, name, cache_slot)) |member|
                 try member.accessors.get(self)
-            else if (scope == .instance)
-                try Super.getProperty(self, name, cache_slot)
             else
-                error.Missing;
+                try Super.getProperty(self, name, cache_slot);
         }
 
         pub fn setProperty(self: *S, name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {

@@ -6,5 +6,5 @@ pub const Struct = packed struct {
 };
 
 pub fn print(value: Struct) void {
-    std.debug.print("{any}\n", .{value});
+    std.debug.print("{}\n", .{value});
 }

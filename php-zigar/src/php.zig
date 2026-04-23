@@ -1195,8 +1195,9 @@ pub fn invokeMethod(container: ?*const Value, fn_name: *const Value, arguments: 
     return retval;
 }
 
-pub fn invokeFunction(callable: *const Value, arguments: []const Value) !Value {
-    return try invokeMethod(null, callable, arguments);
+pub fn invokeFunction(comptime name: []const u8, arguments: []const Value) !Value {
+    const callable = createValueString(persistent(name));
+    return try invokeMethod(null, &callable, arguments);
 }
 
 pub fn emptyArgInfo(comptime count: usize) []const ArgInfo {

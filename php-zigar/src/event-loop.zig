@@ -114,7 +114,6 @@ pub fn EventLoop(comptime cb: fn () void) type {
 
         pub fn handleLoop(ed: *ExecuteData, _: *Value) void {
             const self: *@This() = @ptrCast(@alignCast(ed.func.*.internal_function.reserved[0]));
-            const stream_select = php.createValuePersistentString("stream_select");
             const read_fds = php.createValueReference(&php.createValueArray(null));
             defer php.release(&read_fds);
             const write_fds = php.createValueReference(&php.createValueNull());
@@ -130,7 +129,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
                 const fd_array_ref = php.getValueReference(&read_fds) catch unreachable;
                 const fd_array = php.getValueArray(&fd_array_ref.val) catch unreachable;
                 php.setHashEntryRef(fd_array, 0, self.stream);
-                const result = php.invokeFunction(&stream_select, &.{
+                const result = php.invokeFunction("stream_select", &.{
                     read_fds,
                     write_fds,
                     except_fds,
@@ -257,8 +256,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
                 func.internal_function.reserved[0] = self;
                 const closure = php.createValueClosure(&func, null, null, null);
                 errdefer php.release(&closure);
-                const register = php.createValuePersistentString("register_shutdown_function");
-                _ = try php.invokeFunction(&register, &.{closure});
+                _ = try php.invokeFunction("register_shutdown_function", &.{closure});
                 self.registered = true;
             }
             self.stream = stream.*;

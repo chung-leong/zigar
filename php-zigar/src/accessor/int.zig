@@ -40,15 +40,12 @@ pub fn Int(comptime attrs: Attributes) type {
                 const bytes: []u8 = try buffer.data(self.byte_offset + byte_size, true);
                 if (comptime @bitSizeOf(T) == 0) return;
                 const ptr: *align(1) T = @ptrCast(&bytes[self.byte_offset]);
-                ptr.* = switch (php.isValueNull(value)) {
-                    false => get: {
-                        const long = try php.getValueLong(value);
-                        break :get switch (attrs.signedness) {
-                            .signed => @truncate(long),
-                            .unsigned => @truncate(@as(c_ulong, @bitCast(long))),
-                        };
-                    },
-                    true => 0,
+                ptr.* = get: {
+                    const long = try php.getValueLong(value);
+                    break :get switch (attrs.signedness) {
+                        .signed => @truncate(long),
+                        .unsigned => @truncate(@as(c_ulong, @bitCast(long))),
+                    };
                 };
             }
         },
@@ -92,15 +89,12 @@ pub fn Int(comptime attrs: Attributes) type {
                 const bytes: []u8 = try buffer.data(self.byte_offset + byte_size, true);
                 if (comptime @bitSizeOf(T) == 0) return;
                 const ptr: *align(1) AT = @ptrCast(&bytes[self.byte_offset]);
-                ptr.value = switch (php.isValueNull(value)) {
-                    false => get: {
-                        const long = try php.getValueLong(value);
-                        break :get switch (attrs.signedness) {
-                            .signed => @truncate(long),
-                            .unsigned => @truncate(@as(c_ulong, @bitCast(long))),
-                        };
-                    },
-                    true => 0,
+                ptr.value = get: {
+                    const long = try php.getValueLong(value);
+                    break :get switch (attrs.signedness) {
+                        .signed => @truncate(long),
+                        .unsigned => @truncate(@as(c_ulong, @bitCast(long))),
+                    };
                 };
             }
         },

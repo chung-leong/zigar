@@ -7,11 +7,6 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const php = @import("../php.zig");
 const String = php.String;
 const Value = php.Value;
-var gmp_import: Value = php.empty_value;
-var gmp_export: Value = php.empty_value;
-var gmp_init: Value = php.empty_value;
-var gmp_neg: Value = php.empty_value;
-var gmp_sign: Value = php.empty_value;
 
 const Attributes = struct {
     signedness: std.builtin.Signedness,
@@ -247,20 +242,12 @@ pub fn Gmp(comptime attrs: Attributes) type {
 
 fn gmpFromString(str: *String, negate: bool, comptime signedness: std.builtin.Signedness) !Value {
     const str_value = php.createValueString(str);
-    if (php.getValueType(&gmp_import) != .string) {
-        const name = php.createPersistentString("gmp_import");
-        gmp_import = php.createValueString(name);
-    }
     if (signedness == .signed and negate) {
-        const pos_value = try php.invokeFunction(&gmp_import, &.{str_value});
+        const pos_value = try php.invokeFunction("gmp_import", &.{str_value});
         defer php.release(&pos_value);
-        if (php.getValueType(&gmp_neg) != .string) {
-            const name = php.createPersistentString("gmp_neg");
-            gmp_neg = php.createValueString(name);
-        }
-        return try php.invokeFunction(&gmp_neg, &.{pos_value});
+        return try php.invokeFunction("gmp_neg", &.{pos_value});
     } else {
-        return try php.invokeFunction(&gmp_import, &.{str_value});
+        return try php.invokeFunction("gmp_import", &.{str_value});
     }
 }
 
@@ -271,28 +258,12 @@ fn stringFromGmp(value: *const Value) !std.meta.Tuple(&.{ *String, bool }) {
             break :use value.*;
         },
         else => convert: {
-            if (php.getValueType(&gmp_init) != .string) {
-                const name = php.createPersistentString("gmp_init");
-                gmp_init = php.createValueString(name);
-            }
-            const not_gmp = switch (php.isValueNull(value)) {
-                false => value.*,
-                true => php.createValueLong(0),
-            };
-            break :convert try php.invokeFunction(&gmp_init, &.{not_gmp});
+            break :convert try php.invokeFunction("gmp_init", &.{value.*});
         },
     };
     defer php.release(&gmp_value);
-    if (php.getValueType(&gmp_sign) != .string) {
-        const name = php.createPersistentString("gmp_sign");
-        gmp_sign = php.createValueString(name);
-    }
-    const sign_value = try php.invokeFunction(&gmp_sign, &.{value.*});
+    const sign_value = try php.invokeFunction("gmp_sign", &.{value.*});
     const sign = try php.getValueLong(&sign_value);
-    if (php.getValueType(&gmp_export) != .string) {
-        const name = php.createPersistentString("gmp_export");
-        gmp_export = php.createValueString(name);
-    }
-    const str_value = try php.invokeFunction(&gmp_export, &.{gmp_value});
+    const str_value = try php.invokeFunction("gmp_export", &.{gmp_value});
     return .{ try php.getValueString(&str_value), sign < 0 };
 }

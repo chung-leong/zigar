@@ -35,7 +35,7 @@ final class StructHandlingTest extends ZigarTestCase
         $this->assertEquals([
             123,
             3.14,
-            [ 101, 118, 105, 108 ],
+            'evil',
         ], $m->tuple->__plain);
     }
 
