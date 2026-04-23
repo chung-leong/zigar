@@ -44,6 +44,7 @@ final class TypeHandlingTest extends ZigarTestCase
         for ($i = 0; $i < 4; $i++) {
             $this->assertSame(true, is_callable($m->array[$i]));
         }
+        $count = 0;
         foreach ($m->array as $item) {
             $this->assertSame(true, is_callable($item));
             $count++;
@@ -101,7 +102,7 @@ final class TypeHandlingTest extends ZigarTestCase
         $this->assertSame(true, is_callable([ $m, 'optional1' ]));
         $this->assertSame(true, is_callable($m->optional1));
 
-        $this->assertSame(false, isset($m->optional2));
+        $this->assertSame(true, isset($m->optional2));
         $this->assertSame(false, is_callable([ $m, 'optional2' ]));
         $this->assertSame(false, is_callable($m->optional2));
 

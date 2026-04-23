@@ -410,6 +410,7 @@ pub const Any = union(enum) {
     array_slot: Slot(.{ .index = .use }),
     multi_slot_prebaked: Slot(.{ .prebaked = true }),
     single_slot_prebaked: Slot(.{ .slots = .single, .prebaked = true }),
+    array_slot_prebaked: Slot(.{ .index = .use, .prebaked = true }),
     constant: Constant,
     property: Property,
     // null and void

@@ -128,30 +128,56 @@ pub fn Slot(comptime attrs: Attributes) type {
             },
         },
         true => switch (attrs.slots) {
-            .multiple => struct {
-                slot: usize,
-                output: accessor.Output,
-                transform: ?accessor.Transform,
-                comptime type: accessor.Type = .slot,
-                comptime attributes: Attributes = attrs,
+            .multiple => switch (attrs.index) {
+                .none => struct {
+                    slot: usize,
+                    output: accessor.Output,
+                    transform: ?accessor.Transform,
+                    comptime type: accessor.Type = .slot,
+                    comptime attributes: Attributes = attrs,
 
-                pub fn get(self: @This(), table: *Value) Error!Value {
-                    const ht = try php.getValueHashTable(table);
-                    const entry = try php.getHashEntry(ht, self.slot);
-                    return try getValue(entry, self.transform);
-                }
+                    pub fn get(self: @This(), table: *Value) Error!Value {
+                        const ht = try php.getValueHashTable(table);
+                        const entry = try php.getHashEntry(ht, self.slot);
+                        return try getValue(entry, self.transform);
+                    }
 
-                pub fn getEx(self: @This(), table: *Value, transform: ?accessor.Transform) Error!Value {
-                    const ht = try php.getValueHashTable(table);
-                    const entry = try php.getHashEntry(ht, self.slot);
-                    return try getValueEx(entry, self.transform, transform);
-                }
+                    pub fn getEx(self: @This(), table: *Value, transform: ?accessor.Transform) Error!Value {
+                        const ht = try php.getValueHashTable(table);
+                        const entry = try php.getHashEntry(ht, self.slot);
+                        return try getValueEx(entry, self.transform, transform);
+                    }
 
-                pub fn set(self: @This(), table: *Value, value: *const Value) Error!void {
-                    const ht = try php.getValueHashTable(table);
-                    const entry = try php.getHashEntry(ht, self.slot);
-                    try setValue(entry, value, self.transform);
-                }
+                    pub fn set(self: @This(), table: *Value, value: *const Value) Error!void {
+                        const ht = try php.getValueHashTable(table);
+                        const entry = try php.getHashEntry(ht, self.slot);
+                        try setValue(entry, value, self.transform);
+                    }
+                },
+                .use => struct {
+                    output: accessor.Output,
+                    transform: ?accessor.Transform,
+                    comptime type: accessor.Type = .slot,
+                    comptime attributes: Attributes = attrs,
+
+                    pub fn getElement(self: @This(), table: *Value, index: usize) Error!Value {
+                        const ht = try php.getValueHashTable(table);
+                        const entry = try php.getHashEntry(ht, index);
+                        return try getValue(entry, self.transform);
+                    }
+
+                    pub fn getElementEx(self: @This(), table: *Value, index: usize, transform: ?accessor.Transform) Error!Value {
+                        const ht = try php.getValueHashTable(table);
+                        const entry = try php.getHashEntry(ht, index);
+                        return try getValueEx(entry, self.transform, transform);
+                    }
+
+                    pub fn setElement(self: @This(), table: *Value, index: usize, value: *const Value) Error!void {
+                        const ht = try php.getValueHashTable(table);
+                        const entry = try php.getHashEntry(ht, index);
+                        try setValue(entry, value, self.transform);
+                    }
+                },
             },
             .single => struct {
                 transform: ?accessor.Transform,
