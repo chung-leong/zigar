@@ -22,6 +22,7 @@ pub fn Slot(comptime attrs: Attributes) type {
                     slot: usize,
                     byte_size: usize,
                     byte_offset: usize,
+                    bit_offset: u3,
                     class: *ZigClassEntry,
                     output: accessor.Output,
                     transform: ?accessor.Transform,
@@ -48,7 +49,8 @@ pub fn Slot(comptime attrs: Attributes) type {
                         return php.getHashEntry(ht, self.slot) catch vivicate: {
                             const offset = self.byte_offset;
                             const len = self.byte_size;
-                            const new_obj = try self.class.obtainObjectAtOffset(buffer, offset, len);
+                            const bit_offset = self.bit_offset;
+                            const new_obj = try self.class.obtainObjectAtOffset(buffer, offset, len, bit_offset);
                             var new_value = php.createValueObject(new_obj);
                             break :vivicate php.insertHashEntry(ht, self.slot, &new_value);
                         };
@@ -82,7 +84,7 @@ pub fn Slot(comptime attrs: Attributes) type {
                         return php.getHashEntry(ht, key) catch vivicate: {
                             const offset = self.byte_size * index;
                             const len = self.byte_size;
-                            const new_obj = try self.class.obtainObjectAtOffset(buffer, offset, len);
+                            const new_obj = try self.class.obtainObjectAtOffset(buffer, offset, len, 0);
                             var new_value = php.createValueObject(new_obj);
                             break :vivicate php.insertHashEntry(ht, key, &new_value);
                         };
@@ -92,6 +94,7 @@ pub fn Slot(comptime attrs: Attributes) type {
             .single => struct {
                 byte_size: usize,
                 byte_offset: usize,
+                bit_offset: u3,
                 class: *ZigClassEntry,
                 transform: ?accessor.Transform,
                 comptime type: accessor.Type = .slot,
@@ -116,7 +119,8 @@ pub fn Slot(comptime attrs: Attributes) type {
                     if (php.getValueType(table) == .null) {
                         const offset = self.byte_offset;
                         const len = self.byte_size;
-                        const new_obj = try self.class.obtainObjectAtOffset(buffer, offset, len);
+                        const bit_offset = self.bit_offset;
+                        const new_obj = try self.class.obtainObjectAtOffset(buffer, offset, len, bit_offset);
                         table.* = php.createValueObject(new_obj);
                     }
                     return table;

@@ -11,6 +11,7 @@ const RelativePosition = @import("memory-map.zig").RelativePosition;
 pub const ByteBuffer = struct {
     bytes: []u8 = undefined,
     alignment: std.mem.Alignment = .@"1",
+    bit_offset: u3 = 0,
     ref_count: u32 = 1,
     flags: packed struct {
         uninitialized: bool = true,
@@ -88,11 +89,17 @@ pub const ByteBuffer = struct {
         return false;
     }
 
-    pub fn slice(self: *@This(), offset: usize, len: usize, alignment: std.mem.Alignment) !*@This() {
+    pub fn slice(self: *@This(), offset: usize, len: usize, alignment: std.mem.Alignment, bit_offset: u3) !*@This() {
+        const slice_bit_offset: u3, const slice_alignment = switch (self.flags.contains_packed_data) {
+            false => .{ 0, alignment },
+            true => .{ self.bit_offset +% bit_offset, .@"1" },
+        };
         const bytes = try self.data(offset + len, false);
         const new = try php.allocator.create(@This());
         const slice_bytes = bytes[offset .. offset + len];
-        std.debug.assert(alignment.check(@intFromPtr(slice_bytes.ptr)));
+        if (!self.flags.contains_packed_data) {
+            std.debug.assert(alignment.check(@intFromPtr(slice_bytes.ptr)));
+        }
         var src_buf = self;
         while (src_buf.source == .buffer) {
             src_buf = src_buf.source.buffer;
@@ -100,7 +107,8 @@ pub const ByteBuffer = struct {
         src_buf.addRef();
         new.* = .{
             .bytes = slice_bytes,
-            .alignment = alignment,
+            .alignment = slice_alignment,
+            .bit_offset = slice_bit_offset,
             .flags = self.flags,
             .source = .{ .buffer = src_buf },
         };
@@ -113,6 +121,7 @@ pub const ByteBuffer = struct {
         new.* = .{
             .bytes = bytes,
             .alignment = self.alignment,
+            .bit_offset = self.bit_offset,
             .flags = self.flags,
             .source = .{ .buffer = self },
         };

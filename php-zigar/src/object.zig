@@ -166,7 +166,7 @@ pub const ObjectMap = struct {
             .outside => slice: {
                 const parent_buf = getObjectBuffer(result.value());
                 const offset = @intFromPtr(bytes.ptr) - @intFromPtr(parent_buf.bytes.ptr);
-                const buf = try parent_buf.slice(offset, bytes.len, alignment);
+                const buf = try parent_buf.slice(offset, bytes.len, alignment, 0);
                 buf.protect(read_only);
                 break :slice buf;
             },

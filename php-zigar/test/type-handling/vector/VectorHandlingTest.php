@@ -104,11 +104,12 @@ final class VectorHandlingTest extends ZigarTestCase
 
         $this->expectOutputString(<<<OUTPUT
         .{ .vector1 = { 10, 20, 30, 40 }, .vector2 = { 2, 3, 4, 5 }, .number = 200, .vector3 = { 12, 22, 32, 42 } }
-        .{ .vector1 = { 10, 20, 30, 40 }, .vector2 = { 2, 3, 4, 5 }, .number = 201, .vector3 = { 12, 22, 32, 42 } }
+        .{ .vector1 = { 10, 20, 30, 40 }, .vector2 = { 2, 3, 4, 5 }, .number = 201, .vector3 = { 12, 22, 32, 43 } }
 
         OUTPUT);
         $m->print();
         $m->struct_a->number = 201;
+        $m->struct_a->vector3[3] = 43;
         $m->print();
     }
 

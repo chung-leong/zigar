@@ -1,6 +1,18 @@
 const std = @import("std");
 
-pub const Error = error{ GoldfishDied, NoMoney };
+pub const StructA = packed struct {
+    vector1: @Vector(4, i32) = .{ 1, 2, 3, 4 },
+    vector2: @Vector(4, i4) = .{ 2, 3, 4, 5 },
+    number: u10 = 100,
+    vector3: @Vector(4, i12) = .{ 3, 4, 5, 6 },
+};
 
-pub const error_union1: Error!comptime_float = 1234;
-pub const error_union2: Error!comptime_float = Error.GoldfishDied;
+pub var struct_a: StructA = .{
+    .vector1 = .{ 10, 20, 30, 40 },
+    .number = 200,
+    .vector3 = .{ 12, 22, 32, 42 },
+};
+
+pub fn print() void {
+    std.debug.print("{any}\n", .{struct_a});
+}

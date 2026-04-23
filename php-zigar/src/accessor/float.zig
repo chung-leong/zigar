@@ -49,9 +49,10 @@ pub fn Float(comptime attrs: Attributes) type {
             comptime attributes: Attributes = attrs,
 
             pub fn get(self: @This(), buffer: *ByteBuffer) Error!Value {
-                return inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |bit_offset| {
-                    if (self.bit_offset == bit_offset) {
-                        break try self.getAt(buffer, bit_offset);
+                const bit_offset = buffer.bit_offset +% self.bit_offset;
+                return inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |possible_offset| {
+                    if (bit_offset == possible_offset) {
+                        break try self.getAt(buffer, possible_offset);
                     }
                 } else unreachable;
             }
@@ -66,9 +67,10 @@ pub fn Float(comptime attrs: Attributes) type {
             }
 
             pub fn set(self: @This(), buffer: *ByteBuffer, value: *const Value) Error!void {
-                inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |bit_offset| {
-                    if (self.bit_offset == bit_offset) {
-                        break try self.setAt(buffer, bit_offset, value);
+                const bit_offset = buffer.bit_offset +% self.bit_offset;
+                inline for (.{ 0, 1, 2, 3, 4, 5, 6, 7 }) |possible_offset| {
+                    if (bit_offset == possible_offset) {
+                        break try self.setAt(buffer, possible_offset, value);
                     }
                 } else unreachable;
             }

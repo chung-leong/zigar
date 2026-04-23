@@ -594,6 +594,9 @@ pub const ZigClassEntry = struct {
         var iter: MemberIterator = .init(&members, .{});
         while (iter.next()) |member| {
             member.accessors = try self.getAccessors(member, scope, slot_usage);
+            // if (iter.currentName()) |name| {
+            //     std.debug.print("{s} => {s}\n", .{ php.getStringContent(name), @tagName(member.accessors) });
+            // }
         }
         if (scope == .instance) self.slot_usage = slot_usage;
         const template_info = php.getProperty(scope_info, "template") catch null;
@@ -675,7 +678,7 @@ pub const ZigClassEntry = struct {
         }
     }
 
-    pub fn obtainObjectAtOffset(self: *@This(), parent_buf: *ByteBuffer, offset: usize, len: usize) !*Object {
+    pub fn obtainObjectAtOffset(self: *@This(), parent_buf: *ByteBuffer, offset: usize, len: usize, bit_offset: u3) !*Object {
         const parent_bytes = try parent_buf.data(offset + len, false);
         const bytes = parent_bytes[offset .. offset + len];
         // see if there's an existing object
@@ -686,7 +689,7 @@ pub const ZigClassEntry = struct {
             return obj;
         } else {
             // need to create the object
-            const buf = try parent_buf.slice(offset, len, self.alignment);
+            const buf = try parent_buf.slice(offset, len, self.alignment, bit_offset);
             defer buf.release();
             const obj = try self.createObjectFromBuffer(buf, null);
             errdefer php.release(obj);
@@ -840,7 +843,7 @@ pub const ZigClassEntry = struct {
         // use a bit-shifting accrossor
         const use_bit_offset = member.byte_size == null and member.bit_offset != null;
         const bit_offset: u3 = if (use_bit_offset) @intCast(member.bit_offset.? % 8) else undefined;
-        const has_size = member.byte_size != null;
+        const prebaked = scope == .static or member.class.type == .@"comptime";
         var accessors: accessor.Any = inline for (comptime std.meta.fields(accessor.Any)) |field| {
             const Acc = field.type;
             var acc: Acc = undefined;
@@ -887,7 +890,7 @@ pub const ZigClassEntry = struct {
                     }
                 },
                 .slot => if (member.type == .object or member.type == .literal or member.type == .type) {
-                    if (acc.attributes.prebaked == !has_size) {
+                    if (acc.attributes.prebaked == prebaked) {
                         const slots: @TypeOf(acc.attributes.slots) = switch (slot_usage) {
                             .multiple => .multiple,
                             else => .single,
@@ -909,7 +912,14 @@ pub const ZigClassEntry = struct {
                                 acc.slot = member.slot orelse return error.Unexpected;
                             }
                             if (@hasField(Acc, "byte_size")) {
-                                acc.byte_size = member.byte_size.?;
+                                if (member.byte_size) |byte_size| {
+                                    acc.byte_size = byte_size;
+                                } else {
+                                    acc.byte_size = (member.bit_size + bit_offset + 7) / 8;
+                                    if (@hasField(Acc, "bit_offset")) {
+                                        acc.bit_offset = bit_offset;
+                                    }
+                                }
                             }
                             if (@hasField(Acc, "byte_offset")) {
                                 acc.byte_offset = byte_offset;
