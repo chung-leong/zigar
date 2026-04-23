@@ -51,4 +51,28 @@ pub const Constant = struct {
         var source = .{ .buffer = buffer };
         try self.int.set(&source, &int_value);
     }
+
+    pub fn getElement(self: @This(), buffer: *ByteBuffer, index: usize) Error!Value {
+        var source = .{ .buffer = buffer };
+        const int_value = try self.int.getElement(&source, index);
+        return inline for (.{ .@"enum", .error_set }) |object_type| {
+            if (self.class.type == object_type) {
+                const S = @field(structure.by_enum, @tagName(object_type));
+                const static = self.class.getStaticData(S);
+                break try static.findCanonical(&int_value);
+            }
+        } else unreachable;
+    }
+
+    pub fn setElement(self: @This(), buffer: *ByteBuffer, index: usize, value: *const Value) Error!void {
+        const int_value = inline for (.{ .@"enum", .error_set }) |t| {
+            if (self.class.type == t) {
+                const S = @field(structure.by_enum, @tagName(t));
+                const static = self.class.getStaticData(S);
+                break try static.findCanonicalInt(value);
+            }
+        } else unreachable;
+        var source = .{ .buffer = buffer };
+        try self.int.setElement(&source, index, &int_value);
+    }
 };
