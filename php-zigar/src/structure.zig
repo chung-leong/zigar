@@ -371,25 +371,28 @@ pub fn StructLike(comptime S: type) type {
 
         const MemberCache = cache.MemberCache;
 
-        pub fn getValue(self: *S, transform: accessor.Transform) !Value {
+        pub fn getValue(self: *S, transform: accessor.Transform) accessor.Error!Value {
             switch (transform) {
                 .string, .integer => return error.Unsupported,
                 .plain => {
-                    // TODO: rework this
-                    // const ht = try S.getProperties(object(self));
-                    // var iter: HashTableIterator = .init(ht, .{});
-                    // while (iter.next()) |value| {
-                    //     // make child objects plain too
-                    //     if (php.getValueType(value) == .object) {
-                    //         try transform.apply(value);
-                    //     }
-                    // }
-                    // php.addRef(ht);
-                    // var value = php.createValueArray(ht);
-                    // // don't convert if the struct is a tuple
-                    // if (!isTuple(self)) try php.convertValue(&value, .object);
-                    // return value;
-                    @panic("TODO");
+                    var iter: iterator.PropertyIterator(S) = .init(ZigObject(S).fromStructure(self).object());
+                    const ht = php.createArray();
+                    while (iter.next()) |prop_value| {
+                        const name = iter.current_name.?;
+                        if (php.getValueObject(prop_value) catch null) |obj| {
+                            if (ZigClassEntry.isZig(obj.ce)) {
+                                // make child objects plain too
+                                const prop_plain_value = try invokeMethod(obj, "getValue", .{.plain});
+                                php.setHashEntry(ht, name, &prop_plain_value);
+                                continue;
+                            }
+                        }
+                        php.setHashEntryRef(ht, name, prop_value);
+                    }
+                    var value = php.createValueArray(ht);
+                    // don't convert if the struct is a tuple
+                    if (!isTuple(self)) try php.convertValue(&value, .object);
+                    return value;
                 },
                 else => {},
             }
