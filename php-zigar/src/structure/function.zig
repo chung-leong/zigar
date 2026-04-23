@@ -118,8 +118,13 @@ pub const Function = struct {
     }
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
-        self.transform = transform;
-        return Super.getValue(self, .none);
+        return switch (transform) {
+            .boolean => php.createValueBool(true),
+            else => use: {
+                self.transform = transform;
+                break :use Super.getValue(self, .none);
+            },
+        };
     }
 
     pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) !void {

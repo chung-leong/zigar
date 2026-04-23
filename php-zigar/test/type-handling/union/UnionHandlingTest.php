@@ -238,7 +238,7 @@ final class UnionHandlingTest extends ZigarTestCase
         $this->assertExceptionMessage("union can only have 1 active field", function() use($m) {
             $x = new $m->ExternUnion([ 'number1' => 123, 'number2' => 456 ]);
         });
-        $this->assertExceptionMessage("not found", function() use($m) {
+        $this->assertExceptionMessage("no field named 'number3'", function() use($m) {
             $x = new $m->ExternUnion([ 'number3' => 123 ]);
         });
     }
