@@ -19,4 +19,12 @@ pub const Null = struct {
     pub fn set(_: @This(), value: *const Value) Error!void {
         try php.getValueNull(value);
     }
+
+    pub fn getElement(self: @This(), _: usize) Error!Value {
+        return self.get();
+    }
+
+    pub fn setElement(self: @This(), _: usize, value: *const Value) Error!void {
+        return self.set(value);
+    }
 };
