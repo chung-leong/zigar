@@ -75,7 +75,7 @@ pub const Enum = struct {
                                 return try value_static.getEnum(obj);
                             }
                         }
-                    } else if (php.isGMP(obj)) {
+                    } else if (php.isGmpClass(obj.ce)) {
                         return self.findCanonical(value) catch php.createValueNull();
                     }
                 },
@@ -137,7 +137,7 @@ pub const Enum = struct {
                     if (obj.ce == class.entry()) {
                         php.addRef(obj);
                         return key.*;
-                    } else if (php.isGMP(obj)) {
+                    } else if (php.isGmpClass(obj.ce)) {
                         var key_copy = key.*;
                         php.addRef(&key_copy);
                         try php.convertValue(&key_copy, .string);

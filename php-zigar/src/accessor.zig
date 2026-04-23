@@ -86,10 +86,14 @@ pub const Transform = enum {
     base64,
 
     pub fn apply(self: @This(), value: *Value) Error!void {
-        if (self == .integer) {
-            if (php.getValueObject(value) catch null) |obj| {
+        if (php.getValueObject(value) catch null) |obj| {
+            if (ZigClassEntry.isZig(obj.ce)) {
+                value.* = try invokeMethod(obj, "getValue", .{self});
+                php.release(obj);
+                return;
+            } else if (php.isGmpClass(obj.ce)) {
                 // leave GMP object as is
-                if (php.isGMP(obj)) return;
+                if (self == .integer) return;
             }
         }
         const value_type: ?php.ValueType = switch (self) {
@@ -100,7 +104,11 @@ pub const Transform = enum {
             .none, .plain => null,
             else => return error.Unsupported,
         };
-        if (value_type) |vt| try php.convertValue(value, vt);
+        if (value_type) |vt| {
+            if (php.getValueType(value) != vt) {
+                try php.convertValue(value, vt);
+            }
+        }
     }
 };
 

@@ -379,14 +379,7 @@ pub fn StructLike(comptime S: type) type {
                     const ht = php.createArray();
                     while (iter.next()) |prop_value| {
                         const name = iter.current_name.?;
-                        if (php.getValueObject(prop_value) catch null) |obj| {
-                            if (ZigClassEntry.isZig(obj.ce)) {
-                                // make child objects plain too
-                                const prop_plain_value = try invokeMethod(obj, "getValue", .{.plain});
-                                php.setHashEntry(ht, name, &prop_plain_value);
-                                continue;
-                            }
-                        }
+                        try transform.apply(prop_value);
                         php.setHashEntryRef(ht, name, prop_value);
                     }
                     var value = php.createValueArray(ht);

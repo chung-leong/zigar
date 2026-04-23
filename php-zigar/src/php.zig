@@ -434,8 +434,8 @@ pub fn isGarbage(arg: anytype) bool {
     return php_h.GC_INFO(arg) != 0;
 }
 
-pub fn isGMP(obj: *Object) bool {
-    const name_str = obj.ce.*.name orelse return false;
+pub fn isGmpClass(ce: *ClassEntry) bool {
+    const name_str = ce.*.name orelse return false;
     const name = getStringContent(name_str);
     return std.mem.eql(u8, name, "GMP");
 }
