@@ -367,6 +367,7 @@ pub fn StructLike(comptime S: type) type {
                 .string, .integer => return error.Unsupported,
                 .plain => {
                     var iter: iterator.PropertyIterator(S) = .init(ZigObject(S).fromStructure(self).object());
+                    defer iter.deinit();
                     const ht = php.createArray();
                     const is_tuple = isTuple(self);
                     while (iter.next()) |prop_value| {
