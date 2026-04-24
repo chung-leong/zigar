@@ -119,10 +119,9 @@ pub const Struct = struct {
     pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
         if (transform == .integer) {
             const class = ZigClassEntry.fromStructure(self);
-            const flags = class.getFlags(@This());
-            if (flags.is_packed) {
-                // TODO: handle packed struct
-                @panic("TODO");
+            const static = class.getStaticData(@This());
+            if (static.backing_int) |int| {
+                return try int.accessors.get(self);
             }
         }
         return Super.getValue(self, transform);
