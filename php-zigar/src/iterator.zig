@@ -100,8 +100,6 @@ pub fn PropertyIterator(comptime S: type) type {
         pub fn init(obj: *Object) @This() {
             var self: @This() = undefined;
             const class = ZigClassEntry.fromObject(obj);
-            php.initializeIterator(&self.iter);
-            php.addRef(obj);
             self.member_iter = class.getMemberIterator(scope);
             self.container = ZigObject(S).fromObject(obj).structure();
             self.current_name = null;
@@ -112,18 +110,22 @@ pub fn PropertyIterator(comptime S: type) type {
 
         pub fn deinit(self: *@This()) void {
             php.release(&self.iter.data);
-            php.release(ZigObject(S).fromStructure(self.container).object());
         }
 
         pub fn create(obj: *Object) !*ObjectIterator {
             const self = try php.allocator.create(@This());
             self.* = .init(obj);
+            // initializeIterator() adds the iterator to the Zend object store, that's why
+            // we don't call it when we use the iterator as a stack object
+            php.initializeIterator(&self.iter);
+            php.addRef(obj);
             return &self.iter;
         }
 
         pub fn destroy(iter: *ObjectIterator) void {
             const self = fromIter(iter);
             self.deinit();
+            php.release(ZigObject(S).fromStructure(self.container).object());
         }
 
         pub fn isValid(iter: *ObjectIterator) c_int {
