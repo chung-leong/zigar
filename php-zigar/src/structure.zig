@@ -109,11 +109,9 @@ pub fn Parent(comptime S: type) type {
                 try self.buffer.copy(def);
             }
             if (initializer) |value| {
-                if (!php.isValueNull(value)) {
-                    try self.setValue(value, .none);
-                }
-                if (read_only) self.buffer.protect(true);
+                try self.setValue(value, .none);
             }
+            if (read_only) self.buffer.protect(true);
         }
 
         pub fn finalize(self: *S, _: bool) !void {

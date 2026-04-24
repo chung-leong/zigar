@@ -11,12 +11,12 @@ final class OptionalHandlingTest extends ZigarTestCase
         $this->assertSame(true, $m->bool_value);
         $this->assertSame(null, $m->f64_empty);
         $this->assertSame(3.14, $m->f64_value);
-        // $this->assertSame(null, $m->struct_empty);
-        // $this->assertSame([ 
-        //     'integer' => 1234, 
-        //     'boolean' => true, 
-        //     'decimal' => 3.5,
-        // ], $m->struct_value);
+        $this->assertSame(null, $m->struct_empty);
+        $this->assertEquals((object) [ 
+            'integer' => 1234, 
+            'boolean' => true, 
+            'decimal' => 3.5,
+        ], $m->struct_value);
 
         $this->expectOutputString(<<<OUTPUT
         1234

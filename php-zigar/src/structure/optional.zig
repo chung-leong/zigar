@@ -50,17 +50,15 @@ pub const Optional = struct {
     };
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
-        if (transform == .none) {
-            const class = ZigClassEntry.fromStructure(self);
-            const static = class.getStaticData(@This());
-            const present = try static.present_acc.get(self);
-            return switch (try php.getValueLong(&present)) {
-                0 => php.createValueNull(),
-                else => try static.payload_acc.get(self),
-            };
-        } else {
-            return Super.getValue(self, transform);
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        const present = try static.present_acc.get(self);
+        if (try php.getValueLong(&present) == 0) {
+            return php.createValueNull();
         }
+        var value = try static.payload_acc.get(self);
+        if (transform != .none) try transform.apply(&value);
+        return value;
     }
 
     pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) !void {
