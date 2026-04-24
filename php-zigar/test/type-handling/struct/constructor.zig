@@ -8,13 +8,13 @@ pub const ExternStruct = struct {
     number2: i32 = 456,
 };
 pub const PackedStruct = packed struct {
-    state1: bool,
-    state2: bool,
-    state3: bool,
-    state4: bool,
+    state1: bool = false,
+    state2: bool = false,
+    state3: bool = false,
+    state4: bool = false,
 
     state5: bool = false,
-    state6: bool,
-    state7: bool,
-    state8: bool,
+    state6: bool = false,
+    state7: bool = false,
+    state8: bool = false,
 };

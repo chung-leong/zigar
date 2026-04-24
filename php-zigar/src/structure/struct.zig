@@ -58,6 +58,7 @@ pub const Struct = struct {
                 };
             }
             // count the number of required arguments
+            iter.reset();
             while (iter.next()) |member| {
                 if (member.flags.is_required) self.required_field_count += 1;
             }

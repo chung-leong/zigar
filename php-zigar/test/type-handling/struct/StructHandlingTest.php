@@ -239,8 +239,7 @@ final class StructHandlingTest extends ZigarTestCase
         $this->assertExceptionMessage("struct constructor expects an array as argument or named arguments", function() use($m) {
             $x = new $m->Struct();
         });
-        // TODO: check for missing required fields
-        $this->assertExceptionMessage("???", function() use($m) {
+        $this->assertExceptionMessage("missing initializer", function() use($m) {
             $x = new $m->Struct(number1: 1234);
         });
 
@@ -280,6 +279,11 @@ final class StructHandlingTest extends ZigarTestCase
             'state7' => true, 
             'state8' => true,
         ], $f->__plain);
+        $this->assertEquals(0xfe, $f->__int);
+        $this->assertEquals(0xfe, (int) $f);
+        $g = new $m->PackedStruct();
+        $this->assertEquals(0, $g->__int);
+        $this->assertEquals(true, (bool) $g);
     }
 }
 
