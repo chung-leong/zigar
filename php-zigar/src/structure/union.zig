@@ -125,7 +125,7 @@ pub const Union = struct {
             if (class.purpose == .any_image) {
                 const selector = static.selector orelse return error.Unexpected;
                 const name = php.persistent("gd");
-                try self.setProperty(name, value, null);
+                try Super.setProperty(self, name, value, null);
                 const sel_value = try php.getHashEntry(&selector.possible_values, name);
                 try selector.accessors.set(self, sel_value);
                 return;
@@ -139,7 +139,7 @@ pub const Union = struct {
             }
             const field_value = iter.next().?;
             const name = iter.currentName() orelse return error.KeyIsNotString;
-            self.setProperty(name, field_value, null) catch |err| {
+            Super.setProperty(self, name, field_value, null) catch |err| {
                 return self.reportFieldError(name, .write, err);
             };
             if (static.selector) |selector| {
@@ -149,6 +149,31 @@ pub const Union = struct {
         } else {
             try Super.setValue(self, value, transform);
         }
+    }
+
+    pub fn getProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
+        self.checkSelector(name, cache_slot) catch |err| {
+            const class = ZigClassEntry.fromStructure(self);
+            if (err == error.InactiveField) {
+                if (class.flags.@"union".has_tag) {
+                    return php.createValueNull();
+                } else {
+                    // when the union is untagged, it isn't possible to determine programmatically
+                    // whether a field is set or not when optimize is release; the selector is only
+                    // available for debug purpose; throwing an error because the operation is illegal
+                    return self.reportFieldError(name, .read, err);
+                }
+            }
+            return @errorCast(err);
+        };
+        return Super.getProperty(self, name, cache_slot);
+    }
+
+    pub fn setProperty(self: *@This(), name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) !void {
+        self.checkSelector(name, cache_slot) catch |err| {
+            return self.reportFieldError(name, .write, err);
+        };
+        return Super.setProperty(self, name, value, cache_slot);
     }
 
     pub fn isMemberActive(self: *@This(), name: *String, member: *ZigClassEntry.Member) bool {
@@ -189,30 +214,6 @@ pub const Union = struct {
                 }
             }
         }
-    }
-
-    pub fn readProperty(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
-        const self = fromObject(obj);
-        self.checkSelector(name, cache_slot) catch |err| {
-            const class = ZigClassEntry.fromObject(obj);
-            retval.* = php.createValueNull();
-            if (err != error.InactiveField or !class.flags.@"union".has_tag) {
-                // when the union is untagged, it isn't possible to determine programmatically
-                // whether a field is set or not when optimize is release; the selector is only
-                // available for debug purpose; throwing an error because the operation is illegal
-                php.throwError(self.reportFieldError(name, .read, err));
-            }
-            return retval;
-        };
-        return Super.readProperty(obj, name, prop_type, cache_slot, retval);
-    }
-
-    pub fn writeProperty(obj: *Object, name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) !*Value {
-        const self = fromObject(obj);
-        self.checkSelector(name, cache_slot) catch |err| {
-            return self.reportFieldError(name, .write, err);
-        };
-        return Super.writeProperty(obj, name, value, cache_slot);
     }
 
     pub fn getIterator(obj: *Object) !?*ObjectIterator {
@@ -284,12 +285,12 @@ pub const Union = struct {
     pub const getExtent = Super.getExtent;
     pub const checkArguments = Super.checkArguments;
     pub const getValue = Super.getValue;
-    pub const getProperty = Super.getProperty;
-    pub const setProperty = Super.setProperty;
     pub const propertyExists = Super.propertyExists;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;
+    pub const readProperty = Super.readProperty;
+    pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
     pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;

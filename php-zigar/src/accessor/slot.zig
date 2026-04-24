@@ -41,7 +41,7 @@ pub fn Slot(comptime attrs: Attributes) type {
 
                     pub fn set(self: @This(), buffer: *ByteBuffer, table: *Value, value: *const Value) Error!void {
                         const entry = try self.vivicateSlot(buffer, table);
-                        try setValue(entry, value, self.transform);
+                        try setValue(entry, value, self.transform, attrs.prebaked);
                     }
 
                     fn vivicateSlot(self: @This(), buffer: *ByteBuffer, table: *Value) Error!*Value {
@@ -75,7 +75,7 @@ pub fn Slot(comptime attrs: Attributes) type {
 
                     pub fn setElement(self: @This(), buffer: *ByteBuffer, table: *Value, index: usize, value: *const Value) Error!void {
                         const entry = try self.vivicateSlot(buffer, table, index);
-                        try setValue(entry, value, self.transform);
+                        try setValue(entry, value, self.transform, attrs.prebaked);
                     }
 
                     fn vivicateSlot(self: @This(), buffer: *ByteBuffer, table: *Value, index: usize) Error!*Value {
@@ -112,7 +112,7 @@ pub fn Slot(comptime attrs: Attributes) type {
 
                 pub fn set(self: @This(), buffer: *ByteBuffer, table: *Value, value: *const Value) Error!void {
                     const entry = try self.vivicateSlot(buffer, table);
-                    try setValue(entry, value, self.transform);
+                    try setValue(entry, value, self.transform, attrs.prebaked);
                 }
 
                 fn vivicateSlot(self: @This(), buffer: *ByteBuffer, table: *Value) Error!*Value {
@@ -151,7 +151,7 @@ pub fn Slot(comptime attrs: Attributes) type {
                     pub fn set(self: @This(), table: *Value, value: *const Value) Error!void {
                         const ht = try php.getValueHashTable(table);
                         const entry = try php.getHashEntry(ht, self.slot);
-                        try setValue(entry, value, self.transform);
+                        try setValue(entry, value, self.transform, attrs.prebaked);
                     }
                 },
                 .use => struct {
@@ -175,7 +175,7 @@ pub fn Slot(comptime attrs: Attributes) type {
                     pub fn setElement(self: @This(), table: *Value, index: usize, value: *const Value) Error!void {
                         const ht = try php.getValueHashTable(table);
                         const entry = try php.getHashEntry(ht, index);
-                        try setValue(entry, value, self.transform);
+                        try setValue(entry, value, self.transform, attrs.prebaked);
                     }
                 },
             },
@@ -193,7 +193,7 @@ pub fn Slot(comptime attrs: Attributes) type {
                 }
 
                 pub fn set(self: @This(), table: *Value, value: *const Value) Error!void {
-                    try setValue(table, value, self.transform);
+                    try setValue(table, value, self.transform, attrs.prebaked);
                 }
             },
         },
@@ -221,7 +221,9 @@ fn getValueEx(entry: *Value, transform1: ?accessor.Transform, transform2: ?acces
     return getValue(entry, transform);
 }
 
-fn setValue(entry: *Value, value: *const Value, transform: ?accessor.Transform) Error!void {
-    const obj = php.getValueObject(entry) catch return error.NullPointer;
+fn setValue(entry: *Value, value: *const Value, transform: ?accessor.Transform, comptime prebaked: bool) Error!void {
+    const obj = php.getValueObject(entry) catch {
+        return if (prebaked) error.ComptimeValue else error.NullPointer;
+    };
     try structure.invokeMethod(obj, "setValue", .{ value, transform orelse .none });
 }
