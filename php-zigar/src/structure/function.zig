@@ -18,7 +18,7 @@ const structure = @import("../structure.zig");
 pub const Function = struct {
     closure: Closure = undefined,
     // force buffer to be the last field using alignment
-    transform: accessor.Transform align(@alignOf(*ByteBuffer)) = .none,
+    transform: ?accessor.Transform align(@alignOf(*ByteBuffer)) = null,
     buffer: *ByteBuffer = undefined,
 
     pub const Super = structure.Parent(@This());
@@ -121,7 +121,9 @@ pub const Function = struct {
         return switch (transform) {
             .boolean => php.createValueBool(true),
             else => use: {
-                self.transform = transform;
+                if (transform != .none) {
+                    self.transform = transform;
+                }
                 break :use Super.getValue(self, .none);
             },
         };
@@ -174,7 +176,7 @@ pub const Function = struct {
                         const promise = try promise_struct.getSpecialContext(Promise);
                         if (!php.isValueNull(&retval)) {
                             // if the return value isn't null, we assume the function is choosing to not be async
-                            try self.transform.apply(&retval);
+                            if (self.transform) |tm| try tm.apply(&retval);
                             break :get retval;
                         }
                         // wait for promise to resolve
@@ -189,7 +191,7 @@ pub const Function = struct {
                         php.addRef(generator_obj);
                         break :get php.createValueObject(generator_obj);
                     } else {
-                        try self.transform.apply(&retval);
+                        if (self.transform) |tm| try tm.apply(&retval);
                         break :get retval;
                     }
                 };

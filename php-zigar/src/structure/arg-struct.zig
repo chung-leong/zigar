@@ -32,7 +32,6 @@ pub fn ArgStruct(variadic: bool) type {
         pub const Static = struct {
             arg_accessors: []*accessor.Any = undefined,
             retval_accessors: *accessor.Any = undefined,
-            retval_transform: ?Transform = undefined,
             allocator: ?*ZigClassEntry.Member = null,
             promise: ?*ZigClassEntry.Member = null,
             generator: ?*ZigClassEntry.Member = null,
@@ -146,8 +145,7 @@ pub fn ArgStruct(variadic: bool) type {
         pub fn getReturnValue(self: *@This()) !Value {
             const class = ZigClassEntry.fromStructure(self);
             const static = class.getStaticData(@This());
-            var value = try static.retval_accessors.get(self);
-            if (static.retval_transform) |ot| try ot.apply(&value);
+            const value = try static.retval_accessors.get(self);
             const eg = php.getExecutorGlobals();
             // an error union has yielded an error
             if (eg.exception != null) return error.ExceptionThrown;

@@ -19,7 +19,7 @@ pub const Generator = struct {
     result: Value,
     callback: ?Value,
     index: isize = 0,
-    transform: Transform = .none,
+    transform: ?Transform = null,
     buffer: *ByteBuffer,
 
     pub fn create(callback: ?Value) !*@This() {
@@ -85,7 +85,7 @@ pub const Generator = struct {
         }
         self.result = value.*;
         php.addRef(&self.result);
-        try self.transform.apply(&self.result);
+        if (self.transform) |tm| try tm.apply(&self.result);
         if (!php.isValueNull(&self.result)) {
             self.status = .resolved;
             return true;

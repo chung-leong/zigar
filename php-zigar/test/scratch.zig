@@ -1,10 +1,7 @@
 const std = @import("std");
 
-pub const StructA = packed struct {
-    flag1: bool = true,
-    flag2: bool = true,
-    flag3: bool = false,
-    flga4: bool = true,
-};
+var int: i32 = 123;
 
-pub var struct_a: StructA = .{};
+pub fn get() ?*i32 {
+    return &int;
+}

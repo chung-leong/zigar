@@ -18,7 +18,7 @@ pub const Promise = struct {
     fiber: Value = undefined,
     result: Value,
     callback: ?Value,
-    transform: Transform = .none,
+    transform: ?Transform = null,
     buffer: *ByteBuffer,
 
     pub fn create(callback: ?Value) !*@This() {
@@ -72,7 +72,7 @@ pub const Promise = struct {
         }
         self.result = value.*;
         php.addRef(&self.result);
-        try self.transform.apply(&self.result);
+        if (self.transform) |tm| try tm.apply(&self.result);
         self.status = .resolved;
     }
 

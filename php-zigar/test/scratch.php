@@ -7,9 +7,8 @@ use Revolt\EventLoop;
 zigar_compile_module(__DIR__ . "/scratch.zig", "/tmp/scratch.zigar");
 $m = zigar_load_module("/tmp/scratch.zigar");
 
-print_r($m->struct_a);
-$int = (int) $m->struct_a;
-echo "int = $int\n";
+$result = $m->get();
+print_r($result);
 
 gc_collect_cycles();
 echo "gc completed\n";
