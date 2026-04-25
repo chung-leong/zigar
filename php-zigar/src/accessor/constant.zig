@@ -35,6 +35,8 @@ pub const Constant = struct {
             if (self.class.type == object_type) {
                 const S = @field(structure.by_enum, @tagName(object_type));
                 const static = self.class.getStaticData(S);
+                // int_value could be a GMP object which needs to be released
+                defer php.release(&int_value);
                 break try static.findCanonical(&int_value);
             }
         } else unreachable;

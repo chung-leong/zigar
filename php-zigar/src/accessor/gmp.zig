@@ -242,13 +242,10 @@ pub fn Gmp(comptime attrs: Attributes) type {
 
 fn gmpFromString(str: *String, negate: bool, comptime signedness: std.builtin.Signedness) !Value {
     const str_value = php.createValueString(str);
-    if (signedness == .signed and negate) {
-        const pos_value = try php.invokeFunction("gmp_import", &.{str_value});
-        defer php.release(&pos_value);
-        return try php.invokeFunction("gmp_neg", &.{pos_value});
-    } else {
-        return try php.invokeFunction("gmp_import", &.{str_value});
-    }
+    const pos_value = try php.invokeFunction("gmp_import", &.{str_value});
+    if (signedness == .unsigned or !negate) return pos_value;
+    defer php.release(&pos_value);
+    return try php.invokeFunction("gmp_neg", &.{pos_value});
 }
 
 fn stringFromGmp(value: *const Value) !std.meta.Tuple(&.{ *String, bool }) {
