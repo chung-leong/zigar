@@ -132,6 +132,14 @@ final class FunctionCallingTest extends ZigarTestCase
         print_r($object->__plain);
     }
 
+    public function testReturnSelfReferencingStruct(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/return-self-referencing-struct.zig');
+        $object1 = $m->getStruct();
+        $object2 = $object1->self->{'*'};
+        $this->assertSame($object1, $object2);
+    }
+
     public function testReturnSameStruct(): void
     {
         $m = ZigImporter::load(__DIR__ . '/return-same-struct.zig');
@@ -139,6 +147,25 @@ final class FunctionCallingTest extends ZigarTestCase
         $ptr = $m->echo($object1);
         $object2 = $ptr->{'*'};
         $this->assertSame($object1, $object2);
+    }
+
+    public function testChangePointerTarget(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/change-pointer-target.zig');
+        $this->assertSame(123, $m->number_ptr->{'*'});
+        $this->expectOutputString(<<<OUTPUT
+        odd = 123, even = 456
+        odd = 777, even = 456
+        odd = 777, even = 888
+
+        OUTPUT);
+        $m->print();
+        $m->number_ptr->{'*'} = 777;
+        $m->print();
+        $m->change(true);
+        $this->assertSame(456, $m->number_ptr->{'*'});
+        $m->number_ptr->{'*'} = 888;
+        $m->print();
     }
 
     public function testCallMethods(): void

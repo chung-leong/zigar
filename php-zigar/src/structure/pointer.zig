@@ -182,11 +182,18 @@ pub const Pointer = struct {
     pub fn getProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
         const target_obj = try self.getTarget();
         if (PropCache.idFromString(name, cache_slot)) |id| {
-            const prop_obj = switch (id) {
-                .target => target_obj,
-            };
-            php.addRef(prop_obj);
-            return php.createValueObject(prop_obj);
+            switch (id) {
+                .target => {
+                    const class = ZigClassEntry.fromStructure(self);
+                    const static = class.getStaticData(@This());
+                    if (static.target_class.flags.common.has_value) {
+                        return invokeMethod(target_obj, "getValue", .{.none});
+                    } else {
+                        php.addRef(target_obj);
+                        return php.createValueObject(target_obj);
+                    }
+                },
+            }
         } else {
             try self.checkDoubleReference();
             return try invokeMethod(target_obj, "getProperty", .{ name, cache_slot });
@@ -194,12 +201,14 @@ pub const Pointer = struct {
     }
 
     pub fn setProperty(self: *@This(), name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {
+        const target_obj = try self.getTarget();
         if (PropCache.idFromString(name, cache_slot)) |id| {
             switch (id) {
-                .target => try self.setValue(value, .none),
+                .target => {
+                    try invokeMethod(target_obj, "setValue", .{ value, .none });
+                },
             }
         } else {
-            const target_obj = try self.getTarget();
             try self.checkDoubleReference();
             try invokeMethod(target_obj, "setProperty", .{ name, value, cache_slot });
         }
