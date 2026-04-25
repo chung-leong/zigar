@@ -198,11 +198,24 @@ pub const ErrorSet = struct {
             // reference err by integer value
             const err_code = try php.getValueLong(&err_value);
             const global_set = class.host.global_error_set.?;
-            const err, const is_new = if (php.getHashEntry(global_set, err_code)) |e_ptr|
-                .{ e_ptr.*, false }
-            else |_|
-                .{ php.createValueObject(err_obj), true };
-            const message = createDecamelizedMessage(name);
+            const err, const message, const is_new = get: {
+                if (php.getHashEntry(global_set, err_code)) |existing_value| {
+                    // use error object created earlier for a different error set
+                    const existing_obj = php.getValueObject(existing_value) catch unreachable;
+                    const existing_struct = fromObject(existing_obj);
+                    break :get .{
+                        existing_value.*,
+                        existing_struct.canonical.?.message,
+                        false,
+                    };
+                } else |_| {
+                    break :get .{
+                        php.createValueObject(err_obj),
+                        createDecamelizedMessage(name),
+                        true,
+                    };
+                }
+            };
             if (self.error_set != global_set) {
                 php.setHashEntry(self.error_set, err_code, &err);
                 // reference err by name
