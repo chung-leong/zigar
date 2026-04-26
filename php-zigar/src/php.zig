@@ -142,64 +142,6 @@ pub fn getExecutorGlobals() *ExecutorGlobals {
     return getGlobals("executor_globals");
 }
 
-pub const ParseOptions = struct {
-    quiet: bool = false,
-    accept_null: bool = false,
-    accept_object: bool = true,
-};
-
-pub fn parseArguments(ed: *ExecuteData, comptime specs: [:0]const u8, arg_ptrs: anytype) !void {
-    const AT = @TypeOf(arg_ptrs);
-    const is_tuple = switch (@typeInfo(AT)) {
-        .@"struct" => |st| st.is_tuple,
-        else => false,
-    };
-    if (!is_tuple) @compileError("Tuple expected");
-    const fields = std.meta.fields(AT);
-    comptime var new_fields: [fields.len + 2]std.builtin.Type.StructField = undefined;
-    new_fields[0] = .{
-        .name = "0",
-        .type = u32,
-        .default_value_ptr = null,
-        .is_comptime = false,
-        .alignment = @alignOf(u32),
-    };
-    new_fields[1] = .{
-        .name = "1",
-        .type = [*c]const u8,
-        .default_value_ptr = null,
-        .is_comptime = false,
-        .alignment = @alignOf([*c]const u8),
-    };
-    inline for (fields, 0..) |field, i| {
-        new_fields[i + 2] = .{
-            .name = std.fmt.comptimePrint("{d}", .{i + 2}),
-            .type = field.type,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(field.type),
-        };
-    }
-    const NewAT = @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .decls = &.{},
-            .fields = &new_fields,
-            .is_tuple = true,
-        },
-    });
-    var info: ArgPtrCountExtra = undefined;
-    get_argument_info(ed, &info);
-    var new_args: NewAT = undefined;
-    new_args[0] = @truncate(info.len);
-    new_args[1] = specs.ptr;
-    inline for (arg_ptrs, 0..) |arg, i| {
-        new_args[2 + i] = arg;
-    }
-    const result = @call(.auto, php_h.zend_parse_parameters, new_args);
-    if (result != php_h.SUCCESS) return error.UnableToParseArgument;
-}
-
 const ArgPtrCountExtra = extern struct {
     ptr: [*]Value,
     len: usize,
@@ -259,6 +201,13 @@ pub const ArgumentIterator = struct {
         } else {
             return null;
         }
+    }
+
+    pub fn nextValue(self: *@This(), comptime desired_type: ValueType) !?Value {
+        const value_ptr = self.next() orelse return null;
+        var value = value_ptr.*;
+        try convertValue(&value, desired_type);
+        return value;
     }
 
     pub fn makeThisFirst(self: *@This()) void {

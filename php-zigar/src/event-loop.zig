@@ -228,14 +228,14 @@ pub fn EventLoop(comptime cb: fn () void) type {
             self.loop = .{ .temporary = undefined };
         }
 
-        pub fn use(self: *@This(), type_name: *const String) !void {
+        pub fn use(self: *@This(), type_name: []const u8) !void {
             const reinit = self.ready;
             if (self.ready) {
                 self.deinit();
                 self.ready = false;
             }
             inline for (@typeInfo(Type).@"enum".fields) |field| {
-                if (std.mem.eql(u8, field.name, php.getStringContent(type_name))) {
+                if (std.mem.eql(u8, field.name, type_name)) {
                     const tag = @field(Type, field.name);
                     self.type = tag;
                     self.loop = @unionInit(Loop, @tagName(tag), undefined);

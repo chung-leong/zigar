@@ -173,7 +173,7 @@ pub const ZigCompiler = struct {
     pdb_path: ?[]const u8,
     compiler_args: [][]const u8,
 
-    pub fn compile(src_path: []const u8, mod_path: []const u8, options: ?*Value) !void {
+    pub fn compile(src_path: []const u8, mod_path: []const u8, options: ?*HashTable) !void {
         var self: @This() = undefined;
         self.arena = .init(php.allocator);
         defer self.arena.deinit();
@@ -190,7 +190,7 @@ pub const ZigCompiler = struct {
         return self.arena.allocator();
     }
 
-    fn acquireConfig(self: *@This(), src_path: []const u8, mod_path: ?[]const u8, options: ?*Value) !void {
+    fn acquireConfig(self: *@This(), src_path: []const u8, mod_path: ?[]const u8, options: ?*HashTable) !void {
         const al = self.allocator();
         self.options = try .init(options);
         const mod_name = std.mem.sliceTo(std.fs.path.basename(mod_path orelse src_path), '.');
@@ -416,9 +416,9 @@ pub const Options = struct {
     max_memory: ?usize = null,
     eval_branch_quota: usize = 2000000,
 
-    pub fn init(options: ?*Value) !@This() {
+    pub fn init(options: ?*HashTable) !@This() {
         var self: @This() = .{};
-        const ht = try php.getValueHashTable(options orelse return self);
+        const ht = options orelse return self;
         inline for (comptime std.meta.fields(@This())) |field| {
             if (php.getHashEntry(ht, field.name) catch null) |value| {
                 const T = @FieldType(@This(), field.name);

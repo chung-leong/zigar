@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
+const failure = @import("failure.zig");
 const getSharedLibraryName = @import("compilation.zig").getSharedLibraryName;
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
@@ -70,17 +71,19 @@ const functions = struct {
 
         pub fn run(ed: *ExecuteData, return_value: *Value) !void {
             const al = php.allocator;
-            var module_path: *String = undefined;
-            try php.parseArguments(ed, "S", .{&module_path});
+            var arg_iter = ArgumentIterator.init(ed);
+            if (arg_iter.len < 1 or arg_iter.len > 2) {
+                return reportArgCountMismatch("zigar_load_module", 1, 2, arg_iter.len);
+            }
+            const mod_path = init: {
+                var value = (try arg_iter.nextValue(.string)).?;
+                break :init php.getValueStringContent(&value) catch unreachable;
+            };
             const so_name = try getSharedLibraryName(al, .this, .this);
             defer al.free(so_name);
             const cwd_path = try std.process.getCwdAlloc(al);
             defer php.allocator.free(cwd_path);
-            const so_path = try std.fs.path.resolve(al, &.{
-                cwd_path,
-                php.getStringContent(module_path),
-                so_name,
-            });
+            const so_path = try std.fs.path.resolve(al, &.{ cwd_path, mod_path, so_name });
             defer al.free(so_path);
             return_value.* = try ModuleHost.load(so_path);
         }
@@ -115,21 +118,27 @@ const functions = struct {
 
         pub fn run(ed: *ExecuteData, _: *Value) !void {
             const al = php.allocator;
-            var source_path: *String = undefined;
-            var module_path: *String = undefined;
-            var options: ?*Value = null;
-            try php.parseArguments(ed, "PP|A", .{ &source_path, &module_path, &options });
+            var arg_iter = ArgumentIterator.init(ed);
+            if (arg_iter.len < 2 or arg_iter.len > 3) {
+                return reportArgCountMismatch("zigar_compile_module", 2, 3, arg_iter.len);
+            }
+            const src_path = init: {
+                var value = (try arg_iter.nextValue(.string)).?;
+                break :init php.getValueStringContent(&value) catch unreachable;
+            };
+            const mod_path = init: {
+                var value = (try arg_iter.nextValue(.string)).?;
+                break :init php.getValueStringContent(&value) catch unreachable;
+            };
+            const options = init: {
+                var value = (try arg_iter.nextValue(.object)) orelse break :init null;
+                break :init php.getValueHashTable(&value) catch unreachable;
+            };
             const cwd_path = try std.process.getCwdAlloc(al);
             defer php.allocator.free(cwd_path);
-            const source_path_resolved = try std.fs.path.resolve(al, &.{
-                cwd_path,
-                php.getStringContent(source_path),
-            });
+            const source_path_resolved = try std.fs.path.resolve(al, &.{ cwd_path, src_path });
             defer php.allocator.free(source_path_resolved);
-            const module_path_resolved = try std.fs.path.resolve(al, &.{
-                cwd_path,
-                php.getStringContent(module_path),
-            });
+            const module_path_resolved = try std.fs.path.resolve(al, &.{ cwd_path, mod_path });
             defer php.allocator.free(module_path_resolved);
             try ZigCompiler.compile(source_path_resolved, module_path_resolved, options);
         }
@@ -149,32 +158,34 @@ const functions = struct {
         };
 
         pub fn run(ed: *ExecuteData, _: *Value) !void {
-            var loop_type: *String = undefined;
-            try php.parseArguments(ed, "S", .{&loop_type});
+            var arg_iter = ArgumentIterator.init(ed);
+            if (arg_iter.len != 1) {
+                return reportArgCountMismatch("zigar_event_loop", 1, 1, arg_iter.len);
+            }
+            const loop_type = init: {
+                var value = (try arg_iter.nextValue(.string)).?;
+                break :init php.getValueStringContent(&value) catch unreachable;
+            };
             try CallDispatcher.event_loop.use(loop_type);
         }
     };
-    pub const zigar_test = struct {
-        pub const arg_info = [_]ArgInfo{
-            .{
-                .name = "value",
-                .type = .{
-                    .type_mask = php.MAY_BE_OBJECT,
-                    .ptr = null,
-                },
-            },
-        };
-        pub const info = FunctionInfo{
-            .required_num_args = 1,
-        };
 
-        pub fn run(ed: *ExecuteData, _: *Value) !void {
-            var arg: *Value = undefined;
-            try php.parseArguments(ed, "O", .{&arg});
-            const obj: *Object = try php.getValueObject(arg);
-            _ = obj;
-        }
-    };
+    fn reportArgCountMismatch(fn_name: []const u8, max_arg_count: usize, min_arg_count: usize, arg_count: usize) error{Unexpected}!void {
+        return failure.report("{s}() expects {s} {d} argument%s, {d} given", .{
+            fn_name,
+            if (max_arg_count > min_arg_count)
+                "at most"
+            else if (arg_count < min_arg_count)
+                "at least"
+            else
+                "exactly",
+            if (max_arg_count > min_arg_count)
+                max_arg_count
+            else
+                min_arg_count,
+            arg_count,
+        });
+    }
 };
 
 comptime {
