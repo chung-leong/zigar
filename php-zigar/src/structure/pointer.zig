@@ -149,6 +149,7 @@ pub const Pointer = struct {
                             php.addRef(obj);
                             break :init obj;
                         }
+                        // TODO: deal with array -> slice cast
                     },
                     .pointer => {
                         const ptr = php.getValuePointer(*anyopaque, value) catch unreachable;
@@ -157,10 +158,23 @@ pub const Pointer = struct {
                         return;
                     },
                     .null => {
+                        if (class.flags.pointer.is_nullable) {
+                            return failure.report("pointer '{s}' cannot be null", .{
+                                class.getName(),
+                            });
+                        }
                         php.release(&self.table);
                         self.table = php.createValueNull();
                         try static.setAddress(self, 0);
                         return;
+                    },
+                    .array => {
+                        const ht = php.getValueArray(value) catch unreachable;
+                        if (!class.flags.pointer.is_single and !php.isNormalArray(ht)) {
+                            return failure.report("target of '{s}' expects an array with numeric keys", .{
+                                class.getName(),
+                            });
+                        }
                     },
                     else => {},
                 }

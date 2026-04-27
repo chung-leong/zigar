@@ -385,6 +385,10 @@ export function addTests(importModule, options) {
       const [ line3 ] = await capture(() => print());
       expect(line3).to.equal('odd = 777, even = 888');
     })
+    it('should call inline function', async function() {
+      const { print } = await importTest('call-inline-function.zig');
+      throw Error('TODO');
+    })
     it('should handle pointer in struct', async function() {
       const { User } = await importTest('handle-pointer-in-struct');
       const user = new User({ name: 'Alice' });
@@ -403,14 +407,6 @@ export function addTests(importModule, options) {
       });
       expect(after).to.eql([ 'Bob', 'Bob', 'Bob' ]);
     })
-    it('should correctly return const pointer', async function() {
-      const { getUser } = await importTest('return-const-pointer');
-      const user = getUser();
-      expect(() => user.age = 18).to.throw(TypeError);
-      expect(() => user.name = "Jesus Christ").to.throw(TypeError);
-      expect(() => user.address.street = "Nowhere").to.throw(TypeError);
-      expect(() => user.address.zip = 33333).to.throw(TypeError);
-    })
     it('should correctly handle recursive structure', async function() {
       const { getRoot } = await importTest('handle-recursive-structure');
       const root = getRoot();
@@ -421,6 +417,14 @@ export function addTests(importModule, options) {
       const child2 = parent.children[1];
       expect(child1.parent).to.equal(parent);
       expect(child2.parent).to.equal(parent);
+    })
+    it('should correctly return const pointer', async function() {
+      const { getUser } = await importTest('return-const-pointer');
+      const user = getUser();
+      expect(() => user.age = 18).to.throw(TypeError);
+      expect(() => user.name = "Jesus Christ").to.throw(TypeError);
+      expect(() => user.address.street = "Nowhere").to.throw(TypeError);
+      expect(() => user.address.zip = 33333).to.throw(TypeError);
     })
     it('should accept multi-pointers', async function() {
       const { print } = await importTest('accept-multi-pointer');
@@ -890,10 +894,6 @@ export function addTests(importModule, options) {
         plain: [ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ],
         typed_array: new Uint8Array([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ]),
       });
-    })
-    it('should call inline function', async function() {
-      const { print } = await importTest('call-inline-function.zig');
-      throw Error('TODO');
     })
   })
 }

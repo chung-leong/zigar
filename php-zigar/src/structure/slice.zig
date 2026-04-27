@@ -83,7 +83,11 @@ pub const Slice = struct {
                 } else unreachable;
             } else {
                 // initialize with an array, let setValue() throw an error if it's not an array
-                const len: usize = if (php.getValueArray(value)) |arr| element_size * arr.nNumOfElements else |_| 0;
+                const len: usize = get: {
+                    const arr = php.getValueArray(value) catch break :get 0;
+                    const element_count = if (php.isNormalArray(arr)) arr.nNumOfElements else 1;
+                    break :get element_size * element_count;
+                };
                 try self.buffer.allocate(allocator, len);
                 try self.setValue(value, .none);
             }
@@ -128,12 +132,26 @@ pub const Slice = struct {
         try static.value_acc.setElement(self, index, value);
     }
 
+    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) accessor.Error!void {
+        if (transform == .none) {
+            if (php.getValueArray(value) catch null) |ht| {
+                if (!php.isNormalArray(ht)) {
+                    const array = php.createArray();
+                    _ = php.appendHashEntryRef(array, value);
+                    const array_value = php.createValueArray(array);
+                    defer php.release(array);
+                    return Super.setValue(self, &array_value, transform);
+                }
+            }
+        }
+        return Super.setValue(self, value, transform);
+    }
+
     pub const setStorage = Super.setStorage;
     pub const finalize = Super.finalize;
     pub const externalize = Super.externalize;
     pub const checkArguments = Super.checkArguments;
     pub const getValue = Super.getValue;
-    pub const setValue = Super.setValue;
     pub const getProperty = Super.getProperty;
     pub const setProperty = Super.setProperty;
     pub const propertyExists = Super.propertyExists;

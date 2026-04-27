@@ -135,7 +135,8 @@ final class FunctionCallingTest extends ZigarTestCase
     public function testReturnSelfReferencingStruct(): void
     {
         $m = ZigImporter::load(__DIR__ . '/return-self-referencing-struct.zig');
-        $object1 = $m->getStruct();
+        $ptr = $m->getStruct();
+        $object1 = $ptr->{'*'};
         $object2 = $object1->self->{'*'};
         $this->assertSame($object1, $object2);
     }
@@ -198,5 +199,93 @@ final class FunctionCallingTest extends ZigarTestCase
 
         OUTPUT);
         $m->print();
+    }
+
+    public function testHandlePointerInStruct(): void {
+        $m = ZigImporter::load(__DIR__ . '/handle-pointer-in-struct.zig');
+        $user = new $m->User(name: 'Alice');
+        $this->expectOutputString(<<<OUTPUT
+        Alice
+        Alice
+        Alice
+        Bob
+        Bob
+        Bob
+
+        OUTPUT);
+        $user->print1();
+        $user->print2();
+        $user->print3();
+        $user->name = 'Bob';
+        $user->print1();
+        $user->print2();
+        $user->print3();
+    }
+
+    public function testHandleRecursiveStructure(): void {
+        $m = ZigImporter::load(__DIR__ . '/handle-recursive-structure.zig');
+        $root = $m->getRoot();
+        $parent = $root->__plain;
+        list($child1, $child2) = $parent->children;
+        $this->assertSame($parent, $child1->parent);
+        $this->assertSame($parent, $child2->parent);
+    }
+
+    public function testReturnConstPointer(): void {
+        $m = ZigImporter::load(__DIR__ . '/return-const-pointer.zig');
+        $user = $m->getUser();
+        $this->assertExceptionMessage("write protected", function() use($user) {
+            $user->age = 18;
+        });
+        $this->assertExceptionMessage("write protected", function() use($user) {
+            $user->name = 'Jesus Christ';
+        });
+        $this->assertExceptionMessage("write protected", function() use($user) {
+            $user->address->street = 'Nowhere';
+        });
+        $this->assertExceptionMessage("write protected", function() use($user) {
+            $user->address->zip = 33333;
+        });
+    }
+
+    public function testAcceptMultiplePointers(): void {
+        $m = ZigImporter::load(__DIR__ . '/accept-multi-pointer.zig');
+        $list = [
+            [ 'a' => 1, 'b' => 2 ],
+            [ 'a' => 3, 'b' => 4 ],
+            [ 'a' => 5, 'b' => 6 ],
+            [ 'a' => 7, 'b' => 8 ],
+        ];
+        $this->expectOutputString(<<<OUTPUT
+        .{ .a = 1, .b = 2 }
+        .{ .a = 3, .b = 4 }
+        .{ .a = 5, .b = 6 }
+        .{ .a = 7, .b = 8 }
+
+        OUTPUT);
+        $m->print($list, count($list));
+    }
+
+    public function testAcceptCPointers(): void {
+        $m = ZigImporter::load(__DIR__ . '/accept-c-pointer.zig');
+        $list = [
+            [ 'a' => 1, 'b' => 2 ],
+            [ 'a' => 3, 'b' => 4 ],
+            [ 'a' => 5, 'b' => 6 ],
+            [ 'a' => 7, 'b' => 8 ],
+        ];
+        $this->expectOutputString(<<<OUTPUT
+        .{ .a = 1, .b = 2 }
+        .{ .a = 3, .b = 4 }
+        .{ .a = 5, .b = 6 }
+        .{ .a = 7, .b = 8 }
+        .{ .a = 5, .b = 6 }
+        .{ .a = 9, .b = 10 }
+
+        OUTPUT);
+        $m->print($list, count($list));
+        $m->print($list[2], 1);
+        $object = new $m->Object(a: 9, b: 10);
+        $m->print([ $object ], 1);
     }
 }

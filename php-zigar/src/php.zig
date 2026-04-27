@@ -818,6 +818,10 @@ pub fn createNonDestructiveArray() *Array {
     return ht;
 }
 
+pub fn isNormalArray(ht: *Array) bool {
+    return ht.arData.*.key == null;
+}
+
 pub const destructor = struct {
     pub const function = php_h.zend_function_dtor;
     pub const value = php_h.zval_ptr_dtor;
