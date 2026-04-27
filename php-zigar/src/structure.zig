@@ -68,10 +68,6 @@ pub fn enumName(comptime S: type) []const u8 {
 
 pub fn Parent(comptime S: type) type {
     return struct {
-        pub const ByteExtent = struct {
-            address: usize,
-            len: usize = 1,
-        };
         pub const scope: ZigClassEntry.ScopeType = if (@hasDecl(S, "scope")) S.scope else .instance;
 
         const TransformCache = cache.TransformCache;
@@ -84,7 +80,7 @@ pub fn Parent(comptime S: type) type {
             return &ZigObject(S).fromObject(obj).zig_portion;
         }
 
-        pub fn getExtent(self: *S) ByteExtent {
+        pub fn getExtent(self: *S) ByteBuffer.Extent {
             return .{ .address = @intFromPtr(self.buffer.bytes.ptr) };
         }
 
@@ -361,7 +357,6 @@ pub fn Parent(comptime S: type) type {
 pub fn StructLike(comptime S: type) type {
     return struct {
         pub const Super = Parent(S);
-        pub const ByteExtent = Super.ByteExtent;
         pub const scope = Super.scope;
 
         const MemberCache = cache.MemberCache;
@@ -533,7 +528,6 @@ pub fn StructLike(comptime S: type) type {
 pub fn ArrayLike(comptime S: type) type {
     return struct {
         pub const Super = Parent(S);
-        pub const ByteExtent = Super.ByteExtent;
         pub const scope = Super.scope;
 
         pub fn getValue(self: *S, transform: accessor.Transform) !Value {
@@ -728,7 +722,6 @@ pub fn ArrayLike(comptime S: type) type {
 pub fn OptionalLike(comptime S: type) type {
     return struct {
         pub const Super = Parent(S);
-        pub const ByteExtent = Super.ByteExtent;
         pub const scope = Super.scope;
 
         pub fn getProperties(obj: *Object) !*HashTable {

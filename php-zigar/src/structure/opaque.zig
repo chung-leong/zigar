@@ -16,8 +16,7 @@ const structure = @import("../structure.zig");
 pub const Opaque = struct {
     buffer: *ByteBuffer = undefined,
 
-    const Super = structure.StructLike(@This());
-
+    pub const Super = structure.StructLike(@This());
     pub fn getIterator(obj: *Object) !?*ObjectIterator {
         return try iterator.PropertyIterator(@This()).create(obj);
     }

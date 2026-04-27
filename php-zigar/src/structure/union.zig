@@ -25,10 +25,6 @@ pub const Union = struct {
     buffer: *ByteBuffer = undefined,
 
     pub const Super = structure.StructLike(@This());
-
-    const MemberCache = cache.MemberCache;
-    const TransformCache = cache.TransformCache;
-
     pub const Static = struct {
         selector: ?struct {
             class: *ZigClassEntry,
@@ -92,6 +88,8 @@ pub const Union = struct {
             return try sel.accessors.get(union_struct);
         }
     };
+    pub const MemberCache = cache.MemberCache;
+    pub const TransformCache = cache.TransformCache;
 
     pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value, read_only: bool) !void {
         const class = ZigClassEntry.fromStructure(self);

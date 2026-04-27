@@ -36,6 +36,7 @@ pub const Error = error{
     LengthMismatch,
     Missing,
     NegativeIndex,
+    NegativeValue,
     NotAbortSignal,
     NotAllocator,
     NotArray,

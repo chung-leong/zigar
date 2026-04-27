@@ -18,12 +18,11 @@ const invokeMethod = structure.invokeMethod;
 pub const Pointer = struct {
     last_address: usize = 0,
     last_length: usize = 0,
+    max_length: usize = 1,
     table: Value = undefined,
     buffer: *ByteBuffer = undefined,
 
-    const Super = structure.OptionalLike(@This());
-    const prop_id_aliases = .{ .@"*" = .target };
-
+    pub const Super = structure.OptionalLike(@This());
     pub const Static = struct {
         target_class: *ZigClassEntry = undefined,
         address_acc: *accessor.Int(.{ .bit_size = @bitSizeOf(usize), .signedness = .unsigned }) = undefined,
@@ -55,14 +54,19 @@ pub const Pointer = struct {
             const length: usize = if (self.length_acc) |acc| get: {
                 const value = try acc.get(pointer.buffer);
                 break :get @intCast(try php.getValueLong(&value));
-            } else 1;
+            } else pointer.max_length;
             if (pointer.last_address != address or pointer.last_length != length) {
-                php.release(&pointer.table);
+                const previous = pointer.table;
+                defer php.release(&previous);
                 if (address >= 0) {
                     const class = ZigClassEntry.fromStatic(self);
                     const flags = class.getFlags(Pointer);
-                    const byte_size = length * (self.target_class.byte_size orelse 0);
+                    const byte_size = length * (self.target_class.byte_size orelse 1);
                     const target = try self.target_class.obtainObjectAtAddress(address, byte_size, flags.is_const);
+                    if (pointer.last_address != address) {
+                        // remember the original length if there's one
+                        pointer.max_length = length;
+                    }
                     pointer.table = php.createValueObject(target);
                 } else {
                     pointer.table = php.createValueNull();
@@ -115,7 +119,7 @@ pub const Pointer = struct {
             return StaticPropCache.idFromString(name, cache_slot) != null;
         }
     };
-    pub const PropCache = cache.IdCache(.{.target}, "__", .{ .@"*" = .target });
+    pub const PropCache = cache.IdCache(.{ .target, .len }, "__", .{ .@"*" = .target });
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) accessor.Error!Value {
         const target_obj = try self.getTarget();
@@ -196,16 +200,20 @@ pub const Pointer = struct {
     pub fn getProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
         const target_obj = try self.getTarget();
         if (PropCache.idFromString(name, cache_slot)) |id| {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
             switch (id) {
                 .target => {
-                    const class = ZigClassEntry.fromStructure(self);
-                    const static = class.getStaticData(@This());
                     if (static.target_class.flags.common.has_value) {
                         return invokeMethod(target_obj, "getValue", .{.none});
                     } else {
                         php.addRef(target_obj);
                         return php.createValueObject(target_obj);
                     }
+                },
+                .len => {
+                    if (!class.flags.pointer.is_multiple) return error.Missing;
+                    return php.createValueAnyInt(self.last_length);
                 },
             }
         } else {
@@ -217,9 +225,30 @@ pub const Pointer = struct {
     pub fn setProperty(self: *@This(), name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {
         const target_obj = try self.getTarget();
         if (PropCache.idFromString(name, cache_slot)) |id| {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
             switch (id) {
                 .target => {
                     try invokeMethod(target_obj, "setValue", .{ value, .none });
+                },
+                .len => {
+                    if (!class.flags.pointer.is_multiple) return error.Missing;
+                    // TODO: check for sentinel
+                    const len: usize = try php.getValueUlong(value);
+                    if (static.length_acc != null) {
+                        if (len > self.max_length) return error.OutOfBound;
+                        try static.setLength(self, len);
+                    } else {
+                        const max_length = get: {
+                            const slice_struct = ZigObject(structure.Slice).fromObject(target_obj).structure();
+                            const max = slice_struct.buffer.getMaximumExtent();
+                            const available = (max.address + max.len) - self.last_address;
+                            const element_size = static.target_class.byte_size orelse 1;
+                            break :get available / element_size;
+                        };
+                        if (len > max_length) return error.OutOfBound;
+                        self.max_length = len;
+                    }
                 },
             }
         } else {

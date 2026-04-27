@@ -18,8 +18,7 @@ pub const Vector = struct {
     table: Value = undefined,
     buffer: *ByteBuffer = undefined,
 
-    const Super = structure.ArrayLike(@This());
-
+    pub const Super = structure.ArrayLike(@This());
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
         element_class: *ZigClassEntry = undefined,

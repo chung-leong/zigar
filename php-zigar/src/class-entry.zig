@@ -682,7 +682,7 @@ pub const ZigClassEntry = struct {
         const parent_bytes = try parent_buf.data(offset + len, false);
         const bytes = parent_bytes[offset .. offset + len];
         // see if there's an existing object
-        const result = self.host.object_map.search(bytes, self.entry(), parent_buf.flags.read_only);
+        const result = self.host.object_map.search(bytes, self, parent_buf.flags.read_only);
         if (result.match == .yes) {
             const obj = result.value();
             php.addRef(obj);
@@ -701,14 +701,14 @@ pub const ZigClassEntry = struct {
         const byte_ptr: [*]u8 = @ptrFromInt(address);
         const bytes = byte_ptr[0..len];
         // look for an existing object at that memory location
-        const result = self.host.object_map.search(bytes, self.entry(), is_const);
+        const result = self.host.object_map.search(bytes, self, is_const);
         if (result.match == .yes) {
             const obj = result.value();
             php.addRef(obj);
             return obj;
         } else {
             const buf = get: {
-                if (self.host.unclaimed_buffer_map.claim(bytes)) |buf| {
+                if (try self.host.unclaimed_buffer_map.claim(bytes, self.alignment)) |buf| {
                     // use a buffer that has just been allocated
                     if (is_const) buf.protect(true);
                     break :get buf;

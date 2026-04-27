@@ -114,64 +114,51 @@ pub const ObjectMap = struct {
         return self.map.remove(obj);
     }
 
-    pub fn search(self: *@This(), bytes: []const u8, ce: ?*ClassEntry, read_only: bool) SearchResult {
-        var fake_buf: ByteBuffer = .{
-            .bytes = @constCast(bytes),
-            .alignment = undefined,
-            .ref_count = undefined,
-            .flags = .{ .read_only = read_only },
-            .source = undefined,
-        };
-        var b: GenericObject = .{
-            .buffer = &fake_buf,
-            .php_portion = .{
-                .ce = ce,
-                .gc = undefined,
-                .handle = 0,
-                .handlers = undefined,
-                .properties = undefined,
-                .properties_table = undefined,
-            },
-        };
-        return self.map.search(&b.php_portion);
+    pub fn search(self: *@This(), bytes: []const u8, class: *ZigClassEntry, read_only: bool) SearchResult {
+        return self.map.search(.{ .bytes = bytes, .class = class, .read_only = read_only });
     }
 
-    pub fn find(self: *@This(), bytes: []const u8) ?*Object {
-        var result = self.search(bytes, null, false);
-        if (result.match != .yes) {
-            result = self.search(bytes, null, true);
-            if (result.match != .yes) return null;
+    pub fn freeBuffer(self: *@This(), bytes: []const u8) void {
+        // mark all buffers within the given range as freed; only the one
+        // that performed the allocation will free the actual memory (that
+        // should be the one that yields .yes)
+        while (true) {
+            const result = self.map.search(.{ .bytes = bytes });
+            switch (result.match) {
+                .yes, .inside => {
+                    const buf = getObjectBuffer(result.value());
+                    buf.free();
+                },
+                else => break,
+            }
         }
-        return result.value();
-    }
-
-    pub fn findBuffer(self: *@This(), bytes: []const u8) ?*ByteBuffer {
-        const obj = self.find(bytes) orelse return null;
-        return getObjectBuffer(obj);
     }
 
     pub fn acquireBuffer(self: *@This(), bytes: []const u8, alignment: std.mem.Alignment, read_only: bool) !?*ByteBuffer {
-        const result = self.search(bytes, null, read_only);
-        return switch (result.match) {
-            .yes => use: {
+        const result = self.map.search(.{ .bytes = bytes, .read_only = read_only });
+        switch (result.match) {
+            .yes, .outside => {
                 var buf = getObjectBuffer(result.value());
-                if (buf.flags.read_only == read_only) {
-                    buf.addRef();
-                } else {
-                    buf = try buf.duplciate();
-                    buf.protect(read_only);
+                while (true) {
+                    if (buf.bytes.ptr == bytes.ptr and buf.bytes.len == bytes.len) {
+                        if (buf.flags.read_only == read_only) {
+                            buf.addRef();
+                            return buf;
+                        }
+                    }
+                    // try the parent buffer if there's one
+                    if (buf.getParent()) |p_buf| {
+                        buf = p_buf;
+                    } else break;
                 }
-                break :use buf;
-            },
-            .outside => slice: {
-                const parent_buf = getObjectBuffer(result.value());
-                const offset = @intFromPtr(bytes.ptr) - @intFromPtr(parent_buf.bytes.ptr);
-                const buf = try parent_buf.slice(offset, bytes.len, alignment, 0);
+                const offset = @intFromPtr(bytes.ptr) - @intFromPtr(buf.bytes.ptr);
+                const len = bytes.len;
+                buf = try buf.slice(offset, len, alignment, 0);
                 buf.protect(read_only);
-                break :slice buf;
+                return buf;
             },
-            else => null,
-        };
+            else => return null,
+        }
     }
 
     inline fn getObjectBuffer(obj: *const Object) *ByteBuffer {
@@ -179,23 +166,54 @@ pub const ObjectMap = struct {
         return ptr.buffer;
     }
 
-    fn compareObjects(a: *const Object, b: *const Object) RelativePosition {
-        if (a.handle == b.handle) return .a_is_b;
-        const buf_a = getObjectBuffer(a);
-        const buf_b = getObjectBuffer(b);
-        const pos = buf_a.compare(buf_b);
-        if (pos != .a_is_b) return pos;
-        return if (b.handle == 0 and (a.ce == b.ce or b.ce == null))
-            if (buf_a.flags.read_only == buf_b.flags.read_only)
-                .a_is_b
-            else if (buf_b.flags.read_only)
-                .a_before_b
-            else
-                .b_before_a
-        else if (a.handle < b.handle)
-            .a_before_b
-        else
-            .b_before_a;
+    fn compareObjects(a: *const Object, b: anytype) RelativePosition {
+        const B = @TypeOf(b);
+        if (B == *Object) {
+            if (a.handle == b.handle) return .a_is_b;
+        }
+        const a_buf = getObjectBuffer(a);
+        const b_buf = if (B == *Object) getObjectBuffer(b) else {};
+        const b_bytes = if (@TypeOf(b_buf) != void) b_buf.bytes else b.bytes;
+        // get class entry from B
+        const b_ce = if (@typeInfo(B) == .@"struct" and @hasField(B, "class"))
+            b.class.entry()
+        else if (B == *Object)
+            b.ce
+        else {};
+        // get read-only flag from B
+        const b_ro = if (@typeInfo(B) == .@"struct" and @hasField(B, "read_only"))
+            b.read_only
+        else if (@TypeOf(b_buf) != void)
+            b_buf.flags.read_only
+        else {};
+        return switch (a_buf.compare(.{ .bytes = b_bytes })) {
+            .a_is_b => switch (compare(a.ce, b_ce)) {
+                .a_is_b => compare(a_buf.flags.read_only, b_ro),
+                else => |pos| pos,
+            },
+            else => |pos| check: {
+                if (@TypeOf(b_ce) == void) {
+                    if (a_buf.getParent()) |p_buf| {
+                        switch (p_buf.compare(.{ .bytes = b_bytes })) {
+                            .a_is_b, .a_inside_b, .b_inside_a => |p_pos| {
+                                break :check p_pos;
+                            },
+                            else => {},
+                        }
+                    }
+                }
+                break :check pos;
+            },
+        };
+    }
+
+    fn compare(a: anytype, b: anytype) RelativePosition {
+        if (@TypeOf(b) == void or a == b) return .a_is_b;
+        if (@TypeOf(b) == bool) {
+            return if (b) .a_before_b else .b_before_a;
+        } else {
+            return if (a < b) .a_before_b else .b_before_a;
+        }
     }
 };
 

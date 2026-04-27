@@ -30,8 +30,7 @@ pub const Enum = struct {
         }
     };
 
-    const Super = structure.StructLike(@This());
-
+    pub const Super = structure.StructLike(@This());
     pub const Static = struct {
         constant_acc: *accessor.Constant = undefined,
         available_tags: HashTable = undefined,

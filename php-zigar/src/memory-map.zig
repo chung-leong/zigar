@@ -3,7 +3,7 @@ const expectEqual = std.testing.expectEqual;
 
 pub const RelativePosition = enum { a_is_b, a_before_b, b_before_a, a_inside_b, b_inside_a };
 
-pub fn MemoryMap(comptime T: type, comptime allocator: std.mem.Allocator, comptime compare: fn (T, T) RelativePosition) type {
+pub fn MemoryMap(comptime T: type, comptime allocator: std.mem.Allocator, comptime compare: fn (T, anytype) RelativePosition) type {
     return struct {
         list: std.ArrayList(T) = .empty,
 
@@ -39,14 +39,16 @@ pub fn MemoryMap(comptime T: type, comptime allocator: std.mem.Allocator, compti
             return try self.list.insert(allocator, result.index, value);
         }
 
-        pub fn eject(self: *@This(), result: SearchResult) ?T {
-            return switch (result.match) {
-                .yes => self.list.orderedRemove(result.index),
-                else => null,
+        pub fn eject(self: *@This(), result: SearchResult) T {
+            const index = switch (result.match) {
+                .yes, .inside => result.index,
+                .outside => result.index - 1, // index refers to the would-be insertion position
+                else => unreachable,
             };
+            return self.list.orderedRemove(index);
         }
 
-        pub fn search(self: *@This(), b: T) SearchResult {
+        pub fn search(self: *@This(), b: anytype) SearchResult {
             var low: usize = 0;
             var high = self.list.items.len;
             if (high == 0) return .{};

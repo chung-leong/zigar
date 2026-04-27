@@ -28,6 +28,10 @@ pub const ByteBuffer = struct {
     } = .{ .none = {} },
 
     pub const Encoding = enum { base64 };
+    pub const Extent = struct {
+        address: usize,
+        len: usize = 1,
+    };
 
     pub fn data(self: *@This(), index: usize, write_access: bool) ![]u8 {
         if (self.flags.read_only and write_access) return error.WriteProtected;
@@ -172,10 +176,10 @@ pub const ByteBuffer = struct {
     }
 
     pub fn free(self: *@This()) void {
+        self.flags.uninitialized = true;
         switch (self.source) {
             .allocator => |al| {
                 al.rawFree(self.bytes, self.alignment, 0);
-                self.flags.uninitialized = true;
                 self.source = .{ .none = {} };
             },
             else => {},
@@ -202,6 +206,31 @@ pub const ByteBuffer = struct {
         @panic("TODO");
     }
 
+    pub fn getParent(self: *@This()) ?*@This() {
+        return switch (self.source) {
+            .buffer => |buf| buf,
+            else => null,
+        };
+    }
+
+    pub fn getMaximumExtent(self: *@This()) Extent {
+        switch (self.source) {
+            .buffer => |buf| return buf.getMaximumExtent(),
+            .string => |str| {
+                const sc = php.getStringContent(str);
+                return .{ .address = @intFromPtr(sc.ptr), .len = sc.len };
+            },
+            .allocator => {
+                return .{ .address = @intFromPtr(self.bytes.ptr), .len = self.bytes.len };
+            },
+            .none => {
+                // don't really know where the memory ceases to be valid
+                const address = @intFromPtr(self.bytes.ptr);
+                return .{ .address = address, .len = std.math.maxInt(usize) - address };
+            },
+        }
+    }
+
     pub fn getSourceAllocator(self: *const @This()) ?*const std.mem.Allocator {
         return switch (self.source) {
             .allocator => |a| a,
@@ -210,7 +239,7 @@ pub const ByteBuffer = struct {
         };
     }
 
-    pub fn compare(a: *const @This(), b: *const @This()) RelativePosition {
+    pub fn compare(a: *const @This(), b: anytype) RelativePosition {
         const a_start = @intFromPtr(a.bytes.ptr);
         const a_end = a_start + a.bytes.len;
         const b_start = @intFromPtr(b.bytes.ptr);
@@ -255,24 +284,32 @@ pub const BufferMap = struct {
         return buf;
     }
 
-    pub fn claim(self: *@This(), bytes: []const u8) ?*ByteBuffer {
-        var b: ByteBuffer = .{
-            .bytes = @constCast(bytes),
-            .alignment = undefined,
-            .ref_count = undefined,
-            .flags = undefined,
-            .source = undefined,
+    pub fn claim(self: *@This(), bytes: []const u8, alignment: std.mem.Alignment) !?*ByteBuffer {
+        const result = self.map.search(.{ .bytes = bytes });
+        return switch (result.match) {
+            .yes => self.map.eject(result), // exact match
+            .outside => slice: {
+                // buffer contains the given bytes
+                const buf = self.map.eject(result);
+                defer buf.release();
+                const offset = @intFromPtr(bytes.ptr) - @intFromPtr(buf.bytes.ptr);
+                const len = bytes.len;
+                break :slice try buf.slice(offset, len, alignment, 0);
+            },
+            else => null,
         };
-        const result = self.map.search(&b);
-        return self.map.eject(result);
+    }
+
+    pub fn clear(self: *@This()) void {
+        const buffers = self.map.items();
+        for (buffers) |buf| buf.release();
     }
 
     pub fn free(self: *@This(), bytes: []const u8) bool {
-        if (self.claim(bytes)) |buf| {
-            buf.release();
-            return true;
-        } else {
-            return false;
-        }
+        const result = self.map.search(.{ .bytes = bytes });
+        if (result.match != .yes) return false;
+        const buf = self.map.eject(result);
+        buf.release();
+        return true;
     }
 };

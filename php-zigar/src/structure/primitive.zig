@@ -11,8 +11,7 @@ const structure = @import("../structure.zig");
 pub const Primitive = struct {
     buffer: *ByteBuffer = undefined,
 
-    const Super = structure.Parent(@This());
-
+    pub const Super = structure.Parent(@This());
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
 

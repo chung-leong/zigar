@@ -17,8 +17,7 @@ pub const ErrorUnion = struct {
     table: Value = undefined,
     buffer: *ByteBuffer = undefined,
 
-    const Super = structure.OptionalLike(@This());
-
+    pub const Super = structure.OptionalLike(@This());
     pub const Static = struct {
         payload_acc: *accessor.Any = undefined,
         payload_class: *ZigClassEntry = undefined,

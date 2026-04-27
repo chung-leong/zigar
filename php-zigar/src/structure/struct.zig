@@ -34,8 +34,7 @@ pub const Struct = struct {
         timeout: ?Value = null,
     };
 
-    const Super = structure.StructLike(@This());
-
+    pub const Super = structure.StructLike(@This());
     pub const Static = struct {
         backing_int: ?struct {
             class: *ZigClassEntry,

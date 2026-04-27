@@ -215,10 +215,7 @@ const BufferAllocator = struct {
         // try releasing buffer that has just been allocated
         if (!host.unclaimed_buffer_map.free(memory)) {
             // failing that, look for a buffer that's being used by an object
-            if (host.object_map.findBuffer(memory)) |buf| {
-                // free its memory without releasing it
-                buf.free();
-            }
+            host.object_map.freeBuffer(memory);
         }
     }
 };

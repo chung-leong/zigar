@@ -288,4 +288,30 @@ final class FunctionCallingTest extends ZigarTestCase
         $object = new $m->Object(a: 9, b: 10);
         $m->print([ $object ], 1);
     }
+
+    public function testReturnMultiplePointers(): void {
+        $m = ZigImporter::load(__DIR__ . '/return-multi-pointer.zig');
+        $pointer = $m->getPointer();
+        $this->assertSame(1, $pointer->__len);
+        $this->assertEquals([
+            (object) [ 'a' => 0, 'b' => 1 ]
+        ], $pointer->__plain);
+        $pointer->__len = 5;
+        $this->assertEquals([
+            (object) [ 'a' => 0, 'b' => 1 ],
+            (object) [ 'a' => 2, 'b' => 3 ],
+            (object) [ 'a' => 4, 'b' => 5 ],
+            (object) [ 'a' => 6, 'b' => 7 ],
+            (object) [ 'a' => 8, 'b' => 9 ],
+        ], $pointer->__plain);
+        $this->assertExceptionMessage("out of bound", function() use ($pointer) {
+            $pointer->__len = 6;
+        });
+        $pointer->__len = 3;
+        $this->assertEquals([
+            (object) [ 'a' => 0, 'b' => 1 ],
+            (object) [ 'a' => 2, 'b' => 3 ],
+            (object) [ 'a' => 4, 'b' => 5 ],
+        ], $pointer->__plain);
+    }
 }

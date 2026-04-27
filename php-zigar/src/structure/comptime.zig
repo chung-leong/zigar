@@ -14,8 +14,7 @@ const structure = @import("../structure.zig");
 pub const Comptime = struct {
     table: Value = undefined,
 
-    const Super = structure.OptionalLike(@This());
-
+    pub const Super = structure.OptionalLike(@This());
     pub const Static = struct {
         value_acc: *accessor.Any = undefined,
 
