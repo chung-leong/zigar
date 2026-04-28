@@ -23,6 +23,10 @@ pub const Slice = struct {
         element_class: *ZigClassEntry = undefined,
         element_size: usize = undefined,
         element_shift: ?u6 = undefined,
+        sentinel: struct {
+            buffer: *ByteBuffer,
+            accessors: *accessor.Any,
+        } = undefined,
 
         pub const StaticPropCache = cache.IdCache(.{.child}, "__", .{});
 
@@ -37,6 +41,13 @@ pub const Slice = struct {
                 const one: usize = 1;
                 break :init if (one << shift == self.element_size) shift else null;
             };
+            if (class.flags.slice.has_sentinel) {
+                const sentinel_member = class.getMember(.instance, 1) catch return error.Unexpected;
+                self.sentinel = .{
+                    .buffer = class.instance.template.buffer orelse return error.Unexpected,
+                    .accessors = &sentinel_member.accessors,
+                };
+            }
         }
 
         pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
@@ -55,6 +66,21 @@ pub const Slice = struct {
         pub fn staticPropertyExists(_: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
             return StaticPropCache.idFromString(name, cache_slot) != null;
         }
+
+        pub fn findSentinelIndex(self: *@This(), ptr: [*]const u8) usize {
+            const sentinel_bytes = self.sentinel.buffer.bytes;
+            const end = std.math.maxInt(usize) - @intFromPtr(ptr) - sentinel_bytes.len;
+            var i: usize = 0;
+            var j: usize = 0;
+            while (j < end) : (j += sentinel_bytes.len) {
+                const element_slice = ptr[j .. j + sentinel_bytes.len];
+                if (std.mem.eql(u8, element_slice, sentinel_bytes)) {
+                    return i;
+                }
+                i += 1;
+            }
+            return 0;
+        }
     };
 
     pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value, read_only: bool) !void {
@@ -67,15 +93,29 @@ pub const Slice = struct {
                 const str = php.getValueString(value) catch unreachable;
                 const str_bytes = php.getStringContent(str);
                 if (element_size == 1) {
-                    if (read_only) {
+                    const using_string = use: {
+                        if (!read_only) break :use false;
+                        if (class.flags.slice.has_sentinel) {
+                            // make sure sentinel is present
+                            const static = class.getStaticData(@This());
+                            const sentinel_bytes = static.sentinel.buffer.bytes;
+                            const end = str_bytes.len;
+                            const sentinel_end = end + sentinel_bytes.len;
+                            const element_slice = str_bytes.ptr[end..sentinel_end];
+                            if (!std.mem.eql(u8, element_slice, sentinel_bytes)) {
+                                break :use false;
+                            }
+                        }
                         self.buffer.referenceString(str);
-                    } else {
-                        try self.buffer.allocate(allocator, str_bytes.len);
+                        break :use true;
+                    };
+                    if (!using_string) {
+                        try self.initializeBuffer(allocator, str_bytes.len);
                         try self.buffer.copyBytes(str_bytes);
                     }
                 } else if (element_size == 2) {
                     const len = std.unicode.calcWtf16LeLen(str_bytes) catch return error.IncorrectEncoding;
-                    try self.buffer.allocate(allocator, len * 2);
+                    try self.initializeBuffer(allocator, len * 2);
                     const bytes = try self.buffer.data(0, true);
                     const wtf16_ptr: [*]u16 = @ptrCast(@alignCast(bytes.ptr));
                     const wtf16_slice = wtf16_ptr[0..len];
@@ -88,12 +128,12 @@ pub const Slice = struct {
                     const element_count = if (php.isNormalArray(arr)) arr.nNumOfElements else 1;
                     break :get element_size * element_count;
                 };
-                try self.buffer.allocate(allocator, len);
+                try self.initializeBuffer(allocator, len);
                 try self.setValue(value, .none);
             }
             if (read_only) self.buffer.protect(true);
         } else {
-            try self.buffer.allocate(allocator, 0);
+            try self.initializeBuffer(allocator, 0);
         }
     }
 
@@ -145,6 +185,22 @@ pub const Slice = struct {
             }
         }
         return Super.setValue(self, value, transform);
+    }
+
+    fn initializeBuffer(self: *@This(), allocator: ?*const std.mem.Allocator, content_len: usize) !void {
+        const class = ZigClassEntry.fromStructure(self);
+        if (class.flags.slice.has_sentinel) {
+            // allocate extra space for the sentinel
+            const static = class.getStaticData(@This());
+            const sentinel_bytes = static.sentinel.buffer.bytes;
+            const buf = try ByteBuffer.create(self.buffer.alignment);
+            defer buf.release();
+            try buf.allocate(allocator, content_len + sentinel_bytes.len);
+            @memcpy(buf.bytes[content_len..], sentinel_bytes);
+            self.buffer.referenceBuffer(buf, 0, content_len);
+        } else {
+            try self.buffer.allocate(allocator, content_len);
+        }
     }
 
     pub const setStorage = Super.setStorage;

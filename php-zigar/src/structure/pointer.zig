@@ -51,10 +51,18 @@ pub const Pointer = struct {
         pub fn loadTarget(self: *@This(), pointer: *Pointer) !void {
             const address_value = try self.address_acc.get(pointer.buffer);
             const address: usize = try php.getValueUsize(&address_value);
-            const length: usize = if (self.length_acc) |acc| get: {
-                const value = try acc.get(pointer.buffer);
-                break :get @intCast(try php.getValueLong(&value));
-            } else pointer.max_length;
+            const length: usize = if (self.target_class.type == .slice) get: {
+                if (self.length_acc) |acc| {
+                    const value = try acc.get(pointer.buffer);
+                    break :get @intCast(try php.getValueLong(&value));
+                } else if (self.target_class.flags.slice.has_sentinel) {
+                    const slice_static = self.target_class.getStaticData(structure.Slice);
+                    const ptr: [*]u8 = @ptrFromInt(address);
+                    break :get slice_static.findSentinelIndex(ptr);
+                } else {
+                    break :get pointer.max_length;
+                }
+            } else 1;
             if (pointer.last_address != address or pointer.last_length != length) {
                 const previous = pointer.table;
                 defer php.release(&previous);
@@ -63,8 +71,8 @@ pub const Pointer = struct {
                     const flags = class.getFlags(Pointer);
                     const byte_size = length * (self.target_class.byte_size orelse 1);
                     const target = try self.target_class.obtainObjectAtAddress(address, byte_size, flags.is_const);
-                    if (pointer.last_address != address) {
-                        // remember the original length if there's one
+                    if (pointer.last_address != address and self.target_class.type == .slice) {
+                        // remember the original length
                         pointer.max_length = length;
                     }
                     pointer.table = php.createValueObject(target);
@@ -233,7 +241,7 @@ pub const Pointer = struct {
                 },
                 .len => {
                     if (!class.flags.pointer.is_multiple) return error.Missing;
-                    // TODO: check for sentinel
+                    if (static.target_class.flags.slice.has_sentinel) return error.WriteProtected;
                     const len: usize = try php.getValueUlong(value);
                     if (static.length_acc != null) {
                         if (len > self.max_length) return error.OutOfBound;

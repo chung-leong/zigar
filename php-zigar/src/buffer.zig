@@ -82,6 +82,14 @@ pub const ByteBuffer = struct {
         self.bytes = @constCast(bytes);
     }
 
+    pub fn referenceBuffer(self: *@This(), parent: *@This(), offset: usize, len: usize) void {
+        std.debug.assert(self.flags.uninitialized);
+        defer self.flags.uninitialized = false;
+        self.bytes = parent.bytes[offset .. offset + len];
+        self.source = .{ .buffer = parent };
+        parent.addRef();
+    }
+
     pub fn externalize(self: *@This()) bool {
         switch (self.source) {
             .allocator => |al| if (al != &php.allocator) {
