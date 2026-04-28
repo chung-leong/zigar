@@ -156,6 +156,11 @@ pub const ModuleHost = struct {
         if (self.module.?.exports.run_thunk(thunk_address, fn_address, arg_address) != .SUCCESS)
             return error.UnableToExecuteZigFunction;
     }
+
+    pub fn runVariadicThunk(self: *@This(), thunk_address: usize, fn_address: usize, arg_address: usize, attr_address: usize, arg_count: usize) !void {
+        if (self.module.?.exports.run_variadic_thunk(thunk_address, fn_address, arg_address, attr_address, arg_count) != .SUCCESS)
+            return error.UnableToExecuteZigFunction;
+    }
 };
 
 const BufferAllocator = struct {

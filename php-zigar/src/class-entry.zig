@@ -764,10 +764,10 @@ pub const ZigClassEntry = struct {
                 self.retainClassObject();
                 const obj_struct = zig_obj.structure();
                 try obj_struct.setStorage(buf, &table);
-                if (@hasField(Params, "initializer")) {
+                if (@hasField(Params, "initializer") and @hasDecl(S, "initialize")) {
                     try obj_struct.initialize(params.allocator, params.initializer, params.read_only);
                     try obj_struct.finalize(true);
-                } else if (@hasField(Params, "buffer")) {
+                } else if (@hasField(Params, "buffer") and @hasDecl(S, "finalize")) {
                     try obj_struct.finalize(false);
                 }
                 return zig_obj.object();

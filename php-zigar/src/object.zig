@@ -89,10 +89,6 @@ pub const ObjectMap = struct {
 
     const Map = MemoryMap(*Object, php.allocator, compareObjects);
     const SearchResult = Map.SearchResult;
-    const GenericObject = struct {
-        buffer: *ByteBuffer,
-        php_portion: php.Object,
-    };
 
     pub fn deinit(self: *@This()) void {
         self.map.deinit();
@@ -161,11 +157,6 @@ pub const ObjectMap = struct {
         }
     }
 
-    inline fn getObjectBuffer(obj: *const Object) *ByteBuffer {
-        const ptr: *const GenericObject = @fieldParentPtr("php_portion", obj);
-        return ptr.buffer;
-    }
-
     fn compareObjects(a: *const Object, b: anytype) RelativePosition {
         const B = @TypeOf(b);
         if (B == *Object) {
@@ -216,6 +207,14 @@ pub const ObjectMap = struct {
         }
     }
 };
+
+pub inline fn getObjectBuffer(obj: *const Object) *ByteBuffer {
+    const ptr: *const struct {
+        buffer: *ByteBuffer,
+        php_portion: php.Object,
+    } = @fieldParentPtr("php_portion", obj);
+    return ptr.buffer;
+}
 
 const object_handler_mapping = .{
     .free_obj = "freeObject",

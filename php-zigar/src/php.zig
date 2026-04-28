@@ -210,6 +210,10 @@ pub const ArgumentIterator = struct {
         return value;
     }
 
+    pub fn reset(self: *@This()) void {
+        self.index = 0;
+    }
+
     pub fn makeThisFirst(self: *@This()) void {
         if (!self.use_this_first) {
             self.use_this_first = true;

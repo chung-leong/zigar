@@ -84,7 +84,7 @@ pub const Function = struct {
             defer arg_buffer.release();
             const arg_obj = try self.argument_class.createObjectFromBuffer(arg_buffer, null);
             defer php.release(arg_obj);
-            const arg_struct = ZigObject(structure.ArgStruct(false)).fromObject(arg_obj).structure();
+            const arg_struct = ZigObject(structure.ArgStruct).fromObject(arg_obj).structure();
             var args_on_stack: [16]Value = undefined;
             var args_allocated = false;
             const arg_count = arg_struct.getArgumentCount();
@@ -158,17 +158,14 @@ pub const Function = struct {
             // the this variable is the first argument per Zig convention
             arg_iter.makeThisFirst();
         }
-        const arg = try static.argument_class.createObject(null, null, false);
+        const arg = try static.argument_class.createUninitializedObject();
         defer php.release(arg);
         switch (static.argument_class.type) {
-            inline .arg_struct, .variadic_struct => |t| {
-                const S = @field(structure.by_enum, @tagName(t));
-                const arg_struct = ZigObject(S).fromObject(arg).structure();
+            .arg_struct => {
+                const arg_struct = ZigObject(structure.ArgStruct).fromObject(arg).structure();
+                try arg_struct.copyArguments(null, &arg_iter);
                 const arg_addr = @intFromPtr(arg_struct.buffer.bytes.ptr);
-                try arg_struct.copyArguments(&arg_iter);
-                if (t == .arg_struct) {
-                    try class.host.runThunk(static.thunk_address, fn_addr, arg_addr);
-                }
+                try class.host.runThunk(static.thunk_address, fn_addr, arg_addr);
                 return_value.* = get: {
                     var retval = try arg_struct.getReturnValue();
                     if (arg_struct.flags.has_promise) {
@@ -195,6 +192,17 @@ pub const Function = struct {
                         break :get retval;
                     }
                 };
+            },
+            .variadic_struct => {
+                const arg_struct = ZigObject(structure.VariadicStruct).fromObject(arg).structure();
+                try arg_struct.copyArguments(null, &arg_iter);
+                const arg_addr = @intFromPtr(arg_struct.buffer.bytes.ptr);
+                const attr_addr = @intFromPtr(arg_struct.attributes.ptr);
+                const arg_count = arg_struct.attributes.len;
+                try class.host.runVariadicThunk(static.thunk_address, fn_addr, arg_addr, attr_addr, arg_count);
+                var retval = try arg_struct.getReturnValue();
+                if (self.transform) |tm| try tm.apply(&retval);
+                return_value.* = retval;
             },
             else => unreachable,
         }
