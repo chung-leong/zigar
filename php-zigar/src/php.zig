@@ -608,6 +608,7 @@ pub fn getValueLong(value: *const Value) !c_long {
 }
 
 fn doubleToLong(value: f64) !Long {
+    // TODO: check for overflow
     const long: Long = @intFromFloat(value);
     const double: f64 = @floatFromInt(long);
     return switch (double == value) {

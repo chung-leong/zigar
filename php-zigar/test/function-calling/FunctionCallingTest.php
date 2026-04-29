@@ -373,4 +373,280 @@ final class FunctionCallingTest extends ZigarTestCase
         $str4 = "Hello world";
         $m->puts($str4);
     }
+
+    public function testCallVariadicFunctions(): void {
+        $m = ZigImporter::load(__DIR__ . '/call-variadic-functions.zig');
+        $this->expectOutputString(<<<OUTPUT
+        i8: -10
+        i8: -20
+        i8: -30
+        i16: -10
+        i16: -200
+        i16: -3000
+        i32: -10
+        i32: -200
+        i32: -3000
+        i64: -10
+        i64: -200
+        i64: -3000
+        f16: -10
+        f16: -200
+        f16: -3000
+        f32: -10.25
+        f32: -200.25
+        f32: -3000.25
+        f64: -10.25
+        f64: -200.25
+        f64: -3000.25
+        f80: -10.25
+        f80: -200.25
+        f80: -3000.25
+        Angieszka
+        Basia
+        Czesia
+
+        OUTPUT);
+        $m->printIntegers(8, 3, 
+            new $m->Int8(-10),
+            new $m->Int8(-20),
+            new $m->Int8(-30),
+        );
+        $m->printIntegers(16, 3, 
+            new $m->Int16(-10),
+            new $m->Int16(-200),
+            new $m->Int16(-3000),
+        );
+        $m->printIntegers(32, 3, 
+            new $m->Int32(-10),
+            new $m->Int32(-200),
+            new $m->Int32(-3000),
+        );
+        $m->printIntegers(64, 3, 
+            new $m->Int64(-10),
+            new $m->Int64(-200),
+            new $m->Int64(-3000),
+        );
+        $m->printFloats(16, 3, 
+            new $m->Float16(-10),
+            new $m->Float16(-200),
+            new $m->Float16(-3000),
+        );
+        $m->printFloats(32, 3, 
+            new $m->Float32(-10.25),
+            new $m->Float32(-200.25),
+            new $m->Float32(-3000.25),
+        );
+        $m->printFloats(64, 3, 
+            new $m->Float64(-10.25),
+            new $m->Float64(-200.25),
+            new $m->Float64(-3000.25),
+        );
+        $m->printFloats(80, 3, 
+            new $m->Float80(-10.25),
+            new $m->Float80(-200.25),
+            new $m->Float80(-3000.25),
+        );
+        // $m->printFloats(128, 3, 
+        //     new $m->Float128(-10.25),
+        //     new $m->Float128(-200.25),
+        //     new $m->Float128(-3000.25),
+        // );
+        $m->printStrings(3,
+            new $m->StrPtr('Angieszka'),
+            new $m->StrPtr('Basia'),
+            new $m->StrPtr('Czesia'),
+        );
+    }
+
+    public function testCorrectlyPassUnsignedIntToVariadicFunction(): void {
+        $m = ZigImporter::load(__DIR__ . '/call-variadic-functions-with-unsigned-int.zig');
+        $this->expectOutputString(<<<OUTPUT
+        u8: 255
+        u8: 254
+        u8: 253
+        u16: 65535
+        u16: 65534
+        u16: 65533
+        u32: 4294967295
+        u32: 4294967294
+        u32: 4294967293
+        u64: 9223372036854775807
+        u64: 9223372036854775806
+        u64: 9223372036854775805
+
+        OUTPUT);
+        $m->printUnsigned(8, 3,
+            new $m->Uint8(255),
+            new $m->Uint8(254),
+            new $m->Uint8(253),
+        );
+        $m->printUnsigned(16, 3,
+            new $m->Uint16(65535),
+            new $m->Uint16(65534),
+            new $m->Uint16(65533),
+        );
+        $m->printUnsigned(32, 3,
+            new $m->Uint32(4294967295),
+            new $m->Uint32(4294967294),
+            new $m->Uint32(4294967293),
+        );
+        $m->printUnsigned(64, 3,
+            new $m->Uint64(0x7fff_ffff_ffff_ffff),
+            new $m->Uint64(0x7fff_ffff_ffff_fffe),
+            new $m->Uint64(0x7fff_ffff_ffff_fffd),
+        );
+    }
+
+    public function testWriteToFileUsingFwrite(): void {
+        $m = ZigImporter::load(__DIR__ . '/call-fwrite.zig');
+        $path = __DIR__ . '/test-data/hello.txt';
+        $text = "Hello world!\n";
+        $f = $m->fopen($path, 'w');
+        $count1 = $m->fwrite($text, 1, strlen($text), $f);
+        $count2 = $m->fwrite($text, 1, strlen($text), $f);
+        $m->fclose($f);
+        $this->assertSame(strlen($text), $count1);
+        $this->assertSame(strlen($text), $count2);
+    }
+
+    public function testReadFromFileUsingFread(): void {
+    }
+
+    public function testCallPrintf(): void {
+        $m = ZigImporter::load(__DIR__ . '/call-printf.zig');
+        $this->expectOutputString(<<<OUTPUT
+        Hello world 123!
+        Hello world, 123 234 345 456 567!!
+        Hello world, 1.23 2.34 3.45 4.56 5.67!!
+        Hello world, Dingo Bingo!!
+        Hello world, 1 2.000000 3 4.000000 5 6.000000 7 8.000000 9 10.000000 11 12.000000 13 14.000000 15 16.000000 17 18.000000 19 20.000000 End!!
+        Hello world, 1 2.000000 3 4.000000 5 6.000000 7 8.000000 9 10.000000 11 12.000000 13 14.000000 15 16.000000 17 18.000000 19 20.000000 21 22.000000 23 24.000000 25 26.000000 27 28.000000 29 30.000000 31 32.000000 33 34.000000 35 36.000000 37 38.000000 39 40.000000!!
+
+        OUTPUT);
+        $result = $m->printf("Hello world %d!\n", new $m->Int(123));
+        $this->assertSame(17, $result);
+        $m->printf("Hello world, %d %d %d %d %d!!\n", 
+            new $m->Int(123),
+            new $m->Int(234),
+            new $m->Int(345),
+            new $m->Int(456),
+            new $m->Int(567),
+        );
+        $m->printf("Hello world, %.2f %.2f %.2f %.2f %.2f!!\n",
+            new $m->Double(1.23),
+            new $m->Double(2.34),
+            new $m->Double(3.45),
+            new $m->Double(4.56),
+            new $m->Double(5.67),
+        );
+        $m->printf("Hello world, %s %s!!\n",
+            new $m->StrPtr('Dingo'),
+            new $m->StrPtr('Bingo'),
+        );
+        $m->printf("Hello world, %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %s!!\n",
+            new $m->Int(1),
+            new $m->Double(2),
+            new $m->Int(3),
+            new $m->Double(4),
+            new $m->Int(5),
+            new $m->Double(6),
+            new $m->Int(7),
+            new $m->Double(8),
+            new $m->Int(9),
+            new $m->Double(10),
+            new $m->Int(11),
+            new $m->Double(12),
+            new $m->Int(13),
+            new $m->Double(14),
+            new $m->Int(15),
+            new $m->Double(16),
+            new $m->Int(17),
+            new $m->Double(18),
+            new $m->Int(19),
+            new $m->Double(20),
+            new $m->StrPtr('End')
+        );
+        $m->printf("Hello world, %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f %d %f!!\n",
+            new $m->Int(1),
+            new $m->Double(2),
+            new $m->Int(3),
+            new $m->Double(4),
+            new $m->Int(5),
+            new $m->Double(6),
+            new $m->Int(7),
+            new $m->Double(8),
+            new $m->Int(9),
+            new $m->Double(10),
+            new $m->Int(11),
+            new $m->Double(12),
+            new $m->Int(13),
+            new $m->Double(14),
+            new $m->Int(15),
+            new $m->Double(16),
+            new $m->Int(17),
+            new $m->Double(18),
+            new $m->Int(19),
+            new $m->Double(20),
+            new $m->Int(21),
+            new $m->Double(22),
+            new $m->Int(23),
+            new $m->Double(24),
+            new $m->Int(25),
+            new $m->Double(26),
+            new $m->Int(27),
+            new $m->Double(28),
+            new $m->Int(29),
+            new $m->Double(30),
+            new $m->Int(31),
+            new $m->Double(32),
+            new $m->Int(33),
+            new $m->Double(34),
+            new $m->Int(35),
+            new $m->Double(36),
+            new $m->Int(37),
+            new $m->Double(38),
+            new $m->Int(39),
+            new $m->Double(40),
+        );
+    }
+
+    public function testWriteToFileUsingFprintf(): void {
+        $m = ZigImporter::load(__DIR__ . '/call-fprintf.zig');
+        $path = __DIR__ . '/test-data/world.txt';
+        $f = $m->fopen($path, 'w');
+        if (!$f) throw new Exception("Could not open file: $path");
+        $count1 = $m->fprintf($f, "Hello world %d!\n", new $m->Int(12345));
+        $count2 = $m->fprintf($f, "Hello world %s!\n", new $m->StrPtr('dingo'));
+        $m->fclose($f);
+        $this->assertSame(19, $count1);
+        $this->assertSame(19, $count2);
+    }
+
+    public function testCallSprintf() {
+        $m = ZigImporter::load(__DIR__ . '/call-sprintf.zig');
+    }
+
+    public function testCallSnprintf() {
+        $m = ZigImporter::load(__DIR__ . '/call-snprintf.zig');
+    }
+
+    public function testHandleImmediateFulfillmentOfPromise(): void {
+        $m = ZigImporter::load(__DIR__ . '/handle-immediate-promise-fulfillment.zig');
+        $result1 = $m->fulfillInt();
+        $this->assertSame(1234, $result1);
+    }
+
+    public function testApplyTransformToReturnValues(): void {
+        $m = ZigImporter::load(__DIR__ . '/return-transformed.zig');
+        $result1 = $m->returnString();
+        $this->assertSame('Hello world', $result1);
+        $result2 = $m->returnPlain();
+        $this->assertSame([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ], $result2);
+        $result4 = $m->returnStruct();
+        $this->assertEquals((object) [
+            'string' => 'Hello world',
+            'plain' => [ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ],
+            'typed_array' => [ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ],
+        ], $result4);
+    }   
 }

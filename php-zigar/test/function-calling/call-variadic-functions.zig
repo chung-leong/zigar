@@ -19,7 +19,7 @@ pub fn printIntegers(bits: u8, count: usize, ...) callconv(.c) void {
         inline for (.{ i8, i16, i32, i64, i128 }) |T| {
             if (bits == @bitSizeOf(T)) {
                 const number = @cVaArg(&va_list, T);
-                std.debug.print("{d}\n", .{number});
+                std.debug.print("{}: {d}\n", .{ T, number });
             }
         }
     }
@@ -33,9 +33,9 @@ pub fn printFloats(bits: u8, count: usize, ...) callconv(.c) void {
             if (bits == @bitSizeOf(T)) {
                 const number = @cVaArg(&va_list, T);
                 if (bits <= 64) {
-                    std.debug.print("{d}\n", .{number});
+                    std.debug.print("{}: {d}\n", .{ T, number });
                 } else {
-                    std.debug.print("{d}\n", .{@as(f64, @floatCast(number))});
+                    std.debug.print("{}: {d}\n", .{ T, @as(f64, @floatCast(number)) });
                 }
             }
         }

@@ -149,7 +149,7 @@ pub const VariadicStruct = struct {
                         if (!ZigObject(S).isInstance(obj)) return error.UnexpectedClass;
                         const arg_struct = ZigObject(S).fromObject(obj).structure();
                         const arg_bytes = arg_struct.buffer.bytes;
-                        if (t == .primitive) {
+                        if (t == .primitive or t == .pointer) {
                             const dest_bytes = self.buffer.bytes[offset .. offset + arg_bytes.len];
                             @memcpy(dest_bytes, arg_bytes);
                         } else {
