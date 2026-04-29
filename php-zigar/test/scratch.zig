@@ -1,52 +1,29 @@
 const std = @import("std");
 
-pub const Int8 = i8;
-pub const Int16 = i16;
-pub const Int32 = i32;
-pub const Int64 = i64;
-pub const Int128 = i128;
-pub const Float16 = f16;
-pub const Float32 = f32;
-pub const Float64 = f64;
-pub const Float80 = f80;
-pub const Float128 = f128;
-pub const StrPtr = [*:0]const u8;
+const c = @cImport({
+    @cInclude("stdio.h");
+});
 
-pub fn printIntegers(bits: u8, count: usize, ...) callconv(.c) void {
-    var va_list = @cVaStart();
-    defer @cVaEnd(&va_list);
-    for (0..count) |_| {
-        inline for (.{ i8, i16, i32, i64, i128 }) |T| {
-            if (bits == @bitSizeOf(T)) {
-                const number = @cVaArg(&va_list, T);
-                std.debug.print("{d}\n", .{number});
+const enum_fn = if (@hasField(std.builtin.Type, "Fn")) .Fn else .@"fn";
+
+pub fn stream(num: i32) ?*c.FILE {
+    if (comptime @hasDecl(c, "__acrt_iob_func")) {
+        return c.__acrt_iob_func(@intCast(num));
+    } else {
+        const names = .{ "stdin", "stdout", "stderr" };
+        return inline for (names, 0..) |name, index| {
+            if (num == index) {
+                // on the Mac we get a function returning the stream instead of the stream
+                const s = @field(c, name);
+                return if (@typeInfo(@TypeOf(s)) == enum_fn) s() else s;
             }
-        }
+        } else null;
     }
 }
 
-pub fn printFloats(bits: u8, count: usize, ...) callconv(.c) void {
-    var va_list = @cVaStart();
-    defer @cVaEnd(&va_list);
-    for (0..count) |_| {
-        inline for (.{ f16, f32, f64, f80 }) |T| {
-            if (bits == @bitSizeOf(T)) {
-                const number = @cVaArg(&va_list, T);
-                if (bits <= 64) {
-                    std.debug.print("{d}\n", .{number});
-                } else {
-                    std.debug.print("{d}\n", .{@as(f64, @floatCast(number))});
-                }
-            }
-        }
-    }
-}
-
-pub fn printStrings(count: usize, ...) callconv(.c) void {
-    var va_list = @cVaStart();
-    defer @cVaEnd(&va_list);
-    for (0..count) |_| {
-        const str = @cVaArg(&va_list, [*:0]const u8);
-        std.debug.print("{s}\n", .{str});
-    }
-}
+pub const fwrite = c.fwrite;
+pub const fopen = c.fopen;
+pub const fclose = c.fclose;
+pub const fprintf = c.fprintf;
+pub const puts = c.puts;
+pub const fflush = c.fflush;

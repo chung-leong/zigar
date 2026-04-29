@@ -342,4 +342,35 @@ final class FunctionCallingTest extends ZigarTestCase
         $str = $m->getString();
         $this->assertSame('Hello world', $str->__string);
     }
+
+    public function testModifyPointerTarget(): void {
+        $m = ZigImporter::load(__DIR__ . '/modify-pointer-target.zig');
+        $actor = new $m->Actor(name: 'Arnold Schwarzenegger', age: 77);
+        $this->assertSame(77, $actor->age);
+        $m->deage($actor, 40);
+        $this->assertSame(37, $actor->age);
+    }
+
+    public function testCallCFunctions(): void {
+        $m = ZigImporter::load(__DIR__ . '/call-c-functions.zig');
+        $this->expectOutputString(<<<OUTPUT
+        Hello world
+        Hello world!
+        Hello?
+        Hello world
+
+        OUTPUT);
+        $str1 = "Hello world";
+        $m->puts($str1);
+        $stderr = $m->stream(2);
+        $str2 = "Hello world!\n";
+        $m->fwrite($str2, 1, strlen($str2), $stderr);
+        $stdout = $m->stream(1);
+        $str3 = "Hello?";
+        $m->fwrite($str3, 1, strlen($str3), $stdout);
+        $m->fflush($stdout);
+        $m->fwrite("\n", 1, 1, $stdout);
+        $str4 = "Hello world";
+        $m->puts($str4);
+    }
 }

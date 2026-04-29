@@ -40,11 +40,13 @@ pub const ModuleHost = struct {
         errdefer php.allocator.destroy(self);
         self.* = .{ .module = module };
         self.allocator = .{ .ptr = self, .vtable = &BufferAllocator.vtable };
-        self.importer = try .init(self);
-        defer self.importer.deinit();
+        // install hooks
         self.dispatcher = try .init(self);
         errdefer self.dispatcher.deinit();
+        try self.dispatcher.installHooks(&lib, path, module.attributes.io_redirection);
         _ = module.exports.set_host_instance(@ptrCast(self));
+        self.importer = try .init(self);
+        defer self.importer.deinit();
         try self.exportFunctionsToModule();
         // retrieve and run factory thunk
         const thunk_address: usize = try self.getFactoryThunk();
@@ -52,8 +54,6 @@ pub const ModuleHost = struct {
         // activate acquired structures and get the root
         const root_class_obj = try self.importer.activateStructures();
         errdefer php.release(root_class_obj);
-        // install hooks
-        try self.dispatcher.installHooks(&lib, path, module.attributes.io_redirection);
         return php.createValueObject(root_class_obj);
     }
 

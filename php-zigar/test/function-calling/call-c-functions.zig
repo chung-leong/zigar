@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const c = @cImport({
     @cInclude("stdio.h");
 });
@@ -25,3 +26,4 @@ pub const fopen = c.fopen;
 pub const fclose = c.fclose;
 pub const fprintf = c.fprintf;
 pub const puts = c.puts;
+pub const fflush = c.fflush;
