@@ -1,12 +1,14 @@
 const std = @import("std");
 
-const Struct = struct {
-    self: *@This(),
-    number: i32 = 1234,
+pub const Struct = struct {
+    number: i32,
+    next: *@This(),
 };
 
-pub fn create(allocator: std.mem.Allocator) !*Struct {
-    const ptr = try allocator.create(Struct);
-    ptr.* = .{ .self = ptr };
-    return ptr;
+var s: Struct = undefined;
+
+pub fn get() *Struct {
+    s.next = &s;
+    s.number = 1234;
+    return &s;
 }

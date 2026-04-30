@@ -469,6 +469,7 @@ pub const ErrorSet = struct {
     pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
     pub const getProperties = Super.getProperties;
+    pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;

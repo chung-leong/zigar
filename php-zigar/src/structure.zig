@@ -335,6 +335,15 @@ pub fn Parent(comptime S: type) type {
             ht.gc.refcount = 0;
             return ht;
         }
+
+        pub fn getPropertyPointer(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) ?*Value {
+            _ = obj;
+            _ = name;
+            _ = prop_type;
+            _ = cache_slot;
+            return null;
+        }
+
         pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: ?*const Value) !?*php.Function {
             const obj = obj_ptr.*;
             const self = fromObject(obj);
@@ -480,14 +489,6 @@ pub fn StructLike(comptime S: type) type {
             return ht;
         }
 
-        pub fn getPropertyPointer(obj: *Object, name: *String, prop_type: c_int, cache_slot: ?[*]?*anyopaque) ?*Value {
-            _ = obj;
-            _ = name;
-            _ = prop_type;
-            _ = cache_slot;
-            return null;
-        }
-
         pub fn isTuple(self: *S) bool {
             if (scope == .instance) {
                 const class = ZigClassEntry.fromStructure(self);
@@ -514,6 +515,7 @@ pub fn StructLike(comptime S: type) type {
         pub const readProperty = Super.readProperty;
         pub const writeProperty = Super.writeProperty;
         pub const hasProperty = Super.hasProperty;
+        pub const getPropertyPointer = Super.getPropertyPointer;
         pub const freeObject = Super.freeObject;
         pub const castObject = Super.castObject;
         pub const getGarbageCollection = Super.getGarbageCollection;
@@ -709,6 +711,7 @@ pub fn ArrayLike(comptime S: type) type {
         pub const readProperty = Super.readProperty;
         pub const writeProperty = Super.writeProperty;
         pub const hasProperty = Super.hasProperty;
+        pub const getPropertyPointer = Super.getPropertyPointer;
         pub const freeObject = Super.freeObject;
         pub const castObject = Super.castObject;
         pub const getGarbageCollection = Super.getGarbageCollection;
@@ -762,6 +765,7 @@ pub fn OptionalLike(comptime S: type) type {
         pub const readProperty = Super.readProperty;
         pub const writeProperty = Super.writeProperty;
         pub const hasProperty = Super.hasProperty;
+        pub const getPropertyPointer = Super.getPropertyPointer;
         pub const freeObject = Super.freeObject;
         pub const castObject = Super.castObject;
         pub const getGarbageCollection = Super.getGarbageCollection;

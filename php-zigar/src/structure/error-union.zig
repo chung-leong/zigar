@@ -131,6 +131,7 @@ pub const ErrorUnion = struct {
     pub const writeProperty = Super.writeProperty;
     pub const hasProperty = Super.hasProperty;
     pub const getProperties = Super.getProperties;
+    pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getGarbageCollection = Super.getGarbageCollection;
     pub const getIterator = Super.getIterator;
     const fromObject = Super.fromObject;
