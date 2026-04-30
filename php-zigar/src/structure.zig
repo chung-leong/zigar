@@ -366,23 +366,18 @@ pub fn StructLike(comptime S: type) type {
             switch (transform) {
                 .string, .integer => return error.Unsupported,
                 .plain => {
-                    var iter: iterator.PropertyIterator(S) = .init(ZigObject(S).fromStructure(self).object());
+                    const obj = ZigObject(S).fromStructure(self).object();
+                    const class = ZigClassEntry.fromStructure(self);
+                    var plain = class.host.getPlainObject(obj, isTuple(self));
+                    if (plain.status == .existing) return plain.value;
+                    var iter: iterator.PropertyIterator(S) = .init(obj);
                     defer iter.deinit();
-                    const ht = php.createArray();
-                    const is_tuple = isTuple(self);
                     while (iter.next()) |prop_value| {
                         try transform.apply(prop_value);
-                        if (is_tuple) {
-                            _ = php.appendHashEntryRef(ht, prop_value);
-                        } else {
-                            const name = iter.current_name.?;
-                            php.setHashEntryRef(ht, name, prop_value);
-                        }
+                        plain.add(iter.current_name.?, prop_value);
                     }
-                    var value = php.createValueArray(ht);
-                    // don't convert if the struct is a tuple
-                    if (!is_tuple) try php.convertValue(&value, .object);
-                    return value;
+                    class.host.removePlainObject(obj);
+                    return plain.value;
                 },
                 else => {},
             }

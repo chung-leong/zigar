@@ -10,6 +10,7 @@ const ObjectMap = @import("object.zig").ObjectMap;
 const php = @import("php.zig");
 const Array = php.Array;
 const ClassEntry = php.ClassEntry;
+const HashTable = php.HashTable;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
@@ -28,6 +29,7 @@ pub const ModuleHost = struct {
     unclaimed_buffer_map: BufferMap = .{},
     object_map: ObjectMap = .{},
     gc_buffer: GarbageCollectionBuffer = .empty,
+    plain_object_table: HashTable,
 
     const Module = ModuleGeneric(StructureImporter.Handle);
 
@@ -38,7 +40,10 @@ pub const ModuleHost = struct {
         if (module.version != Module.current_version) return error.IncorrectVersion;
         var self: *@This() = try php.allocator.create(@This());
         errdefer php.allocator.destroy(self);
-        self.* = .{ .module = module };
+        self.* = .{
+            .module = module,
+            .plain_object_table = php.createHashTable(null),
+        };
         self.allocator = .{ .ptr = self, .vtable = &BufferAllocator.vtable };
         // install hooks
         self.dispatcher = try .init(self);
@@ -160,6 +165,53 @@ pub const ModuleHost = struct {
     pub fn runVariadicThunk(self: *@This(), thunk_address: usize, fn_address: usize, arg_address: usize, attr_address: usize, arg_count: usize) !void {
         if (self.module.?.exports.run_variadic_thunk(thunk_address, fn_address, arg_address, attr_address, arg_count) != .SUCCESS)
             return error.UnableToExecuteZigFunction;
+    }
+
+    const PlainObject = struct {
+        value: Value,
+        hash_table: *HashTable,
+        status: enum { new, existing },
+        is_tuple: bool,
+
+        pub fn add(self: *@This(), name: *String, value: *const Value) void {
+            if (self.is_tuple) {
+                _ = php.appendHashEntryRef(self.hash_table, value);
+            } else {
+                php.setHashEntryRef(self.hash_table, name, value);
+            }
+        }
+    };
+
+    pub fn getPlainObject(self: *@This(), obj: *Object, is_tuple: bool) PlainObject {
+        const key: i32 = @bitCast(obj.handle);
+        if (php.getHashEntry(&self.plain_object_table, key) catch null) |existing| {
+            php.addRef(existing);
+            return .{
+                .value = existing.*,
+                .hash_table = php.getValueHashTable(existing) catch unreachable,
+                .status = .existing,
+                .is_tuple = is_tuple,
+            };
+        } else {
+            const value = switch (is_tuple) {
+                true => php.createValueArray(null),
+                false => php.createValueObject(null),
+            };
+            // var value = php.createValueArray(null);
+            // if (!is_tuple) php.convertValue(&value, .object) catch unreachable;
+            php.setHashEntry(&self.plain_object_table, key, &value);
+            return .{
+                .value = value,
+                .hash_table = php.getValueHashTable(&value) catch unreachable,
+                .status = .new,
+                .is_tuple = is_tuple,
+            };
+        }
+    }
+
+    pub fn removePlainObject(self: *@This(), obj: *Object) void {
+        const key: i32 = @bitCast(obj.handle);
+        _ = php.removeHashEntry(&self.plain_object_table, key);
     }
 };
 

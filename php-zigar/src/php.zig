@@ -454,9 +454,9 @@ pub inline fn createValuePersistentString(sc: []const u8) Value {
     return createValueString(persistent(sc));
 }
 
-pub fn createValueObject(object: *Object) Value {
+pub fn createValueObject(object: ?*Object) Value {
     var result: Value = .{};
-    result.value.obj = object;
+    result.value.obj = object orelse createStandardObject();
     result.u1.type_info = php_h.IS_OBJECT_EX;
     return result;
 }
@@ -810,6 +810,12 @@ pub fn compareStrings(s1: *const String, s2: *const String) bool {
 pub fn matchString(s: *const String, text: []const u8) bool {
     const sc = getStringContent(s);
     return std.mem.eql(u8, sc, text);
+}
+
+pub fn createStandardObject() *Object {
+    const obj = php_h.zend_objects_new(php_h.zend_standard_class_def);
+    obj.*.properties = php_h._zend_new_array_0();
+    return obj;
 }
 
 pub fn createArray() *Array {
