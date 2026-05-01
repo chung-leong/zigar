@@ -15,7 +15,7 @@ const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 pub fn ZigObject(comptime S: type) type {
     const Result = struct {
         zig_portion: S = .{},
-        php_portion: php.Object = .{},
+        php_portion: Object = .{},
 
         var object_handlers: ?ObjectHandlers = null;
 
@@ -60,8 +60,8 @@ pub fn ZigObject(comptime S: type) type {
                 object_handlers = init: {
                     var handlers: ObjectHandlers = undefined;
                     handlers.offset = @offsetOf(@This(), "php_portion");
-                    inline for (comptime std.meta.fields(@TypeOf(object_handler_mapping))) |field| {
-                        const func_name = @field(object_handler_mapping, field.name);
+                    inline for (comptime std.meta.fields(@TypeOf(php.object_handler_mapping))) |field| {
+                        const func_name = @field(php.object_handler_mapping, field.name);
                         @field(handlers, field.name) = if (@hasDecl(S, func_name))
                             php.transform(@field(S, func_name))
                         else if (@hasField(@TypeOf(php.std_object_handlers.*), field.name))
@@ -211,34 +211,7 @@ pub const ObjectMap = struct {
 pub inline fn getObjectBuffer(obj: *const Object) *ByteBuffer {
     const ptr: *const struct {
         buffer: *ByteBuffer,
-        php_portion: php.Object,
+        php_portion: Object,
     } = @fieldParentPtr("php_portion", obj);
     return ptr.buffer;
 }
-
-const object_handler_mapping = .{
-    .free_obj = "freeObject",
-    .dtor_obj = "destroyObject",
-    .clone_obj = "cloneObject",
-    .cast_object = "castObject",
-    .read_property = "readProperty",
-    .write_property = "writeProperty",
-    .unset_property = "unsetProperty",
-    .has_property = "hasProperty",
-    .get_properties = "getProperties",
-    .get_properties_for = "getPropertiesFor",
-    .get_property_ptr_ptr = "getPropertyPointer",
-    .read_dimension = "readElement",
-    .write_dimension = "writeElement",
-    .unset_dimension = "unsetElement",
-    .has_dimension = "hasElement",
-    .count_elements = "countElements",
-    .get_constructor = "getConstructor",
-    .get_method = "getMethod",
-    .get_closure = "getClosure",
-    .get_class_name = "getClassName",
-    .get_debug_info = "getDebugInfo",
-    .get_gc = "getGarbageCollection",
-    .compare = "compare",
-    .do_operation = "doOperation",
-};

@@ -315,6 +315,7 @@ pub const Pointer = struct {
     pub const finalize = Super.finalize;
     pub const externalize = Super.externalize;
     pub const checkArguments = Super.checkArguments;
+    pub const getConstructor = Super.getConstructor;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
     pub const readProperty = Super.readProperty;

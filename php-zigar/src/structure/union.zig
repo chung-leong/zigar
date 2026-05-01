@@ -284,6 +284,7 @@ pub const Union = struct {
     pub const checkArguments = Super.checkArguments;
     pub const getValue = Super.getValue;
     pub const propertyExists = Super.propertyExists;
+    pub const getConstructor = Super.getConstructor;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;

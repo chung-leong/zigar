@@ -395,13 +395,6 @@ pub const ZigClassEntry = struct {
         switch (self.type) {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
-                const C = structure.Class(S);
-                // methods that are implemented as function objects
-                const methods = C.getMethods();
-                inline for (comptime std.meta.fieldNames(C.Methods)) |name| {
-                    @field(ce, name) = &@field(methods, name);
-                }
-                // methods that use direct callbacks
                 if (@hasDecl(S, "getIterator")) {
                     ce.get_iterator = getIteratorHandler(S);
                 }

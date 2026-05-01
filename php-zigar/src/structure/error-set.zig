@@ -464,6 +464,7 @@ pub const ErrorSet = struct {
     pub const externalize = Super.externalize;
     pub const checkArguments = Super.checkArguments;
     pub const visitPointers = Super.visitPointers;
+    pub const getConstructor = Super.getConstructor;
     pub const castObject = Super.castObject;
     pub const readProperty = Super.readProperty;
     pub const writeProperty = Super.writeProperty;

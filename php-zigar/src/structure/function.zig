@@ -225,6 +225,7 @@ pub const Function = struct {
     pub const propertyExists = Super.propertyExists;
     pub const checkArguments = Super.checkArguments;
     pub const visitPointers = Super.visitPointers;
+    pub const getConstructor = Super.getConstructor;
     pub const castObject = Super.castObject;
     pub const freeObject = Super.freeObject;
     pub const getProperties = Super.getProperties;

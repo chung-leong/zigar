@@ -103,6 +103,7 @@ pub const Optional = struct {
     pub const setProperty = Super.setProperty;
     pub const propertyExists = Super.propertyExists;
     pub const checkArguments = Super.checkArguments;
+    pub const getConstructor = Super.getConstructor;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
     pub const readProperty = Super.readProperty;

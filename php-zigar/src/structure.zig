@@ -8,7 +8,9 @@ const StructureType = enums.StructureType;
 const failure = @import("failure.zig");
 const iterator = @import("iterator.zig");
 const php = @import("php.zig");
+const ArgumentIterator = php.ArgumentIterator;
 const ClassEntry = php.ClassEntry;
+const ExecuteData = php.ExecuteData;
 const HashTable = php.HashTable;
 const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
@@ -136,7 +138,7 @@ pub fn Parent(comptime S: type) type {
             _ = options;
         }
 
-        pub fn checkArguments(self: *S, arg_iter: *php.ArgumentIterator) !void {
+        pub fn checkArguments(self: *S, arg_iter: *ArgumentIterator) !void {
             if (arg_iter.len != 1) {
                 const class = ZigClassEntry.fromStructure(self);
                 return failure.report("{s} constructor expects one argument", .{
@@ -265,6 +267,13 @@ pub fn Parent(comptime S: type) type {
                     message,
                 });
             }
+        }
+
+        pub fn getConstructor(obj: *Object) *php.Function {
+            const class = ZigClassEntry.fromObject(obj);
+            const class_obj = class.object;
+            const class_struct = ZigObject(Class(S)).fromObject(class_obj).structure();
+            return &class_struct.constructor;
         }
 
         pub fn freeObject(obj: *Object) void {
@@ -512,6 +521,7 @@ pub fn StructLike(comptime S: type) type {
         pub const visitPointers = Super.visitPointers;
         pub const reportFieldError = Super.reportFieldError;
 
+        pub const getConstructor = Super.getConstructor;
         pub const readProperty = Super.readProperty;
         pub const writeProperty = Super.writeProperty;
         pub const hasProperty = Super.hasProperty;
@@ -708,6 +718,7 @@ pub fn ArrayLike(comptime S: type) type {
         pub const checkArguments = Super.checkArguments;
         pub const copySelf = Super.copySelf;
 
+        pub const getConstructor = Super.getConstructor;
         pub const readProperty = Super.readProperty;
         pub const writeProperty = Super.writeProperty;
         pub const hasProperty = Super.hasProperty;
@@ -762,6 +773,7 @@ pub fn OptionalLike(comptime S: type) type {
         pub const copySelf = Super.copySelf;
         pub const visitPointers = Super.visitPointers;
 
+        pub const getConstructor = Super.getConstructor;
         pub const readProperty = Super.readProperty;
         pub const writeProperty = Super.writeProperty;
         pub const hasProperty = Super.hasProperty;

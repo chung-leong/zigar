@@ -165,6 +165,7 @@ pub const ArgStruct = struct {
     pub const setStorage = Super.setStorage;
     pub const getValue = Super.getValue;
     pub const propertyExists = Super.propertyExists;
+    pub const getConstructor = Super.getConstructor;
     pub const freeObject = Super.freeObject;
     pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;

@@ -22,24 +22,20 @@ const structure = @import("../structure.zig");
 
 pub fn Class(comptime S: type) type {
     return struct {
+        constructor: Function = undefined,
         closure: Closure = undefined,
         table: Value = undefined,
 
         pub const scope: ZigClassEntry.ScopeType = .static;
         pub const Super = structure.StructLike(@This());
-        pub const Methods = struct {
-            constructor: Function,
-            __tostring: Function,
-        };
         pub const Self = @This();
         pub const Closure = struct {
             self: *Self,
             php_portion: Function,
         };
 
-        var methods: ?Methods = null;
-
         pub fn finalize(self: *@This(), _: bool) !void {
+            self.constructor = php.createTransformedFunction(handleConstructor, "__construct", 0, true);
             // create closure for casting string to Zig object
             self.closure = .{
                 .self = self,
@@ -107,17 +103,6 @@ pub fn Class(comptime S: type) type {
             const self = fromObject(obj);
             fn_ptr.* = &self.closure.php_portion;
             return php.SUCCESS;
-        }
-
-        pub fn getMethods() *Methods {
-            if (methods == null) {
-                methods = .{
-                    // constructor needs to be variadic since it can accept named arguments in lieu of an array
-                    .constructor = php.createTransformedFunction(handleConstructor, "__construct", 0, true),
-                    .__tostring = php.createTransformedFunction(handleToString, "__toString", 0, false),
-                };
-            }
-            return &methods.?;
         }
 
         pub fn getGarbageCollection(obj: *Object, table: *[*c]Value, n: *c_int) !?*HashTable {
@@ -200,21 +185,6 @@ pub fn Class(comptime S: type) type {
             if (custom_allocator != null) {
                 // make buffers allocated from custom allocator external
                 try this_struct.externalize();
-            }
-        }
-
-        pub fn handleToString(ed: *ExecuteData, return_value: *Value) !void {
-            const this_obj = try php.getValueObject(&ed.This);
-            if (ZigObject(S).isInstance(this_obj)) {
-                const this_struct = ZigObject(S).fromObject(this_obj).structure();
-                return_value.* = try this_struct.getValue(.string);
-            } else {
-                return_value.* = php.createValueNull();
-                const class = ZigClassEntry.fromObject(this_obj);
-                return failure.report("cannot convert {s} '{s}' to a string", .{
-                    class.getStructureName(),
-                    class.getName(),
-                });
             }
         }
 
