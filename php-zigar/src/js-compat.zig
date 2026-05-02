@@ -148,6 +148,7 @@ pub const ArrayBuffer = struct {
                 buf.referenceString(str);
             } else if (php.getValueUlong(arg) catch null) |size| {
                 try buf.allocate(null, size);
+                try buf.clear();
             } else {
                 var tmp = arg.*;
                 try php.convertValue(&tmp, .string);
@@ -239,6 +240,10 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
 
         pub inline fn fromObject(obj: *Object) *@This() {
             return @fieldParentPtr("php_portion", obj);
+        }
+
+        pub fn is(obj: *const Object) bool {
+            return obj.ce.? == class_entry;
         }
 
         pub fn create(buffer: *ByteBuffer) !*Object {
@@ -411,21 +416,21 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
                             if (n * @sizeOf(T) != byte_len) return error.InvalidLength;
                             break :calc n;
                         };
-                        buf = try ab_buf.slice(offset, len, .fromByteUnits(@alignOf(T)), 0);
+                        buf = try ab_buf.slice(offset, len * @sizeOf(T), .fromByteUnits(@alignOf(T)), 0);
                         self.array_buffer = arg_obj;
                         php.addRef(arg_obj);
+                    } else if (is(arg_obj)) {
+                        const other = fromObject(arg_obj);
+                        const other_buf = other.buffer orelse return error.Uninitialized;
+                        buf = try other_buf.duplciate();
+                    } else {
+                        var tmp = arg.*;
+                        try php.convertValue(&tmp, .array);
+                        const ht = php.getValueArray(arg) catch unreachable;
+                        buf = try createBufferFromArray(ht);
                     }
                 } else if (php.getValueArray(arg) catch null) |ht| {
-                    buf = try ByteBuffer.create(.@"1");
-                    errdefer buf.release();
-                    try buf.allocate(null, ht.nNumOfElements);
-                    const ptr: [*]T = @ptrCast(@alignCast(buf.bytes.ptr));
-                    var ht_iter: HashTableIterator = .init(ht, .{});
-                    var index: usize = 0;
-                    while (ht_iter.next()) |value| {
-                        ptr[index] = try extractValue(value);
-                        index += 1;
-                    }
+                    buf = try createBufferFromArray(ht);
                 } else if (php.getValueUlong(arg) catch null) |len| {
                     buf = try ByteBuffer.create(.@"1");
                     errdefer buf.release();
@@ -503,6 +508,20 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
         fn getLength(self: *@This()) !usize {
             const buf = self.buffer orelse return error.Uninitialized;
             return buf.bytes.len / @sizeOf(T);
+        }
+
+        fn createBufferFromArray(ht: *HashTable) !*ByteBuffer {
+            const buf = try ByteBuffer.create(.@"1");
+            errdefer buf.release();
+            try buf.allocate(null, ht.nNumOfElements);
+            const ptr: [*]T = @ptrCast(@alignCast(buf.bytes.ptr));
+            var ht_iter: HashTableIterator = .init(ht, .{});
+            var index: usize = 0;
+            while (ht_iter.next()) |value| {
+                ptr[index] = try extractValue(value);
+                index += 1;
+            }
+            return buf;
         }
 
         fn extractValue(value: *Value) !T {
