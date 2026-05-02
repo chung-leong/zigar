@@ -1231,6 +1231,7 @@ pub const instanceOf = php_h.instanceof_function;
 pub const initializeStandardObject = php_h.zend_object_std_init;
 pub const initializeObjectProperties = php_h.object_properties_init;
 pub const registerInternalClass = php_h.zend_register_internal_class_ex;
+pub const registerInternalInterface = php_h.zend_register_internal_interface;
 pub const traceToString = php_h.zend_trace_to_string;
 
 pub fn getObjectProperty(obj: *Object, name: *String) ?Value {

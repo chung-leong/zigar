@@ -102,11 +102,15 @@ pub const ByteBuffer = struct {
     }
 
     pub fn slice(self: *@This(), offset: usize, len: usize, alignment: std.mem.Alignment, bit_offset: u3) !*@This() {
+        const bytes = try self.data(offset + len, false);
+        if (offset == 0 and len == bytes.len and bit_offset == 0) {
+            self.addRef();
+            return self;
+        }
         const slice_bit_offset: u3, const slice_alignment = switch (self.flags.contains_packed_data) {
             false => .{ 0, alignment },
             true => .{ self.bit_offset +% bit_offset, .@"1" },
         };
-        const bytes = try self.data(offset + len, false);
         const new = try php.allocator.create(@This());
         const slice_bytes = bytes[offset .. offset + len];
         if (!self.flags.contains_packed_data) {
@@ -192,6 +196,13 @@ pub const ByteBuffer = struct {
             },
             else => {},
         }
+    }
+
+    pub fn getBase(self: *@This()) *@This() {
+        return switch (self.source) {
+            .buffer => |buf| buf,
+            else => self,
+        };
     }
 
     pub fn getString(self: *@This(), encoding: ?Encoding) !*String {

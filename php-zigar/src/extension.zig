@@ -4,6 +4,7 @@ const builtin = @import("builtin");
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const failure = @import("failure.zig");
 const getSharedLibraryName = @import("compilation.zig").getSharedLibraryName;
+const js_compat = @import("js-compat.zig");
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
 const ArgumentIterator = php.ArgumentIterator;
@@ -30,6 +31,7 @@ export fn php_zigar_mod_init(_: c_int, _: c_int) php.Result {
         }
     }
     ZigClassEntry.registerGlobalClasses() catch return php.FAILURE;
+    js_compat.registerClasses() catch return php.FAILURE;
     return php.SUCCESS;
 }
 
