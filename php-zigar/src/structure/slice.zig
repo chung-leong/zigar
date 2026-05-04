@@ -106,7 +106,7 @@ pub const Slice = struct {
                                 break :use false;
                             }
                         }
-                        self.buffer.referenceString(str);
+                        self.buffer.referenceString(str, read_only);
                         break :use true;
                     };
                     if (!using_string) {

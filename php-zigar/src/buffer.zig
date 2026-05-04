@@ -68,11 +68,23 @@ pub const ByteBuffer = struct {
         }
     }
 
-    pub fn referenceString(self: *@This(), str: *String) void {
+    pub fn referenceString(self: *@This(), str: *String, read_only: bool) void {
         std.debug.assert(self.flags.uninitialized);
         defer self.flags.uninitialized = false;
+        if (!read_only) {
+            const interned = php.isStringInterned(str);
+            // separate the string if another variable is referencing it or if it's interned
+            if (str.gc.refcount > 1 or interned) {
+                const sc = php.getStringContent(str);
+                const new_str = php.createString(sc);
+                self.bytes = @constCast(php.getStringContent(new_str));
+                self.source = .{ .string = new_str };
+                return;
+            }
+        }
         self.bytes = @constCast(php.getStringContent(str));
         self.source = .{ .string = str };
+        if (read_only) self.flags.read_only = true;
         php.addRef(str);
     }
 

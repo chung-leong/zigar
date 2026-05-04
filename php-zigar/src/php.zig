@@ -778,6 +778,10 @@ pub fn dupliateString(str: *String) *String {
     return php_h.zend_string_dup(str, false);
 }
 
+pub fn isStringInterned(str: *String) bool {
+    return (str.gc.u.type_info & php_h.IS_STR_INTERNED) != 0;
+}
+
 pub fn createStringWithLength(len: usize) *String {
     const zs = switch (len) {
         0 => php_h.zend_empty_string,
@@ -1338,6 +1342,11 @@ pub fn emalloc(size: usize) ?*anyopaque {
     } else {
         return php_h._emalloc(size);
     }
+}
+
+pub fn malloc(size: usize) ?*anyopaque {
+    const ptr = php_h.__zend_malloc(size);
+    return ptr;
 }
 
 pub fn efree(ptr: ?*anyopaque) void {
