@@ -192,7 +192,8 @@ final class FunctionCallingTest extends ZigarTestCase
         $this->assertSame(460, $b->number);
     }
 
-    public function testCallInlineFunction(): void {
+    public function testCallInlineFunction(): void 
+    {
         $m = ZigImporter::load(__DIR__ . '/call-inline-function.zig');
         $this->expectOutputString(<<<OUTPUT
         Hello world!
@@ -201,7 +202,8 @@ final class FunctionCallingTest extends ZigarTestCase
         $m->print();
     }
 
-    public function testHandlePointerInStruct(): void {
+    public function testHandlePointerInStruct(): void 
+    {
         $m = ZigImporter::load(__DIR__ . '/handle-pointer-in-struct.zig');
         $user = new $m->User(name: 'Alice');
         $this->expectOutputString(<<<OUTPUT
@@ -222,7 +224,8 @@ final class FunctionCallingTest extends ZigarTestCase
         $user->print3();
     }
 
-    public function testHandleRecursiveStructure(): void {
+    public function testHandleRecursiveStructure(): void 
+    {
         $m = ZigImporter::load(__DIR__ . '/handle-recursive-structure.zig');
         $root = $m->getRoot();
         $parent = $root->__plain;
@@ -231,7 +234,8 @@ final class FunctionCallingTest extends ZigarTestCase
         $this->assertSame($parent, $child2->parent);
     }
 
-    public function testReturnConstPointer(): void {
+    public function testReturnConstPointer(): void 
+    {
         $m = ZigImporter::load(__DIR__ . '/return-const-pointer.zig');
         $user = $m->getUser();
         $this->assertExceptionMessage("write protected", function() use($user) {
@@ -248,7 +252,8 @@ final class FunctionCallingTest extends ZigarTestCase
         });
     }
 
-    public function testAcceptMultiplePointers(): void {
+    public function testAcceptMultiplePointers(): void 
+    {
         $m = ZigImporter::load(__DIR__ . '/accept-multi-pointer.zig');
         $list = [
             [ 'a' => 1, 'b' => 2 ],
@@ -266,7 +271,8 @@ final class FunctionCallingTest extends ZigarTestCase
         $m->print($list, count($list));
     }
 
-    public function testAcceptCPointers(): void {
+    public function testAcceptCPointers(): void 
+    {
         $m = ZigImporter::load(__DIR__ . '/accept-c-pointer.zig');
         $list = [
             [ 'a' => 1, 'b' => 2 ],
@@ -289,7 +295,8 @@ final class FunctionCallingTest extends ZigarTestCase
         $m->print([ $object ], 1);
     }
 
-    public function testReturnMultiplePointers(): void {
+    public function testReturnMultiplePointers(): void 
+    {
         $m = ZigImporter::load(__DIR__ . '/return-multi-pointer.zig');
         $pointer = $m->getPointer();
         $this->assertSame(1, $pointer->__len);
@@ -315,7 +322,8 @@ final class FunctionCallingTest extends ZigarTestCase
         ], $pointer->__plain);
     }
 
-    public function testReturnCPointers(): void {
+    public function testReturnCPointers(): void 
+    {
         $m = ZigImporter::load(__DIR__ . '/return-c-pointer.zig');
         $pointer = $m->getPointer();
         $this->assertSame(1, $pointer->__len);
@@ -343,7 +351,8 @@ final class FunctionCallingTest extends ZigarTestCase
         $this->assertSame('Hello world', $str->__string);
     }
 
-    public function testModifyPointerTarget(): void {
+    public function testModifyPointerTarget(): void 
+    {
         $m = ZigImporter::load(__DIR__ . '/modify-pointer-target.zig');
         $actor = new $m->Actor(name: 'Arnold Schwarzenegger', age: 77);
         $this->assertSame(77, $actor->age);
@@ -351,7 +360,8 @@ final class FunctionCallingTest extends ZigarTestCase
         $this->assertSame(37, $actor->age);
     }
 
-    public function testCallCFunctions(): void {
+    public function testCallCFunctions(): void 
+    {
         $m = ZigImporter::load(__DIR__ . '/call-c-functions.zig');
         $this->expectOutputString(<<<OUTPUT
         Hello world
@@ -374,7 +384,8 @@ final class FunctionCallingTest extends ZigarTestCase
         $m->puts($str4);
     }
 
-    public function testCallVariadicFunctions(): void {
+    public function testCallVariadicFunctions(): void 
+    {
         $m = ZigImporter::load(__DIR__ . '/call-variadic-functions.zig');
         $this->expectOutputString(<<<OUTPUT
         i8: -10
@@ -458,7 +469,8 @@ final class FunctionCallingTest extends ZigarTestCase
         );
     }
 
-    public function testCorrectlyPassUnsignedIntToVariadicFunction(): void {
+    public function testCorrectlyPassUnsignedIntToVariadicFunction(): void 
+    {
         $m = ZigImporter::load(__DIR__ . '/call-variadic-functions-with-unsigned-int.zig');
         $this->expectOutputString(<<<OUTPUT
         u8: 255
@@ -497,7 +509,8 @@ final class FunctionCallingTest extends ZigarTestCase
         );
     }
 
-    public function testWriteToFileUsingFwrite(): void {
+    public function testWriteToFileUsingFwrite(): void 
+    {
         $m = ZigImporter::load(__DIR__ . '/call-fwrite.zig');
         $path = __DIR__ . '/test-data/hello.txt';
         $text = "Hello world!\n";
@@ -509,10 +522,24 @@ final class FunctionCallingTest extends ZigarTestCase
         $this->assertSame(strlen($text), $count2);
     }
 
-    public function testReadFromFileUsingFread(): void {
+    public function testReadFromFileUsingFread(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/call-fread.zig');
+        $path = __DIR__ . '/test-data/donuts.txt';
+        $buffer1 = new Uint8Array(3);
+        $buffer2 = new Uint8Array(3);
+        $f = $m->fopen($path, "r");
+        $count1 = $m->fread($buffer1, 1, $buffer1->byteLength, $f);
+        $count2 = $m->fread($buffer2, 1, $buffer2->byteLength, $f);
+        $m->fclose($f);
+        $this->assertSame($count1, $buffer1->byteLength);
+        $this->assertSame($count2, $buffer2->byteLength);
+        $this->assertSame("Was", (string) $buffer1);
+        $this->assertSame("abi", (string) $buffer2);
     }
 
-    public function testCallPrintf(): void {
+    public function testCallPrintf(): void 
+    {
         $m = ZigImporter::load(__DIR__ . '/call-printf.zig');
         $this->expectOutputString(<<<OUTPUT
         Hello world 123!
@@ -610,7 +637,8 @@ final class FunctionCallingTest extends ZigarTestCase
         );
     }
 
-    public function testWriteToFileUsingFprintf(): void {
+    public function testWriteToFileUsingFprintf(): void 
+    {
         $m = ZigImporter::load(__DIR__ . '/call-fprintf.zig');
         $path = __DIR__ . '/test-data/world.txt';
         $f = $m->fopen($path, 'w');
@@ -622,21 +650,47 @@ final class FunctionCallingTest extends ZigarTestCase
         $this->assertSame(19, $count2);
     }
 
-    public function testCallSprintf() {
+    public function testCallSprintf() 
+    {
         $m = ZigImporter::load(__DIR__ . '/call-sprintf.zig');
+        $buffer = new ArrayBuffer(1024);
+        $result1 = $m->sprintf($buffer, "Hello world %d!\n", new $m->Int(123));
+        $this->assertSame(17, $result1);
+        $ta = new Uint8Array($buffer);
+        $this->assertSame(ord('H'), $ta[0]);
+        $this->assertSame(ord('e'), $ta[1]);
+        $result2 = $m->sprintf($buffer, "Hello world %d!\n", new $m->Int(12345));
+        $this->assertSame(19, $result2);
+        $result3 = $m->sprintf($buffer, "Hello world, %.2f!\n", new $m->Double(1.23));
+        $this->assertSame(19, $result3);
+        $this->assertSame("Hello world, 1.23!\n", substr((string) $buffer, 0, $result3));
     }
 
-    public function testCallSnprintf() {
+    public function testCallSnprintf() 
+    {
         $m = ZigImporter::load(__DIR__ . '/call-snprintf.zig');
+        $buffer = new ArrayBuffer(1024);
+        $result1 = $m->snprintf($buffer, $buffer->byteLength, "Hello world %d!\n", new $m->Int(123));
+        $this->assertSame(17, $result1);
+        $ta = new Uint8Array($buffer);
+        $this->assertSame(ord('H'), $ta[0]);
+        $this->assertSame(ord('e'), $ta[1]);
+        $result2 = $m->snprintf($buffer, 0, "Hello world %d!\n", new $m->Int(12345));
+        $this->assertSame(19, $result2);
+        $result3 = $m->snprintf($buffer, $buffer->byteLength, "Hello world, %.2f!!\n", new $m->Double(1.23));
+        $this->assertSame(20, $result3);
+        $this->assertSame("Hello world, 1.23!!\n", substr((string) $buffer, 0, $result3));
     }
 
-    public function testHandleImmediateFulfillmentOfPromise(): void {
+    public function testHandleImmediateFulfillmentOfPromise(): void 
+    {
         $m = ZigImporter::load(__DIR__ . '/handle-immediate-promise-fulfillment.zig');
         $result1 = $m->fulfillInt();
         $this->assertSame(1234, $result1);
     }
 
-    public function testApplyTransformToReturnValues(): void {
+    public function testApplyTransformToReturnValues(): void 
+    {
         $m = ZigImporter::load(__DIR__ . '/return-transformed.zig');
         $result1 = $m->returnString();
         $this->assertSame('Hello world', $result1);

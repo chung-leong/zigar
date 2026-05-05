@@ -53,6 +53,8 @@ final class JsCompatTest extends ZigarTestCase
         $this->assertSame([ -3, -4, -5 ], (array) $f);
         $g = new Int8Array($buf, 1, 3);
         $this->assertSame([ -2, -3, -4 ], (array) $g);
+        $h = new Int8Array(4);
+        $this->assertSame([ 0, 0, 0, 0 ], (array) $h);
 
         $this->expectOutputString(<<<OUTPUT
         0: 1
