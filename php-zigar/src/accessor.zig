@@ -88,6 +88,8 @@ pub const Transform = enum {
     plain,
     bytes,
     base64,
+    typed_array,
+    clamped_array,
 
     pub fn apply(self: @This(), value: *Value) Error!void {
         if (php.getValueObject(value) catch null) |obj| {

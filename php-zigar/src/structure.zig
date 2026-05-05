@@ -7,6 +7,7 @@ const enums = @import("enums.zig");
 const StructureType = enums.StructureType;
 const failure = @import("failure.zig");
 const iterator = @import("iterator.zig");
+const js_compat = @import("js-compat.zig");
 const php = @import("php.zig");
 const ArgumentIterator = php.ArgumentIterator;
 const ClassEntry = php.ClassEntry;
@@ -110,7 +111,7 @@ pub fn Parent(comptime S: type) type {
             if (initializer) |value| {
                 try self.setValue(value, .none);
             }
-            if (read_only) self.buffer.protect(true);
+            if (read_only) self.buffer.protect();
         }
 
         pub fn finalize(self: *S, _: bool) !void {
@@ -170,7 +171,7 @@ pub fn Parent(comptime S: type) type {
                     const str = try self.buffer.getString(encoding);
                     return php.createValueString(str);
                 },
-                .plain => return error.Unsupported,
+                .plain, .clamped_array, .typed_array => return error.Unsupported,
                 .none => {
                     const obj = object(self);
                     php.addRef(obj);
@@ -578,6 +579,16 @@ pub fn ArrayLike(comptime S: type) type {
                     } else unreachable;
                 },
                 .integer => return error.Unsupported,
+                .typed_array => {
+                    const class = ZigClassEntry.fromStructure(self);
+                    const obj = try class.createTypedArray(self.buffer);
+                    return php.createValueObject(obj);
+                },
+                .clamped_array => {
+                    const class = ZigClassEntry.fromStructure(self);
+                    const obj = try class.createClampedArray(self.buffer);
+                    return php.createValueObject(obj);
+                },
                 else => {},
             }
             return Super.getValue(self, transform);

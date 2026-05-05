@@ -131,7 +131,7 @@ pub const Slice = struct {
                 try self.initializeBuffer(allocator, len);
                 try self.setValue(value, .none);
             }
-            if (read_only) self.buffer.protect(true);
+            if (read_only) self.buffer.protect();
         } else {
             try self.initializeBuffer(allocator, 0);
         }

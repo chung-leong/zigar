@@ -114,15 +114,11 @@ pub const ByteBuffer = struct {
     }
 
     pub fn slice(self: *@This(), offset: usize, len: usize, alignment: std.mem.Alignment, bit_offset: u3) !*@This() {
-        const bytes = try self.data(offset + len, false);
-        if (offset == 0 and len == bytes.len and bit_offset == 0) {
-            self.addRef();
-            return self;
-        }
         const slice_bit_offset: u3, const slice_alignment = switch (self.flags.contains_packed_data) {
             false => .{ 0, alignment },
             true => .{ self.bit_offset +% bit_offset, .@"1" },
         };
+        const bytes = try self.data(offset + len, false);
         const new = try php.allocator.create(@This());
         const slice_bytes = bytes[offset .. offset + len];
         if (!self.flags.contains_packed_data) {
@@ -157,8 +153,8 @@ pub const ByteBuffer = struct {
         return new;
     }
 
-    pub fn protect(self: *@This(), read_only: bool) void {
-        self.flags.read_only = read_only;
+    pub fn protect(self: *@This()) void {
+        self.flags.read_only = true;
     }
 
     pub fn markPackedData(self: *@This()) void {

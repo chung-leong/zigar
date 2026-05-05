@@ -150,7 +150,7 @@ pub const ObjectMap = struct {
                 const offset = @intFromPtr(bytes.ptr) - @intFromPtr(buf.bytes.ptr);
                 const len = bytes.len;
                 buf = try buf.slice(offset, len, alignment, 0);
-                buf.protect(read_only);
+                if (read_only) buf.protect();
                 return buf;
             },
             else => return null,

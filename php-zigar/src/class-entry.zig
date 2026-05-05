@@ -2,6 +2,7 @@ const std = @import("std");
 
 const AbortSignal = @import("abort-signal.zig").AbortSignal;
 const accessor = @import("accessor.zig");
+const ArrayBuffer = @import("js-compat.zig").ArrayBuffer;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const enums = @import("enums.zig");
 const MemberFlags = enums.MemberFlags;
@@ -25,6 +26,7 @@ const ObjectIterator = php.ObjectIterator;
 const String = php.String;
 const Value = php.Value;
 const structure = @import("structure.zig");
+const TypedArrayOf = @import("js-compat.zig").TypedArrayOf;
 const ZigObject = @import("object.zig").ZigObject;
 
 pub const ZigClassEntry = struct {
@@ -455,6 +457,71 @@ pub const ZigClassEntry = struct {
         }
     }
 
+    pub fn isTypedArray(self: *@This()) bool {
+        return switch (self.type) {
+            inline .array, .slice, .vector => |t| @field(self.flags, @tagName(t)).is_typed_array,
+            else => false,
+        };
+    }
+
+    pub fn isClampedArray(self: *@This()) bool {
+        return switch (self.type) {
+            inline .array, .slice, .vector => |t| @field(self.flags, @tagName(t)).is_clamped_array,
+            else => false,
+        };
+    }
+
+    pub fn createTypedArray(self: *@This(), buffer: *ByteBuffer) !*Object {
+        if (!self.isTypedArray()) return error.Unsupported;
+        const member = self.getMember(.instance, 0) catch return error.Unexpected;
+        return switch (member.type) {
+            inline .int, .uint, .float => |t| inline for (@field(typed_array_types, @tagName(t))) |T| {
+                if (member.bit_size == @bitSizeOf(T)) {
+                    break try TypedArrayOf(T, false).create(buffer);
+                }
+            } else error.Unsupported,
+            else => error.Unsupported,
+        };
+    }
+
+    pub fn createClampedArray(self: *@This(), buffer: *ByteBuffer) !*Object {
+        if (!self.isClampedArray()) return error.Unsupported;
+        return TypedArrayOf(u8, true).create(buffer);
+    }
+
+    pub fn extractBuffer(self: *@This(), obj: *Object) ?*ByteBuffer {
+        if (php.instanceOf(obj.ce, ArrayBuffer.entry())) {
+            return ArrayBuffer.fromObject(obj).buffer;
+        }
+        if (self.isTypedArray()) {
+            const member = self.getMember(.instance, 0) catch return null;
+            switch (member.type) {
+                inline .int, .uint, .float => |t| inline for (@field(typed_array_types, @tagName(t))) |T| {
+                    if (member.bit_size == @bitSizeOf(T)) {
+                        const TypedArray = TypedArrayOf(T, false);
+                        if (php.instanceOf(obj.ce, TypedArray.entry())) {
+                            return TypedArray.fromObject(obj).buffer;
+                        }
+                    }
+                },
+                else => {},
+            }
+        }
+        if (self.isClampedArray()) {
+            const ClampedArray = TypedArrayOf(u8, true);
+            if (php.instanceOf(obj.ce, ClampedArray.entry())) {
+                return ClampedArray.fromObject(obj).buffer;
+            }
+        }
+        return null;
+    }
+
+    const typed_array_types = .{
+        .int = .{ i8, i16, i32, i64 },
+        .uint = .{ u8, u16, u32, u64 },
+        .float = .{ f16, f32, f64 },
+    };
+
     pub fn checkByteLength(self: *@This(), len: usize) !void {
         const element_size = self.byte_size orelse return;
         if (self.type == .slice) {
@@ -671,6 +738,29 @@ pub const ZigClassEntry = struct {
         }
     }
 
+    pub fn validateBuffer(self: *@This(), buf: *ByteBuffer) !void {
+        const correct_len = self.byte_size orelse return;
+        const len = buf.bytes.len;
+        switch (self.type) {
+            .slice => if (len % correct_len != 0) {
+                return failure.report("{s} '{s}' expects multiple of {d} bytes, received {d}", .{
+                    self.getStructureName(),
+                    self.getName(),
+                    correct_len,
+                    len,
+                });
+            },
+            else => if (len != correct_len) {
+                return failure.report("{s} '{s}' expects {d} bytes, received {d}", .{
+                    self.getStructureName(),
+                    self.getName(),
+                    correct_len,
+                    len,
+                });
+            },
+        }
+    }
+
     pub fn obtainObjectAtOffset(self: *@This(), parent_buf: *ByteBuffer, offset: usize, len: usize, bit_offset: u3) !*Object {
         const parent_bytes = try parent_buf.data(offset + len, false);
         const bytes = parent_bytes[offset .. offset + len];
@@ -703,7 +793,7 @@ pub const ZigClassEntry = struct {
             const buf = get: {
                 if (try self.host.unclaimed_buffer_map.claim(bytes, self.alignment)) |buf| {
                     // use a buffer that has just been allocated
-                    if (is_const) buf.protect(true);
+                    if (is_const) buf.protect();
                     break :get buf;
                 } else if (try self.host.object_map.acquireBuffer(bytes, self.alignment, is_const)) |buf| {
                     // use a buffer that's attached to an existing object
@@ -712,14 +802,23 @@ pub const ZigClassEntry = struct {
                     // assume addresss is valid, pointing to memory somewhere inside the app's address space
                     const buf = try ByteBuffer.create(self.alignment);
                     buf.referencExternal(bytes);
-                    if (is_const) buf.protect(true);
+                    if (is_const) buf.protect();
                     break :get buf;
                 }
             };
             defer buf.release();
-            const obj = try self.createObjectFromBuffer(buf, null);
-            errdefer php.release(obj);
+            return try self.createObjectFromBuffer(buf, null);
+        }
+    }
+
+    pub fn obtainObjectFromBuffer(self: *@This(), buf: *ByteBuffer) !*Object {
+        const result = self.host.object_map.search(buf.bytes, self, buf.flags.read_only);
+        if (result.match == .yes) {
+            const obj = result.value();
+            php.addRef(obj);
             return obj;
+        } else {
+            return try self.createObjectFromBuffer(buf, null);
         }
     }
 
@@ -897,6 +996,10 @@ pub const ZigClassEntry = struct {
                                 .string
                             else if (member.flags.is_plain)
                                 .plain
+                            else if (member.flags.is_typed_array)
+                                .typed_array
+                            else if (member.flags.is_clamped_array)
+                                .clamped_array
                             else if (member.class.flags.common.has_value)
                                 .none
                             else

@@ -130,7 +130,7 @@ pub const ErrorSet = struct {
                         const err_obj = try class.createObject(null, null, false);
                         const err_struct = fromObject(err_obj);
                         try self.constant_acc.int.set(err_struct, value);
-                        err_struct.buffer.protect(true);
+                        err_struct.buffer.protect();
                         var text_buffer: [64]u8 = undefined;
                         const text = std.fmt.bufPrint(&text_buffer, "UnknownError #{d}", .{err_code}) catch unreachable;
                         const name = php.createString(text);

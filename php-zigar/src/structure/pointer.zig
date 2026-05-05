@@ -5,6 +5,10 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
+const js_compat = @import("../js-compat.zig");
+const ArrayBuffer = js_compat.ArrayBuffer;
+const TypedArrayOf = js_compat.TypedArrayOf;
+const TypedArray = js_compat.TypedArray;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const HashTable = php.HashTable;
@@ -149,6 +153,7 @@ pub const Pointer = struct {
         if (transform == .none) {
             if (try Super.copySelf(self, value)) return;
             const class = ZigClassEntry.fromStructure(self);
+            const read_only = class.flags.pointer.is_const;
             const static = class.getStaticData(@This());
             const target_obj = init: {
                 const target_class = static.target_class;
@@ -160,6 +165,16 @@ pub const Pointer = struct {
                             // TODO: check read-only flag
                             php.addRef(obj);
                             break :init obj;
+                        }
+                        if (target_class.extractBuffer(obj)) |buf| {
+                            if (buf.flags.read_only and !read_only) {
+                                return failure.report("pointer '{s}' cannot pointer to a read-only buffer", .{
+                                    class.getName(),
+                                });
+                            }
+                            try target_class.validateBuffer(buf);
+                            const new_obj = try target_class.obtainObjectFromBuffer(buf);
+                            break :init new_obj;
                         }
                         // TODO: deal with array -> slice cast
                     },
@@ -192,7 +207,6 @@ pub const Pointer = struct {
                 }
                 // autovivificate new target, using the allocator associated with the pointer
                 const allocator = self.buffer.getSourceAllocator();
-                const read_only = class.flags.pointer.is_const;
                 break :init try target_class.createObject(allocator, value, read_only);
             };
             try static.saveTarget(self, target_obj);

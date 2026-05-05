@@ -6,6 +6,7 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
 const iterator = @import("../iterator.zig");
+const ArrayBuffer = @import("../js-compat.zig").ArrayBuffer;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const ArgumentIterator = php.ArgumentIterator;
@@ -134,7 +135,6 @@ pub fn Class(comptime S: type) type {
             const closure: *Closure = @fieldParentPtr("php_portion", func);
             const self: *@This() = closure.self;
             const class = ZigClassEntry.fromStructure(self);
-            const byte_size = class.byte_size orelse return error.InvalidType;
             var arg_iter: ArgumentIterator = .init(ed);
             if (arg_iter.len != 1) {
                 return failure.report("casting operation expects 1 argument, received {d}", .{
@@ -151,23 +151,19 @@ pub fn Class(comptime S: type) type {
                     return;
                 }
             }
-            const str = php.getValueString(arg) catch {
-                return failure.report("casting operation expects a string as argument, received {s}", .{
-                    @tagName(php.getValueType(arg)),
+            const buf = get: {
+                if (php.getValueObject(arg) catch null) |obj| {
+                    if (class.extractBuffer(obj)) |buf| break :get buf;
+                }
+                const arg_d = php.createValueDebug(arg);
+                defer php.release(&arg_d);
+                return failure.report("casting operation expects an ArrayBuffer as argument, received {s}", .{
+                    php.getValueStringContent(&arg_d) catch unreachable,
                 });
             };
-            if (str.len != byte_size) {
-                return failure.report("{s} '{s}' expects {d} bytes, received a string with {d} bytes", .{
-                    class.getStructureName(),
-                    class.getName(),
-                    byte_size,
-                    str.len,
-                });
-            }
-            const buf = try ByteBuffer.create(class.alignment);
-            defer buf.release();
-            buf.referenceString(str, false);
-            const new_obj = try class.createObjectFromBuffer(buf, null);
+            try class.validateBuffer(buf);
+            buf.addRef();
+            const new_obj = try class.obtainObjectFromBuffer(buf);
             return_value.* = php.createValueObject(new_obj);
         }
 

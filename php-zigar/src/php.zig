@@ -513,6 +513,18 @@ pub fn createValueException() ?Value {
     return createValueObject(ex);
 }
 
+pub fn createValueDebug(value: *const Value) Value {
+    switch (getValueType(value)) {
+        .object => {
+            const obj = getValueObject(value) catch unreachable;
+            return createValueString(obj.ce.*.name.?);
+        },
+        inline else => |t| {
+            return createValueStringContent("(" ++ @tagName(t) ++ ")");
+        },
+    }
+}
+
 pub fn persistent(comptime s: []const u8) *String {
     const static = struct {
         comptime text: []const u8 = s,
