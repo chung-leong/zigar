@@ -77,10 +77,8 @@ const functions = struct {
             if (arg_iter.len < 1 or arg_iter.len > 2) {
                 return reportArgCountMismatch("zigar_load_module", 1, 2, arg_iter.len);
             }
-            const mod_path = init: {
-                var value = (try arg_iter.nextValue(.string)).?;
-                break :init php.getValueStringContent(&value) catch unreachable;
-            };
+            const arg0 = arg_iter.next().?;
+            const mod_path = try php.getValueStringContent(arg0);
             const so_name = try getSharedLibraryName(al, .this, .this);
             defer al.free(so_name);
             const cwd_path = try std.process.getCwdAlloc(al);
@@ -124,18 +122,11 @@ const functions = struct {
             if (arg_iter.len < 2 or arg_iter.len > 3) {
                 return reportArgCountMismatch("zigar_compile_module", 2, 3, arg_iter.len);
             }
-            const src_path = init: {
-                var value = (try arg_iter.nextValue(.string)).?;
-                break :init php.getValueStringContent(&value) catch unreachable;
-            };
-            const mod_path = init: {
-                var value = (try arg_iter.nextValue(.string)).?;
-                break :init php.getValueStringContent(&value) catch unreachable;
-            };
-            const options = init: {
-                var value = (try arg_iter.nextValue(.object)) orelse break :init null;
-                break :init php.getValueHashTable(&value) catch unreachable;
-            };
+            const arg0 = arg_iter.next().?;
+            const src_path = try php.getValueStringContent(arg0);
+            const arg1 = arg_iter.next().?;
+            const mod_path = try php.getValueStringContent(arg1);
+            const options = if (arg_iter.next()) |arg2| try php.getValueHashTable(arg2) else null;
             const cwd_path = try std.process.getCwdAlloc(al);
             defer php.allocator.free(cwd_path);
             const source_path_resolved = try std.fs.path.resolve(al, &.{ cwd_path, src_path });
@@ -164,10 +155,8 @@ const functions = struct {
             if (arg_iter.len != 1) {
                 return reportArgCountMismatch("zigar_event_loop", 1, 1, arg_iter.len);
             }
-            const loop_type = init: {
-                var value = (try arg_iter.nextValue(.string)).?;
-                break :init php.getValueStringContent(&value) catch unreachable;
-            };
+            const arg0 = arg_iter.next().?;
+            const loop_type = try php.getValueStringContent(arg0);
             try CallDispatcher.event_loop.use(loop_type);
         }
     };

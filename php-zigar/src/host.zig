@@ -70,6 +70,7 @@ pub const ModuleHost = struct {
         self.ref_count -= 1;
         if (self.ref_count == 0) {
             // std.debug.print("freeing host\n", .{});
+            php.destroyHashTable(&self.plain_object_table);
             self.unclaimed_buffer_map.deinit();
             self.object_map.deinit();
             self.dispatcher.deinit();

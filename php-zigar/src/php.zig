@@ -203,13 +203,6 @@ pub const ArgumentIterator = struct {
         }
     }
 
-    pub fn nextValue(self: *@This(), comptime desired_type: ValueType) !?Value {
-        const value_ptr = self.next() orelse return null;
-        var value = value_ptr.*;
-        try convertValue(&value, desired_type);
-        return value;
-    }
-
     pub fn reset(self: *@This()) void {
         self.index = 0;
     }

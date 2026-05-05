@@ -389,13 +389,13 @@ pub fn StructLike(comptime S: type) type {
                     const class = ZigClassEntry.fromStructure(self);
                     var plain = class.host.getPlainObject(obj, isTuple(self));
                     if (plain.status == .existing) return plain.value;
+                    defer class.host.removePlainObject(obj);
                     var iter: iterator.PropertyIterator(S) = .init(obj);
                     defer iter.deinit();
                     while (iter.next()) |prop_value| {
                         try transform.apply(prop_value);
                         plain.add(iter.current_name.?, prop_value);
                     }
-                    class.host.removePlainObject(obj);
                     return plain.value;
                 },
                 else => {},

@@ -700,7 +700,7 @@ final class FunctionCallingTest extends ZigarTestCase
         $this->assertEquals((object) [
             'string' => 'Hello world',
             'plain' => [ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ],
-            'typed_array' => [ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ],
+            'typed_array' => new Uint8Array([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ]),
         ], $result4);
     }   
 }
