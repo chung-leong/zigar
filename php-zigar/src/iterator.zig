@@ -293,7 +293,6 @@ pub const IteratorIterator = struct {
     }
 
     pub fn getCurrentData(iter: *ObjectIterator) !*Value {
-        php.addRef(&iter.data);
         return &iter.data;
     }
 
