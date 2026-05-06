@@ -33,7 +33,18 @@ pub const VariadicStruct = struct {
             const class = ZigClassEntry.fromObject(class_obj);
             var iter = class.getMemberIterator(.instance);
             if (iter.len == 0) return error.Unexpected;
-            const arg_count = iter.len - 1;
+            var arg_count: usize = 0;
+            var last_arg_class: *ZigClassEntry = undefined;
+            _ = iter.next(); // first member is retval
+            while (iter.next()) |member| {
+                switch (member.class.purpose) {
+                    else => {
+                        arg_count += 1;
+                        last_arg_class = member.class;
+                    },
+                }
+            }
+            iter.reset();
             self.arg_members = try php.allocator.alloc(*ZigClassEntry.Member, arg_count);
             const retval_member = iter.next().?;
             self.retval_accessors = &retval_member.accessors;
@@ -42,7 +53,13 @@ pub const VariadicStruct = struct {
                 self.arg_members[index] = member;
                 index += 1;
             }
-            // TODO: allow empty struct as last argument
+            if (arg_count > 0) {
+                // allow omission of last argument if it's a struct with no required fields
+                if (last_arg_class.type == .@"struct") {
+                    const static = last_arg_class.getStaticData(structure.Struct);
+                    self.last_arg_optional = static.required_field_count == 0;
+                }
+            }
         }
 
         pub fn deinit(self: *@This()) void {

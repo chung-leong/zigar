@@ -237,15 +237,6 @@ pub const Struct = struct {
         Super.freeObject(obj);
     }
 
-    pub fn getIterator(obj: *Object) !?*ObjectIterator {
-        const class = ZigClassEntry.fromObject(obj);
-        return switch (class.purpose) {
-            .iterator => try iterator.IteratorIterator.create(obj),
-            .generator => try iterator.GeneratorIterator.create(obj),
-            else => try iterator.PropertyIterator(@This()).create(obj),
-        };
-    }
-
     pub const finalize = Super.finalize;
     pub const externalize = Super.externalize;
     pub const getExtent = Super.getExtent;
@@ -261,5 +252,6 @@ pub const Struct = struct {
     pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getGarbageCollection = Super.getGarbageCollection;
+    pub const getIterator = Super.getIterator;
     const fromObject = Super.fromObject;
 };

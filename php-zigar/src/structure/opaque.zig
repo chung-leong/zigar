@@ -17,9 +17,6 @@ pub const Opaque = struct {
     buffer: *ByteBuffer = undefined,
 
     pub const Super = structure.StructLike(@This());
-    pub fn getIterator(obj: *Object) !?*ObjectIterator {
-        return try iterator.PropertyIterator(@This()).create(obj);
-    }
 
     fn throwException(self: *@This()) error{Unexpected} {
         const class = ZigClassEntry.fromStructure(self);
@@ -50,4 +47,5 @@ pub const Opaque = struct {
     pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getGarbageCollection = Super.getGarbageCollection;
+    pub const getIterator = Super.getIterator;
 };

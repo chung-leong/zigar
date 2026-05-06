@@ -481,6 +481,17 @@ pub fn StructLike(comptime S: type) type {
             return member;
         }
 
+        pub fn isTuple(self: *S) bool {
+            if (scope == .instance) {
+                const class = ZigClassEntry.fromStructure(self);
+                const flags = class.getFlags(S);
+                if (@hasField(@TypeOf(flags), "is_tuple")) {
+                    return flags.is_tuple;
+                }
+            }
+            return false;
+        }
+
         pub fn getProperties(obj: *Object) !*HashTable {
             var iter: iterator.PropertyIterator(S) = .init(obj);
             defer iter.deinit();
@@ -499,15 +510,13 @@ pub fn StructLike(comptime S: type) type {
             return ht;
         }
 
-        pub fn isTuple(self: *S) bool {
-            if (scope == .instance) {
-                const class = ZigClassEntry.fromStructure(self);
-                const flags = class.getFlags(S);
-                if (@hasField(@TypeOf(flags), "is_tuple")) {
-                    return flags.is_tuple;
-                }
-            }
-            return false;
+        pub fn getIterator(obj: *Object) !?*ObjectIterator {
+            const class = ZigClassEntry.fromObject(obj);
+            return switch (class.purpose) {
+                .iterator => try iterator.IteratorIterator.create(obj),
+                .generator => try iterator.GeneratorIterator.create(obj),
+                else => try iterator.PropertyIterator(S).create(obj),
+            };
         }
 
         pub const object = Super.object;

@@ -30,6 +30,7 @@ pub const ArgStruct = struct {
 
     pub const Static = struct {
         arg_accessors: []*accessor.Any = undefined,
+        last_arg_optional: bool = false,
         retval_accessors: *accessor.Any = undefined,
         allocator: ?*ZigClassEntry.Member = null,
         promise: ?*ZigClassEntry.Member = null,
@@ -41,11 +42,15 @@ pub const ArgStruct = struct {
             var iter = class.getMemberIterator(.instance);
             if (iter.len == 0) return error.Unexpected;
             var arg_count: usize = 0;
+            var last_arg_class: *ZigClassEntry = undefined;
             _ = iter.next(); // first member is retval
             while (iter.next()) |member| {
                 switch (member.class.purpose) {
                     .allocator, .promise, .generator, .abort_signal => {},
-                    else => arg_count += 1,
+                    else => {
+                        arg_count += 1;
+                        last_arg_class = member.class;
+                    },
                 }
             }
             iter.reset();
@@ -62,6 +67,15 @@ pub const ArgStruct = struct {
                         self.arg_accessors[index] = &member.accessors;
                         index += 1;
                     },
+                }
+            }
+            if (arg_count > 0) {
+                // allow omission of last argument if it's a struct with no required fields
+                if (last_arg_class.type == .@"struct") {
+                    var last_arg_iter = last_arg_class.getMemberIterator(.instance);
+                    self.last_arg_optional = while (last_arg_iter.next()) |m| {
+                        if (m.flags.is_required) break false;
+                    } else true;
                 }
             }
         }
@@ -88,8 +102,12 @@ pub const ArgStruct = struct {
             }
         }
         try self.buffer.allocate(allocator, class.byte_size.?);
-        // TODO: allow empty struct as last argument
-        if (arg_iter.len != static.arg_accessors.len) return error.IncorrectArgumentCount;
+        const max_arg_count = static.arg_accessors.len;
+        const min_arg_count = if (static.last_arg_optional) max_arg_count - 1 else max_arg_count;
+        const arg_count = arg_iter.len;
+        if (arg_count < min_arg_count or arg_count > max_arg_count) {
+            return error.IncorrectArgumentCount;
+        }
         // use accessors to write into the argument struct
         var index: usize = 0;
         while (arg_iter.next()) |arg| : (index += 1) {

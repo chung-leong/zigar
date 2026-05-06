@@ -214,10 +214,6 @@ pub const Union = struct {
         }
     }
 
-    pub fn getIterator(obj: *Object) !?*ObjectIterator {
-        return try iterator.PropertyIterator(@This()).create(obj);
-    }
-
     fn checkSelector(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
@@ -294,6 +290,7 @@ pub const Union = struct {
     pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getGarbageCollection = Super.getGarbageCollection;
+    pub const getIterator = Super.getIterator;
     const fromObject = Super.fromObject;
     const copySelf = Super.copySelf;
     const findMember = Super.findMember;
