@@ -17,8 +17,10 @@ const structure = @import("../structure.zig");
 
 pub const Function = struct {
     closure: Closure = undefined,
-    // force buffer to be the last field using alignment
-    transform: ?accessor.Transform align(@alignOf(*ByteBuffer)) = null,
+    info: struct {
+        transform: ?accessor.Transform = null,
+        has_thunk: bool = false,
+    } align(@alignOf(*ByteBuffer)) = .{}, // force buffer to be the last field using alignment
     buffer: *ByteBuffer = undefined,
 
     pub const Super = structure.Parent(@This());
@@ -97,10 +99,10 @@ pub const Function = struct {
             defer for (args) |*arg| php.release(arg);
             const result = try php.invokeMethod(null, callable, args);
             defer php.release(&result);
-            // replace buffer so the retval gets written into the stack
+            // replace buffer so the retval gets written into the stack;
             var stack_buffer: ByteBuffer = .init(arg_bytes);
-            arg_buffer.release();
             arg_struct.buffer = &stack_buffer;
+            defer arg_struct.buffer = arg_buffer;
             try arg_struct.setReturnValue(&result);
         }
     };
@@ -122,7 +124,7 @@ pub const Function = struct {
             .boolean => php.createValueBool(true),
             else => use: {
                 if (transform != .none) {
-                    self.transform = transform;
+                    self.info.transform = transform;
                 }
                 break :use Super.getValue(self, .none);
             },
@@ -131,15 +133,36 @@ pub const Function = struct {
 
     pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) !void {
         if (transform == .none) {
+            self.freeThunk();
             if (try Super.copySelf(self, value)) return;
-            const class = ZigClassEntry.fromStructure(self);
-            if (!php.isCallable(value)) return error.NotCallable;
-            const thunk_address = try class.host.dispatcher.createJsThunk(class, @constCast(value));
-            const ptr: [*]u8 = @ptrFromInt(thunk_address);
-            self.buffer.bytes = ptr[0..0];
+            try self.createThunk(value);
         } else {
             return error.Unsupported;
         }
+    }
+
+    fn createThunk(self: *@This(), value: *const Value) !void {
+        if (!php.isCallable(value)) return error.NotCallable;
+        const class = ZigClassEntry.fromStructure(self);
+        const thunk_address = try class.host.dispatcher.createJsThunk(class, @constCast(value));
+        const ptr: [*]u8 = @ptrFromInt(thunk_address);
+        self.buffer.bytes = ptr[0..0];
+        self.info.has_thunk = true;
+    }
+
+    fn freeThunk(self: *@This()) void {
+        if (self.info.has_thunk) {
+            const class = ZigClassEntry.fromStructure(self);
+            const thunk_address = @intFromPtr(self.buffer.bytes.ptr);
+            class.host.dispatcher.destroyJsThunk(class, thunk_address) catch {};
+            self.info.has_thunk = false;
+        }
+    }
+
+    pub fn freeObject(obj: *Object) void {
+        const self = fromObject(obj);
+        self.freeThunk();
+        Super.freeObject(obj);
     }
 
     pub fn handleCall(ed: *ExecuteData, return_value: *Value) !void {
@@ -173,22 +196,22 @@ pub const Function = struct {
                         const promise = try promise_struct.getSpecialContext(Promise);
                         if (!php.isValueNull(&retval)) {
                             // if the return value isn't null, we assume the function is choosing to not be async
-                            if (self.transform) |tm| try tm.apply(&retval);
+                            if (self.info.transform) |tm| try tm.apply(&retval);
                             break :get retval;
                         }
                         // wait for promise to resolve
-                        promise.transform = self.transform;
+                        promise.transform = self.info.transform;
                         break :get try promise.await();
                     } else if (arg_struct.flags.has_generator) {
                         const generator_struct = try arg_struct.getSpecialArgument(Generator);
                         const generator = try generator_struct.getSpecialContext(Generator);
-                        generator.transform = self.transform;
+                        generator.transform = self.info.transform;
                         // return generator
                         const generator_obj = ZigObject(structure.Struct).fromStructure(generator_struct).object();
                         php.addRef(generator_obj);
                         break :get php.createValueObject(generator_obj);
                     } else {
-                        if (self.transform) |tm| try tm.apply(&retval);
+                        if (self.info.transform) |tm| try tm.apply(&retval);
                         break :get retval;
                     }
                 };
@@ -201,7 +224,7 @@ pub const Function = struct {
                 const arg_count = arg_struct.attributes.len;
                 try class.host.runVariadicThunk(static.thunk_address, fn_addr, arg_addr, attr_addr, arg_count);
                 var retval = try arg_struct.getReturnValue();
-                if (self.transform) |tm| try tm.apply(&retval);
+                if (self.info.transform) |tm| try tm.apply(&retval);
                 return_value.* = retval;
             },
             else => unreachable,
@@ -227,7 +250,6 @@ pub const Function = struct {
     pub const visitPointers = Super.visitPointers;
     pub const getConstructor = Super.getConstructor;
     pub const castObject = Super.castObject;
-    pub const freeObject = Super.freeObject;
     pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getGarbageCollection = Super.getGarbageCollection;

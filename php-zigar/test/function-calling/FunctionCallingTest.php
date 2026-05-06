@@ -687,6 +687,11 @@ final class FunctionCallingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/handle-immediate-promise-fulfillment.zig');
         $result1 = $m->fulfillInt();
         $this->assertSame(1234, $result1);
+        $result2 = $m->fulfillVoid();
+        $this->assertSame(null, $result2);
+        $copiedBytesArray = new Uint8ClampedArray(36);
+        $result3 = $m->reduceColorDepthOfRgba8888ToArgb1555($copiedBytesArray, 128);
+        $this->assertSame(1234, $result3);
     }
 
     public function testApplyTransformToReturnValues(): void 

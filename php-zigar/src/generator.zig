@@ -69,7 +69,7 @@ pub const Generator = struct {
         return self.status == .resolved;
     }
 
-    pub fn getHandler() Value {
+    pub fn createHandler() Value {
         var func = php.createTransformedFunction(handleResolve, "resolve", 2, false);
         return php.createValueClosure(&func, null, null, null);
     }

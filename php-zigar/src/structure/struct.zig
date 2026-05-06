@@ -65,10 +65,11 @@ pub const Struct = struct {
             switch (class.purpose) {
                 inline .promise, .generator => |p| {
                     const closure = switch (p) {
-                        .promise => Promise.getHandler(),
-                        .generator => Generator.getHandler(),
+                        .promise => Promise.createHandler(),
+                        .generator => Generator.createHandler(),
                         else => unreachable,
                     };
+                    defer php.release(&closure);
                     const cb_member = try class.getMember(.instance, "callback");
                     if (cb_member.class.type != .pointer) return error.Unexpected;
                     const cb_obj = try cb_member.class.createObject(null, &closure, false);
@@ -206,7 +207,12 @@ pub const Struct = struct {
     }
 
     pub fn getSpecialContext(self: *@This(), comptime T: type) !*T {
-        const target = try self.getProperty(php.persistent("ptr"), null);
+        const ptr_value = try self.getProperty(php.persistent("ptr"), null);
+        const ptr_obj = try php.getValueObject(&ptr_value);
+        defer php.release(ptr_obj);
+        const ptr_struct = ZigObject(structure.Pointer).fromObject(ptr_obj).structure();
+        const target = try ptr_struct.getValue(.none);
+        defer php.release(&target);
         return accessor.getOpaqueTarget(T, &target);
     }
 

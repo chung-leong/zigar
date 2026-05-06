@@ -51,6 +51,7 @@ pub const ByteBuffer = struct {
             .bytes = bytes,
             .flags = .{
                 .temporary = true,
+                .uninitialized = false,
             },
         };
     }

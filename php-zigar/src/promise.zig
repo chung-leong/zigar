@@ -76,7 +76,7 @@ pub const Promise = struct {
         self.status = .resolved;
     }
 
-    pub fn getHandler() Value {
+    pub fn createHandler() Value {
         var func = php.createTransformedFunction(handleResolve, "resolve", 2, false);
         return php.createValueClosure(&func, null, null, null);
     }
@@ -85,8 +85,9 @@ pub const Promise = struct {
         var arg_iter: ArgumentIterator = .init(ed);
         const ptr = arg_iter.next() orelse return error.Unexpected;
         const ptr_obj = php.getValueObject(ptr) catch unreachable;
-        const ptr_struct = ZigObject(structure.Optional).fromObject(ptr_obj).structure();
+        const ptr_struct = ZigObject(structure.Pointer).fromObject(ptr_obj).structure();
         const target = try ptr_struct.getValue(.none);
+        defer php.release(&target);
         const self = try accessor.getOpaqueTarget(@This(), &target);
         const result = arg_iter.next() orelse return error.Unexpected;
         try self.resolve(result);

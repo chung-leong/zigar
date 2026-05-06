@@ -1341,8 +1341,8 @@ pub fn getBacktrace() !*Array {
 
 pub fn emalloc(size: usize) ?*anyopaque {
     if (php_h.ZEND_DEBUG == 1) {
-        const ptr = php_h._emalloc(size, "zig", 0, null, 0);
-        // std.debug.print("allocate: {d} {x}\n", .{ size, @intFromPtr(ptr) });
+        const src = @src();
+        const ptr = php_h._emalloc(size, src.file, src.line + 1, null, 0);
         return ptr;
     } else {
         return php_h._emalloc(size);
@@ -1356,7 +1356,6 @@ pub fn malloc(size: usize) ?*anyopaque {
 
 pub fn efree(ptr: ?*anyopaque) void {
     if (php_h.ZEND_DEBUG == 1) {
-        // std.debug.print("free: {x}\n", .{@intFromPtr(ptr)});
         php_h._efree(ptr, "zig", 0, null, 0);
     } else {
         php_h.efree(ptr);

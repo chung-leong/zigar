@@ -178,11 +178,14 @@ pub const CallDispatcher = struct {
         return thunk_address;
     }
 
-    pub fn destroyJsThunk(self: *@This(), controller_address: usize, thunk_address: usize) !void {
+    pub fn destroyJsThunk(self: *@This(), class: *ZigClassEntry, thunk_address: usize) !void {
+        const fn_static = class.getStaticData(structure.Function);
+        const controller_address = fn_static.controller_address;
         var fn_id: usize = 0;
         const module = self.host.module orelse return error.Unexpected;
-        _ = module.exports.destroy_js_thunk(controller_address, thunk_address, &fn_id);
-        try self.deleteCallback(fn_id);
+        if (module.exports.destroy_js_thunk(controller_address, thunk_address, &fn_id) == .SUCCESS) {
+            self.deleteCallback(fn_id);
+        }
     }
 
     fn saveCallback(self: *@This(), class: *ZigClassEntry, callable: *Value) !usize {
