@@ -299,6 +299,7 @@ pub const BufferMap = struct {
     const SearchResult = Map.SearchResult;
 
     pub fn deinit(self: *@This()) void {
+        for (self.map.list.items) |buf| buf.release();
         self.map.deinit();
     }
 
