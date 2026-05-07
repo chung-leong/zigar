@@ -204,19 +204,294 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame(14, $len);
         $this->assertSame("This is a test", $output);
     }
+
+    public function testObtainErrorCodeUsingLibcFunction(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/return-last-error-with-libc-function.zig');
+        $result = $m->triggerError("/cow://moo");
+    }
+
+    public function testDetectEndOfFileUsingLibcFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/detect-end-of-file-with-libc-function.zig');
+        $url_path = '/data://text/plain;base64,' . base64_encode(str_repeat(' ', 256));
+        $result = $m->detectEOF($url_path);
+        $this->assertSame(true, $result);
+    }
+
+    public function testRewindFileUsingLibcFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/rewind-file-with-libc-function.zig');
+        $url_path = '/data://text/plain;base64,' . base64_encode(str_repeat(' ', 256));
+        $result = $m->getStartingPos($url_path);
+        $this->assertSame(0, $result);
+    }
+
+    public function testCheckFileAccessUsingPosixFunction(): void
+    {
+        global $output, $stat;
+        $m = ZigImporter::load(__DIR__ . '/check-access-with-posix-function.zig');
+        $output = '';
+        $stat = [
+            'mode' => 0o0100000,
+            'size' => 5,
+        ];
+        $url_path = '/var://output/stat';
+        $result1 = $m->check($url_path, read: true);
+        $this->assertSame(true, $result1);
+        $result2 = $m->check($url_path, write: true);
+        $this->assertSame(true, $result2);
+        $result3 = $m->check($url_path, execute: true);
+        $this->assertSame(false, $result3);
+        $stat = [
+            'mode' => 0o0040000,
+            'size' => 0,
+        ];
+        $result4 = $m->check($url_path, execute: true);
+        $this->assertSame(true, $result4);
+    }
+
+    public function testCheckAccessOfFileinDirectoryUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/check-access-at-dir-with-posix-function.zig');
+    }
+
+    public function testCheckAccessOfFileinDirectoryInFileSystemUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/check-access-at-dir-in-file-system-with-posix-function.zig');
+        $path = __DIR__ . 'data/statat_test';
+        mkdir($path, 0o0777, true);
+        try {
+            file_put_contents("$path/file.txt", "Hello world");
+            $result = $m->check($path, "file.txt", read: true);
+            $this->assertSame(true, $result);
+        } finally {
+            unlink("$path/file.txt");
+            rmdir($path);
+        }
+    }
+
+    public function testOpenFileInDirectoryUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/open-file-at-dir-with-posix-function.zig');
+    }
+
+    public function testOpenFileFileInDirectoryInFileSystemUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/open-file-at-dir-in-file-system-with-posix-function.zig');
+        $path = __DIR__ . 'data/openat_test';
+        mkdir($path, 0o0777, true);
+        try {
+            $text = 'Hello world!!!';
+            $len = $m->write($path, "writable.txt", $text);
+            $this->assertSame(strlen($text), $len);
+            $content = file_get_contents("$path/writable.txt");
+            $this->assertSame($text, $content);
+        } finally {
+            unlink("$path/writable.txt");
+            rmdir($path);
+        }
+    }
+
+    public function testOpenFileInDirectoryInFileSystemUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/stat-file-at-dir-in-file-system-with-posix-function.zig');
+        $path = __DIR__ . 'data/statat_test';
+        mkdir($path, 0o0777, true);
+        try {
+            file_put_contents("$path/file.txt", "Hello world");
+            $this->expectOutputString(<<<OUTPUT
+            size = 11
+
+            OUTPUT);
+            $m->stat($path, "file.txt");
+        } finally {
+            unlink("$path/file.txt");
+            rmdir($path);
+        }
+    }
+
+    public function testDecompressGzipFile(): void
+    {
+        $m->startup(1);
+        try {
+
+        } finally {
+            $m->shutdown();
+        }
+    }
+
+    public function testOpenAndReadFromFileUsingPread(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/open-and-read-file-with-pread.zig');
+        $path = __DIR__ . '/data/test.txt';        
+        $content = file_get_contents($path);
+        $url_path = '/data://text/plain;base64,' . base64_encode($content);
+        $chunk = $m->readAt($url_path, 120, 16);
+        $this->assertSame('cated to the pro', (string) $chunk);
+    }
+
+    public function testOpenAndReadFromFileUsingPreadv(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/open-and-read-file-with-preadv.zig');
+        $path = __DIR__ . '/data/test.txt';        
+        $content = file_get_contents($path);
+        $url_path = '/data://text/plain;base64,' . base64_encode($content);
+        $vectors = [
+            new Uint8Array(16),
+            new Uint8Array(8),
+            new Uint8Array(4),
+        ];
+        $count = $m->readAt($url_path, $vectors, 76);
+        $this->assertSame(28, $count);        
+        $this->assertSame([ 'a new nation, co', 'nceived ', 'in L' ], [
+            (string) $vectors[0],
+            (string) $vectors[1],
+            (string) $vectors[2],
+        ]);
+    }
+
+    public function testOpenAndReadFromFileUsingReadv(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/open-and-read-file-with-readv.zig');
+        $path = __DIR__ . '/data/test.txt';        
+        $content = file_get_contents($path);
+        $url_path = '/data://text/plain;base64,' . base64_encode($content);
+        $vectors = [
+            new Uint8Array(16),
+            new Uint8Array(8),
+            new Uint8Array(4),
+        ];
+        $count = $m->read($url_path, $vectors);
+        $this->assertSame(28, $count);        
+        $this->assertSame([ 'Four score and s', 'even yea', 'rs a' ], [
+            (string) $vectors[0],
+            (string) $vectors[1],
+            (string) $vectors[2],
+        ]);
+    }
+
+    public function testOpenAndWriteToFileUsingPwrite(): void 
+    {
+        global $output;
+        $m = ZigImporter::load(__DIR__ . '/open-and-write-file-with-pwrite.zig');
+        $output = str_repeat(' ', 256);
+        $url_path = '/var://output';
+        $written = $m->writeAt($url_path, 'Hello world', 120);
+        $this->assertSame(11, $written);
+        $text = substr($output, 120, 11);
+        $this->assertSame('Hello world', $text);
+    }
+
+    public function testOpenAndWriteToFileUsingPwritev(): void 
+    {
+        global $output;
+        $m = ZigImporter::load(__DIR__ . '/open-and-write-file-with-pwritev.zig');
+        $output = str_repeat(' ', 256);
+        $url_path = '/var://output';
+        $written = $m->writeAt($url_path, [ 'Hello', ' world', '???' ], 120);
+        $this->assertSame(14, $written);
+        $text = substr($output, 120, 14);
+        $this->assertSame('Hello world???', $text);
+    }
+
+    public function testOpenAndWriteToFileUsingWritev(): void 
+    {
+        global $output;
+        $m = ZigImporter::load(__DIR__ . '/open-and-write-file-with-writev.zig');
+        $output = str_repeat(' ', 256);
+        $url_path = '/var://output';
+        $written = $m->write($url_path, [ 'Hello', ' world', '???' ]);
+        $this->assertSame(14, $written);
+        $text = substr($output, 0, 14);
+        $this->assertSame('Hello world???', $text);
+    }
+
+    public function testGetCharactersFromFileUsingFgetc(): void {
+        $m = ZigImporter::load(__DIR__ . '/read-file-content-with-fgetc.zig');
+        $path = __DIR__ . '/data/macbetch.txt';
+        // TODO
+    }
+
+    public function testGetCharactersFromStdinUsingGetchar(): void {
+        // TODO
+    }
+
+    public function testCreateDirectoryInFileSystemUsingPosixFunction(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/create-directory-in-file-system-with-posix-function.zig');
+        $path = __DIR__ . '/data/mkdir_test';
+        $m->makeDirectory($path);
+        $this->expectNotToPerformAssertions();
+    }
+
+    public function testCreateDirectoryInAnotherDirectoryInFileSystemUsingPosixFunction(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/create-directory-at-dir-in-file-system-with-posix-function.zig');
+        $path = __DIR__ . '/data/mkdirat_test';
+        mkdir($path, 0o0777, true);
+        try {
+            $m->makeDirectory($path, 'hello');
+            $info = stat("$path/hello");
+            $this->assertSame(0o0040000, $info['mode'] & 0o0040000);
+        } finally {
+            rmdir("$path/hello");
+            rmdir($path);
+        }
+    }
+
+    public function testRemoveDirectoryInFileSystemUsingPosixFunction(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/remove-directory-in-file-system-with-posix-function.zig');
+        $path = __DIR__ . '/data/rmdir_test';
+        mkdir($path, 0o0777, true);
+        try {
+            $m->removeDirectory($path);
+            $this->expectNotToPerformAssertions();
+        } catch (Exception $e) {
+            rmdir($path);
+        }
+    }
+
+    public function testRemoveFileInFileSystemUsingPosixFunction(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/remove-file-in-file-system-with-posix-function.zig');
+        $path = __DIR__ . '/data/unlink_test.txt';
+        file_put_contents($path, "Hello world");
+        try {
+            $m->removeFile($path);
+            $this->expectNotToPerformAssertions();
+        } catch (Exception $e) {
+            unmlink($path);
+        }
+    }
+
+    public function testCopyVirtualFileToReadFileUsingSendfile(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/copy-virtual-file-to-real-file-with-sendfile.zig');
+        $path = __DIR__ . 'data/virtual-file-test.txt';
+        try {
+            // TODO
+        } finally {
+            unlink($path);
+        }
+    }
+
 }
 
 class VariableStream {
     var $position;
     var $varname;
+    var $statname;
 
     function stream_open($path, $mode, $options, &$opened_path)
     {
         $url = parse_url($path);
         $this->varname = $url["host"];
+        $this->statname = isset($url["path"]) ? substr($url["path"], 1) : '';
         $this->position = 0;
 
-        return true;
+        return isset($GLOBALS[$this->varname]) ? true : false;
     }
 
     function stream_read($count)
@@ -291,6 +566,15 @@ class VariableStream {
             return true;
         }
         return false;
+    }
+
+    function url_stat($path, $flags)
+    {
+        $url = parse_url($path);
+        $varname = $url["host"];
+        if (!isset($GLOBALS[$varname])) return false;
+        $statname = substr($url["path"], 1);
+        return $GLOBALS[$statname] ?? false;
     }
 }
 

@@ -1067,7 +1067,7 @@ export function addTests(importModule, options) {
         .with.property('message', 'Unable to set times');
     })
     skip.entirely.if(target === 'win32').
-    it('should set access and last modified time of a file by using posix function', async function() {
+    it('should set access and last modified time of a file using posix function', async function() {
       const { __zigar, setTimes, setLinkTimes } = await importTest('set-times-of-file-by-path-with-posix-function', { useLibc: true });
       let event;
       __zigar.on('utimes', (evt) => {
@@ -1100,7 +1100,7 @@ export function addTests(importModule, options) {
         });
       }
     })
-    it('should set access and last modified time of a file by using utime', async function() {
+    it('should set access and last modified time of a file using utime', async function() {
       const { __zigar, setTimes } = await importTest('set-times-of-file-by-path-with-utime', { useLibc: true });
       let event;
       __zigar.on('utimes', (evt) => {
@@ -2472,7 +2472,7 @@ export function addTests(importModule, options) {
         } catch {}
       }
     })
-    it('should scan directory in file system file using posix function', async function() {
+    it('should scan directory in file system using posix function', async function() {
       const { __zigar, print } = await importTest('scan-directory-in-file-system-with-posix-functions', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');

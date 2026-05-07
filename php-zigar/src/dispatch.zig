@@ -671,27 +671,16 @@ pub const CallDispatcher = struct {
     }
 
     fn handleStat(self: *@This(), args: anytype) !E {
-        _ = self;
-        _ = args;
-        return .OPNOTSUPP;
-        // const env = self.env;
-        // if (@hasField(@TypeOf(args.*), "fd")) {
-        //     return try self.callPosixFunction(self.js.fd_filestat_get, &.{
-        //         try env.createInt32(args.fd),
-        //         try env.createUsize(@intFromPtr(&args.stat)),
-        //         futex,
-        //     });
-        // } else {
-        //     const path_len: u32 = @truncate(std.mem.len(args.path));
-        //     return try self.callPosixFunction(self.js.path_filestat_get, &.{
-        //         try env.createInt32(args.dirfd),
-        //         try env.createUint32(@as(u32, @bitCast(args.lookup_flags))),
-        //         try env.createUsize(@intFromPtr(args.path)),
-        //         try env.createUint32(path_len),
-        //         try env.createUsize(@intFromPtr(&args.stat)),
-        //         futex,
-        //     });
-        // }
+        if (@hasField(@TypeOf(args.*), "fd")) {
+            const entry = self.findStream(args.fd) catch return .BADF;
+            php.fstat(entry.stream, &args.stat) catch return .BADF;
+            return .SUCCESS;
+        } else {
+            const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
+            defer loc.deinit();
+            php.stat(loc.url, loc.context, args.lookup_flags, &args.stat) catch return .NOENT;
+            return .SUCCESS;
+        }
     }
 
     fn handleGetDescriptorFlags(self: *@This(), args: anytype) !E {

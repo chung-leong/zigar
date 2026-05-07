@@ -1522,27 +1522,62 @@ pub fn seek(strm: *Stream, offset: i64, whence: u32) !void {
     if (php_h._php_stream_seek(strm, offset, @intCast(whence)) < 0) return error.Failure;
 }
 
+pub fn stat(path: *const String, context: ?*StreamContext, _: std.os.wasi.lookupflags_t, out: *std.os.wasi.filestat_t) !void {
+    const p = getStringContent(path);
+    var stat_buf: php_h.php_stream_statbuf = undefined;
+    if (php_h._php_stream_stat_path(p.ptr, 0, &stat_buf, context) != 0) return error.Failure;
+    copyStat(&stat_buf.sb, out);
+}
+
+pub fn fstat(strm: *Stream, out: *std.os.wasi.filestat_t) !void {
+    var stat_buf: php_h.php_stream_statbuf = undefined;
+    if (php_h._php_stream_stat(strm, &stat_buf) != 0) return error.Failure;
+    copyStat(&stat_buf.sb, out);
+}
+
+fn copyStat(in: *php_h.zend_stat_t, out: *std.os.wasi.filestat_t) void {
+    out.size = convertSize(in.st_size);
+    out.atim = convertTimespec(&in.st_atim);
+    out.ctim = convertTimespec(&in.st_ctim);
+    out.mtim = convertTimespec(&in.st_mtim);
+    out.ino = @intCast(in.st_ino);
+    out.dev = @intCast(in.st_dev);
+    out.filetype = switch (in.st_mode & php_h.S_IFMT) {
+        php_h.S_IFSOCK => .SOCKET_STREAM,
+        php_h.S_IFLNK => .SYMBOLIC_LINK,
+        php_h.S_IFREG => .REGULAR_FILE,
+        php_h.S_IFBLK => .BLOCK_DEVICE,
+        php_h.S_IFDIR => .DIRECTORY,
+        php_h.S_IFCHR => .CHARACTER_DEVICE,
+        else => .UNKNOWN,
+    };
+}
+
+fn convertSize(value: anytype) usize {
+    if (value < 0) return 0;
+    return @intCast(value);
+}
+
+fn convertTimespec(t: *php_h.timespec) u64 {
+    const s: i64 = t.tv_sec;
+    if (s < 0) return 0;
+    const ns: i64 = t.tv_nsec;
+    return @bitCast(s * 1_000_000_000 + ns);
+}
+
 pub fn unlink(path: *const String, context: ?*StreamContext) !void {
     const p = getStringContent(path);
-    const wrapper = php_h.php_stream_locate_url_wrapper(p.ptr, null, 0);
-    if (wrapper == null or wrapper.*.wops == null or wrapper.*.wops.*.unlink == null) {
-        return error.Failure;
-    }
-    const handler = wrapper.*.wops.*.unlink.?;
-    if (handler(wrapper, p.ptr, 0, context) == 0) return error.Failure;
+    const wrapper, const handler = try getStreamWrapper(p, "unlink");
+    if (handler.?(wrapper, p.ptr, 0, context) == 0) return error.Failure;
 }
 
 pub fn rename(path: *const String, new_path: *const String, context: ?*StreamContext) !void {
     const p = getStringContent(path);
     const np = getStringContent(new_path);
-    const wrapper = php_h.php_stream_locate_url_wrapper(p.ptr, null, 0);
-    if (wrapper == null or wrapper.*.wops == null or wrapper.*.wops.*.rename == null) {
-        return error.Failure;
-    }
-    const new_wrapper = php_h.php_stream_locate_url_wrapper(np.ptr, null, 0);
+    const wrapper, const handler = try getStreamWrapper(p, "rename");
+    const new_wrapper, _ = try getStreamWrapper(np, "rename");
     if (wrapper != new_wrapper) return error.Failure;
-    const handler = wrapper.*.wops.*.rename.?;
-    if (handler(wrapper, p.ptr, np.ptr, 0, context) == 0) return error.Failure;
+    if (handler.?(wrapper, p.ptr, np.ptr, 0, context) == 0) return error.Failure;
 }
 
 pub fn tell(strm: *Stream) !usize {
@@ -1626,12 +1661,19 @@ pub fn touch(path: *String, timebuf: *const php_h.utimbuf, context: ?*StreamCont
 
 fn setMetadata(path: *String, op: c_int, param_ptr: ?*const anyopaque, context: ?*StreamContext) !void {
     const p = getStringContent(path);
-    const wrapper = php_h.php_stream_locate_url_wrapper(p.ptr, null, 0);
-    if (wrapper == null or wrapper.*.wops == null or wrapper.*.wops.*.stream_metadata == null) {
+    const wrapper, const handler = try getStreamWrapper(p, "stream_metadata");
+    if (handler.?(wrapper, p.ptr, op, @constCast(param_ptr), context) == 0) return error.Failure;
+}
+
+fn getStreamWrapper(path: []const u8, comptime name: []const u8) !std.meta.Tuple(&.{
+    *php_h.php_stream_wrapper,
+    @FieldType(php_h.php_stream_wrapper_ops, name),
+}) {
+    const wrapper = php_h.php_stream_locate_url_wrapper(path.ptr, null, 0);
+    if (wrapper == null or wrapper.*.wops == null or @field(wrapper.*.wops.*, name) == null) {
         return error.Failure;
     }
-    const handler = wrapper.*.wops.*.stream_metadata.?;
-    if (handler(wrapper, p.ptr, op, @constCast(param_ptr), context) == 0) return error.Failure;
+    return .{ wrapper, @field(wrapper.*.wops.*, name) };
 }
 
 pub const reportWrongParamCount = php_h.zend_wrong_param_count;
