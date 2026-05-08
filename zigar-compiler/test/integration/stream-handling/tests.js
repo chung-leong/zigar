@@ -242,7 +242,7 @@ export function addTests(importModule, options) {
         expect(chunk).to.have.lengthOf(16);
         expect(chunk.string).to.equal('ur fathers broug');       
       } finally {
-        await shutdown();;
+        await shutdown();
       }
     })
     it('should open a file and seek to a particular position using posix function', async function() {

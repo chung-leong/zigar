@@ -416,12 +416,16 @@ pub const CallDispatcher = struct {
         }
     }
 
-    pub fn addStream(self: *@This(), strm: *Stream) !c_long {
+    pub fn addStream(self: *@This(), strm: *Stream, is_dir: bool) !c_long {
         const fd = try self.createDescriptor();
-        var stat: std.os.wasi.filestat_t = undefined;
-        try php.fstat(strm, &stat);
+        const filetype: std.os.wasi.filetype_t = get: {
+            var stat: std.os.wasi.filestat_t = undefined;
+            break :get if (php.fstat(strm, &stat))
+                stat.filetype
+            else |_| if (is_dir) .DIRECTORY else .REGULAR_FILE;
+        };
         var fdstat: std.os.wasi.fdstat_t = .{
-            .fs_filetype = stat.filetype,
+            .fs_filetype = filetype,
             .fs_flags = .{},
             .fs_rights_base = .{},
             .fs_rights_inheriting = .{},

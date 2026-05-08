@@ -22,6 +22,13 @@ final class StreamHandlingTest extends ZigarTestCase
     public function testReadFromFileInMainThread(): void
     {
         $m = ZigImporter::load(__DIR__ . '/read-from-file-in-main-thread.zig');
+        $correct = (PHP_OS_FAMILY === 'Windows')
+        ? '8b25078fffd077f119a53a0121a560b3eba816a0' 
+        : 'bbfdc0a41a89def805b19b4f90bb1ce4302b4aef';
+        $path = __DIR__ . '/data/test.txt';        
+        $f = fopen($path, 'r');
+        $digest1 = $m->hash($f);
+        $this->assertSame($correct, $digest1->__string);
     }
 
     public function testOpenAndReadFromFileInMainThread(): void
@@ -105,9 +112,26 @@ final class StreamHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/seek-file.zig');
         $path = __DIR__ . '/data/test.txt';        
         $content = file_get_contents($path);
-        $url_path = '/data://text/plain;base64,' . base64_encode($content);
-        $chunk = $m->read($url_path, 32, 16);
+        $url = 'data://text/plain;base64,' . base64_encode($content);
+        $f = fopen($url, 'r');
+        $chunk = $m->read($f, 32, 16);
         $this->assertSame('ur fathers broug', (string) $chunk);
+    }
+
+    public function testSeekToParticularPositionInThread(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/seek-file-in-thread.zig');
+        $m->startup(1);
+        try {
+            $path = __DIR__ . '/data/test.txt';        
+            $content = file_get_contents($path);
+            $url = 'data://text/plain;base64,' . base64_encode($content);
+            $f = fopen($url, 'r');
+            $chunk = $m->read($f, 32, 16);
+            $this->assertSame('ur fathers broug', (string) $chunk);
+        } finally {
+            $m->shutdown();
+        }
     }
 
     public function testOpenFileAndSeekToParticularPositionUsingPosixFunctions(): void
@@ -164,12 +188,29 @@ final class StreamHandlingTest extends ZigarTestCase
 
     public function testWriteToFile(): void 
     {
+        global $output;
         $m = ZigImporter::load(__DIR__ . '/write-to-file.zig');
+        $m->startup(1);
+        try {
+            $output = '';
+            $f = fopen('var://output', 'w');
+            $len = $m->save('This is a test', $f);
+            $this->assertSame(14, $len);
+            $this->assertSame('This is a test', $output);
+        } finally {
+            $m->shutdown();
+        }
     }
 
     public function testWriteToFileInMainThread(): void 
     {
+        global $output;
         $m = ZigImporter::load(__DIR__ . '/write-to-file-in-main-thread.zig');
+        $output = '';
+        $f = fopen('var://output', 'w');
+        $len = $m->save('This is a test', $f);
+        $this->assertSame(14, $len);
+        $this->assertSame('This is a test', $output);
     }
 
     public function testOpenAndWriteToFileInMainThread(): void 
@@ -313,9 +354,19 @@ final class StreamHandlingTest extends ZigarTestCase
 
     public function testDecompressGzipFile(): void
     {
+        $m = ZigImporter::load(__DIR__ . '/decompress.zig');
         $m->startup(1);
         try {
-
+            $input_path = __DIR__ . '/data/test.txt.gz';
+            $input = fopen($input_path, 'r');
+            $output_path = __DIR__ . '/data/decompressed.txt';
+            $output = fopen($output_path, 'w');
+            $m->decompress($input, $output);
+            fclose($input);
+            fclose($output);
+            $content = file_get_contents($output_path);
+            $this->assertStringContainsString('Four score', $content);
+            $this->assertStringContainsString('shall not perish from the earth', $content);
         } finally {
             $m->shutdown();
         }
@@ -553,6 +604,11 @@ class VariableStream {
             default:
                 return false;
         }
+    }
+
+    function stream_stat()
+    {
+        return $GLOBALS[$this->statname] ?? false;
     }
 
     function stream_metadata($path, $option, $var) 
