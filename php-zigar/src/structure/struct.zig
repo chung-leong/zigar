@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const AbortSignal = @import("../abort-signal.zig").AbortSignal;
 const accessor = @import("../accessor.zig");
@@ -18,6 +19,7 @@ const HashTable = php.HashTable;
 const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
 const ObjectIterator = php.ObjectIterator;
+const Stream = php.Stream;
 const String = php.String;
 const Value = php.Value;
 const Promise = @import("../promise.zig").Promise;
@@ -93,17 +95,6 @@ pub const Struct = struct {
         }
     }
 
-    pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value, read_only: bool) !void {
-        try Super.initialize(self, allocator, initializer, read_only);
-        const class = ZigClassEntry.fromStructure(self);
-        switch (class.purpose) {
-            .unknown => {},
-            // clear the buffer of special purpose structs to ensure their pointers are null
-            // during clean-up after an initialization error
-            else => try self.buffer.clear(),
-        }
-    }
-
     pub fn checkArguments(self: *@This(), arg_iter: *php.ArgumentIterator) !void {
         if (arg_iter.len != 1) {
             // check if the struct has default values for all fields
@@ -130,16 +121,47 @@ pub const Struct = struct {
 
     pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) accessor.Error!void {
         const class = ZigClassEntry.fromStructure(self);
-        if (class.purpose == .gd_image) {
-            const ptr = gd.getPointer(value) orelse {
-                return failure.report("GD image object expected", .{});
-            };
-            const ptr_value = php.createValuePointer(ptr);
-            try self.setProperty(php.persistent("ptr"), &ptr_value, null);
-            php.release(&self.table);
-            self.table = value.*;
-            php.addRef(&self.table);
-            return;
+        switch (class.purpose) {
+            .gd_image => {
+                const ptr = gd.getPointer(value) orelse {
+                    return failure.report("GD image object expected", .{});
+                };
+                const ptr_value = php.createValuePointer(ptr);
+                try self.setProperty(php.persistent("ptr"), &ptr_value, null);
+                php.release(&self.table);
+                self.table = value.*;
+                php.addRef(&self.table);
+                return;
+            },
+            .file => {
+                if (self.getStreamHandle(value)) |handle| {
+                    try self.setProperty(php.persistent("handle"), &handle, null);
+                    return;
+                } else {
+                    const arg_d = php.createValueDebug(value);
+                    defer php.release(&arg_d);
+                    return failure.report("{s} '{s}' expects a file resource pointer from fopen(), received: {s}\n", .{
+                        class.getStructureName(),
+                        class.getName(),
+                        php.getValueStringContent(&arg_d) catch unreachable,
+                    });
+                }
+            },
+            .directory => {
+                if (self.getStreamHandle(value)) |handle| {
+                    try self.setProperty(php.persistent("fd"), &handle, null);
+                    return;
+                } else {
+                    const arg_d = php.createValueDebug(value);
+                    defer php.release(&arg_d);
+                    return failure.report("{s} '{s}' expects a directory handle from opendir(), received: {s}\n", .{
+                        class.getStructureName(),
+                        class.getName(),
+                        php.getValueStringContent(&arg_d) catch unreachable,
+                    });
+                }
+            },
+            else => {},
         }
         return Super.setValue(self, value, transform);
     }
@@ -221,22 +243,63 @@ pub const Struct = struct {
         const self = fromObject(obj);
         // release special context object
         switch (class.purpose) {
-            inline else => |t| {
-                const ctx_type: ?type = switch (t) {
-                    .promise => Promise,
-                    .generator => Generator,
-                    // ptr points to an i32, but it's the first field of AbortSignal
-                    .abort_signal => AbortSignal,
-                    else => null,
-                };
-                if (ctx_type) |T| {
-                    if (self.getSpecialContext(T) catch null) |ctx| ctx.release();
+            .promise => if (self.getSpecialContext(Promise) catch null) |ctx| ctx.release(),
+            .generator => if (self.getSpecialContext(Generator) catch null) |ctx| ctx.release(),
+            .abort_signal => if (self.getSpecialContext(AbortSignal) catch null) |ctx| ctx.release(),
+            .file => if (self.getProperty(php.persistent("handle"), null) catch null) |handle| {
+                if (getDescriptor(&handle) catch null) |fd| {
+                    class.host.dispatcher.removeStream(fd) catch {};
                 }
             },
+            .directory => if (self.getProperty(php.persistent("fd"), null) catch null) |handle| {
+                if (getDescriptor(&handle) catch null) |fd| {
+                    class.host.dispatcher.removeStream(fd) catch {};
+                }
+            },
+            else => {},
         }
         Super.freeObject(obj);
     }
 
+    extern fn _get_osfhandle(fd: c_int) std.os.windows.HANDLE;
+
+    fn getStreamHandle(self: *@This(), value: *const Value) ?Value {
+        const strm = php.getValueStream(value) catch return null;
+        if (php.getDescriptor(strm)) |fd| {
+            if (builtin.target.os.tag == .windows) {
+                const handle = _get_osfhandle(fd);
+                return php.createValuePointer(handle);
+            } else {
+                return php.createValueAnyInt(fd);
+            }
+        } else {
+            // not a real file/dir--create a virtual descriptor
+            const class = ZigClassEntry.fromStructure(self);
+            if (class.host.dispatcher.addStream(strm) catch null) |fd| {
+                if (builtin.target.os.tag == .windows) {
+                    // the fake win32 handle for a virtual file is its descriptor left-shifted by 1
+                    const handle: *anyopaque = @ptrFromInt(fd << 1);
+                    return php.createValuePointer(handle);
+                } else {
+                    return php.createValueAnyInt(fd);
+                }
+            }
+        }
+        return null;
+    }
+
+    fn getDescriptor(value: *const Value) !c_long {
+        if (builtin.target.os.tag == .windows) {
+            const ptr_obj = try php.getValueObject(value);
+            const ptr_struct = ZigObject(structure.Pointer).fromObject(ptr_obj).structure();
+            const address = try ptr_struct.getAddress();
+            return @intCast(address >> 1);
+        } else {
+            return try php.getValueLong(value);
+        }
+    }
+
+    pub const initialize = Super.initialize;
     pub const finalize = Super.finalize;
     pub const externalize = Super.externalize;
     pub const getExtent = Super.getExtent;

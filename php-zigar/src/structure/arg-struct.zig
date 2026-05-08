@@ -102,6 +102,11 @@ pub const ArgStruct = struct {
             }
         }
         try self.buffer.allocate(allocator, class.byte_size.?);
+        if (class.instance.template.buffer) |buf| {
+            try self.buffer.copy(buf);
+        } else {
+            try self.buffer.clear();
+        }
         const max_arg_count = static.arg_accessors.len;
         const min_arg_count = if (static.last_arg_optional) max_arg_count - 1 else max_arg_count;
         const arg_count = arg_iter.len;

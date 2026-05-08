@@ -69,6 +69,7 @@ pub const ObjectIterator = php_h.zend_object_iterator;
 pub const ObjectIteratorFunctions = php_h.zend_object_iterator_funcs;
 pub const RefCounted = php_h.zend_refcounted;
 pub const Reference = php_h.zend_reference;
+pub const Resource = php_h.zend_resource;
 pub const Result = php_h.zend_result;
 pub const Stream = php_h.php_stream;
 pub const StreamContext = php_h.php_stream_context;
@@ -1481,7 +1482,22 @@ pub fn open(path: *const String, mode: [*c]const u8, options: c_int) !*Stream {
 
 pub const pipe = php_h.pipe;
 
+extern fn get_stream_path(strm: *Stream) [*:0]const u8;
+extern fn get_stream_mode(strm: *Stream) [*:0]const u8;
 extern fn set_stream_no_close(strm: *Stream) void;
+extern fn is_stdio_stream(strm: *Stream) bool;
+
+pub fn getStreamPath(strm: *Stream) []const u8 {
+    const ptr = get_stream_path(strm);
+    const len = std.mem.len(ptr);
+    return ptr[0..len];
+}
+
+pub fn getStreamMode(strm: *Stream) []const u8 {
+    const ptr = get_stream_mode(strm);
+    const len = std.mem.len(ptr);
+    return ptr[0..len];
+}
 
 pub fn preserveStream(strm: *Stream) void {
     set_stream_no_close(strm);
@@ -1496,6 +1512,16 @@ pub fn openDescriptor(fd: c_int, mode: [*c]const u8) !*Stream {
         strm = php_h._php_stream_fopen_from_fd(fd, mode, null);
     }
     return strm orelse error.Failure;
+}
+
+pub fn getDescriptor(strm: *Stream) ?c_int {
+    if (!is_stdio_stream(strm)) return null;
+    return inline for (.{ php_h.PHP_STREAM_AS_FD_FOR_SELECT, php_h.PHP_STREAM_AS_FD }) |as| {
+        var fd: c_int align(@alignOf(*anyopaque)) = undefined;
+        if (php_h._php_stream_cast(strm, as, @ptrCast(&fd), 0) == SUCCESS) {
+            break fd;
+        }
+    } else null;
 }
 
 pub fn close(strm: *Stream) void {
@@ -1616,9 +1642,8 @@ pub fn closedir(strm: *Stream) void {
     _ = php_h.php_stream_closedir(strm);
 }
 
-pub fn resolve(name: []const u8, parent_path: *String) !*String {
-    const p = getStringContent(parent_path);
-    return php_h.php_resolve_path(name.ptr, name.len, p.ptr) orelse error.Failure;
+pub fn resolve(name: []const u8, parent_path: []const u8) !*String {
+    return php_h.php_resolve_path(name.ptr, name.len, parent_path.ptr) orelse error.Failure;
 }
 
 pub fn rewinddir(strm: *Stream) !void {

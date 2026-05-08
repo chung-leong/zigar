@@ -77,13 +77,12 @@ pub const CallDispatcher = struct {
     };
     const StreamEntry = struct {
         fd: c_long,
-        url: *String,
         stream: *Stream,
         fd_stat: std.os.wasi.fdstat_t,
+        close: bool,
 
         pub fn deinit(self: *@This()) void {
-            php.release(self.url);
-            _ = php.close(self.stream);
+            if (self.close) _ = php.close(self.stream);
         }
     };
     const ScheduledTask = struct {
@@ -417,6 +416,43 @@ pub const CallDispatcher = struct {
         }
     }
 
+    pub fn addStream(self: *@This(), strm: *Stream) !c_long {
+        const fd = try self.createDescriptor();
+        var stat: std.os.wasi.filestat_t = undefined;
+        try php.fstat(strm, &stat);
+        var fdstat: std.os.wasi.fdstat_t = .{
+            .fs_filetype = stat.filetype,
+            .fs_flags = .{},
+            .fs_rights_base = .{},
+            .fs_rights_inheriting = .{},
+        };
+        const mode = php.getStreamMode(strm);
+        for (mode) |c| {
+            switch (c) {
+                'r' => fdstat.fs_rights_base.FD_READ = true,
+                'w' => fdstat.fs_rights_base.FD_WRITE = true,
+                '+' => {
+                    fdstat.fs_rights_base.FD_READ = true;
+                    fdstat.fs_rights_base.FD_WRITE = true;
+                },
+                'a' => {
+                    fdstat.fs_flags.APPEND = true;
+                },
+                else => {},
+            }
+        }
+        _ = try self.addStreamEntry(fd, strm, &fdstat, false);
+        return fd;
+    }
+
+    pub fn removeStream(self: *@This(), fd: c_long) !void {
+        if (fd < fd_min or fd > fd_max) return;
+        const entry = try self.findStream(fd);
+        entry.deinit();
+        const index = (@intFromPtr(entry) - @intFromPtr(self.stream_list.items.ptr)) / @sizeOf(StreamEntry);
+        _ = self.stream_list.swapRemove(index);
+    }
+
     fn findStream(self: *@This(), fd: c_long) !*StreamEntry {
         for (self.stream_list.items) |*entry| {
             if (entry.fd == fd) return entry;
@@ -438,17 +474,18 @@ pub const CallDispatcher = struct {
                 },
                 .fs_rights_inheriting = .{},
             };
-            return try self.addStreamEntry(fd, url, strm, &stat);
+            return try self.addStreamEntry(fd, strm, &stat, false);
         }
     }
 
-    fn addStreamEntry(self: *@This(), fd: c_long, url: *String, strm: *Stream, stat: *const std.os.wasi.fdstat_t) !*StreamEntry {
+    fn addStreamEntry(self: *@This(), fd: c_long, strm: *Stream, stat: *const std.os.wasi.fdstat_t, close: bool) !*StreamEntry {
         const entry = try self.stream_list.addOne(php.allocator);
-        entry.fd = fd;
-        entry.url = url;
-        entry.stream = strm;
-        entry.fd_stat = stat.*;
-        php.addRef(url);
+        entry.* = .{
+            .fd = fd,
+            .stream = strm,
+            .fd_stat = stat.*,
+            .close = close,
+        };
         return entry;
     }
 
@@ -496,8 +533,9 @@ pub const CallDispatcher = struct {
         } else {
             const parent = try self.findStream(dirfd);
             const name = path[0..std.mem.len(path)];
+            const parent_url = php.getStreamPath(parent.stream);
             return .{
-                .url = try php.resolve(name, parent.url),
+                .url = try php.resolve(name, parent_url),
                 .context = php.getStreamContext(parent.stream),
             };
         }
@@ -528,16 +566,13 @@ pub const CallDispatcher = struct {
             .fs_rights_inheriting = .{},
         };
         errdefer php.close(strm);
-        _ = self.addStreamEntry(fd, loc.url, strm, &stat) catch return .MFILE;
+        _ = self.addStreamEntry(fd, strm, &stat, true) catch return .MFILE;
         args.fd = @intCast(fd);
         return .SUCCESS;
     }
 
     fn handleClose(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
-        entry.deinit();
-        const index = (@intFromPtr(entry) - @intFromPtr(self.stream_list.items.ptr)) / @sizeOf(StreamEntry);
-        _ = self.stream_list.swapRemove(index);
+        self.removeStream(args.fd) catch return .BADF;
         return .SUCCESS;
     }
 
@@ -652,9 +687,9 @@ pub const CallDispatcher = struct {
         const loc: PathInfo = get: {
             if (@hasField(@TypeOf(args.*), "fd")) {
                 const entry = self.findStream(args.fd) catch return .BADF;
-                php.addRef(entry.url);
+                const path = php.getStreamPath(entry.stream);
                 break :get .{
-                    .url = entry.url,
+                    .url = php.createString(path),
                     .context = php.getStreamContext(entry.stream),
                 };
             } else {

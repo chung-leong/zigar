@@ -51,6 +51,7 @@ pub const Error = error{
     NotNull,
     NotObject,
     NotPointer,
+    NotStream,
     NotString,
     NotTheSame,
     NullPointer,

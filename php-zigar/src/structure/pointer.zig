@@ -215,6 +215,12 @@ pub const Pointer = struct {
         }
     }
 
+    pub fn getAddress(self: *@This()) !usize {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        return try static.getAddress(self);
+    }
+
     pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime _: structure.VisitOptions) accessor.Error!void {
         try @call(.auto, cb, .{self} ++ args);
     }

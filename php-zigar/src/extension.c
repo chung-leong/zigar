@@ -47,8 +47,20 @@ php_stream_context* get_stream_context(php_stream* strm) {
     return PHP_STREAM_CONTEXT(strm);
 }
 
+const char* get_stream_path(php_stream* strm) {
+    return strm->orig_path;
+}
+
+const char* get_stream_mode(php_stream* strm) {
+    return strm->mode;
+}
+
 void set_stream_no_close(php_stream* strm) {
     strm->flags |= PHP_STREAM_FLAG_NO_CLOSE;
+}
+
+bool is_stdio_stream(php_stream* strm) {
+    return php_stream_is(strm, PHP_STREAM_IS_STDIO);
 }
 
 typedef struct {
