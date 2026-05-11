@@ -6,6 +6,7 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
 const iterator = @import("../iterator.zig");
+const ArrayBuffer = @import("../js-compat.zig").ArrayBuffer;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const ClassEntry = php.ClassEntry;
@@ -74,15 +75,21 @@ pub const Enum = struct {
                                 return try value_static.getEnum(obj);
                             }
                         }
-                    } else if (php.isGmpClass(obj.ce)) {
+                    }
+                    if (php.isGmpClass(obj.ce)) {
                         return self.findCanonical(value) catch php.createValueNull();
                     }
+                    if (php.instanceOf(obj.ce, ArrayBuffer.entry())) {
+                        // allow default handling
+                        return null;
+                    }
                 },
-                .string => return null,
                 else => {},
             }
-            return failure.report("casting operation expects an interger, a string, or a tagged union as argument, received {s}", .{
-                @tagName(php.getValueType(value)),
+            const value_d = php.createValueDebug(value);
+            defer php.release(&value_d);
+            return failure.report("casting operation expects an interger, ArrayBuffer, or tagged union as argument, received {s}", .{
+                php.getValueStringContent(&value_d) catch unreachable,
             });
         }
 
@@ -270,6 +277,24 @@ pub const Enum = struct {
             props.release();
         }
         Super.freeObject(obj);
+    }
+
+    pub fn compare(a: *Value, b: *Value) !c_int {
+        const obj_a = php.getValueObject(a) catch return -1;
+        const obj_b = php.getValueObject(b) catch return 1;
+        if (obj_a == obj_b) return 0;
+        if (obj_a.ce != obj_b.ce) {
+            return if (@intFromPtr(obj_a.ce) < @intFromPtr(obj_b.ce)) -1 else 1;
+        }
+        const class = ZigClassEntry.fromObject(obj_a);
+        const static = class.getStaticData(@This());
+        const struct_a = fromObject(obj_a);
+        const struct_b = fromObject(obj_b);
+        const value_a = try static.constant_acc.int.get(struct_a);
+        defer php.release(&value_a);
+        const value_b = try static.constant_acc.int.get(struct_b);
+        defer php.release(&value_b);
+        return php.compareValues(&value_a, &value_b);
     }
 
     pub fn getIterator(obj: *Object) !?*ObjectIterator {

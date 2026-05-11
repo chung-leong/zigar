@@ -256,6 +256,10 @@ final class ArrayHandlingTest extends ZigarTestCase
         $this->assertExceptionMessage('out of bound', function() use($m) {
             $x = new $m->IntArray4([ 1, 2, 3, 4, 5 ]);
         });
+        $c = new $m->IntArray4([ 1, 2, 3, 4 ]);
+        $this->assertSame(0, $b <=> $c);
+        $d = new $m->IntArray4([ 2, 2, 3, 4 ]);
+        $this->assertSame(-1, $b <=> $d);
     }
 }
 

@@ -30,9 +30,4 @@ abstract class ZigarTestCase extends TestCase
 		$errorMessage = 'Failed asserting that exception was thrown.';
 		$this->fail($errorMessage);
 	}
-
-	public function tearDown(): void
-	{
-		gc_collect_cycles();
-	}
 }

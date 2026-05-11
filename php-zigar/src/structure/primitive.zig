@@ -60,6 +60,7 @@ pub const Primitive = struct {
     pub const writeProperty = Super.writeProperty;
     pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
+    pub const compare = Super.compare;
     pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
 };

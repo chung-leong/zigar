@@ -216,6 +216,13 @@ final class PointerHandlingTest extends ZigarTestCase
         $this->assertSame(1234, $b->__value);
         $c = new $m->IntPtr->__child(4567);
         $d = new $m->IntPtr($c);
-        $this->assertSame(4567, $d->{'*'}->{'$'});
+        $this->assertSame(4567, $d->{'*'});
+        $d->{'*'} = 8888;
+        $this->assertSame(8888, $d->{'*'});
+        $e = new $m->IntPtr(1234);
+        $this->assertSame(0, $b <=> $e);
+        $this->assertSame(-1, $b <=> $d);
+        $d->{'*'} = 8;
+        $this->assertSame(1, $b <=> $d);
     }
 }

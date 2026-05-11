@@ -264,6 +264,11 @@ final class IntHandlingTest extends ZigarTestCase
         });
         $d = new $m->BigInt('12345678901234567890123456789012345678');
         $this->assertSame('12345678901234567890123456789012345678', (string) $d);
+        $e = new $m->Int('4567');
+        $this->assertSame(true, $c == $e);
+        $f = new $m->BigInt('12345678901234567890123456789012345678');
+        $this->assertSame(false, $c == $f);
+        $this->assertSame(true, $d == $f);
     }
 }
 

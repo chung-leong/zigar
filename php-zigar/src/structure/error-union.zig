@@ -116,6 +116,37 @@ pub const ErrorUnion = struct {
         }
     }
 
+    pub fn compare(a: *Value, b: *Value) !c_int {
+        const obj_a = php.getValueObject(a) catch return -1;
+        const obj_b = php.getValueObject(b) catch return 1;
+        if (obj_a == obj_b) return 0;
+        if (obj_a.ce != obj_b.ce) {
+            return if (@intFromPtr(obj_a.ce) < @intFromPtr(obj_b.ce)) -1 else 1;
+        }
+        const class = ZigClassEntry.fromObject(obj_a);
+        const static = class.getStaticData(@This());
+        const struct_a = fromObject(obj_a);
+        const struct_b = fromObject(obj_b);
+        const err_a = try static.error_acc.get(struct_a.buffer);
+        defer php.release(&err_a);
+        const err_b = try static.error_acc.get(struct_b.buffer);
+        defer php.release(&err_b);
+        if (php.getValueType(&err_a) == .object) {
+            if (php.getValueType(&err_b) == .object) {
+                return php.compareValues(&err_a, &err_b);
+            } else {
+                return -1;
+            }
+        } else if (php.getValueType(&err_b) == .object) {
+            return 1;
+        }
+        const value_a = try static.payload_acc.get(struct_a);
+        defer php.release(&value_a);
+        const value_b = try static.payload_acc.get(struct_b);
+        defer php.release(&value_b);
+        return php.compareValues(&value_a, &value_b);
+    }
+
     pub const getExtent = Super.getExtent;
     pub const setStorage = Super.setStorage;
     pub const initialize = Super.initialize;

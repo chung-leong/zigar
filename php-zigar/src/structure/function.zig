@@ -239,6 +239,20 @@ pub const Function = struct {
         return php.SUCCESS;
     }
 
+    pub fn compare(a: *Value, b: *Value) !c_int {
+        const obj_a = php.getValueObject(a) catch return -1;
+        const obj_b = php.getValueObject(b) catch return 1;
+        if (obj_a == obj_b) return 0;
+        if (obj_a.ce != obj_b.ce) {
+            return if (@intFromPtr(obj_a.ce) < @intFromPtr(obj_b.ce)) -1 else 1;
+        }
+        const struct_a = fromObject(obj_a);
+        const struct_b = fromObject(obj_b);
+        const address_a = @intFromPtr(struct_a.buffer.bytes.ptr);
+        const address_b = @intFromPtr(struct_b.buffer.bytes.ptr);
+        return if (address_a == address_b) 0 else if (address_a < address_b) -1 else 1;
+    }
+
     pub const setStorage = Super.setStorage;
     pub const initialize = Super.initialize;
     pub const externalize = Super.externalize;

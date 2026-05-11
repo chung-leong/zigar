@@ -90,6 +90,7 @@ pub fn PropertyIterator(comptime S: type) type {
         member_iter: ZigClassEntry.MemberIterator,
         container: *S,
         current_name: ?*String,
+        current_index: usize,
 
         fn fromIter(iter: *ObjectIterator) *@This() {
             return @fieldParentPtr("iter", iter);
@@ -103,6 +104,7 @@ pub fn PropertyIterator(comptime S: type) type {
             self.member_iter = class.getMemberIterator(scope);
             self.container = ZigObject(S).fromObject(obj).structure();
             self.current_name = null;
+            self.current_index = 0;
             self.iter.funcs = &methods;
             self.iter.data = php.createValueNull();
             return self;
@@ -162,6 +164,7 @@ pub fn PropertyIterator(comptime S: type) type {
                         if (member.accessors.get(self.container) catch null) |value| {
                             iter.data = value;
                             self.current_name = name;
+                            self.current_index += 1;
                             return;
                         }
                     }
@@ -175,6 +178,7 @@ pub fn PropertyIterator(comptime S: type) type {
         pub fn rewind(iter: *ObjectIterator) !void {
             const self = fromIter(iter);
             self.member_iter.reset();
+            self.current_index = 0;
         }
 
         pub fn next(self: *@This()) ?*Value {

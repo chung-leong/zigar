@@ -255,6 +255,11 @@ final class ErrorUnionHandlingTest extends ZigarTestCase
         $this->assertExceptionMessage("no money", function() use($b) {
             $x = $b->__value;
         });
+        $this->assertSame(1, $a <=> $b);
+        // $c = new $m->ErrorUnion(1235);
+        // $this->assertSame(-1, $a <=> $c);
+        // $d = new $m->ErrorUnion(new Exception('no money'));
+        // $this->assertSame(0, $b <=> $d);
     }
 }
 

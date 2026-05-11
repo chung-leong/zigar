@@ -218,8 +218,9 @@ final class OptionalHandlingTest extends ZigarTestCase
         $b = new $m->Optional(null);
         $this->assertSame(1234, $a->__value);
         $this->assertSame(null, $b->__value);
-        $c = $m->Optional(pack("Lcccc", 777, 1, 0, 0, 0));
+        $c = $m->Optional(new ArrayBuffer(pack("Lcccc", 777, 1, 0, 0, 0)));
         $this->assertEquals(777, $c->__value);
+        $this->assertSame(1, $a <=> $b);
     }
 }
 

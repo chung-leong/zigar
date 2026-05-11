@@ -400,6 +400,22 @@ pub const ErrorSet = struct {
         return null;
     }
 
+    pub fn compare(a: *Value, b: *Value) !c_int {
+        const obj_a = php.getValueObject(a) catch return -1;
+        const obj_b = php.getValueObject(b) catch return 1;
+        if (obj_a == obj_b) return 0;
+        if (obj_a.ce != obj_b.ce) {
+            return if (@intFromPtr(obj_a.ce) < @intFromPtr(obj_b.ce)) -1 else 1;
+        }
+        const class = ZigClassEntry.fromObject(obj_a);
+        const static = class.getStaticData(@This());
+        const struct_a = fromObject(obj_a);
+        const struct_b = fromObject(obj_b);
+        const value_a = try static.constant_acc.int.get(struct_a);
+        const value_b = try static.constant_acc.int.get(struct_b);
+        return php.compareValues(&value_a, &value_b);
+    }
+
     pub fn handleGetMessage(ed: *ExecuteData, return_value: *Value) !void {
         const canonical = try getCanonicalFromValue(&ed.This);
         return_value.* = php.createValueString(canonical.message);

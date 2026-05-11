@@ -17,6 +17,7 @@ final class EnumLiteralHandlingTest extends ZigarTestCase
             'Alfheim',
             'Nidavellir',
         ], (array) $m->world);
+        $this->assertSame(-1, $m->hello <=> $m->hey);
     }
 
     public function testIgnoreFunctionAcceptingEnumLiteral(): void

@@ -153,8 +153,8 @@ pub fn Parent(comptime S: type) type {
                 .string, .integer, .float, .boolean => |tm| {
                     var value = try self.getValue(.none);
                     if (php.getValueObject(&value) catch null) |obj| {
-                        defer php.release(obj);
                         if (ZigClassEntry.isZig(obj.ce)) {
+                            defer php.release(obj);
                             return if (tm == .boolean) php.createValueBool(true) else error.Unsupported;
                         }
                     }
@@ -360,6 +360,22 @@ pub fn Parent(comptime S: type) type {
             return try findMethod(self, name);
         }
 
+        pub fn compare(a: *Value, b: *Value) !c_int {
+            const obj_a = php.getValueObject(a) catch return -1;
+            const obj_b = php.getValueObject(b) catch return 1;
+            if (obj_a == obj_b) return 0;
+            if (obj_a.ce != obj_b.ce) {
+                return if (@intFromPtr(obj_a.ce) < @intFromPtr(obj_b.ce)) -1 else 1;
+            }
+            const struct_a = fromObject(obj_a);
+            const struct_b = fromObject(obj_b);
+            const value_a = try struct_a.getValue(.none);
+            defer php.release(&value_a);
+            const value_b = try struct_b.getValue(.none);
+            defer php.release(&value_b);
+            return php.compareValues(&value_a, &value_b);
+        }
+
         pub fn getGarbageCollection(obj: *Object, table: *[*c]Value, n: *c_int) !?*HashTable {
             const self = fromObject(obj);
             const class = ZigClassEntry.fromObject(obj);
@@ -508,6 +524,24 @@ pub fn StructLike(comptime S: type) type {
             // caller seem to expect a hash table with zero refcount
             ht.gc.refcount = 0;
             return ht;
+        }
+
+        pub fn compare(a: *Value, b: *Value) !c_int {
+            const obj_a = php.getValueObject(a) catch return -1;
+            const obj_b = php.getValueObject(b) catch return 1;
+            if (obj_a == obj_b) return 0;
+            if (obj_a.ce != obj_b.ce) {
+                return if (@intFromPtr(obj_a.ce) < @intFromPtr(obj_b.ce)) -1 else 1;
+            }
+            var iter_a: iterator.PropertyIterator(S) = .init(obj_a);
+            defer iter_a.deinit();
+            var iter_b: iterator.PropertyIterator(S) = .init(obj_b);
+            defer iter_b.deinit();
+            return while (iter_a.next()) |child_value_a| {
+                const child_value_b = iter_b.next().?;
+                const result = php.compareValues(child_value_a, child_value_b);
+                if (result != 0) break result;
+            } else 0;
         }
 
         pub fn getIterator(obj: *Object) !?*ObjectIterator {
@@ -706,6 +740,28 @@ pub fn ArrayLike(comptime S: type) type {
             return ht;
         }
 
+        pub fn compare(a: *Value, b: *Value) !c_int {
+            const obj_a = php.getValueObject(a) catch return -1;
+            const obj_b = php.getValueObject(b) catch return 1;
+            if (obj_a == obj_b) return 0;
+            if (obj_a.ce != obj_b.ce) {
+                return if (@intFromPtr(obj_a.ce) < @intFromPtr(obj_b.ce)) -1 else 1;
+            }
+            const struct_a = ZigObject(S).fromObject(obj_a).structure();
+            const struct_b = ZigObject(S).fromObject(obj_b).structure();
+            const len_a = struct_a.getLength();
+            const len_b = struct_b.getLength();
+            const len = @min(len_a, len_b);
+            return for (0..len) |i| {
+                const value_a = try struct_a.getElement(i);
+                defer php.release(&value_a);
+                const value_b = try struct_b.getElement(i);
+                defer php.release(&value_b);
+                const result = php.compareValues(&value_a, &value_b);
+                if (result != 0) break result;
+            } else if (len_a == len_b) 0 else if (len_a < len_b) -1 else 1;
+        }
+
         pub fn getIterator(obj: *Object) !?*ObjectIterator {
             return try iterator.ArrayIterator(S).create(obj);
         }
@@ -800,6 +856,7 @@ pub fn OptionalLike(comptime S: type) type {
         pub const getPropertyPointer = Super.getPropertyPointer;
         pub const freeObject = Super.freeObject;
         pub const castObject = Super.castObject;
+        pub const compare = Super.compare;
         pub const getGarbageCollection = Super.getGarbageCollection;
     };
 }

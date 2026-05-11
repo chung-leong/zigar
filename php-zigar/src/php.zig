@@ -558,18 +558,8 @@ pub fn convertValue(value: *Value, desired_type: ValueType) !void {
     }
 }
 
-pub fn compareValues(value1: *const Value, value2: *const Value) bool {
-    if (value1.u1.v.type != value2.u1.v.type) return false;
-    return switch (value1.u1.v.type) {
-        php_h.IS_TRUE, php_h.IS_FALSE => true,
-        php_h.IS_LONG => value1.value.lval == value2.value.lval,
-        php_h.IS_DOUBLE => value1.value.dval == value2.value.dval,
-        php_h.IS_STRING => compareStrings(value1.value.str, value2.value.str),
-        php_h.IS_NULL => true,
-        php_h.IS_ARRAY => false, // TODO
-        php_h.IS_OBJECT => false, // TODO
-        else => false,
-    };
+pub fn compareValues(a: *const Value, b: *const Value) c_int {
+    return php_h.zend_compare(@constCast(a), @constCast(b));
 }
 
 pub fn isValueNull(value: *const Value) bool {

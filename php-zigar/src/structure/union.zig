@@ -214,6 +214,29 @@ pub const Union = struct {
         }
     }
 
+    pub fn compare(a: *Value, b: *Value) !c_int {
+        const obj_a = php.getValueObject(a) catch return -1;
+        const obj_b = php.getValueObject(b) catch return 1;
+        if (obj_a == obj_b) return 0;
+        if (obj_a.ce != obj_b.ce) {
+            return if (@intFromPtr(obj_a.ce) < @intFromPtr(obj_b.ce)) -1 else 1;
+        }
+        var iter_a: iterator.PropertyIterator(@This()) = .init(obj_a);
+        defer iter_a.deinit();
+        var iter_b: iterator.PropertyIterator(@This()) = .init(obj_b);
+        defer iter_b.deinit();
+        return while (iter_a.next()) |child_value_a| {
+            const child_value_b = iter_b.next().?;
+            if (iter_a.current_index != iter_b.current_index) {
+                // if the different fields are set in a tagged union, the one with the
+                // "earlier" field comes first
+                return if (iter_a.current_index < iter_b.current_index) -1 else 1;
+            }
+            const result = php.compareValues(child_value_a, child_value_b);
+            if (result != 0) break result;
+        } else 0;
+    }
+
     fn checkSelector(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());

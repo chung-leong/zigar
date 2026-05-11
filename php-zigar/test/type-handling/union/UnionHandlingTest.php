@@ -233,7 +233,7 @@ final class UnionHandlingTest extends ZigarTestCase
         
         $c = new $m->ExternUnion(number1: -1234);
         $this->assertEquals((object) [ 'number1' => -1234, 'number2' => -1234 ], $c->__plain);
-        $d = $m->ExternUnion(pack('l', 12345));
+        $d = $m->ExternUnion(new ArrayBuffer(pack('l', 12345)));
         $this->assertEquals((object) [ 'number1' => 12345, 'number2' => 12345 ], $d->__plain);
         $this->assertExceptionMessage("union can only have 1 active field", function() use($m) {
             $x = new $m->ExternUnion([ 'number1' => 123, 'number2' => 456 ]);
@@ -241,6 +241,12 @@ final class UnionHandlingTest extends ZigarTestCase
         $this->assertExceptionMessage("no field named 'number3'", function() use($m) {
             $x = new $m->ExternUnion([ 'number3' => 123 ]);
         });
+        $e = new $m->TaggedUnion(number1: 123);
+        $this->assertSame(0, $b <=> $e);
+        $f = new $m->TaggedUnion(number1: 124);
+        $this->assertSame(-1, $b <=> $f);
+        $g = new $m->TaggedUnion(number2: 0);
+        $this->assertSame(-1, $b <=> $f);
     }
 }
 

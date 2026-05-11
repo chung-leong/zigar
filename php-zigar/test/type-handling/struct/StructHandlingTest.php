@@ -245,7 +245,7 @@ final class StructHandlingTest extends ZigarTestCase
 
         $c = new $m->ExternStruct(number1: 1111, number2: 2222);
         $this->assertEquals((object) [ 'number1' => 1111, 'number2' => 2222 ], $c->__plain);
-        $d = $m->ExternStruct(pack('ll', 1234, 4567));
+        $d = $m->ExternStruct(new ArrayBuffer(pack('ll', 1234, 4567)));
         $this->assertEquals((object) [ 'number1' => 1234, 'number2' => 4567 ], $d->__plain);
 
         $e = new $m->PackedStruct(
@@ -268,7 +268,7 @@ final class StructHandlingTest extends ZigarTestCase
             'state7' => true, 
             'state8' => false,
         ], $e->__plain);
-        $f = $m->PackedStruct("\xFE");
+        $f = $m->PackedStruct(new ArrayBuffer("\xFE"));
         $this->assertEquals((object) [ 
             'state1' => false, 
             'state2' => true, 
@@ -284,6 +284,10 @@ final class StructHandlingTest extends ZigarTestCase
         $g = new $m->PackedStruct();
         $this->assertEquals(0, $g->__int);
         $this->assertEquals(true, (bool) $g);
+        $h = new $m->Struct(number1: 1111, number2: 2222);
+        $this->assertSame(0, $b <=> $h);
+        $i = new $m->Struct(number1: 1111, number2: 2222, number3: 3000);
+        $this->assertSame(1, $b <=> $i);
     }
 }
 

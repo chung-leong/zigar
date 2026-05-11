@@ -106,6 +106,15 @@ pub fn Class(comptime S: type) type {
             return php.SUCCESS;
         }
 
+        pub fn compare(a: *Value, b: *Value) !c_int {
+            const obj_a = php.getValueObject(a) catch return -1;
+            const obj_b = php.getValueObject(b) catch return 1;
+            if (obj_a.ce != obj_b.ce) {
+                return if (@intFromPtr(obj_a.ce) < @intFromPtr(obj_b.ce)) -1 else 1;
+            }
+            return 0;
+        }
+
         pub fn getGarbageCollection(obj: *Object, table: *[*c]Value, n: *c_int) !?*HashTable {
             const class = ZigClassEntry.fromObject(obj);
             const gc_buffer = class.host.gc_buffer.start(obj);
@@ -162,7 +171,6 @@ pub fn Class(comptime S: type) type {
                 });
             };
             try class.validateBuffer(buf);
-            buf.addRef();
             const new_obj = try class.obtainObjectFromBuffer(buf);
             return_value.* = php.createValueObject(new_obj);
         }

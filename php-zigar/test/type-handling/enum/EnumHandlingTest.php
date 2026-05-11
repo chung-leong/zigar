@@ -220,8 +220,10 @@ final class EnumHandlingTest extends ZigarTestCase
         $this->assertSame('dog', (string) $b);
         $this->assertSame('cat', (string) $c);
         $this->assertSame('@enumFromInt(5)', (string) $d);
-        $e = $m->Enum(pack('S', 1));
+        $e = $m->Enum(new ArrayBuffer(pack('S', 1)));
         $this->assertSame('cat', (string) $e);
+        $this->assertSame(-1, $m->Enum->dog <=> $m->Enum->cat);
+        $this->assertSame(1, $m->Enum->monkey <=> $c);
     }    
 }
 
