@@ -1632,6 +1632,29 @@ pub fn closedir(strm: *Stream) void {
     _ = php_h.php_stream_closedir(strm);
 }
 
+pub fn sendfile(out_strm: *Stream, in_strm: *Stream, offset: ?*i64, len: u32) !u32 {
+    var original_pos: i64 = 0;
+    var copied: i64 = 0;
+    if (offset) |ptr| {
+        original_pos = php_h._php_stream_tell(in_strm);
+        _ = php_h._php_stream_seek(in_strm, ptr.*, php_h.SEEK_SET);
+    }
+    var buf: [8192]u8 = undefined;
+    var remaining = len;
+    while (remaining > 0) {
+        const bytes_read = php_h._php_stream_read(in_strm, &buf, @min(remaining, buf.len));
+        if (bytes_read == 0) break;
+        _ = php_h._php_stream_write(out_strm, &buf, @intCast(bytes_read));
+        copied += bytes_read;
+        remaining -= @intCast(bytes_read);
+    }
+    if (offset) |ptr| {
+        ptr.* += copied;
+        _ = php_h._php_stream_seek(in_strm, original_pos, php_h.SEEK_SET);
+    }
+    return @intCast(copied);
+}
+
 pub fn resolve(name: []const u8, parent_path: []const u8) !*String {
     return php_h.php_resolve_path(name.ptr, name.len, parent_path.ptr) orelse error.Failure;
 }

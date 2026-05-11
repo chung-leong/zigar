@@ -482,6 +482,19 @@ pub const CallDispatcher = struct {
         }
     }
 
+    fn useStream(self: *@This(), fd: c_long, mode: [*c]const u8) !std.meta.Tuple(&.{ *Stream, bool }) {
+        switch (fd) {
+            0, 1, 2, fd_min...fd_max => {
+                const entry = try self.findStream(fd);
+                return .{ entry.stream, false };
+            },
+            else => {
+                const strm = try php.openDescriptor(@intCast(fd), mode);
+                return .{ strm, true };
+            },
+        }
+    }
+
     fn addStreamEntry(self: *@This(), fd: c_long, strm: *Stream, stat: *const std.os.wasi.fdstat_t, close: bool) !*StreamEntry {
         const entry = try self.stream_list.addOne(php.allocator);
         entry.* = .{
@@ -843,19 +856,12 @@ pub const CallDispatcher = struct {
     }
 
     fn handleSendFile(self: *@This(), args: anytype) !E {
-        _ = self;
-        _ = args;
-        return .OPNOTSUPP;
-        // const env = self.env;
-        // return try self.callPosixFunction(self.js.fd_sendfile, &.{
-        //     try env.createInt32(args.out_fd),
-        //     try env.createInt32(args.in_fd),
-        //     try env.createBigintInt64(if (args.offset) |ptr| ptr.* else 0),
-        //     try env.createUsize(@intFromPtr(args.offset)),
-        //     try env.createUint32(args.len),
-        //     try env.createUsize(@intFromPtr(&args.sent)),
-        //     futex,
-        // });
+        const out_strm, const close_out_strm = self.useStream(args.out_fd, "w") catch return .BADF;
+        defer if (close_out_strm) php.close(out_strm);
+        const in_strm, const close_in_strm = self.useStream(args.in_fd, "r") catch return .BADF;
+        defer if (close_in_strm) php.close(in_strm);
+        args.sent = php.sendfile(out_strm, in_strm, args.offset, args.len) catch return .EIO;
+        return .SUCCESS;
     }
 
     fn handleGetEnvironmentStrings(self: *@This(), args: anytype) !E {

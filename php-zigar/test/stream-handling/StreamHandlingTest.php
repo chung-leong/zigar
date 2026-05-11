@@ -517,17 +517,92 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
-    public function testCopyVirtualFileToReadFileUsingSendfile(): void 
+    public function testCopyVirtualFileToVirtualFile(): void 
     {
-        $m = ZigImporter::load(__DIR__ . '/copy-virtual-file-to-real-file-with-sendfile.zig');
-        $path = __DIR__ . 'data/virtual-file-test.txt';
+        global $input, $in_stat, $output, $out_stat;
+        $m = ZigImporter::load(__DIR__ . '/copy-virtual-file-to-real-file.zig');
+        $output = '';
+        $out_file = fopen("var://output/out_stat", 'w');
+        $out_stat = [ 'size' => 0 ];
+        $input = 'Hello world!';
+        $in_file = fopen("var://input/in_stat", 'r');
+        $in_stat = [ 'size' => strlen($input) ];
+        $size = strlen($input);
+        $copied = $m->copy($in_file, $out_file);
+        $this->assertSame($size, $copied);
+        fclose($out_file);
+        $this->assertSame($input, $output);
+    }
+
+    public function testCopyVirtualFileToRealFile(): void 
+    {
+        global $input;
+        $m = ZigImporter::load(__DIR__ . '/copy-virtual-file-to-real-file.zig');
+        $path = __DIR__ . '/data/virtual-file-test.txt';
         try {
-            // TODO
+            $out_file = fopen($path, 'w');
+            $input = 'Hello world!';
+            $in_file = fopen("var://input", 'r');
+            $size = strlen($input);
+            $copied = $m->copy($in_file, $out_file);
+            $this->assertSame($size, $copied);
+            fclose($out_file);
+            $content = file_get_contents($path);
+            $this->assertSame($input, $content);
         } finally {
             unlink($path);
         }
     }
 
+    public function testCopyRealFileToVirtualFileUsingSendfile(): void 
+    {
+        global $output;
+        $m = ZigImporter::load(__DIR__ . '/copy-real-file-to-virtual-file-with-sendfile.zig');
+        $path = __DIR__ . '/data/macbeth.txt';
+        $stat = stat($path);
+        $size = $stat['size'];
+        $output = '';        
+        $out_file = fopen("var://output", 'w');
+        $in_file = fopen($path, 'r');
+        $copied = $m->copy($in_file, $out_file, $size);
+        fclose($out_file);
+        fclose($in_file);
+        $content = file_get_contents($path);
+        $this->assertSame($content, $output);
+    }
+
+    public function testCopyVirtualFileToVirtualFileUsingSendfile(): void 
+    {
+        global $input, $output;
+        $m = ZigImporter::load(__DIR__ . '/copy-virtual-file-to-virtual-file-with-sendfile.zig');
+        $output = '';
+        $out_file = fopen("var://output", 'w');
+        $input = "Hello world!";
+        $in_file = fopen("var://input", 'r');
+        $copied = $m->copy($in_file, $out_file, strlen($input));
+        fclose($out_file);
+        fclose($in_file);
+        $this->assertSame($input, $output);
+    }
+
+    public function testCopyVirtualFileToRealFileUsingSendfile(): void 
+    {
+        global $input;
+        $m = ZigImporter::load(__DIR__ . '/copy-virtual-file-to-real-file-with-sendfile.zig');
+        $path = __DIR__ . '/data/virtual-file-test.txt';
+        try {
+            $out_file = fopen($path, 'w');
+            $input = "Hello world!";
+            $in_file = fopen("var://input", 'r');
+            $copied = $m->copy($in_file, $out_file, strlen($input));
+            fclose($out_file);
+            fclose($in_file);
+            $content = file_get_contents($path);
+            $this->assertSame($input, $content);
+        } finally {
+            unlink($path);
+        }
+    }
 }
 
 class VariableStream {
