@@ -517,6 +517,24 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
+    public function testCopyRealFileToVirtualFile(): void 
+    {
+        global $output, $out_stat;
+        $m = ZigImporter::load(__DIR__ . '/copy-real-file-to-virtual-file.zig');
+        $path = __DIR__ . '/data/macbeth.txt';
+        $stat = stat($path);
+        $size = $stat['size'];
+        $output = '';
+        $out_stat = [ 'size' => '0' ];
+        $out_file = fopen("var://output", 'w');
+        $in_file = fopen($path, 'r');
+        $copied = $m->copy($in_file, $out_file);
+        fclose($out_file);
+        fclose($in_file);
+        $content = file_get_contents($path);
+        $this->assertSame($content, $output);
+    }
+
     public function testCopyVirtualFileToVirtualFile(): void 
     {
         global $input, $in_stat, $output, $out_stat;

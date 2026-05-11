@@ -555,14 +555,15 @@ pub fn Controller(comptime Host: type) type {
             };
         }
 
-        fn handleSigsysSignal(_: i32, info: *const std.c.siginfo_t, ucontext: ?*anyopaque) callconv(.c) void {
+        fn handleSigsysSignal(_: i32, _: *const std.c.siginfo_t, ucontext: ?*anyopaque) callconv(.c) void {
             if (os != .linux) @compileError("Unsupported");
             if (@TypeOf(syscall.table) == void) return;
             @setEvalBranchQuota(2000000);
             Host.trapping_syscalls = false;
             defer Host.trapping_syscalls = true;
+            const sc_num = syscall.getSyscallNumber(ucontext);
             inline for (syscall.table) |sc| {
-                if (info.fields.sigsys.syscall == sc.num) {
+                if (sc_num == sc.num) {
                     const args = syscall.getArguments(ucontext, sc.args);
                     if (@hasField(Host.HandlerVTable, sc.name)) {
                         const ip = syscall.getInstructionPointer(ucontext);
@@ -616,7 +617,7 @@ pub fn Controller(comptime Host: type) type {
                     var syscall_args: std.meta.ArgsTuple(@TypeOf(syscaller)) = undefined;
                     inline for (&syscall_args, 0..) |*ptr, arg_index| {
                         ptr.* = switch (arg_index) {
-                            0 => @enumFromInt(info.fields.sigsys.syscall),
+                            0 => @enumFromInt(sc_num),
                             else => args[arg_index - 1],
                         };
                     }

@@ -2359,6 +2359,20 @@ pub const table = switch (builtin.target.os.tag) {
     else => {},
 };
 
+pub fn getSyscallNumber(ucontext: ?*anyopaque) usize {
+    const ctx: *ucontext_h.ucontext_t = @ptrCast(@alignCast(ucontext.?));
+    const reg = switch (builtin.target.cpu.arch) {
+        .x86_64 => ctx.uc_mcontext.gregs[ucontext_h.REG_RAX],
+        .aarch64, .aarch64_be => ctx.uc_mcontext.regs[8],
+        .riscv64 => ctx.uc_mcontext.__gregs[17],
+        .powerpc64, .powerpc64le => ctx.uc_mcontext.gp_regs[1],
+        .x86 => ctx.uc_mcontext.gregs[ucontext_h.REG_EAX],
+        .arm, .armeb => ctx.uc_mcontext.arm_r7,
+        else => @compileError("Unsupported platform"),
+    };
+    return @bitCast(reg);
+}
+
 pub fn getArguments(ucontext: ?*anyopaque, comptime len: usize) [len]usize {
     const ctx: *ucontext_h.ucontext_t = @ptrCast(@alignCast(ucontext.?));
     var arg_values: [len]usize = undefined;
