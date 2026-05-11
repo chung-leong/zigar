@@ -458,10 +458,49 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame('Hello world???', $text);
     }
 
+    public function testReadLinesFromFileUsingFgets(): void {
+        global $input;
+        $m = ZigImporter::load(__DIR__ . '/read-line-from-file-with-fgets.zig');
+        $path = __DIR__ . '/data/macbeth.txt';
+        $input = file_get_contents($path);
+        $file = fopen("var://input", 'r');
+        $m->startup();
+        try {
+            $m->print($file);
+        } finally {
+            $m->shutdown();
+            fclose($file);
+        }
+    }
+
     public function testGetCharactersFromFileUsingFgetc(): void {
+        global $input;
         $m = ZigImporter::load(__DIR__ . '/read-file-content-with-fgetc.zig');
-        $path = __DIR__ . '/data/macbetch.txt';
-        // TODO
+        $path = __DIR__ . '/data/macbeth.txt';
+        $input = file_get_contents($path);
+        $file = fopen("var://input", 'r');
+        ob_start();
+        $m->print($file);
+        $text = ob_get_clean();
+        $this->assertStringContainsString('Signifying nothing', $text);
+    }
+
+    public function testFlushOpenFileUsingFflush(): void {
+        global $output;
+        $m = ZigImporter::load(__DIR__ . '/flush-buffer-with-fflush.zig');
+        $output = '';
+        $m->open("/var://output");
+        try {
+            $m->writeFlush("Hello world");
+            $this->assertSame("Hello world", $output);
+            $m->writeFlushAll("Hello world");
+            $this->assertSame("Hello worldHello world", $output);
+            $m->write("Hello world");
+            $this->assertSame("Hello worldHello world", $output);
+        } finally {
+            $m->close();
+        }
+            $this->assertSame("Hello worldHello worldHello world", $output);
     }
 
     public function testGetCharactersFromStdinUsingGetchar(): void {
