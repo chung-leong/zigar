@@ -1472,13 +1472,14 @@ pub fn open(path: *const String, mode: [*c]const u8, options: c_int) !*Stream {
 
 pub const pipe = php_h.pipe;
 
-extern fn get_stream_path(strm: *Stream) [*:0]const u8;
+extern fn get_stream_path(strm: *Stream) ?[*:0]const u8;
 extern fn get_stream_mode(strm: *Stream) [*:0]const u8;
+extern fn get_stream_wrapper_data(strm: *Stream) *Value;
 extern fn set_stream_no_close(strm: *Stream) void;
 extern fn is_stdio_stream(strm: *Stream) bool;
 
-pub fn getStreamPath(strm: *Stream) []const u8 {
-    const ptr = get_stream_path(strm);
+pub fn getStreamPath(strm: *Stream) ?[]const u8 {
+    const ptr = get_stream_path(strm) orelse return null;
     const len = std.mem.len(ptr);
     return ptr[0..len];
 }
@@ -1612,7 +1613,7 @@ pub fn rmdir(path: *const String, context: ?*StreamContext) !void {
     if (php_h._php_stream_rmdir(p.ptr, 0, context) < 0) return error.Failure;
 }
 
-pub fn opendir(path: *String, options: c_int, context: *StreamContext) !*Stream {
+pub fn opendir(path: *String, options: c_int, context: ?*StreamContext) !*Stream {
     const p = getStringContent(path);
     var strm: ?*Stream = undefined;
     if (php_h.ZEND_DEBUG == 1) {
@@ -1624,8 +1625,8 @@ pub fn opendir(path: *String, options: c_int, context: *StreamContext) !*Stream 
     return strm orelse error.Failure;
 }
 
-pub fn readdir(strm: *Stream, ent: *DirEntry) ?*DirEntry {
-    return php_h._php_stream_readdir(strm, ent);
+pub fn readdir(strm: *Stream, ent: *DirEntry) bool {
+    return php_h._php_stream_readdir(strm, ent) != null;
 }
 
 pub fn closedir(strm: *Stream) void {
@@ -1667,6 +1668,11 @@ extern fn get_stream_context(strm: *Stream) *StreamContext;
 
 pub fn getStreamContext(strm: *Stream) *StreamContext {
     return get_stream_context(strm);
+}
+
+pub fn getStreamWrapperProperty(strm: *Stream, name: []const u8) !*Value {
+    const wrapper = get_stream_wrapper_data(strm);
+    return try getProperty(wrapper, name);
 }
 
 pub fn setBlocking(strm: *Stream, set: bool) !void {

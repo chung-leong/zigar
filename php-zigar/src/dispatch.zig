@@ -4,6 +4,7 @@ const builtin = @import("builtin");
 
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const EventLoop = @import("event-loop.zig").EventLoop;
+const failure = @import("failure.zig");
 const interface = @import("module/native/interface.zig");
 const Jscall = interface.Jscall;
 const Syscall = interface.Syscall;
@@ -78,11 +79,18 @@ pub const CallDispatcher = struct {
     const StreamEntry = struct {
         fd: c_long,
         stream: *Stream,
+        path: *String,
         fd_stat: std.os.wasi.fdstat_t,
-        close: bool,
+        dir_entry: ?*php.DirEntry = null,
+        flags: packed struct {
+            close: bool = false,
+            populated: bool = false,
+        } = .{},
 
         pub fn deinit(self: *@This()) void {
-            if (self.close) _ = php.close(self.stream);
+            php.release(self.path);
+            if (self.dir_entry) |de| php.allocator.destroy(de);
+            if (self.flags.close) _ = php.close(self.stream);
         }
     };
     const ScheduledTask = struct {
@@ -424,6 +432,16 @@ pub const CallDispatcher = struct {
                 stat.filetype
             else |_| if (is_dir) .DIRECTORY else .REGULAR_FILE;
         };
+        const path = find: {
+            if (php.getStreamPath(strm)) |path_sc| {
+                break :find php.createString(path_sc);
+            } else if (php.getStreamWrapperProperty(strm, "path") catch null) |path_v| {
+                if (php.getValueString(path_v) catch null) |path| {
+                    break :find path;
+                }
+            }
+            return failure.report("stream wrapper does not have the property 'path'", .{});
+        };
         var fdstat: std.os.wasi.fdstat_t = .{
             .fs_filetype = filetype,
             .fs_flags = .{},
@@ -445,7 +463,7 @@ pub const CallDispatcher = struct {
                 else => {},
             }
         }
-        _ = try self.addStreamEntry(fd, strm, &fdstat, false);
+        _ = try self.addStreamEntry(fd, path, strm, &fdstat);
         return fd;
     }
 
@@ -461,14 +479,14 @@ pub const CallDispatcher = struct {
         for (self.stream_list.items) |*entry| {
             if (entry.fd == fd) return entry;
         } else {
-            const path: []const u8, const mode: [*:0]const u8 = switch (fd) {
+            const path_sc: []const u8, const mode: [*:0]const u8 = switch (fd) {
                 0 => .{ "php://input", "r" },
                 1, 2 => .{ "php://output", "w" },
                 else => return error.Unexpected,
             };
-            const url = php.createString(path);
-            defer php.release(url);
-            const strm = php.open(url, mode, 0) catch return error.Unexpected;
+            const path = php.createString(path_sc);
+            defer php.release(path);
+            const strm = php.open(path, mode, 0) catch return error.Unexpected;
             const stat: std.os.wasi.fdstat_t = .{
                 .fs_filetype = .REGULAR_FILE,
                 .fs_flags = .{},
@@ -478,7 +496,7 @@ pub const CallDispatcher = struct {
                 },
                 .fs_rights_inheriting = .{},
             };
-            return try self.addStreamEntry(fd, strm, &stat, false);
+            return try self.addStreamEntry(fd, path, strm, &stat);
         }
     }
 
@@ -495,14 +513,15 @@ pub const CallDispatcher = struct {
         }
     }
 
-    fn addStreamEntry(self: *@This(), fd: c_long, strm: *Stream, stat: *const std.os.wasi.fdstat_t, close: bool) !*StreamEntry {
+    fn addStreamEntry(self: *@This(), fd: c_long, path: *String, strm: *Stream, stat: *const std.os.wasi.fdstat_t) !*StreamEntry {
         const entry = try self.stream_list.addOne(php.allocator);
         entry.* = .{
             .fd = fd,
+            .path = path,
             .stream = strm,
             .fd_stat = stat.*,
-            .close = close,
         };
+        php.addRef(path);
         return entry;
     }
 
@@ -515,7 +534,7 @@ pub const CallDispatcher = struct {
         } else error.OutOfDescriptor;
     }
 
-    fn getWrapperUrl(path: [*:0]const u8) ?[]const u8 {
+    fn getWrapperUrl(path: [*:0]const u8) ?*String {
         var start: usize = 0;
         var index: usize = 0;
         while (true) : (index += 1) {
@@ -523,7 +542,7 @@ pub const CallDispatcher = struct {
             if (c == ':') {
                 const s = path[start..];
                 const len = std.mem.len(s);
-                return s[0..len];
+                return php.createString(s[0..len]);
             } else if (index == 0 and (c == '/' or c == '\\')) {
                 start += 1;
             } else if (!std.ascii.isAlphanumeric(c)) {
@@ -544,46 +563,73 @@ pub const CallDispatcher = struct {
 
     fn resolvePath(self: *@This(), dirfd: c_long, path: [*:0]const u8) !?PathInfo {
         if (getWrapperUrl(path)) |url| {
-            return .{ .url = php.createString(url) };
+            return .{ .url = url };
         } else if (dirfd == -1) {
             return null;
         } else {
             const parent = try self.findStream(dirfd);
             const name = path[0..std.mem.len(path)];
-            const parent_url = php.getStreamPath(parent.stream);
+            const parent_path = php.getStringContent(parent.path);
             return .{
-                .url = try php.resolve(name, parent_url),
+                .url = joinPath(parent_path, name),
                 .context = php.getStreamContext(parent.stream),
             };
         }
     }
 
+    fn joinPath(parent_path: []const u8, path: []const u8) *String {
+        const slash_count: usize = if (parent_path[parent_path.len - 1] != '/') 1 else 0;
+        const len = parent_path.len + slash_count + path.len;
+        const str = php.createStringWithLength(len);
+        const sc: [*]u8 = @ptrCast(&str.val[0]);
+        @memcpy(sc[0..parent_path.len], parent_path);
+        if (slash_count == 1) sc[parent_path.len] = '/';
+        @memcpy(sc[parent_path.len + slash_count .. len], path);
+        sc[len] = 0;
+        return str;
+    }
+
     fn handleOpen(self: *@This(), args: anytype) !E {
         const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
         defer loc.deinit();
-        const mode = if (args.rights.FD_WRITE)
-            if (args.open_flags.CREAT)
-                if (args.descriptor_flags.APPEND)
-                    if (args.rights.FD_READ) "a+" else "a"
-                else if (args.open_flags.EXCL)
-                    if (args.rights.FD_READ) "x+" else "x"
-                else if (args.open_flags.TRUNC)
-                    if (args.rights.FD_READ) "w+" else "w"
-                else if (args.rights.FD_READ) "c+" else "c"
-            else
-                "r+"
-        else
-            "r";
-        const fd = self.createDescriptor() catch return .MFILE;
-        const strm = php.open(loc.url, mode, 0) catch return .NOENT;
+        const strm, const file_type: std.os.wasi.filetype_t = open: {
+            if (args.rights.FD_READDIR) {
+                // opening a directory
+                const strm = php.opendir(loc.url, 0, null) catch return .NOENT;
+                break :open .{ strm, .DIRECTORY };
+            } else {
+                const mode = if (args.rights.FD_WRITE)
+                    if (args.open_flags.CREAT)
+                        if (args.descriptor_flags.APPEND)
+                            if (args.rights.FD_READ) "a+" else "a"
+                        else if (args.open_flags.EXCL)
+                            if (args.rights.FD_READ) "x+" else "x"
+                        else if (args.open_flags.TRUNC)
+                            if (args.rights.FD_READ) "w+" else "w"
+                        else if (args.rights.FD_READ) "c+" else "c"
+                    else
+                        "r+"
+                else
+                    "r";
+                const strm = php.open(loc.url, mode, 0) catch return .NOENT;
+                break :open .{ strm, .REGULAR_FILE };
+            }
+        };
+        errdefer php.close(strm);
         const stat: std.os.wasi.fdstat_t = .{
-            .fs_filetype = .REGULAR_FILE,
+            .fs_filetype = file_type,
             .fs_flags = args.descriptor_flags,
             .fs_rights_base = args.rights,
             .fs_rights_inheriting = .{},
         };
-        errdefer php.close(strm);
-        _ = self.addStreamEntry(fd, strm, &stat, true) catch return .MFILE;
+        const fd = self.createDescriptor() catch return .MFILE;
+        const entry = self.addStreamEntry(fd, loc.url, strm, &stat) catch return .MFILE;
+        entry.flags.close = true;
+        if (file_type == .DIRECTORY) {
+            if (php.allocator.create(php.DirEntry) catch null) |de| {
+                entry.dir_entry = de;
+            }
+        }
         args.fd = @intCast(fd);
         return .SUCCESS;
     }
@@ -704,9 +750,9 @@ pub const CallDispatcher = struct {
         const loc: PathInfo = get: {
             if (@hasField(@TypeOf(args.*), "fd")) {
                 const entry = self.findStream(args.fd) catch return .BADF;
-                const path = php.getStreamPath(entry.stream);
+                php.addRef(entry.path);
                 break :get .{
-                    .url = php.createString(path),
+                    .url = entry.path,
                     .context = php.getStreamContext(entry.stream),
                 };
             } else {
@@ -827,18 +873,44 @@ pub const CallDispatcher = struct {
     }
 
     fn handleGetdents(self: *@This(), args: anytype) !E {
-        _ = self;
-        _ = args;
-        return .OPNOTSUPP;
-        // const env = self.env;
-        // return try self.callPosixFunction(self.js.fd_readdir, &.{
-        //     try env.createInt32(args.dirfd),
-        //     try env.createUsize(@intFromPtr(args.buffer)),
-        //     try env.createUint32(args.len),
-        //     try env.createUint32(0),
-        //     try env.createUsize(@intFromPtr(&args.read)),
-        //     futex,
-        // });
+        const entry = self.findStream(args.dirfd) catch return .BADF;
+        const dir_entry = entry.dir_entry orelse return .NOMEM;
+        var index: usize = 0;
+        var remaining: usize = args.len;
+        while (true) {
+            if (!entry.flags.populated) {
+                if (php.readdir(entry.stream, dir_entry)) {
+                    entry.flags.populated = true;
+                } else break;
+            }
+            const name_ptr: [*:0]u8 = @ptrCast(&dir_entry.d_name);
+            const name = name_ptr[0..std.mem.len(name_ptr)];
+            if (name.len + @sizeOf(std.os.wasi.dirent_t) > remaining) {
+                break;
+            }
+            const dir_path = php.getStringContent(entry.path);
+            const path = joinPath(dir_path, name);
+            defer php.release(path);
+            var info: std.os.wasi.filestat_t = undefined;
+            php.stat(path, null, .{}, &info) catch {
+                info.ino = 0;
+                info.filetype = .UNKNOWN;
+            };
+            const out_dirent: *align(1) std.os.wasi.dirent_t = @ptrCast(&args.buffer[index]);
+            out_dirent.next = @intFromPtr(dir_entry);
+            out_dirent.ino = info.ino;
+            out_dirent.namlen = @intCast(name.len);
+            out_dirent.type = info.filetype;
+            const si = index + @sizeOf(std.os.wasi.dirent_t);
+            const ei = si + name.len;
+            const out_name = args.buffer[si..ei];
+            @memcpy(out_name, name);
+            entry.flags.populated = false;
+            index += name.len + @sizeOf(std.os.wasi.dirent_t);
+            remaining -= name.len + @sizeOf(std.os.wasi.dirent_t);
+        }
+        args.read = @intCast(index);
+        return .SUCCESS;
     }
 
     fn handlePoll(self: *@This(), args: anytype) !E {

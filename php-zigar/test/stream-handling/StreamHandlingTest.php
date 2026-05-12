@@ -372,6 +372,24 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
+    public function testRetrieveNamesOfFilesInDirectoryUsingPosixFunctions(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/scan-directory-with-posix-functions.zig');
+        $dir = new VirtualDir([
+            'hello.txt' => new VirtualFile('Hello world'),
+            'test.txt' => new VirtualFile('This is a test and this is only a test'),
+            'world' => new VirtualDir(),
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $this->expectOutputString(<<<OUTPUT
+        hello.txt (file)
+        test.txt (file)
+        world (dir)
+
+        OUTPUT);
+        $m->print('/vfs://test');
+    } 
+
     public function testOpenAndReadFromFileUsingPread(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/open-and-read-file-with-pread.zig');
@@ -458,7 +476,8 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame('Hello world???', $text);
     }
 
-    public function testReadLinesFromFileUsingFgets(): void {
+    public function testReadLinesFromFileUsingFgets(): void 
+    {
         global $input;
         $m = ZigImporter::load(__DIR__ . '/read-line-from-file-with-fgets.zig');
         $path = __DIR__ . '/data/macbeth.txt';
@@ -473,7 +492,23 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
-    public function testGetCharactersFromFileUsingFgetc(): void {
+    public function testScanVariablesFromFileUsingFscanf(): void 
+    {
+        global $input;
+        $m = ZigImporter::load(__DIR__ . '/read-line-from-file-with-fgets.zig');
+        $path = __DIR__ . '/data/macbeth.txt';
+        $input = <<<INPUT
+        1 2 3 hello
+        4 5 6 wpr;d
+        123 456
+
+        INPUT;
+        $file = fopen("var://input", 'r');
+        $m->scan($input);
+    }
+
+    public function testGetCharactersFromFileUsingFgetc(): void 
+    {
         global $input;
         $m = ZigImporter::load(__DIR__ . '/read-file-content-with-fgetc.zig');
         $path = __DIR__ . '/data/macbeth.txt';
@@ -485,7 +520,8 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertStringContainsString('Signifying nothing', $text);
     }
 
-    public function testFlushOpenFileUsingFflush(): void {
+    public function testFlushOpenFileUsingFflush(): void 
+    {
         global $output;
         $m = ZigImporter::load(__DIR__ . '/flush-buffer-with-fflush.zig');
         $output = '';
@@ -503,7 +539,8 @@ final class StreamHandlingTest extends ZigarTestCase
             $this->assertSame("Hello worldHello worldHello world", $output);
     }
 
-    public function testGetCharactersFromStdinUsingGetchar(): void {
+    public function testGetCharactersFromStdinUsingGetchar(): void 
+    {
         // TODO
     }
 
@@ -767,4 +804,231 @@ class VariableStream {
 }
 
 stream_wrapper_register("var", "VariableStream")
+    or die("Failed to register protocol");
+
+class VirtualFSStream {
+    var $node;
+    var $position;
+
+    static $directories = [];
+
+    static function add_root_node($name, $dir) {
+        self::$directories[$name] = $dir;
+    }
+
+    static function remove_root_node($name) {
+        unset(self::$directories[$name]);
+    }
+
+    static function get_node($path) {
+        $url = parse_url($path);
+        $root_name = $url["host"];
+        if (!isset(self::$directories[$root_name])) return false;
+        $node = self::$directories[$root_name];
+        if (isset($url["path"])) {
+            $path = substr($url["path"], 1);
+            if ($path) {
+                foreach (explode('/', $path) as $part) {
+                    if (!isset($node->children[$part])) return false;
+                    $node = $node->children[$part];
+                }
+            }
+        }
+        return $node;
+    }
+
+    function dir_opendir(string $path, int $options)
+    {
+        $dir = self::get_node($path);
+        if (!isset($dir->children)) return false;
+        $this->node = $dir;
+        $this->position = 0;
+        return true;
+    }
+
+    function dir_closedir()
+    {
+    } 
+
+    function dir_readdir()
+    {
+        $keys = array_keys($this->node->children);
+        if (!isset($keys[$this->position])) return false;
+        $name = $keys[$this->position++];
+        return $name;
+    }
+
+    function dir_rewinddir()
+    {
+        $this->position = 0;
+        return true;
+    }
+
+    function mkdir($path, $mode, $options) 
+    {
+        $parent = self::get_node(dirname($path));
+        if (!isset($parent->children)) return false;
+        $name = basename($path);
+        if (isset($parent->children[$name])) return false;
+        $dir = $parent->children[$name] = new VirtualDir();
+        $dir->mode = 0o0040000 | $mode;
+        return true;
+    }
+
+    function rmdir($path, $options) 
+    {
+        $parent = self::get_node(dirname($path));
+        if (!isset($parent->children)) return false;
+        $name = basename($path);
+        if (!isset($parent->children[$name])) return false;
+        $dir = $parent->children[$name];
+        if (!isset($dir->children)) return false;
+        unset($parent->children[$name]);
+        return true;
+    }
+
+    function unlink($path) 
+    {
+        $parent = self::get_node(dirname($path));
+        if (!isset($parent->children)) return false;
+        $name = basename($path);
+        if (!isset($parent->children[$name])) return false;
+        $file = $parent->children[$name];
+        if (!isset($file->content)) return false;
+        unset($parent->children[$name]);
+        return true;
+    }
+
+    function stream_open($path, $mode, $options, &$opened_path)
+    {
+        $file = self::get_node($path);
+        if (!$file && strstr($mode, 'w')) {
+            $parent = self::get_node(dirname($path));
+            if (isset($parent->children)) {
+                $name = basename($path);
+                $file = $parent->children[$name] = new VirtualFile();
+            }
+        }
+        if (!isset($file->content)) return false;
+        $this->node = $file;
+        $this->position = 0;
+        return true;
+    }
+
+    function stream_read($count)
+    {
+        $content = $this->node->content;
+        $ret = substr($content, $this->position, $count);
+        $this->position += strlen($ret);
+        return $ret;
+    }
+
+    function stream_write($data)
+    {
+        $content = &$this->node->content;
+        $left = substr($content, 0, $this->position);
+        $right = substr($content, $this->position + strlen($data));
+        $content = $left . $data . $right;
+        $this->position += strlen($data);
+        return strlen($data);
+    }
+
+    function stream_tell()
+    {
+        return $this->position;
+    }
+
+    function stream_eof()
+    {
+        $content = $this->node->content;
+        return $this->position >= strlen($content);
+    }
+
+    function stream_seek($offset, $whence)
+    {
+        $content = $this->node->content;
+        switch ($whence) {
+            case SEEK_SET:
+                if ($offset < strlen($content) && $offset >= 0) {
+                     $this->position = $offset;
+                     return true;
+                } else {
+                     return false;
+                }
+                break;
+
+            case SEEK_CUR:
+                if ($offset >= 0) {
+                     $this->position += $offset;
+                     return true;
+                } else {
+                     return false;
+                }
+                break;
+
+            case SEEK_END:
+                if (strlen($content) + $offset >= 0) {
+                     $this->position = strlen($content) + $offset;
+                     return true;
+                } else {
+                     return false;
+                }
+                break;
+
+            default:
+                return false;
+        }
+    }
+
+    function stream_stat()
+    {
+        return $this->node;
+    }
+
+    function stream_metadata($path, $option, $var) 
+    {
+        if($option == STREAM_META_TOUCH) {
+            $node = self::get_node($path);
+            if ($node) {
+                $node->atime = $node->mtime = time();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function url_stat($path, $flags)
+    {
+        return (array) self::get_node($path);
+    }
+}
+
+class VirtualFSObject {
+    var $size = 0;
+    var $atime = 0;
+    var $ctime = 0;
+    var $mtime = 0;
+    var $mode = 0;
+}
+
+class VirtualDir extends VirtualFSObject {
+    var $children;
+
+    function __construct($children = []) {
+        $this->children = $children;
+        $this->mode = 0o0040000 | 0o777;
+    }
+}
+
+class VirtualFile extends VirtualFSObject {
+    var $content;
+
+    function __construct($content = '') {
+        $this->content = $content;
+        $this->size = strlen($content);
+        $this->mode = 0o0100000 | 0o666;
+    }
+}
+
+stream_wrapper_register("vfs", "VirtualFSStream")
     or die("Failed to register protocol");

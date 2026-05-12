@@ -51,6 +51,10 @@ const char* get_stream_path(php_stream* strm) {
     return strm->orig_path;
 }
 
+zval* get_stream_wrapper_data(php_stream* strm) {
+    return &strm->wrapperdata;
+}
+
 const char* get_stream_mode(php_stream* strm) {
     return strm->mode;
 }
