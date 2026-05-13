@@ -372,6 +372,41 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
+    public function testOpenFileInDirectory(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/open-file-at-dir.zig');
+        $dir = new VirtualDir([
+            'hello.txt' => new VirtualFile('Hello world'),
+            'test.txt' => new VirtualFile('This is a test and this is only a test'),
+            'world' => new VirtualDir(),
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $this->expectOutputString(<<<OUTPUT
+        This is a test and this is only a test
+        OUTPUT);
+        $handle = opendir('vfs://test');
+        $m->print($handle, 'test.txt');
+    } 
+
+    public function testRetrieveNamesOfFilesInDirectory(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/scan-directory.zig');
+        $dir = new VirtualDir([
+            'hello.txt' => new VirtualFile('Hello world'),
+            'test.txt' => new VirtualFile('This is a test and this is only a test'),
+            'world' => new VirtualDir(),
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $this->expectOutputString(<<<OUTPUT
+        hello.txt (file)
+        test.txt (file)
+        world (dir)
+
+        OUTPUT);
+        $handle = opendir('vfs://test');
+        $m->print($handle);
+    } 
+
     public function testRetrieveNamesOfFilesInDirectoryUsingPosixFunctions(): void
     {
         $m = ZigImporter::load(__DIR__ . '/scan-directory-with-posix-functions.zig');
@@ -389,6 +424,57 @@ final class StreamHandlingTest extends ZigarTestCase
         OUTPUT);
         $m->print('/vfs://test');
     } 
+
+    public function testDeleteFileInDirectory(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/delete-file-at-dir.zig');
+        $dir = new VirtualDir([
+            'hello.txt' => new VirtualFile('Hello world'),
+            'test.txt' => new VirtualFile('This is a test and this is only a test'),
+            'world' => new VirtualDir(),
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $handle = opendir("vfs://test");
+        $m->remove($handle, 'test.txt');
+        $this->assertArrayNotHasKey('test.txt', $dir->children);
+        $this->assertExceptionMessage('not found', function() use($handle, $m) {
+            $m->remove($handle, 'test.txt');
+        });
+    }
+
+    public function testRemoveDirectoryInDirectory(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/remove-directory-at-dir.zig');
+        $dir = new VirtualDir([
+            'hello.txt' => new VirtualFile('Hello world'),
+            'test.txt' => new VirtualFile('This is a test and this is only a test'),
+            'world' => new VirtualDir(),
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $handle = opendir("vfs://test");
+        $m->remove($handle, 'world');
+        $this->assertArrayNotHasKey('world', $dir->children);
+        $this->assertExceptionMessage('not found', function() use($handle, $m) {
+            $m->remove($handle, 'world');
+        });
+    }
+
+    public function testMakeDirectoryInDirectory(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/make-directory-at-dir.zig');
+        $dir = new VirtualDir([
+            'hello.txt' => new VirtualFile('Hello world'),
+            'test.txt' => new VirtualFile('This is a test and this is only a test'),
+            'world' => new VirtualDir(),
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $handle = opendir("vfs://test");
+        $m->add($handle, 'cow');
+        $this->assertArrayHasKey('cow', $dir->children);
+        $this->assertExceptionMessage('path already exists', function() use($handle, $m) {
+            $m->add($handle, 'world');
+        });
+    }
 
     public function testCreateDirectoryUsingPosixFunction(): void
     {
@@ -501,6 +587,41 @@ final class StreamHandlingTest extends ZigarTestCase
             $this->assertSame('hello world', $content);
         } finally {
             unlink($new_path);
+        }
+    }
+
+    public function testSetMtimeAndATimeOfFileInFileSystemUsingPosixFunction(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/set-times-of-file-in-file-system-with-posix-functions.zig');
+        $path = __DIR__ . '/data/settimes_test.txt';
+        file_put_contents($path, 'Hello world');
+        try {
+            $m->setTimes($path, 3, 1234);
+            $info = stat($path);
+            $this->assertSame(3, $info['atime']);
+            $this->assertSame(3, $info['mtime']);
+        } finally {
+            unlink($path);
+        }
+    }
+
+    public function testScanDirectoryInFileSystemUsingPosixFunction(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/scan-directory-in-file-system-with-posix-functions.zig');
+        $path = __DIR__ . '/data/readdir_test';
+        mkdir($path, 0777, true);
+        file_put_contents("$path/file1.txt", 'Hello world');
+        file_put_contents("$path/file2.txt", 'Rats live on no evil start');
+        try {
+            ob_start();
+            $m->print($path);
+            $text = ob_get_clean();
+            $this->assertStringContainsString('file1.txt (11 bytes)', $text);
+            $this->assertStringContainsString('file2.txt (26 bytes)', $text);
+        } finally {
+            unlink("$path/file1.txt");
+            unlink("$path/file2.txt");
+            rmdir($path);
         }
     }
 

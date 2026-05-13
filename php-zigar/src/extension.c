@@ -59,6 +59,14 @@ const char* get_stream_mode(php_stream* strm) {
     return strm->mode;
 }
 
+uint32_t get_stream_flags(php_stream* strm) {
+    return strm->flags;
+}
+
+const php_stream_ops* get_stream_handlers(php_stream* strm) {
+    return strm->ops;
+}
+
 void set_stream_no_close(php_stream* strm) {
     strm->flags |= PHP_STREAM_FLAG_NO_CLOSE;
 }

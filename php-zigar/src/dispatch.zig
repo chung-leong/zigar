@@ -525,6 +525,9 @@ pub const CallDispatcher = struct {
             .fd_stat = stat.*,
         };
         php.addRef(path);
+        if (stat.fs_filetype == .DIRECTORY) {
+            entry.dir_entry = php.allocator.create(php.DirEntry) catch null;
+        }
         return entry;
     }
 
@@ -598,25 +601,25 @@ pub const CallDispatcher = struct {
         const strm, const file_type: std.os.wasi.filetype_t = open: {
             if (args.rights.FD_READDIR) {
                 // opening a directory
-                const strm = php.opendir(loc.url, 0, null) catch return .NOENT;
-                break :open .{ strm, .DIRECTORY };
-            } else {
-                const mode = if (args.rights.FD_WRITE)
-                    if (args.open_flags.CREAT)
-                        if (args.descriptor_flags.APPEND)
-                            if (args.rights.FD_READ) "a+" else "a"
-                        else if (args.open_flags.EXCL)
-                            if (args.rights.FD_READ) "x+" else "x"
-                        else if (args.open_flags.TRUNC)
-                            if (args.rights.FD_READ) "w+" else "w"
-                        else if (args.rights.FD_READ) "c+" else "c"
-                    else
-                        "r+"
-                else
-                    "r";
-                const strm = php.open(loc.url, mode, 0) catch return .NOENT;
-                break :open .{ strm, .REGULAR_FILE };
+                if (php.opendir(loc.url, 0, null) catch null) |strm| {
+                    break :open .{ strm, .DIRECTORY };
+                }
             }
+            const mode = if (args.rights.FD_WRITE)
+                if (args.open_flags.CREAT)
+                    if (args.descriptor_flags.APPEND)
+                        if (args.rights.FD_READ) "a+" else "a"
+                    else if (args.open_flags.EXCL)
+                        if (args.rights.FD_READ) "x+" else "x"
+                    else if (args.open_flags.TRUNC)
+                        if (args.rights.FD_READ) "w+" else "w"
+                    else if (args.rights.FD_READ) "c+" else "c"
+                else
+                    "r+"
+            else
+                "r";
+            const strm = php.open(loc.url, mode, 0) catch return .NOENT;
+            break :open .{ strm, .REGULAR_FILE };
         };
         errdefer php.close(strm);
         const stat: std.os.wasi.fdstat_t = .{
@@ -628,11 +631,6 @@ pub const CallDispatcher = struct {
         const fd = self.createDescriptor() catch return .MFILE;
         const entry = self.addStreamEntry(fd, loc.url, strm, &stat) catch return .MFILE;
         entry.flags.close = true;
-        if (file_type == .DIRECTORY) {
-            if (php.allocator.create(php.DirEntry) catch null) |de| {
-                entry.dir_entry = de;
-            }
-        }
         args.fd = @intCast(fd);
         return .SUCCESS;
     }
@@ -725,7 +723,7 @@ pub const CallDispatcher = struct {
         const entry = self.findStream(args.fd) catch return .BADF;
         const pos = php.tell(entry.stream) catch return .BADF;
         defer php.seek(entry.stream, @intCast(pos), 0) catch {};
-        php.seek(entry.stream, @intCast(args.offset), 0) catch return .INVAL;
+        php.seek(entry.stream, @intCast(args.offset), 0) catch return .SPIPE;
         const len: usize = args.count;
         const iovs = args.iovs[0..len];
         var total: usize = 0;
@@ -836,7 +834,10 @@ pub const CallDispatcher = struct {
     fn handleMkdir(self: *@This(), args: anytype) !E {
         const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
         defer loc.deinit();
-        php.mkdir(loc.url, args.mode, loc.context) catch return .NOENT;
+        php.mkdir(loc.url, args.mode, loc.context) catch {
+            var info: std.os.wasi.filestat_t = undefined;
+            return if (php.stat(loc.url, null, .{}, &info)) .EXIST else |_| .NOENT;
+        };
         return .SUCCESS;
     }
 

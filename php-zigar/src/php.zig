@@ -1473,6 +1473,8 @@ pub fn open(path: *const String, mode: [*c]const u8, options: c_int) !*Stream {
 pub const pipe = php_h.pipe;
 
 extern fn get_stream_path(strm: *Stream) ?[*:0]const u8;
+extern fn get_stream_flags(strm: *Stream) u32;
+extern fn get_stream_handlers(strm: *Stream) *const php_h.php_stream_ops;
 extern fn get_stream_mode(strm: *Stream) [*:0]const u8;
 extern fn get_stream_wrapper_data(strm: *Stream) *Value;
 extern fn set_stream_no_close(strm: *Stream) void;
@@ -1536,6 +1538,10 @@ pub fn write(strm: *Stream, buf: [*]const u8, size: usize) !usize {
 }
 
 pub fn seek(strm: *Stream, offset: i64, whence: u32) !void {
+    const ops = get_stream_handlers(strm);
+    const flags = get_stream_flags(strm);
+    if (ops.seek == null) return error.Unseekable;
+    if (flags & php_h.PHP_STREAM_FLAG_NO_SEEK != 0) return error.Unseekable;
     if (php_h._php_stream_seek(strm, offset, @intCast(whence)) < 0) return error.Failure;
 }
 
@@ -1585,7 +1591,8 @@ fn convertTimespec(t: *php_h.timespec) u64 {
 pub fn unlink(path: *const String, context: ?*StreamContext) !void {
     const p = getStringContent(path);
     const wrapper, const handler = try getStreamWrapper(p, "unlink");
-    if (handler.?(wrapper, p.ptr, 0, context) == 0) return error.Failure;
+    const result = handler.?(wrapper, p.ptr, 0, context);
+    if (result == 0) return error.Failure;
 }
 
 pub fn rename(path: *const String, new_path: *const String, context: ?*StreamContext) !void {
@@ -1605,12 +1612,14 @@ pub fn tell(strm: *Stream) !usize {
 
 pub fn mkdir(path: *const String, mode: u32, context: ?*StreamContext) !void {
     const p = getStringContent(path);
-    if (php_h._php_stream_mkdir(p.ptr, @intCast(mode), 0, context) < 0) return error.Failure;
+    const result = php_h._php_stream_mkdir(p.ptr, @intCast(mode), 0, context);
+    if (result == 0) return error.Failure;
 }
 
 pub fn rmdir(path: *const String, context: ?*StreamContext) !void {
     const p = getStringContent(path);
-    if (php_h._php_stream_rmdir(p.ptr, 0, context) < 0) return error.Failure;
+    const result = php_h._php_stream_rmdir(p.ptr, 0, context);
+    if (result == 0) return error.Failure;
 }
 
 pub fn opendir(path: *String, options: c_int, context: ?*StreamContext) !*Stream {
