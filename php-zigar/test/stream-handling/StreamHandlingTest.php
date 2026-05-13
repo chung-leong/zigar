@@ -484,6 +484,73 @@ final class StreamHandlingTest extends ZigarTestCase
         $m->print("/vfs://hello/test.txt");
     }
 
+    public function testGetSizeOfOpenedFileUsingWin32Function(): void
+    {
+        // TODO
+    }
+
+    public function testGetStatsOfOpenedFileUsingWin32Function(): void
+    {
+        // TODO
+    }
+
+    public function testSetAccessAndModifiedTimeOfOpenedFileUsingPosixFunction(): void    
+    {
+        $m = ZigImporter::load(__DIR__ . '/set-times-of-opened-file-with-posix-function.zig');
+        $file = new VirtualFile('Hello world!!!');
+        $dir = new VirtualDir([ 'hello.txt' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $m->setTimes('/vfs://test/hello.txt', 123, 456);
+        $this->assertSame(123, $file->atime);
+        $this->assertSame(456, $file->mtime);
+    }
+
+    public function testSetAccessAndModifiedTimeOfOpenedFileUsingFutime(): void
+    {
+        // TODO
+    }
+
+    public function testSetAccessAndModifiedTimeOfOpenedFileUsingPosixFunctionWithNsPrecision(): void    
+    {
+        $m = ZigImporter::load(__DIR__ . '/set-ns-times-of-opened-file-with-posix-function.zig');
+        $file = new VirtualFile('Hello world!!!');
+        $dir = new VirtualDir([ 'hello.txt' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $m->setTimes('/vfs://test/hello.txt', 123, 456);
+        $this->assertSame(123, $file->atime);
+        $this->assertSame(456, $file->mtime);
+    }
+
+    public function testSetAccessAndModifiedTimeOfFileUsingPosixFunction(): void    
+    {
+        $m = ZigImporter::load(__DIR__ . '/set-times-of-file-by-path-with-posix-function.zig');
+        $file1 = new VirtualFile('Hello world!!!');
+        $file2 = new VirtualFile('Hello world!!!');
+        $dir = new VirtualDir([ 
+            'hello.txt' => $file1,
+            'world.txt' => $file2,
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $m->setTimes('/vfs://test/hello.txt', 123, 456);
+        $this->assertSame(123, $file1->atime);
+        $this->assertSame(456, $file1->mtime);
+        $m->setLinkTimes('/vfs://test/world.txt', 1234, 5678);
+        $this->assertSame(1234, $file2->atime);
+        $this->assertSame(5678, $file2->mtime);
+    }
+
+    public function testSetAccessAndModifiedTimeOfFileInDirectoryUsingPosixFunction(): void    
+    {
+        $m = ZigImporter::load(__DIR__ . '/set-times-of-file-at-dir-with-posix-function.zig');
+        $file = new VirtualFile('Hello world!!!');
+        $dir = new VirtualDir([ 'hello.txt' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $handle = opendir('vfs://test');
+        $m->setTimes($handle, 'hello.txt', 123, 456);
+        $this->assertSame(123, $file->atime);
+        $this->assertSame(456, $file->mtime);
+    }
+
     public function testOpenFileInDirectory(): void
     {
         $m = ZigImporter::load(__DIR__ . '/open-file-at-dir.zig');
@@ -1354,7 +1421,8 @@ class VirtualFSStream {
         if($option == STREAM_META_TOUCH) {
             $node = self::get_node($path);
             if ($node) {
-                $node->atime = $node->mtime = time();
+                $node->mtime = $var[0];
+                $node->atime = $var[1];
                 return true;
             }
         }

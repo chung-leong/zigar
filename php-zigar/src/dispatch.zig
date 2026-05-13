@@ -764,8 +764,8 @@ pub const CallDispatcher = struct {
         };
         defer loc.deinit();
         const buf: php.utimbuf = .{
-            .actime = @divTrunc(args.atime, 1_000_000),
-            .modtime = @divTrunc(args.mtime, 1_000_000),
+            .actime = @divTrunc(args.atime, 1_000_000_000),
+            .modtime = @divTrunc(args.mtime, 1_000_000_000),
         };
         php.touch(loc.url, &buf, loc.context) catch return .INVAL;
         return .SUCCESS;

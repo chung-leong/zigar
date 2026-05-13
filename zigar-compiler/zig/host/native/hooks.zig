@@ -2225,11 +2225,17 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.telldir(d);
         }
 
-        pub fn utime(path: [*:0]const u8, tb: *const utimbuf) callconv(.c) c_int {
-            const ts: [2]std.c.timespec = .{
-                .{ .sec = tb.actime, .nsec = 0 },
-                .{ .sec = tb.modtime, .nsec = 0 },
-            };
+        pub fn utime(path: [*:0]const u8, tb: ?*const utimbuf) callconv(.c) c_int {
+            var ts: [2]std.c.timespec = undefined;
+            if (tb) |t| {
+                ts = .{ .{ .sec = t.actime, .nsec = 0 }, .{ .sec = t.modtime, .nsec = 0 } };
+            } else {
+                const now = std.time.nanoTimestamp();
+                const nps = 1_000_000_000;
+                const s: c_longlong = @intCast(@divTrunc(now, nps));
+                const ns: c_longlong = @intCast(now - s * nps);
+                ts = .{ .{ .sec = s, .nsec = ns }, .{ .sec = s, .nsec = ns } };
+            }
             var result: c_int = undefined;
             if (redirector.utimensat(fd_cwd, path, &ts, 0, &result)) {
                 return saveError(result);
@@ -2237,11 +2243,17 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             return Original.utime(path, tb);
         }
 
-        pub fn utime64(path: [*:0]const u8, tb: *const utimbuf) callconv(.c) c_int {
-            const ts: [2]std.c.timespec = .{
-                .{ .sec = tb.actime, .nsec = 0 },
-                .{ .sec = tb.modtime, .nsec = 0 },
-            };
+        pub fn utime64(path: [*:0]const u8, tb: ?*const utimbuf) callconv(.c) c_int {
+            var ts: [2]std.c.timespec = undefined;
+            if (tb) |t| {
+                ts = .{ .{ .sec = t.actime, .nsec = 0 }, .{ .sec = t.modtime, .nsec = 0 } };
+            } else {
+                const now = std.time.nanoTimestamp();
+                const nps = 1_000_000_000;
+                const s: c_longlong = @intCast(@divTrunc(now, nps));
+                const ns: c_longlong = @intCast(now - s * nps);
+                ts = .{ .{ .sec = s, .nsec = ns }, .{ .sec = s, .nsec = ns } };
+            }
             var result: c_int = undefined;
             if (redirector.utimensat(fd_cwd, path, &ts, 0, &result)) {
                 return saveError(result);
