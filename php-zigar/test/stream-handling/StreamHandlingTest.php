@@ -292,12 +292,30 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame(true, $result4);
     }
 
-    public function testCheckAccessOfFileinDirectoryUsingPosixFunction(): void
+    public function testCheckAccessOfFileInDirectoryUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/check-access-at-dir-with-posix-function.zig');
+        $file1 = new VirtualFile();
+        $file1->mode = 0o0100000 | 0111;
+        $file2 = new VirtualFile();
+        $file2->mode = 0o0100000 | 0222;
+        $subdir = new VirtualDir();
+        $dir = new VirtualDir([ 
+            'readable.txt' => $file1,
+            'writable.txt' => $file2,
+            'subdirectory' => $subdir,
+        ]);
+        VirtualFSStream::add_root_node('hello', $dir);
+        $handle = opendir("vfs://hello");
+        $result1 = $m->check($handle, 'readable.txt', read: true);
+        $result2 = $m->check($handle, 'writable.txt', write: true);
+        $result3 = $m->check($handle, 'subdirectory', execute: true);
+        $this->assertSame(true, $result1);
+        $this->assertSame(true, $result2);
+        $this->assertSame(true, $result3);
     }
 
-    public function testCheckAccessOfFileinDirectoryInFileSystemUsingPosixFunction(): void
+    public function testCheckAccessOfFileInDirectoryInFileSystemUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/check-access-at-dir-in-file-system-with-posix-function.zig');
         $path = __DIR__ . 'data/statat_test';
@@ -315,9 +333,17 @@ final class StreamHandlingTest extends ZigarTestCase
     public function testOpenFileInDirectoryUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/open-file-at-dir-with-posix-function.zig');
+        $file = new VirtualFile();
+        $dir = new VirtualDir([ 'writable.txt' => $file ]);
+        VirtualFSStream::add_root_node('hello', $dir);
+        $handle = opendir("vfs://hello");
+        $text = 'Hello world!!!';
+        $len = $m->write($handle, 'writable.txt', $text);
+        $this->assertSame(strlen($text), $len);
+        $this->assertSame($text, $file->content);
     }
 
-    public function testOpenFileFileInDirectoryInFileSystemUsingPosixFunction(): void
+    public function testOpenFileInDirectoryInFileSystemUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/open-file-at-dir-in-file-system-with-posix-function.zig');
         $path = __DIR__ . 'data/openat_test';
@@ -334,13 +360,33 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
-    public function testOpenFileInDirectoryInFileSystemUsingPosixFunction(): void
+    public function testRetrieveStatsOfFileInDirectoryUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/stat-file-at-dir-with-posix-function.zig');
+        $file = new VirtualFile('This is a test and this is only a test');
+        $file->ctime = 123;
+        $file->mtime = 124;
+        $file->atime = 125;
+        $dir = new VirtualDir([ "test.txt" => $file ]);
+        VirtualFSStream::add_root_node('hello', $dir);
+        $handle = opendir('vfs://hello');
+        $this->expectOutputString(<<<OUTPUT
+        size = 38
+        ctime = 123,0
+        mtime = 124,0
+        atime = 125,0
+
+        OUTPUT);
+        $m->stat($handle, 'test.txt');
+    }
+
+    public function testRetrieveStatsOfFileInDirectoryInFileSystemUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/stat-file-at-dir-in-file-system-with-posix-function.zig');
-        $path = __DIR__ . 'data/statat_test';
-        mkdir($path, 0o0777, true);
+        $path = __DIR__ . '/data/statat_test';
+        mkdir($path, 0777, true);
+        file_put_contents("$path/file.txt", "Hello world");
         try {
-            file_put_contents("$path/file.txt", "Hello world");
             $this->expectOutputString(<<<OUTPUT
             size = 11
 
@@ -370,6 +416,72 @@ final class StreamHandlingTest extends ZigarTestCase
         } finally {
             $m->shutdown();
         }
+    }
+
+    public function testGetStatsOfVirtualFile(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/stat-opened-file.zig');
+        $file = new VirtualFile('This is a test and this is only a test');
+        $file->ctime = 1234;
+        $dir = new VirtualDir([ "test.txt" => $file ]);
+        VirtualFSStream::add_root_node('hello', $dir);
+        $handle = fopen("vfs://hello/test.txt", 'r');
+        $this->expectOutputString(<<<OUTPUT
+        size = 38
+        ctime = 1234000000000
+        mtime = 0
+        atime = 0
+
+        OUTPUT);
+        $m->print($handle);
+    }
+
+    public function testGetStatsOfOpenedFileUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/stat-opened-file-with-posix-function.zig');
+        $file = new VirtualFile('This is a test and this is only a test');
+        $file->ctime = 1234;
+        $dir = new VirtualDir([ "test.txt" => $file ]);
+        VirtualFSStream::add_root_node('hello', $dir);
+        $this->expectOutputString(<<<OUTPUT
+        size = 38
+        ctime = 1234,0
+        mtime = 0,0
+        atime = 0,0
+
+        OUTPUT);
+        $m->print("/vfs://hello/test.txt");
+    }
+
+    public function testGetStatsOfOpenedFileInFileSystemUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/stat-opened-file-in-file-system-with-posix-function.zig');
+        $path = __DIR__ . '/data/fstat_test';
+        file_put_contents($path, 'This is a test and this is only a test');
+        $this->expectOutputString(<<<OUTPUT
+        size = 38
+
+        OUTPUT);
+        $m->print($path);
+    }
+
+    public function testGetStatsOfFileReferencedByPathUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/stat-file-by-path-with-posix-function.zig');
+        $file = new VirtualFile('This is a test and this is only a test');
+        $file->ctime = 1234;
+        $file->atime = 4567;
+        $file->mtime = 8888;
+        $dir = new VirtualDir([ "test.txt" => $file ]);
+        VirtualFSStream::add_root_node('hello', $dir);
+        $this->expectOutputString(<<<OUTPUT
+        size = 38
+        ctime = 1234,0
+        mtime = 8888,0
+        atime = 4567,0
+
+        OUTPUT);
+        $m->print("/vfs://hello/test.txt");
     }
 
     public function testOpenFileInDirectory(): void
@@ -1153,7 +1265,7 @@ class VirtualFSStream {
     function stream_open($path, $mode, $options, &$opened_path)
     {
         $file = self::get_node($path);
-        if (!$file && strstr($mode, 'w')) {
+        if (!$file && (strstr($mode, 'w') or strstr($mode, 'x') or strstr($mode, 'c'))) {
             $parent = self::get_node(dirname($path));
             if (isset($parent->children)) {
                 $name = basename($path);
@@ -1234,7 +1346,7 @@ class VirtualFSStream {
 
     function stream_stat()
     {
-        return $this->node;
+        return (array) $this->node;
     }
 
     function stream_metadata($path, $option, $var) 

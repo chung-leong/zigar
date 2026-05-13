@@ -440,11 +440,13 @@ pub const CallDispatcher = struct {
                 break :find php.createString(path_sc);
             } else if (php.getStreamWrapperProperty(strm, "path") catch null) |path_v| {
                 if (php.getValueString(path_v) catch null) |path| {
+                    php.addRef(path);
                     break :find path;
                 }
             }
             return failure.report("stream wrapper does not have the property 'path'", .{});
         };
+        defer php.release(path);
         var fdstat: std.os.wasi.fdstat_t = .{
             .fs_filetype = filetype,
             .fs_flags = .{},
@@ -455,7 +457,7 @@ pub const CallDispatcher = struct {
         for (mode) |c| {
             switch (c) {
                 'r' => fdstat.fs_rights_base.FD_READ = true,
-                'w' => fdstat.fs_rights_base.FD_WRITE = true,
+                'w', 'x', 'c' => fdstat.fs_rights_base.FD_WRITE = true,
                 '+' => {
                     fdstat.fs_rights_base.FD_READ = true;
                     fdstat.fs_rights_base.FD_WRITE = true;
