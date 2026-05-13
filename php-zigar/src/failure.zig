@@ -17,6 +17,10 @@ pub fn report(comptime fmt: []const u8, params: anytype) error{Unexpected} {
 const oom_msg = "out of memory";
 var error_message: ?[]const u8 = null;
 
+pub fn hasMessage() bool {
+    return error_message != null;
+}
+
 pub fn acquireMessage(err: anytype) []const u8 {
     if (error_message) |msg| {
         error_message = null;

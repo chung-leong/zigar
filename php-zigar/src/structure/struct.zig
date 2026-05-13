@@ -151,6 +151,8 @@ pub const Struct = struct {
                 if (self.getStreamHandle(value, true)) |handle| {
                     try self.setProperty(php.persistent("fd"), &handle, null);
                     return;
+                } else if (failure.hasMessage()) {
+                    return error.Unexpected;
                 } else {
                     const arg_d = php.createValueDebug(value);
                     defer php.release(&arg_d);

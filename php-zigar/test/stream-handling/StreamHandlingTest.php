@@ -390,6 +390,120 @@ final class StreamHandlingTest extends ZigarTestCase
         $m->print('/vfs://test');
     } 
 
+    public function testCreateDirectoryUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/create-directory-with-posix-function.zig');
+        $dir = new VirtualDir([
+            'world' => new VirtualDir(),
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $m->create('/vfs://test/world/hello');
+        $subdir = VirtualFSStream::get_node('vfs://test/world');
+        $this->assertArrayHasKey('hello', $subdir->children);
+    }
+
+    public function testRemoveDirectoryUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/remove-directory-with-posix-function.zig');
+        $subdir = new VirtualDir([
+            'hello' => new VirtualDir(),
+        ]);
+        $dir = new VirtualDir([
+            'world' => $subdir,
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $this->assertArrayHasKey('hello', $subdir->children);
+        $m->remove('/vfs://test/world/hello');
+        $this->assertArrayNotHasKey('hello', $subdir->children);
+    }
+
+    public function testRenameFile(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/rename-file.zig');
+        $subdir = new VirtualDir([
+            'hello.txt' => new VirtualFile('Hello world!'),
+        ]);
+        $dir = new VirtualDir([
+            'world' => $subdir,
+            'donut' => new VirtualDir(),
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $this->assertArrayHasKey('hello.txt', $subdir->children);
+        $m->rename('/vfs://test/world/hello.txt', '/vfs://test/donut/earth.txt');
+        $this->assertArrayNotHasKey('hello.txt', $subdir->children);
+        $content = file_get_contents('vfs://test/donut/earth.txt');
+        $this->assertSame('Hello world!', $content);
+    }
+
+    public function testRenameFileInDirectory(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/rename-file-at-dir.zig');
+        $subdir = new VirtualDir([
+            'hello.txt' => new VirtualFile('Hello world!'),
+        ]);
+        $dir = new VirtualDir([
+            'world' => $subdir,
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $handle = opendir('vfs://test/world');
+        $this->assertArrayHasKey('hello.txt', $subdir->children);
+        $m->rename($handle, 'hello.txt', 'earth.txt');
+        $this->assertArrayNotHasKey('hello.txt', $subdir->children);
+        $content = file_get_contents('vfs://test/world/earth.txt');
+        $this->assertSame('Hello world!', $content);
+    }
+
+    public function testRenameFileUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/rename-file-with-posix-function.zig');
+        $subdir = new VirtualDir([
+            'hello.txt' => new VirtualFile('Hello world!'),
+        ]);
+        $dir = new VirtualDir([
+            'world' => $subdir,
+            'donut' => new VirtualDir(),
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $this->assertArrayHasKey('hello.txt', $subdir->children);
+        $m->rename('/vfs://test/world/hello.txt', '/vfs://test/donut/earth.txt');
+        $this->assertArrayNotHasKey('hello.txt', $subdir->children);
+        $content = file_get_contents('vfs://test/donut/earth.txt');
+        $this->assertSame('Hello world!', $content);
+    }
+
+    public function testRenameFileInDirectoryUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/rename-file-at-dir-with-posix-function.zig');
+        $subdir = new VirtualDir([
+            'hello.txt' => new VirtualFile('Hello world!'),
+        ]);
+        $dir = new VirtualDir([
+            'world' => $subdir,
+            'donut' => new VirtualDir(),
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $this->assertArrayHasKey('hello.txt', $subdir->children);
+        $m->renameat('/vfs://test/world', 'hello.txt', '/vfs://test/donut', 'earth.txt');
+        $this->assertArrayNotHasKey('hello.txt', $subdir->children);
+        $content = file_get_contents('vfs://test/donut/earth.txt');
+        $this->assertSame('Hello world!', $content);
+    }
+
+    public function testRenameFileInFileSystemUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/rename-file-in-file-system-with-posix-function.zig');
+        $path = __DIR__ . '/data/rename_test.txt';
+        $new_path = __DIR__ . '/data/new_name_test.txt';
+        file_put_contents($path, 'hello world');
+        try {
+            $m->rename($path, $new_path);
+            $content = file_get_contents($new_path);
+            $this->assertSame('hello world', $content);
+        } finally {
+            unlink($new_path);
+        }
+    }
+
     public function testOpenAndReadFromFileUsingPread(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/open-and-read-file-with-pread.zig');
@@ -842,6 +956,7 @@ class VirtualFSStream {
         $dir = self::get_node($path);
         if (!isset($dir->children)) return false;
         $this->node = $dir;
+        $this->path = $path;
         $this->position = 0;
         return true;
     }
@@ -899,6 +1014,21 @@ class VirtualFSStream {
         return true;
     }
 
+    function rename($path_from, $path_to)
+    {
+        $dir_from = self::get_node(dirname($path_from));
+        if (!isset($dir_from->children)) return false;
+        $name_from = basename($path_from);
+        if (!isset($dir_from->children[$name_from])) return false;
+        $target = $dir_from->children[$name_from];
+        $dir_to = self::get_node(dirname($path_to));
+        if (!isset($dir_to->children)) return false;
+        $name_to = basename($path_to);
+        $dir_to->children[$name_to] = $target;
+        unset($dir_from->children[$name_from]);
+        return true;
+    }
+
     function stream_open($path, $mode, $options, &$opened_path)
     {
         $file = self::get_node($path);
@@ -910,6 +1040,7 @@ class VirtualFSStream {
             }
         }
         if (!isset($file->content)) return false;
+        $this->path = $path;
         $this->node = $file;
         $this->position = 0;
         return true;
@@ -1009,6 +1140,7 @@ class VirtualFSObject {
     var $ctime = 0;
     var $mtime = 0;
     var $mode = 0;
+    var $path;
 }
 
 class VirtualDir extends VirtualFSObject {
