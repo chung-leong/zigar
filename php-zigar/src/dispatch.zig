@@ -151,6 +151,7 @@ pub const CallDispatcher = struct {
                 const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
                 redirection_controller.removeSyscallVtable(vtable) catch {};
             }
+            redirection_controller.uninstallSyscallTrap();
         }
         for (self.function_list.items) |*ptr| ptr.deinit();
         self.function_list.deinit(php.allocator);
@@ -171,7 +172,9 @@ pub const CallDispatcher = struct {
     }
 
     pub fn uninstallHandlers() void {
+        trapping_syscalls = false;
         for (pipes) |fd| _ = std.c.close(fd);
+        redirection_controller.uninstallSignalHandler();
     }
 
     pub fn createJsThunk(self: *@This(), class: *ZigClassEntry, callable: *Value) !usize {
