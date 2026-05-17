@@ -57,20 +57,7 @@ pub fn ZigObject(comptime S: type) type {
 
         fn getHandlers() *ObjectHandlers {
             if (object_handlers == null) {
-                object_handlers = init: {
-                    var handlers: ObjectHandlers = undefined;
-                    handlers.offset = @offsetOf(@This(), "php_portion");
-                    inline for (comptime std.meta.fields(@TypeOf(php.object_handler_mapping))) |field| {
-                        const func_name = @field(php.object_handler_mapping, field.name);
-                        @field(handlers, field.name) = if (@hasDecl(S, func_name))
-                            php.transform(@field(S, func_name))
-                        else if (@hasField(@TypeOf(php.std_object_handlers.*), field.name))
-                            @field(php.std_object_handlers, field.name)
-                        else
-                            null;
-                    }
-                    break :init handlers;
-                };
+                object_handlers = php.createHandlerTable(S, @offsetOf(@This(), "php_portion"));
             }
             return &object_handlers.?;
         }

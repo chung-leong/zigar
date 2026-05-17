@@ -219,16 +219,7 @@ pub const ArrayBuffer = struct {
         class_entry.unnamed_1.create_object = php.transform(handleCreateObject);
         class_entry.get_iterator = php.transform(handleGetIterator);
         constructor = php.createTransformedFunction(handleConstructor, "__construct", 0, true);
-        handlers.offset = @offsetOf(@This(), "php_portion");
-        inline for (comptime std.meta.fields(@TypeOf(php.object_handler_mapping))) |field| {
-            const func_name = @field(php.object_handler_mapping, field.name);
-            @field(handlers, field.name) = if (@hasDecl(@This(), func_name))
-                php.transform(@field(@This(), func_name))
-            else if (@hasField(@TypeOf(php.std_object_handlers.*), field.name))
-                @field(php.std_object_handlers, field.name)
-            else
-                null;
-        }
+        handlers = php.createHandlerTable(@This(), @offsetOf(@This(), "php_portion"));
     }
 
     pub fn reportFieldError(name: *String, access: accessor.FieldAccess, err: anytype) error{Unexpected} {
@@ -566,16 +557,7 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
             class_entry.unnamed_1.create_object = php.transform(handleCreateObject);
             class_entry.get_iterator = php.transform(handleGetIterator);
             constructor = php.createTransformedFunction(handleConstructor, "__construct", 0, true);
-            handlers.offset = @offsetOf(@This(), "php_portion");
-            inline for (comptime std.meta.fields(@TypeOf(php.object_handler_mapping))) |field| {
-                const func_name = @field(php.object_handler_mapping, field.name);
-                @field(handlers, field.name) = if (@hasDecl(@This(), func_name))
-                    php.transform(@field(@This(), func_name))
-                else if (@hasField(@TypeOf(php.std_object_handlers.*), field.name))
-                    @field(php.std_object_handlers, field.name)
-                else
-                    null;
-            }
+            handlers = php.createHandlerTable(@This(), @offsetOf(@This(), "php_portion"));
         }
 
         fn getProperty(self: *@This(), id: PropCache.Id) !Value {

@@ -429,24 +429,40 @@ pub const CallDispatcher = struct {
 
     pub fn addStream(self: *@This(), strm: *Stream, is_dir: bool) !c_long {
         const fd = try self.createDescriptor();
+        const path = try getStreamPath(strm);
+        defer php.release(path);
+        const fdstat = getStreamStat(strm, is_dir);
+        _ = try self.addStreamEntry(fd, path, strm, &fdstat);
+        return fd;
+    }
+
+    pub fn removeStream(self: *@This(), fd: c_long) !void {
+        if (fd < fd_min or fd > fd_max) return;
+        const entry = try self.findStream(fd);
+        entry.deinit();
+        const index = (@intFromPtr(entry) - @intFromPtr(self.stream_list.items.ptr)) / @sizeOf(StreamEntry);
+        _ = self.stream_list.swapRemove(index);
+    }
+
+    pub fn getStreamPath(strm: *Stream) !*String {
+        if (php.getStreamPath(strm)) |path_sc| {
+            return php.createString(path_sc);
+        } else if (php.getStreamWrapperProperty(strm, "path") catch null) |path_v| {
+            if (php.getValueString(path_v) catch null) |path| {
+                php.addRef(path);
+                return path;
+            }
+        }
+        return failure.report("stream wrapper does not have the property 'path'", .{});
+    }
+
+    pub fn getStreamStat(strm: *Stream, is_dir: bool) std.os.wasi.fdstat_t {
         const filetype: std.os.wasi.filetype_t = get: {
             var stat: std.os.wasi.filestat_t = undefined;
             break :get if (php.fstat(strm, &stat))
                 stat.filetype
-            else |_| if (is_dir) .DIRECTORY else .REGULAR_FILE;
+            else |_| if (is_dir) .DIRECTORY else .CHARACTER_DEVICE;
         };
-        const path = find: {
-            if (php.getStreamPath(strm)) |path_sc| {
-                break :find php.createString(path_sc);
-            } else if (php.getStreamWrapperProperty(strm, "path") catch null) |path_v| {
-                if (php.getValueString(path_v) catch null) |path| {
-                    php.addRef(path);
-                    break :find path;
-                }
-            }
-            return failure.report("stream wrapper does not have the property 'path'", .{});
-        };
-        defer php.release(path);
         var fdstat: std.os.wasi.fdstat_t = .{
             .fs_filetype = filetype,
             .fs_flags = .{},
@@ -468,16 +484,30 @@ pub const CallDispatcher = struct {
                 else => {},
             }
         }
-        _ = try self.addStreamEntry(fd, path, strm, &fdstat);
-        return fd;
+        fdstat.fs_rights_base.FD_READDIR = is_dir;
+        return fdstat;
     }
 
-    pub fn removeStream(self: *@This(), fd: c_long) !void {
-        if (fd < fd_min or fd > fd_max) return;
-        const entry = try self.findStream(fd);
-        entry.deinit();
-        const index = (@intFromPtr(entry) - @intFromPtr(self.stream_list.items.ptr)) / @sizeOf(StreamEntry);
-        _ = self.stream_list.swapRemove(index);
+    pub fn redirectStream(self: *@This(), fd: c_long, arg: *Value) !void {
+        const strm, const path, const close = if (php.getValueStream(arg)) |strm| use: {
+            const path = try getStreamPath(strm);
+            break :use .{ strm, path, false };
+        } else |_| open: {
+            const path = try php.getValueString(arg);
+            const strm = switch (fd) {
+                0 => try php.open(path, "r", 0),
+                1 => try php.open(path, "w", 0),
+                2 => try php.open(path, "w", 0),
+                -1 => try php.opendir(path, 0, null),
+                else => unreachable,
+            };
+            break :open .{ strm, path, true };
+        };
+        defer php.release(path);
+        errdefer if (close) php.close(strm);
+        const fdstat = getStreamStat(strm, fd == -1);
+        try self.removeStream(fd);
+        _ = try self.addStreamEntry(fd, path, strm, &fdstat);
     }
 
     fn findStream(self: *@This(), fd: c_long) !*StreamEntry {
@@ -492,8 +522,9 @@ pub const CallDispatcher = struct {
             const path = php.createString(path_sc);
             defer php.release(path);
             const strm = php.open(path, mode, 0) catch return error.Unexpected;
-            const stat: std.os.wasi.fdstat_t = .{
-                .fs_filetype = .REGULAR_FILE,
+            errdefer php.close(strm);
+            const fdstat: std.os.wasi.fdstat_t = .{
+                .fs_filetype = .CHARACTER_DEVICE,
                 .fs_flags = .{},
                 .fs_rights_base = .{
                     .FD_READ = mode[0] == 'r',
@@ -501,7 +532,7 @@ pub const CallDispatcher = struct {
                 },
                 .fs_rights_inheriting = .{},
             };
-            return try self.addStreamEntry(fd, path, strm, &stat);
+            return try self.addStreamEntry(fd, path, strm, &fdstat);
         }
     }
 

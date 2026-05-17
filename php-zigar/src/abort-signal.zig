@@ -67,11 +67,6 @@ pub const AbortSignal = struct {
         std.Thread.Futex.wake(&self.value, std.math.maxInt(u32));
     }
 
-    pub fn handleAbort(ed: *ExecuteData, _: *Value) !void {
-        const self = try getSelf(&ed.This);
-        self.abort();
-    }
-
     pub fn setTimeout(self: *@This(), value: *const Value) !void {
         const seconds = try php.getValueDouble(value);
         try CallDispatcher.event_loop.addTimeout(seconds, self);
@@ -90,6 +85,11 @@ pub const AbortSignal = struct {
             }
         }
         return null;
+    }
+
+    pub fn handleAbort(ed: *ExecuteData, _: *Value) !void {
+        const self = try getSelf(&ed.This);
+        self.abort();
     }
 
     pub fn handleTimeout(ed: *ExecuteData, _: *Value) !void {

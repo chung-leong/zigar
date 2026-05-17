@@ -1475,7 +1475,7 @@ pub const pipe = php_h.pipe;
 extern fn get_stream_path(strm: *Stream) ?[*:0]const u8;
 extern fn get_stream_flags(strm: *Stream) u32;
 extern fn get_stream_handlers(strm: *Stream) *const php_h.php_stream_ops;
-extern fn get_stream_mode(strm: *Stream) [*:0]const u8;
+extern fn get_stream_mode(strm: *Stream) ?[*:0]const u8;
 extern fn get_stream_wrapper_data(strm: *Stream) *Value;
 extern fn set_stream_no_close(strm: *Stream) void;
 extern fn is_stdio_stream(strm: *Stream) bool;
@@ -1487,7 +1487,7 @@ pub fn getStreamPath(strm: *Stream) ?[]const u8 {
 }
 
 pub fn getStreamMode(strm: *Stream) []const u8 {
-    const ptr = get_stream_mode(strm);
+    const ptr = get_stream_mode(strm) orelse "";
     const len = std.mem.len(ptr);
     return ptr[0..len];
 }
@@ -1734,6 +1734,21 @@ pub const reportWrongParamCount = php_h.zend_wrong_param_count;
 pub const infoTableStart = php_h.php_info_print_table_start;
 pub const infoTableHeader = php_h.php_info_print_table_header;
 pub const infoTableEnd = php_h.php_info_print_table_end;
+
+pub fn createHandlerTable(comptime T: type, comptime offset: comptime_int) ObjectHandlers {
+    var handlers: ObjectHandlers = undefined;
+    handlers.offset = offset;
+    inline for (comptime std.meta.fields(@TypeOf(object_handler_mapping))) |field| {
+        const func_name = @field(object_handler_mapping, field.name);
+        @field(handlers, field.name) = if (@hasDecl(T, func_name))
+            transform(@field(T, func_name))
+        else if (@hasField(@TypeOf(std_object_handlers.*), field.name))
+            @field(std_object_handlers, field.name)
+        else
+            null;
+    }
+    return handlers;
+}
 
 pub const object_handler_mapping = .{
     .free_obj = "freeObject",

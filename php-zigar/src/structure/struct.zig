@@ -5,6 +5,7 @@ const AbortSignal = @import("../abort-signal.zig").AbortSignal;
 const accessor = @import("../accessor.zig");
 const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
+const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const StructurePurpose = @import("../enums.zig").StructurePurpose;
 const failure = @import("../failure.zig");
@@ -23,6 +24,7 @@ const Stream = php.Stream;
 const String = php.String;
 const Value = php.Value;
 const Promise = @import("../promise.zig").Promise;
+const SpecialExports = @import("../special-exports.zig").SpecialExports;
 const structure = @import("../structure.zig");
 
 pub const Struct = struct {
@@ -44,6 +46,7 @@ pub const Struct = struct {
         } = null,
         required_field_count: usize = 0,
         callback: ?*Object = null,
+        is_root: bool = false,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -84,7 +87,23 @@ pub const Struct = struct {
         pub fn deinit(self: *@This()) void {
             if (self.callback) |cb| php.release(cb);
         }
+
+        pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
+            if (self.is_root) {
+                if (RootPropCache.idFromString(name, cache_slot)) |id| {
+                    switch (id) {
+                        .zigar => {
+                            const class = ZigClassEntry.fromStatic(self);
+                            const obj = try SpecialExports.create(class.host);
+                            return php.createValueObject(obj);
+                        },
+                    }
+                }
+            }
+            return error.Missing;
+        }
     };
+    pub const RootPropCache = cache.IdCache(.{.zigar}, "__", .{});
 
     pub fn setStorage(self: *@This(), buffer: *ByteBuffer, table: *const Value) !void {
         try Super.setStorage(self, buffer, table);
