@@ -13,6 +13,8 @@ const Object = php.Object;
 const ObjectHandlers = php.ObjectHandlers;
 const String = php.String;
 const Value = php.Value;
+const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
+const ZigObject = @import("object.zig").ZigObject;
 
 pub const SpecialExports = struct {
     host: *ModuleHost,
@@ -77,7 +79,7 @@ pub const SpecialExports = struct {
                 .alignOf = php.createTransformedFunction(handleAlignOf, "alignOf", 1, false),
                 .redirect = php.createTransformedFunction(handleRedirect, "redirect", 2, false),
                 .sizeOf = php.createTransformedFunction(handleSizeOf, "sizeOf", 1, false),
-                .typeOf = php.createTransformedFunction(handleAlignOf, "typeOf", 1, false),
+                .typeOf = php.createTransformedFunction(handleTypeOf, "typeOf", 1, false),
             },
         };
         host.addRef();
@@ -155,9 +157,9 @@ pub const SpecialExports = struct {
         return null;
     }
 
-    pub fn handleAlignOf(ed: *ExecuteData, _: *Value) !void {
-        var iter: ArgumentIterator = .init(ed);
-        _ = &iter;
+    pub fn handleAlignOf(ed: *ExecuteData, retval: *Value) !void {
+        const class = try getClassFromArgument(ed);
+        retval.* = php.createValueAnyInt(class.alignment.toByteUnits());
     }
 
     pub fn handleRedirect(ed: *ExecuteData, _: *Value) !void {
@@ -191,13 +193,23 @@ pub const SpecialExports = struct {
         };
     }
 
-    pub fn handleSizeOf(ed: *ExecuteData, _: *Value) !void {
-        var iter: ArgumentIterator = .init(ed);
-        _ = &iter;
+    pub fn handleSizeOf(ed: *ExecuteData, retval: *Value) !void {
+        const class = try getClassFromArgument(ed);
+        retval.* = if (class.byte_size) |sz| php.createValueAnyInt(sz) else php.createValueNull();
     }
 
-    pub fn handleTypeOf(ed: *ExecuteData, _: *Value) !void {
-        var iter: ArgumentIterator = .init(ed);
-        _ = &iter;
+    pub fn handleTypeOf(ed: *ExecuteData, retval: *Value) !void {
+        const class = try getClassFromArgument(ed);
+        retval.* = php.createValueStringContent(class.getStructureName());
+    }
+
+    pub fn getClassFromArgument(ed: *ExecuteData) !*ZigClassEntry {
+        var arg_iter: ArgumentIterator = .init(ed);
+        const arg0 = arg_iter.next() orelse return error.NotString;
+        const obj = try php.getValueObject(arg0);
+        if (!ZigClassEntry.isZig(obj.ce)) {
+            return error.NotZigClass;
+        }
+        return ZigClassEntry.fromObject(obj);
     }
 };

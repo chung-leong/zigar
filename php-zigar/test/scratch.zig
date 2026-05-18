@@ -13,3 +13,8 @@ pub fn hash(path: []const u8) ![std.crypto.hash.Sha1.digest_length * 2]u8 {
     const digest = sha1.finalResult();
     return std.fmt.bytesToHex(digest, .lower);
 }
+
+pub const A = struct {
+    number1: usize,
+    number2: usize,
+};

@@ -18,7 +18,11 @@ $f = opendir('vfs://test');
 $zigar = $m->__zigar;
 $zigar->redirect('root', $f);
 $hash = $m->hash('/hello.txt');
-echo (string) $hash;
+echo (string) $hash, "\n";
+
+echo "sizeOf = " . $zigar->sizeOf($m->A) . "\n";
+echo "alignOf = " . $zigar->alignOf($m->A) . "\n";
+echo "typeOf = " . $zigar->typeOf($m->A) . "\n";
 
 class VirtualFSStream {
     var $node;
