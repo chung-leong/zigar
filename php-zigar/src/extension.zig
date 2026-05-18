@@ -162,7 +162,7 @@ const functions = struct {
     };
 
     fn reportArgCountMismatch(fn_name: []const u8, max_arg_count: usize, min_arg_count: usize, arg_count: usize) error{Unexpected}!void {
-        return failure.report("{s}() expects {s} {d} argument%s, {d} given", .{
+        return failure.report("{s}() expects {s} {d} argument{s}, {d} given", .{
             fn_name,
             if (max_arg_count > min_arg_count)
                 "at most"
@@ -174,6 +174,7 @@ const functions = struct {
                 max_arg_count
             else
                 min_arg_count,
+            if (min_arg_count != 1) "s" else "",
             arg_count,
         });
     }

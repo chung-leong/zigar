@@ -318,7 +318,7 @@ final class StreamHandlingTest extends ZigarTestCase
     public function testCheckAccessOfFileInDirectoryInFileSystemUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/check-access-at-dir-in-file-system-with-posix-function.zig');
-        $path = __DIR__ . 'data/statat_test';
+        $path = __DIR__ . '/data/statat_test';
         mkdir($path, 0o0777, true);
         try {
             file_put_contents("$path/file.txt", "Hello world");
@@ -346,7 +346,7 @@ final class StreamHandlingTest extends ZigarTestCase
     public function testOpenFileInDirectoryInFileSystemUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/open-file-at-dir-in-file-system-with-posix-function.zig');
-        $path = __DIR__ . 'data/openat_test';
+        $path = __DIR__ . '/data/openat_test';
         mkdir($path, 0o0777, true);
         try {
             $text = 'Hello world!!!';
@@ -1005,41 +1005,97 @@ final class StreamHandlingTest extends ZigarTestCase
         global $input;
         $m = ZigImporter::load(__DIR__ . '/read-line-from-file-with-fgets.zig');
         $path = __DIR__ . '/data/macbeth.txt';
-        $input = file_get_contents($path);
-        $file = fopen("var://input", 'r');
+        $file = fopen($path, 'r');
         $m->startup();
+        ob_start();
         try {
             $m->print($file);
+            $text = ob_get_clean();
+            $this->assertStringContainsString('Signifying nothing', $text);            
         } finally {
             $m->shutdown();
             fclose($file);
         }
     }
 
+    public function testReadLinesFromStdinUsingFgets(): void 
+    {
+        global $input;
+        $m = ZigImporter::load(__DIR__ . '/read-line-from-stdin-with-fgets.zig');
+        $path = __DIR__ . '/data/macbeth.txt';
+        $m->__zigar->redirect('stdin', $path);
+        $m->startup();
+        ob_start();
+        try {
+            $m->print();
+            $text = ob_get_clean();
+            $this->assertStringContainsString('Signifying nothing', $text);            
+        } finally {
+            $m->shutdown();
+        }
+    }
+
     public function testScanVariablesFromFileUsingFscanf(): void 
     {
         global $input;
-        $m = ZigImporter::load(__DIR__ . '/read-line-from-file-with-fgets.zig');
-        $path = __DIR__ . '/data/macbeth.txt';
+        $m = ZigImporter::load(__DIR__ . '/c/scan-file-with-fscanf.zig');
         $input = <<<INPUT
         1 2 3 hello
-        4 5 6 wpr;d
+        4 5 6 world
         123 456
 
         INPUT;
         $file = fopen("var://input", 'r');
-        $m->scan($input);
+        $this->expectOutputString(<<<OUTPUT
+        1 2 3 hello
+        4 5 6 world
+        count = 2
+
+        OUTPUT);
+        $m->scan($file);
     }
+
+    public function testScanVariablesFromFileUsingScanf(): void 
+    {
+        global $input;
+        $m = ZigImporter::load(__DIR__ . '/c/scan-stdin-with-scanf.zig');
+        $input = <<<INPUT
+        1 2 3 hello
+        4 5 6 world
+        123 456
+
+        INPUT;
+        $file = fopen("var://input", 'r');
+        $m->__zigar->redirect('stdin', $file);
+        $this->expectOutputString(<<<OUTPUT
+        1 2 3 hello
+        4 5 6 world
+        count = 2
+
+        OUTPUT);
+        $m->scan();
+    }  
 
     public function testGetCharactersFromFileUsingFgetc(): void 
     {
         global $input;
         $m = ZigImporter::load(__DIR__ . '/read-file-content-with-fgetc.zig');
         $path = __DIR__ . '/data/macbeth.txt';
-        $input = file_get_contents($path);
-        $file = fopen("var://input", 'r');
+        $file = fopen($path, 'r');
         ob_start();
         $m->print($file);
+        $text = ob_get_clean();
+        $this->assertStringContainsString('Signifying nothing', $text);
+    }
+
+    public function testGetCharactersFromStdinUsingGetchar(): void 
+    {
+        global $input;
+        $m = ZigImporter::load(__DIR__ . '/read-stdin-with-getchar.zig');
+        $path = __DIR__ . '/data/macbeth.txt';
+        $m->__zigar->redirect('stdin', $path);
+        ob_start();
+        $m->print();
         $text = ob_get_clean();
         $this->assertStringContainsString('Signifying nothing', $text);
     }
@@ -1061,11 +1117,6 @@ final class StreamHandlingTest extends ZigarTestCase
             $m->close();
         }
             $this->assertSame("Hello worldHello worldHello world", $output);
-    }
-
-    public function testGetCharactersFromStdinUsingGetchar(): void 
-    {
-        // TODO
     }
 
     public function testCreateDirectoryInFileSystemUsingPosixFunction(): void 

@@ -158,12 +158,19 @@ pub const SpecialExports = struct {
     }
 
     pub fn handleAlignOf(ed: *ExecuteData, retval: *Value) !void {
-        const class = try getClassFromArgument(ed);
+        var arg_iter: ArgumentIterator = .init(ed);
+        if (arg_iter.len != 1) {
+            return reportArgCountMismatch("alignOf", 1, arg_iter.len);
+        }
+        const class = try getClassFromArgument(&arg_iter);
         retval.* = php.createValueAnyInt(class.alignment.toByteUnits());
     }
 
     pub fn handleRedirect(ed: *ExecuteData, _: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
+        if (arg_iter.len != 2) {
+            return reportArgCountMismatch("redirect", 2, arg_iter.len);
+        }
         const obj = try php.getValueObject(arg_iter.this);
         const self = fromObject(obj);
         const arg0 = arg_iter.next() orelse return error.NotString;
@@ -194,22 +201,38 @@ pub const SpecialExports = struct {
     }
 
     pub fn handleSizeOf(ed: *ExecuteData, retval: *Value) !void {
-        const class = try getClassFromArgument(ed);
+        var arg_iter: ArgumentIterator = .init(ed);
+        if (arg_iter.len != 1) {
+            return reportArgCountMismatch("sizeOf", 1, arg_iter.len);
+        }
+        const class = try getClassFromArgument(&arg_iter);
         retval.* = if (class.byte_size) |sz| php.createValueAnyInt(sz) else php.createValueNull();
     }
 
     pub fn handleTypeOf(ed: *ExecuteData, retval: *Value) !void {
-        const class = try getClassFromArgument(ed);
+        var arg_iter: ArgumentIterator = .init(ed);
+        if (arg_iter.len != 1) {
+            return reportArgCountMismatch("typeOf", 1, arg_iter.len);
+        }
+        const class = try getClassFromArgument(&arg_iter);
         retval.* = php.createValueStringContent(class.getStructureName());
     }
 
-    pub fn getClassFromArgument(ed: *ExecuteData) !*ZigClassEntry {
-        var arg_iter: ArgumentIterator = .init(ed);
+    fn getClassFromArgument(arg_iter: *ArgumentIterator) !*ZigClassEntry {
         const arg0 = arg_iter.next() orelse return error.NotString;
         const obj = try php.getValueObject(arg0);
         if (!ZigClassEntry.isZig(obj.ce)) {
             return error.NotZigClass;
         }
         return ZigClassEntry.fromObject(obj);
+    }
+
+    fn reportArgCountMismatch(fn_name: []const u8, min_arg_count: usize, arg_count: usize) error{Unexpected}!void {
+        return failure.report("{s}() expects exactly {d} argument{s}, {d} given", .{
+            fn_name,
+            min_arg_count,
+            if (min_arg_count != 1) "s" else "",
+            arg_count,
+        });
     }
 };
