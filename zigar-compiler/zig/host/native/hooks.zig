@@ -1385,11 +1385,11 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn readlink(path: [*:0]const u8, buffer: [*]u8, len: usize, result: *c_int) callconv(.c) bool {
+        pub fn readlink(path: [*:0]const u8, buffer: [*]u8, len: usize, result: *isize) callconv(.c) bool {
             return readlinkat(fd_cwd, path, buffer, len, result);
         }
 
-        pub fn readlinkat(dirfd: c_int, path: [*:0]const u8, buffer: [*]u8, len: usize, result: *c_int) callconv(.c) bool {
+        pub fn readlinkat(dirfd: c_int, path: [*:0]const u8, buffer: [*]u8, len: usize, result: *isize) callconv(.c) bool {
             if (isPrivateDescriptor(dirfd) or (dirfd == fd_cwd and Host.isRedirecting(.readlink))) {
                 var resolver = PathResolver.init(dirfd, path) catch {
                     result.* = intFromError(.NOMEM);
@@ -3894,7 +3894,7 @@ pub fn Win32Substitute(comptime redirector: type) type {
             const object_name = object_attributes.ObjectName;
             const name_len = @divExact(object_name.Length, 2);
             const path = object_name.Buffer.?[0..name_len];
-            var result: c_int = undefined;
+            var result: isize = undefined;
             if (isPrivateDescriptor(dirfd) or redirector.Host.isRedirecting(.any)) {
                 var converter = Wtf8Converter.init(.{ .save_error = false });
                 defer converter.deinit();

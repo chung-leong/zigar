@@ -912,16 +912,12 @@ pub const CallDispatcher = struct {
         return .SUCCESS;
     }
 
-    fn handleReadlink(self: *@This(), args: anytype) !E {
-        const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
-        defer loc.deinit();
-        return .INVAL;
+    fn handleReadlink(_: *@This(), _: anytype) !E {
+        return .ACCES;
     }
 
-    fn handleSymlink(self: *@This(), args: anytype) !E {
-        const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
-        defer loc.deinit();
-        return .INVAL;
+    fn handleSymlink(_: *@This(), _: anytype) !E {
+        return .ACCES;
     }
 
     fn handleRename(self: *@This(), args: anytype) !E {

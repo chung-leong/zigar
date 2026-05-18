@@ -1090,7 +1090,6 @@ final class StreamHandlingTest extends ZigarTestCase
 
     public function testGetCharactersFromStdinUsingGetchar(): void 
     {
-        global $input;
         $m = ZigImporter::load(__DIR__ . '/read-stdin-with-getchar.zig');
         $path = __DIR__ . '/data/macbeth.txt';
         $m->__zigar->redirect('stdin', $path);
@@ -1098,6 +1097,27 @@ final class StreamHandlingTest extends ZigarTestCase
         $m->print();
         $text = ob_get_clean();
         $this->assertStringContainsString('Signifying nothing', $text);
+    }
+
+    public function testPutCharacterIntoStdinUsingUngetc(): void 
+    {
+        global $input;
+        $m = ZigImporter::load(__DIR__ . '/push-character-into-stdin-with-ungetc.zig');
+        $input = "\x01\x02\x03\x04";
+        $m->__zigar->redirect('stdin', 'var://input');
+        $m->push(5);
+        $result1 = $m->get();
+        $this->assertSame(5, $result1);
+        $result2 = $m->get();
+        $this->assertSame(1, $result2);
+        $m->push(6);
+        $m->push(7);
+        $result3 = $m->get();
+        $this->assertSame(7, $result3);
+        $result4 = $m->get();
+        $this->assertSame(6, $result4);
+        $result5 = $m->get();
+        $this->assertSame(2, $result5);
     }
 
     public function testFlushOpenFileUsingFflush(): void 
@@ -1166,6 +1186,14 @@ final class StreamHandlingTest extends ZigarTestCase
         } catch (Exception $e) {
             unmlink($path);
         }
+    }
+
+    public function testThrowWhenAttemptingToReadlink(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/read-link-with-posix-function.zig');
+        $this->assertExceptionMessage('file not found', function() use($m) {
+            $m->readLink('/vfs://test');
+        });
     }
 
     public function testThrowWhenAttemptingToConvertFileWhenUseRedirectionIsFalse(): void
