@@ -23,7 +23,18 @@ const structure = @import("structure.zig");
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
 pub const CallDispatcher = struct {
-    redirection_mask: Syscall.Mask = .{},
+    redirection_mask: Syscall.Mask = .{
+        .open = true,
+        .mkdir = true,
+        .readlink = true,
+        .rename = true,
+        .rmdir = true,
+        .stat = true,
+        .symlink = true,
+        .unlink = true,
+        .utimes = true,
+    },
+    redirected_root: bool = false,
     function_list: std.ArrayList(CallbackEntry) = .empty,
     next_function_id: c_ulong = 1,
     stream_list: std.ArrayList(StreamEntry) = .empty,
@@ -435,9 +446,7 @@ pub const CallDispatcher = struct {
         entry.deinit();
         const index = (@intFromPtr(entry) - @intFromPtr(self.stream_list.items.ptr)) / @sizeOf(StreamEntry);
         _ = self.stream_list.swapRemove(index);
-        if (fd == -1) {
-            self.clearRedirectionMask();
-        }
+        if (fd == -1) self.redirected_root = false;
     }
 
     pub fn getStreamPath(strm: *Stream) !*String {
@@ -504,9 +513,7 @@ pub const CallDispatcher = struct {
         const fdstat = getStreamStat(strm, fd == -1);
         self.removeStream(fd) catch {};
         _ = try self.addStreamEntry(fd, path, strm, &fdstat);
-        if (fd == -1) {
-            self.setRedirectionMask();
-        }
+        if (fd == -1) self.redirected_root = true;
     }
 
     fn findStream(self: *@This(), fd: c_long) !*StreamEntry {
@@ -563,24 +570,6 @@ pub const CallDispatcher = struct {
         return entry;
     }
 
-    fn setRedirectionMask(self: *@This()) void {
-        self.redirection_mask = .{
-            .open = true,
-            .mkdir = true,
-            .readlink = true,
-            .rename = true,
-            .rmdir = true,
-            .stat = true,
-            .symlink = true,
-            .unlink = true,
-            .utimes = true,
-        };
-    }
-
-    fn clearRedirectionMask(self: *@This()) void {
-        self.redirection_mask = .{};
-    }
-
     fn createDescriptor(self: *@This()) !c_long {
         var fd: c_long = fd_min;
         return while (fd < fd_max) : (fd += 1) {
@@ -623,7 +612,7 @@ pub const CallDispatcher = struct {
         } else {
             if (dirfd == -1) {
                 // don't bother lookup the root stream if the root descriptor hasn't been redirected
-                if (!self.redirection_mask.open) return null;
+                if (!self.redirected_root) return null;
             }
             const parent = try self.findStream(dirfd);
             const name = path[0..std.mem.len(path)];

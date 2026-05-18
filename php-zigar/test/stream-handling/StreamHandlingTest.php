@@ -879,6 +879,53 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
+    public function testFailToCreateSymlink(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/create-symlink.zig');
+        $this->assertExceptionMessage('file not found', function() use($m) {
+            $m->symlink('/vfs://test/hello/world.txt', '/vfs://test/hello/earth.txt');
+        });
+    }
+
+    public function testFailToCreateSymlinkInDirectory(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/create-symlink-at-dir.zig');
+        $dir = new VirtualDir([
+            'world.txt' => new VirtualFile('Hello world'),
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);       
+        $this->assertExceptionMessage('access denied', function() use($m) {
+            $f = opendir('vfs://test');
+            $m->symlink($f, 'world.txt', 'earth.txt');
+        });
+    }
+
+    public function testFailToCreateSymlinkUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/create-symlink-with-posix-function.zig');
+        $dir = new VirtualDir([
+            'world.txt' => new VirtualFile('Hello world'),
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);       
+        $f = opendir('vfs://test');
+        $m->__zigar->redirect('root', $f);
+        $this->assertExceptionMessage('unable to create symlink', function() use($m) {
+            $m->symlink('/world.txt', '/earth.txt');
+        });
+    }
+
+    public function testFailToCreateSymlinkInDirectoryUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/create-symlink-at-dir-with-posix-function.zig');
+        $dir = new VirtualDir([
+            'world.txt' => new VirtualFile('Hello world'),
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);       
+        $this->assertExceptionMessage('unable to create symlink', function() use($m) {
+            $m->symlinkat('/vfs://test/world.txt', '/vfs://test', 'earth.txt');
+        });
+    }
+
     public function testSetMtimeAndATimeOfFileInFileSystemUsingPosixFunction(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/set-times-of-file-in-file-system-with-posix-functions.zig');
