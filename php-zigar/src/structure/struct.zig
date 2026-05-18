@@ -153,7 +153,7 @@ pub const Struct = struct {
                 return;
             },
             .file => {
-                if (self.getStreamHandle(value, false)) |handle| {
+                if (try self.getStreamHandle(value, false)) |handle| {
                     try self.setProperty(php.persistent("handle"), &handle, null);
                     return;
                 } else {
@@ -167,7 +167,7 @@ pub const Struct = struct {
                 }
             },
             .directory => {
-                if (self.getStreamHandle(value, true)) |handle| {
+                if (try self.getStreamHandle(value, true)) |handle| {
                     try self.setProperty(php.persistent("fd"), &handle, null);
                     return;
                 } else if (failure.hasMessage()) {
@@ -288,7 +288,11 @@ pub const Struct = struct {
 
     extern fn _get_osfhandle(fd: c_int) std.os.windows.HANDLE;
 
-    fn getStreamHandle(self: *@This(), value: *const Value, is_dir: bool) ?Value {
+    fn getStreamHandle(self: *@This(), value: *const Value, is_dir: bool) !?Value {
+        const class = ZigClassEntry.fromStructure(self);
+        if (!class.host.isRedirecting()) {
+            return failure.report("redirection disabled", .{});
+        }
         const strm = php.getValueStream(value) catch return null;
         if (php.getDescriptor(strm)) |fd| {
             if (builtin.target.os.tag == .windows) {
@@ -299,7 +303,6 @@ pub const Struct = struct {
             }
         } else {
             // not a real file/dir--create a virtual descriptor
-            const class = ZigClassEntry.fromStructure(self);
             if (class.host.dispatcher.addStream(strm, is_dir) catch null) |fd| {
                 if (builtin.target.os.tag == .windows) {
                     // the fake win32 handle for a virtual file is its descriptor left-shifted by 1

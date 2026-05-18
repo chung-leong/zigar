@@ -173,6 +173,9 @@ pub const SpecialExports = struct {
         }
         const obj = try php.getValueObject(arg_iter.this);
         const self = fromObject(obj);
+        if (!self.host.isRedirecting()) {
+            return failure.report("redirection disabled", .{});
+        }
         const arg0 = arg_iter.next() orelse return error.NotString;
         const name = try php.getValueString(arg0);
         const arg1 = arg_iter.next() orelse return error.NotString;

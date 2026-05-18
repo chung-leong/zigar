@@ -1168,6 +1168,54 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
+    public function testThrowWhenAttemptingToConvertFileWhenUseRedirectionIsFalse(): void
+    {        
+        $m = ZigImporter::load(__DIR__ . '/fail-to-convert-file.zig', [
+            'use_redirection' => false,
+        ]);
+        $this->assertExceptionMessage('redirection disabled', function() use($m) {
+            $f = fopen('php://memory', 'w+');
+            $m->call($f);
+        });
+    }
+
+    public function testThrowWhenAttemptingToConvertDirWhenUseRedirectionIsFalse(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/fail-to-convert-dir.zig', [
+            'use_redirection' => false,
+        ]);
+        $dir = new VirtualDir();
+        VirtualFSStream::add_root_node('test', $dir);
+        $this->assertExceptionMessage('redirection disabled', function() use($m) {
+            $f = opendir('vfs://test');
+            $m->call($f);
+        });
+    }
+
+    public function testHandleThreadsCorrectlyWhenUseRedirectionIsFalse(): void
+    {
+        global $output;
+        $m = ZigImporter::load(__DIR__ . '/return-from-thread.zig', [
+            'use_redirection' => false,
+        ]);        
+        $m->startup();
+        $output = '';
+        try {
+            $result = $m->call(1234);
+            $this->assertSame(1234, $result);
+            $this->assertExceptionMessage('redirection disabled', function() use($m) {
+                $m->__zigar->redirect('stdout', 'var://output');
+            });
+        } finally {
+            $m->shutdown();
+        }
+    }
+
+    public function testIgnoreOffsetToWriteFileWhenStreamIsUnseekable(): void     
+    {
+        // TODO
+    }
+
     public function testCopyRealFileToVirtualFile(): void 
     {
         global $output, $out_stat;

@@ -214,6 +214,16 @@ pub const ModuleHost = struct {
         const key: i32 = @bitCast(obj.handle);
         _ = php.removeHashEntry(&self.plain_object_table, key);
     }
+
+    pub fn isRedirecting(self: *@This()) bool {
+        if (self.module) |m| return m.attributes.io_redirection;
+        return false;
+    }
+
+    pub fn useRuntimeSafety(self: *@This()) bool {
+        if (self.module) |m| return m.attributes.runtime_safety;
+        return false;
+    }
 };
 
 const BufferAllocator = struct {
