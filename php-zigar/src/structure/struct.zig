@@ -269,12 +269,16 @@ pub const Struct = struct {
             .abort_signal => if (self.getSpecialContext(AbortSignal) catch null) |ctx| ctx.release(),
             .file => if (self.getProperty(php.persistent("handle"), null) catch null) |handle| {
                 if (getDescriptor(&handle) catch null) |fd| {
-                    class.host.dispatcher.removeStream(fd) catch {};
+                    if (class.host.dispatcher.isVirtualStream(fd)) {
+                        class.host.dispatcher.removeStream(fd) catch {};
+                    }
                 }
             },
             .directory => if (self.getProperty(php.persistent("fd"), null) catch null) |handle| {
                 if (getDescriptor(&handle) catch null) |fd| {
-                    class.host.dispatcher.removeStream(fd) catch {};
+                    if (class.host.dispatcher.isVirtualStream(fd)) {
+                        class.host.dispatcher.removeStream(fd) catch {};
+                    }
                 }
             },
             else => {},

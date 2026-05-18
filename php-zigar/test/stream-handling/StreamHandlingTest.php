@@ -551,6 +551,116 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame(456, $file->mtime);
     }
 
+    public function testGetDirectoryEntries(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/read-directory.zig');
+        $dir1 = new VirtualDir([ 
+            'hello.txt' => new VirtualFile(),
+            'world' => new VirtualDir(),
+        ]);
+        VirtualFSStream::add_root_node('test1', $dir1);
+        $handle1 = opendir('vfs://test1');
+        $this->expectOutputString(<<<OUTPUT
+        hello.txt file
+        world directory
+
+        OUTPUT);
+        $m->print($handle1);
+        closedir($handle1);
+        $initializers = [];
+        for ($i = 0; $i < 100; $i++) {
+            $name = str_repeat('x', $i + 1) . '.txt';
+            $initializers[$name] = new VirtualFile();
+        }
+        $dir2 = new VirtualDir($initializers);
+        VirtualFSStream::add_root_node('test2', $dir2);
+        $handle2 = opendir('vfs://test2');
+        ob_start();
+        $m->print($handle2);
+        $text = ob_get_clean();
+        $lines = explode("\n", trim($text));
+        $this->assertSame(100, count($lines));
+        closedir($handle2);
+    }
+
+    public function testGetDirectoryEntriesInThread(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/read-directory-in-thread.zig');
+        $dir1 = new VirtualDir([ 
+            'hello.txt' => new VirtualFile(),
+            'world' => new VirtualDir(),
+        ]);
+        $m->startup(1);
+        try {
+            VirtualFSStream::add_root_node('test1', $dir1);
+            $handle1 = opendir('vfs://test1');
+            $this->expectOutputString(<<<OUTPUT
+            hello.txt file
+            world directory
+
+            OUTPUT);
+            $m->print($handle1);
+            closedir($handle1);
+            $initializers = [];
+            for ($i = 0; $i < 100; $i++) {
+                $name = str_repeat('x', $i + 1) . '.txt';
+                $initializers[$name] = new VirtualFile();
+            }
+            $dir2 = new VirtualDir($initializers);
+            VirtualFSStream::add_root_node('test2', $dir2);
+            $handle2 = opendir('vfs://test2');
+            ob_start();
+            $m->print($handle2);
+            $text = ob_get_clean();
+            $lines = explode("\n", trim($text));
+            $this->assertSame(100, count($lines));
+            closedir($handle2);
+        } finally {
+            $m->shutdown();
+        }
+    }
+
+    public function testPerformSyncOperationUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/perform-sync-with-posix-function.zig');
+        $file = new VirtualFile();
+        $dir = new VirtualDir([ 'hello.txt' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $m->save("/vfs://test/hello.txt", "This is a test");
+        $this->assertSame("This is a test", $file->content);
+    }
+
+    public function testPerformDataSyncOperationUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/perform-datasync-with-posix-function.zig');
+        $file = new VirtualFile();
+        $dir = new VirtualDir([ 'hello.txt' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $m->save("/vfs://test/hello.txt", "This is a test");
+        $this->assertSame("This is a test", $file->content);
+    }
+
+    public function testPerformAdviseOperationUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/perform-advise-with-posix-function.zig');
+        $file = new VirtualFile();
+        $dir = new VirtualDir([ 'hello.txt' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $m->save("/vfs://test/hello.txt", "This is a test");
+        $this->assertSame("This is a test", $file->content);
+    }
+
+    public function testFailToPerformAllocateOperationUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/perform-allocate-with-posix-function.zig');
+        $file = new VirtualFile();
+        $dir = new VirtualDir([ 'hello.txt' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $this->assertExceptionMessage('allocation failed', function() use($m) {
+            $m->save("/vfs://test/hello.txt", "This is a test");
+        });
+    }
+
     public function testOpenFileInDirectory(): void
     {
         $m = ZigImporter::load(__DIR__ . '/open-file-at-dir.zig');

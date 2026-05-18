@@ -23,17 +23,7 @@ const structure = @import("structure.zig");
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
 pub const CallDispatcher = struct {
-    redirection_mask: Syscall.Mask = .{
-        .open = true,
-        .mkdir = true,
-        .readlink = true,
-        .rename = true,
-        .rmdir = true,
-        .stat = true,
-        .symlink = true,
-        .unlink = true,
-        .utimes = true,
-    },
+    redirection_mask: Syscall.Mask = .{},
     function_list: std.ArrayList(CallbackEntry) = .empty,
     next_function_id: c_ulong = 1,
     stream_list: std.ArrayList(StreamEntry) = .empty,
@@ -427,6 +417,10 @@ pub const CallDispatcher = struct {
         }
     }
 
+    pub fn isVirtualStream(_: *@This(), fd: c_long) bool {
+        return fd >= fd_min and fd <= fd_max;
+    }
+
     pub fn addStream(self: *@This(), strm: *Stream, is_dir: bool) !c_long {
         const fd = try self.createDescriptor();
         const path = try getStreamPath(strm);
@@ -437,11 +431,13 @@ pub const CallDispatcher = struct {
     }
 
     pub fn removeStream(self: *@This(), fd: c_long) !void {
-        if (fd < fd_min or fd > fd_max) return;
         const entry = try self.findStream(fd);
         entry.deinit();
         const index = (@intFromPtr(entry) - @intFromPtr(self.stream_list.items.ptr)) / @sizeOf(StreamEntry);
         _ = self.stream_list.swapRemove(index);
+        if (fd == -1) {
+            self.clearRedirectionMask();
+        }
     }
 
     pub fn getStreamPath(strm: *Stream) !*String {
@@ -506,8 +502,11 @@ pub const CallDispatcher = struct {
         defer php.release(path);
         errdefer if (close) php.close(strm);
         const fdstat = getStreamStat(strm, fd == -1);
-        try self.removeStream(fd);
+        self.removeStream(fd) catch {};
         _ = try self.addStreamEntry(fd, path, strm, &fdstat);
+        if (fd == -1) {
+            self.setRedirectionMask();
+        }
     }
 
     fn findStream(self: *@This(), fd: c_long) !*StreamEntry {
@@ -564,6 +563,24 @@ pub const CallDispatcher = struct {
         return entry;
     }
 
+    fn setRedirectionMask(self: *@This()) void {
+        self.redirection_mask = .{
+            .open = true,
+            .mkdir = true,
+            .readlink = true,
+            .rename = true,
+            .rmdir = true,
+            .stat = true,
+            .symlink = true,
+            .unlink = true,
+            .utimes = true,
+        };
+    }
+
+    fn clearRedirectionMask(self: *@This()) void {
+        self.redirection_mask = .{};
+    }
+
     fn createDescriptor(self: *@This()) !c_long {
         var fd: c_long = fd_min;
         return while (fd < fd_max) : (fd += 1) {
@@ -603,9 +620,11 @@ pub const CallDispatcher = struct {
     fn resolvePath(self: *@This(), dirfd: c_long, path: [*:0]const u8) !?PathInfo {
         if (getWrapperUrl(path)) |url| {
             return .{ .url = url };
-        } else if (dirfd == -1) {
-            return null;
         } else {
+            if (dirfd == -1) {
+                // don't bother lookup the root stream if the root descriptor hasn't been redirected
+                if (!self.redirection_mask.open) return null;
+            }
             const parent = try self.findStream(dirfd);
             const name = path[0..std.mem.len(path)];
             const parent_path = php.getStringContent(parent.path);
@@ -617,7 +636,12 @@ pub const CallDispatcher = struct {
     }
 
     fn joinPath(parent_path: []const u8, path: []const u8) *String {
-        const slash_count: usize = if (parent_path[parent_path.len - 1] != '/') 1 else 0;
+        const slash_count: usize = init: {
+            if (parent_path[parent_path.len - 1] != '/') {
+                if (path[0] != '/') break :init 1;
+            }
+            break :init 0;
+        };
         const len = parent_path.len + slash_count + path.len;
         const str = php.createStringWithLength(len);
         const sc: [*]u8 = @ptrCast(&str.val[0]);
