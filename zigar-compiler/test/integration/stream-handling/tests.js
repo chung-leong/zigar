@@ -1747,28 +1747,6 @@ export function addTests(importModule, options) {
       const text = new TextDecoder().decode(subarray);
       expect(text).to.equal('Hello world???');
     })
-    skip.entirely.if(target == 'win32').or.if(target === 'wasm32').
-    it('should set lock on file using fcntl', async function() {
-      const { lock } = await importTest('set-lock-with-fcntl', { useLibc: true });
-      const file1 = {
-        read() {},
-        setlock(lock) {
-          if (!this.lock) {
-            this.lock = lock;
-            return true;
-          } else {
-            return false;
-          }
-        }
-      };
-      lock(file1);
-      expect(file1.lock).to.eql({ type: 1, whence: 0, start: 1234, len: 8000, pid: 123 });
-      expect(() => lock(file1)).to.throw(Error).with.property('message').that.equal('Unable to set lock');
-      const file2 = {
-        read() {},
-      };
-      expect(() => lock(file2)).to.not.throw();
-    })
     skip.entirely.if(target === 'win32').or.if(target === 'wasm32').
     it('should set lock on file', async function() {
       const { lock, unlock } = await importTest('set-lock-on-file', { useLibc: true });
@@ -1797,6 +1775,28 @@ export function addTests(importModule, options) {
       const result3 = unlock(file);
       expect(result3).to.be.true;
       expect(file.lock).to.be.null;
+    })
+    skip.entirely.if(target == 'win32').or.if(target === 'wasm32').
+    it('should set lock on file using fcntl', async function() {
+      const { lock } = await importTest('set-lock-with-fcntl', { useLibc: true });
+      const file1 = {
+        read() {},
+        setlock(lock) {
+          if (!this.lock) {
+            this.lock = lock;
+            return true;
+          } else {
+            return false;
+          }
+        }
+      };
+      lock(file1);
+      expect(file1.lock).to.eql({ type: 1, whence: 0, start: 1234, len: 8000, pid: 123 });
+      expect(() => lock(file1)).to.throw(Error).with.property('message').that.equal('Unable to set lock');
+      const file2 = {
+        read() {},
+      };
+      expect(() => lock(file2)).to.not.throw();
     })
     skip.entirely.if(target === 'win32').or.if(target === 'wasm32').
     it('should get lock on file using fcntl', async function() {
@@ -1930,9 +1930,9 @@ export function addTests(importModule, options) {
         const line = lines.find(s => s.includes('Signifying nothing'));
         expect(line).to.be.a('string');
       } finally {
-        await shutdown();;
+        await shutdown();
+        reader.close();
       }
-      reader.close();
     })
     it('should read lines from stdin using fgets', async function() {
       const { __zigar, print, startup, shutdown } = await importTest('read-line-from-stdin-with-fgets', { multithreaded: true, useLibc: true });
@@ -2429,7 +2429,7 @@ export function addTests(importModule, options) {
       }
     })
     skip.entirely.if(target === 'win32').
-    it('should set mtime and atime of file using posix function', async function() {
+    it('should set mtime and atime of file in file system using posix function', async function() {
       const { __zigar, setTimes } = await importTest('set-times-of-file-in-file-system-with-posix-functions', { useLibc: true });
       if (target === 'wasm32') {
         const { WASI } = await import('wasi');

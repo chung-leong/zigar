@@ -13,8 +13,8 @@ pub fn spawn(file: std.fs.File, promise: zigar.function.Promise(usize)) !void {
 
 fn run(file: std.fs.File, promise: zigar.function.Promise(usize)) !void {
     try file.lock(.exclusive);
-    defer file.unlock();
     const written = try file.write("Hello world");
+    file.unlock();
     promise.resolve(written);
 }
 

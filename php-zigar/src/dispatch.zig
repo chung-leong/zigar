@@ -843,14 +843,25 @@ pub const CallDispatcher = struct {
 
     fn handleSetLock(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        php.setLock(entry.stream, args.lock.type) catch return .FAULT;
+        const lock_type: c_int = switch (args.lock.type) {
+            Syscall.Lock.RDLCK => std.posix.LOCK.SH,
+            Syscall.Lock.WRLCK => std.posix.LOCK.EX,
+            Syscall.Lock.UNLCK => std.posix.LOCK.UN,
+            else => return .INVAL,
+        };
+        php.setLock(entry.stream, lock_type) catch {
+            return switch (lock_type) {
+                std.posix.LOCK.UN => .NOLCK,
+                else => .AGAIN,
+            };
+        };
         return .SUCCESS;
     }
 
     fn handleGetLock(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
         _ = entry;
-        return .OPNOTSUPP;
+        return .INVAL;
     }
 
     fn handleAdvise(self: *@This(), args: anytype) !E {
@@ -901,11 +912,15 @@ pub const CallDispatcher = struct {
         return .SUCCESS;
     }
 
-    fn handleReadlink(_: *@This(), _: anytype) !E {
+    fn handleReadlink(self: *@This(), args: anytype) !E {
+        const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
+        defer loc.deinit();
         return .ACCES;
     }
 
-    fn handleSymlink(_: *@This(), _: anytype) !E {
+    fn handleSymlink(self: *@This(), args: anytype) !E {
+        const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
+        defer loc.deinit();
         return .ACCES;
     }
 

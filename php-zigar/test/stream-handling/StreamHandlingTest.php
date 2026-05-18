@@ -1047,6 +1047,95 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame('Hello world???', $text);
     }
 
+    public function testSetLockOnFile(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/set-lock-on-file.zig');
+        $file = new VirtualFile();
+        $dir = new VirtualDir([ 'hello.txt' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $f = fopen('vfs://test/hello.txt', 'w+');
+        $result1 = $m->lock($f);
+        $this->assertSame(true, $result1);
+        $this->assertSame(LOCK_EX, $file->lock);
+        $result2 = $m->lock($f);
+        $this->assertSame(false, $result2);
+        $result3 = $m->unlock($f);
+        $this->assertSame(true, $result3);
+        $this->assertSame(0, $file->lock);
+    }
+
+    public function testSetLockOnFileUsingFcntl(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/set-lock-with-fcntl.zig');
+        $file1 = new VirtualFile();
+        $file2 = new VirtualFile();
+        $dir = new VirtualDir([ 
+            'hello.txt' => $file1,
+            'world.txt' => $file2,
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $f1 = fopen('vfs://test/hello.txt', 'w+');
+        $f2 = fopen('vfs://test/world.txt', 'w+');
+        $m->lock($f1);
+        $this->assertSame(LOCK_EX, $file1->lock);
+        $this->assertExceptionMessage('unable to set lock', function() use($m, $f1) {
+            $m->lock($f1);
+        });
+        $m->lock($f2);
+        $this->assertSame(LOCK_EX, $file2->lock);
+    }
+
+    public function testFailToGetLockOnFileUsingFcntl(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/get-lock-with-fcntl.zig');
+        $file = new VirtualFile();
+        $dir = new VirtualDir([ 'hello.txt' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $this->assertExceptionMessage('unable to get lock', function() use($m) {
+            $f = fopen('vfs://test/hello.txt', 'w+');
+            $m->check($f);
+        });
+    }
+
+    public function testSetLockOnFileUsingPosixFunction(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/set-lock-with-posix-function.zig');       
+        $file = new VirtualFile();
+        $dir = new VirtualDir([ 'hello.txt' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $f = fopen('vfs://test/hello.txt', 'w+');
+        $result1 = $m->lock($f);
+        $this->assertSame(true, $result1);
+        $this->assertSame(LOCK_EX, $file->lock);
+        $result2 = $m->lock($f);
+        $this->assertSame(false, $result2);
+        $result3 = $m->unlock($f);
+        $this->assertSame(true, $result3);
+        $this->assertSame(0, $file->lock);
+    }
+
+    public function testSetLockOnFileInsideThread(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/set-lock-on-file-in-thread.zig');
+        $m->startup();
+        $file = new VirtualFile();
+        $dir = new VirtualDir([ 'hello.txt' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $f = fopen('vfs://test/hello.txt', 'w+');
+        try {
+            $written = $m->spawn($f);
+            $this->assertSame(11, $written);
+            $this->assertSame(0, $file->lock);
+        } finally {
+            $m->shutdown();
+        }
+    }
+
+    public function testNoblockingFlagUsingFcntl(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/set-non-blocking-flag-with-fcntl.zig');
+    }
+
     public function testReadLinesFromFileUsingFgets(): void 
     {
         global $input;
@@ -1238,7 +1327,7 @@ final class StreamHandlingTest extends ZigarTestCase
     public function testThrowWhenAttemptingToReadlink(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/read-link-with-posix-function.zig');
-        $this->assertExceptionMessage('file not found', function() use($m) {
+        $this->assertExceptionMessage('access denied', function() use($m) {
             $m->readLink('/vfs://test');
         });
     }
@@ -1700,6 +1789,18 @@ class VirtualFSStream {
         return (array) $this->node;
     }
 
+    function stream_lock($operation)
+    {
+        if ($operation == LOCK_UN) {
+            if (!$this->node->lock) return false;
+            $this->node->lock = 0;
+        } else {
+            if ($this->node->lock) return false;
+            $this->node->lock = $operation;
+        }
+        return true;
+    }
+
     function stream_metadata($path, $option, $var) 
     {
         if($option == STREAM_META_TOUCH) {
@@ -1744,6 +1845,7 @@ class VirtualFile extends VirtualFSObject {
         $this->content = $content;
         $this->size = strlen($content);
         $this->mode = 0o0100000 | 0o666;
+        $this->lock = 0;
     }
 }
 

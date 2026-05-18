@@ -1703,7 +1703,8 @@ pub fn setSync(strm: *Stream, sync: bool, sync_data: bool) !void {
 
 pub fn setLock(strm: *Stream, lock_type: c_int) !void {
     const id = php_h.PHP_STREAM_OPTION_LOCKING;
-    if (php_h._php_stream_set_option(strm, id, lock_type, null) < 0) return error.Failure;
+    const result = php_h._php_stream_set_option(strm, id, lock_type, null);
+    if (result != SUCCESS) return error.Failure;
 }
 
 pub const utimbuf = php_h.utimbuf;
