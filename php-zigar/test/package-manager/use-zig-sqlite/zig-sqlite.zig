@@ -2,9 +2,6 @@ const std = @import("std");
 
 const sqlite = @import("sqlite");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-const allocator = gpa.allocator();
-
 pub const Album = struct {
     AlbumId: ?u32 = null,
     Title: []const u8,
@@ -12,8 +9,8 @@ pub const Album = struct {
     Artist: []const u8,
 };
 
-pub fn search(keyword: []const u8) !void {
-    const path = "chinook.db";
+pub fn search(allocator: std.mem.Allocator, keyword: []const u8) !void {
+    const path = "/chinook.db";
     var db = try sqlite.Db.init(.{
         .mode = .{ .File = path },
         .open_flags = .{},

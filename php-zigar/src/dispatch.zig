@@ -3,6 +3,7 @@ const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
+const DynLib = @import("dyn-lib.zig").DynLib;
 const EventLoop = @import("event-loop.zig").EventLoop;
 const failure = @import("failure.zig");
 const interface = @import("module/native/interface.zig");
@@ -303,8 +304,8 @@ pub const CallDispatcher = struct {
         }
     }
 
-    pub fn installHooks(self: *@This(), lib: *std.DynLib, lib_path: []const u8, redirect_syscalls: bool) !void {
-        const pos = try redirection_controller.installHooks(self, lib, lib_path);
+    pub fn installHooks(self: *@This(), lib: *DynLib, redirect_syscalls: bool) !void {
+        const pos = try redirection_controller.installHooks(self, lib);
         if (redirect_syscalls) {
             if (self.getSyscallHook("__sc_vtable")) |hook| {
                 const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));

@@ -14,9 +14,16 @@ final class PackageManagerTest extends ZigarTestCase
 
     public function testLinkInZigSqlite(): void
     {
-        $m = ZigImporter::load(__DIR__ . '/use-zig-sqlite/zig-sqlite.zig', [
-            'use_llvm' => true,
-        ]);
+        $m = ZigImporter::load(__DIR__ . '/use-zig-sqlite/zig-sqlite.zig');
+        // VirtualDir, VirtualFile, and VirtualFSStream are defined in ../stream-handling/StreamHandlingTest.php
+        $path = __DIR__ . '/use-zig-sqlite/chinook.db';
+        $content = file_get_contents($path);
+        $file = new VirtualFile($content);
+        $dir = new VirtualDir([ 'chinook.db' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $handle = opendir('vfs://test');
+        $m->__zigar->redirect('root', $handle);
+        $m->search('music');
     }
 
     public function testLinkInLocalPackage(): void
@@ -29,3 +36,4 @@ final class PackageManagerTest extends ZigarTestCase
         $m->hello();
     }
 }
+

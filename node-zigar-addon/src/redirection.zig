@@ -2,6 +2,7 @@ const std = @import("std");
 const c_allocator = std.heap.c_allocator;
 const builtin = @import("builtin");
 
+const DynLib = @import("dyn-lib.zig").DynLib;
 const syscall = @import("syscall.zig");
 
 const os = switch (builtin.target.os.tag) {
@@ -28,7 +29,7 @@ pub fn Controller(comptime Host: type) type {
     const syscall_user_dispatch = os == .linux and builtin.target.cpu.arch.isX86();
 
     return struct {
-        pub fn installHooks(host: *Host, lib: *std.DynLib, path: []const u8) !LibExtent {
+        pub fn installHooks(host: *Host, lib: *DynLib) !LibExtent {
             var sfb = std.heap.stackFallback(4096, c_allocator);
             const allocator = sfb.get();
             if (os == .linux) {
@@ -38,7 +39,7 @@ pub fn Controller(comptime Host: type) type {
                 const Elf_Shdr = if (bits == 64) elf.Elf64_Shdr else elf.Elf32_Shdr;
                 const Elf_Sym = if (bits == 64) elf.Elf64_Sym else elf.Elf32_Sym;
                 const Elf_Rel = if (bits == 64) elf.Elf64_Rela else elf.Elf32_Rel;
-                const file = try std.fs.openFileAbsolute(path, .{});
+                const file = try std.fs.openFileAbsolute(lib.path, .{});
                 defer file.close();
                 // read ELF header
                 const header = try readStruct(Elf_Ehdr, file);
@@ -113,7 +114,7 @@ pub fn Controller(comptime Host: type) type {
                 const SegmentCommand = if (bits == 64) macho.segment_command_64 else macho.segment_command;
                 const NList = if (bits == 64) macho.nlist_64 else macho.nlist;
 
-                const file = try std.fs.openFileAbsolute(path, .{});
+                const file = try std.fs.openFileAbsolute(lib.path, .{});
                 defer file.close();
                 const header = try readStruct(MachHeader, file);
                 // process mach-o commands
@@ -305,23 +306,9 @@ pub fn Controller(comptime Host: type) type {
         }
 
         pub fn installHooksInLibraryOf(host: *Host, ptr: *const anyopaque) !LibExtent {
-            var lib: std.DynLib, const path: []const u8 = switch (os) {
-                .linux, .darwin => get: {
-                    var info: dlfcn_h.Dl_info = undefined;
-                    if (dlfcn_h.dladdr(ptr, &info) == 0) return error.UnableToGetLibraryInfo;
-                    const path = std.mem.sliceTo(info.dli_fname, 0);
-                    break :get .{ try std.DynLib.openZ(info.dli_fname), path };
-                },
-                .windows => get: {
-                    var handle: windows_h.HMODULE = undefined;
-                    if (windows_h.GetModuleHandleExA(windows_h.GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, @ptrCast(ptr), &handle) == 0)
-                        return error.UnableToGetLibraryInfo;
-                    break :get .{ .{ .inner = .{ .dll = @ptrCast(handle) } }, "" }; // path isn't needed on Windows
-                },
-                else => unreachable,
-            };
+            var lib = try DynLib.openBySymbol(ptr);
             defer lib.close();
-            return try installHooks(host, &lib, path);
+            return try installHooks(host, &lib);
         }
 
         pub fn installHook(hook: Host.HookEntry, address: usize, read_only: bool) !void {

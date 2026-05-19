@@ -4,6 +4,7 @@ const builtin = @import("builtin");
 
 const BufferMap = @import("buffer.zig").BufferMap;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
+const DynLib = @import("dyn-lib.zig").DynLib;
 const GarbageCollectionBuffer = @import("gc.zig").GarbageCollectionBuffer;
 const ModuleGeneric = @import("module/native/interface.zig").Module;
 const ObjectMap = @import("object.zig").ObjectMap;
@@ -21,7 +22,7 @@ const fn_transform = @import("zigft/fn-transform.zig");
 pub const ModuleHost = struct {
     ref_count: isize = 0,
     module: ?*Module = null,
-    library: ?std.DynLib = null,
+    library: ?DynLib = null,
     global_error_set: ?*Array = null,
     importer: *StructureImporter = undefined,
     dispatcher: *CallDispatcher = undefined,
@@ -34,7 +35,7 @@ pub const ModuleHost = struct {
     const Module = ModuleGeneric(StructureImporter.Handle);
 
     pub fn load(path: []const u8) !Value {
-        var lib = try std.DynLib.open(path);
+        var lib: DynLib = try DynLib.open(path);
         errdefer lib.close();
         const module = lib.lookup(*Module, "zig_module") orelse return error.MissingSymbol;
         if (module.version != Module.current_version) return error.IncorrectVersion;
@@ -48,7 +49,7 @@ pub const ModuleHost = struct {
         // install hooks
         self.dispatcher = try .init(self);
         errdefer self.dispatcher.deinit();
-        try self.dispatcher.installHooks(&lib, path, module.attributes.io_redirection);
+        try self.dispatcher.installHooks(&lib, module.attributes.io_redirection);
         _ = module.exports.set_host_instance(@ptrCast(self));
         self.importer = try .init(self);
         defer self.importer.deinit();
