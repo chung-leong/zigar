@@ -58,6 +58,14 @@ pub const Syscall = extern struct {
         close: extern struct {
             fd: i32,
         },
+        copyfilerange: extern struct {
+            out_fd: i32,
+            in_fd: i32,
+            out_offset: ?*i64,
+            in_offset: ?*i64,
+            len: u64,
+            copied: u32 = undefined,
+        },
         datasync: extern struct {
             fd: i32,
         },
@@ -244,6 +252,7 @@ pub const Syscall = extern struct {
         advise,
         allocate,
         close,
+        copyfilerange,
         datasync,
         environ,
         fstat,
@@ -502,6 +511,33 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                 const err = Host.redirectSyscall(&call);
                 result.* = intFromError(err);
                 return true;
+            }
+            return false;
+        }
+
+        pub fn copy_file_range(in_fd: c_int, out_fd: c_int, in_offset: [*c]off_t, out_offset: [*c]off_t, len: size_t, _: c_int, result: *ssize_t) callconv(.c) bool {
+            if (isPrivateDescriptor(out_fd) or isPrivateDescriptor(in_fd)) {
+                var in_offset64: off64_t = if (in_offset) |ptr| ptr.* else 0;
+                var out_offset64: off64_t = if (out_offset) |ptr| ptr.* else 0;
+                var call: Syscall = .{ .cmd = .copyfilerange, .u = .{
+                    .copyfilerange = .{
+                        .in_fd = in_fd,
+                        .out_fd = out_fd,
+                        .in_offset = if (in_offset != null) &in_offset64 else null,
+                        .out_offset = if (in_offset != null) &out_offset64 else null,
+                        .len = @intCast(len),
+                    },
+                } };
+                const err = Host.redirectSyscall(&call);
+                if (err == .SUCCESS) {
+                    if (in_offset) |ptr| ptr.* = @intCast(in_offset64);
+                    if (out_offset) |ptr| ptr.* = @intCast(out_offset64);
+                    result.* = @intCast(call.u.copyfilerange.copied);
+                    return true;
+                } else if (err != .OPNOTSUPP) {
+                    result.* = intFromError(err);
+                    return true;
+                }
             }
             return false;
         }
@@ -1889,6 +1925,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const fstatfs64 = makeStdHook("fstatfs64");
         pub const fsync = makeStdHook("fsync");
         pub const ftruncate = makeStdHook("ftruncate");
+        pub const ftruncate64 = makeStdHook("ftruncate64");
         pub const futimens = makeStdHook("futimens");
         pub const futimes = makeStdHook("futimes");
         pub const futimesat = makeStdHook("futimesat");
@@ -2443,6 +2480,7 @@ pub fn PosixSubstituteLinux(comptime redirector: type) type {
     return struct {
         const posix = PosixSubstitute(redirector);
 
+        pub const copy_file_range = makeStdHook("copy_file_range");
         pub const sendfile = makeStdHook("sendfile");
         pub const sendfile64 = makeStdHook("sendfile64");
 
@@ -2452,6 +2490,7 @@ pub fn PosixSubstituteLinux(comptime redirector: type) type {
 
         const Self = @This();
         pub const Original = struct {
+            pub var copy_file_range: *const @TypeOf(Self.copy_file_range) = undefined;
             pub var sendfile: *const @TypeOf(Self.sendfile) = undefined;
             pub var sendfile64: *const @TypeOf(Self.sendfile64) = undefined;
         };
@@ -2833,6 +2872,13 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             return Original.fgets(buf, num, s);
         }
 
+        pub fn fileno(s: *std.c.FILE) callconv(.c) c_int {
+            if (getRedirectedFile(s)) |file| {
+                return file.fd;
+            }
+            return Original.fileno(s);
+        }
+
         pub fn fopen(path: [*:0]const u8, mode: [*:0]const u8) callconv(.c) ?*std.c.FILE {
             const oflags = decodeOpenMode(mode);
             const oflags_int: u32 = @bitCast(oflags);
@@ -2923,6 +2969,14 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             return Original.fwrite(buffer, size, n, s);
         }
 
+        pub fn isatty(fd: c_int) callconv(.c) c_int {
+            if (redirector.isPrivateDescriptor(fd)) {
+                _ = posix.saveError(.NOTTY);
+                return 0;
+            }
+            return Original.isatty(fd);
+        }
+
         pub fn perror(text: [*:0]const u8) callconv(.c) void {
             const msg = stdio_h.strerror(posix.getError());
             const stderr = getStdProxy(2);
@@ -2972,6 +3026,10 @@ pub fn LibcSubstitute(comptime redirector: type) type {
                 total += result;
             }
             return @intCast(total);
+        }
+
+        pub fn realpath(name: [*:0]const u8, resolved: [*]u8) callconv(.c) [*:0]u8 {
+            return Original.realpath(name, resolved);
         }
 
         pub fn rewind(s: *std.c.FILE) callconv(.c) void {
@@ -3056,6 +3114,21 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             if (result < 0) return saveFileError(file, posix.getError());
             if (result == 0) file.eof = true;
             return result;
+        }
+
+        fn ttyname(fd: c_int) callconv(.c) ?[*]u8 {
+            if (redirector.isPrivateDescriptor(fd)) {
+                _ = posix.saveError(.NOTTY);
+                return null;
+            }
+            return Original.ttyname(fd);
+        }
+
+        fn ttyname_r(fd: c_int, buf: [*]u8, size: usize) callconv(.c) c_int {
+            if (redirector.isPrivateDescriptor(fd)) {
+                return @intFromEnum(std.posix.E.NOTTY);
+            }
+            return Original.ttyname_r(fd, buf, size);
         }
 
         fn write(file: *RedirectedFile, src: [*]const u8, len: off_t) callconv(.c) off_t {
@@ -3247,6 +3320,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             pub var fgetc: *const @TypeOf(Self.fgetc) = undefined;
             pub var fgetpos: *const @TypeOf(Self.fgetpos) = undefined;
             pub var fgets: *const @TypeOf(Self.fgets) = undefined;
+            pub var fileno: *const @TypeOf(Self.fileno) = undefined;
             pub var fopen: *const @TypeOf(Self.fopen) = undefined;
             pub var fputc: *const @TypeOf(Self.fputc) = undefined;
             pub var fputs: *const @TypeOf(Self.fputs) = undefined;
@@ -3255,13 +3329,17 @@ pub fn LibcSubstitute(comptime redirector: type) type {
             pub var fsetpos: *const @TypeOf(Self.fsetpos) = undefined;
             pub var ftell: *const @TypeOf(Self.ftell) = undefined;
             pub var fwrite: *const @TypeOf(Self.fwrite) = undefined;
+            pub var isatty: *const @TypeOf(Self.isatty) = undefined;
             pub var perror: *const @TypeOf(Self.perror) = undefined;
             pub var putc: *const @TypeOf(Self.putc) = undefined;
             pub var putchar: *const @TypeOf(Self.putchar) = undefined;
             pub var puts: *const @TypeOf(Self.puts) = undefined;
+            pub var realpath: *const @TypeOf(Self.realpath) = undefined;
             pub var rewind: *const @TypeOf(Self.rewind) = undefined;
             pub var setbuf: *const @TypeOf(Self.setbuf) = undefined;
             pub var setvbuf: *const @TypeOf(Self.setvbuf) = undefined;
+            pub var ttyname: *const @TypeOf(Self.ttyname) = undefined;
+            pub var ttyname_r: *const @TypeOf(Self.ttyname_r) = undefined;
             pub var ungetc: *const @TypeOf(Self.ungetc) = undefined;
 
             pub extern var vfprintf_orig: *const @TypeOf(Self.vfprintf_hook);

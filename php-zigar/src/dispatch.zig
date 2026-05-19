@@ -291,6 +291,7 @@ pub const CallDispatcher = struct {
                 .rename => try self.handleRename(&call.u.rename),
                 .poll => try self.handlePoll(&call.u.poll),
                 .sendfile => try self.handleSendFile(&call.u.sendfile),
+                .copyfilerange => try self.handleCopyFileRange(&call.u.copyfilerange),
                 .environ => try self.handleGetEnvironmentStrings(&call.u.environ),
                 .write_stderr => try self.handleWriteStderr(&call.u.write_stderr),
             };
@@ -981,18 +982,8 @@ pub const CallDispatcher = struct {
         return .SUCCESS;
     }
 
-    fn handlePoll(self: *@This(), args: anytype) !E {
-        _ = self;
-        _ = args;
+    fn handlePoll(_: *@This(), _: anytype) !E {
         return .INVAL;
-        // const env = self.env;
-        // return try self.callPosixFunction(self.js.poll_oneoff, &.{
-        //     try env.createUsize(@intFromPtr(args.subscriptions)),
-        //     try env.createUsize(@intFromPtr(args.events)),
-        //     try env.createUint32(args.subscription_count),
-        //     try env.createUsize(@intFromPtr(&args.event_count)),
-        //     futex,
-        // });
     }
 
     fn handleSendFile(self: *@This(), args: anytype) !E {
@@ -1001,6 +992,15 @@ pub const CallDispatcher = struct {
         const in_strm, const close_in_strm = self.useStream(args.in_fd, "r") catch return .BADF;
         defer if (close_in_strm) php.close(in_strm);
         args.sent = php.sendfile(out_strm, in_strm, args.offset, args.len) catch return .EIO;
+        return .SUCCESS;
+    }
+
+    fn handleCopyFileRange(self: *@This(), args: anytype) !E {
+        const out_strm, const close_out_strm = self.useStream(args.out_fd, "w") catch return .BADF;
+        defer if (close_out_strm) php.close(out_strm);
+        const in_strm, const close_in_strm = self.useStream(args.in_fd, "r") catch return .BADF;
+        defer if (close_in_strm) php.close(in_strm);
+        args.copied = php.copyFileRange(in_strm, out_strm, args.in_offset, args.out_offset, args.len) catch return .EIO;
         return .SUCCESS;
     }
 

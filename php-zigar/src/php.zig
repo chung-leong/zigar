@@ -1665,6 +1665,38 @@ pub fn sendfile(out_strm: *Stream, in_strm: *Stream, offset: ?*i64, len: u32) !u
     return @intCast(copied);
 }
 
+pub fn copyFileRange(in_strm: *Stream, out_strm: *Stream, in_offset: ?*i64, out_offset: ?*i64, len: u64) !u32 {
+    var original_in_pos: i64 = 0;
+    var original_out_pos: i64 = 0;
+    var copied: i64 = 0;
+    if (in_offset) |ptr| {
+        original_in_pos = php_h._php_stream_tell(in_strm);
+        _ = php_h._php_stream_seek(in_strm, ptr.*, php_h.SEEK_SET);
+    }
+    if (out_offset) |ptr| {
+        original_out_pos = php_h._php_stream_tell(out_strm);
+        _ = php_h._php_stream_seek(out_strm, ptr.*, php_h.SEEK_SET);
+    }
+    var buf: [8192]u8 = undefined;
+    var remaining = len;
+    while (remaining > 0) {
+        const bytes_read = php_h._php_stream_read(in_strm, &buf, @min(remaining, buf.len));
+        if (bytes_read == 0) break;
+        _ = php_h._php_stream_write(out_strm, &buf, @intCast(bytes_read));
+        copied += bytes_read;
+        remaining -= @intCast(bytes_read);
+    }
+    if (in_offset) |ptr| {
+        ptr.* += copied;
+        _ = php_h._php_stream_seek(in_strm, original_in_pos, php_h.SEEK_SET);
+    }
+    if (out_offset) |ptr| {
+        ptr.* += copied;
+        _ = php_h._php_stream_seek(out_strm, original_out_pos, php_h.SEEK_SET);
+    }
+    return @intCast(copied);
+}
+
 pub fn resolve(name: []const u8, parent_path: []const u8) !*String {
     return php_h.php_resolve_path(name.ptr, name.len, parent_path.ptr) orelse error.Failure;
 }
