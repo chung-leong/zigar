@@ -1131,9 +1131,17 @@ final class StreamHandlingTest extends ZigarTestCase
         }
     }
 
-    public function testNoblockingFlagUsingFcntl(): void 
+    public function testSetNoblockingFlagUsingFcntl(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/set-non-blocking-flag-with-fcntl.zig');
+        $file = new VirtualFile('Hello world!');
+        $dir = new VirtualDir([ 'hello.txt' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $f = fopen('vfs://test/hello.txt', 'r');
+        $m->setNonBlocking($f, true);
+        $this->assertSame(false, $file->blocking);
+        $m->setNonBlocking($f, false);
+        $this->assertSame(true, $file->blocking);
     }
 
     public function testReadLinesFromFileUsingFgets(): void 
@@ -1273,6 +1281,40 @@ final class StreamHandlingTest extends ZigarTestCase
             $m->close();
         }
             $this->assertSame("Hello worldHello worldHello world", $output);
+    }
+
+    public function testRedirectIoFromDynamicallyLinkedLibrary(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/redirect-shared-lib.zig');
+        switch (PHP_OS_FAMILY) {
+            case 'Windows': 
+                $os = 'windows';
+                $ext = 'dll';
+                break;
+            case 'Darwin':
+                $os = 'macox';
+                $ext = 'dynlib';
+                break;
+            case 'Linux':
+                $os = 'linux-gnu';
+                $ext = 'so';
+                break;
+        }
+        switch (php_uname('m')) {
+            case 'i386':
+                $arch = 'x86';
+                break;
+            case 'x86_64':
+                $arch = 'x86_64';
+                break;
+        }
+        $lib_path = __DIR__ . "/data/print.$ext";
+        $zig_path = __DIR__ . '/redirect-shared-lib-target.zig';
+        `zig build-lib "$zig_path" -target $arch-$os -dynamic -O ReleaseSmall -femit-bin="$lib_path"`;
+        ob_start();
+        $m->use($lib_path);
+        $text = ob_get_clean();
+        $this->assertStringContainsString('Hello world', $text);
     }
 
     public function testCreateDirectoryInFileSystemUsingPosixFunction(): void 
@@ -1801,6 +1843,16 @@ class VirtualFSStream {
         return true;
     }
 
+    function stream_set_option($option, $arg1, $arg2)
+    {
+        switch ($option) {
+            case STREAM_OPTION_BLOCKING:
+                $this->node->blocking = !!$arg1;
+                break;
+        }
+        return true;
+    }
+
     function stream_metadata($path, $option, $var) 
     {
         if($option == STREAM_META_TOUCH) {
@@ -1840,12 +1892,15 @@ class VirtualDir extends VirtualFSObject {
 
 class VirtualFile extends VirtualFSObject {
     var $content;
+    var $lock;
+    var $blocking;
 
     function __construct($content = '') {
         $this->content = $content;
         $this->size = strlen($content);
         $this->mode = 0o0100000 | 0o666;
         $this->lock = 0;
+        $this->blocking = true;
     }
 }
 

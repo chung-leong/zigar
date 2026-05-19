@@ -1687,18 +1687,8 @@ pub fn getStreamWrapperProperty(strm: *Stream, name: []const u8) !*Value {
 pub fn setBlocking(strm: *Stream, set: bool) !void {
     const id = php_h.PHP_STREAM_OPTION_BLOCKING;
     const value: c_int = if (set) 1 else 0;
-    if (php_h._php_stream_set_option(strm, id, value, null) < 0) return error.Failure;
-}
-
-pub fn setSync(strm: *Stream, sync: bool, sync_data: bool) !void {
-    const id = php_h.PHP_STREAM_OPTION_SYNC_API;
-    const value: c_int = if (sync)
-        php_h.PHP_STREAM_SYNC_FSYNC
-    else if (sync_data)
-        php_h.PHP_STREAM_SYNC_FDSYNC
-    else
-        0;
-    if (php_h._php_stream_set_option(strm, id, value, null) < 0) return error.Failure;
+    const result = php_h._php_stream_set_option(strm, id, value, null);
+    if (result != SUCCESS) return error.Failure;
 }
 
 pub fn setLock(strm: *Stream, lock_type: c_int) !void {

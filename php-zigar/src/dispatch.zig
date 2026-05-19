@@ -34,7 +34,8 @@ pub const CallDispatcher = struct {
         .unlink = true,
         .utimes = true,
     },
-    redirected_root: bool = false,
+    redirecting_root: bool = false,
+    redirecting_other_libraries: bool = false,
     function_list: std.ArrayList(CallbackEntry) = .empty,
     next_function_id: c_ulong = 1,
     stream_list: std.ArrayList(StreamEntry) = .empty,
@@ -342,8 +343,14 @@ pub const CallDispatcher = struct {
     }
 
     pub fn redirectSyscalls(self: *@This(), ptr: *const anyopaque) !void {
-        _ = self;
-        _ = ptr;
+        if (!self.hooks_installed) return error.RedirectionDisabled;
+        const pos = try redirection_controller.installHooksInLibraryOf(self, ptr);
+        if (self.syscall_trap_installed) {
+            if (self.getSyscallHook("__sc_vtable")) |hook| {
+                const vtable: *const HandlerVTable = @ptrCast(@alignCast(hook.handler));
+                return redirection_controller.addSyscallVtable(pos, vtable);
+            }
+        }
     }
 
     pub fn enableMultithread(self: *@This()) !void {
@@ -446,7 +453,7 @@ pub const CallDispatcher = struct {
         entry.deinit();
         const index = (@intFromPtr(entry) - @intFromPtr(self.stream_list.items.ptr)) / @sizeOf(StreamEntry);
         _ = self.stream_list.swapRemove(index);
-        if (fd == -1) self.redirected_root = false;
+        if (fd == -1) self.redirecting_root = false;
     }
 
     pub fn getStreamPath(strm: *Stream) !*String {
@@ -513,7 +520,7 @@ pub const CallDispatcher = struct {
         const fdstat = getStreamStat(strm, fd == -1);
         self.removeStream(fd) catch {};
         _ = try self.addStreamEntry(fd, path, strm, &fdstat);
-        if (fd == -1) self.redirected_root = true;
+        if (fd == -1) self.redirecting_root = true;
     }
 
     fn findStream(self: *@This(), fd: c_long) !*StreamEntry {
@@ -612,7 +619,7 @@ pub const CallDispatcher = struct {
         } else {
             if (dirfd == -1) {
                 // don't bother lookup the root stream if the root descriptor hasn't been redirected
-                if (!self.redirected_root) return null;
+                if (!self.redirecting_root) return null;
             }
             const parent = try self.findStream(dirfd);
             const name = path[0..std.mem.len(path)];
@@ -836,8 +843,8 @@ pub const CallDispatcher = struct {
 
     fn handleSetDescriptorFlags(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        php.setBlocking(entry.stream, args.fdflags.NONBLOCK) catch return .FAULT;
-        php.setSync(entry.stream, args.fdflags.SYNC, args.fdflags.DSYNC) catch return .FAULT;
+        php.setBlocking(entry.stream, !args.fdflags.NONBLOCK) catch return .INVAL;
+        entry.fd_stat.fs_flags.NONBLOCK = args.fdflags.NONBLOCK;
         return .SUCCESS;
     }
 
