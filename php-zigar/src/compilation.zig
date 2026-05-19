@@ -262,10 +262,22 @@ pub const ZigCompiler = struct {
         try arg_list.insert(al, 0, self.options.zig_path);
         self.compiler_args = arg_list.items;
         // use custom build file if it exists; otherwise use Zigar's own build file
-        self.build_file_path = try findFile(al, self.module_dir_wo_sep, "build.zig") orelse try std.fs.path.resolve(al, &.{
-            self.zigar_src_path_wo_sep,
-            "build.zig",
-        });
+        self.build_file_path = find: {
+            if (findFile(al, self.module_dir_wo_sep, "build.zig") catch null) |path| {
+                const path_z = try php.allocator.dupeZ(u8, path);
+                defer php.allocator.free(path_z);
+                // make sure it's not empty
+                var tree = std.zig.Ast.parse(php.allocator, path_z, .zig) catch {
+                    // use the path if there's a syntax error so that the user would know
+                    break :find path;
+                };
+                defer tree.deinit(php.allocator);
+                const decls = tree.rootDecls();
+                if (decls.len > 0) break :find path;
+            }
+            // use the built-in build file
+            break :find try std.fs.path.resolve(al, &.{ self.zigar_src_path_wo_sep, "build.zig" });
+        };
         self.extra_file_path = try findFile(al, self.module_dir_wo_sep, "build.extra.zig");
         self.package_config_path = try findFile(al, self.module_dir_wo_sep, "build.zig.zon");
     }

@@ -1,0 +1,14 @@
+.{
+    .name = .ziglite_example,
+    .version = "0.0.0",
+    .dependencies = .{
+        .sqlite = .{
+            .url = "https://github.com/chung-leong/zig-sqlite/archive/refs/heads/master.zip",
+            .hash = "sqlite-3.48.0-F2R_a--PDgBzVlT53TAls-wQDUPRz8C7iFy7V2Psp0Cm",
+        },
+    },
+    .paths = .{
+        "",
+    },
+    .fingerprint = 0x779ac584a9d7d503,
+}
