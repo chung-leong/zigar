@@ -1185,7 +1185,7 @@ export function addTests(importModule, options) {
         map2.close();
         expect(lines2).to.have.lengthOf(100);
       } finally {
-        await shutdown();;
+        await shutdown();
       }
     })
     skip.entirely.if(target === 'win32').
@@ -1876,7 +1876,7 @@ export function addTests(importModule, options) {
         await delay(50);
         expect(file.lock).to.be.null;
       } finally {
-        await shutdown();;
+        await shutdown();
       }
     })
     skip.entirely.if(target === 'win32').
@@ -1903,7 +1903,7 @@ export function addTests(importModule, options) {
         const line = lines.find(s => s.includes('Signifying nothing'));
         expect(line).to.be.a('string');
       } finally {
-        await shutdown();;
+        await shutdown();
       }
       reader.close();
     })
@@ -1958,7 +1958,7 @@ export function addTests(importModule, options) {
         const line = lines.find(s => s.includes('Signifying nothing'));
         expect(line).to.be.a('string');
       } finally {
-        await shutdown();;
+        await shutdown();
       }
       reader.close();
     })

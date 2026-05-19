@@ -765,6 +765,20 @@ final class StreamHandlingTest extends ZigarTestCase
         });
     }
 
+    public function testFailToPollFile(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/poll-file.zig');
+        $dir = new VirtualDir([
+            'hello.txt' => new VirtualFile('Hello world'),
+            'world.txt' => new VirtualFile('Hello world'),
+        ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $f1 = fopen("vfs://test/hello.txt", 'r');
+        $f2 = fopen("vfs://test/world.txt", 'r');
+        $result = $m->poll($f1, $f2);
+        $this->assertSame(-1, $result);
+    }
+
     public function testCreateDirectoryUsingPosixFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/create-directory-with-posix-function.zig');

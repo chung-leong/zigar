@@ -984,7 +984,7 @@ pub const CallDispatcher = struct {
     fn handlePoll(self: *@This(), args: anytype) !E {
         _ = self;
         _ = args;
-        return .OPNOTSUPP;
+        return .INVAL;
         // const env = self.env;
         // return try self.callPosixFunction(self.js.poll_oneoff, &.{
         //     try env.createUsize(@intFromPtr(args.subscriptions)),
