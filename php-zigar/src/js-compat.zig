@@ -147,9 +147,6 @@ pub const ArrayBuffer = struct {
         const self = fromObject(obj_a);
         const other = fromObject(obj_b);
         if (self.buffer == other.buffer) return 0;
-        if (self.buffer.flags.read_only != other.buffer.flags.read_only) {
-            return if (self.buffer.flags.read_only) 1 else -1;
-        }
         if (self.buffer.flags.uninitialized != other.buffer.flags.uninitialized) {
             return if (self.buffer.flags.uninitialized) 1 else -1;
         }
@@ -431,9 +428,6 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
             const self = fromObject(obj_a);
             const other = fromObject(obj_b);
             if (self.buffer == other.buffer) return 0;
-            if (self.buffer.flags.read_only != other.buffer.flags.read_only) {
-                return if (self.buffer.flags.read_only) 1 else -1;
-            }
             if (self.buffer.flags.uninitialized or other.buffer.flags.uninitialized) {
                 return if (self.buffer.flags.uninitialized) 1 else -1;
             }
