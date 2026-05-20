@@ -32,7 +32,7 @@ pub const search = work_queue.promisify(ns.search);
 
 const ns = struct {
     pub fn open() !void {
-        const path = "/zig/chinook.db";
+        const path = "/chinook.db";
         db = try sqlite.Db.init(.{
             .mode = .{ .File = path },
             .open_flags = .{},

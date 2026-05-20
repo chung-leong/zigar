@@ -33,6 +33,48 @@ final class PackageManagerTest extends ZigarTestCase
         $m->search('music');
     }
 
+    public function testUseZigSqliteInMultithreadMode(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/use-zig-sqlite/zig-sqlite-threaded.zig', [
+            'multithreaded' => true,
+        ]);
+        $path = __DIR__ . '/use-zig-sqlite/chinook.db';
+        $content = file_get_contents($path);
+        $file = new VirtualFile($content);
+        $dir = new VirtualDir([ 'chinook.db' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $handle = opendir('vfs://test');
+        $m->__zigar->redirect('root', $handle);
+        $m->startup();
+        try {
+            $m->open();
+            $results = $m->search('death');
+            $this->assertEquals([
+                (object) [
+                    'AlbumId' => 94,
+                    'Title' => 'A Matter of Life and Death',
+                    'ArtistId' => 90,
+                    'Artist' => 'Iron Maiden',
+                ],
+                (object) [
+                    'AlbumId' => 98,
+                    'Title' => 'Dance Of Death',
+                    'ArtistId' => 90,
+                    'Artist' => 'Iron Maiden',
+                ],
+                (object) [
+                    'AlbumId' => 102,
+                    'Title' => 'Live After Death',
+                    'ArtistId' => 90,
+                    'Artist' => 'Iron Maiden',
+                ],
+            ], $results->__plain);
+            $m->close();
+        } finally {
+            $m->shutdown();
+        }
+    }
+
     public function testLinkInLocalPackage(): void
     {
         $m = ZigImporter::load(__DIR__ . '/use-local/local.zig');

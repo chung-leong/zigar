@@ -1728,7 +1728,7 @@ pub fn setBlocking(strm: *Stream, set: bool) !void {
     const id = php_h.PHP_STREAM_OPTION_BLOCKING;
     const value: c_int = if (set) 1 else 0;
     const result = php_h._php_stream_set_option(strm, id, value, null);
-    if (result != SUCCESS) return error.Failure;
+    if (result < 0) return error.Failure;
 }
 
 pub fn setLock(strm: *Stream, lock_type: c_int) !void {
