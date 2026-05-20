@@ -87,6 +87,10 @@ pub const Syscall = extern struct {
             fd: i32,
             stat: Filestat = undefined,
         },
+        ftruncate: extern struct {
+            fd: i32,
+            len: u64 = undefined,
+        },
         futimes: extern struct {
             fd: i32,
             atime: i64,
@@ -256,6 +260,7 @@ pub const Syscall = extern struct {
         datasync,
         environ,
         fstat,
+        ftruncate,
         futimes,
         getdents,
         getfl,
@@ -896,17 +901,28 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn ftruncate(fd: c_int, _: off_t, result: *c_int) callconv(.c) bool {
-            if (isPrivateDescriptor(fd)) {
-                result.* = intFromError(.INVAL);
-                return true;
-            }
-            return false;
+        pub fn ftruncate(fd: c_int, offset: off_t, result: *c_int) callconv(.c) bool {
+            return ftruncateT(off_t, fd, offset, result);
         }
 
-        pub fn ftruncate64(fd: c_int, _: off64_t, result: *c_int) callconv(.c) bool {
+        pub fn ftruncate64(fd: c_int, offset: off64_t, result: *c_int) callconv(.c) bool {
+            return ftruncateT(off_t, fd, offset, result);
+        }
+
+        fn ftruncateT(comptime T: type, fd: c_int, offset: T, result: *c_int) bool {
             if (isPrivateDescriptor(fd)) {
-                result.* = intFromError(.INVAL);
+                if (offset < 0) {
+                    result.* = intFromError(.INVAL);
+                } else {
+                    var call: Syscall = .{ .cmd = .ftruncate, .u = .{
+                        .ftruncate = .{
+                            .fd = @intCast(fd),
+                            .len = @intCast(offset),
+                        },
+                    } };
+                    const err = Host.redirectSyscall(&call);
+                    result.* = intFromError(err);
+                }
                 return true;
             }
             return false;
@@ -2416,6 +2432,7 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var fstatfs64: *const @TypeOf(Self.fstatfs64) = undefined;
             pub var fsync: *const @TypeOf(Self.fsync) = undefined;
             pub var ftruncate: *const @TypeOf(Self.ftruncate) = undefined;
+            pub var ftruncate64: *const @TypeOf(Self.ftruncate64) = undefined;
             pub var futime: *const @TypeOf(Self.futime) = undefined;
             pub var futime64: *const @TypeOf(Self.futime64) = undefined;
             pub var futimes: *const @TypeOf(Self.futimes) = undefined;

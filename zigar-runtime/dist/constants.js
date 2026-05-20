@@ -148,6 +148,7 @@ const PosixError = { // values mirror std.os.wasi.errno_t
   EMFILE: 34,
   ENOENT: 44,
   ENOSPC: 51,
+  ENOSYS: 52,
   ENOTSUP: 58,
   EPERM: 63,
   ESPIPE: 70,
@@ -231,4 +232,5 @@ const PosixPollEventType = {
   FD_WRITE: 2,
 };
 
-export { ArgStructFlag, ArrayFlag, EnumFlag, ErrorSetFlag, MemberFlag, MemberType, ModuleAttribute, OptionalFlag, PointerFlag, PosixDescriptor, PosixDescriptorFlag, PosixDescriptorRight, PosixError, PosixFileType, PosixLockType, PosixLookupFlag, PosixOpenFlag, PosixPollEventType, PrimitiveFlag, ProxyType, SliceFlag, StructFlag, StructureFlag, StructurePurpose, StructureType, UnionFlag, VectorFlag, VisitorFlag, memberNames, structureNames };
+export { ArgStructFlag, ArrayFlag, EnumFlag, ErrorSetFlag, MemberFlag, memberNames, MemberType, ModuleAttribute, OptionalFlag, PointerFlag, PosixDescriptor, PosixDescriptorFlag, PosixDescriptorRight, PosixError, PosixFileType, PosixLockType, PosixLookupFlag, PosixOpenFlag, PosixPollEventType, PrimitiveFlag, ProxyType, SliceFlag, StructFlag, StructureFlag, structureNames, StructurePurpose, StructureType, UnionFlag, VectorFlag, VisitorFlag };
+

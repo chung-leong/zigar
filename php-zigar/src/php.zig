@@ -1542,19 +1542,22 @@ pub fn seek(strm: *Stream, offset: i64, whence: u32) !void {
     const flags = get_stream_flags(strm);
     if (ops.seek == null) return error.Unseekable;
     if (flags & php_h.PHP_STREAM_FLAG_NO_SEEK != 0) return error.Unseekable;
-    if (php_h._php_stream_seek(strm, offset, @intCast(whence)) < 0) return error.Failure;
+    const pos = php_h._php_stream_seek(strm, offset, @intCast(whence));
+    if (pos < 0) return error.Failure;
 }
 
 pub fn stat(path: *const String, context: ?*StreamContext, _: std.os.wasi.lookupflags_t, out: *std.os.wasi.filestat_t) !void {
     const p = getStringContent(path);
     var stat_buf: php_h.php_stream_statbuf = undefined;
-    if (php_h._php_stream_stat_path(p.ptr, 0, &stat_buf, context) != 0) return error.Failure;
+    const result = php_h._php_stream_stat_path(p.ptr, 0, &stat_buf, context);
+    if (result != SUCCESS) return error.Failure;
     copyStat(&stat_buf.sb, out);
 }
 
 pub fn fstat(strm: *Stream, out: *std.os.wasi.filestat_t) !void {
     var stat_buf: php_h.php_stream_statbuf = undefined;
-    if (php_h._php_stream_stat(strm, &stat_buf) != 0) return error.Failure;
+    const result = php_h._php_stream_stat(strm, &stat_buf);
+    if (result != SUCCESS) return error.Failure;
     copyStat(&stat_buf.sb, out);
 }
 
@@ -1605,9 +1608,14 @@ pub fn rename(path: *const String, new_path: *const String, context: ?*StreamCon
 }
 
 pub fn tell(strm: *Stream) !usize {
-    const t = php_h._php_stream_tell(strm);
-    if (t < 0) return error.Failure;
-    return @intCast(t);
+    const pos = php_h._php_stream_tell(strm);
+    if (pos < 0) return error.Failure;
+    return @intCast(pos);
+}
+
+pub fn truncate(strm: *Stream, len: u64) !void {
+    const result = php_h._php_stream_truncate_set_size(strm, @intCast(len));
+    if (result != 0) return error.Failure;
 }
 
 pub fn mkdir(path: *const String, mode: u32, context: ?*StreamContext) !void {

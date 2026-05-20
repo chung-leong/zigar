@@ -1099,16 +1099,20 @@ final class StreamHandlingTest extends ZigarTestCase
         $this->assertSame(LOCK_EX, $file2->lock);
     }
 
-    public function testFailToGetLockOnFileUsingFcntl(): void 
+    public function testGetLockOnFileUsingFcntl(): void 
     {
         $m = ZigImporter::load(__DIR__ . '/get-lock-with-fcntl.zig');
         $file = new VirtualFile();
         $dir = new VirtualDir([ 'hello.txt' => $file ]);
         VirtualFSStream::add_root_node('test', $dir);
-        $this->assertExceptionMessage('unable to get lock', function() use($m) {
-            $f = fopen('vfs://test/hello.txt', 'w+');
-            $m->check($f);
-        });
+        $f = fopen('vfs://test/hello.txt', 'w+');
+        $result1 = $m->check($f, true);
+        $this->assertSame(true, $result1);
+        $m->lock($f, false);
+        $result2 = $m->check($f, true);
+        $this->assertSame(false, $result2);
+        $result3 = $m->check($f, false);
+        $this->assertSame(true, $result3);
     }
 
     public function testSetLockOnFileUsingPosixFunction(): void 
@@ -1798,6 +1802,17 @@ class VirtualFSStream {
         return $this->position;
     }
 
+    function stream_truncate($new_size) {
+        $content = &$this->node->content;
+        $len = strlen($content);
+        if ($len > $new_size) {
+            $content = substr($content, 0, $new_size);
+        } else if ($len < $new_size) {
+            $content .= str_repeat("\x00", $new_size - $len);
+        }
+        return true;
+    }
+
     function stream_eof()
     {
         $content = $this->node->content;
@@ -1847,12 +1862,26 @@ class VirtualFSStream {
 
     function stream_lock($operation)
     {
-        if ($operation == LOCK_UN) {
-            if (!$this->node->lock) return false;
-            $this->node->lock = 0;
-        } else {
-            if ($this->node->lock) return false;
-            $this->node->lock = $operation;
+        switch ($operation & ~LOCK_NB) {
+            case LOCK_UN:
+                if (!$this->node->lock) return false;
+                if ($this->node->lock === INF) {
+                    $this->node->lock = 0;
+                } else {
+                    $this->node->lock--;
+                }
+                break;
+            case LOCK_SH:
+                if ($this->node->lock === INF) {
+                    // downgrade
+                    $this->node->lock = 1;
+                } else {
+                    $this->node->lock++;
+                }
+                break;
+            case LOCK_EX:
+                $this->node->lock = INF;
+                break;
         }
         return true;
     }
@@ -1882,7 +1911,8 @@ class VirtualFSStream {
 
     function url_stat($path, $flags)
     {
-        return (array) self::get_node($path);
+        $node = self::get_node($path);
+        return ($node) ? (array) $node : false;
     }
 }
 

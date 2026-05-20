@@ -277,6 +277,7 @@ pub const CallDispatcher = struct {
                 .setlk => try self.handleSetLock(&call.u.setlk),
                 .fstat => try self.handleStat(&call.u.fstat),
                 .stat => try self.handleStat(&call.u.stat),
+                .ftruncate => try self.handleTruncate(&call.u.ftruncate),
                 .futimes => try self.handleSettimes(&call.u.futimes),
                 .utimes => try self.handleSettimes(&call.u.utimes),
                 .advise => try self.handleAdvise(&call.u.advise),
@@ -837,6 +838,12 @@ pub const CallDispatcher = struct {
         }
     }
 
+    fn handleTruncate(self: *@This(), args: anytype) !E {
+        const entry = self.findStream(args.fd) catch return .BADF;
+        php.truncate(entry.stream, args.len) catch return .FBIG;
+        return .SUCCESS;
+    }
+
     fn handleGetDescriptorFlags(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
         args.fdstat = entry.fd_stat;
@@ -869,8 +876,31 @@ pub const CallDispatcher = struct {
 
     fn handleGetLock(self: *@This(), args: anytype) !E {
         const entry = self.findStream(args.fd) catch return .BADF;
-        _ = entry;
-        return .INVAL;
+        const lock_type: c_int = switch (args.lock.type) {
+            Syscall.Lock.RDLCK => std.posix.LOCK.SH,
+            Syscall.Lock.WRLCK => std.posix.LOCK.EX,
+            else => return .INVAL,
+        };
+        // try setting the lock
+        if (php.setLock(entry.stream, lock_type)) {
+            // unlock it again
+            php.setLock(entry.stream, std.posix.LOCK.UN) catch {};
+            args.lock.type = Syscall.Lock.UNLCK;
+        } else |_| {
+            if (lock_type == std.posix.LOCK.SH) {
+                // can't get a shared lock because there's an exclusive lock
+                args.lock.type = Syscall.Lock.WRLCK;
+            } else {
+                // see if a shared lock would succeed
+                if (php.setLock(entry.stream, lock_type)) {
+                    php.setLock(entry.stream, std.posix.LOCK.SH) catch {};
+                    args.lock.type = Syscall.Lock.RDLCK;
+                } else |_| {
+                    args.lock.type = Syscall.Lock.WRLCK;
+                }
+            }
+        }
+        return .SUCCESS;
     }
 
     fn handleAdvise(self: *@This(), args: anytype) !E {

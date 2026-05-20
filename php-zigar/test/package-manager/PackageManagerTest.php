@@ -23,6 +23,13 @@ final class PackageManagerTest extends ZigarTestCase
         VirtualFSStream::add_root_node('test', $dir);
         $handle = opendir('vfs://test');
         $m->__zigar->redirect('root', $handle);
+        $this->expectOutputString(<<<OUTPUT
+        Handel: Music for the Royal Fireworks (Original Version 1749) - English Concert & Trevor Pinnock
+        Armada: Music from the Courts of England and Spain - Fretwork
+        Purcell: Music for the Queen Mary - Equale Brass Ensemble, John Eliot Gardiner & Munich Monteverdi Orchestra and Choir
+        Mozart: Chamber Music - Nash Ensemble
+
+        OUTPUT);
         $m->search('music');
     }
 
