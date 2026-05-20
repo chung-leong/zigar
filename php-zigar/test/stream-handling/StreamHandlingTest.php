@@ -1544,6 +1544,39 @@ final class StreamHandlingTest extends ZigarTestCase
             unlink($path);
         }
     }
+
+    public function testGetFileDescriptorUsingLibcFunction(): void 
+    {
+        $m = ZigImporter::load(__DIR__ . '/get-file-descriptor-with-libc-function.zig');
+        $result1 = $m->get('/php://memory');
+        $this->assertTrue($result1 >= 0xf00000);
+        $result2 = $m->get(__FILE__);
+        $this->assertTrue($result2 < 1024);
+    }
+
+    public function testCheckIfStreamIsTerminalUsingLibcFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/check-if-stream-is-terminal-with-libc-function.zig');
+        $f = fopen('php://memory', 'w');
+        $result1 = $m->check($f);
+        $this->assertFalse($result1);
+        $result2 = $m->check(STDIN);
+        $this->assertFalse($result2);
+    }
+
+    public function testGetTerminalNameUsingLibcFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/get-terminal-name-with-libc-function.zig');
+        $f = fopen('php://memory', 'w');
+        $result1 = $m->get1($f);
+        $this->assertNull($result1);
+        $result2 = $m->get2($f);
+        $this->assertNull($result2);
+        $result3 = $m->get1(STDIN);
+        $this->assertNull($result3);
+        $result4 = $m->get2(STDIN);
+        $this->assertNull($result4);
+    }
 }
 
 class VariableStream {
