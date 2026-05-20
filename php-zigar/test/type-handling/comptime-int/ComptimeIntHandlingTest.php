@@ -32,8 +32,8 @@ final class ComptimeIntHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/array-of.zig');
         $this->assertSame([ 1, 2, 3, 4 ], (array) $m->array1);
-        $this->assertSame(true, gmp_init('0x1000000000000000') == $m->array2[0]);
-        $this->assertSame(true, gmp_init('0x2000000000000000') == $m->array2[1]);
+        $this->assertTrue(gmp_init('0x1000000000000000') == $m->array2[0]);
+        $this->assertTrue(gmp_init('0x2000000000000000') == $m->array2[1]);
     }
 
     public function testHandleComptimeIntInStruct(): void
@@ -118,9 +118,9 @@ final class ComptimeIntHandlingTest extends ZigarTestCase
     public function testConstructComptimeInt(): void
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
-        $this->assertSame(true, isset($m->ComptimeInt));
-        $this->assertSame(true, is_callable($m->ComptimeInt));
-        $this->assertSame(true, is_callable([ $m, 'ComptimeInt' ]));
+        $this->assertTrue(isset($m->ComptimeInt));
+        $this->assertTrue(is_callable($m->ComptimeInt));
+        $this->assertTrue(is_callable([ $m, 'ComptimeInt' ]));
         $this->assertExceptionMessage("cannot create comptime object", function() use($m) {
             $x = new $m->ComptimeInt(1);
         });

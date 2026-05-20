@@ -5,13 +5,13 @@ final class BoolHandlingTest extends ZigarTestCase
     public function testImportBoolAsStaticVariables(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
-        $this->assertSame(true, $m->bool1);
-        $this->assertSame(false, $m->bool2);
-        $this->assertSame(true, $m->bool3);
-        $this->assertSame(false, $m->bool4);
+        $this->assertTrue($m->bool1);
+        $this->assertFalse($m->bool2);
+        $this->assertTrue($m->bool3);
+        $this->assertFalse($m->bool4);
 
         $m->bool1 = false;
-        $this->assertSame(false, $m->bool1);
+        $this->assertFalse($m->bool1);
 
         $this->assertExceptionMessage("write protected (zig)", function() use($m) {
             $m->bool4 = false;
@@ -36,8 +36,8 @@ final class BoolHandlingTest extends ZigarTestCase
     public function testReturnBool(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-return-value.zig');
-        $this->assertSame(false, $m->getFalse());
-        $this->assertSame(true, $m->getTrue());
+        $this->assertFalse($m->getFalse());
+        $this->assertTrue($m->getTrue());
     }
 
     public function testHandleBoolInArray(): void
@@ -68,8 +68,8 @@ final class BoolHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/in-struct.zig');
         $this->assertSame([ 'state1' => false, 'state2' => true ], (array) $m->struct_a);
         $b = new $m->StructA();
-        $this->assertSame(true, $b->state1);
-        $this->assertSame(false, $b->state2);
+        $this->assertTrue($b->state1);
+        $this->assertFalse($b->state2);
 
         $this->expectOutputString(<<<OUTPUT
         .{ .state1 = false, .state2 = true }
@@ -111,9 +111,9 @@ final class BoolHandlingTest extends ZigarTestCase
     public function testHandleBoolAsComptimeField(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
-        $this->assertSame(false, $m->struct_a->state);
+        $this->assertFalse($m->struct_a->state);
         $b = new $m->StructA([ 'number' => 500 ]);
-        $this->assertSame(false, $b->state);
+        $this->assertFalse($b->state);
 
         $this->expectOutputString(<<<OUTPUT
         .{ .number = 500, .state = false }
@@ -125,7 +125,7 @@ final class BoolHandlingTest extends ZigarTestCase
     public function testHandleBoolInBareUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-bare-union.zig');
-        $this->assertSame(true, $m->union_a->state);
+        $this->assertTrue($m->union_a->state);
         if (ZigImporter::safetyCheck()) {
             $this->assertExceptionMessage("'state' is active", function() use($m) {
                 $x = $m->union_a->number;
@@ -133,7 +133,7 @@ final class BoolHandlingTest extends ZigarTestCase
         }
 
         $b = new $m->UnionA(state: false);
-        $this->assertSame(false, $b->state);
+        $this->assertFalse($b->state);
         $c = new $m->UnionA(number: 123);
         $this->assertSame(123, $c->number);
         if (ZigImporter::safetyCheck()) {
@@ -143,7 +143,7 @@ final class BoolHandlingTest extends ZigarTestCase
         }
 
         $m->union_a = $b;
-        $this->assertSame(false, $m->union_a->state);
+        $this->assertFalse($m->union_a->state);
         $m->union_a = $c;
         if (ZigImporter::safetyCheck()) {
             $this->assertExceptionMessage("'number' is active", function() use($m) {
@@ -155,7 +155,7 @@ final class BoolHandlingTest extends ZigarTestCase
     public function testHandleBoolInTaggedUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-tagged-union.zig');
-        $this->assertSame(true, $m->union_a->state);
+        $this->assertTrue($m->union_a->state);
         $this->assertSame(null, $m->union_a->number);
     }
 
@@ -175,7 +175,7 @@ final class BoolHandlingTest extends ZigarTestCase
     public function testHandleBoolInErrorUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
-        $this->assertSame(true, $m->error_union);
+        $this->assertTrue($m->error_union);
 
         $this->expectOutputString(<<<OUTPUT
         true
@@ -221,12 +221,12 @@ final class BoolHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
         $a = new $m->Bool(true);
         $b = new $m->Bool(false);
-        $this->assertSame(true, (boolean) $a);
-        $this->assertSame(false, (boolean) $b);
+        $this->assertTrue((boolean) $a);
+        $this->assertFalse((boolean) $b);
         $c = $m->Bool("\x00");
         $d = $m->Bool("\x01");
-        $this->assertSame(false, (boolean) $c);
-        $this->assertSame(true, (boolean) $d);
+        $this->assertFalse((boolean) $c);
+        $this->assertTrue((boolean) $d);
     }
 }
 

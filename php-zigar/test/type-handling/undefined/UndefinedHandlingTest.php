@@ -6,21 +6,21 @@ final class UndefinedHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
         $this->assertSame(null, $m->weird);
-        $this->assertSame(true, isset($m->weird));
+        $this->assertTrue(isset($m->weird));
     }
 
     public function testIgnoreFunctionWithUndefinedArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->assertSame(false, isset($m->print));
-        $this->assertSame(false, is_callable([ $m, 'print' ]));
+        $this->assertFalse(isset($m->print));
+        $this->assertFalse(is_callable([ $m, 'print' ]));
     }
 
     public function testIgnoreFunctionReturningUndefined(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-return-value.zig');
-        $this->assertSame(false, isset($m->getUndefined));
-        $this->assertSame(false, is_callable([ $m, 'getUndefined' ]));
+        $this->assertFalse(isset($m->getUndefined));
+        $this->assertFalse(is_callable([ $m, 'getUndefined' ]));
     }
 
     public function testHandleUndefinedInArray(): void
@@ -102,7 +102,7 @@ final class UndefinedHandlingTest extends ZigarTestCase
     public function testConstructUndefined(): void
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
-        $this->assertSame(true, isset($m->Undefined));
+        $this->assertTrue(isset($m->Undefined));
         $this->assertExceptionMessage("cannot create comptime object", function() use($m) {
             $x = new $m->Undefined();
         });

@@ -6,31 +6,31 @@ final class JsCompatTest extends ZigarTestCase
     {
         $a = new ArrayBuffer(8);
         $this->assertSame(8, $a->byteLength);
-        $this->assertSame(false, $a->detached);
-        $this->assertSame(false, $a->readOnly);
+        $this->assertFalse($a->detached);
+        $this->assertFalse($a->readOnly);
         // ensure $str isn't interned
         $noun = "world";
         $str = "Hello $noun";
         $b = new ArrayBuffer($str);
         $this->assertSame(strlen($str), $b->byteLength);
-        $this->assertSame(false, $b->readOnly);
+        $this->assertFalse($b->readOnly);
         ob_start();
         debug_zval_dump($str);
         $text = ob_get_clean();
         $this->assertStringContainsString("refcount(2)", $text);
         $c = new ArrayBuffer($str, true);
         $this->assertSame(strlen($str), $c->byteLength);
-        $this->assertSame(true, $c->readOnly);
+        $this->assertTrue($c->readOnly);
         ob_start();
         debug_zval_dump($str);
         $text = ob_get_clean();
         $this->assertStringContainsString("refcount(3)", $text);
-        $this->assertSame(false, $b == $c);
+        $this->assertFalse($b == $c);
         $d = new ArrayBuffer("Hello world", true);
-        $this->assertSame(false, $b == $d);
-        $this->assertSame(true, $c == $d);
+        $this->assertFalse($b == $d);
+        $this->assertTrue($c == $d);
         $e = new stdClass();
-        $this->assertSame(false, $b == $e);
+        $this->assertFalse($b == $e);
 
         $this->assertExceptionMessage("did not create an Iterator", function() use($b) {
             foreach ($b as $value) {}

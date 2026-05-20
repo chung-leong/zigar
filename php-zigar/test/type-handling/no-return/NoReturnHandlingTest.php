@@ -20,9 +20,9 @@ final class NoReturnHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/as-return-value.zig');
         $this->assertSame("object", gettype($m->exit));
-        $this->assertSame(true, is_callable([ $m, 'exit' ]));
-        $this->assertSame(true, isset($m->exit));
-        $this->assertSame(true, (bool) $m->exit);
+        $this->assertTrue(is_callable([ $m, 'exit' ]));
+        $this->assertTrue(isset($m->exit));
+        $this->assertTrue((bool) $m->exit);
     }
 
     public function testFailWithNoReturnInArray(): void

@@ -115,9 +115,9 @@ final class ComptimeFloatHandlingTest extends ZigarTestCase
     public function testConstructComptimeFloat(): void
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
-        $this->assertSame(true, isset($m->ComptimeFloat));
-        $this->assertSame(true, is_callable($m->ComptimeFloat));
-        $this->assertSame(true, is_callable([ $m, 'ComptimeFloat' ]));
+        $this->assertTrue(isset($m->ComptimeFloat));
+        $this->assertTrue(is_callable($m->ComptimeFloat));
+        $this->assertTrue(is_callable([ $m, 'ComptimeFloat' ]));
         $this->assertExceptionMessage("cannot create comptime object", function() use($m) {
             $x = new $m->ComptimeFloat(1.0);
         });

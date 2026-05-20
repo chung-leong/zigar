@@ -9,7 +9,7 @@ final class EnumHandlingTest extends ZigarTestCase
         $this->assertSame('dog cat monkey', "{$m->Pet->dog} {$m->Pet->cat} {$m->Pet->monkey}");
         $this->assertSame($m->Pet->cat, $m->Pet(1));
         $this->assertSame(null, $m->Pet(5));
-        $this->assertSame(true, $m->pet instanceof $m->Pet);
+        $this->assertTrue($m->pet instanceof $m->Pet);
         $this->assertSame($m->Pet->cat, $m->pet);
         $this->assertSame($m->Donut->plain, $m->Donut(gmp_init('0')));
         $this->assertSame($m->Donut->jelly, $m->Donut(gmp_init('0xfffffffffffffffffffffffffffffffe')));

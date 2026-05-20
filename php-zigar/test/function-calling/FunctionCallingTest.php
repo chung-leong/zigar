@@ -69,11 +69,11 @@ final class FunctionCallingTest extends ZigarTestCase
         $a = [ true, true, true, true ];
         $b = [ true, true, false, true ];
         $c = [ false, false, false, false ];
-        $this->assertSame(true, $m->all($a));
-        $this->assertSame(false, $m->all($b));
-        $this->assertSame(true, $m->any($a));
-        $this->assertSame(true, $m->any($b));
-        $this->assertSame(false, $m->any($c));
+        $this->assertTrue($m->all($a));
+        $this->assertFalse($m->all($b));
+        $this->assertTrue($m->any($a));
+        $this->assertTrue($m->any($b));
+        $this->assertFalse($m->any($c));
     }
 
     public function testAllocateSliceOfSlices(): void

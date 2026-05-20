@@ -153,7 +153,7 @@ final class ErrorUnionHandlingTest extends ZigarTestCase
         $this->assertExceptionMessage('goldfish died', function() use($b) {
             $x = $b->number;
         });
-        $this->assertSame(false, $c->state);
+        $this->assertFalse($c->state);
         if (ZigImporter::safetyCheck()) {
             $this->assertExceptionMessage("'state' is active", function() use($m, $c) {
                 $x = $c->number;
@@ -185,7 +185,7 @@ final class ErrorUnionHandlingTest extends ZigarTestCase
         $this->assertExceptionMessage('goldfish died', function() use($b) {
             $x = $b->number;
         });
-        $this->assertSame(false, $c->state);
+        $this->assertFalse($c->state);
         $this->assertSame(null, $c->number);
 
         $m->union_a = $b;

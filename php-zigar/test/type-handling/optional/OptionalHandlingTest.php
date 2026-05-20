@@ -8,7 +8,7 @@ final class OptionalHandlingTest extends ZigarTestCase
         $this->assertSame(null, $m->i32_empty);
         $this->assertSame(1234, $m->i32_value);
         $this->assertSame(null, $m->bool_empty);
-        $this->assertSame(true, $m->bool_value);
+        $this->assertTrue($m->bool_value);
         $this->assertSame(null, $m->f64_empty);
         $this->assertSame(3.14, $m->f64_value);
         $this->assertSame(null, $m->struct_empty);
@@ -127,7 +127,7 @@ final class OptionalHandlingTest extends ZigarTestCase
         $b = new $m->UnionA(number: null);
         $c = new $m->UnionA(state: false);
         $this->assertSame(null, $b->number);
-        $this->assertSame(false, $c->state);
+        $this->assertFalse($c->state);
         if (ZigImporter::safetyCheck()) {
             $this->assertExceptionMessage("'state' is active", function() use($c) {
                 $x = $c->number;
@@ -155,13 +155,13 @@ final class OptionalHandlingTest extends ZigarTestCase
         $b = new $m->UnionA(number: null);
         $c = new $m->UnionA(state: false);
         $this->assertSame(null, $b->number);
-        $this->assertSame(false, $c->state);
+        $this->assertFalse($c->state);
         $this->assertSame(null, $c->number);
 
         $m->union_a = $b;
         $this->assertSame(null, $m->union_a->number);
         $m->union_a = $c;
-        $this->assertSame(false, $m->union_a->state);
+        $this->assertFalse($m->union_a->state);
         $this->assertSame(null, $m->union_a->number);
     }
 

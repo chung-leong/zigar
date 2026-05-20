@@ -17,7 +17,7 @@ final class IntHandlingTest extends ZigarTestCase
         $this->assertSame(7, $m->int4);
         $this->assertSame(1234, $m->size1);
         $this->assertSame(-1234, $m->size2);
-        $this->assertSame(false, isset($m->private));
+        $this->assertFalse(isset($m->private));
 
         $this->expectOutputString(<<<OUTPUT
         44
@@ -110,7 +110,7 @@ final class IntHandlingTest extends ZigarTestCase
         $this->assertSame(-420, $m->struct_a->number3);
         $this->assertSame(1, $m->struct_b->number1);
         $this->assertSame((string) gmp_init("12345678901234567890"), (string) $m->struct_b->number2);
-        $this->assertSame(false, $m->struct_b->state);
+        $this->assertFalse($m->struct_b->state);
 
         $m->print();
         $this->expectOutputString(<<<OUTPUT
@@ -122,7 +122,7 @@ final class IntHandlingTest extends ZigarTestCase
     public function testHandleIntAsComptimeField(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
-        $this->assertSame(true, $m->struct_a->state);
+        $this->assertTrue($m->struct_a->state);
         $this->assertSame(5000, $m->struct_a->number);
         $b = new $m->StructA(state: true);
         $this->assertSame([ 'state' => true, 'number' => 5000 ], (array) $b);
@@ -140,7 +140,7 @@ final class IntHandlingTest extends ZigarTestCase
         $b = new $m->UnionA(number: 4567);
         $c = new $m->UnionA(state: false);
         $this->assertSame(4567, $b->number);
-        $this->assertSame(false, $c->state);
+        $this->assertFalse($c->state);
         if (ZigImporter::safetyCheck()) {
             $this->assertExceptionMessage("'state' is active", function() use($c) {
                 $x = $c->number;
@@ -167,7 +167,7 @@ final class IntHandlingTest extends ZigarTestCase
 
         $b = new $m->UnionA(number: 123);
         $c = new $m->UnionA(state: false);
-        $this->assertSame(false, $c->state);
+        $this->assertFalse($c->state);
         $this->assertSame(null, $c->number);
         
         $m->union_a = $b;
@@ -265,10 +265,10 @@ final class IntHandlingTest extends ZigarTestCase
         $d = new $m->BigInt('12345678901234567890123456789012345678');
         $this->assertSame('12345678901234567890123456789012345678', (string) $d);
         $e = new $m->Int('4567');
-        $this->assertSame(true, $c == $e);
+        $this->assertTrue($c == $e);
         $f = new $m->BigInt('12345678901234567890123456789012345678');
-        $this->assertSame(false, $c == $f);
-        $this->assertSame(true, $d == $f);
+        $this->assertFalse($c == $f);
+        $this->assertTrue($d == $f);
     }
 }
 

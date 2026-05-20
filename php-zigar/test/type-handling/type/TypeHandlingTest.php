@@ -5,18 +5,18 @@ final class TypeHandlingTest extends ZigarTestCase
     public function testImportTypeAsStaticVariables(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
-        $this->assertSame(true, is_callable($m->Int32));
-        $this->assertSame(true, is_callable([ $m, 'Int32' ]));
+        $this->assertTrue(is_callable($m->Int32));
+        $this->assertTrue(is_callable([ $m, 'Int32' ]));
         $int32 = new $m->Int32(null);
         $int32->__value = 1234;
         $this->assertSame(1234, $int32->__value);
 
-        $this->assertSame(true, is_callable($m->Int128));
+        $this->assertTrue(is_callable($m->Int128));
         $int128 = new $m->Int128(0);
         $int128->__value = gmp_init('0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF');
         $this->assertSame('170141183460469231731687303715884105727', (string) $int128);
         $this->assertSame('170141183460469231731687303715884105727', $int128->__string);
-        $this->assertSame(true, gmp_init('0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF') == $int128->__value);
+        $this->assertTrue(gmp_init('0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF') == $int128->__value);
 
         $object = new $m->Struct();
         $this->assertEquals((object) [
@@ -28,13 +28,13 @@ final class TypeHandlingTest extends ZigarTestCase
     public function testIgnoreFunctionAcceptingType(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->assertSame(false, isset($m->print));
+        $this->assertFalse(isset($m->print));
     }
 
     public function testIgnoreFunctionReturningType(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-return-value.zig');
-        $this->assertSame(false, isset($m->getType));
+        $this->assertFalse(isset($m->getType));
     }
 
     public function testHandleTypeInArray(): void
@@ -42,11 +42,11 @@ final class TypeHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/array-of.zig');
         $this->assertSame(4, count($m->array));
         for ($i = 0; $i < 4; $i++) {
-            $this->assertSame(true, is_callable($m->array[$i]));
+            $this->assertTrue(is_callable($m->array[$i]));
         }
         $count = 0;
         foreach ($m->array as $item) {
-            $this->assertSame(true, is_callable($item));
+            $this->assertTrue(is_callable($item));
             $count++;
         }
         $this->assertSame(4, $count);
@@ -69,12 +69,12 @@ final class TypeHandlingTest extends ZigarTestCase
     public function testHandleTypeAsComptimeField(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-comptime-field.zig');
-        $this->assertSame(true, is_callable($m->struct_a->Type));
+        $this->assertTrue(is_callable($m->struct_a->Type));
         $b = new $m->StructA(number: 500);
-        $this->assertSame(true, is_callable($b->Type));
+        $this->assertTrue(is_callable($b->Type));
 
         $boolean = new $b->Type(true);
-        $this->assertSame(true, $boolean->__value);
+        $this->assertTrue($boolean->__value);
 
         // TODO: check __plain
     }
@@ -89,7 +89,7 @@ final class TypeHandlingTest extends ZigarTestCase
     public function testHandleTypeInTaggedUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-tagged-union.zig');
-        $this->assertSame(true, is_callable($m->union_a->Type));
+        $this->assertTrue(is_callable($m->union_a->Type));
         $tag = $m->TagType($m->union_a);
         $this->assertSame('Type', (string) $tag);
         $this->assertSame(null, $m->union_a->number);
@@ -98,13 +98,13 @@ final class TypeHandlingTest extends ZigarTestCase
     public function testHandleTypeInOptional(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-optional.zig');
-        $this->assertSame(true, isset($m->optional1));
-        $this->assertSame(true, is_callable([ $m, 'optional1' ]));
-        $this->assertSame(true, is_callable($m->optional1));
+        $this->assertTrue(isset($m->optional1));
+        $this->assertTrue(is_callable([ $m, 'optional1' ]));
+        $this->assertTrue(is_callable($m->optional1));
 
-        $this->assertSame(true, isset($m->optional2));
-        $this->assertSame(false, is_callable([ $m, 'optional2' ]));
-        $this->assertSame(false, is_callable($m->optional2));
+        $this->assertTrue(isset($m->optional2));
+        $this->assertFalse(is_callable([ $m, 'optional2' ]));
+        $this->assertFalse(is_callable($m->optional2));
 
         $this->expectOutputString(<<<OUTPUT
         bool
@@ -116,9 +116,9 @@ final class TypeHandlingTest extends ZigarTestCase
     public function testHandleTypeInErrorUnion(): void
     {
         $m = ZigImporter::load(__DIR__ . '/in-error-union.zig');
-        $this->assertSame(true, isset($m->error_union1));
-        $this->assertSame(true, is_callable([ $m, 'error_union1' ]));
-        $this->assertSame(true, is_callable($m->error_union1));
+        $this->assertTrue(isset($m->error_union1));
+        $this->assertTrue(is_callable([ $m, 'error_union1' ]));
+        $this->assertTrue(is_callable($m->error_union1));
 
         $this->assertExceptionMessage('goldfish died', function() use($m) {
             $x = $m->error_union2;
@@ -141,7 +141,7 @@ final class TypeHandlingTest extends ZigarTestCase
     public function testConstructType(): void
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
-        $this->assertSame(true, is_callable([ $m, 'Type' ]));
+        $this->assertTrue(is_callable([ $m, 'Type' ]));
         $this->assertExceptionMessage("cannot create comptime object", function() use($m) {
             $type = new $m->Type();
         });

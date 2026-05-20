@@ -11,15 +11,15 @@ final class NullHandlingTest extends ZigarTestCase
     public function testIgnoreFunctionAcceptingNull(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->assertSame(false, isset($m->print));
-        $this->assertSame(false, is_callable([ $m, 'print' ]));
+        $this->assertFalse(isset($m->print));
+        $this->assertFalse(is_callable([ $m, 'print' ]));
     }
 
     public function testIgnoreFunctionReturningNull(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-return-value.zig');
-        $this->assertSame(false, isset($m->getNull));
-        $this->assertSame(false, is_callable([ $m, 'getNull' ]));
+        $this->assertFalse(isset($m->getNull));
+        $this->assertFalse(is_callable([ $m, 'getNull' ]));
     }
 
     public function testHandleNullInArray(): void
@@ -118,7 +118,7 @@ final class NullHandlingTest extends ZigarTestCase
     public function testConstructNull(): void
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
-        $this->assertSame(true, isset($m->Null));
+        $this->assertTrue(isset($m->Null));
         $this->assertExceptionMessage("cannot create comptime object", function() use($m) {
             $x = new $m->Null();
         });

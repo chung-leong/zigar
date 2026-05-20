@@ -78,7 +78,7 @@ final class StreamHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/open-file-through-direct-syscall.zig');
         $url_path = '/data://text/plain;base64,SSBsb3ZlIFBIUAo=';
         $result = $m->check($url_path);
-        $this->assertSame(true, $result);
+        $this->assertTrue($result);
     }
 
     public function testOpenAndReadFromFileUsingPosixFunctions(): void
@@ -257,7 +257,7 @@ final class StreamHandlingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/detect-end-of-file-with-libc-function.zig');
         $url_path = '/data://text/plain;base64,' . base64_encode(str_repeat(' ', 256));
         $result = $m->detectEOF($url_path);
-        $this->assertSame(true, $result);
+        $this->assertTrue($result);
     }
 
     public function testRewindFileUsingLibcFunction(): void
@@ -279,17 +279,17 @@ final class StreamHandlingTest extends ZigarTestCase
         ];
         $url_path = '/var://output/stat';
         $result1 = $m->check($url_path, read: true);
-        $this->assertSame(true, $result1);
+        $this->assertTrue($result1);
         $result2 = $m->check($url_path, write: true);
-        $this->assertSame(true, $result2);
+        $this->assertTrue($result2);
         $result3 = $m->check($url_path, execute: true);
-        $this->assertSame(false, $result3);
+        $this->assertFalse($result3);
         $stat = [
             'mode' => 0o0040000,
             'size' => 0,
         ];
         $result4 = $m->check($url_path, execute: true);
-        $this->assertSame(true, $result4);
+        $this->assertTrue($result4);
     }
 
     public function testCheckAccessOfFileInDirectoryUsingPosixFunction(): void
@@ -310,9 +310,9 @@ final class StreamHandlingTest extends ZigarTestCase
         $result1 = $m->check($handle, 'readable.txt', read: true);
         $result2 = $m->check($handle, 'writable.txt', write: true);
         $result3 = $m->check($handle, 'subdirectory', execute: true);
-        $this->assertSame(true, $result1);
-        $this->assertSame(true, $result2);
-        $this->assertSame(true, $result3);
+        $this->assertTrue($result1);
+        $this->assertTrue($result2);
+        $this->assertTrue($result3);
     }
 
     public function testCheckAccessOfFileInDirectoryInFileSystemUsingPosixFunction(): void
@@ -323,7 +323,7 @@ final class StreamHandlingTest extends ZigarTestCase
         try {
             file_put_contents("$path/file.txt", "Hello world");
             $result = $m->check($path, "file.txt", read: true);
-            $this->assertSame(true, $result);
+            $this->assertTrue($result);
         } finally {
             unlink("$path/file.txt");
             rmdir($path);
@@ -1069,12 +1069,12 @@ final class StreamHandlingTest extends ZigarTestCase
         VirtualFSStream::add_root_node('test', $dir);
         $f = fopen('vfs://test/hello.txt', 'w+');
         $result1 = $m->lock($f);
-        $this->assertSame(true, $result1);
+        $this->assertTrue($result1);
         $this->assertSame(LOCK_EX, $file->lock);
         $result2 = $m->lock($f);
-        $this->assertSame(false, $result2);
+        $this->assertFalse($result2);
         $result3 = $m->unlock($f);
-        $this->assertSame(true, $result3);
+        $this->assertTrue($result3);
         $this->assertSame(0, $file->lock);
     }
 
@@ -1107,12 +1107,12 @@ final class StreamHandlingTest extends ZigarTestCase
         VirtualFSStream::add_root_node('test', $dir);
         $f = fopen('vfs://test/hello.txt', 'w+');
         $result1 = $m->check($f, true);
-        $this->assertSame(true, $result1);
+        $this->assertTrue($result1);
         $m->lock($f, false);
         $result2 = $m->check($f, true);
-        $this->assertSame(false, $result2);
+        $this->assertFalse($result2);
         $result3 = $m->check($f, false);
-        $this->assertSame(true, $result3);
+        $this->assertTrue($result3);
     }
 
     public function testSetLockOnFileUsingPosixFunction(): void 
@@ -1123,12 +1123,12 @@ final class StreamHandlingTest extends ZigarTestCase
         VirtualFSStream::add_root_node('test', $dir);
         $f = fopen('vfs://test/hello.txt', 'w+');
         $result1 = $m->lock($f);
-        $this->assertSame(true, $result1);
+        $this->assertTrue($result1);
         $this->assertSame(LOCK_EX, $file->lock);
         $result2 = $m->lock($f);
-        $this->assertSame(false, $result2);
+        $this->assertFalse($result2);
         $result3 = $m->unlock($f);
-        $this->assertSame(true, $result3);
+        $this->assertTrue($result3);
         $this->assertSame(0, $file->lock);
     }
 
@@ -1157,9 +1157,9 @@ final class StreamHandlingTest extends ZigarTestCase
         VirtualFSStream::add_root_node('test', $dir);
         $f = fopen('vfs://test/hello.txt', 'r');
         $m->setNonBlocking($f, true);
-        $this->assertSame(false, $file->blocking);
+        $this->assertFalse($file->blocking);
         $m->setNonBlocking($f, false);
-        $this->assertSame(true, $file->blocking);
+        $this->assertTrue($file->blocking);
     }
 
     public function testReadLinesFromFileUsingFgets(): void 

@@ -23,15 +23,15 @@ final class EnumLiteralHandlingTest extends ZigarTestCase
     public function testIgnoreFunctionAcceptingEnumLiteral(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-function-parameters.zig');
-        $this->assertSame(false, isset($m->print));
-        $this->assertSame(false, is_callable([ $m, 'print' ]));
+        $this->assertFalse(isset($m->print));
+        $this->assertFalse(is_callable([ $m, 'print' ]));
     }
 
     public function testIgnoreFunctionReturningEnumLiteral(): void
     {
         $m = ZigImporter::load(__DIR__ . '/as-return-value.zig');
-        $this->assertSame(false, isset($m->getLiteral));
-        $this->assertSame(false, is_callable([ $m, 'getLiteral' ]));
+        $this->assertFalse(isset($m->getLiteral));
+        $this->assertFalse(is_callable([ $m, 'getLiteral' ]));
     }
 
     public function testHandleEnumLiteralInArray(): void
@@ -124,9 +124,9 @@ final class EnumLiteralHandlingTest extends ZigarTestCase
     public function testConstructEnumLiteral(): void
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
-        $this->assertSame(true, isset($m->EnumLiteral));
-        $this->assertSame(true, is_callable($m->EnumLiteral));
-        $this->assertSame(true, is_callable([ $m, 'EnumLiteral' ]));
+        $this->assertTrue(isset($m->EnumLiteral));
+        $this->assertTrue(is_callable($m->EnumLiteral));
+        $this->assertTrue(is_callable([ $m, 'EnumLiteral' ]));
         $this->assertExceptionMessage("cannot create comptime object", function() use($m) {
             $x = new $m->EnumLiteral('hello');
         });

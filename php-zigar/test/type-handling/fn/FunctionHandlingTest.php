@@ -71,7 +71,7 @@ final class FunctionHandlingTest extends ZigarTestCase
     public function testConstructFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/constructor.zig');
-        $this->assertSame(false, isset($m->Function));
+        $this->assertFalse(isset($m->Function));
     }
 }
 
