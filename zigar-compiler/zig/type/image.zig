@@ -20,15 +20,15 @@ pub const WebImage = struct {
 
     pub const internal_type: util.InternalType = .web_image;
 
-    pub fn getWidth(self: *const @This()) u32 {
+    pub fn getWidth(self: *const @This()) usize {
         return self.width;
     }
 
-    pub fn getHeight(self: *const @This()) u32 {
+    pub fn getHeight(self: *const @This()) usize {
         return self.height;
     }
 
-    pub fn getPixel(self: *const @This(), comptime T: type, x: u32, y: u32) T {
+    pub fn getPixel(self: *const @This(), comptime T: type, x: usize, y: usize) T {
         const E = Child(T);
         const len = channels(T);
         const index = (y * self.width) + x;
@@ -48,11 +48,11 @@ pub const WebImage = struct {
         return float_vec * multiplier;
     }
 
-    pub fn setPixel(self: *const @This(), comptime T: type, x: u32, y: u32, pixel: T) void {
+    pub fn setPixel(self: *const @This(), comptime T: type, x: usize, y: usize, pixel: T) void {
         const E = Child(T);
         const len = channels(T);
         const min: T = @splat(0.0);
-        const max: T = @splat(@floatFromInt(std.math.maxInt(T)));
+        const max: T = @splat(@floatFromInt(std.math.maxInt(u8)));
         // expand to int range (1.0 to 255.0)
         const float_vec_wo_min_max = pixel * max;
         // apply minimum constraint
@@ -67,7 +67,7 @@ pub const WebImage = struct {
             else => unreachable,
         };
         const index = (y * self.width) + x;
-        self.data[index] = int_vec;
+        self.vectors[index] = int_vec;
     }
 
     const Super = Parent(@This());
@@ -86,30 +86,28 @@ pub const GdImage = struct {
 
     pub const internal_type: util.InternalType = .gd_image;
 
-    pub inline fn cast(self: *const @This()) *const GdStruct {
+    pub inline fn cast(self: *const @This()) *GdStruct {
         return @ptrCast(@alignCast(self.ptr));
     }
 
-    pub fn getWidth(self: *const @This()) u32 {
+    pub fn getWidth(self: *const @This()) usize {
         const im = self.cast();
         return @intCast(im.sx);
     }
 
-    pub fn getHeight(self: *const @This()) u32 {
+    pub fn getHeight(self: *const @This()) usize {
         const im = self.cast();
         return @intCast(im.sy);
     }
 
-    pub fn getPixel(self: *const @This(), comptime T: type, x: u32, y: u32) T {
+    pub fn getPixel(self: *const @This(), comptime T: type, x: usize, y: usize) T {
         const im = self.cast();
         const len = channels(T);
         const E = Child(T);
-        const i: usize = y;
-        const j: usize = x;
         const color = if (im.tpixels) |tpixels|
-            tpixels[i][j]
+            tpixels[y][x]
         else if (im.pixels) |pixels|
-            self.getPaletteColor(pixels[i][j])
+            self.getPaletteColor(pixels[y][x])
         else
             unreachable;
         const color_u: c_uint = @bitCast(color);
@@ -142,7 +140,7 @@ pub const GdImage = struct {
         return float_vec * multiplier;
     }
 
-    pub fn setPixel(self: *const @This(), comptime T: type, x: u32, y: u32, pixel: T) void {
+    pub fn setPixel(self: *const @This(), comptime T: type, x: usize, y: usize, pixel: T) void {
         const im = self.cast();
         const len = channels(T);
         const E = Child(T);
@@ -174,14 +172,12 @@ pub const GdImage = struct {
         const b: c_int = int_vec[2];
         const a: c_int = int_vec[3];
         const t: c_int = 127 - a;
-        const i: usize = y;
-        const j: usize = x;
         if (im.tpixels) |tpixels| {
             const color = (r << 16) | (g << 8) | (b << 0) | (t << 24);
-            tpixels[i][j] = color;
+            tpixels[y][x] = color;
         } else if (im.pixels) |pixels| {
             const color_index = self.findClosestPaletteColor(r, g, b, t);
-            pixels[i][j] = color_index;
+            pixels[y][x] = color_index;
         }
     }
 
@@ -213,7 +209,7 @@ pub const GdImage = struct {
     fn findClosestPaletteColor(self: *const @This(), r: c_int, g: c_int, b: c_int, a: c_int) u8 {
         const im = self.cast();
         var color_index: usize = undefined;
-        var min_dist: usize = undefined;
+        var min_dist: c_int = undefined;
         const len: usize = @intCast(im.colors_total);
         for (0..len) |i| {
             const rd = im.red[i] - r;
@@ -222,9 +218,20 @@ pub const GdImage = struct {
             const ad = im.alpha[i] - a;
             const dist = rd * rd + gd * gd + bd * bd + ad * ad;
             if (i == 0 or dist < min_dist) {
+                if (dist == 0) return @intCast(i);
                 min_dist = dist;
                 color_index = i;
             }
+        }
+        if (len < GdStruct.max_colors) {
+            // allocate new color
+            color_index = len;
+            im.red[color_index] = r;
+            im.green[color_index] = g;
+            im.blue[color_index] = b;
+            im.alpha[color_index] = a;
+            im.open[color_index] = 0;
+            im.colors_total += 1;
         }
         return @intCast(color_index);
     }
