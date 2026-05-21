@@ -1,9 +1,7 @@
 // Pixel Bender kernel "Sepia" (translated using pb2zig)
 const std = @import("std");
 
-const Image = zigar.image.Any;
-const AbortSignal = zigar.function.AbortSignal;
-const WorkQueue = zigar.thread.WorkQueue;
+const zigar = @import("zigar");
 
 pub const kernel = struct {
     // kernel information
@@ -32,7 +30,7 @@ pub const kernel = struct {
             params: ParameterStruct,
             input: InputStruct,
             output: OutputStruct,
-            outputCoord: @Vector(2, u32) = @splat(0),
+            outputCoord: @Vector(2, f32) = .{ 0.5, 0.5 },
 
             // output pixel
             dst: @Vector(4, f32) = undefined,
@@ -89,11 +87,11 @@ pub const kernel = struct {
                 yiqaColor[2] = 0.0;
                 self.dst = @"M * V"(inverseYIQ, yiqaColor);
 
-                dst.setPixel(self.outputCoord[0], self.outputCoord[1], self.dst);
+                dst.writePixel(self.outputCoord, self.dst);
             }
 
             pub fn outCoord(self: *@This()) @Vector(2, f32) {
-                return .{ @as(f32, @floatFromInt(self.outputCoord[0])) + 0.5, @as(f32, @floatFromInt(self.outputCoord[1])) + 0.5 };
+                return self.outputCoord;
             }
         };
     }
@@ -124,34 +122,92 @@ pub const kernel = struct {
     }
 };
 
-pub const Input = KernelInput(u8, kernel);
-pub const Output = KernelOutput(u8, kernel);
+pub const Input = KernelInput(kernel);
+pub const Output = KernelOutput(kernel);
 pub const Parameters = KernelParameters(kernel);
 
-pub fn createOutput(allocator: std.mem.Allocator, width: u32, height: u32, input: Input, params: Parameters) !Output {
-    var output: Output = undefined;
-    inline for (std.meta.fields(Output)) |field| {
-        const ImageT = @TypeOf(@field(output, field.name));
-        @field(output, field.name) = .{
-            .data = try allocator.alloc(ImageT.Pixel, width * height),
-            .width = width,
-            .height = height,
-        };
-    }
-    var instance = kernel.create(input, output, params);
-    if (@hasDecl(@TypeOf(instance), "evaluateDependents")) {
-        instance.evaluateDependents();
-    }
-    while (instance.outputCoord[1] < height) : (instance.outputCoord[1] += 1) {
-        instance.outputCoord[0] = 0;
-        while (instance.outputCoord[0] < width) : (instance.outputCoord[0] += 1) {
-            instance.evaluatePixel();
+pub fn process(input: Input, output: Output, params: Parameters) !void {
+    // use inline loop to generate code for each image implementation (WebImage or GD)
+    inline for (zigar.image.Any.tags) |tag| {
+        const input_field_names = comptime std.meta.fieldNames(Input);
+        const output_field_names = comptime std.meta.fieldNames(Output);
+        const output_image_0 = @field(output, output_field_names[0]);
+        if (output_image_0 == tag) {
+            const Impl = zigar.image.Any.FieldType(tag);
+            // copy fields from zigar.image.Any to implementation-specific structs
+            var input_impl: KernelInputImpl(Impl, kernel) = undefined;
+            inline for (input_field_names) |name| {
+                const input_image = @field(input, name);
+                if (input_image != tag) unreachable;
+                @field(input_impl, name).impl = input_image.getField(tag);
+            }
+            var output_impl: KernelOutputImpl(Impl, kernel) = undefined;
+            inline for (output_field_names) |name| {
+                const output_image = @field(output, name);
+                if (output_image != tag) unreachable;
+                @field(output_impl, name).impl = output_image.getField(tag);
+            }
+            // get the output dimensions (multiple outputs are possible but unlikely)
+            var output_width: usize = 0;
+            var output_height: usize = 0;
+            inline for (output_field_names) |name| {
+                const output_image = @field(output, name);
+                var out = output_image.getField(tag);
+                const w = out.getWidth();
+                const h = out.getHeight();
+                if (w > output_width) output_width = w;
+                if (h > output_height) output_height = h;
+            }
+            // create the implementation-specific kernel instance
+            var instance = kernel.create(input_impl, output_impl, params);
+            // calculate variables that are dependent on kernel parameters
+            if (@hasDecl(@TypeOf(instance), "evaluateDependents")) {
+                instance.evaluateDependents();
+            }
+            // loop through all coordinates, starting from (0.5, 0.5)
+            const width: f32 = @floatFromInt(output_width);
+            const height: f32 = @floatFromInt(output_height);
+            while (instance.outputCoord[1] < height) : (instance.outputCoord[1] += 1) {
+                instance.outputCoord[0] = 0;
+                while (instance.outputCoord[0] < width) : (instance.outputCoord[0] += 1) {
+                    instance.evaluatePixel();
+                }
+            }
         }
     }
-    return output;
 }
 
-const ColorSpace = enum { srgb, @"display-p3" };
+pub fn KernelImage(comptime Impl: type, comptime channels: comptime_int, comptime writable: bool) type {
+    const Pixel = @Vector(channels, f32);
+    const Coord = @Vector(2, f32);
+    return struct {
+        impl: Impl,
+
+        fn writePixel(self: @This(), coord: Coord, pixel: Pixel) void {
+            if (comptime !writable) unreachable;
+            const i: @Vector(2, usize) = @intFromFloat(coord);
+            self.impl.setPixel(Pixel, i[0], i[1], pixel);
+        }
+
+        fn pixelSize(self: @This()) Coord {
+            _ = self;
+            return .{ 1, 1 };
+        }
+
+        fn pixelAspectRatio(self: @This()) f32 {
+            _ = self;
+            return 1;
+        }
+
+        fn sampleNearest(self: @This(), coord: Coord) Pixel {
+            return self.impl.sampleNearest(Pixel, coord);
+        }
+
+        fn sampleLinear(self: @This(), coord: Coord) Pixel {
+            return self.impl.sampleLinear(Pixel, coord);
+        }
+    };
+}
 
 pub fn KernelInput(comptime Kernel: type) type {
     const input_fields = std.meta.fields(@TypeOf(Kernel.inputImages));
@@ -159,10 +215,10 @@ pub fn KernelInput(comptime Kernel: type) type {
     inline for (input_fields, 0..) |field, index| {
         struct_fields[index] = .{
             .name = field.name,
-            .type = Image,
+            .type = zigar.image.Any,
             .default_value_ptr = null,
             .is_comptime = false,
-            .alignment = @alignOf(Image),
+            .alignment = @alignOf(zigar.image.Any),
         };
     }
     return @Type(.{
@@ -175,17 +231,65 @@ pub fn KernelInput(comptime Kernel: type) type {
     });
 }
 
-pub fn KernelOutput(comptime T: type, comptime Kernel: type) type {
+pub fn KernelInputImpl(comptime Impl: type, comptime Kernel: type) type {
+    const input_fields = std.meta.fields(@TypeOf(Kernel.inputImages));
+    comptime var struct_fields: [input_fields.len]std.builtin.Type.StructField = undefined;
+    inline for (input_fields, 0..) |field, index| {
+        const input = @field(Kernel.inputImages, field.name);
+        const KernelImageImpl = KernelImage(Impl, input.channels, false);
+        struct_fields[index] = .{
+            .name = field.name,
+            .type = KernelImageImpl,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .alignment = @alignOf(KernelImageImpl),
+        };
+    }
+    return @Type(.{
+        .@"struct" = .{
+            .layout = .auto,
+            .fields = &struct_fields,
+            .decls = &.{},
+            .is_tuple = false,
+        },
+    });
+}
+
+pub fn KernelOutput(comptime Kernel: type) type {
+    const output_fields = std.meta.fields(@TypeOf(Kernel.outputImages));
+    comptime var struct_fields: [output_fields.len]std.builtin.Type.StructField = undefined;
+    inline for (output_fields, 0..) |field, index| {
+        struct_fields[index] = .{
+            .name = field.name,
+            .type = zigar.image.Any,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .alignment = @alignOf(zigar.image.Any),
+        };
+    }
+    return @Type(.{
+        .@"struct" = .{
+            .layout = .auto,
+            .fields = &struct_fields,
+            .decls = &.{},
+            .is_tuple = false,
+        },
+    });
+}
+
+pub fn KernelOutputImpl(comptime Impl: type, comptime Kernel: type) type {
     const output_fields = std.meta.fields(@TypeOf(Kernel.outputImages));
     comptime var struct_fields: [output_fields.len]std.builtin.Type.StructField = undefined;
     inline for (output_fields, 0..) |field, index| {
         const output = @field(Kernel.outputImages, field.name);
+        const KernelImageImpl = KernelImage(Impl, output.channels, true);
+        const default_value: KernelImageImpl = undefined;
         struct_fields[index] = .{
             .name = field.name,
-            .type = Image,
-            .default_value_ptr = null,
+            .type = KernelImageImpl,
+            .default_value_ptr = @ptrCast(&default_value),
             .is_comptime = false,
-            .alignment = @alignOf(ImageT),
+            .alignment = @alignOf(KernelImageImpl),
         };
     }
     return @Type(.{
@@ -232,84 +336,3 @@ pub fn KernelParameters(comptime Kernel: type) type {
         },
     });
 }
-
-const builtin = if (true) @import("builtin") else unreachable;
-const zigar = if (true) @import("zigar") else unreachable;
-const Allocator = if (true) std.mem.Allocator else unreachable;
-const Promise = zigar.function.PromiseOf(thread_ns.processSlice);
-var work_queue: WorkQueue(thread_ns) = .{};
-var gpa = switch (builtin.target.cpu.arch.isWasm()) {
-    true => {},
-    false => std.heap.DebugAllocator(.{}){},
-};
-const internal_allocator = switch (builtin.target.cpu.arch.isWasm()) {
-    true => std.heap.wasm_allocator,
-    false => gpa.allocator(),
-};
-
-pub fn startThreadPool(count: u32) !void {
-    if (builtin.single_threaded) @panic("Unavailable");
-    try work_queue.init(.{
-        .allocator = internal_allocator,
-        .stack_size = 65536,
-        .n_jobs = count,
-    });
-}
-
-pub fn stopThreadPoolAsync(promise: zigar.function.Promise(void)) void {
-    if (builtin.single_threaded) @panic("Unavailable");
-    work_queue.deinitAsync(promise);
-}
-
-pub fn createOutputAsync(allocator: Allocator, promise: Promise, signal: AbortSignal, width: u32, height: u32, input: Input, params: Parameters) !void {
-    if (builtin.single_threaded) @panic("Unavailable");
-    var output: Output = undefined;
-    // allocate memory for output image
-    const fields = std.meta.fields(Output);
-    var allocated: usize = 0;
-    errdefer inline for (fields, 0..) |field, i| {
-        if (i < allocated) {
-            allocator.free(@field(output, field.name).data);
-        }
-    };
-    inline for (fields) |field| {
-        const ImageT = @TypeOf(@field(output, field.name));
-        const data = try allocator.alloc(ImageT.Pixel, width * height);
-        @field(output, field.name) = .{
-            .data = data,
-            .width = width,
-            .height = height,
-        };
-        allocated += 1;
-    }
-    // add work units to queue
-    const workers: u32 = @intCast(@max(1, work_queue.thread_count));
-    const scanlines: u32 = height / workers;
-    const slices: u32 = if (scanlines > 0) workers else 1;
-    const multipart_promise = try promise.partition(internal_allocator, slices);
-    var slice_num: u32 = 0;
-    while (slice_num < slices) : (slice_num += 1) {
-        const start = scanlines * slice_num;
-        const count = if (slice_num < slices - 1) scanlines else height - (scanlines * slice_num);
-        try work_queue.push(thread_ns.processSlice, .{ signal, width, start, count, input, output, params }, multipart_promise);
-    }
-}
-
-const thread_ns = struct {
-    pub fn processSlice(signal: AbortSignal, start: u32, count: u32, input: Input, output: Output, params: Parameters) !Output {
-        var instance = kernel.create(input, output, params);
-        if (@hasDecl(@TypeOf(instance), "evaluateDependents")) {
-            instance.evaluateDependents();
-        }
-        const end = start + count;
-        instance.outputCoord[1] = start;
-        while (instance.outputCoord[1] < end) : (instance.outputCoord[1] += 1) {
-            instance.outputCoord[0] = 0;
-            while (instance.outputCoord[0] < width) : (instance.outputCoord[0] += 1) {
-                instance.evaluatePixel();
-                if (signal.on()) return error.Aborted;
-            }
-        }
-        return output;
-    }
-};

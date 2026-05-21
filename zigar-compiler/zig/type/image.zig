@@ -28,8 +28,12 @@ pub const AnyImage = union(enum) {
         break :init list;
     };
 
-    pub fn getField(self: *const @This(), comptime tag: Tag) *const @FieldType(@This(), @tagName(tag)) {
-        return &@field(self, @tagName(tag));
+    pub fn FieldType(comptime tag: Tag) type {
+        return @FieldType(@This(), @tagName(tag));
+    }
+
+    pub fn getField(self: @This(), comptime tag: Tag) FieldType(tag) {
+        return @field(self, @tagName(tag));
     }
 };
 
