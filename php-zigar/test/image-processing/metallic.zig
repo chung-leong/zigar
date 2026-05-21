@@ -1,22 +1,66 @@
-// Pixel Bender kernel "Sepia" (translated using pb2zig)
+// Pixel Bender kernel "VertexRenderer" (translated using pb2zig)
 const std = @import("std");
 
 pub const kernel = struct {
     // kernel information
-    pub const namespace = "AIF";
-    pub const vendor = "Adobe Systems";
-    pub const version = 2;
-    pub const description = "a variable sepia filter";
+    pub const namespace = "Metallic";
+    pub const vendor = "Petri Leskinen";
+    pub const version = 1;
+    pub const description = "Metallic -effect";
     pub const parameters = .{
-        .intensity = .{
+        .lightsource = .{
+            .type = @Vector(3, f32),
+            .minValue = .{
+                -1000.0,
+                -1000.0,
+                -1000.0,
+            },
+            .maxValue = .{
+                1000.0,
+                1000.0,
+                1000.0,
+            },
+            .defaultValue = .{ 200.0, 60.0, 40.0 },
+            .description = "xyz-location of the light source",
+        },
+        .shininess = .{
+            .type = i32,
+            .minValue = 2,
+            .maxValue = 64,
+            .defaultValue = 40,
+            .description = "shininess",
+        },
+        .shadow = .{
             .type = f32,
             .minValue = 0.0,
             .maxValue = 1.0,
-            .defaultValue = 0.0,
+            .defaultValue = 0.4,
+            .description = "depth of shadow areas",
+        },
+        .relief = .{
+            .type = f32,
+            .minValue = 1.0,
+            .maxValue = 10.0,
+            .defaultValue = 2.0,
+            .description = "the height of 3D effect",
+        },
+        .stripesize = .{
+            .type = @Vector(2, f32),
+            .minValue = .{ 1.0, 1.0 },
+            .maxValue = .{ 256.0, 200.0 },
+            .defaultValue = .{ 256.0, 10.0 },
+            .description = "the size for input 'stripe'",
+        },
+        .viewDirection = .{
+            .type = @Vector(3, f32),
+            .minValue = .{ -1.0, -1.0, -1.0 },
+            .maxValue = .{ 1.0, 1.0, 1.0 },
+            .defaultValue = .{ 0.0, 0.0, 1.0 },
         },
     };
     pub const inputImages = .{
-        .src = .{ .channels = 4 },
+        .source = .{ .channels = 4 },
+        .stripe = .{ .channels = 4 },
     };
     pub const outputImages = .{
         .dst = .{ .channels = 4 },
@@ -35,57 +79,81 @@ pub const kernel = struct {
 
             // functions defined in kernel
             pub fn evaluatePixel(self: *@This()) void {
-                const intensity = self.params.intensity;
-                const src = self.input.src;
+                const lightsource = self.params.lightsource;
+                const shininess = self.params.shininess;
+                const shadow = self.params.shadow;
+                const relief = self.params.relief;
+                const stripesize = self.params.stripesize;
+                const viewDirection = self.params.viewDirection;
+                const source = self.input.source;
+                const stripe = self.input.stripe;
                 const dst = self.output.dst;
                 self.dst = @splat(0.0);
 
-                var rgbaColor: @Vector(4, f32) = undefined;
-                var yiqaColor: @Vector(4, f32) = undefined;
-                const YIQMatrix: [4]@Vector(4, f32) = .{
-                    .{
-                        0.299,
-                        0.596,
-                        0.212,
-                        0.0,
-                    },
-                    .{
-                        0.587,
-                        -0.275,
-                        -0.523,
-                        0.0,
-                    },
-                    .{
-                        0.114,
-                        -0.321,
-                        0.311,
-                        0.0,
-                    },
-                    .{ 0.0, 0.0, 0.0, 1.0 },
-                };
-                const inverseYIQ: [4]@Vector(4, f32) = .{
-                    .{ 1.0, 1.0, 1.0, 0.0 },
-                    .{
-                        0.956,
-                        -0.272,
-                        -1.1,
-                        0.0,
-                    },
-                    .{
-                        0.621,
-                        -0.647,
-                        1.7,
-                        0.0,
-                    },
-                    .{ 0.0, 0.0, 0.0, 1.0 },
-                };
-                rgbaColor = src.sampleNearest(self.outCoord());
-                yiqaColor = @"M * V"(YIQMatrix, rgbaColor);
-                yiqaColor[1] = intensity;
-                yiqaColor[2] = 0.0;
-                self.dst = @"M * V"(inverseYIQ, yiqaColor);
+                const po: @Vector(2, f32) = self.outCoord();
+                var tmp4: @Vector(4, f32) = undefined;
+                self.dst = source.sampleLinear(po);
+                if (self.dst[3] > 0.01) {
+                    const sourcesample: @Vector(4, f32) = self.dst;
+                    tmp4 = source.sampleLinear(po + @Vector(2, f32){ -3.0, 0.0 });
+                    const tmp1 = tmp4;
+                    tmp4 = source.sampleLinear(po + @Vector(2, f32){ -2.0, 0.0 });
+                    const tmp2 = tmp4;
+                    tmp4 = source.sampleLinear(po + @Vector(2, f32){ -1.0, 0.0 });
+                    const tmp3 = tmp4;
+                    tmp4 = source.sampleLinear(po + @Vector(2, f32){ 1.0, 0.0 });
+                    const tmp5 = tmp4;
+                    tmp4 = source.sampleLinear(po + @Vector(2, f32){ 2.0, 0.0 });
+                    const tmp6 = tmp4;
+                    tmp4 = source.sampleLinear(po + @Vector(2, f32){ 3.0, 0.0 });
+                    const tmp7 = tmp4;
+                    tmp4 = source.sampleLinear(po + @Vector(2, f32){ 0.0, -3.0 });
+                    const tmp8 = tmp4;
+                    tmp4 = source.sampleLinear(po + @Vector(2, f32){ 0.0, -2.0 });
+                    const tmp9 = tmp4;
+                    tmp4 = source.sampleLinear(po + @Vector(2, f32){ 0.0, -1.0 });
+                    const tmp10 = tmp4;
+                    tmp4 = source.sampleLinear(po + @Vector(2, f32){ 0.0, 1.0 });
+                    const tmp11 = tmp4;
+                    tmp4 = source.sampleLinear(po + @Vector(2, f32){ 0.0, 2.0 });
+                    const tmp12 = tmp4;
+                    tmp4 = source.sampleLinear(po + @Vector(2, f32){ 0.0, 3.0 });
+                    const tmp13 = tmp4;
+                    var normal: @Vector(3, f32) = .{
+                        (0.7 * tmp1[1] + 0.2 * tmp4[0] + 0.1 * tmp4[2]) + (0.7 * tmp2[1] + 0.2 * tmp4[0] + 0.1 * tmp4[2]) + (0.7 * tmp3[1] + 0.2 * tmp4[0] + 0.1 * tmp4[2]) - (0.7 * tmp5[1] + 0.2 * tmp4[0] + 0.1 * tmp4[2]) - (0.7 * tmp6[1] + 0.2 * tmp4[0] + 0.1 * tmp4[2]) - (0.7 * tmp7[1] + 0.2 * tmp4[0] + 0.1 * tmp4[2]),
+                        (0.7 * tmp8[1] + 0.2 * tmp4[0] + 0.1 * tmp4[2]) + (0.7 * tmp9[1] + 0.2 * tmp4[0] + 0.1 * tmp4[2]) + (0.7 * tmp10[1] + 0.2 * tmp4[0] + 0.1 * tmp4[2]) - (0.7 * tmp11[1] + 0.2 * tmp4[0] + 0.1 * tmp4[2]) - (0.7 * tmp12[1] + 0.2 * tmp4[0] + 0.1 * tmp4[2]) - (0.7 * tmp13[1] + 0.2 * tmp4[0] + 0.1 * tmp4[2]),
+                        12.0 / relief,
+                    };
+                    var len: f32 = 1.0 / sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2] + 0.0);
+                    normal *= @as(@Vector(3, f32), @splat(len));
+                    var lightbeam: @Vector(3, f32) = lightsource;
+                    lightbeam = @shuffle(f32, lightbeam, @shuffle(f32, lightbeam, undefined, @Vector(2, i32){ 0, 1 }) - po, @Vector(3, i32){ -1, -2, 2 });
+                    tmp4 = sourcesample;
+                    const tmp14 = tmp4;
+                    lightbeam[2] -= 5.0 * relief * ((0.7 * tmp14[1] + 0.2 * tmp4[0] + 0.1 * tmp4[2]) - 1.0);
+                    len = 1.0 / sqrt(lightbeam[0] * lightbeam[0] + lightbeam[1] * lightbeam[1] + lightbeam[2] * lightbeam[2] + 0.0);
+                    lightbeam *= @as(@Vector(3, f32), @splat(len));
+                    var refl: f32 = shadow + (1.0 - shadow) * dot(normal, lightbeam);
+                    const v: @Vector(3, f32) = reflectVector(viewDirection, normal);
+                    var spec: f32 = dot(v, lightbeam);
+                    if (spec > 0.0) {
+                        spec = pow(spec, @as(f32, @floatFromInt(shininess)));
+                        refl += spec;
+                    }
+                    refl = clamp(refl, 0.0, 1.0);
+                    self.dst = stripe.sampleLinear(@Vector(2, f32){
+                        0.5 + (stripesize[0] - 1.0) * refl,
+                        stripesize[1],
+                    });
+                    self.dst[3] *= sourcesample[3];
+                }
 
                 dst.writePixel(self.outputCoord, self.dst);
+            }
+
+            // macros
+            fn reflectVector(v: @Vector(3, f32), n: @Vector(3, f32)) @Vector(3, f32) {
+                return (@as(@Vector(3, f32), @splat(2.0)) * n * @as(@Vector(3, f32), @splat(dot(v, n))) / @as(@Vector(3, f32), @splat((n[0] * n[0] + n[1] * n[1] + n[2] * n[2]))) - v);
             }
 
             pub fn outCoord(self: *@This()) @Vector(2, f32) {
@@ -104,19 +172,51 @@ pub const kernel = struct {
     }
 
     // built-in Pixel Bender functions
-    fn @"M * V"(m1: anytype, v2: anytype) @TypeOf(v2) {
-        const ar = @typeInfo(@TypeOf(m1)).array;
-        var t1: @TypeOf(m1) = undefined;
-        inline for (m1, 0..) |column, c| {
-            inline for (0..ar.len) |r| {
-                t1[r][c] = column[r];
-            }
-        }
-        var result: @TypeOf(v2) = undefined;
-        inline for (t1, 0..) |column, c| {
-            result[c] = @reduce(.Add, column * v2);
-        }
-        return result;
+    fn pow(v1: anytype, v2: anytype) @TypeOf(v1) {
+        return switch (@typeInfo(@TypeOf(v1))) {
+            .vector => calc: {
+                var result: @TypeOf(v1) = undefined;
+                inline for (0..@typeInfo(@TypeOf(v1)).vector.len) |i| {
+                    result[i] = pow(v1[i], v2[i]);
+                }
+                break :calc result;
+            },
+            else => std.math.pow(@TypeOf(v1), v1, v2),
+        };
+    }
+
+    fn sqrt(v: anytype) @TypeOf(v) {
+        return @sqrt(v);
+    }
+
+    fn clamp(v: anytype, min_val: anytype, max_val: anytype) @TypeOf(v) {
+        return switch (@typeInfo(@TypeOf(min_val))) {
+            .vector => calc: {
+                const T = @typeInfo(@TypeOf(v)).vector.child;
+                const result1 = @select(T, v < min_val, min_val, v);
+                const result2 = @select(T, result1 > max_val, max_val, result1);
+                break :calc result2;
+            },
+            else => switch (@typeInfo(@TypeOf(v))) {
+                .vector => clamp(v, @as(@TypeOf(v), @splat(min_val)), @as(@TypeOf(v), @splat(max_val))),
+                else => calc: {
+                    if (v < min_val) {
+                        break :calc min_val;
+                    } else if (v > max_val) {
+                        break :calc max_val;
+                    } else {
+                        break :calc v;
+                    }
+                },
+            },
+        };
+    }
+
+    fn dot(v1: anytype, v2: anytype) f32 {
+        return switch (@typeInfo(@TypeOf(v1))) {
+            .vector => @reduce(.Add, v1 * v2),
+            else => v1 * v2,
+        };
     }
 };
 

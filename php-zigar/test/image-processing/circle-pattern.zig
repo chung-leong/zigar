@@ -251,7 +251,7 @@ pub fn process(input: Input, output: Output, params: Parameters) !void {
             const width: f32 = @floatFromInt(output_width);
             const height: f32 = @floatFromInt(output_height);
             while (instance.outputCoord[1] < height) : (instance.outputCoord[1] += 1) {
-                instance.outputCoord[0] = 0;
+                instance.outputCoord[0] = 0.5;
                 while (instance.outputCoord[0] < width) : (instance.outputCoord[0] += 1) {
                     instance.evaluatePixel();
                 }

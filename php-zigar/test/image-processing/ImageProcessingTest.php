@@ -106,6 +106,92 @@ final class ImageProcessingTest extends ZigarTestCase
         $data = file_get_contents($path);
         $this->assertSame($ref_data, $data);
     }
+
+    public function testRunMetallicFilter(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/metallic.zig');
+        $im_in0 = imagecreatefrompng(__DIR__ . '/images/zig-logo.png');
+        $im_in1 = imagecreatefrompng(__DIR__ . '/images/stripe.png');
+        $im_out = imagecreatetruecolor(imagesx($im_in0), imagesy($im_in0));
+        imagesavealpha($im_out, true);
+        $m->process([ 
+            'source' => $im_in0,
+            'stripe' => $im_in1,
+        ], [ 
+            'dst' => $im_out, 
+        ], [
+            'lightsource' => [ 240, 230, 50 ],
+            'shininess' => 35,
+            'shadow' => 0.4,
+            'relief' => 3.25,
+            'stripesize' => [ 256, 10 ],
+            'viewDirection' => [ 0.5, 0.02, 1 ],
+        ]);
+        $filename = 'metallic.png';
+        $path = get_output_path($filename);
+        imagepng($im_out, $path);
+        $ref_data = file_get_contents(__DIR__ . "/images/$filename");
+        $data = file_get_contents($path);
+        $this->assertSame($ref_data, $data);
+    }
+
+    public function testRunDrosteFilter(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/droste.zig');
+        $im_in = imagecreatefrompng(__DIR__ . '/images/ipad.png');
+        $im_out = imagecreatetruecolor(imagesx($im_in), imagesy($im_in));
+        imagesavealpha($im_out, true);
+        $m->process([ 
+            'src' => $im_in,
+        ], [ 
+            'dst' => $im_out, 
+        ], [
+            'strandMirror' => true,
+            'transparentInside' => true,
+            'transparentOutside' => true,
+            'twist' => true,
+            'periodicityAuto' => false,
+            'hyperDroste' => false,
+            'antialiasing' => 2,
+            'size' => [ 680, 725 ],
+            'radiusInside' => 56,
+            'radiusOutside' => 100,
+            'periodicity' => 1,
+            'strands'  => 1,
+            'centerShift' => [ -32, 1.5 ],
+        ]);
+        $filename = 'droste.png';
+        $path = get_output_path($filename);
+        imagepng($im_out, $path);
+        // $ref_data = file_get_contents(__DIR__ . "/images/$filename");
+        // $data = file_get_contents($path);
+        // $this->assertSame($ref_data, $data);
+    }
+
+    public function testRunRayTracer(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/raytracer.zig');
+        $im_out = imagecreatetruecolor(512, 512);
+        $m->process([], [ 
+            'dst' => $im_out, 
+        ], [
+            'outputWidth' => 512,
+            'outputHeight' => 512,
+            // default values
+            'viewPlaneDistance' => 2.0,
+            'lightPos' => [ 0.0, 2.0, -4.0 ],
+            'sphere0Position' => [ 0.0, 2.0, -10.0 ],
+            'sphere0Radius' => 2.0,
+            'sphere0Color' => [ 0.8, 0.8, 0.8 ],
+            'sphere0Material' => [ 0.05, 0.1, 1.0, 1.0 ],
+        ]);
+        $filename = 'raytracer.png';
+        $path = get_output_path($filename);
+        imagepng($im_out, $path);
+        // $ref_data = file_get_contents(__DIR__ . "/images/$filename");
+        // $data = file_get_contents($path);
+        // $this->assertSame($ref_data, $data);
+    }
 }
 
 function get_output_path($filename) {
