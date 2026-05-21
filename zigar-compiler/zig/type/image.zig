@@ -10,6 +10,27 @@ pub const AnyImage = union(enum) {
     gd: if (!is_wasm) GdImage else void,
 
     pub const internal_type: util.InternalType = .any_image;
+    pub const Tag = @typeInfo(@This()).@"union".tag_type.?;
+    pub const tags = init: {
+        const fields = @typeInfo(@This()).@"union".fields;
+        var count: usize = 0;
+        for (fields) |field| {
+            if (field.type != void) count += 1;
+        }
+        var list: [count]Tag = undefined;
+        var index: usize = 0;
+        for (fields) |field| {
+            if (field.type != void) {
+                list[index] = @field(Tag, field.name);
+                index += 1;
+            }
+        }
+        break :init list;
+    };
+
+    pub fn getField(self: *const @This(), comptime tag: Tag) *const @FieldType(@This(), @tagName(tag)) {
+        return &@field(self, @tagName(tag));
+    }
 };
 
 pub const WebImage = struct {
