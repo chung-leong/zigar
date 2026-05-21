@@ -1577,6 +1577,40 @@ final class StreamHandlingTest extends ZigarTestCase
         $result4 = $m->get2(STDIN);
         $this->assertNull($result4);
     }
+
+    public function testTruncateFileUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/truncate-file-with-posix-function.zig');
+        $file = new VirtualFile();
+        $dir = new VirtualDir([ 'hello.txt' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $path = '/vfs://test/hello.txt';
+        $m->truncate($path, 256);
+        $this->assertSame(256, $file->size);
+        $this->assertSame(256, strlen($file->content));
+        $m->truncate($path, 16);
+        $this->assertSame(16, $file->size);
+    }
+
+    public function testTruncateOpenedFileUsingPosixFunction(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/truncate-opened-file-with-posix-function.zig');
+        $file = new VirtualFile();
+        $dir = new VirtualDir([ 'hello.txt' => $file ]);
+        VirtualFSStream::add_root_node('test', $dir);
+        $f = fopen('vfs://test/hello.txt', 'w');
+        $m->truncate($f, 256);
+        $this->assertSame(256, $file->size);
+        $this->assertSame(256, strlen($file->content));
+        $m->truncate($f, 16);
+        $this->assertSame(16, $file->size);
+    }
+
+    public function testTruncateOpenedFileUsingWin32Function(): void
+    {
+        // TODO
+    }
+
 }
 
 class VariableStream {
@@ -1827,6 +1861,7 @@ class VirtualFSStream {
         $right = substr($content, $this->position + strlen($data));
         $content = $left . $data . $right;
         $this->position += strlen($data);
+        $this->size = strlen($content);
         return strlen($data);
     }
 
@@ -1843,6 +1878,7 @@ class VirtualFSStream {
         } else if ($len < $new_size) {
             $content .= str_repeat("\x00", $new_size - $len);
         }
+        $this->node->size = $new_size;
         return true;
     }
 

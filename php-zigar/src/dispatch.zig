@@ -278,6 +278,7 @@ pub const CallDispatcher = struct {
                 .fstat => try self.handleStat(&call.u.fstat),
                 .stat => try self.handleStat(&call.u.stat),
                 .ftruncate => try self.handleTruncate(&call.u.ftruncate),
+                .truncate => try self.handleTruncate(&call.u.truncate),
                 .futimes => try self.handleSettimes(&call.u.futimes),
                 .utimes => try self.handleSettimes(&call.u.utimes),
                 .advise => try self.handleAdvise(&call.u.advise),
@@ -829,18 +830,25 @@ pub const CallDispatcher = struct {
         if (@hasField(@TypeOf(args.*), "fd")) {
             const entry = self.findStream(args.fd) catch return .BADF;
             php.fstat(entry.stream, &args.stat) catch return .BADF;
-            return .SUCCESS;
         } else {
             const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
             defer loc.deinit();
             php.stat(loc.url, loc.context, args.lookup_flags, &args.stat) catch return .NOENT;
-            return .SUCCESS;
         }
+        return .SUCCESS;
     }
 
     fn handleTruncate(self: *@This(), args: anytype) !E {
-        const entry = self.findStream(args.fd) catch return .BADF;
-        php.truncate(entry.stream, args.len) catch return .FBIG;
+        if (@hasField(@TypeOf(args.*), "fd")) {
+            const entry = self.findStream(args.fd) catch return .BADF;
+            php.truncate(entry.stream, args.len) catch return .FBIG;
+        } else {
+            const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
+            defer loc.deinit();
+            const strm = php.open(loc.url, "x", 0) catch return .NOENT;
+            defer php.close(strm);
+            php.truncate(strm, args.len) catch return .FBIG;
+        }
         return .SUCCESS;
     }
 

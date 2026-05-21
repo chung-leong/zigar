@@ -89,7 +89,7 @@ pub const Syscall = extern struct {
         },
         ftruncate: extern struct {
             fd: i32,
-            len: u64 = undefined,
+            len: u64,
         },
         futimes: extern struct {
             fd: i32,
@@ -220,6 +220,11 @@ pub const Syscall = extern struct {
             fd: i32,
             position: u64 = undefined,
         },
+        truncate: extern struct {
+            dirfd: i32,
+            path: [*:0]const u8,
+            len: u64,
+        },
         unlink: extern struct {
             dirfd: i32,
             path: [*:0]const u8,
@@ -285,6 +290,7 @@ pub const Syscall = extern struct {
         symlink,
         sync,
         tell,
+        truncate,
         unlink,
         utimes,
         write,
@@ -1623,6 +1629,34 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
+        pub fn truncate(path: [*:0]const u8, offset: off_t, result: *c_int) callconv(.c) bool {
+            return truncateT(off_t, path, offset, result);
+        }
+
+        pub fn truncate64(path: [*:0]const u8, offset: off64_t, result: *c_int) callconv(.c) bool {
+            return truncateT(off_t, path, offset, result);
+        }
+
+        fn truncateT(comptime T: type, path: [*:0]const u8, offset: T, result: *c_int) bool {
+            if (Host.isRedirecting(.open)) {
+                if (offset < 0) {
+                    result.* = intFromError(.INVAL);
+                } else {
+                    var call: Syscall = .{ .cmd = .truncate, .u = .{
+                        .truncate = .{
+                            .dirfd = fd_cwd,
+                            .path = path,
+                            .len = @intCast(offset),
+                        },
+                    } };
+                    const err = Host.redirectSyscall(&call);
+                    result.* = intFromError(err);
+                }
+                return true;
+            }
+            return false;
+        }
+
         pub fn unlink(path: [*:0]const u8, result: *c_int) callconv(.c) bool {
             return unlinkat(fd_cwd, path, 0, result);
         }
@@ -1976,6 +2010,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
         pub const stat64 = makeStdHook("stat64");
         pub const symlink = makeStdHook("symlink");
         pub const symlinkat = makeStdHook("symlinkat");
+        pub const truncate = makeStdHook("truncate");
+        pub const truncate64 = makeStdHook("truncate64");
         pub const unlink = makeStdHook("unlink");
         pub const unlinkat = makeStdHook("unlinkat");
         pub const utimensat = makeStdHook("utimensat");
@@ -2479,6 +2515,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             pub var stat64: *const @TypeOf(Self.stat64) = undefined;
             pub var symlink: *const @TypeOf(Self.symlink) = undefined;
             pub var symlinkat: *const @TypeOf(Self.symlinkat) = undefined;
+            pub var truncate: *const @TypeOf(Self.truncate) = undefined;
+            pub var truncate64: *const @TypeOf(Self.truncate64) = undefined;
             pub var telldir: *const @TypeOf(Self.telldir) = undefined;
             pub var unlink: *const @TypeOf(Self.unlink) = undefined;
             pub var unlinkat: *const @TypeOf(Self.unlinkat) = undefined;
