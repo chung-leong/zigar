@@ -1655,14 +1655,17 @@ pub fn sendfile(out_strm: *Stream, in_strm: *Stream, offset: ?*i64, len: u32) !u
     var copied: i64 = 0;
     if (offset) |ptr| {
         original_pos = php_h._php_stream_tell(in_strm);
-        _ = php_h._php_stream_seek(in_strm, ptr.*, php_h.SEEK_SET);
+        if (original_pos < 0) return error.Failure;
+        const pos = php_h._php_stream_seek(in_strm, ptr.*, php_h.SEEK_SET);
+        if (pos < 0) return error.InvalidOffset;
     }
     var buf: [8192]u8 = undefined;
     var remaining = len;
     while (remaining > 0) {
         const bytes_read = php_h._php_stream_read(in_strm, &buf, @min(remaining, buf.len));
         if (bytes_read == 0) break;
-        _ = php_h._php_stream_write(out_strm, &buf, @intCast(bytes_read));
+        const written = php_h._php_stream_write(out_strm, &buf, @intCast(bytes_read));
+        if (written < 0) return error.Failure;
         copied += bytes_read;
         remaining -= @intCast(bytes_read);
     }
@@ -1679,18 +1682,23 @@ pub fn copyFileRange(in_strm: *Stream, out_strm: *Stream, in_offset: ?*i64, out_
     var copied: i64 = 0;
     if (in_offset) |ptr| {
         original_in_pos = php_h._php_stream_tell(in_strm);
-        _ = php_h._php_stream_seek(in_strm, ptr.*, php_h.SEEK_SET);
+        if (original_in_pos < 0) return error.Failure;
+        const pos = php_h._php_stream_seek(in_strm, ptr.*, php_h.SEEK_SET);
+        if (pos < 0) return error.InvalidOffset;
     }
     if (out_offset) |ptr| {
         original_out_pos = php_h._php_stream_tell(out_strm);
-        _ = php_h._php_stream_seek(out_strm, ptr.*, php_h.SEEK_SET);
+        if (original_out_pos < 0) return error.Failure;
+        const pos = php_h._php_stream_seek(out_strm, ptr.*, php_h.SEEK_SET);
+        if (pos < 0) return error.InvalidOffset;
     }
     var buf: [8192]u8 = undefined;
     var remaining = len;
     while (remaining > 0) {
         const bytes_read = php_h._php_stream_read(in_strm, &buf, @min(remaining, buf.len));
         if (bytes_read == 0) break;
-        _ = php_h._php_stream_write(out_strm, &buf, @intCast(bytes_read));
+        const written = php_h._php_stream_write(out_strm, &buf, @intCast(bytes_read));
+        if (written < 0) return error.Failure;
         copied += bytes_read;
         remaining -= @intCast(bytes_read);
     }

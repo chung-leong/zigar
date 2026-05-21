@@ -526,7 +526,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
             return false;
         }
 
-        pub fn copy_file_range(in_fd: c_int, out_fd: c_int, in_offset: [*c]off_t, out_offset: [*c]off_t, len: size_t, _: c_int, result: *ssize_t) callconv(.c) bool {
+        pub fn copy_file_range(in_fd: c_int, in_offset: [*c]off_t, out_fd: c_int, out_offset: [*c]off_t, len: size_t, _: c_int, result: *ssize_t) callconv(.c) bool {
             if (isPrivateDescriptor(out_fd) or isPrivateDescriptor(in_fd)) {
                 var in_offset64: off64_t = if (in_offset) |ptr| ptr.* else 0;
                 var out_offset64: off64_t = if (out_offset) |ptr| ptr.* else 0;
@@ -535,7 +535,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
                         .in_fd = in_fd,
                         .out_fd = out_fd,
                         .in_offset = if (in_offset != null) &in_offset64 else null,
-                        .out_offset = if (in_offset != null) &out_offset64 else null,
+                        .out_offset = if (out_offset != null) &out_offset64 else null,
                         .len = @intCast(len),
                     },
                 } };

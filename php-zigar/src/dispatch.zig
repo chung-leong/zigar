@@ -1030,7 +1030,12 @@ pub const CallDispatcher = struct {
         defer if (close_out_strm) php.close(out_strm);
         const in_strm, const close_in_strm = self.useStream(args.in_fd, "r") catch return .BADF;
         defer if (close_in_strm) php.close(in_strm);
-        args.sent = php.sendfile(out_strm, in_strm, args.offset, args.len) catch return .EIO;
+        args.sent = php.sendfile(out_strm, in_strm, args.offset, args.len) catch |err| {
+            return switch (err) {
+                error.InvalidOffset => .INVAL,
+                else => .IO,
+            };
+        };
         return .SUCCESS;
     }
 
@@ -1039,7 +1044,12 @@ pub const CallDispatcher = struct {
         defer if (close_out_strm) php.close(out_strm);
         const in_strm, const close_in_strm = self.useStream(args.in_fd, "r") catch return .BADF;
         defer if (close_in_strm) php.close(in_strm);
-        args.copied = php.copyFileRange(in_strm, out_strm, args.in_offset, args.out_offset, args.len) catch return .EIO;
+        args.copied = php.copyFileRange(in_strm, out_strm, args.in_offset, args.out_offset, args.len) catch |err| {
+            return switch (err) {
+                error.InvalidOffset => .INVAL,
+                else => .IO,
+            };
+        };
         return .SUCCESS;
     }
 

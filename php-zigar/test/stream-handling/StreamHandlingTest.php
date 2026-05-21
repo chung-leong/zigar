@@ -1611,6 +1611,45 @@ final class StreamHandlingTest extends ZigarTestCase
         // TODO
     }
 
+    public function testCopyRealFileToVirtualFileUsingCopyFileRange(): void 
+    {
+        global $output;
+        $m = ZigImporter::load(__DIR__ . '/copy-real-file-to-virtual-file-with-copy-file-range.zig');
+        $path = __DIR__ . '/data/macbeth.txt';
+        $output = 'Hello world';
+        $out_file = fopen("var://output", 'x');
+        $in_file = fopen($path, 'r');
+        $copied = $m->copy($in_file, $out_file, 28, 4, 32);
+        fclose($out_file);
+        fclose($in_file);
+        $content = file_get_contents($path);
+        $chunk = substr($content, 28, 32);
+        $this->assertSame("Hell$chunk", $output);
+    }
+
+    public function testCopyVirtualFileToRealFileUsingCopyFileRange(): void 
+    {
+        global $input;
+        $m = ZigImporter::load(__DIR__ . '/copy-virtual-file-to-real-file-with-copy-file-range.zig');
+        $path = __DIR__ . '/data/macbeth.txt';
+        $input = file_get_contents($path);
+        $out_path = __DIR__ . '/data/copy-file-range-test.txt';        
+        try {
+            $out_file = fopen($out_path, 'w');
+            fwrite($out_file, "Hello world");
+            $initial_pos = ftell($out_file);
+            $in_file = fopen("var://input", 'r');
+            $copied = $m->copy($in_file, $out_file, 28, 4, 32);
+            fclose($out_file);
+            fclose($in_file);
+            $content = file_get_contents($out_path);
+            $chunk = substr($input, 28, 32);
+            $this->assertSame("Hell$chunk", $content);
+        } finally {
+            unlink($out_path);
+        }
+    }
+
 }
 
 class VariableStream {
