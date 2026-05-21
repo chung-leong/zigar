@@ -1,18 +1,48 @@
-// Pixel Bender kernel "Sepia" (translated using pb2zig)
+// Pixel Bender kernel "CirclePacking" (translated using pb2zig)
 const std = @import("std");
 
 pub const kernel = struct {
     // kernel information
-    pub const namespace = "AIF";
-    pub const vendor = "Adobe Systems";
-    pub const version = 2;
-    pub const description = "a variable sepia filter";
+    pub const namespace = "CirclePattern";
+    pub const vendor = "Petri Leskinen";
+    pub const version = 1;
+    pub const description = "CirclePattern";
     pub const parameters = .{
-        .intensity = .{
+        .fill = .{
             .type = f32,
             .minValue = 0.0,
+            .maxValue = 0.33,
+            .defaultValue = 0.23,
+        },
+        .scale = .{
+            .type = f32,
+            .minValue = 1.0,
+            .maxValue = 20.0,
+            .defaultValue = 1.0,
+        },
+        .distort = .{
+            .type = @Vector(2, f32),
+            .minValue = .{ 0.1, 0.1 },
+            .maxValue = .{ 8.0, 8.0 },
+            .defaultValue = .{ 3.0, 1.7320508 },
+        },
+        .center = .{
+            .type = @Vector(2, f32),
+            .minValue = .{ -20.0, -20.0 },
+            .maxValue = .{ 400.0, 400.0 },
+            .defaultValue = .{ 120.0, 130.0 },
+        },
+        .minSolid = .{
+            .type = f32,
+            .minValue = 0.001,
+            .maxValue = 0.1,
+            .defaultValue = 0.005,
+        },
+        .maxSolid = .{
+            .type = f32,
+            .minValue = 0.001,
             .maxValue = 1.0,
-            .defaultValue = 0.0,
+            .defaultValue = 0.05,
         },
     };
     pub const inputImages = .{
@@ -33,57 +63,74 @@ pub const kernel = struct {
             // output pixel
             dst: @Vector(4, f32) = undefined,
 
+            // constants
+            const sqr3: f32 = 1.7320508;
+            const halfPixel: @Vector(2, f32) = @Vector(2, f32){ 0.5, 0.5 };
+
             // functions defined in kernel
             pub fn evaluatePixel(self: *@This()) void {
-                const intensity = self.params.intensity;
+                const fill = self.params.fill;
+                const scale = self.params.scale;
+                const distort = self.params.distort;
+                const center = self.params.center;
+                const minSolid = self.params.minSolid;
+                const maxSolid = self.params.maxSolid;
                 const src = self.input.src;
                 const dst = self.output.dst;
                 self.dst = @splat(0.0);
 
-                var rgbaColor: @Vector(4, f32) = undefined;
-                var yiqaColor: @Vector(4, f32) = undefined;
-                const YIQMatrix: [4]@Vector(4, f32) = .{
-                    .{
-                        0.299,
-                        0.596,
-                        0.212,
-                        0.0,
-                    },
-                    .{
-                        0.587,
-                        -0.275,
-                        -0.523,
-                        0.0,
-                    },
-                    .{
-                        0.114,
-                        -0.321,
-                        0.311,
-                        0.0,
-                    },
-                    .{ 0.0, 0.0, 0.0, 1.0 },
-                };
-                const inverseYIQ: [4]@Vector(4, f32) = .{
-                    .{ 1.0, 1.0, 1.0, 0.0 },
-                    .{
-                        0.956,
-                        -0.272,
-                        -1.1,
-                        0.0,
-                    },
-                    .{
-                        0.621,
-                        -0.647,
-                        1.7,
-                        0.0,
-                    },
-                    .{ 0.0, 0.0, 0.0, 1.0 },
-                };
-                rgbaColor = src.sampleNearest(self.outCoord());
-                yiqaColor = @"M * V"(YIQMatrix, rgbaColor);
-                yiqaColor[1] = intensity;
-                yiqaColor[2] = 0.0;
-                self.dst = @"M * V"(inverseYIQ, yiqaColor);
+                var z: @Vector(2, f32) = @as(@Vector(2, f32), @splat(scale * 0.001)) * (self.outCoord() - center);
+                const pixelCheck: f32 = z[0] * z[0] + z[1] * z[1];
+                z /= @as(@Vector(2, f32), @splat(pixelCheck));
+                var znew: @Vector(2, f32) = distort * z;
+                z = fract(znew);
+                z[1] *= sqr3;
+                znew = floor(znew);
+                var tmp: f32 = z[0] * z[0] + z[1] * z[1];
+                var alf: f32 = 0.0;
+                if (tmp < fill) {
+                    alf = 1.0;
+                    znew -= halfPixel;
+                } else {
+                    tmp = z[0] - 0.5;
+                    const tmp1 = tmp;
+                    tmp = z[1] - 0.5 * sqr3;
+                    const tmp2 = tmp;
+                    if (tmp1 * tmp1 + tmp2 * tmp2 < fill) {
+                        alf = 1.0;
+                    } else {
+                        tmp = z[1] - sqr3;
+                        const tmp3 = tmp;
+                        if (z[0] * z[0] + tmp3 * tmp3 < fill) {
+                            alf = 1.0;
+                            znew[0] -= 0.5;
+                            znew[1] += 0.5;
+                        } else {
+                            tmp = z[0] - 1.0;
+                            const tmp4 = tmp;
+                            tmp = z[1] - sqr3;
+                            const tmp5 = tmp;
+                            if (tmp4 * tmp4 + tmp5 * tmp5 < fill) {
+                                alf = 1.0;
+                                znew += halfPixel;
+                            } else {
+                                tmp = z[0] - 1.0;
+                                const tmp6 = tmp;
+                                if (tmp6 * tmp6 + z[1] * z[1] < fill) {
+                                    alf = 1.0;
+                                    znew[0] += 0.5;
+                                    znew[1] += -0.5;
+                                }
+                            }
+                        }
+                    }
+                }
+                z = znew / distort * @as(@Vector(2, f32), @splat(scale)) * @as(@Vector(2, f32), @splat(0.001));
+                z /= @as(@Vector(2, f32), @splat(z[0] * z[0] + z[1] * z[1]));
+                tmp = 1.0 - smoothStep(minSolid, maxSolid, pixelCheck / scale);
+                alf = max(tmp, alf);
+                self.dst = src.sampleNearest(z + center);
+                self.dst[3] *= alf;
 
                 dst.writePixel(self.outputCoord, self.dst);
             }
@@ -104,19 +151,54 @@ pub const kernel = struct {
     }
 
     // built-in Pixel Bender functions
-    fn @"M * V"(m1: anytype, v2: anytype) @TypeOf(v2) {
-        const ar = @typeInfo(@TypeOf(m1)).array;
-        var t1: @TypeOf(m1) = undefined;
-        inline for (m1, 0..) |column, c| {
-            inline for (0..ar.len) |r| {
-                t1[r][c] = column[r];
-            }
-        }
-        var result: @TypeOf(v2) = undefined;
-        inline for (t1, 0..) |column, c| {
-            result[c] = @reduce(.Add, column * v2);
-        }
-        return result;
+    fn floor(v: anytype) @TypeOf(v) {
+        return @floor(v);
+    }
+
+    fn fract(v: anytype) @TypeOf(v) {
+        return v - @floor(v);
+    }
+
+    fn max(v1: anytype, v2: anytype) @TypeOf(v1) {
+        return switch (@typeInfo(@TypeOf(v2))) {
+            .vector => @max(v1, v2),
+            else => switch (@typeInfo(@TypeOf(v1))) {
+                .vector => @max(v1, @as(@TypeOf(v1), @splat(v2))),
+                else => @max(v1, v2),
+            },
+        };
+    }
+
+    fn smoothStep(edge0: anytype, edge1: anytype, v: anytype) @TypeOf(v) {
+        return switch (@typeInfo(@TypeOf(edge0))) {
+            .vector => calc: {
+                const T = @TypeOf(v);
+                const ET = @typeInfo(T).vector.child;
+                const zeros: T = @splat(0);
+                const ones: T = @splat(1);
+                const twos: T = @splat(2);
+                const threes: T = @splat(3);
+                const value = (v - edge0) / (edge1 - edge0);
+                const interpolated = value * value * (threes - twos * value);
+                const result1 = @select(ET, v <= edge0, zeros, interpolated);
+                const result2 = @select(ET, v >= edge1, ones, result1);
+                break :calc result2;
+            },
+            else => switch (@typeInfo(@TypeOf(v))) {
+                .vector => smoothStep(@as(@TypeOf(v), @splat(edge0)), @as(@TypeOf(v), @splat(edge1)), v),
+                else => calc: {
+                    if (v <= edge0) {
+                        break :calc 0;
+                    } else if (v >= edge1) {
+                        break :calc 1;
+                    } else {
+                        const value = (v - edge0) / (edge1 - edge0);
+                        const interpolated = value * value * (3 - 2 * value);
+                        break :calc interpolated;
+                    }
+                },
+            },
+        };
     }
 };
 

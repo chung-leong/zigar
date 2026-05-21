@@ -76,6 +76,35 @@ final class ImageProcessingTest extends ZigarTestCase
         $filename = 'sepia.png';
         $path = get_output_path($filename);
         imagepng($im_out, $path);
+        $ref_data = file_get_contents(__DIR__ . "/images/$filename");
+        $data = file_get_contents($path);
+        $this->assertSame($ref_data, $data);
+    }
+
+    public function testRunCirclePatternFilter(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/circle-pattern.zig');
+        $im_in = imagecreatefrompng(__DIR__ . '/images/malgorzata-socha.png');
+        $im_out = imagecreatetruecolor(imagesx($im_in), imagesy($im_in));
+        imagesavealpha($im_out, true);
+        $m->process([ 
+            'src' => $im_in,
+        ], [ 
+            'dst' => $im_out, 
+        ], [
+            'fill' => 0.2,
+            'scale' => 1,
+            'distort' => [ 5, 2 ],
+            'center' => [ 325, 120 ],
+            'minSolid' => 0.001,
+            'maxSolid' => 0.04,
+        ]);
+        $filename = 'circle-pattern.png';
+        $path = get_output_path($filename);
+        imagepng($im_out, $path);
+        $ref_data = file_get_contents(__DIR__ . "/images/$filename");
+        $data = file_get_contents($path);
+        $this->assertSame($ref_data, $data);
     }
 }
 
