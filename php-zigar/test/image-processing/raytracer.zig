@@ -380,7 +380,6 @@ pub const Parameters = KernelParameters(kernel);
 
 pub fn process(input: Input, output: Output, params: Parameters) !void {
     // use inline loop to generate code for each image implementation (WebImage or GD)
-    std.debug.print("{}", .{params});
     inline for (zigar.image.Any.tags) |tag| {
         const input_field_names = comptime std.meta.fieldNames(Input);
         const output_field_names = comptime std.meta.fieldNames(Output);

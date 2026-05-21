@@ -140,7 +140,6 @@ final class ImageProcessingTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/droste.zig');
         $im_in = imagecreatefrompng(__DIR__ . '/images/ipad.png');
         $im_out = imagecreatetruecolor(imagesx($im_in), imagesy($im_in));
-        imagesavealpha($im_out, true);
         $m->process([ 
             'src' => $im_in,
         ], [ 
@@ -163,9 +162,9 @@ final class ImageProcessingTest extends ZigarTestCase
         $filename = 'droste.png';
         $path = get_output_path($filename);
         imagepng($im_out, $path);
-        // $ref_data = file_get_contents(__DIR__ . "/images/$filename");
-        // $data = file_get_contents($path);
-        // $this->assertSame($ref_data, $data);
+        $ref_data = file_get_contents(__DIR__ . "/images/$filename");
+        $data = file_get_contents($path);
+        $this->assertSame($ref_data, $data);
     }
 
     public function testRunRayTracer(): void
@@ -177,21 +176,32 @@ final class ImageProcessingTest extends ZigarTestCase
         ], [
             'outputWidth' => 512,
             'outputHeight' => 512,
-            // default values
-            'viewPlaneDistance' => 2.0,
-            'lightPos' => [ 0.0, 2.0, -4.0 ],
-            'sphere0Position' => [ 0.0, 2.0, -10.0 ],
-            'sphere0Radius' => 2.0,
-            'sphere0Color' => [ 0.8, 0.8, 0.8 ],
-            'sphere0Material' => [ 0.05, 0.1, 1.0, 1.0 ],
         ]);
         $filename = 'raytracer.png';
         $path = get_output_path($filename);
         imagepng($im_out, $path);
-        // $ref_data = file_get_contents(__DIR__ . "/images/$filename");
-        // $data = file_get_contents($path);
-        // $this->assertSame($ref_data, $data);
+        $ref_data = file_get_contents(__DIR__ . "/images/$filename");
+        $data = file_get_contents($path);
+        $this->assertSame($ref_data, $data);
     }
+
+    public function testRenderMandelbulb(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/mandelbulb-quick.zig');
+        $im_out = imagecreatetruecolor( 400, 400 );
+        $m->process([], [ 
+            'dst' => $im_out, 
+        ], [
+            'size' => [ 400, 400 ],
+        ]);
+        $filename = 'mandelbulb-quick.png';
+        $path = get_output_path($filename);
+        imagepng($im_out, $path);
+        $ref_data = file_get_contents(__DIR__ . "/images/$filename");
+        $data = file_get_contents($path);
+        $this->assertSame($ref_data, $data);
+    }
+
 }
 
 function get_output_path($filename) {
