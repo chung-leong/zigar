@@ -104,10 +104,6 @@ pub fn Parent(comptime S: type) type {
             const class = ZigClassEntry.fromStructure(self);
             const len = class.byte_size.?;
             try self.buffer.allocate(allocator, len);
-            if (class.instance.template.buffer) |def| {
-                // copy default values from template
-                try self.buffer.copy(def);
-            }
             if (initializer) |value| {
                 try self.setValue(value, .none);
             }
@@ -428,6 +424,12 @@ pub fn StructLike(comptime S: type) type {
                 var iter = class.getMemberIterator(.instance);
                 var missing: std.ArrayList([]const u8) = .empty;
                 var remaining = ht.nNumOfElements;
+                // copy default values from template unless the number of initializers matches the number of fields
+                if (remaining < iter.len) {
+                    if (class.instance.template.buffer) |def| {
+                        try self.buffer.copy(def);
+                    }
+                }
                 while (iter.next()) |member| {
                     const name = iter.currentName() orelse continue;
                     const found = set: {
