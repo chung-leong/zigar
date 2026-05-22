@@ -42,7 +42,7 @@ pub fn Gmp(comptime attrs: Attributes) type {
                 inline for (.{ 1, 2, 3, 4, 5, 6, 7, 8 }) |bits| {
                     if (msb_bits == bits) {
                         const T = @Type(.{ .int = .{ .bits = bits, .signedness = attrs.signedness } });
-                        const ptr: *align(1) T = @ptrCast(&bytes[offset]);
+                        const ptr: *align(1) const T = @ptrCast(&bytes[offset]);
                         var int = ptr.*;
                         if (attrs.signedness == .signed and int < 0) {
                             int = int ^ -1;
@@ -56,7 +56,7 @@ pub fn Gmp(comptime attrs: Attributes) type {
                 while (dst_offset < byte_count - 1) {
                     if (be) offset += 1 else offset -= 1;
                     dst_offset += 1;
-                    const ptr: *align(1) u8 = @ptrCast(&bytes[offset]);
+                    const ptr: *align(1) const u8 = @ptrCast(&bytes[offset]);
                     const int = ptr.*;
                     dst[dst_offset] = int ^ mask;
                 }
@@ -149,7 +149,7 @@ pub fn Gmp(comptime attrs: Attributes) type {
                     if (msb_bits == bits) {
                         const T = @Type(.{ .int = .{ .bits = bits, .signedness = attrs.signedness } });
                         const AT = accessor.WithBitOffset(T, bit_offset);
-                        const ptr: *align(1) AT = @ptrCast(&bytes[offset]);
+                        const ptr: *align(1) const AT = @ptrCast(&bytes[offset]);
                         var int = ptr.value;
                         if (attrs.signedness == .signed and int < 0) {
                             int = int ^ -1;
@@ -164,7 +164,7 @@ pub fn Gmp(comptime attrs: Attributes) type {
                     if (be) offset += 1 else offset -= 1;
                     dst_offset += 1;
                     const U = accessor.WithBitOffset(u8, bit_offset);
-                    const ptr: *align(1) U = @ptrCast(&bytes[offset]);
+                    const ptr: *align(1) const U = @ptrCast(&bytes[offset]);
                     const int = ptr.value;
                     dst[dst_offset] = int ^ mask;
                 }

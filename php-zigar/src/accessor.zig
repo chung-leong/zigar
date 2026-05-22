@@ -31,6 +31,7 @@ pub const Error = error{
     Inaccessible,
     IncorrectEncoding,
     IntegerOverflow,
+    InvalidEncoding,
     InvalidOperation,
     InvalidType,
     LengthMismatch,

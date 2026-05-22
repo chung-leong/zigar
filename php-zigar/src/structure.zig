@@ -615,7 +615,7 @@ pub fn ArrayLike(comptime S: type) type {
                         return php.createValueStringContent(self.buffer.bytes);
                     } else if (bytes.len == len * 2) {
                         // convert from WTF-16 to WTF-8
-                        const wtf16_ptr: [*]u16 = @ptrCast(@alignCast(bytes.ptr));
+                        const wtf16_ptr: [*]const u16 = @ptrCast(@alignCast(bytes.ptr));
                         const wtf16_slice = wtf16_ptr[0..len];
                         const wtf8_len = std.unicode.calcWtf8Len(wtf16_slice);
                         const wtf8_str = php.createStringWithLength(wtf8_len);

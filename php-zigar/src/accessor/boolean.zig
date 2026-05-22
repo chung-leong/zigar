@@ -20,8 +20,8 @@ pub fn Boolean(comptime attrs: Attributes) type {
 
             pub fn get(self: @This(), buffer: *ByteBuffer) Error!Value {
                 const byte_size = (@bitSizeOf(T) + 7) / 8;
-                const bytes: []u8 = try buffer.data(self.byte_offset + byte_size, false);
-                const ptr: *align(1) T = @ptrCast(&bytes[self.byte_offset]);
+                const bytes: []const u8 = try buffer.data(self.byte_offset + byte_size, false);
+                const ptr: *align(1) const T = @ptrCast(&bytes[self.byte_offset]);
                 return php.createValueBool(ptr.*);
             }
 
@@ -52,8 +52,8 @@ pub fn Boolean(comptime attrs: Attributes) type {
                 // use a packed struct to access the boolean when there's a bit offset
                 const AT = accessor.WithBitOffset(T, bit_offset);
                 const byte_size = (@bitSizeOf(AT) + 7) / 8;
-                const bytes: []u8 = try buffer.data(self.byte_offset + byte_size, false);
-                const ptr: *align(1) AT = @ptrCast(&bytes[self.byte_offset]);
+                const bytes: []const u8 = try buffer.data(self.byte_offset + byte_size, false);
+                const ptr: *align(1) const AT = @ptrCast(&bytes[self.byte_offset]);
                 return php.createValueBool(ptr.value);
             }
 

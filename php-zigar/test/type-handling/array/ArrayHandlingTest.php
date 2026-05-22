@@ -260,6 +260,10 @@ final class ArrayHandlingTest extends ZigarTestCase
         $this->assertSame(0, $b <=> $c);
         $d = new $m->IntArray4([ 2, 2, 3, 4 ]);
         $this->assertSame(-1, $b <=> $d);
+        $f = new $m->IntArray4([ 0, 0, 0, 0 ]);
+        $this->assertSame('AAAAAAAAAAAAAAAAAAAAAA', $f->__base64);
+        $c->__base64 = $f->__base64;
+        $this->assertSame([ 0, 0, 0, 0 ], $c->__plain);
     }
 }
 

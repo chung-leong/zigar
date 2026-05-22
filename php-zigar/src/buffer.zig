@@ -33,7 +33,10 @@ pub const ByteBuffer = struct {
         len: usize = 1,
     };
 
-    pub fn data(self: *@This(), index: usize, write_access: bool) ![]u8 {
+    pub fn data(self: *@This(), index: usize, comptime write_access: bool) !switch (write_access) {
+        false => []const u8,
+        true => []u8,
+    } {
         if (self.flags.read_only and write_access) return error.WriteProtected;
         if (self.flags.uninitialized) return error.AccessingDeallocatedMemory;
         if (index > self.bytes.len) return error.OutOfBound;
@@ -131,7 +134,7 @@ pub const ByteBuffer = struct {
         }
         src_buf.addRef();
         new.* = .{
-            .bytes = slice_bytes,
+            .bytes = @constCast(slice_bytes),
             .alignment = slice_alignment,
             .bit_offset = slice_bit_offset,
             .flags = self.flags,
@@ -215,12 +218,17 @@ pub const ByteBuffer = struct {
     }
 
     pub fn getString(self: *@This(), encoding: ?Encoding) !*String {
-        var bytes = try self.data(0, false);
+        const bytes = try self.data(0, false);
         if (encoding) |ec| {
             switch (ec) {
                 .base64 => {
-                    _ = &bytes;
-                    @panic("TODO");
+                    const encoder = std.base64.url_safe_no_pad.Encoder;
+                    const base64_len = encoder.calcSize(bytes.len);
+                    const str = php.createStringWithLength(base64_len);
+                    const dest = @constCast(php.getStringContent(str));
+                    _ = encoder.encode(dest, bytes);
+                    dest.ptr[base64_len] = 0;
+                    return str;
                 },
             }
         }
@@ -228,10 +236,21 @@ pub const ByteBuffer = struct {
     }
 
     pub fn copyString(self: *@This(), str: *String, encoding: ?Encoding) !void {
-        _ = self;
-        _ = str;
-        _ = encoding;
-        @panic("TODO");
+        const bytes = try self.data(0, true);
+        const sc = php.getStringContent(str);
+        if (encoding) |ec| {
+            switch (ec) {
+                .base64 => {
+                    const decoder = std.base64.url_safe_no_pad.Decoder;
+                    const base64_len = decoder.calcSizeForSlice(sc) catch return error.InvalidEncoding;
+                    if (bytes.len != base64_len) return error.LengthMismatch;
+                    decoder.decode(bytes, sc) catch return error.InvalidEncoding;
+                    return;
+                },
+            }
+        }
+        if (bytes.len != sc.len) return error.LengthMismatch;
+        @memcpy(bytes, sc);
     }
 
     pub fn getParent(self: *@This()) ?*@This() {
