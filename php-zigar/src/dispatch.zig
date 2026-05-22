@@ -598,7 +598,22 @@ pub const CallDispatcher = struct {
         var start: usize = 0;
         for (path, 0..) |c, i| {
             if (c == ':') {
-                return php.createString(path[start..]);
+                if (path[i + 1] == '/') {
+                    if (path[i + 2] == '/') {
+                        return php.createString(path[start..]);
+                    } else {
+                        // assume the '//' in 'protocol://host' got replaced by a single slash
+                        const len = path.len - start + 1;
+                        const str = php.createStringWithLength(len);
+                        const sc = @constCast(php.getStringContent(str));
+                        const j = i - start;
+                        @memcpy(sc[0..j], path[start..i]);
+                        @memcpy(sc[j .. j + 3], "://");
+                        @memcpy(sc[j + 3 ..], path[i + 2 ..]);
+                        sc.ptr[len] = 0;
+                        return str;
+                    }
+                }
             } else if (i == 0 and (c == '/' or c == '\\')) {
                 start += 1;
             } else if (!std.ascii.isAlphanumeric(c)) {

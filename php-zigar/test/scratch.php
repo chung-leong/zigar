@@ -14,10 +14,7 @@ $dir = new VirtualDir([
     'hello.txt' => new VirtualFile('Hello world!'),
 ]);
 VirtualFSStream::add_root_node('test', $dir);
-$f = opendir('vfs://test');
-$zigar = $m->__zigar;
-$zigar->redirect('root', $f);
-$hash = $m->hash('/hello.txt');
+$hash = $m->hash('/vfs:/test/hello.txt');
 echo (string) $hash, "\n";
 
 class VirtualFSStream {
