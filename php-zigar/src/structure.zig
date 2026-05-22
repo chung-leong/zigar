@@ -310,7 +310,9 @@ pub fn Parent(comptime S: type) type {
             const self = fromObject(obj);
             if (self.getProperty(name, cache_slot)) |value| {
                 retval.* = value;
-                if (prop_type == php.BP_VAR_IS) {
+                if (prop_type == php.BP_VAR_UNSET) {
+                    php.throwError(error.IllegalOperation);
+                } else if (prop_type == php.BP_VAR_IS) {
                     // silent access doesn't increment refcount
                     php.delRef(retval);
                 }
