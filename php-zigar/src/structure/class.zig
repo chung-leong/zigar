@@ -24,6 +24,7 @@ const structure = @import("../structure.zig");
 pub fn Class(comptime S: type) type {
     return struct {
         constructor: Function = undefined,
+        stringifier: Function = undefined,
         closure: Closure = undefined,
         table: Value = undefined,
 
@@ -36,7 +37,8 @@ pub fn Class(comptime S: type) type {
         };
 
         pub fn finalize(self: *@This(), _: bool) !void {
-            self.constructor = php.createTransformedFunction(handleConstructor, "__construct", 0, true);
+            self.constructor = php.createTransformedFunction(handleConstruct, "__construct", 0, true);
+            self.stringifier = php.createTransformedFunction(handleStringify, "__tostring", 0, true);
             // create closure for casting string to Zig object
             self.closure = .{
                 .self = self,
@@ -188,7 +190,7 @@ pub fn Class(comptime S: type) type {
             return_value.* = php.createValueObject(new_obj);
         }
 
-        pub fn handleConstructor(ed: *ExecuteData, _: *Value) !void {
+        pub fn handleConstruct(ed: *ExecuteData, _: *Value) !void {
             if (!@hasDecl(S, "checkArguments")) unreachable;
             const this_obj = try php.getValueObject(&ed.This);
             const this_struct = ZigObject(S).fromObject(this_obj).structure();
@@ -203,6 +205,12 @@ pub fn Class(comptime S: type) type {
                 // make buffers allocated from custom allocator external
                 try this_struct.externalize();
             }
+        }
+
+        pub fn handleStringify(ed: *ExecuteData, retval: *Value) !void {
+            const this_obj = try php.getValueObject(&ed.This);
+            const this_struct = ZigObject(S).fromObject(this_obj).structure();
+            retval.* = try this_struct.getValue(.string);
         }
 
         fn extractAllocator(arg_iter: *ArgumentIterator) !?*std.mem.Allocator {

@@ -234,6 +234,8 @@ pub const ZigClassEntry = struct {
                 const S = @field(structure.by_enum, @tagName(t));
                 const C = structure.Class(S);
                 const class_zobj = try ZigObject(C).create(self);
+                const class_struct = class_zobj.structure();
+                ce.__tostring = &class_struct.stringifier;
                 break :create class_zobj.object();
             },
         };
