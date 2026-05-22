@@ -35,6 +35,7 @@ pub const CallDispatcher = struct {
         .unlink = true,
         .utimes = true,
     },
+    redirection_cb: ?Value = null,
     redirecting_root: bool = false,
     redirecting_other_libraries: bool = false,
     function_list: std.ArrayList(CallbackEntry) = .empty,
@@ -86,14 +87,14 @@ pub const CallDispatcher = struct {
         fd_stat: std.os.wasi.fdstat_t,
         dir_entry: ?*php.DirEntry = null,
         flags: packed struct {
-            close: bool = false,
             populated: bool = false,
         } = .{},
 
         pub fn deinit(self: *@This()) void {
             php.release(self.path);
             if (self.dir_entry) |de| php.allocator.destroy(de);
-            if (self.flags.close) _ = php.close(self.stream);
+            const res = php.getStreamResource(self.stream);
+            php.release(res);
         }
     };
     const ScheduledTask = struct {
@@ -160,6 +161,7 @@ pub const CallDispatcher = struct {
         self.function_list.deinit(php.allocator);
         for (self.stream_list.items) |*ptr| ptr.deinit();
         self.stream_list.deinit(php.allocator);
+        if (self.redirection_cb) |*cb| php.release(cb);
         php.allocator.destroy(self);
     }
 
@@ -505,22 +507,22 @@ pub const CallDispatcher = struct {
     }
 
     pub fn redirectStream(self: *@This(), fd: c_long, arg: *Value) !void {
-        const strm, const path, const close = if (php.getValueStream(arg)) |strm| use: {
-            const path = try getStreamPath(strm);
-            break :use .{ strm, path, false };
-        } else |_| open: {
-            const path = try php.getValueString(arg);
-            const strm = switch (fd) {
-                0 => try php.open(path, "r", 0),
-                1 => try php.open(path, "w", 0),
-                2 => try php.open(path, "w", 0),
-                -1 => try php.opendir(path, 0, null),
-                else => unreachable,
-            };
-            break :open .{ strm, path, true };
-        };
+        if (fd == -1) {
+            if (self.redirection_cb) |*cb| {
+                php.release(cb);
+                self.redirection_cb = null;
+            }
+            if (php.isCallable(arg)) {
+                self.redirection_cb = arg.*;
+                php.addRef(arg);
+                self.removeStream(fd) catch {};
+                self.redirecting_root = true;
+                return;
+            }
+        }
+        const strm = try php.getValueStream(arg);
+        const path = try getStreamPath(strm);
         defer php.release(path);
-        errdefer if (close) php.close(strm);
         const fdstat = getStreamStat(strm, fd == -1);
         self.removeStream(fd) catch {};
         _ = try self.addStreamEntry(fd, path, strm, &fdstat);
@@ -538,7 +540,7 @@ pub const CallDispatcher = struct {
             };
             const path = php.createString(path_sc);
             defer php.release(path);
-            const strm = php.open(path, mode, 0) catch return error.Unexpected;
+            const strm = php.open(path, mode, null, 0) catch return error.Unexpected;
             errdefer php.close(strm);
             const fdstat: std.os.wasi.fdstat_t = .{
                 .fs_filetype = .CHARACTER_DEVICE,
@@ -575,6 +577,8 @@ pub const CallDispatcher = struct {
             .fd_stat = stat.*,
         };
         php.addRef(path);
+        const res = php.getStreamResource(strm);
+        php.addRef(res);
         if (stat.fs_filetype == .DIRECTORY) {
             entry.dir_entry = php.allocator.create(php.DirEntry) catch null;
         }
@@ -590,16 +594,12 @@ pub const CallDispatcher = struct {
         } else error.OutOfDescriptor;
     }
 
-    fn getWrapperUrl(path: [*:0]const u8) ?*String {
+    fn getWrapperUrl(path: []const u8) ?*String {
         var start: usize = 0;
-        var index: usize = 0;
-        while (true) : (index += 1) {
-            const c = path[index];
+        for (path, 0..) |c, i| {
             if (c == ':') {
-                const s = path[start..];
-                const len = std.mem.len(s);
-                return php.createString(s[0..len]);
-            } else if (index == 0 and (c == '/' or c == '\\')) {
+                return php.createString(path[start..]);
+            } else if (i == 0 and (c == '/' or c == '\\')) {
                 start += 1;
             } else if (!std.ascii.isAlphanumeric(c)) {
                 break;
@@ -614,25 +614,48 @@ pub const CallDispatcher = struct {
 
         pub fn deinit(self: *const @This()) void {
             php.release(self.url);
+            if (self.context) |cxt| php.release(cxt.res);
         }
     };
 
-    fn resolvePath(self: *@This(), dirfd: c_long, path: [*:0]const u8) !?PathInfo {
-        if (getWrapperUrl(path)) |url| {
-            return .{ .url = url };
-        } else {
+    fn resolvePath(self: *@This(), dirfd: c_long, path_c: [*:0]const u8) !?PathInfo {
+        const path = path_c[0..std.mem.len(path_c)];
+        var context: ?*StreamContext = null;
+        const url: *String = getWrapperUrl(path) orelse find: {
             if (dirfd == -1) {
+                // if a callback was given, call it to see if this path should be redirected somewhere else
+                if (self.redirection_cb) |*cb| {
+                    const args: [1]Value = .{php.createValueStringContent(path)};
+                    defer php.release(&args[0]);
+                    const retval = try php.invokeMethod(null, cb, &args);
+                    defer php.release(&retval);
+                    switch (php.getValueType(&retval)) {
+                        .null, .false => return null,
+                        .string => {
+                            const parent_path = php.getValueStringContent(&retval) catch unreachable;
+                            break :find joinPath(parent_path, path);
+                        },
+                        .resource => {
+                            const strm = try php.getValueStream(&retval);
+                            const strm_path = try getStreamPath(strm);
+                            defer php.release(strm_path);
+                            const parent_path = php.getStringContent(strm_path);
+                            context = php.getStreamContext(strm);
+                            break :find joinPath(parent_path, path);
+                        },
+                        else => return error.InvalidReturnValueFromCallback,
+                    }
+                }
                 // don't bother lookup the root stream if the root descriptor hasn't been redirected
                 if (!self.redirecting_root) return null;
             }
             const parent = try self.findStream(dirfd);
-            const name = path[0..std.mem.len(path)];
             const parent_path = php.getStringContent(parent.path);
-            return .{
-                .url = joinPath(parent_path, name),
-                .context = php.getStreamContext(parent.stream),
-            };
-        }
+            context = php.getStreamContext(parent.stream);
+            break :find joinPath(parent_path, path);
+        };
+        if (context) |cxt| php.addRef(cxt.res);
+        return .{ .url = url, .context = context };
     }
 
     fn joinPath(parent_path: []const u8, path: []const u8) *String {
@@ -675,7 +698,7 @@ pub const CallDispatcher = struct {
                     "r+"
             else
                 "r";
-            const strm = php.open(loc.url, mode, 0) catch return .NOENT;
+            const strm = php.open(loc.url, mode, loc.context, 0) catch return .NOENT;
             break :open .{ strm, .REGULAR_FILE };
         };
         errdefer php.close(strm);
@@ -686,8 +709,7 @@ pub const CallDispatcher = struct {
             .fs_rights_inheriting = .{},
         };
         const fd = self.createDescriptor() catch return .MFILE;
-        const entry = self.addStreamEntry(fd, loc.url, strm, &stat) catch return .MFILE;
-        entry.flags.close = true;
+        _ = self.addStreamEntry(fd, loc.url, strm, &stat) catch return .MFILE;
         args.fd = @intCast(fd);
         return .SUCCESS;
     }
@@ -845,7 +867,7 @@ pub const CallDispatcher = struct {
         } else {
             const loc = (self.resolvePath(args.dirfd, args.path) catch return .BADF) orelse return .OPNOTSUPP;
             defer loc.deinit();
-            const strm = php.open(loc.url, "x", 0) catch return .NOENT;
+            const strm = php.open(loc.url, "x", loc.context, 0) catch return .NOENT;
             defer php.close(strm);
             php.truncate(strm, args.len) catch return .FBIG;
         }

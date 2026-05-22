@@ -1108,7 +1108,7 @@ pub fn addRef(value: anytype) void {
         *String, [*c]String => {
             _ = php_h.zend_string_addref(value);
         },
-        *Object, [*c]Object, *HashTable, [*c]HashTable => {
+        *Object, [*c]Object, *HashTable, [*c]HashTable, *Resource, [*c]Resource => {
             _ = php_h.GC_ADDREF(value);
         },
         else => @compileError("Unexpected type: " ++ @typeName(T)),
@@ -1123,7 +1123,7 @@ pub fn delRef(value: anytype) void {
                 _ = php_h.zval_delref_p(@constCast(value));
             }
         },
-        *String, [*c]String, *Object, [*c]Object, *HashTable, [*c]HashTable => {
+        *String, [*c]String, *Object, [*c]Object, *HashTable, [*c]HashTable, *Resource, [*c]Resource => {
             _ = php_h.GC_DELREF(value);
         },
         else => {},
@@ -1137,6 +1137,7 @@ pub fn release(value: anytype) void {
         *String, [*c]String => php_h.zend_string_release(value),
         *Object, [*c]Object => php_h.zend_object_release(value),
         *HashTable, [*c]HashTable => php_h.zend_hash_release(value),
+        *Resource, [*c]Resource => _ = php_h.zend_list_delete(value),
         else => @compileError("Unexpected type: " ++ @typeName(T)),
     }
 }
@@ -1458,14 +1459,14 @@ fn isInt(comptime T: type) bool {
     };
 }
 
-pub fn open(path: *const String, mode: [*c]const u8, options: c_int) !*Stream {
+pub fn open(path: *const String, mode: [*c]const u8, context: ?*StreamContext, options: c_int) !*Stream {
     const p = getStringContent(path);
     var strm: ?*Stream = undefined;
     if (php_h.ZEND_DEBUG == 1) {
         const src = @src();
-        strm = php_h._php_stream_open_wrapper_ex(p.ptr, mode, options, null, null, 1, src.file, src.line, src.file, src.line);
+        strm = php_h._php_stream_open_wrapper_ex(p.ptr, mode, options, null, context, 1, src.file, src.line, src.file, src.line);
     } else {
-        strm = php_h._php_stream_open_wrapper_ex(p.ptr, mode, options, null, null);
+        strm = php_h._php_stream_open_wrapper_ex(p.ptr, mode, options, null, context);
     }
     return strm orelse error.Failure;
 }
@@ -1721,10 +1722,15 @@ pub fn rewinddir(strm: *Stream) !void {
     if (php_h.php_stream_rewinddir(strm) < 0) return error.Failure;
 }
 
-extern fn get_stream_context(strm: *Stream) *StreamContext;
+extern fn get_stream_context(strm: *Stream) ?*StreamContext;
+extern fn get_stream_resource(strm: *Stream) *Resource;
 
-pub fn getStreamContext(strm: *Stream) *StreamContext {
+pub fn getStreamContext(strm: *Stream) ?*StreamContext {
     return get_stream_context(strm);
+}
+
+pub fn getStreamResource(strm: *Stream) *Resource {
+    return get_stream_resource(strm);
 }
 
 pub fn getStreamWrapperProperty(strm: *Stream, name: []const u8) !*Value {

@@ -47,6 +47,10 @@ php_stream_context* get_stream_context(php_stream* strm) {
     return PHP_STREAM_CONTEXT(strm);
 }
 
+zend_resource* get_stream_resource(php_stream* strm) {
+    return strm->res;
+}
+
 const char* get_stream_path(php_stream* strm) {
     return strm->orig_path;
 }

@@ -22,7 +22,11 @@ final class PackageManagerTest extends ZigarTestCase
         $dir = new VirtualDir([ 'chinook.db' => $file ]);
         VirtualFSStream::add_root_node('test', $dir);
         $handle = opendir('vfs://test');
-        $m->__zigar->redirect('root', $handle);
+        $m->__zigar->redirect('root', function($path) use($handle) {
+            if (strpos($path, '/dev/') === false) {
+                return $handle;
+            }
+        });
         $this->expectOutputString(<<<OUTPUT
         Handel: Music for the Royal Fireworks (Original Version 1749) - English Concert & Trevor Pinnock
         Armada: Music from the Courts of England and Spain - Fretwork
@@ -44,7 +48,11 @@ final class PackageManagerTest extends ZigarTestCase
         $dir = new VirtualDir([ 'chinook.db' => $file ]);
         VirtualFSStream::add_root_node('test', $dir);
         $handle = opendir('vfs://test');
-        $m->__zigar->redirect('root', $handle);
+        $m->__zigar->redirect('root', function($path) use($handle) {
+            if (strpos($path, '/dev/') === false) {
+                return $handle;
+            }
+        });
         $m->startup();
         try {
             $m->open();
