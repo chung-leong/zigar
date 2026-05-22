@@ -598,8 +598,8 @@ pub const ZigClassEntry = struct {
         return interfaces;
     }
 
-    fn extractScope(self: *@This(), info: *Value, comptime scope: ScopeType) !void {
-        const scope_info = try php.getProperty(info, @tagName(scope));
+    fn extractScope(self: *@This(), info: *Value, comptime scope_type: ScopeType) !void {
+        const scope_info = try php.getProperty(info, @tagName(scope_type));
         var slot_count: usize = 0;
         var members = php.createHashTable(null);
         errdefer php.destroyHashTable(&members);
@@ -622,7 +622,7 @@ pub const ZigClassEntry = struct {
                     .slot = try php.getHashEntryWithType(?usize, member_ht, "slot"),
                     .class = class,
                 };
-                if (scope == .instance) {
+                if (scope_type == .instance) {
                     // need to keep a reference since new instance can get created
                     // don't need to the same for static members, since objects in the table
                     // have references to their classes already
@@ -641,7 +641,7 @@ pub const ZigClassEntry = struct {
                 }
             }
         }
-        const slot_usage: SlotUsage = switch (scope) {
+        const slot_usage: SlotUsage = switch (scope_type) {
             .static => .multiple,
             .instance => switch (slot_count) {
                 0 => .none,
@@ -652,18 +652,15 @@ pub const ZigClassEntry = struct {
                 else => .multiple,
             },
         };
-        // attach accessors to members
         var iter: MemberIterator = .init(&members, .{});
         while (iter.next()) |member| {
-            member.accessors = try self.getAccessors(member, scope, slot_usage);
-            // if (iter.currentName()) |name| {
-            //     std.debug.print("{s} => {s}\n", .{ php.getStringContent(name), @tagName(member.accessors) });
-            // }
+            member.accessors = try self.getAccessors(member, scope_type, slot_usage);
         }
-        if (scope == .instance) self.slot_usage = slot_usage;
+        if (scope_type == .instance) self.slot_usage = slot_usage;
         const template_info = php.getProperty(scope_info, "template") catch null;
         const template = try createTemplate(template_info);
-        @field(self, @tagName(scope)) = .{
+        const scope = &@field(self, @tagName(scope_type));
+        scope.* = .{
             .members = members,
             .template = template,
         };
@@ -896,11 +893,14 @@ pub const ZigClassEntry = struct {
         fn_static.controller_address = @intFromPtr(controller_buf.bytes.ptr);
         // add flags to argument members
         const arg_member = try self.getMember(.instance, 0);
+        const slot_usage = self.slot_usage;
         var iter = arg_member.class.getMemberIterator(.instance);
         var index: usize = 0;
         while (iter.next()) |member| : (index += 1) {
             if (try php.getPropertyWithType(?MemberFlags, member_flags, index)) |flags| {
                 member.flags = flags;
+                // update accessors, since member flags can change due to @"meta(zigar)".toArgumentXXX()
+                member.accessors = try self.getAccessors(member, .instance, slot_usage);
             }
         }
     }

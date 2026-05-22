@@ -312,9 +312,8 @@ pub fn Parent(comptime S: type) type {
                 retval.* = value;
                 if (prop_type == php.BP_VAR_UNSET) {
                     php.throwError(error.IllegalOperation);
-                } else if (prop_type == php.BP_VAR_IS) {
-                    // silent access doesn't increment refcount
-                    php.delRef(retval);
+                } else if (prop_type == php.BP_VAR_W) {
+                    php.throwError(error.IllegalOperation);
                 }
             } else |err| {
                 retval.* = php.createValueNull();
