@@ -56,8 +56,19 @@ export fn php_zigar_info(_: *ModuleEntry) void {
     php.infoTableEnd();
 }
 
+const ExtensionOptions = extern struct {
+    disable_compilation: bool,
+    module_relative_path: [*:0]u8,
+};
+
+extern fn get_options() *ExtensionOptions;
+
+pub fn getOptions() *ExtensionOptions {
+    return get_options();
+}
+
 const functions = struct {
-    pub const zigar_load_module = struct {
+    pub const zigar_load = struct {
         pub const arg_info = [_]ArgInfo{
             .{
                 .name = "path",
@@ -75,7 +86,7 @@ const functions = struct {
             const al = php.allocator;
             var arg_iter = ArgumentIterator.init(ed);
             if (arg_iter.len < 1 or arg_iter.len > 2) {
-                return reportArgCountMismatch("zigar_load_module", 1, 2, arg_iter.len);
+                return failure.reportArgCountMismatch("zigar_load", 1, 2, arg_iter.len);
             }
             const arg0 = arg_iter.next().?;
             const mod_path = try php.getValueStringContent(arg0);
@@ -88,7 +99,7 @@ const functions = struct {
             return_value.* = try ModuleHost.load(so_path);
         }
     };
-    pub const zigar_compile_module = struct {
+    pub const zigar_compile = struct {
         pub const arg_info = [_]ArgInfo{
             .{
                 .name = "source_path",
@@ -116,11 +127,16 @@ const functions = struct {
             .required_num_args = 2,
         };
 
-        pub fn run(ed: *ExecuteData, _: *Value) !void {
+        pub fn run(ed: *ExecuteData, retval: *Value) !void {
             const al = php.allocator;
             var arg_iter = ArgumentIterator.init(ed);
             if (arg_iter.len < 2 or arg_iter.len > 3) {
-                return reportArgCountMismatch("zigar_compile_module", 2, 3, arg_iter.len);
+                return failure.reportArgCountMismatch("zigar_compile", 2, 3, arg_iter.len);
+            }
+            const extension_options = getOptions();
+            if (extension_options.disable_compilation) {
+                retval.* = php.createValueBool(false);
+                return;
             }
             const arg0 = arg_iter.next().?;
             const src_path = try php.getValueStringContent(arg0);
@@ -134,6 +150,7 @@ const functions = struct {
             const module_path_resolved = try std.fs.path.resolve(al, &.{ cwd_path, mod_path });
             defer php.allocator.free(module_path_resolved);
             try ZigCompiler.compile(source_path_resolved, module_path_resolved, options);
+            retval.* = php.createValueBool(true);
         }
     };
     pub const zigar_event_loop = struct {
@@ -153,31 +170,13 @@ const functions = struct {
         pub fn run(ed: *ExecuteData, _: *Value) !void {
             var arg_iter = ArgumentIterator.init(ed);
             if (arg_iter.len != 1) {
-                return reportArgCountMismatch("zigar_event_loop", 1, 1, arg_iter.len);
+                return failure.reportArgCountMismatch("zigar_event_loop", 1, 1, arg_iter.len);
             }
             const arg0 = arg_iter.next().?;
             const loop_type = try php.getValueStringContent(arg0);
             try CallDispatcher.event_loop.use(loop_type);
         }
     };
-
-    fn reportArgCountMismatch(fn_name: []const u8, max_arg_count: usize, min_arg_count: usize, arg_count: usize) error{Unexpected}!void {
-        return failure.report("{s}() expects {s} {d} argument{s}, {d} given", .{
-            fn_name,
-            if (max_arg_count > min_arg_count)
-                "at most"
-            else if (arg_count < min_arg_count)
-                "at least"
-            else
-                "exactly",
-            if (max_arg_count > min_arg_count)
-                max_arg_count
-            else
-                min_arg_count,
-            if (min_arg_count != 1) "s" else "",
-            arg_count,
-        });
-    }
 };
 
 comptime {

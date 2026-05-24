@@ -17,8 +17,8 @@ final class ZigImporter
         $info = pathinfo($src_path);
         $options['optimize'] = self::$optimize;
         $mod_path = "{$info['dirname']}/lib/{$info['filename']}.zigar";
-        zigar_compile_module($src_path, $mod_path, $options);
-        return zigar_load_module($mod_path);
+        zigar_compile($src_path, $mod_path, $options);
+        return zigar_load($mod_path);
     }
 
     public static function safetyCheck() {

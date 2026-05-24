@@ -14,6 +14,24 @@ pub fn report(comptime fmt: []const u8, params: anytype) error{Unexpected} {
     return error.Unexpected;
 }
 
+pub fn reportArgCountMismatch(fn_name: []const u8, max_arg_count: usize, min_arg_count: usize, arg_count: usize) error{Unexpected} {
+    return report("{s}() expects {s} {d} argument{s}, {d} given", .{
+        fn_name,
+        if (max_arg_count > min_arg_count)
+            "at most"
+        else if (arg_count < min_arg_count)
+            "at least"
+        else
+            "exactly",
+        if (max_arg_count > min_arg_count)
+            max_arg_count
+        else
+            min_arg_count,
+        if (min_arg_count != 1) "s" else "",
+        arg_count,
+    });
+}
+
 const oom_msg = "out of memory";
 var error_message: ?[]const u8 = null;
 
