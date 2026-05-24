@@ -95,6 +95,8 @@ pub const TransformCache = struct {
             .__int = .integer,
             .__bytes = .bytes,
             .__base64 = .base64,
+            .__typed_array = .typed_array,
+            .__clamped_array = .clamped_array,
             .@"$" = .plain,
         };
         return inline for (std.meta.fields(@TypeOf(transforms))) |field| {
