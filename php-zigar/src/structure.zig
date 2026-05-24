@@ -313,7 +313,9 @@ pub fn Parent(comptime S: type) type {
                 if (prop_type == php.BP_VAR_UNSET) {
                     php.throwError(error.IllegalOperation);
                 } else if (prop_type == php.BP_VAR_W) {
-                    php.throwError(error.IllegalOperation);
+                    if (php.getValueType(&value) != .object) {
+                        php.throwError(error.IllegalOperation);
+                    }
                 }
             } else |err| {
                 retval.* = php.createValueNull();
