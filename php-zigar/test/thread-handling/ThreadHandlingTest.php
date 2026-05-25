@@ -4,23 +4,25 @@ use Revolt\EventLoop;
 
 final class ThreadHandlingTest extends ZigarTestCase
 {   
-    // public function testSpawnThreadsAndInvokeCallback(): void
-    // {
-    //     zigar_event_loop('revolt');
-    //     $m = ZigImporter::load(__DIR__ . '/create-thread-call-function.zig');
-    //     $m->startup();
-    //     try {
-    //         // EventLoop::defer(function() use ($m) {
-    //         //     $m->spawn();
-    //         // });
-    //         EventLoop::delay(5.5, function() {
-    //             echo "ok\n";
-    //         });
-    //         EventLoop::run();
-    //     } finally {
-    //         // $m->shutdown();
-    //     }
-    // }   
+    public function testSpawnThreadsAndInvokeCallback(): void
+    {
+        zigar_loop('revolt');
+        $m = ZigImporter::load(__DIR__ . '/create-thread-call-function.zig');
+        $m->startup();
+        try {
+            // EventLoop::defer(function() use ($m) {
+            //     $m->spawn(function() {
+            //         echo "callback\n";
+            //     });
+            // });
+            // EventLoop::delay(5.5, function() {
+            //     echo "ok\n";
+            // });
+            // EventLoop::run();
+        } finally {
+            $m->shutdown();
+        }
+    }   
 
     public function testCreateThreadThatResolvesAPromise(): void
     {

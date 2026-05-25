@@ -209,7 +209,7 @@ const functions = struct {
             retval.* = try ModuleHost.load(so_path);
         }
     };
-    pub const zigar_event_loop = struct {
+    pub const zigar_loop = struct {
         pub const arg_info = [_]ArgInfo{
             .{
                 .name = "value",
@@ -226,7 +226,7 @@ const functions = struct {
         pub fn run(ed: *ExecuteData, _: *Value) !void {
             var arg_iter = ArgumentIterator.init(ed);
             if (arg_iter.len != 1) {
-                return failure.reportArgCountMismatch("zigar_event_loop", 1, 1, arg_iter.len);
+                return failure.reportArgCountMismatch("zigar_loop", 1, 1, arg_iter.len);
             }
             const arg0 = arg_iter.next().?;
             const loop_type = try php.getValueStringContent(arg0);
