@@ -576,12 +576,14 @@ pub const ZigClassEntry = struct {
                 buffer[count] = php.getInterface(.throwable);
                 count += 1;
             },
-            .@"struct" => switch (self.purpose) {
-                .generator, .iterator => {
-                    buffer[count] = php.getInterface(.traversable);
-                    count += 1;
-                },
-                else => {},
+            .@"struct" => if (self.purpose == .generator or self.purpose == .iterator) {
+                buffer[count] = php.getInterface(.traversable);
+                count += 1;
+            } else if (self.flags.@"struct".is_tuple) {
+                buffer[count] = php.getInterface(.array_access);
+                count += 1;
+                buffer[count] = php.getInterface(.traversable);
+                count += 1;
             },
             else => {},
         }

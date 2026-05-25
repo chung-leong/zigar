@@ -104,7 +104,7 @@ pub fn PropertyIterator(comptime S: type) type {
             self.member_iter = class.getMemberIterator(scope);
             self.container = ZigObject(S).fromObject(obj).structure();
             self.current_name = null;
-            self.current_index = 0;
+            self.current_index = std.math.maxInt(usize);
             self.iter.funcs = &methods;
             self.iter.data = php.createValueNull();
             return self;
@@ -164,7 +164,11 @@ pub fn PropertyIterator(comptime S: type) type {
                         if (member.accessors.get(self.container) catch null) |value| {
                             iter.data = value;
                             self.current_name = name;
-                            self.current_index += 1;
+                            if (self.current_index == std.math.maxInt(usize)) {
+                                self.current_index = 0;
+                            } else {
+                                self.current_index += 1;
+                            }
                             return;
                         }
                     }
@@ -178,7 +182,8 @@ pub fn PropertyIterator(comptime S: type) type {
         pub fn rewind(iter: *ObjectIterator) !void {
             const self = fromIter(iter);
             self.member_iter.reset();
-            self.current_index = 0;
+            self.current_index = std.math.maxInt(usize);
+            moveForward(&self.iter);
         }
 
         pub fn next(self: *@This()) ?*Value {
@@ -339,6 +344,105 @@ pub const IteratorIterator = struct {
         const obj_value = php.createValueObject(self.iter_object);
         const method_value = php.createValuePersistentString(method);
         return php.invokeMethod(&obj_value, &method_value, &.{});
+    }
+
+    const methods: ObjectIteratorFunctions = .{
+        .dtor = php.transform(destroy),
+        .valid = php.transform(isValid),
+        .get_current_data = php.transform(getCurrentData),
+        .get_current_key = php.transform(getCurrentKey),
+        .move_forward = php.transform(moveForward),
+        .rewind = php.transform(rewind),
+    };
+};
+
+pub const TupleIterator = struct {
+    iter: ObjectIterator,
+    member_iter: ZigClassEntry.MemberIterator,
+    container: *structure.Struct,
+    current_index: usize,
+    has_value: bool = false,
+
+    fn fromIter(iter: *ObjectIterator) *@This() {
+        return @fieldParentPtr("iter", iter);
+    }
+
+    pub fn init(obj: *Object) @This() {
+        var self: @This() = undefined;
+        const class = ZigClassEntry.fromObject(obj);
+        self.member_iter = class.getMemberIterator(.instance);
+        self.container = ZigObject(structure.Struct).fromObject(obj).structure();
+        self.current_index = std.math.maxInt(usize);
+        self.has_value = false;
+        self.iter.funcs = &methods;
+        self.iter.data = php.createValueNull();
+        return self;
+    }
+
+    pub fn deinit(self: *@This()) void {
+        php.release(&self.iter.data);
+    }
+
+    pub fn create(obj: *Object) !*ObjectIterator {
+        const self = try php.allocator.create(@This());
+        self.* = .init(obj);
+        // initializeIterator() adds the iterator to the Zend object store, that's why
+        // we don't call it when we use the iterator as a stack object
+        php.initializeIterator(&self.iter);
+        php.addRef(obj);
+        return &self.iter;
+    }
+
+    pub fn destroy(iter: *ObjectIterator) void {
+        const self = fromIter(iter);
+        self.deinit();
+        php.release(ZigObject(structure.Struct).fromStructure(self.container).object());
+    }
+
+    pub fn isValid(iter: *ObjectIterator) c_int {
+        const self = fromIter(iter);
+        return if (self.has_value) php.SUCCESS else php.FAILURE;
+    }
+
+    pub fn getCurrentData(iter: *ObjectIterator) *Value {
+        return &iter.data;
+    }
+
+    pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {
+        const self = fromIter(iter);
+        key_ptr.* = php.createValueAnyInt(self.current_index);
+    }
+
+    pub fn moveForward(iter: *ObjectIterator) void {
+        const self = fromIter(iter);
+        php.release(&iter.data);
+        while (self.member_iter.next()) |member| {
+            if (member.accessors.get(self.container) catch null) |value| {
+                iter.data = value;
+                self.has_value = true;
+                if (self.current_index == std.math.maxInt(usize)) {
+                    self.current_index = 0;
+                } else {
+                    self.current_index += 1;
+                }
+                return;
+            }
+        } else {
+            iter.data = php.createValueNull();
+            self.has_value = false;
+        }
+    }
+
+    pub fn rewind(iter: *ObjectIterator) !void {
+        const self = fromIter(iter);
+        self.member_iter.reset();
+        self.current_index = std.math.maxInt(usize);
+        moveForward(&self.iter);
+    }
+
+    pub fn next(self: *@This()) ?*Value {
+        moveForward(&self.iter);
+        return if (self.has_value) &self.iter.data else null;
     }
 
     const methods: ObjectIteratorFunctions = .{

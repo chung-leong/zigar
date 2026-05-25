@@ -286,6 +286,46 @@ pub const Struct = struct {
         Super.freeObject(obj);
     }
 
+    pub fn readElement(obj: *Object, key: *Value, _: c_int, retval: *Value) !*Value {
+        const self = fromObject(obj);
+        const len = self.getLength();
+        const index = try getIndex(key, len);
+        retval.* = try self.getElement(index);
+        return retval;
+    }
+
+    pub fn writeElement(obj: *Object, key: *Value, value: *Value) !void {
+        const self = fromObject(obj);
+        const len = self.getLength();
+        const index = try getIndex(key, len);
+        try self.setElement(index, value);
+    }
+
+    pub fn hasElement(obj: *Object, key: *Value, _: c_int) !c_int {
+        const self = fromObject(obj);
+        const len = self.getLength();
+        return if (getIndex(key, len)) |_| 1 else |_| 0;
+    }
+
+    pub fn countElements(obj: *Object, count: *php.Long) !c_int {
+        const self = fromObject(obj);
+        const len = self.getLength();
+        if (len > std.math.maxInt(php.Long)) return error.TooLarge;
+        count.* = @intCast(len);
+        return php.SUCCESS;
+    }
+
+    pub fn getIterator(obj: *Object) !?*ObjectIterator {
+        const class = ZigClassEntry.fromObject(obj);
+        return if (class.flags.@"struct".is_tuple)
+            try iterator.TupleIterator.create(obj)
+        else switch (class.purpose) {
+            .iterator => try iterator.IteratorIterator.create(obj),
+            .generator => try iterator.GeneratorIterator.create(obj),
+            else => try Super.getIterator(obj),
+        };
+    }
+
     extern fn _get_osfhandle(fd: c_int) std.os.windows.HANDLE;
 
     fn getStreamHandle(self: *@This(), value: *const Value, is_dir: bool) !?Value {
@@ -327,6 +367,42 @@ pub const Struct = struct {
         }
     }
 
+    fn getElement(self: *@This(), index: usize) !Value {
+        const class = ZigClassEntry.fromStructure(self);
+        var iter = class.getMemberIterator(.instance);
+        var i: usize = 0;
+        while (iter.next()) |m| {
+            if (i == index) return try m.accessors.get(self);
+            i += 1;
+        }
+        return error.OutOfBound;
+    }
+
+    fn setElement(self: *@This(), index: usize, value: *const Value) !void {
+        const class = ZigClassEntry.fromStructure(self);
+        var iter = class.getMemberIterator(.instance);
+        var i: usize = 0;
+        while (iter.next()) |m| {
+            if (i == index) return try m.accessors.set(self, value);
+            i += 1;
+        }
+        return error.OutOfBound;
+    }
+
+    fn getLength(self: *@This()) usize {
+        const class = ZigClassEntry.fromStructure(self);
+        const iter = class.getMemberIterator(.instance);
+        return iter.len;
+    }
+
+    fn getIndex(key: *Value, len: usize) !usize {
+        const key_long = try php.getValueLong(key);
+        if (key_long < 0) return error.NegativeIndex;
+        const index: usize = @intCast(key_long);
+        if (index >= len) return error.OutOfBound;
+        return index;
+    }
+
     pub const initialize = Super.initialize;
     pub const finalize = Super.finalize;
     pub const externalize = Super.externalize;
@@ -344,6 +420,5 @@ pub const Struct = struct {
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const compare = Super.compare;
     pub const getGarbageCollection = Super.getGarbageCollection;
-    pub const getIterator = Super.getIterator;
     const fromObject = Super.fromObject;
 };
