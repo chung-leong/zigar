@@ -36,7 +36,7 @@ pub const ZigClassEntry = struct {
     purpose: StructurePurpose,
     flags: StructureFlags,
     alignment: std.mem.Alignment,
-    signature: u64,
+    signature: c_long,
     length: ?usize,
     byte_size: ?usize,
     instance: Scope = undefined,
@@ -179,15 +179,8 @@ pub const ZigClassEntry = struct {
             php.addRef(str);
             break :use str;
         } else |_| php.createString(""); // use an empty string for now
-        const signature: u64 = init: {
-            const value = try php.getProperty(info, "signature");
-            if (php.getValueDouble(value)) |d|
-                break :init @intFromFloat(d)
-            else |_| if (php.getValueLong(value)) |l|
-                break :init @intCast(l)
-            else |_|
-                return error.InvalidSignature;
-        };
+        const signature_value = try php.getProperty(info, "signature");
+        const signature = try php.getValueLong(signature_value);
         var self: *@This() = try php.allocator.create(@This());
         errdefer php.allocator.destroy(self);
         self.* = .{

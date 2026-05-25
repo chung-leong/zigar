@@ -411,15 +411,26 @@ pub fn createValueLong(l: c_long) Value {
 }
 
 pub fn createValueAnyInt(i: anytype) Value {
-    const max = std.math.maxInt(c_long);
-    const min = std.math.minInt(c_long);
-    if (min <= i and i <= max) {
-        const long: c_long = @intCast(i);
-        return createValueLong(long);
-    } else {
-        const double: f32 = @floatFromInt(i);
-        return createValueDouble(double);
+    const T = @TypeOf(i);
+    var long: c_long = undefined;
+    switch (@typeInfo(T)) {
+        .int => |int| {
+            if (int.signedness == .signed) {
+                long = if (int.bits > @bitSizeOf(c_long)) @truncate(i) else i;
+            } else {
+                const ulong: c_ulong = if (int.bits > @bitSizeOf(c_ulong)) @truncate(i) else i;
+                long = @bitCast(ulong);
+            }
+        },
+        .comptime_int => {
+            if (i < std.math.minInt(c_long) or i > std.math.maxInt(c_long)) {
+                @compileError("Integer overflow");
+            }
+            long = i;
+        },
+        else => @compileError("Not integer"),
     }
+    return createValueLong(long);
 }
 
 pub fn createValueDouble(d: f64) Value {
@@ -604,7 +615,7 @@ pub fn getValueLong(value: *const Value) !c_long {
 }
 
 fn doubleToLong(value: f64) !Long {
-    // TODO: check for overflow
+    @setRuntimeSafety(false);
     const long: Long = @intFromFloat(value);
     const double: f64 = @floatFromInt(long);
     return switch (double == value) {
@@ -647,6 +658,7 @@ pub fn getValueDouble(value: *const Value) !f64 {
 }
 
 fn longToDouble(value: Long) !f64 {
+    @setRuntimeSafety(false);
     const double: f64 = @floatFromInt(value);
     const long: Long = @intFromFloat(double);
     return switch (long == value) {
