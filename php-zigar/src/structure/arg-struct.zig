@@ -5,6 +5,7 @@ const accessor = @import("../accessor.zig");
 const Transform = accessor.Transform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const failure = @import("../failure.zig");
 const Generator = @import("../generator.zig").Generator;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
@@ -117,7 +118,15 @@ pub const ArgStruct = struct {
         var index: usize = 0;
         while (arg_iter.next()) |arg| : (index += 1) {
             const acc = static.arg_accessors[index];
-            try acc.set(self, arg);
+            acc.set(self, arg) catch |err| {
+                if (failure.hasMessage()) {
+                    const msg = failure.acquireMessage(err);
+                    defer php.allocator.free(msg);
+                    return failure.report("args[{d}]: {s}", .{ index, msg });
+                } else {
+                    return err;
+                }
+            };
         }
         // initialize special arguments
         inline for (.{ .allocator, .promise, .generator, .abort_signal }) |t| {

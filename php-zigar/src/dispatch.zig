@@ -187,7 +187,7 @@ pub const CallDispatcher = struct {
         const controller_address = fn_static.controller_address;
         if (controller_address == 0) return error.Unexpected;
         var thunk_address: usize = 0;
-        const module = self.host.module orelse return error.Unexpected;
+        const module = self.host.module;
         const fn_id = try self.saveCallback(class, callable);
         _ = module.exports.create_js_thunk(controller_address, fn_id, &thunk_address);
         return thunk_address;
@@ -197,7 +197,7 @@ pub const CallDispatcher = struct {
         const fn_static = class.getStaticData(structure.Function);
         const controller_address = fn_static.controller_address;
         var fn_id: usize = 0;
-        const module = self.host.module orelse return error.Unexpected;
+        const module = self.host.module;
         if (module.exports.destroy_js_thunk(controller_address, thunk_address, &fn_id) == .SUCCESS) {
             self.deleteCallback(fn_id);
         }
@@ -324,7 +324,7 @@ pub const CallDispatcher = struct {
     }
 
     pub fn getSyscallHook(self: *@This(), name: [*:0]const u8) ?HookEntry {
-        const module = self.host.module.?;
+        const module = self.host.module;
         var hook: HookEntry = undefined;
         return if (module.exports.get_syscall_hook(name, &hook) == .SUCCESS) .{
             .handler = hook.handler,
@@ -425,9 +425,8 @@ pub const CallDispatcher = struct {
                 trapping_syscalls = true;
             }
         }
-        if (self.host.module) |m| {
-            _ = m.exports.set_host_instance(@ptrCast(self.host));
-        }
+        const module = self.host.module;
+        _ = module.exports.set_host_instance(@ptrCast(self.host));
     }
 
     pub fn deinitializeThread(self: *@This()) !void {

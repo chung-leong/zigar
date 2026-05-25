@@ -3,6 +3,7 @@ const std = @import("std");
 const accessor = @import("../accessor.zig");
 const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
+const failure = @import("../failure.zig");
 const php = @import("../php.zig");
 const Value = php.Value;
 
@@ -24,6 +25,7 @@ pub fn Int(comptime attrs: Attributes) type {
     return switch (attrs.use_bit_offset) {
         false => struct {
             byte_offset: usize,
+            runtime_check: bool,
             comptime type: accessor.Type = .int,
             comptime attributes: Attributes = attrs,
 
@@ -36,22 +38,22 @@ pub fn Int(comptime attrs: Attributes) type {
             }
 
             pub fn set(self: @This(), buffer: *ByteBuffer, value: *const Value) Error!void {
+                const long = try php.getValueLong(value);
+                if (self.runtime_check) try check(T, long);
                 const byte_size = (@bitSizeOf(T) + 7) / 8;
                 const bytes: []u8 = try buffer.data(self.byte_offset + byte_size, true);
                 if (comptime @bitSizeOf(T) == 0) return;
                 const ptr: *align(1) T = @ptrCast(&bytes[self.byte_offset]);
-                ptr.* = get: {
-                    const long = try php.getValueLong(value);
-                    break :get switch (attrs.signedness) {
-                        .signed => @truncate(long),
-                        .unsigned => @truncate(@as(c_ulong, @bitCast(long))),
-                    };
+                ptr.* = switch (attrs.signedness) {
+                    .signed => @truncate(long),
+                    .unsigned => @truncate(@as(c_ulong, @bitCast(long))),
                 };
             }
         },
         true => struct {
             byte_offset: usize,
             bit_offset: u3,
+            runtime_check: bool,
             comptime type: accessor.Type = .int,
             comptime attributes: Attributes = attrs,
 
@@ -84,19 +86,24 @@ pub fn Int(comptime attrs: Attributes) type {
             }
 
             pub fn setAt(self: @This(), buffer: *ByteBuffer, comptime bit_offset: u3, value: *const Value) Error!void {
+                const long = try php.getValueLong(value);
+                if (self.runtime_check) try check(T, long);
                 const AT = accessor.WithBitOffset(T, bit_offset);
                 const byte_size = (@bitSizeOf(AT) + 7) / 8;
                 const bytes: []u8 = try buffer.data(self.byte_offset + byte_size, true);
                 if (comptime @bitSizeOf(T) == 0) return;
                 const ptr: *align(1) AT = @ptrCast(&bytes[self.byte_offset]);
-                ptr.value = get: {
-                    const long = try php.getValueLong(value);
-                    break :get switch (attrs.signedness) {
-                        .signed => @truncate(long),
-                        .unsigned => @truncate(@as(c_ulong, @bitCast(long))),
-                    };
+                ptr.value = switch (attrs.signedness) {
+                    .signed => @truncate(long),
+                    .unsigned => @truncate(@as(c_ulong, @bitCast(long))),
                 };
             }
         },
     };
+}
+
+fn check(comptime T: type, value: c_long) error{Unexpected}!void {
+    if (value < std.math.minInt(T) or value > std.math.maxInt(T)) {
+        return failure.report("{s} cannot represent the value given: {d}", .{ @typeName(T), value });
+    }
 }

@@ -52,6 +52,7 @@ const Attributes = union(enum) {
 pub fn Vector(comptime attrs: Attributes) type {
     if (comptime attrs != .gmp) {
         return struct {
+            runtime_check: bool,
             comptime type: accessor.Type = .vector,
             comptime attributes: Attributes = attrs,
 
@@ -93,10 +94,11 @@ pub fn Vector(comptime attrs: Attributes) type {
                 }
             }
 
-            fn primitiveAt(_: @This(), byte_offset: usize, comptime use_bit_offset: bool) attrs.Primitive(use_bit_offset) {
+            fn primitiveAt(self: @This(), byte_offset: usize, comptime use_bit_offset: bool) attrs.Primitive(use_bit_offset) {
                 const P = attrs.Primitive(use_bit_offset);
                 var acc: P = undefined;
                 acc.byte_offset = byte_offset;
+                if (@hasField(P, "runtime_check")) acc.runtime_check = self.runtime_check;
                 return acc;
             }
         };
@@ -104,6 +106,7 @@ pub fn Vector(comptime attrs: Attributes) type {
         return struct {
             // gmp accessors don't have comptime known bit size
             bit_size: usize = 0,
+            runtime_check: bool,
             comptime type: accessor.Type = .vector,
             comptime attributes: Attributes = attrs,
 
@@ -148,6 +151,7 @@ pub fn Vector(comptime attrs: Attributes) type {
                 var acc: P = undefined;
                 acc.byte_offset = byte_offset;
                 acc.bit_size = self.bit_size;
+                if (@hasField(P, "runtime_check")) acc.runtime_check = self.runtime_check;
                 return acc;
             }
         };

@@ -21,7 +21,7 @@ const fn_transform = @import("zigft/fn-transform.zig");
 
 pub const ModuleHost = struct {
     ref_count: isize = 0,
-    module: ?*Module = null,
+    module: *Module,
     library: ?DynLib = null,
     global_error_set: ?*Array = null,
     importer: *StructureImporter = undefined,
@@ -83,7 +83,6 @@ pub const ModuleHost = struct {
 
     fn exportFunctionsToModule(self: *@This()) !void {
         @setEvalBranchQuota(2000000);
-        const module = self.module orelse return error.NoLoadedModule;
         inline for (std.meta.fields(Module.Imports)) |field| {
             const name_c = comptime camelize(field.name);
             const Component = inline for (.{ StructureImporter, CallDispatcher }) |T| {
@@ -144,28 +143,28 @@ pub const ModuleHost = struct {
             };
             const transformed_func = fn_transform.spreadArgs(ns.call, .c);
             const T1 = @TypeOf(transformed_func);
-            const T2 = @typeInfo(@TypeOf(@field(module.imports, field.name))).pointer.child;
+            const T2 = @typeInfo(@TypeOf(@field(self.module.imports, field.name))).pointer.child;
             if (T1 != T2) {
                 @compileError("Function declaration mismatch: " ++ field.name ++ "\n\nExpected: " ++ @typeName(T2) ++ "\n  Actual: " ++ @typeName(T1) ++ "\n");
             }
-            @field(module.imports, field.name) = transformed_func;
+            @field(self.module.imports, field.name) = transformed_func;
         }
     }
 
     fn getFactoryThunk(self: *@This()) !usize {
         var thunk_address: usize = 0;
-        if (self.module.?.exports.get_factory_thunk(&thunk_address) != .SUCCESS)
+        if (self.module.exports.get_factory_thunk(&thunk_address) != .SUCCESS)
             return error.UnableToFindFactoryFunction;
         return thunk_address;
     }
 
     pub fn runThunk(self: *@This(), thunk_address: usize, fn_address: usize, arg_address: usize) !void {
-        if (self.module.?.exports.run_thunk(thunk_address, fn_address, arg_address) != .SUCCESS)
+        if (self.module.exports.run_thunk(thunk_address, fn_address, arg_address) != .SUCCESS)
             return error.UnableToExecuteZigFunction;
     }
 
     pub fn runVariadicThunk(self: *@This(), thunk_address: usize, fn_address: usize, arg_address: usize, attr_address: usize, arg_count: usize) !void {
-        if (self.module.?.exports.run_variadic_thunk(thunk_address, fn_address, arg_address, attr_address, arg_count) != .SUCCESS)
+        if (self.module.exports.run_variadic_thunk(thunk_address, fn_address, arg_address, attr_address, arg_count) != .SUCCESS)
             return error.UnableToExecuteZigFunction;
     }
 
@@ -217,13 +216,11 @@ pub const ModuleHost = struct {
     }
 
     pub fn isRedirecting(self: *@This()) bool {
-        if (self.module) |m| return m.attributes.io_redirection;
-        return false;
+        return self.module.attributes.io_redirection;
     }
 
     pub fn useRuntimeSafety(self: *@This()) bool {
-        if (self.module) |m| return m.attributes.runtime_safety;
-        return false;
+        return self.module.attributes.runtime_safety;
     }
 };
 

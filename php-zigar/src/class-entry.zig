@@ -971,6 +971,9 @@ pub const ZigClassEntry = struct {
                                 if (@hasField(Acc, "bit_size")) {
                                     acc.bit_size = member.bit_size;
                                 }
+                                if (@hasField(Acc, "runtime_check")) {
+                                    acc.runtime_check = self.host.useRuntimeSafety();
+                                }
                                 break @unionInit(accessor.Any, field.name, acc);
                             }
                         }
