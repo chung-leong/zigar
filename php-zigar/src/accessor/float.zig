@@ -91,7 +91,9 @@ pub fn Float(comptime attrs: Attributes) type {
 }
 
 fn check(comptime T: type, value: f64) error{Unexpected}!void {
-    if (value < std.math.floatMin(T) or value > std.math.floatMax(T)) {
+    const abs_value = @abs(value);
+    if (abs_value < std.math.floatMin(T) or abs_value > std.math.floatMax(T)) {
+        std.debug.print("min = {d}, max = {d}\n", .{ std.math.floatMin(T), std.math.floatMax(T) });
         return failure.report("{s} cannot represent the value given: {d}", .{ @typeName(T), value });
     }
 }
