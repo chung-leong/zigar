@@ -1207,7 +1207,7 @@ pub fn createFunction(
 
 pub fn createFunctionEx(
     func_ptr: php_h.zif_handler,
-    name: *String,
+    name: ?*String,
     comptime arg_count: usize,
     comptime is_variadic: bool,
 ) Function {
@@ -1229,7 +1229,7 @@ pub fn createFunctionEx(
 
 pub inline fn createTransformedFunction(
     comptime func: anytype,
-    name: []const u8,
+    comptime name: []const u8,
     arg_count: usize,
     is_variadic: bool,
 ) Function {

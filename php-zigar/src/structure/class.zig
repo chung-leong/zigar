@@ -104,8 +104,10 @@ pub fn Class(comptime S: type) type {
             const field_obj = php.getValueObject(&field) catch return null;
             const field_class = ZigClassEntry.fromObject(field_obj);
             if (field_class.type == .function) {
-                const func = ZigObject(structure.Function).fromObject(field_obj).structure();
-                return &func.closure.php_portion;
+                const func_struct = ZigObject(structure.Function).fromObject(field_obj).structure();
+                const func = &func_struct.closure.php_portion;
+                func.internal_function.function_name = name;
+                return func;
             } else if (field_obj.handlers.*.get_closure != php.std_object_handlers.get_closure) {
                 // aside from Function, only Class implements getClosure()
                 const class_struct = fromObject(field_obj);

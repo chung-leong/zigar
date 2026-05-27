@@ -232,8 +232,10 @@ pub fn Parent(comptime S: type) type {
             const field_obj = php.getValueObject(&field) catch return null;
             const field_class = ZigClassEntry.fromObject(field_obj);
             if (field_class.type != .function) return null;
-            const func = ZigObject(Function).fromObject(field_obj).structure();
-            return &func.closure.php_portion;
+            const func_struct = ZigObject(Function).fromObject(field_obj).structure();
+            const func = &func_struct.closure.php_portion;
+            func.internal_function.function_name = name;
+            return func;
         }
 
         pub fn reportFieldError(self: *S, name: *String, access: accessor.FieldAccess, err: anytype) error{ ExceptionThrown, Unexpected } {

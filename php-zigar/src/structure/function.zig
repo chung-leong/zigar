@@ -112,9 +112,10 @@ pub const Function = struct {
     };
 
     pub fn finalize(self: *@This(), init_called: bool) !void {
+        const handler = php.transform(handleCall);
         self.closure = .{
             .self = self,
-            .php_portion = php.createTransformedFunction(handleCall, "call", 0, true),
+            .php_portion = php.createFunctionEx(handler, null, 0, true),
         };
         try Super.finalize(self, init_called);
     }
