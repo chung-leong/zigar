@@ -11,5 +11,5 @@ try {
     $m->hello();
 } catch (Exception $e) {
     echo "$e\n"; 
-    echo $e == "pants on fire\n";
+    echo $e == "pants on fire", "\n";
 }

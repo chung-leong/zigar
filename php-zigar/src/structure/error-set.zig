@@ -412,6 +412,17 @@ pub const ErrorSet = struct {
 
     pub fn compare(a: *Value, b: *Value) !c_int {
         const obj_a = php.getValueObject(a) catch return -1;
+        if (php.getValueType(b) == .string) {
+            const struct_a = fromObject(obj_a);
+            const canonical_a = try struct_a.getCanonical();
+            const sc_a = php.getStringContent(canonical_a.message);
+            const sc_b = php.getValueStringContent(b) catch unreachable;
+            return switch (std.mem.order(u8, sc_a, sc_b)) {
+                .lt => -1,
+                .gt => 1,
+                .eq => 0,
+            };
+        }
         const obj_b = php.getValueObject(b) catch return 1;
         if (obj_a == obj_b) return 0;
         if (obj_a.ce != obj_b.ce) {
