@@ -5,6 +5,5 @@ require __DIR__ . '/../vendor/autoload.php';
 
 $m = zigar_use(__DIR__ . "/scratch.zig");
 
-foreach ($m->tuple as $element) {
-    echo $element, "\n";
-}
+echo $m->union_value, "\n";
+debug_zval_dump($m->union_value == 'dog');

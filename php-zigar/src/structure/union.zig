@@ -115,6 +115,13 @@ pub const Union = struct {
         try Super.finalize(self, init_called);
     }
 
+    pub fn getValue(self: *@This(), transform: accessor.Transform) Error!Value {
+        if (transform == .string) {
+            if (try self.getActiveTagName()) |name| return name;
+        }
+        return Super.getValue(self, transform);
+    }
+
     pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) Error!void {
         if (transform == .none) {
             if (try self.copySelf(value)) return;
@@ -216,6 +223,13 @@ pub const Union = struct {
 
     pub fn compare(a: *Value, b: *Value) !c_int {
         const obj_a = php.getValueObject(a) catch return -1;
+        if (php.getValueType(b) == .string) {
+            const struct_a = fromObject(obj_a);
+            if (try struct_a.getActiveTagName()) |name| {
+                defer php.release(&name);
+                return php.compareValues(&name, b);
+            }
+        }
         const obj_b = php.getValueObject(b) catch return 1;
         if (obj_a == obj_b) return 0;
         if (obj_a.ce != obj_b.ce) {
@@ -272,6 +286,17 @@ pub const Union = struct {
         };
     }
 
+    fn getActiveTagName(self: *@This()) !?Value {
+        const class = ZigClassEntry.fromStructure(self);
+        if (!class.flags.@"union".has_tag) return null;
+        const static = class.getStaticData(@This());
+        const sel = static.selector orelse return error.Unexpected;
+        const tag_value = try sel.accessors.get(self);
+        const tag_obj = try php.getValueObject(&tag_value);
+        const tag_struct = ZigObject(structure.Enum).fromObject(tag_obj).structure();
+        return try tag_struct.getValue(.string);
+    }
+
     fn reportFieldError(self: *@This(), name: *String, access: accessor.FieldAccess, err: anytype) error{ ExceptionThrown, Unexpected } {
         const member = self.findMember(name, null);
         if (member != null and err == error.InactiveField) {
@@ -301,7 +326,6 @@ pub const Union = struct {
     pub const externalize = Super.externalize;
     pub const getExtent = Super.getExtent;
     pub const checkArguments = Super.checkArguments;
-    pub const getValue = Super.getValue;
     pub const propertyExists = Super.propertyExists;
     pub const getConstructor = Super.getConstructor;
     pub const freeObject = Super.freeObject;
