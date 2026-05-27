@@ -32,6 +32,8 @@ pub const Union = struct {
             possible_values: HashTable,
         } = null,
 
+        pub const StaticPropCache = cache.IdCache(.{.tag}, "__", .{});
+
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
             var iter = class.getMemberIterator(.instance);
@@ -86,6 +88,27 @@ pub const Union = struct {
             const sel = self.selector orelse return error.Unexpected;
             const union_struct = ZigObject(Union).fromObject(obj).structure();
             return try sel.accessors.get(union_struct);
+        }
+
+        pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
+            if (StaticPropCache.idFromString(name, cache_slot)) |id| {
+                switch (id) {
+                    .tag => {
+                        const class = ZigClassEntry.fromStatic(self);
+                        if (class.flags.@"union".has_tag) {
+                            const sel = self.selector orelse return error.Unexpected;
+                            const class_obj = sel.class.object;
+                            php.addRef(class_obj);
+                            return php.createValueObject(class_obj);
+                        }
+                    },
+                }
+            }
+            return error.Missing;
+        }
+
+        pub fn staticPropertyExists(_: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
+            return StaticPropCache.idFromString(name, cache_slot) != null;
         }
     };
     pub const MemberCache = cache.MemberCache;
