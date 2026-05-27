@@ -17,6 +17,7 @@ pub fn Module(comptime Value: type) type {
     return extern struct {
         version: u32 = current_version,
         attributes: Attributes,
+        module_path: [*:0]const u8,
         imports: *Imports,
         exports: *const Exports,
 

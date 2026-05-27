@@ -215,10 +215,7 @@ pub const ZigClassEntry = struct {
                 .interfaces = if (interfaces.len > 0) @ptrCast(interfaces.ptr) else null,
             },
             .info = .{
-                .user = .{
-                    // TODO
-                    .filename = php.createString("filename"),
-                },
+                .user = .{ .filename = host.module_path },
             },
         };
         // create the class object
@@ -261,7 +258,6 @@ pub const ZigClassEntry = struct {
         // if (self.gc_buffer) |buf| php.allocator.free(buf);
         const ce = self.entry();
         if (ce.name) |n| php.release(n);
-        if (ce.info.user.filename) |f| php.release(f);
         if (ce.unnamed_2.interfaces) |ptr| {
             const list = ptr[0..@as(usize, ce.num_interfaces)];
             php.allocator.free(list);

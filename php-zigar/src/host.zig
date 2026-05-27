@@ -22,6 +22,7 @@ const fn_transform = @import("zigft/fn-transform.zig");
 pub const ModuleHost = struct {
     ref_count: isize = 0,
     module: *Module,
+    module_path: *String,
     library: ?DynLib = null,
     global_error_set: ?*Array = null,
     importer: *StructureImporter = undefined,
@@ -43,6 +44,7 @@ pub const ModuleHost = struct {
         errdefer php.allocator.destroy(self);
         self.* = .{
             .module = module,
+            .module_path = php.createString(std.mem.sliceTo(module.module_path, 0)),
             .plain_object_table = php.createHashTable(null),
         };
         self.allocator = .{ .ptr = self, .vtable = &BufferAllocator.vtable };
@@ -72,6 +74,7 @@ pub const ModuleHost = struct {
         if (self.ref_count == 0) {
             // std.debug.print("freeing host\n", .{});
             php.destroyHashTable(&self.plain_object_table);
+            php.release(self.module_path);
             self.unclaimed_buffer_map.deinit();
             self.object_map.deinit();
             self.dispatcher.deinit();

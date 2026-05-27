@@ -60,10 +60,7 @@ pub const SpecialExports = struct {
                 .interfaces = null,
             },
             .info = .{
-                .user = .{
-                    // TODO
-                    .filename = php.createString("filename"),
-                },
+                .user = .{ .filename = host.module_path },
             },
         };
         const prop_size = php.getObjectPropertySize(&class_entry);
@@ -99,7 +96,6 @@ pub const SpecialExports = struct {
 
     pub fn freeObject(obj: *Object) void {
         const self = fromObject(obj);
-        php.release(self.class_entry.info.user.filename);
         self.host.release();
     }
 

@@ -390,6 +390,10 @@ pub fn createModule(comptime module_ns: type) Module {
             .libc = builtin.link_libc,
             .io_redirection = exporter.options.use_redirection,
         },
+        .module_path = switch (builtin.mode) {
+            .Debug => exporter.options.module_path.ptr,
+            else => std.fs.path.basename(exporter.options.module_path).ptr,
+        },
         .imports = &imports,
         .exports = &.{
             .set_host_instance = setHostInstance,
