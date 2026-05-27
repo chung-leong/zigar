@@ -5,5 +5,15 @@ require __DIR__ . '/../vendor/autoload.php';
 
 $m = zigar_use(__DIR__ . "/scratch.zig");
 
-echo $m->union_value, "\n";
-debug_zval_dump($m->union_value == 'dog');
+$m->User->print([
+    'id' => 1234,
+    'name' => "Bigus Dickus",
+    'email' => "madeupname12@rome.gov.it",
+    'age' => 32,
+    'address' => [
+        'street' => '1 Colosseum Sq.',
+        'city' => 'Rome',
+        'state' => 'NY',
+        'zipCode' => '10001',
+    ],
+]);

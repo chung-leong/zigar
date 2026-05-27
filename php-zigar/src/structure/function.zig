@@ -53,8 +53,9 @@ pub const Function = struct {
             }
         }
 
-        pub fn matchFirstArgument(self: *@This(), value: *const Value) bool {
+        pub fn matchFirstArgument(self: *@This(), this_value: *const Value) bool {
             var arg_class = self.first_arg_class orelse return false;
+            var this_obj = php.getValueObject(this_value) catch return false;
             if (arg_class.type == .pointer) {
                 const target_member = arg_class.getMember(.instance, 0) catch unreachable;
                 switch (target_member.class.type) {
@@ -68,14 +69,13 @@ pub const Function = struct {
                     },
                 }
             }
-            var obj = php.getValueObject(value) catch return false;
-            if (!ZigClassEntry.isZig(obj.ce)) return false;
-            if (ZigObject(structure.Pointer).isInstance(obj)) {
-                const pointer = ZigObject(structure.Pointer).fromObject(obj).structure();
+            if (ZigObject(structure.Pointer).isInstance(this_obj)) {
+                const pointer = ZigObject(structure.Pointer).fromObject(this_obj).structure();
                 const target = pointer.getValue(.none) catch return false;
-                obj = php.getValueObject(&target) catch return false;
+                this_obj = php.getValueObject(&target) catch return false;
             }
-            return obj.ce == arg_class.entry();
+            // see if the class entry matches and this_obj isn't the class object
+            return this_obj.ce == arg_class.entry() and this_obj != arg_class.object;
         }
 
         pub fn runCallback(self: *@This(), callable: *Value, arg_bytes: []u8) !void {
