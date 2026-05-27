@@ -88,12 +88,14 @@ pub const ErrorSet = struct {
 
         pub fn castValue(self: *@This(), value: *Value) !?Value {
             switch (php.getValueType(value)) {
-                .long => return self.findCanonical(value) catch php.createValueNull(),
-                .string => return null,
+                .long, .string => return self.findCanonical(value) catch php.createValueNull(),
+                .object => return null, // allow default handling
                 else => {},
             }
-            return failure.report("casting operation expects an interger or a string as argument, received {s}", .{
-                @tagName(php.getValueType(value)),
+            const value_d = php.createValueDebug(value);
+            defer php.release(&value_d);
+            return failure.report("casting operation requires an interger, string, or ArrayBuffer as argument, received {s}", .{
+                php.getValueStringContent(&value_d) catch unreachable,
             });
         }
 
@@ -116,11 +118,11 @@ pub const ErrorSet = struct {
                 try std.fmt.allocPrint(php.allocator, "error{{ {s} }}", .{joined});
         }
 
-        pub fn findCanonical(self: *@This(), value: *const Value) !Value {
+        pub fn findCanonical(self: *@This(), key: *const Value) !Value {
             const class = ZigClassEntry.fromStatic(self);
-            return switch (php.getValueType(value)) {
+            return switch (php.getValueType(key)) {
                 .long => {
-                    const err_code = php.getValueLong(value) catch unreachable;
+                    const err_code = php.getValueLong(key) catch unreachable;
                     if (err_code == 0) return php.createValueNull();
                     if (php.getHashEntry(self.error_set, err_code)) |err| {
                         php.addRef(err);
@@ -129,7 +131,7 @@ pub const ErrorSet = struct {
                         // create new error
                         const err_obj = try class.createObject(null, null, false);
                         const err_struct = fromObject(err_obj);
-                        try self.constant_acc.int.set(err_struct, value);
+                        try self.constant_acc.int.set(err_struct, key);
                         err_struct.buffer.protect();
                         var text_buffer: [64]u8 = undefined;
                         const text = std.fmt.bufPrint(&text_buffer, "UnknownError #{d}", .{err_code}) catch unreachable;
@@ -147,19 +149,25 @@ pub const ErrorSet = struct {
                         return php.createValueObject(err_obj);
                     }
                 },
+                .string => {
+                    const name = php.getValueStringContent(key) catch unreachable;
+                    const tag = try php.getHashEntry(self.error_set, name);
+                    php.addRef(tag);
+                    return tag.*;
+                },
                 .object => {
-                    const err_obj = php.getValueObject(value) catch unreachable;
+                    const err_obj = php.getValueObject(key) catch unreachable;
                     if (err_obj.ce == class.entry()) {
                         php.addRef(err_obj);
-                        return value.*;
+                        return key.*;
                     }
                     if (php.instanceOf(err_obj.ce, php.getInterface(.throwable))) {
                         if (ZigClassEntry.isZigError(err_obj.ce)) {
                             php.addRef(err_obj);
-                            return value.*;
+                            return key.*;
                         } else {
                             const method = php.createValuePersistentString("getMessage");
-                            const message = try php.invokeMethod(value, &method, &.{});
+                            const message = try php.invokeMethod(key, &method, &.{});
                             if (php.getHashEntry(self.error_set, &message)) |err| {
                                 php.addRef(err);
                                 return err.*;

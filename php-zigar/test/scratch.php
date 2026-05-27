@@ -6,10 +6,5 @@ require __DIR__ . '/../vendor/autoload.php';
 $m = zigar_use(__DIR__ . "/scratch.zig");
 
 echo $m->ErrorSet->DingoAteBaby, "\n";
-
-try {
-    $m->hello();
-} catch (Exception $e) {
-    echo "$e\n"; 
-    echo $e == "pants on fire", "\n";
-}
+echo $m->ErrorSet('dingo ate baby'), "\n";
+echo $m->Enum('alpha'), "\n";

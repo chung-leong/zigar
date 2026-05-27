@@ -64,7 +64,7 @@ pub const Enum = struct {
 
         pub fn castValue(self: *@This(), value: *Value) !?Value {
             switch (php.getValueType(value)) {
-                .long => return self.findCanonical(value) catch php.createValueNull(),
+                .long, .string => return self.findCanonical(value) catch php.createValueNull(),
                 .object => {
                     const obj = php.getValueObject(value) catch unreachable;
                     if (ZigClassEntry.get(obj, false)) |value_class| {
@@ -88,13 +88,9 @@ pub const Enum = struct {
             }
             const value_d = php.createValueDebug(value);
             defer php.release(&value_d);
-            return failure.report("casting operation expects an interger, ArrayBuffer, or tagged union as argument, received {s}", .{
+            return failure.report("casting operation requires an interger, string, ArrayBuffer, or tagged union as argument, received {s}", .{
                 php.getValueStringContent(&value_d) catch unreachable,
             });
-        }
-
-        pub fn getCastArgs(_: *@This()) []const u8 {
-            return "an integer, tagged union, or string";
         }
 
         pub fn findCanonical(self: *@This(), key: *const Value) !Value {

@@ -181,7 +181,7 @@ pub fn Class(comptime S: type) type {
                 }
                 const arg_d = php.createValueDebug(arg);
                 defer php.release(&arg_d);
-                return failure.report("casting operation expects an ArrayBuffer as argument, received {s}", .{
+                return failure.report("casting operation requires an ArrayBuffer as argument, received {s}", .{
                     php.getValueStringContent(&arg_d) catch unreachable,
                 });
             };
