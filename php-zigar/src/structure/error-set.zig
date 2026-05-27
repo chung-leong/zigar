@@ -276,41 +276,13 @@ pub const ErrorSet = struct {
                     const err_struct = fromObject(err_obj);
                     const canonical = err_struct.canonical.?;
                     const message = canonical.message;
-                    const message_value = php.createValueString(message);
+                    value = php.createValueString(message);
                     if (t == .plain) {
                         const ht = php.createArray();
-                        php.setHashEntryRef(ht, "message", &message_value);
+                        php.setHashEntryRef(ht, "message", &value);
                         value = php.createValueArray(ht);
                         // convert to stdclass
                         try php.convertValue(&value, .object);
-                    } else if (t == .string) {
-                        const file = canonical.file orelse php.persistent("unknown");
-                        const trace = canonical.trace orelse php.empty_array;
-                        const text = switch (trace.nNumOfElements) {
-                            0 => try std.fmt.allocPrint(php.allocator,
-                                \\ZigError: {s} in {s}:{d}
-                            , .{
-                                php.getStringContent(message),
-                                php.getStringContent(file),
-                                canonical.lineno,
-                            }),
-                            else => format: {
-                                const trace_str = php.traceToString(@constCast(trace), true);
-                                defer php.release(trace_str);
-                                break :format try std.fmt.allocPrint(php.allocator,
-                                    \\ZigError: {s} in {s}:{d}
-                                    \\Stack trace:
-                                    \\{s}
-                                , .{
-                                    php.getStringContent(message),
-                                    php.getStringContent(file),
-                                    canonical.lineno,
-                                    php.getStringContent(trace_str),
-                                });
-                            },
-                        };
-                        defer php.allocator.free(text);
-                        value = php.createValueStringContent(text);
                     }
                 }
                 break :get value;
@@ -377,6 +349,44 @@ pub const ErrorSet = struct {
         if (canonical.file) |s| php.release(s);
         canonical.file = php.getCurrentFile();
         canonical.lineno = php.getCurrentLine();
+    }
+
+    pub fn stringify(self: *@This()) !Value {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        var value = try static.constant_acc.get(self.buffer);
+        const err_obj = try php.getValueObject(&value);
+        defer php.release(err_obj);
+        const err_struct = fromObject(err_obj);
+        const canonical = err_struct.canonical.?;
+        const message = canonical.message;
+        const file = canonical.file orelse php.persistent("unknown");
+        const trace = canonical.trace orelse php.empty_array;
+        const text = switch (trace.nNumOfElements) {
+            0 => try std.fmt.allocPrint(php.allocator,
+                \\ZigError: {s} in {s}:{d}
+            , .{
+                php.getStringContent(message),
+                php.getStringContent(file),
+                canonical.lineno,
+            }),
+            else => format: {
+                const trace_str = php.traceToString(@constCast(trace), true);
+                defer php.release(trace_str);
+                break :format try std.fmt.allocPrint(php.allocator,
+                    \\ZigError: {s} in {s}:{d}
+                    \\Stack trace:
+                    \\{s}
+                , .{
+                    php.getStringContent(message),
+                    php.getStringContent(file),
+                    canonical.lineno,
+                    php.getStringContent(trace_str),
+                });
+            },
+        };
+        defer php.allocator.free(text);
+        return php.createValueStringContent(text);
     }
 
     pub fn freeObject(obj: *Object) void {

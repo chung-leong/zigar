@@ -210,7 +210,12 @@ pub fn Class(comptime S: type) type {
         pub fn handleStringify(ed: *ExecuteData, retval: *Value) !void {
             const this_obj = try php.getValueObject(&ed.This);
             const this_struct = ZigObject(S).fromObject(this_obj).structure();
-            retval.* = try this_struct.getValue(.string);
+            // only error set implements stringify(), which adds information about where the error
+            // occurred to the error message
+            retval.* = switch (@hasDecl(S, "stringify")) {
+                true => try this_struct.stringify(),
+                false => try this_struct.getValue(.string),
+            };
         }
 
         fn extractAllocator(arg_iter: *ArgumentIterator) !?*std.mem.Allocator {

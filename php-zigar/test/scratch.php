@@ -5,6 +5,11 @@ require __DIR__ . '/../vendor/autoload.php';
 
 $m = zigar_use(__DIR__ . "/scratch.zig");
 
-foreach($m->ErrorSet as $name => $error) {
-    echo "$name\n";
+echo $m->ErrorSet->DingoAteBaby, "\n";
+
+try {
+    $m->hello();
+} catch (Exception $e) {
+    echo "$e\n"; 
+    echo $e == "pants on fire\n";
 }
