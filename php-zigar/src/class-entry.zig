@@ -388,9 +388,7 @@ pub const ZigClassEntry = struct {
         switch (self.type) {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
-                if (@hasDecl(S, "getIterator")) {
-                    ce.get_iterator = getIteratorHandler(S);
-                }
+                ce.get_iterator = getIteratorHandler(S);
             },
         }
         self.status.finalized = true;
@@ -909,7 +907,7 @@ pub const ZigClassEntry = struct {
                 // distinguish between the two using ZigObject.isInstance() (which compares the handlers)
                 return switch (ZigObject(structure.Class(S)).isInstance(obj)) {
                     true => structure.Class(S).getIterator(obj),
-                    false => S.getIterator(obj),
+                    false => if (@hasDecl(S, "getIterator")) S.getIterator(obj) else null,
                 };
             }
         };
