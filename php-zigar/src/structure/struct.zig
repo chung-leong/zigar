@@ -184,6 +184,12 @@ pub const Struct = struct {
             },
             else => {},
         }
+        const static = class.getStaticData(@This());
+        if (static.backing_int) |backing_int| {
+            if (backing_int.accessors.set(self, value)) {
+                return;
+            } else |_| {}
+        }
         return Super.setValue(self, value, transform);
     }
 
