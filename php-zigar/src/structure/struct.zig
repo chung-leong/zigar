@@ -315,6 +315,31 @@ pub const Struct = struct {
         return php.SUCCESS;
     }
 
+    pub fn compare(a: *Value, b: *Value) !c_int {
+        const b_is_int = check: {
+            switch (php.getValueType(b)) {
+                .long, .double, .string => break :check true,
+                .object => {
+                    const obj_b = php.getValueObject(b) catch unreachable;
+                    if (php.isGmpClass(obj_b.ce)) break :check true;
+                },
+                else => {},
+            }
+            break :check false;
+        };
+        if (b_is_int) {
+            const obj_a = php.getValueObject(a) catch return -1;
+            const struct_a = fromObject(obj_a);
+            const class = ZigClassEntry.fromObject(obj_a);
+            const static = class.getStaticData(@This());
+            if (static.backing_int) |int| {
+                const backing_value = try int.accessors.get(struct_a);
+                return php.compareValues(&backing_value, b);
+            }
+        }
+        return Super.compare(a, b);
+    }
+
     pub fn getIterator(obj: *Object) !?*ObjectIterator {
         const class = ZigClassEntry.fromObject(obj);
         return if (class.flags.@"struct".is_tuple)
@@ -418,7 +443,6 @@ pub const Struct = struct {
     pub const hasProperty = Super.hasProperty;
     pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
-    pub const compare = Super.compare;
     pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
 };
