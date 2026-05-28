@@ -137,6 +137,7 @@ pub const ErrorSet = struct {
                         const text = std.fmt.bufPrint(&text_buffer, "UnknownError #{d}", .{err_code}) catch unreachable;
                         const name = php.createString(text);
                         try self.addCanonical(name, err_obj);
+                        defer php.release(name);
                         // add object to template table, which owns the other items as well
                         var err_value = php.createValueObject(err_obj);
                         var table = class.static.template.table orelse init: {
@@ -145,7 +146,7 @@ pub const ErrorSet = struct {
                             break :init new_table;
                         };
                         try php.addElementRef(&table, &err_value);
-                        // err_obj should have refcount = 2 at this point
+                        // err_obj should have refcount = 5 at this point
                         return php.createValueObject(err_obj);
                     }
                 },
