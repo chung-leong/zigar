@@ -370,29 +370,29 @@ pub const ErrorSet = struct {
         const message = canonical.message;
         const file = canonical.file orelse php.persistent("unknown");
         const trace = canonical.trace orelse php.empty_array;
-        const text = switch (trace.nNumOfElements) {
-            0 => try std.fmt.allocPrint(php.allocator,
+        var text: []const u8 = undefined;
+        if (trace.nNumOfElements == 0) {
+            text = try std.fmt.allocPrint(php.allocator,
                 \\ZigError: {s} in {s}:{d}
             , .{
                 php.getStringContent(message),
                 php.getStringContent(file),
                 canonical.lineno,
-            }),
-            else => format: {
-                const trace_str = php.traceToString(@constCast(trace), true);
-                defer php.release(trace_str);
-                break :format try std.fmt.allocPrint(php.allocator,
-                    \\ZigError: {s} in {s}:{d}
-                    \\Stack trace:
-                    \\{s}
-                , .{
-                    php.getStringContent(message),
-                    php.getStringContent(file),
-                    canonical.lineno,
-                    php.getStringContent(trace_str),
-                });
-            },
-        };
+            });
+        } else {
+            const trace_str = php.traceToString(@constCast(trace), true);
+            defer php.release(trace_str);
+            text = try std.fmt.allocPrint(php.allocator,
+                \\ZigError: {s} in {s}:{d}
+                \\Stack trace:
+                \\{s}
+            , .{
+                php.getStringContent(message),
+                php.getStringContent(file),
+                canonical.lineno,
+                php.getStringContent(trace_str),
+            });
+        }
         defer php.allocator.free(text);
         return php.createValueStringContent(text);
     }
@@ -548,7 +548,6 @@ fn createDecamelizedMessage(name_obj: *const String) *String {
         }
     }
     // set sentinel
-    buffer.len += 1;
-    buffer[len] = 0;
+    buffer.ptr[len] = 0;
     return message;
 }
