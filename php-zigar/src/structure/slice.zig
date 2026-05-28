@@ -173,7 +173,7 @@ pub const Slice = struct {
         return try static.value_acc.getElementEx(self, index, transform);
     }
 
-    pub fn setElement(self: *@This(), index: usize, value: *Value) !void {
+    pub fn setElement(self: *@This(), index: usize, value: *const Value) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         try static.value_acc.setElement(self, index, value);

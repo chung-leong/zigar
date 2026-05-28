@@ -432,6 +432,13 @@ pub const ZigClassEntry = struct {
                 _ = iter.next() orelse break;
                 _ = iter.next() orelse break;
             }
+        } else if (self.type == .pointer) {
+            // update the interface list with the list from the target class
+            const target = try self.getMember(.instance, 0);
+            if (target.class.type != .pointer) {
+                self.php_portion.num_interfaces = target.class.php_portion.num_interfaces;
+                self.php_portion.unnamed_2.interfaces = target.class.php_portion.unnamed_2.interfaces;
+            }
         }
     }
 

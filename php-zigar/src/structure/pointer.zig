@@ -294,6 +294,35 @@ pub const Pointer = struct {
         };
     }
 
+    pub fn readElement(obj: *Object, key: *Value, _: c_int, retval: *Value) !*Value {
+        const self = fromObject(obj);
+        const len = self.getLength();
+        const index = try getIndex(key, len);
+        retval.* = try self.getElement(index);
+        return retval;
+    }
+
+    pub fn writeElement(obj: *Object, key: *Value, value: *Value) !void {
+        const self = fromObject(obj);
+        const len = self.getLength();
+        const index = try getIndex(key, len);
+        try self.setElement(index, value);
+    }
+
+    pub fn hasElement(obj: *Object, key: *Value, _: c_int) !c_int {
+        const self = fromObject(obj);
+        const len = self.getLength();
+        return if (getIndex(key, len)) |_| 1 else |_| 0;
+    }
+
+    pub fn countElements(obj: *Object, count: *php.Long) !c_int {
+        const self = fromObject(obj);
+        const len = self.getLength();
+        if (len > std.math.maxInt(php.Long)) return error.TooLarge;
+        count.* = @intCast(len);
+        return php.SUCCESS;
+    }
+
     pub fn externalizeTarget(self: *@This()) accessor.Error!void {
         const obj = php.getValueObject(&self.table) catch return;
         try invokeMethod(obj, "externalize", .{});
@@ -332,6 +361,29 @@ pub const Pointer = struct {
         const static = class.getStaticData(@This());
         try static.loadTarget(self);
         return php.getValueObject(&self.table) catch return error.NullPointer;
+    }
+
+    fn getElement(self: *@This(), index: usize) !Value {
+        const target_obj = try self.getTarget();
+        return invokeMethod(target_obj, "getElement", .{index});
+    }
+
+    fn setElement(self: *@This(), index: usize, value: *const Value) !void {
+        const target_obj = try self.getTarget();
+        return invokeMethod(target_obj, "setElement", .{ index, value });
+    }
+
+    fn getLength(self: *@This()) usize {
+        const target_obj = self.getTarget() catch return 0;
+        return invokeMethod(target_obj, "getLength", .{}) catch unreachable;
+    }
+
+    fn getIndex(key: *Value, len: usize) !usize {
+        const key_long = try php.getValueLong(key);
+        if (key_long < 0) return error.NegativeIndex;
+        const index: usize = @intCast(key_long);
+        if (index >= len) return error.OutOfBound;
+        return index;
     }
 
     fn checkDoubleReference(self: *@This()) !void {

@@ -61,6 +61,7 @@ pub const Error = error{
     OutOfBound,
     OutOfMemory,
     ReadOnlyProperty,
+    TooLarge,
     Unexpected,
     UnexpectedClass,
     Unsupported,
