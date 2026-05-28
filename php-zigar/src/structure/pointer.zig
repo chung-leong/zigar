@@ -96,6 +96,7 @@ pub const Pointer = struct {
             try self.setLength(pointer, extent.len);
             pointer.last_address = extent.address;
             pointer.last_length = extent.len;
+            pointer.max_length = extent.len;
         }
 
         pub fn getAddress(self: *@This(), pointer: *Pointer) !usize {

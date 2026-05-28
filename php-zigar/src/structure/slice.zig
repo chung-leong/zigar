@@ -88,49 +88,56 @@ pub const Slice = struct {
         if (initializer) |value| {
             // anyopaque is represented by a slice with no size
             const element_size = class.byte_size orelse 1;
-            const value_type = php.getValueType(value);
-            if (value_type == .string and class.flags.slice.is_string) {
-                const str = php.getValueString(value) catch unreachable;
-                const str_bytes = php.getStringContent(str);
-                if (element_size == 1) {
-                    const using_string = use: {
-                        if (!read_only) break :use false;
-                        if (class.flags.slice.has_sentinel) {
-                            // make sure sentinel is present
-                            const static = class.getStaticData(@This());
-                            const sentinel_bytes = static.sentinel.buffer.bytes;
-                            const end = str_bytes.len;
-                            const sentinel_end = end + sentinel_bytes.len;
-                            const element_slice = str_bytes.ptr[end..sentinel_end];
-                            if (!std.mem.eql(u8, element_slice, sentinel_bytes)) {
-                                break :use false;
+            if (php.getValueString(value) catch null) |str| {
+                if (class.flags.slice.is_string or class.flags.slice.is_opaque) {
+                    const str_bytes = php.getStringContent(str);
+                    if (element_size == 1) {
+                        const using_string = use: {
+                            if (!read_only) break :use false;
+                            if (class.flags.slice.has_sentinel) {
+                                // make sure sentinel is present
+                                const static = class.getStaticData(@This());
+                                const sentinel_bytes = static.sentinel.buffer.bytes;
+                                const end = str_bytes.len;
+                                const sentinel_end = end + sentinel_bytes.len;
+                                const element_slice = str_bytes.ptr[end..sentinel_end];
+                                if (!std.mem.eql(u8, element_slice, sentinel_bytes)) {
+                                    break :use false;
+                                }
                             }
+                            self.buffer.referenceString(str, read_only);
+                            break :use true;
+                        };
+                        if (!using_string) {
+                            try self.initializeBuffer(allocator, str_bytes.len);
+                            try self.buffer.copyBytes(str_bytes);
                         }
-                        self.buffer.referenceString(str, read_only);
-                        break :use true;
-                    };
-                    if (!using_string) {
-                        try self.initializeBuffer(allocator, str_bytes.len);
-                        try self.buffer.copyBytes(str_bytes);
-                    }
-                } else if (element_size == 2) {
-                    const len = std.unicode.calcWtf16LeLen(str_bytes) catch return error.IncorrectEncoding;
-                    try self.initializeBuffer(allocator, len * 2);
-                    const bytes = try self.buffer.data(0, true);
-                    const wtf16_ptr: [*]u16 = @ptrCast(@alignCast(bytes.ptr));
-                    const wtf16_slice = wtf16_ptr[0..len];
-                    _ = std.unicode.wtf8ToWtf16Le(wtf16_slice, str_bytes) catch return error.IncorrectEncoding;
-                } else unreachable;
-            } else {
-                // initialize with an array, let setValue() throw an error if it's not an array
-                const len: usize = get: {
-                    const arr = php.getValueArray(value) catch break :get 0;
-                    const element_count = if (php.isNormalArray(arr)) arr.nNumOfElements else 1;
-                    break :get element_size * element_count;
-                };
-                try self.initializeBuffer(allocator, len);
-                try self.setValue(value, .none);
+                    } else if (element_size == 2) {
+                        const len = std.unicode.calcWtf16LeLen(str_bytes) catch return error.IncorrectEncoding;
+                        try self.initializeBuffer(allocator, len * 2);
+                        const bytes = try self.buffer.data(0, true);
+                        const wtf16_ptr: [*]u16 = @ptrCast(@alignCast(bytes.ptr));
+                        const wtf16_slice = wtf16_ptr[0..len];
+                        _ = std.unicode.wtf8ToWtf16Le(wtf16_slice, str_bytes) catch return error.IncorrectEncoding;
+                    } else unreachable;
+                    return;
+                }
             }
+            const element_count: usize, const copy = get: {
+                if (php.getValueLong(value) catch null) |long| {
+                    // initialize array to a specific length
+                    if (long < 0) return error.NegativeValue;
+                    break :get .{ @intCast(long), false };
+                } else if (php.getValueArray(value) catch null) |arr| {
+                    // initialize with an array
+                    break :get .{ if (php.isNormalArray(arr)) arr.nNumOfElements else 1, true };
+                } else {
+                    // let setValue() throw an error
+                    break :get .{ 0, true };
+                }
+            };
+            try self.initializeBuffer(allocator, element_size * element_count);
+            if (copy) try self.setValue(value, .none) else try self.buffer.clear();
             if (read_only) self.buffer.protect();
         } else {
             try self.initializeBuffer(allocator, 0);
