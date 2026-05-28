@@ -275,6 +275,20 @@ pub const Enum = struct {
         Super.freeObject(obj);
     }
 
+    pub fn getPropertiesFor(obj: *Object, purpose_i: c_uint) !*HashTable {
+        const purpose: php.PropPurpose = @enumFromInt(purpose_i);
+        const self = fromObject(obj);
+        const ht = php.createArray();
+        switch (purpose) {
+            .debug, .json => {
+                const value = try self.getValue(.string);
+                php.setHashEntry(ht, "name", &value);
+            },
+            else => {},
+        }
+        return ht;
+    }
+
     pub fn compare(a: *Value, b: *Value) !c_int {
         const obj_a = php.getValueObject(a) catch return -1;
         const obj_b = php.getValueObject(b) catch return 1;

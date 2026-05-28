@@ -277,23 +277,15 @@ pub const ErrorSet = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         return switch (transform) {
-            .none, .plain, .string => |t| get: {
-                var value = try static.constant_acc.get(self.buffer);
-                if (t != .none) {
-                    const err_obj = try php.getValueObject(&value);
-                    defer php.release(err_obj);
-                    const err_struct = fromObject(err_obj);
-                    const canonical = err_struct.canonical.?;
-                    const message = canonical.message;
-                    value = php.createValueString(message);
-                    if (t == .plain) {
-                        const ht = php.createArray();
-                        php.setHashEntryRef(ht, "message", &value);
-                        value = php.createValueArray(ht);
-                        // convert to stdclass
-                        try php.convertValue(&value, .object);
-                    }
-                }
+            .none => try static.constant_acc.get(self.buffer),
+            .string => try self.getMessage(),
+            .plain => get: {
+                const msg = try self.getMessage();
+                const ht = php.createArray();
+                php.setHashEntry(ht, "error", &msg);
+                var value = php.createValueArray(ht);
+                // convert to stdclass
+                try php.convertValue(&value, .object);
                 break :get value;
             },
             .integer => try static.constant_acc.int.get(self),
@@ -419,6 +411,20 @@ pub const ErrorSet = struct {
         return null;
     }
 
+    pub fn getPropertiesFor(obj: *Object, purpose_i: c_uint) !*HashTable {
+        const purpose: php.PropPurpose = @enumFromInt(purpose_i);
+        const self = fromObject(obj);
+        const ht = php.createArray();
+        switch (purpose) {
+            .debug, .json => {
+                const msg = try self.getMessage();
+                php.setHashEntry(ht, "error", &msg);
+            },
+            else => {},
+        }
+        return ht;
+    }
+
     pub fn compare(a: *Value, b: *Value) !c_int {
         const obj_a = php.getValueObject(a) catch return -1;
         if (php.getValueType(b) == .string) {
@@ -488,7 +494,13 @@ pub const ErrorSet = struct {
         return_value.* = php.createValueNull();
     }
 
-    fn getCanonical(self: *@This()) !*Canonical {
+    fn getMessage(self: *@This()) !Value {
+        const canonical = try self.getCanonical();
+        const message = canonical.message;
+        return php.createValueString(message);
+    }
+
+    fn getCanonical(self: *@This()) accessor.Error!*Canonical {
         if (self.canonical) |c| return c;
         const err_value = try self.getValue(.none);
         defer php.release(&err_value);

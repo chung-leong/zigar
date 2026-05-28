@@ -4,6 +4,7 @@ const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const php = @import("../php.zig");
+const HashTable = php.HashTable;
 const Object = php.Object;
 const Value = php.Value;
 const structure = @import("../structure.zig");
@@ -41,6 +42,20 @@ pub const Primitive = struct {
         } else {
             return Super.setValue(self, value, transform);
         }
+    }
+
+    pub fn getPropertiesFor(obj: *Object, purpose_i: c_uint) !*HashTable {
+        const purpose: php.PropPurpose = @enumFromInt(purpose_i);
+        const self = fromObject(obj);
+        const ht = php.createArray();
+        switch (purpose) {
+            .debug, .json => {
+                const value = try self.getValue(.none);
+                php.setHashEntry(ht, "value", &value);
+            },
+            else => {},
+        }
+        return ht;
     }
 
     pub const getExtent = Super.getExtent;
