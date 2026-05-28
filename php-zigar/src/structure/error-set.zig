@@ -525,20 +525,7 @@ fn createDecamelizedMessage(name_obj: *const String) *String {
     const name = php.getStringContent(name_obj);
     var len_required: usize = 0;
     for (name, 0..) |c, i| {
-        const conversion_needed = check: {
-            var needed = false;
-            if (std.ascii.isUpper(c)) {
-                // previous letter is not uppercase
-                if (i == 0 or !std.ascii.isUpper(name[i - 1])) {
-                    // next letter is not uppercase
-                    if (i == name.len - 1 or !std.ascii.isUpper(name[i + 1])) {
-                        needed = true;
-                    }
-                }
-            }
-            break :check needed;
-        };
-        if (conversion_needed) {
+        if (std.ascii.isUpper(c)) {
             len_required += if (i > 0) 2 else 1;
         } else {
             len_required += 1;
@@ -548,18 +535,7 @@ fn createDecamelizedMessage(name_obj: *const String) *String {
     var buffer = @constCast(php.getStringContent(message));
     var len: usize = 0;
     for (name, 0..) |c, i| {
-        const conversion_needed = check: {
-            var needed = false;
-            if (std.ascii.isUpper(c)) {
-                if (i == 0 or !std.ascii.isUpper(name[i - 1])) {
-                    if (i == name.len - 1 or !std.ascii.isUpper(name[i + 1])) {
-                        needed = true;
-                    }
-                }
-            }
-            break :check needed;
-        };
-        if (conversion_needed) {
+        if (std.ascii.isUpper(c)) {
             if (i > 0) {
                 buffer[len] = ' ';
                 len += 1;

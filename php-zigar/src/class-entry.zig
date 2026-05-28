@@ -394,13 +394,44 @@ pub const ZigClassEntry = struct {
         self.status.finalized = true;
     }
 
-    pub fn activate(obj: *Object) void {
+    pub fn activate(obj: *Object) !void {
         // this method is called when the host is about to release the structure map
         const self = fromObject(obj);
         self.host.addRef();
         self.status.activated = true;
         if (self.php_portion.name.*.len == 0) {
             self.php_portion.name = self.inferName() catch php.persistent("Unknown");
+        }
+        if (self.type == .error_set and self.flags.error_set.is_global) {
+            const table = php.createArray();
+            const class_struct = ZigObject(structure.Class(structure.ErrorSet)).fromObject(self.object).structure();
+            class_struct.table = php.createValueArray(table);
+            self.static.template.table = php.createValueArray(table);
+            const ht = self.host.global_error_set.?;
+            var iter: HashTableIterator = .init(ht, .{});
+            var slot: usize = 0;
+            while (iter.next()) |err_obj| {
+                const name = iter.currentName() orelse return error.Unexpected;
+                const member = try php.allocator.create(Member);
+                errdefer php.allocator.destroy(member);
+                member.* = .{
+                    .type = .object,
+                    .flags = .{},
+                    .bit_offset = null,
+                    .bit_size = 0,
+                    .byte_size = null,
+                    .slot = slot,
+                    .class = self,
+                };
+                member.accessors = try self.getAccessors(member, .static, .multiple);
+                const member_ptr = php.createValuePointer(member);
+                php.setHashEntry(&self.static.members, name, &member_ptr);
+                php.setHashEntryRef(table, slot, err_obj);
+                slot += 1;
+                // skip entries indexed by number and message
+                _ = iter.next() orelse break;
+                _ = iter.next() orelse break;
+            }
         }
     }
 

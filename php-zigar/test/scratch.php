@@ -5,4 +5,6 @@ require __DIR__ . '/../vendor/autoload.php';
 
 $m = zigar_use(__DIR__ . "/scratch.zig");
 
-$m->hello();
+foreach ($m->AnyError as $name => $error) {
+    echo "$error\n";
+}

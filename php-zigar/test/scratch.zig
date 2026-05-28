@@ -1,5 +1,16 @@
 const std = @import("std");
 
-pub fn hello() !void {
-    return error.PantsOnFire;
-}
+pub const FileOpenError = error{
+    AccessDenied,
+    OutOfMemory,
+    FileNotFound,
+};
+
+pub const HumanError = error{
+    GotIntoCryptoCurrencies,
+    RanOutOfBeer,
+    DidNotKnowHowToUseACondom,
+    HungOutWithCliffordBanes,
+};
+
+pub const AnyError = anyerror;

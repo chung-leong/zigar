@@ -71,7 +71,7 @@ pub const StructureImporter = struct {
         // initially, the host holds references to class objects through class_list
         // prior to destroying that list we need to flip the relationship so that
         // these objects own the host instead
-        for (self.class_list.items) |class_obj| ZigClassEntry.activate(class_obj);
+        for (self.class_list.items) |class_obj| try ZigClassEntry.activate(class_obj);
         const root_class = ZigClassEntry.fromObject(root_obj);
         const root_static = root_class.getStaticData(structure.Struct);
         root_static.is_root = true;
