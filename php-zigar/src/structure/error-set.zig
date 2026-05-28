@@ -5,6 +5,7 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
+const ArrayBuffer = @import("../js-compat.zig").ArrayBuffer;
 const php = @import("../php.zig");
 const Array = php.Array;
 const ClassEntry = php.ClassEntry;
@@ -89,12 +90,22 @@ pub const ErrorSet = struct {
         pub fn castValue(self: *@This(), value: *Value) !?Value {
             switch (php.getValueType(value)) {
                 .long, .string => return self.findCanonical(value) catch php.createValueNull(),
-                .object => return null, // allow default handling
+                .object => {
+                    const obj = php.getValueObject(value) catch unreachable;
+                    if (obj.ce == php.getClassEntry(.standard)) {
+                        const ht = php.getValueHashTable(value) catch unreachable;
+                        if (php.getHashEntry(ht, "error") catch null) |msg| {
+                            return try self.castValue(msg);
+                        }
+                    } else if (php.instanceOf(obj.ce, ArrayBuffer.entry())) {
+                        return null; // allow default handling
+                    }
+                },
                 else => {},
             }
             const value_d = php.createValueDebug(value);
             defer php.release(&value_d);
-            return failure.report("casting operation requires an interger, string, or ArrayBuffer as argument, received {s}", .{
+            return failure.report("casting operation requires an interger, string, object, or ArrayBuffer as argument, received {s}", .{
                 php.getValueStringContent(&value_d) catch unreachable,
             });
         }

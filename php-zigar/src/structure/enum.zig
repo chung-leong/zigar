@@ -67,7 +67,12 @@ pub const Enum = struct {
                 .long, .string => return self.findCanonical(value) catch php.createValueNull(),
                 .object => {
                     const obj = php.getValueObject(value) catch unreachable;
-                    if (ZigClassEntry.get(obj, false)) |value_class| {
+                    if (obj.ce == php.getClassEntry(.standard)) {
+                        const ht = php.getValueHashTable(value) catch unreachable;
+                        if (php.getHashEntry(ht, "error") catch null) |msg| {
+                            return try self.castValue(msg);
+                        }
+                    } else if (ZigClassEntry.get(obj, false)) |value_class| {
                         if (value_class.type == .@"union") {
                             // see if the union uses this enum as its tag
                             const value_static = value_class.getStaticData(structure.Union);
@@ -75,11 +80,9 @@ pub const Enum = struct {
                                 return try value_static.getEnum(obj);
                             }
                         }
-                    }
-                    if (php.isGmpClass(obj.ce)) {
+                    } else if (php.isGmpClass(obj.ce)) {
                         return self.findCanonical(value) catch php.createValueNull();
-                    }
-                    if (php.instanceOf(obj.ce, ArrayBuffer.entry())) {
+                    } else if (php.instanceOf(obj.ce, ArrayBuffer.entry())) {
                         // allow default handling
                         return null;
                     }
@@ -88,7 +91,7 @@ pub const Enum = struct {
             }
             const value_d = php.createValueDebug(value);
             defer php.release(&value_d);
-            return failure.report("casting operation requires an interger, string, ArrayBuffer, or tagged union as argument, received {s}", .{
+            return failure.report("casting operation requires an interger, string, object, ArrayBuffer, or tagged union as argument, received {s}", .{
                 php.getValueStringContent(&value_d) catch unreachable,
             });
         }
