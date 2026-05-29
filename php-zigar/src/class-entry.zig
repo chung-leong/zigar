@@ -12,6 +12,7 @@ const StructurePurpose = enums.StructurePurpose;
 const StructureType = enums.StructureType;
 const failure = @import("failure.zig");
 const GarbageCollectionBuffer = @import("gc.zig").GarbageCollectionBuffer;
+const getObjectBuffer = @import("object.zig").getObjectBuffer;
 const Host = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
 const ArgumentIterator = php.ArgumentIterator;
@@ -520,13 +521,22 @@ pub const ZigClassEntry = struct {
         if (php.instanceOf(obj.ce, ArrayBuffer.entry())) {
             return ArrayBuffer.fromObject(obj).buffer;
         }
+        const is_opaque_slice = self.type == .slice and self.flags.slice.is_opaque;
+        if (is_opaque_slice) {
+            // opaque slice can accept any Zig object
+            if (ZigClassEntry.isZig(obj.ce)) {
+                return getObjectBuffer(obj);
+            }
+        }
+        // structure can accept a typed array when it can be represented by one
         if (self.isTypedArray()) {
             const member = self.getMember(.instance, 0) catch return null;
             switch (member.type) {
                 inline .int, .uint, .float => |t| inline for (@field(typed_array_types, @tagName(t))) |T| {
-                    if (member.bit_size == @bitSizeOf(T)) {
-                        const TypedArray = TypedArrayOf(T, false);
-                        if (php.instanceOf(obj.ce, TypedArray.entry())) {
+                    const TypedArray = TypedArrayOf(T, false);
+                    if (php.instanceOf(obj.ce, TypedArray.entry())) {
+                        // opaque can accept typed array of any size
+                        if (member.bit_size == @bitSizeOf(T) or is_opaque_slice) {
                             return TypedArray.fromObject(obj).buffer;
                         }
                     }
@@ -534,7 +544,7 @@ pub const ZigClassEntry = struct {
                 else => {},
             }
         }
-        if (self.isClampedArray()) {
+        if (self.isClampedArray() or self.type == .@"opaque") {
             const ClampedArray = TypedArrayOf(u8, true);
             if (php.instanceOf(obj.ce, ClampedArray.entry())) {
                 return ClampedArray.fromObject(obj).buffer;
