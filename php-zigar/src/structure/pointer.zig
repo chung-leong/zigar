@@ -191,7 +191,7 @@ pub const Pointer = struct {
                         return;
                     },
                     .null => {
-                        if (class.flags.pointer.is_nullable) {
+                        if (!class.flags.pointer.is_nullable) {
                             return failure.report("pointer '{s}' cannot be null", .{
                                 class.getName(),
                             });
