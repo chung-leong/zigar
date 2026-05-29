@@ -39,6 +39,7 @@ pub const Struct = struct {
     };
 
     pub const Super = structure.StructLike(@This());
+    pub const Tuple = structure.ArrayLike(@This());
     pub const Static = struct {
         backing_int: ?struct {
             class: *ZigClassEntry,
@@ -47,6 +48,8 @@ pub const Struct = struct {
         required_field_count: usize = 0,
         callback: ?*Object = null,
         is_root: bool = false,
+
+        pub const StaticPropCache = cache.IdCache(.{ .length, .zigar }, "__", .{});
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -89,21 +92,26 @@ pub const Struct = struct {
         }
 
         pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
-            if (self.is_root) {
-                if (RootPropCache.idFromString(name, cache_slot)) |id| {
-                    switch (id) {
-                        .zigar => {
-                            const class = ZigClassEntry.fromStatic(self);
+            if (StaticPropCache.idFromString(name, cache_slot)) |id| {
+                const class = ZigClassEntry.fromStatic(self);
+                switch (id) {
+                    .length => {
+                        if (class.flags.@"struct".is_tuple) {
+                            const iter = class.getMemberIterator(.instance);
+                            return php.createValueAnyInt(iter.len);
+                        }
+                    },
+                    .zigar => {
+                        if (self.is_root) {
                             const obj = try SpecialExports.create(class.host);
                             return php.createValueObject(obj);
-                        },
-                    }
+                        }
+                    },
                 }
             }
             return error.Missing;
         }
     };
-    pub const RootPropCache = cache.IdCache(.{.zigar}, "__", .{});
 
     pub fn setStorage(self: *@This(), buffer: *ByteBuffer, table: *const Value) !void {
         try Super.setStorage(self, buffer, table);
@@ -191,6 +199,34 @@ pub const Struct = struct {
             } else |_| {}
         }
         return Super.setValue(self, value, transform);
+    }
+
+    pub fn getElement(self: *@This(), index: usize) !Value {
+        const class = ZigClassEntry.fromStructure(self);
+        var iter = class.getMemberIterator(.instance);
+        var i: usize = 0;
+        while (iter.next()) |m| {
+            if (i == index) return try m.accessors.get(self);
+            i += 1;
+        }
+        return error.OutOfBound;
+    }
+
+    pub fn setElement(self: *@This(), index: usize, value: *const Value) !void {
+        const class = ZigClassEntry.fromStructure(self);
+        var iter = class.getMemberIterator(.instance);
+        var i: usize = 0;
+        while (iter.next()) |m| {
+            if (i == index) return try m.accessors.set(self, value);
+            i += 1;
+        }
+        return error.OutOfBound;
+    }
+
+    pub fn getLength(self: *@This()) usize {
+        const class = ZigClassEntry.fromStructure(self);
+        const iter = class.getMemberIterator(.instance);
+        return iter.len;
     }
 
     pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) accessor.Error!void {
@@ -292,35 +328,6 @@ pub const Struct = struct {
         Super.freeObject(obj);
     }
 
-    pub fn readElement(obj: *Object, key: *Value, _: c_int, retval: *Value) !*Value {
-        const self = fromObject(obj);
-        const len = self.getLength();
-        const index = try getIndex(key, len);
-        retval.* = try self.getElement(index);
-        return retval;
-    }
-
-    pub fn writeElement(obj: *Object, key: *Value, value: *Value) !void {
-        const self = fromObject(obj);
-        const len = self.getLength();
-        const index = try getIndex(key, len);
-        try self.setElement(index, value);
-    }
-
-    pub fn hasElement(obj: *Object, key: *Value, _: c_int) !c_int {
-        const self = fromObject(obj);
-        const len = self.getLength();
-        return if (getIndex(key, len)) |_| 1 else |_| 0;
-    }
-
-    pub fn countElements(obj: *Object, count: *php.Long) !c_int {
-        const self = fromObject(obj);
-        const len = self.getLength();
-        if (len > std.math.maxInt(php.Long)) return error.TooLarge;
-        count.* = @intCast(len);
-        return php.SUCCESS;
-    }
-
     pub fn compare(a: *Value, b: *Value) !c_int {
         const b_is_int = check: {
             switch (php.getValueType(b)) {
@@ -398,42 +405,6 @@ pub const Struct = struct {
         }
     }
 
-    fn getElement(self: *@This(), index: usize) !Value {
-        const class = ZigClassEntry.fromStructure(self);
-        var iter = class.getMemberIterator(.instance);
-        var i: usize = 0;
-        while (iter.next()) |m| {
-            if (i == index) return try m.accessors.get(self);
-            i += 1;
-        }
-        return error.OutOfBound;
-    }
-
-    fn setElement(self: *@This(), index: usize, value: *const Value) !void {
-        const class = ZigClassEntry.fromStructure(self);
-        var iter = class.getMemberIterator(.instance);
-        var i: usize = 0;
-        while (iter.next()) |m| {
-            if (i == index) return try m.accessors.set(self, value);
-            i += 1;
-        }
-        return error.OutOfBound;
-    }
-
-    fn getLength(self: *@This()) usize {
-        const class = ZigClassEntry.fromStructure(self);
-        const iter = class.getMemberIterator(.instance);
-        return iter.len;
-    }
-
-    fn getIndex(key: *Value, len: usize) !usize {
-        const key_long = try php.getValueLong(key);
-        if (key_long < 0) return error.NegativeIndex;
-        const index: usize = @intCast(key_long);
-        if (index >= len) return error.OutOfBound;
-        return index;
-    }
-
     pub const initialize = Super.initialize;
     pub const finalize = Super.finalize;
     pub const externalize = Super.externalize;
@@ -450,6 +421,10 @@ pub const Struct = struct {
     pub const hasProperty = Super.hasProperty;
     pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
+    pub const readElement = Tuple.readElement;
+    pub const writeElement = Tuple.writeElement;
+    pub const hasElement = Tuple.hasElement;
+    pub const countElements = Tuple.countElements;
     pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
 };
