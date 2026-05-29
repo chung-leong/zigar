@@ -3,12 +3,12 @@ const builtin = @import("builtin");
 
 const AbortSignal = @import("../abort-signal.zig").AbortSignal;
 const accessor = @import("../accessor.zig");
-const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const StructurePurpose = @import("../enums.zig").StructurePurpose;
 const failure = @import("../failure.zig");
+const Error = failure.Error;
 const gd = @import("../gd.zig");
 const Generator = @import("../generator.zig").Generator;
 const iterator = @import("../iterator.zig");
@@ -146,7 +146,7 @@ pub const Struct = struct {
         return Super.getValue(self, transform);
     }
 
-    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) accessor.Error!void {
+    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) Error!void {
         const class = ZigClassEntry.fromStructure(self);
         switch (class.purpose) {
             .gd_image => {
@@ -229,7 +229,7 @@ pub const Struct = struct {
         return iter.len;
     }
 
-    pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) accessor.Error!void {
+    pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) Error!void {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.common.has_pointer) {
             var iter = class.getMemberIterator(.instance);

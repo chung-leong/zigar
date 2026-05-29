@@ -5,6 +5,7 @@ const Transform = accessor.Transform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
+const Error = failure.Error;
 const iterator = @import("../iterator.zig");
 const ArrayBuffer = @import("../js-compat.zig").ArrayBuffer;
 const ZigObject = @import("../object.zig").ZigObject;
@@ -59,7 +60,7 @@ pub fn Class(comptime S: type) type {
             class.destroy();
         }
 
-        pub fn getProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
+        pub fn getProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) Error!Value {
             return Super.getProperty(self, name, cache_slot) catch |err| get: {
                 if (@hasDecl(S, "Static") and @hasDecl(S.Static, "getStaticProperty")) {
                     if (err == error.Missing) {
@@ -72,7 +73,7 @@ pub fn Class(comptime S: type) type {
             };
         }
 
-        pub fn setProperty(self: *@This(), name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {
+        pub fn setProperty(self: *@This(), name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) Error!void {
             return Super.setProperty(self, name, value, cache_slot) catch |err| get: {
                 if (@hasDecl(S, "Static") and @hasDecl(S.Static, "setStaticProperty")) {
                     if (err == error.Missing) {

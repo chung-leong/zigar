@@ -4,6 +4,7 @@ const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const Error = @import("../failure.zig").Error;
 const php = @import("../php.zig");
 const Object = php.Object;
 const String = php.String;
@@ -86,7 +87,7 @@ pub const Optional = struct {
         return php.getValueObject(&value) catch null;
     }
 
-    pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) accessor.Error!void {
+    pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) Error!void {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.common.has_pointer) {
             const static = class.getStaticData(@This());

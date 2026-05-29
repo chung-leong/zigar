@@ -5,6 +5,7 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
+const Error = failure.Error;
 const ArrayBuffer = @import("../js-compat.zig").ArrayBuffer;
 const php = @import("../php.zig");
 const Array = php.Array;
@@ -316,7 +317,7 @@ pub const ErrorSet = struct {
         }
     }
 
-    pub fn getProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
+    pub fn getProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) Error!Value {
         const canonical = try self.getCanonical();
         if (PropCache.idFromString(name, cache_slot)) |id| {
             const value = switch (id) {
@@ -331,7 +332,7 @@ pub const ErrorSet = struct {
         }
     }
 
-    pub fn setProperty(self: *@This(), name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {
+    pub fn setProperty(self: *@This(), name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) Error!void {
         const canonical = try self.getCanonical();
         if (PropCache.idFromString(name, cache_slot)) |id| {
             switch (id) {
@@ -511,7 +512,7 @@ pub const ErrorSet = struct {
         return php.createValueString(message);
     }
 
-    fn getCanonical(self: *@This()) accessor.Error!*Canonical {
+    fn getCanonical(self: *@This()) Error!*Canonical {
         if (self.canonical) |c| return c;
         const err_value = try self.getValue(.none);
         defer php.release(&err_value);

@@ -5,6 +5,7 @@ const Transform = accessor.Transform;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const Error = @import("../failure.zig").Error;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const HashTableIterator = php.HashTableIterator;
@@ -179,7 +180,7 @@ pub const Slice = struct {
         try static.value_acc.setElement(self, index, value);
     }
 
-    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) accessor.Error!void {
+    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) Error!void {
         if (transform == .none) {
             if (php.getValueArray(value) catch null) |ht| {
                 if (!php.isNormalArray(ht)) {

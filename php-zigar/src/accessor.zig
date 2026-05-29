@@ -12,6 +12,7 @@ pub const Slot = @import("accessor/slot.zig").Slot;
 pub const Vector = @import("accessor/vector.zig").Vector;
 pub const Void = @import("accessor/void.zig").Void;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
+const Error = @import("failure.zig").Error;
 const php = @import("php.zig");
 const HashTable = php.HashTable;
 const Object = php.Object;
@@ -22,54 +23,7 @@ const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigObject = @import("object.zig").ZigObject;
 
 pub const FieldAccess = enum { read, write };
-pub const Error = error{
-    AccessingDeallocatedMemory,
-    AccessingMissingObject,
-    CannotCreateObject,
-    ComptimeValue,
-    ExceptionThrown,
-    Failure,
-    Inaccessible,
-    IncorrectEncoding,
-    IntegerOverflow,
-    InvalidEncoding,
-    InvalidOperation,
-    InvalidType,
-    LengthMismatch,
-    MisplacedSentinel,
-    Missing,
-    MissingSentinel,
-    NegativeIndex,
-    NegativeValue,
-    NotAbortSignal,
-    NotAllocator,
-    NotArray,
-    NotArrayOrObject,
-    NotBoolean,
-    NotCallable,
-    NotDouble,
-    NotFound,
-    NotImplemented,
-    NotInteger,
-    NotNull,
-    NotObject,
-    NotPointer,
-    NotStream,
-    NotString,
-    NotTheSame,
-    NullPointer,
-    KeyIsNotInteger,
-    KeyIsNotString,
-    OutOfBound,
-    OutOfMemory,
-    ReadOnlyProperty,
-    TooLarge,
-    Unexpected,
-    UnexpectedClass,
-    Unsupported,
-    WriteOnly,
-    WriteProtected,
-};
+pub const Output = enum { object, value };
 pub const Type = enum {
     void,
     bool,
@@ -83,7 +37,6 @@ pub const Type = enum {
     property,
     inaccessible,
 };
-
 pub const Transform = enum {
     none,
     string,
@@ -122,8 +75,6 @@ pub const Transform = enum {
         }
     }
 };
-
-pub const Output = enum { object, value };
 
 pub fn WithBitOffset(comptime T: type, comptime bit_offset: u3) type {
     const fields: [2]std.builtin.Type.StructField = .{

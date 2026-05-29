@@ -6,6 +6,7 @@ const cache = @import("cache.zig");
 const enums = @import("enums.zig");
 const StructureType = enums.StructureType;
 const failure = @import("failure.zig");
+const Error = failure.Error;
 const iterator = @import("iterator.zig");
 const js_compat = @import("js-compat.zig");
 const php = @import("php.zig");
@@ -128,7 +129,7 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
-        pub fn visitPointers(self: *S, cb: anytype, args: anytype, comptime options: VisitOptions) accessor.Error!void {
+        pub fn visitPointers(self: *S, cb: anytype, args: anytype, comptime options: VisitOptions) Error!void {
             _ = self;
             _ = cb;
             _ = args;
@@ -144,7 +145,7 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
-        pub fn getValue(self: *S, transform: accessor.Transform) accessor.Error!Value {
+        pub fn getValue(self: *S, transform: accessor.Transform) Error!Value {
             switch (transform) {
                 .string, .integer, .float, .boolean => |tm| {
                     var value = try self.getValue(.none);
@@ -176,7 +177,7 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
-        pub fn setValue(self: *S, value: *const Value, transform: accessor.Transform) accessor.Error!void {
+        pub fn setValue(self: *S, value: *const Value, transform: accessor.Transform) Error!void {
             switch (transform) {
                 .bytes, .base64 => |t| {
                     if (!@hasField(S, "buffer")) return error.Unsupported;
@@ -207,12 +208,12 @@ pub fn Parent(comptime S: type) type {
             return true;
         }
 
-        pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
+        pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) Error!Value {
             const transform = TransformCache.idFromString(name, cache_slot) orelse return error.Missing;
             return try self.getValue(transform);
         }
 
-        pub fn setProperty(self: *S, name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {
+        pub fn setProperty(self: *S, name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) Error!void {
             const transform = TransformCache.idFromString(name, cache_slot) orelse return error.Missing;
             return try self.setValue(value, transform);
         }
@@ -398,7 +399,7 @@ pub fn StructLike(comptime S: type) type {
 
         const MemberCache = cache.MemberCache;
 
-        pub fn getValue(self: *S, transform: accessor.Transform) accessor.Error!Value {
+        pub fn getValue(self: *S, transform: accessor.Transform) Error!Value {
             switch (transform) {
                 .string, .integer => return error.Unsupported,
                 .plain => {
@@ -421,7 +422,7 @@ pub fn StructLike(comptime S: type) type {
         }
 
         // error set cannot be inferred due to recursion
-        pub fn setValue(self: *S, value: *const Value, transform: accessor.Transform) accessor.Error!void {
+        pub fn setValue(self: *S, value: *const Value, transform: accessor.Transform) Error!void {
             if (transform == .none) {
                 if (try copySelf(self, value)) return;
                 const ht = try php.getValueHashTable(value);
@@ -472,14 +473,14 @@ pub fn StructLike(comptime S: type) type {
             return Super.setValue(self, value, transform);
         }
 
-        pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
+        pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) Error!Value {
             return if (findMember(self, name, cache_slot)) |member|
                 try member.accessors.get(self)
             else
                 try Super.getProperty(self, name, cache_slot);
         }
 
-        pub fn setProperty(self: *S, name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {
+        pub fn setProperty(self: *S, name: *String, value: *const Value, cache_slot: ?[*]?*anyopaque) Error!void {
             if (findMember(self, name, cache_slot)) |member| {
                 try member.accessors.set(self, value);
             } else if (scope == .instance) {
@@ -640,7 +641,7 @@ pub fn ArrayLike(comptime S: type) type {
             return Super.getValue(self, transform);
         }
 
-        pub fn setValue(self: *S, value: *const Value, transform: accessor.Transform) accessor.Error!void {
+        pub fn setValue(self: *S, value: *const Value, transform: accessor.Transform) Error!void {
             if (try copySelf(self, value)) return;
             if (transform == .string) {
                 if (!isString(self)) return error.Unsupported;
@@ -678,7 +679,7 @@ pub fn ArrayLike(comptime S: type) type {
             return Super.setValue(self, value, transform);
         }
 
-        pub fn visitPointers(self: *S, cb: anytype, args: anytype, comptime options: VisitOptions) accessor.Error!void {
+        pub fn visitPointers(self: *S, cb: anytype, args: anytype, comptime options: VisitOptions) Error!void {
             const class = ZigClassEntry.fromStructure(self);
             if (class.flags.common.has_pointer) {
                 const len = self.getLength();
@@ -813,12 +814,12 @@ pub fn OptionalLike(comptime S: type) type {
         pub const Super = Parent(S);
         pub const scope = Super.scope;
 
-        pub fn getElement(self: *S, index: usize) accessor.Error!Value {
+        pub fn getElement(self: *S, index: usize) Error!Value {
             const target_obj = self.getChildObject() orelse return error.AccessingMissingObject;
             return invokeMethod(target_obj, "getElement", .{index});
         }
 
-        pub fn setElement(self: *S, index: usize, value: *const Value) accessor.Error!void {
+        pub fn setElement(self: *S, index: usize, value: *const Value) Error!void {
             const target_obj = self.getChildObject() orelse return error.AccessingMissingObject;
             return invokeMethod(target_obj, "setElement", .{ index, value });
         }
@@ -828,7 +829,7 @@ pub fn OptionalLike(comptime S: type) type {
             return invokeMethod(target_obj, "getLength", .{}) catch unreachable;
         }
 
-        pub fn findMethod(self: *S, name: *String) accessor.Error!?*php.Function {
+        pub fn findMethod(self: *S, name: *String) Error!?*php.Function {
             const target_obj = self.getChildObject() orelse return error.AccessingMissingObject;
             return invokeMethod(target_obj, "findMethod", .{name}) catch |err| check: {
                 break :check if (err == error.Missing) null else err;

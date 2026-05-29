@@ -1,8 +1,8 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
+const Error = @import("../failure.zig").Error;
 const failure = @import("../failure.zig");
 const php = @import("../php.zig");
 const Value = php.Value;

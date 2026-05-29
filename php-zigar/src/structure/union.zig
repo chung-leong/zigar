@@ -2,11 +2,11 @@ const std = @import("std");
 
 const accessor = @import("../accessor.zig");
 const Transform = accessor.Transform;
-const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
+const Error = failure.Error;
 const iterator = @import("../iterator.zig");
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
@@ -179,7 +179,7 @@ pub const Union = struct {
         }
     }
 
-    pub fn getProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
+    pub fn getProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) Error!Value {
         self.checkSelector(name, cache_slot) catch |err| {
             const class = ZigClassEntry.fromStructure(self);
             if (err == error.InactiveField) {
@@ -213,7 +213,7 @@ pub const Union = struct {
         return true;
     }
 
-    pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) accessor.Error!void {
+    pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) Error!void {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.common.has_pointer) {
             const static = class.getStaticData(@This());

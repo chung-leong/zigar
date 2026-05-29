@@ -1,9 +1,9 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const Error = accessor.Error;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const Error = @import("../failure.zig").Error;
 const php = @import("../php.zig");
 const Value = php.Value;
 const structure = @import("../structure.zig");

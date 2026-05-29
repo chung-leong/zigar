@@ -1,8 +1,8 @@
 const std = @import("std");
 
 const accessor = @import("../accessor.zig");
-const Error = accessor.Error;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const Error = @import("../failure.zig").Error;
 const php = @import("../php.zig");
 const Object = php.Object;
 const String = php.String;

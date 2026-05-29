@@ -5,6 +5,7 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
+const Error = failure.Error;
 const js_compat = @import("../js-compat.zig");
 const ArrayBuffer = js_compat.ArrayBuffer;
 const TypedArrayOf = js_compat.TypedArrayOf;
@@ -134,7 +135,7 @@ pub const Pointer = struct {
     };
     pub const PropCache = cache.IdCache(.{ .target, .length }, "__", .{ .@"*" = .target });
 
-    pub fn getValue(self: *@This(), transform: accessor.Transform) accessor.Error!Value {
+    pub fn getValue(self: *@This(), transform: accessor.Transform) Error!Value {
         const target_obj = try self.getTarget();
         switch (transform) {
             .none => {
@@ -147,7 +148,7 @@ pub const Pointer = struct {
         }
     }
 
-    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) accessor.Error!void {
+    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) Error!void {
         if (self.buffer.flags.inaccessible) {
             if (!php.isValueNull(value)) return self.reportInaccessiblePointer();
         }
@@ -227,11 +228,11 @@ pub const Pointer = struct {
         return try static.getAddress(self);
     }
 
-    pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime _: structure.VisitOptions) accessor.Error!void {
+    pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime _: structure.VisitOptions) Error!void {
         try @call(.auto, cb, .{self} ++ args);
     }
 
-    pub fn getProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) accessor.Error!Value {
+    pub fn getProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) Error!Value {
         const target_obj = try self.getTarget();
         if (PropCache.idFromString(name, cache_slot)) |id| {
             const class = ZigClassEntry.fromStructure(self);
@@ -256,7 +257,7 @@ pub const Pointer = struct {
         }
     }
 
-    pub fn setProperty(self: *@This(), name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) accessor.Error!void {
+    pub fn setProperty(self: *@This(), name: *String, value: *Value, cache_slot: ?[*]?*anyopaque) Error!void {
         const target_obj = try self.getTarget();
         if (PropCache.idFromString(name, cache_slot)) |id| {
             const class = ZigClassEntry.fromStructure(self);
@@ -299,7 +300,7 @@ pub const Pointer = struct {
         };
     }
 
-    pub fn externalizeTarget(self: *@This()) accessor.Error!void {
+    pub fn externalizeTarget(self: *@This()) Error!void {
         const obj = php.getValueObject(&self.table) catch return;
         try invokeMethod(obj, "externalize", .{});
     }

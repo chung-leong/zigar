@@ -2,10 +2,59 @@ const std = @import("std");
 
 const php = @import("php.zig");
 
+pub const Error = error{
+    AccessingDeallocatedMemory,
+    AccessingMissingObject,
+    CannotCreateObject,
+    ComptimeValue,
+    ExceptionThrown,
+    Failure,
+    Inaccessible,
+    IncorrectEncoding,
+    IntegerOverflow,
+    InvalidEncoding,
+    InvalidOperation,
+    InvalidType,
+    LengthMismatch,
+    MisplacedSentinel,
+    Missing,
+    MissingSentinel,
+    NegativeIndex,
+    NegativeValue,
+    NotAbortSignal,
+    NotAllocator,
+    NotArray,
+    NotArrayOrObject,
+    NotBoolean,
+    NotCallable,
+    NotDouble,
+    NotFound,
+    NotImplemented,
+    NotInteger,
+    NotNull,
+    NotObject,
+    NotPointer,
+    NotStream,
+    NotString,
+    NotTheSame,
+    NullPointer,
+    KeyIsNotInteger,
+    KeyIsNotString,
+    OutOfBound,
+    OutOfMemory,
+    ReadOnlyProperty,
+    TooLarge,
+    Unexpected,
+    UnexpectedClass,
+    Unsupported,
+    WriteOnly,
+    WriteProtected,
+};
+
 pub fn match(err: anyerror, other_err: anyerror) bool {
-    const Error = @TypeOf(err);
-    const OtherError = @TypeOf(other_err);
-    return (Error || OtherError == Error and err == other_err);
+    const E1 = @TypeOf(err);
+    const E2 = @TypeOf(other_err);
+    return (E1 || E2 == E1 and err == other_err);
 }
 
 pub fn report(comptime fmt: []const u8, params: anytype) error{Unexpected} {
