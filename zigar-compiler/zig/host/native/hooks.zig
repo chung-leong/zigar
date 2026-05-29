@@ -2928,7 +2928,7 @@ pub fn LibcSubstitute(comptime redirector: type) type {
         }
 
         pub fn fileno(s: *std.c.FILE) callconv(.c) c_int {
-            if (getRedirectedFile(s)) |file| {
+            if (RedirectedFile.cast(s)) |file| {
                 return file.fd;
             }
             return Original.fileno(s);

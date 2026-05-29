@@ -5,7 +5,7 @@ require __DIR__ . '/../vendor/autoload.php';
 
 $m = zigar_use(__DIR__ . "/scratch.zig");
 
-$buffer = new $m->PtrVoid('Hello world!');
-echo count($buffer), "\n";
-echo $buffer[0], "\n";
-print_r($buffer->__typed_array);
+$f = $m->fopen('anyopaque-pointer-example-2-out.txt', 'w');
+$buffer = new $m->PtrVoid("Cześć! Jak się masz?\n");
+$m->fwrite($buffer, count($buffer), 1, $f);
+$m->fclose($f);

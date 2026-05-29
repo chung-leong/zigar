@@ -160,7 +160,12 @@ pub const Pointer = struct {
                 const target_class = static.target_class;
                 switch (php.getValueType(value)) {
                     .object => {
-                        const obj = php.getValueObject(value) catch unreachable;
+                        var obj = php.getValueObject(value) catch unreachable;
+                        const obj_class = ZigClassEntry.fromObject(obj);
+                        if (obj_class.type == .pointer) {
+                            const ptr_struct = ZigObject(structure.Pointer).fromObject(obj).structure();
+                            obj = try ptr_struct.getTarget();
+                        }
                         if (php.instanceOf(obj.ce, target_class.entry())) {
                             // point to existing object
                             // TODO: check read-only flag
