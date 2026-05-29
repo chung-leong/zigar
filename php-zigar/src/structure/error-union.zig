@@ -99,6 +99,12 @@ pub const ErrorUnion = struct {
         }
     }
 
+    pub fn getChildObject(self: *@This()) ?*Object {
+        const value = self.getValue(.none) catch return null;
+        defer php.release(&value);
+        return php.getValueObject(&value) catch null;
+    }
+
     pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) accessor.Error!void {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.common.has_slot) {
@@ -156,6 +162,10 @@ pub const ErrorUnion = struct {
     pub const setProperty = Super.setProperty;
     pub const propertyExists = Super.propertyExists;
     pub const checkArguments = Super.checkArguments;
+    pub const getElement = Super.getElement;
+    pub const setElement = Super.setElement;
+    pub const getLength = Super.getLength;
+    pub const findMethod = Super.findMethod;
     pub const getConstructor = Super.getConstructor;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
@@ -164,6 +174,11 @@ pub const ErrorUnion = struct {
     pub const hasProperty = Super.hasProperty;
     pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
+    pub const readElement = Super.readElement;
+    pub const writeElement = Super.writeElement;
+    pub const hasElement = Super.hasElement;
+    pub const countElements = Super.countElements;
+    pub const getMethod = Super.getMethod;
     pub const getGarbageCollection = Super.getGarbageCollection;
     pub const getIterator = Super.getIterator;
     const fromObject = Super.fromObject;

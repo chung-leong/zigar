@@ -24,6 +24,7 @@ const ZigObject = @import("object.zig").ZigObject;
 pub const FieldAccess = enum { read, write };
 pub const Error = error{
     AccessingDeallocatedMemory,
+    AccessingMissingObject,
     CannotCreateObject,
     ComptimeValue,
     ExceptionThrown,
@@ -48,6 +49,7 @@ pub const Error = error{
     NotCallable,
     NotDouble,
     NotFound,
+    NotImplemented,
     NotInteger,
     NotNull,
     NotObject,

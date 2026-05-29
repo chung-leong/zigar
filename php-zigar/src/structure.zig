@@ -227,9 +227,9 @@ pub fn Parent(comptime S: type) type {
             const member = try class.getMember(.static, name);
             if (!member.flags.is_method) return null;
             const class_struct = ZigObject(Class(S)).fromObject(class.object).structure();
-            var field = try member.accessors.get(class_struct);
-            defer php.release(&field);
-            const field_obj = php.getValueObject(&field) catch return null;
+            var field_value = try member.accessors.get(class_struct);
+            defer php.release(&field_value);
+            const field_obj = php.getValueObject(&field_value) catch return null;
             const field_class = ZigClassEntry.fromObject(field_obj);
             if (field_class.type != .function) return null;
             const func_struct = ZigObject(Function).fromObject(field_obj).structure();
@@ -358,7 +358,7 @@ pub fn Parent(comptime S: type) type {
         pub fn getMethod(obj_ptr: *[*c]Object, name: *String, _: ?*const Value) !?*php.Function {
             const obj = obj_ptr.*;
             const self = fromObject(obj);
-            return try findMethod(self, name);
+            return try self.findMethod(name);
         }
 
         pub fn compare(a: *Value, b: *Value) !c_int {
@@ -562,6 +562,7 @@ pub fn StructLike(comptime S: type) type {
         pub const initialize = Super.initialize;
         pub const finalize = Super.finalize;
         pub const externalize = Super.externalize;
+        pub const findMethod = Super.findMethod;
         pub const checkArguments = Super.checkArguments;
         pub const copySelf = Super.copySelf;
         pub const visitPointers = Super.visitPointers;
@@ -574,8 +575,8 @@ pub fn StructLike(comptime S: type) type {
         pub const getPropertyPointer = Super.getPropertyPointer;
         pub const freeObject = Super.freeObject;
         pub const castObject = Super.castObject;
-        pub const getGarbageCollection = Super.getGarbageCollection;
         pub const getMethod = Super.getMethod;
+        pub const getGarbageCollection = Super.getGarbageCollection;
     };
 }
 
@@ -812,6 +813,28 @@ pub fn OptionalLike(comptime S: type) type {
         pub const Super = Parent(S);
         pub const scope = Super.scope;
 
+        pub fn getElement(self: *S, index: usize) accessor.Error!Value {
+            const target_obj = self.getChildObject() orelse return error.AccessingMissingObject;
+            return invokeMethod(target_obj, "getElement", .{index});
+        }
+
+        pub fn setElement(self: *S, index: usize, value: *const Value) accessor.Error!void {
+            const target_obj = self.getChildObject() orelse return error.AccessingMissingObject;
+            return invokeMethod(target_obj, "setElement", .{ index, value });
+        }
+
+        pub fn getLength(self: *S) usize {
+            const target_obj = self.getChildObject() orelse return 0;
+            return invokeMethod(target_obj, "getLength", .{}) catch unreachable;
+        }
+
+        pub fn findMethod(self: *S, name: *String) accessor.Error!?*php.Function {
+            const target_obj = self.getChildObject() orelse return error.AccessingMissingObject;
+            return invokeMethod(target_obj, "findMethod", .{name}) catch |err| check: {
+                break :check if (err == error.Missing) null else err;
+            };
+        }
+
         pub fn getProperties(obj: *Object) !*HashTable {
             const self = fromObject(obj);
             const child = try self.getValue(.none);
@@ -847,6 +870,10 @@ pub fn OptionalLike(comptime S: type) type {
         pub const getProperty = Super.getProperty;
         pub const setProperty = Super.setProperty;
         pub const propertyExists = Super.propertyExists;
+        pub const readElement = ArrayLike(S).readElement;
+        pub const writeElement = ArrayLike(S).writeElement;
+        pub const hasElement = ArrayLike(S).hasElement;
+        pub const countElements = ArrayLike(S).countElements;
         pub const checkArguments = Super.checkArguments;
         pub const copySelf = Super.copySelf;
         pub const visitPointers = Super.visitPointers;
@@ -859,11 +886,13 @@ pub fn OptionalLike(comptime S: type) type {
         pub const freeObject = Super.freeObject;
         pub const castObject = Super.castObject;
         pub const compare = Super.compare;
+        pub const getMethod = Super.getMethod;
         pub const getGarbageCollection = Super.getGarbageCollection;
     };
 }
 
 pub fn invokeMethod(obj: *Object, comptime name: []const u8, args: anytype) RT: {
+    // merge the error sets of all implementations and verify that they have the same payload
     var error_set = error{};
     var payload: ?type = null;
     for (std.meta.fields(@TypeOf(by_enum))) |field| {
@@ -873,13 +902,16 @@ pub fn invokeMethod(obj: *Object, comptime name: []const u8, args: anytype) RT: 
             if (ErrorType(RT)) |ES| {
                 error_set = error_set || ES;
             }
-            if (payload) |PL| {
-                const PL2 = Payload(RT);
-                if (PL != PL2)
-                    @compileError(@typeName(S) ++ "." ++ name ++ "() returns " ++ @typeName(PL2) ++ " instead of " ++ @typeName(PL));
+            const PL = Payload(RT);
+            if (payload) |current| {
+                if (PL != current) {
+                    @compileError(@typeName(S) ++ "." ++ name ++ "() returns " ++ @typeName(PL) ++ " instead of " ++ @typeName(current));
+                }
             } else {
-                payload = Payload(RT);
+                payload = PL;
             }
+        } else {
+            error_set = error_set || error{NotImplemented};
         }
     }
     if (payload == null) @compileError("No matching function: " ++ name);
@@ -893,22 +925,19 @@ pub fn invokeMethod(obj: *Object, comptime name: []const u8, args: anytype) RT: 
             const C = Class(S);
             // the class object has the same class entry as instance objects; we can only
             // distingish the two by checking the object handlers
-            if (ZigObject(C).isInstance(obj)) {
-                if (comptime @hasDecl(C, name)) {
-                    const func = @field(C, name);
-                    const self = ZigObject(C).fromObject(obj).structure();
-                    const RT = ReturnType(C, name);
-                    const result = @call(.auto, func, .{self} ++ args);
-                    return if (ErrorType(RT) != null) try result else result;
-                } else @panic(@typeName(C) ++ "has not implementation for " ++ name ++ "()");
-            } else {
-                if (comptime @hasDecl(S, name)) {
-                    const func = @field(S, name);
-                    const self = ZigObject(S).fromObject(obj).structure();
-                    const RT = ReturnType(S, name);
-                    const result = @call(.auto, func, .{self} ++ args);
-                    return if (ErrorType(RT) != null) try result else result;
-                } else @panic(@typeName(S) ++ "has not implementation for " ++ name ++ "()");
+            switch (ZigObject(S).isInstance(obj)) {
+                inline else => |is_instance| {
+                    const T = if (is_instance) S else C;
+                    if (comptime @hasDecl(T, name)) {
+                        const func = @field(T, name);
+                        const self = ZigObject(T).fromObject(obj).structure();
+                        const RT = ReturnType(T, name);
+                        const result = @call(.auto, func, .{self} ++ args);
+                        return if (ErrorType(RT) != null) try result else result;
+                    } else {
+                        return error.NotImplemented;
+                    }
+                },
             }
         },
     }

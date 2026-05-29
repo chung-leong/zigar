@@ -1309,6 +1309,14 @@ pub const ZigClassEntry = struct {
         return ce.*.unnamed_0.parent == global_class;
     }
 
+    pub fn isZigInstance(obj: *Object) bool {
+        if (isZig(obj.ce)) {
+            const self = fromObject(obj);
+            return self.object != obj;
+        }
+        return false;
+    }
+
     pub fn isZigError(ce: *ClassEntry) bool {
         return ce.*.unnamed_0.parent == global_error_class;
     }

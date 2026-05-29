@@ -350,6 +350,7 @@ pub const Union = struct {
     pub const getExtent = Super.getExtent;
     pub const checkArguments = Super.checkArguments;
     pub const propertyExists = Super.propertyExists;
+    pub const findMethod = Super.findMethod;
     pub const getConstructor = Super.getConstructor;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;

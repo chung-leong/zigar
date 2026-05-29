@@ -132,7 +132,7 @@ pub const Pointer = struct {
             return StaticPropCache.idFromString(name, cache_slot) != null;
         }
     };
-    pub const PropCache = cache.IdCache(.{ .target, .len }, "__", .{ .@"*" = .target });
+    pub const PropCache = cache.IdCache(.{ .target, .length }, "__", .{ .@"*" = .target });
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) accessor.Error!Value {
         const target_obj = try self.getTarget();
@@ -245,13 +245,13 @@ pub const Pointer = struct {
                         return php.createValueObject(target_obj);
                     }
                 },
-                .len => {
+                .length => {
                     if (!class.flags.pointer.is_multiple) return error.Missing;
                     return php.createValueAnyInt(self.last_length);
                 },
             }
         } else {
-            try self.checkDoubleReference();
+            if (self.isPointerToPointer()) return self.reportNoAutoDereference();
             return try invokeMethod(target_obj, "getProperty", .{ name, cache_slot });
         }
     }
@@ -265,7 +265,7 @@ pub const Pointer = struct {
                 .target => {
                     try invokeMethod(target_obj, "setValue", .{ value, .none });
                 },
-                .len => {
+                .length => {
                     if (!class.flags.pointer.is_multiple) return error.Missing;
                     if (static.target_class.flags.slice.has_sentinel) return error.WriteProtected;
                     const len: usize = try php.getValueUlong(value);
@@ -286,7 +286,7 @@ pub const Pointer = struct {
                 },
             }
         } else {
-            try self.checkDoubleReference();
+            if (self.isPointerToPointer()) return self.reportNoAutoDereference();
             try invokeMethod(target_obj, "setProperty", .{ name, value, cache_slot });
         }
     }
@@ -294,38 +294,9 @@ pub const Pointer = struct {
     pub fn propertyExists(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) bool {
         return PropCache.idFromString(name, cache_slot) != null or check: {
             const target_obj = self.getTarget() catch return false;
-            self.checkDoubleReference() catch return false;
+            if (self.isPointerToPointer()) return false;
             break :check invokeMethod(target_obj, "propertyExists", .{ name, cache_slot }) catch unreachable;
         };
-    }
-
-    pub fn readElement(obj: *Object, key: *Value, _: c_int, retval: *Value) !*Value {
-        const self = fromObject(obj);
-        const len = self.getLength();
-        const index = try getIndex(key, len);
-        retval.* = try self.getElement(index);
-        return retval;
-    }
-
-    pub fn writeElement(obj: *Object, key: *Value, value: *Value) !void {
-        const self = fromObject(obj);
-        const len = self.getLength();
-        const index = try getIndex(key, len);
-        try self.setElement(index, value);
-    }
-
-    pub fn hasElement(obj: *Object, key: *Value, _: c_int) !c_int {
-        const self = fromObject(obj);
-        const len = self.getLength();
-        return if (getIndex(key, len)) |_| 1 else |_| 0;
-    }
-
-    pub fn countElements(obj: *Object, count: *php.Long) !c_int {
-        const self = fromObject(obj);
-        const len = self.getLength();
-        if (len > std.math.maxInt(php.Long)) return error.TooLarge;
-        count.* = @intCast(len);
-        return php.SUCCESS;
     }
 
     pub fn externalizeTarget(self: *@This()) accessor.Error!void {
@@ -335,6 +306,18 @@ pub const Pointer = struct {
 
     pub fn restrictAccess(self: *@This()) !void {
         self.buffer.flags.inaccessible = true;
+    }
+
+    pub fn getTarget(self: *@This()) !*Object {
+        if (self.buffer.flags.inaccessible) return self.reportInaccessiblePointer();
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        try static.loadTarget(self);
+        return php.getValueObject(&self.table) catch return error.NullPointer;
+    }
+
+    pub fn getChildObject(self: *@This()) ?*Object {
+        return self.getTarget() catch return null;
     }
 
     pub fn compare(a: *Value, b: *Value) !c_int {
@@ -360,43 +343,10 @@ pub const Pointer = struct {
         return php.compareValues(&target_value_a, &target_value_b);
     }
 
-    fn getTarget(self: *@This()) !*Object {
-        if (self.buffer.flags.inaccessible) return self.reportInaccessiblePointer();
+    fn isPointerToPointer(self: *@This()) bool {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        try static.loadTarget(self);
-        return php.getValueObject(&self.table) catch return error.NullPointer;
-    }
-
-    fn getElement(self: *@This(), index: usize) !Value {
-        const target_obj = try self.getTarget();
-        return invokeMethod(target_obj, "getElement", .{index});
-    }
-
-    fn setElement(self: *@This(), index: usize, value: *const Value) !void {
-        const target_obj = try self.getTarget();
-        return invokeMethod(target_obj, "setElement", .{ index, value });
-    }
-
-    fn getLength(self: *@This()) usize {
-        const target_obj = self.getTarget() catch return 0;
-        return invokeMethod(target_obj, "getLength", .{}) catch unreachable;
-    }
-
-    fn getIndex(key: *Value, len: usize) !usize {
-        const key_long = try php.getValueLong(key);
-        if (key_long < 0) return error.NegativeIndex;
-        const index: usize = @intCast(key_long);
-        if (index >= len) return error.OutOfBound;
-        return index;
-    }
-
-    fn checkDoubleReference(self: *@This()) !void {
-        const class = ZigClassEntry.fromStructure(self);
-        const static = class.getStaticData(@This());
-        if (static.target_class.type == .pointer) {
-            return self.reportNoAutoDereference();
-        }
+        return static.target_class.type == .pointer;
     }
 
     fn reportInaccessiblePointer(_: *@This()) error{Unexpected} {
@@ -416,6 +366,10 @@ pub const Pointer = struct {
     pub const finalize = Super.finalize;
     pub const externalize = Super.externalize;
     pub const checkArguments = Super.checkArguments;
+    pub const getElement = Super.getElement;
+    pub const setElement = Super.setElement;
+    pub const getLength = Super.getLength;
+    pub const findMethod = Super.findMethod;
     pub const getConstructor = Super.getConstructor;
     pub const freeObject = Super.freeObject;
     pub const castObject = Super.castObject;
@@ -424,6 +378,11 @@ pub const Pointer = struct {
     pub const hasProperty = Super.hasProperty;
     pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
+    pub const readElement = Super.readElement;
+    pub const writeElement = Super.writeElement;
+    pub const hasElement = Super.hasElement;
+    pub const countElements = Super.countElements;
+    pub const getMethod = Super.getMethod;
     pub const getGarbageCollection = Super.getGarbageCollection;
     pub const getIterator = Super.getIterator;
     const fromObject = Super.fromObject;

@@ -323,6 +323,7 @@ pub const Enum = struct {
     pub const getProperty = Super.getProperty;
     pub const setProperty = Super.setProperty;
     pub const propertyExists = Super.propertyExists;
+    pub const findMethod = Super.findMethod;
     pub const visitPointers = Super.visitPointers;
     pub const getConstructor = Super.getConstructor;
     pub const castObject = Super.castObject;

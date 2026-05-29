@@ -116,7 +116,24 @@ pub const ArgStruct = struct {
         }
         // use accessors to write into the argument struct
         var index: usize = 0;
-        while (arg_iter.next()) |arg| : (index += 1) {
+        while (arg_iter.next()) |arg_given| : (index += 1) {
+            var arg_target: Value = undefined;
+            const arg = init: {
+                // if argument is a pointer, dereference it
+                if (php.getValueObject(arg_given) catch null) |arg_obj| {
+                    if (ZigClassEntry.isZigInstance(arg_obj)) {
+                        const arg_class = ZigClassEntry.fromObject(arg_obj);
+                        if (arg_class.type == .pointer) {
+                            const arg_struct = ZigObject(structure.Pointer).fromObject(arg_obj).structure();
+                            const target_obj = try arg_struct.getTarget();
+                            defer php.release(target_obj);
+                            arg_target = php.createValueObject(target_obj);
+                            break :init &arg_target;
+                        }
+                    }
+                }
+                break :init arg_given;
+            };
             const acc = static.arg_accessors[index];
             acc.set(self, arg) catch |err| {
                 if (failure.hasMessage()) {
