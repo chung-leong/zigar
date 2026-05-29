@@ -322,32 +322,36 @@ pub const Pointer = struct {
     }
 
     pub fn compare(a: *Value, b: *Value) !c_int {
-        const obj_a = php.getValueObject(a) catch return -1;
-        const obj_b = php.getValueObject(b) catch return 1;
-        if (obj_a == obj_b) return 0;
-        if (obj_a.ce != obj_b.ce) {
-            return if (@intFromPtr(obj_a.ce) < @intFromPtr(obj_b.ce)) -1 else 1;
-        }
-        const struct_a = fromObject(obj_a);
-        const struct_b = fromObject(obj_b);
-        const target_a = struct_a.getTarget() catch null;
-        const target_b = struct_b.getTarget() catch null;
-        if (target_a == target_b) {
-            return 0;
-        } else if (target_a == null) {
-            return -1;
-        } else if (target_b == null) {
-            return 1;
-        }
-        const target_value_a = php.createValueObject(target_a);
-        const target_value_b = php.createValueObject(target_b);
-        return php.compareValues(&target_value_a, &target_value_b);
+        const op1 = try resolveReference(a);
+        const op2 = try resolveReference(b);
+        return php.compareValues(&op1, &op2);
+    }
+
+    pub fn doOperation(opcode: php.Uchar, retval: *Value, a: *Value, b: *Value) !c_int {
+        const op1 = try resolveReference(a);
+        const op2 = try resolveReference(b);
+        retval.* = try php.performOperation(opcode, &op1, &op2);
+        return php.SUCCESS;
     }
 
     fn isPointerToPointer(self: *@This()) bool {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         return static.target_class.type == .pointer;
+    }
+
+    fn resolveReference(operand: *Value) !Value {
+        if (php.getValueObject(operand) catch null) |ptr_obj| {
+            if (ZigClassEntry.isZigInstance(ptr_obj)) {
+                const class = ZigClassEntry.fromObject(ptr_obj);
+                if (class.type == .pointer) {
+                    const self = fromObject(ptr_obj);
+                    const target_obj = try self.getTarget();
+                    return php.createValueObject(target_obj);
+                }
+            }
+        }
+        return operand.*;
     }
 
     fn reportInaccessiblePointer(_: *@This()) error{Unexpected} {

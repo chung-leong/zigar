@@ -36,6 +36,7 @@ pub const FunctionEntry = extern struct {
 pub const FunctionInfo = php_h.zend_internal_function_info;
 pub const HashPosition = php_h.HashPosition;
 pub const HashTable = php_h.HashTable;
+pub const Uchar = php_h.zend_uchar;
 pub const Long = php_h.zend_long;
 pub const ModuleEntry = extern struct {
     size: c_ushort,
@@ -1572,6 +1573,19 @@ pub fn fstat(strm: *Stream, out: *std.os.wasi.filestat_t) !void {
     const result = php_h._php_stream_stat(strm, &stat_buf);
     if (result != SUCCESS) return error.Failure;
     copyStat(&stat_buf.sb, out);
+}
+
+pub fn performOperation(opcode: c_int, op1: *const Value, op2: *const Value) !Value {
+    var value: Value = undefined;
+    var result: Result = undefined;
+    if (php_h.get_unary_op(opcode)) |unary_handler| {
+        result = unary_handler(&value, @constCast(op1));
+    } else if (php_h.get_binary_op(opcode)) |binary_handler| {
+        result = binary_handler(&value, @constCast(op1), @constCast(op2));
+    } else {
+        result = FAILURE;
+    }
+    return if (result == SUCCESS) value else error.Failure;
 }
 
 fn copyStat(in: *php_h.zend_stat_t, out: *std.os.wasi.filestat_t) void {

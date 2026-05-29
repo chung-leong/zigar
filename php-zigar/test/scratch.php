@@ -5,4 +5,7 @@ require __DIR__ . '/../vendor/autoload.php';
 
 $m = zigar_use(__DIR__ . "/scratch.zig");
 
-$m->b->ptr->print();
+debug_zval_dump($m->int_ptr * 2);
+debug_zval_dump($m->int_ptr == 12345);
+$m->int_ptr *= 2;
+debug_zval_dump(-$m->int_ptr);

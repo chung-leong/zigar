@@ -58,6 +58,32 @@ pub const Primitive = struct {
         return ht;
     }
 
+    pub fn compare(a: *Value, b: *Value) !c_int {
+        const op1 = try getPrimitiveValue(a);
+        const op2 = try getPrimitiveValue(b);
+        return php.compareValues(&op1, &op2);
+    }
+
+    pub fn doOperation(opcode: php.Uchar, retval: *Value, a: *Value, b: *Value) !c_int {
+        const op1 = try getPrimitiveValue(a);
+        const op2 = try getPrimitiveValue(b);
+        retval.* = try php.performOperation(opcode, &op1, &op2);
+        return php.SUCCESS;
+    }
+
+    fn getPrimitiveValue(operand: *const Value) !Value {
+        if (php.getValueObject(operand) catch null) |ptr_obj| {
+            if (ZigClassEntry.isZigInstance(ptr_obj)) {
+                const class = ZigClassEntry.fromObject(ptr_obj);
+                if (class.type == .primitive) {
+                    const self = fromObject(ptr_obj);
+                    return try self.getValue(.none);
+                }
+            }
+        }
+        return operand.*;
+    }
+
     pub const getExtent = Super.getExtent;
     pub const setStorage = Super.setStorage;
     pub const initialize = Super.initialize;
@@ -75,7 +101,6 @@ pub const Primitive = struct {
     pub const writeProperty = Super.writeProperty;
     pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
-    pub const compare = Super.compare;
     pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
 };
