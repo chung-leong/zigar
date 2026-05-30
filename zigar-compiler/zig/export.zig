@@ -1046,16 +1046,16 @@ fn Factory(comptime host: type, comptime module: type) type {
                     true => try self.getComptimeValues(ptr.*),
                     false => null,
                 };
-                const obj = try createInstance(structure, value_ptr, is_comptime, export_handle, comptime_values);
+                const obj = try createInstance(structure, value_ptr, is_comptime, pt.is_const, export_handle, comptime_values);
                 return obj;
             } else {
-                return createView(value_ptr, is_comptime, export_handle);
+                return createView(value_ptr, is_comptime, pt.is_const, export_handle);
             }
         }
 
         fn exportError(self: @This(), err: anyerror, comptime T: type) !Value {
             const structure = try self.getStructure(T);
-            return try createInstance(structure, &err, true, null, null);
+            return try createInstance(structure, &err, true, true, null, null);
         }
 
         fn exportComptimeValue(self: @This(), comptime value: anytype) !Value {
@@ -1180,7 +1180,7 @@ fn Factory(comptime host: type, comptime module: type) type {
             };
         }
 
-        fn createView(ptr: anytype, copying: bool, export_handle: anytype) !Value {
+        fn createView(ptr: anytype, copying: bool, read_only: bool, export_handle: anytype) !Value {
             const PtrT = @TypeOf(ptr);
             const pt = @typeInfo(PtrT).pointer;
             const child_size = switch (@typeInfo(pt.child)) {
@@ -1201,7 +1201,7 @@ fn Factory(comptime host: type, comptime module: type) type {
                 break :create @intFromPtr(invalid_ptr);
             };
             if (address == invalid_address) {
-                return host.createView(null, 0, copying, export_handle, child_align);
+                return host.createView(null, 0, copying, read_only, export_handle, child_align);
             }
             const len: usize = switch (pt.size) {
                 .one => child_size,
@@ -1224,12 +1224,12 @@ fn Factory(comptime host: type, comptime module: type) type {
                 },
             };
             const bytes: [*]const u8 = @ptrFromInt(address);
-            return host.createView(bytes, len, copying, export_handle, child_align);
+            return host.createView(bytes, len, copying, read_only, export_handle, child_align);
         }
 
-        fn createInstance(structure: Value, ptr: anytype, copying: bool, export_handle: anytype, slots: ?Value) !Value {
+        fn createInstance(structure: Value, ptr: anytype, copying: bool, read_only: bool, export_handle: anytype, slots: ?Value) !Value {
             // export_handle is  null for WebAssembly, since addresses don't change there
-            const dv = try createView(ptr, copying, export_handle);
+            const dv = try createView(ptr, copying, read_only, export_handle);
             return host.createInstance(structure, dv, slots);
         }
     };

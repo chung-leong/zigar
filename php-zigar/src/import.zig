@@ -121,7 +121,7 @@ pub const StructureImporter = struct {
         return self.allocateHandle(value);
     }
 
-    pub fn createView(self: *@This(), bytes: ?[*]const u8, len: usize, copying: bool, _: usize, alignment: usize) !Handle {
+    pub fn createView(self: *@This(), bytes: ?[*]const u8, len: usize, copying: bool, read_only: bool, _: usize, alignment: usize) !Handle {
         if (!std.math.isPowerOfTwo(alignment)) return error.InvalidAlignment;
         const buffer = try ByteBuffer.create(std.mem.Alignment.fromByteUnits(alignment));
         if (bytes) |b| {
@@ -135,7 +135,7 @@ pub const StructureImporter = struct {
         } else {
             buffer.referencExternal(&.{});
         }
-        if (copying) buffer.protect();
+        if (read_only) buffer.protect();
         const value = php.createValuePointer(buffer);
         return self.allocateHandle(value);
     }

@@ -34,7 +34,7 @@ pub fn Module(comptime Value: type) type {
             create_integer: *const fn (*Host, i32, bool, *Value) callconv(.c) E,
             create_big_integer: *const fn (*Host, i64, bool, *Value) callconv(.c) E,
             create_string: *const fn (*Host, [*]const u8, usize, *Value) callconv(.c) E,
-            create_view: *const fn (*Host, ?[*]const u8, usize, bool, usize, usize, *Value) callconv(.c) E,
+            create_view: *const fn (*Host, ?[*]const u8, usize, bool, bool, usize, usize, *Value) callconv(.c) E,
             create_template: *const fn (*Host, ?Value, ?Value, *Value) callconv(.c) E,
             create_instance: *const fn (*Host, Value, Value, ?Value, *Value) callconv(.c) E,
             create_list: *const fn (*Host, *Value) callconv(.c) E,
