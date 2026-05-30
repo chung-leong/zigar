@@ -210,10 +210,10 @@ pub const ByteBuffer = struct {
         }
     }
 
-    pub fn getBase(self: *@This()) *@This() {
+    pub fn getBase(self: *const @This()) *@This() {
         return switch (self.source) {
             .buffer => |buf| buf,
-            else => self,
+            else => @constCast(self),
         };
     }
 
@@ -253,7 +253,7 @@ pub const ByteBuffer = struct {
         @memmove(bytes, sc);
     }
 
-    pub fn getParent(self: *@This()) ?*@This() {
+    pub fn getParent(self: *const @This()) ?*@This() {
         return switch (self.source) {
             .buffer => |buf| buf,
             else => null,
@@ -280,9 +280,18 @@ pub const ByteBuffer = struct {
 
     pub fn getSourceAllocator(self: *const @This()) ?*const std.mem.Allocator {
         return switch (self.source) {
-            .allocator => |a| a,
+            .allocator => |a| if (a != &php.allocator) a else null,
             .buffer => |b| b.getSourceAllocator(),
             else => null,
+        };
+    }
+
+    pub fn inZigMemory(self: *const @This()) bool {
+        const base = self.getBase();
+        return switch (base.source) {
+            .allocator => |a| a != &php.allocator,
+            .none => true,
+            else => false,
         };
     }
 

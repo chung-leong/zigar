@@ -11,6 +11,7 @@ const ArrayBuffer = js_compat.ArrayBuffer;
 const TypedArrayOf = js_compat.TypedArrayOf;
 const TypedArray = js_compat.TypedArray;
 const ZigObject = @import("../object.zig").ZigObject;
+const getObjectBuffer = @import("../object.zig").getObjectBuffer;
 const php = @import("../php.zig");
 const HashTable = php.HashTable;
 const Object = php.Object;
@@ -217,8 +218,17 @@ pub const Pointer = struct {
                 }
                 // autovivificate new target, using the allocator associated with the pointer
                 const allocator = self.buffer.getSourceAllocator();
-                break :init try target_class.createObject(allocator, value, read_only);
+                const new_obj = try target_class.createObject(allocator, value, read_only);
+                break :init new_obj;
             };
+            errdefer php.release(target_obj);
+            if (self.buffer.inZigMemory()) {
+                // pointer in Zig memory cannot point to garbage-collected memory
+                const target_buf = getObjectBuffer(target_obj);
+                if (!target_buf.inZigMemory()) {
+                    return failure.report("pointers in Zig memory cannot point to garbage-collected object", .{});
+                }
+            }
             try static.saveTarget(self, target_obj);
         } else {
             return Super.setValue(self, value, transform);
