@@ -172,7 +172,7 @@ pub const ByteBuffer = struct {
     pub fn copyBytes(self: *@This(), bytes: []const u8) !void {
         const dest = try self.data(0, true);
         if (self.bytes.len != bytes.len) return error.LengthMismatch;
-        @memcpy(dest, bytes);
+        @memmove(dest, bytes);
     }
 
     pub fn clear(self: *@This()) !void {
@@ -250,7 +250,7 @@ pub const ByteBuffer = struct {
             }
         }
         if (bytes.len != sc.len) return error.LengthMismatch;
-        @memcpy(bytes, sc);
+        @memmove(bytes, sc);
     }
 
     pub fn getParent(self: *@This()) ?*@This() {
