@@ -517,9 +517,15 @@ pub const ZigClassEntry = struct {
         return TypedArrayOf(u8, true).create(buffer);
     }
 
-    pub fn extractBuffer(self: *@This(), obj: *Object) ?*ByteBuffer {
+    pub fn extractBuffer(self: *@This(), obj: *Object, strict: bool) ?*ByteBuffer {
         if (php.instanceOf(obj.ce, ArrayBuffer.entry())) {
             return ArrayBuffer.fromObject(obj).buffer;
+        }
+        if (!strict) {
+            const Uint8Array = TypedArrayOf(u8, false);
+            if (php.instanceOf(obj.ce, Uint8Array.entry())) {
+                return Uint8Array.fromObject(obj).buffer;
+            }
         }
         const is_opaque_slice = self.type == .slice and self.flags.slice.is_opaque;
         if (is_opaque_slice) {

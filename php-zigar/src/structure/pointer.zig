@@ -175,7 +175,8 @@ pub const Pointer = struct {
                             php.addRef(obj);
                             break :init obj;
                         }
-                        if (target_class.extractBuffer(obj)) |buf| {
+                        // only extract buffer from a TypedArray if it's compatible with the class
+                        if (target_class.extractBuffer(obj, true)) |buf| {
                             if (buf.flags.read_only and !read_only) {
                                 return failure.report("pointer '{s}' cannot pointer to a read-only buffer", .{
                                     class.getName(),

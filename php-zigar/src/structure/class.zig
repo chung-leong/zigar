@@ -180,16 +180,20 @@ pub fn Class(comptime S: type) type {
             }
             const buf = get: {
                 if (php.getValueObject(arg) catch null) |obj| {
-                    if (class.extractBuffer(obj)) |buf| break :get buf;
+                    if (class.extractBuffer(obj, false)) |buf| break :get buf;
                 }
                 const arg_d = php.createValueDebug(arg);
                 defer php.release(&arg_d);
-                return failure.report("casting operation requires an ArrayBuffer as argument, received {s}", .{
+                return failure.report("casting operation requires an ArrayBuffer or Uint8Array as argument, received {s}", .{
                     php.getValueStringContent(&arg_d) catch unreachable,
                 });
             };
-            try class.validateBuffer(buf);
-            const new_obj = try class.obtainObjectFromBuffer(buf);
+            const target_class = switch (class.type) {
+                .pointer => class.getStaticData(structure.Pointer).target_class,
+                else => class,
+            };
+            try target_class.validateBuffer(buf);
+            const new_obj = try target_class.obtainObjectFromBuffer(buf);
             return_value.* = php.createValueObject(new_obj);
         }
 
