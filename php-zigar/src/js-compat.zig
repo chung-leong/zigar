@@ -20,6 +20,10 @@ const Value = php.Value;
 
 pub const ArrayBuffer = struct {
     buffer: *ByteBuffer,
+    flags: packed struct(usize) {
+        bytes_debug_output: bool = true,
+        _: u63 = 0,
+    } = .{},
     php_portion: Object = undefined,
 
     var class_entry: *ClassEntry = undefined;
@@ -128,13 +132,46 @@ pub const ArrayBuffer = struct {
     }
 
     pub fn getProperties(obj: *Object) !*HashTable {
+        const ht = try getPropertiesFor(obj, @intFromEnum(php.PropPurpose.array_cast));
+        ht.gc.refcount = 0;
+        return ht;
+    }
+
+    pub fn getPropertiesFor(obj: *Object, purpose_i: c_uint) !*HashTable {
+        const purpose: php.PropPurpose = @enumFromInt(purpose_i);
         const self = fromObject(obj);
         const ht = php.createArray();
-        inline for (comptime std.meta.fields(PropCache.Id)) |field| {
-            const value = try self.getProperty(@field(PropCache.Id, field.name));
-            php.setHashEntry(ht, field.name, &value);
+        if (purpose == .debug) {
+            inline for (comptime std.meta.fields(PropCache.Id)) |field| {
+                const id = @field(PropCache.Id, field.name);
+                const value = try self.getProperty(id);
+                php.setHashEntry(ht, field.name, &value);
+            }
+            if (self.flags.bytes_debug_output) {
+                if (self.buffer.data(0, false) catch null) |bytes| {
+                    const bytes_ht = php.createArray();
+                    for (bytes, 0..) |byte, index| {
+                        if (index == 50) {
+                            const left = bytes.len - index;
+                            if (left >= 10) {
+                                var buffer: [128]u8 = undefined;
+                                const text = try std.fmt.bufPrint(&buffer, "... {d} more bytes", .{left});
+                                const text_value = php.createValueStringContent(text);
+                                _ = php.appendHashEntry(bytes_ht, &text_value);
+                                break;
+                            }
+                        }
+                        const byte_value = php.createValueAnyInt(byte);
+                        _ = php.appendHashEntry(bytes_ht, &byte_value);
+                    }
+                    const bytes_value = php.createValueArray(bytes_ht);
+                    php.setHashEntry(ht, "[BYTES]", &bytes_value);
+                }
+            } else {
+                // turn it back on
+                self.flags.bytes_debug_output = true;
+            }
         }
-        ht.gc.refcount = 0;
         return ht;
     }
 
@@ -405,19 +442,53 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
         }
 
         pub fn getProperties(obj: *Object) !*HashTable {
+            const ht = try getPropertiesFor(obj, @intFromEnum(php.PropPurpose.array_cast));
+            ht.gc.refcount = 0;
+            return ht;
+        }
+
+        pub fn getPropertiesFor(obj: *Object, purpose_i: c_uint) !*HashTable {
+            const purpose: php.PropPurpose = @enumFromInt(purpose_i);
             const self = fromObject(obj);
             const len = self.getLength();
             const ptr: [*]T = @ptrCast(@alignCast(self.buffer.bytes.ptr));
+            const items = ptr[0..len];
             const ht = php.createArray();
-            for (0..len) |index| {
-                const value = switch (@typeInfo(T)) {
-                    .int => php.createValueAnyInt(ptr[index]),
-                    .float => php.createValueDouble(ptr[index]),
-                    else => unreachable,
-                };
-                _ = php.appendHashEntry(ht, &value);
+            if (purpose == .debug) {
+                const ab_obj = self.array_buffer.?;
+                const ab = ArrayBuffer.fromObject(ab_obj);
+                ab.flags.bytes_debug_output = false;
+                // ArrayBuffer's own getPropertiesFor() will reenable it
+                inline for (comptime std.meta.fields(PropCache.Id)) |field| {
+                    const id = @field(PropCache.Id, field.name);
+                    const value = try self.getProperty(id);
+                    php.setHashEntry(ht, field.name, &value);
+                }
+                const items_ht = php.createArray();
+                for (items, 0..) |item, index| {
+                    if (purpose == .debug) {
+                        if (index == 50) {
+                            const left = items.len - index;
+                            if (left >= 10) {
+                                var buffer: [128]u8 = undefined;
+                                const text = try std.fmt.bufPrint(&buffer, "... {d} more items", .{left});
+                                const text_value = php.createValueStringContent(text);
+                                _ = php.appendHashEntry(items_ht, &text_value);
+                                break;
+                            }
+                        }
+                    }
+                    const value = createValue(item);
+                    _ = php.appendHashEntry(items_ht, &value);
+                }
+                const items_value = php.createValueArray(items_ht);
+                php.setHashEntry(ht, "[ITEMS]", &items_value);
+            } else {
+                for (items) |item| {
+                    const value = createValue(item);
+                    _ = php.appendHashEntry(ht, &value);
+                }
             }
-            ht.gc.refcount = 0;
             return ht;
         }
 
@@ -556,6 +627,14 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
             handlers = php.createHandlerTable(@This(), @offsetOf(@This(), "php_portion"));
         }
 
+        fn createValue(item: T) Value {
+            return switch (@typeInfo(T)) {
+                .int => php.createValueAnyInt(item),
+                .float => php.createValueDouble(item),
+                else => unreachable,
+            };
+        }
+
         fn getProperty(self: *@This(), id: PropCache.Id) !Value {
             switch (id) {
                 .buffer => {
@@ -573,7 +652,7 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
                 },
                 .byteOffset => {
                     const parent_buf = self.buffer.getBase();
-                    const offset = @intFromPtr(parent_buf.bytes.ptr) - @intFromPtr(self.buffer.bytes.ptr);
+                    const offset = @intFromPtr(self.buffer.bytes.ptr) - @intFromPtr(parent_buf.bytes.ptr);
                     return php.createValueAnyInt(offset);
                 },
                 .length => {
