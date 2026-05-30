@@ -474,16 +474,17 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
                 }
                 const items_value = php.createValueArray(items_ht);
                 php.setHashEntry(ht, "[ITEMS]", &items_value);
-                if (self.array_buffer) |ab_obj| {
-                    const ab = ArrayBuffer.fromObject(ab_obj);
-                    ab.flags.bytes_debug_output = false;
-                    // ArrayBuffer's getPropertiesFor() will reenable it
-                }
                 inline for (comptime std.meta.fields(PropCache.Id)) |field| {
                     const id = @field(PropCache.Id, field.name);
                     const value = try self.getProperty(id);
                     php.setHashEntry(ht, field.name, &value);
                 }
+                // at this point, array_buffer will have been created by getProperty()
+                // if it was empty before
+                const ab_obj = self.array_buffer.?;
+                const ab = ArrayBuffer.fromObject(ab_obj);
+                ab.flags.bytes_debug_output = false;
+                // ArrayBuffer's getPropertiesFor() will reset the flag
             } else {
                 for (items) |item| {
                     const value = createValue(item);
