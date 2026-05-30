@@ -47,9 +47,11 @@ pub const Pointer = struct {
             };
             if (address_member.accessors != usize_tag) return error.Unexpected;
             self.address_acc = &@field(address_member.accessors, @tagName(usize_tag));
+            self.address_acc.runtime_check = false;
             if (class.getMember(.instance, 2) catch null) |length_member| {
                 if (length_member.accessors != usize_tag) return error.Unexpected;
                 self.length_acc = &@field(length_member.accessors, @tagName(usize_tag));
+                self.length_acc.?.runtime_check = false;
             }
         }
 
@@ -354,11 +356,11 @@ pub const Pointer = struct {
         return operand.*;
     }
 
-    fn reportInaccessiblePointer(_: *@This()) error{Unexpected} {
+    fn reportInaccessiblePointer(_: *@This()) error{FailureReported} {
         return failure.report("pointer is inaccessible because it's in an untagged union", .{});
     }
 
-    fn reportNoAutoDereference(self: *@This()) error{Unexpected} {
+    fn reportNoAutoDereference(self: *@This()) error{FailureReported} {
         const class = ZigClassEntry.fromStructure(self);
         return failure.report("cannot access properties through pointer '{s}', only one level of automatic dereferencing", .{
             class.getName(),

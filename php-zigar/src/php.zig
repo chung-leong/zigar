@@ -843,7 +843,7 @@ pub fn createNonDestructiveArray() *Array {
 }
 
 pub fn isNormalArray(ht: *Array) bool {
-    return ht.arData.*.key == null;
+    return ht.nNumOfElements == ht.nNextFreeElement;
 }
 
 pub const destructor = struct {

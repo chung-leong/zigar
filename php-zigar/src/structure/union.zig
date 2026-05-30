@@ -320,7 +320,7 @@ pub const Union = struct {
         return try tag_struct.getValue(.string);
     }
 
-    fn reportFieldError(self: *@This(), name: *String, access: accessor.FieldAccess, err: anytype) error{ ExceptionThrown, Unexpected } {
+    fn reportFieldError(self: *@This(), name: *String, access: accessor.FieldAccess, err: anytype) error{ ExceptionThrown, FailureReported } {
         const member = self.findMember(name, null);
         if (member != null and err == error.InactiveField) {
             const active_name = find: {

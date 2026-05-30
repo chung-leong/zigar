@@ -32,13 +32,6 @@ pub const Opaque = struct {
         return if (address_a == address_b) 0 else if (address_a < address_b) -1 else 1;
     }
 
-    fn throwException(self: *@This()) error{Unexpected} {
-        const class = ZigClassEntry.fromStructure(self);
-        return failure.report("cannot access opaque structure '{s}'", .{
-            class.getName(),
-        });
-    }
-
     pub const getExtent = Super.getExtent;
     pub const setStorage = Super.setStorage;
     pub const initialize = Super.initialize;

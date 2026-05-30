@@ -7,6 +7,7 @@ pub const Error = error{
     AccessingMissingObject,
     CannotCreateObject,
     ComptimeValue,
+    FailureReported,
     ExceptionThrown,
     Failure,
     Inaccessible,
@@ -57,13 +58,13 @@ pub fn match(err: anyerror, other_err: anyerror) bool {
     return (E1 || E2 == E1 and err == other_err);
 }
 
-pub fn report(comptime fmt: []const u8, params: anytype) error{Unexpected} {
+pub fn report(comptime fmt: []const u8, params: anytype) error{FailureReported} {
     if (error_message) |msg| freeMessage(msg);
     error_message = std.fmt.allocPrintSentinel(php.allocator, fmt, params, 0) catch oom_msg;
-    return error.Unexpected;
+    return error.FailureReported;
 }
 
-pub fn reportArgCountMismatch(fn_name: []const u8, max_arg_count: usize, min_arg_count: usize, arg_count: usize) error{Unexpected} {
+pub fn reportArgCountMismatch(fn_name: []const u8, max_arg_count: usize, min_arg_count: usize, arg_count: usize) error{FailureReported} {
     return report("{s}() expects {s} {d} argument{s}, {d} given", .{
         fn_name,
         if (max_arg_count > min_arg_count)

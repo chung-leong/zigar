@@ -239,9 +239,11 @@ pub fn Parent(comptime S: type) type {
             return func;
         }
 
-        pub fn reportFieldError(self: *S, name: *String, access: accessor.FieldAccess, err: anytype) error{ ExceptionThrown, Unexpected } {
+        pub fn reportFieldError(self: *S, name: *String, access: accessor.FieldAccess, err: anytype) error{ ExceptionThrown, FailureReported } {
             const class = ZigClassEntry.fromStructure(self);
-            if (failure.match(err, error.Missing)) {
+            if (failure.match(err, error.FailureReported)) {
+                return error.FailureReported;
+            } else if (failure.match(err, error.Missing)) {
                 return switch (scope) {
                     .instance => failure.report("no field named '{s}' in {s} '{s}'", .{
                         php.getStringContent(name),
@@ -776,7 +778,7 @@ pub fn ArrayLike(comptime S: type) type {
             return @hasField(@TypeOf(flags), "is_string") and flags.is_string;
         }
 
-        pub fn reportLengthMismatch(self: *S, expected: usize, received: usize) error{Unexpected} {
+        pub fn reportLengthMismatch(self: *S, expected: usize, received: usize) error{FailureReported} {
             const class = ZigClassEntry.fromStructure(self);
             return failure.report("{s} '{s}' expects {d} bytes, received {d}", .{
                 class.getStructureName(),

@@ -219,8 +219,10 @@ pub const ArrayBuffer = struct {
         handlers = php.createHandlerTable(@This(), @offsetOf(@This(), "php_portion"));
     }
 
-    pub fn reportFieldError(name: *String, access: accessor.FieldAccess, err: anytype) error{Unexpected} {
-        if (failure.match(err, error.Missing)) {
+    pub fn reportFieldError(name: *String, access: accessor.FieldAccess, err: anytype) error{FailureReported} {
+        if (failure.match(err, error.FailureReported)) {
+            return error.FailureReported;
+        } else if (failure.match(err, error.Missing)) {
             return failure.report("no field named '{s}' in {s}", .{
                 php.getStringContent(name),
                 class_name,
@@ -623,8 +625,10 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
             };
         }
 
-        fn reportFieldError(name: *String, access: accessor.FieldAccess, err: anytype) error{Unexpected} {
-            if (failure.match(err, error.Missing)) {
+        fn reportFieldError(name: *String, access: accessor.FieldAccess, err: anytype) error{FailureReported} {
+            if (failure.match(err, error.FailureReported)) {
+                return error.FailureReported;
+            } else if (failure.match(err, error.Missing)) {
                 return failure.report("no field named '{s}' in {s}", .{
                     php.getStringContent(name),
                     class_name,

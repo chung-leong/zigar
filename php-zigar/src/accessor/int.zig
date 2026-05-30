@@ -38,15 +38,15 @@ pub fn Int(comptime attrs: Attributes) type {
             }
 
             pub fn set(self: @This(), buffer: *ByteBuffer, value: *const Value) Error!void {
-                const long = try php.getValueLong(value);
-                if (self.runtime_check) try check(T, long);
+                const number = try php.getValueLong(value);
+                if (self.runtime_check) try check(T, number);
                 const byte_size = (@bitSizeOf(T) + 7) / 8;
                 const bytes: []u8 = try buffer.data(self.byte_offset + byte_size, true);
                 if (comptime @bitSizeOf(T) == 0) return;
                 const ptr: *align(1) T = @ptrCast(&bytes[self.byte_offset]);
                 ptr.* = switch (attrs.signedness) {
-                    .signed => @truncate(long),
-                    .unsigned => @truncate(@as(c_ulong, @bitCast(long))),
+                    .signed => @truncate(number),
+                    .unsigned => @truncate(@as(c_ulong, @bitCast(number))),
                 };
             }
         },
@@ -86,23 +86,23 @@ pub fn Int(comptime attrs: Attributes) type {
             }
 
             pub fn setAt(self: @This(), buffer: *ByteBuffer, comptime bit_offset: u3, value: *const Value) Error!void {
-                const long = try php.getValueLong(value);
-                if (self.runtime_check) try check(T, long);
+                const number = try php.getValueLong(value);
+                if (self.runtime_check) try check(T, number);
                 const AT = accessor.WithBitOffset(T, bit_offset);
                 const byte_size = (@bitSizeOf(AT) + 7) / 8;
                 const bytes: []u8 = try buffer.data(self.byte_offset + byte_size, true);
                 if (comptime @bitSizeOf(T) == 0) return;
                 const ptr: *align(1) AT = @ptrCast(&bytes[self.byte_offset]);
                 ptr.value = switch (attrs.signedness) {
-                    .signed => @truncate(long),
-                    .unsigned => @truncate(@as(c_ulong, @bitCast(long))),
+                    .signed => @truncate(number),
+                    .unsigned => @truncate(@as(c_ulong, @bitCast(number))),
                 };
             }
         },
     };
 }
 
-fn check(comptime T: type, value: c_long) error{Unexpected}!void {
+fn check(comptime T: type, value: c_long) error{FailureReported}!void {
     if (value < std.math.minInt(T) or value > std.math.maxInt(T)) {
         return failure.report("{s} cannot represent the value given: {d}", .{ @typeName(T), value });
     }

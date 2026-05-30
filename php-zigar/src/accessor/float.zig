@@ -90,7 +90,7 @@ pub fn Float(comptime attrs: Attributes) type {
     };
 }
 
-fn check(comptime T: type, value: f64) error{Unexpected}!void {
+fn check(comptime T: type, value: f64) error{FailureReported}!void {
     const abs_value = @abs(value);
     if (abs_value < std.math.floatMin(T) or abs_value > std.math.floatMax(T)) {
         std.debug.print("min = {d}, max = {d}\n", .{ std.math.floatMin(T), std.math.floatMax(T) });
