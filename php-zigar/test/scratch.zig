@@ -1,5 +1,2 @@
-pub const Hello = struct {
-    number1: i32,
-    number2: i32,
-    number3: i32 = 12345,
-};
+pub const Pixel = @Vector(4, u8);
+pub const Pixels = []Pixel;

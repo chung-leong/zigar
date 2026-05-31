@@ -486,31 +486,46 @@ pub const ZigClassEntry = struct {
         }
     }
 
+    pub fn getElementMember(self: *@This()) ?*Member {
+        const member0 = self.getMember(.instance, 0) catch return null;
+        return switch (self.type) {
+            .primitive => member0,
+            .array, .slice, .vector => member0.class.getElementMember(),
+            else => null,
+        };
+    }
+
     pub fn isTypedArray(self: *@This()) bool {
         return switch (self.type) {
-            inline .array, .slice, .vector => |t| @field(self.flags, @tagName(t)).is_typed_array,
+            .array => self.flags.array.is_typed_array,
+            .slice => self.flags.slice.is_typed_array,
+            .vector => self.flags.vector.is_typed_array,
             else => false,
         };
     }
 
     pub fn isClampedArray(self: *@This()) bool {
         return switch (self.type) {
-            inline .array, .slice, .vector => |t| @field(self.flags, @tagName(t)).is_clamped_array,
+            .array => self.flags.array.is_clamped_array,
+            .slice => self.flags.slice.is_clamped_array,
+            .vector => self.flags.vector.is_clamped_array,
             else => false,
         };
     }
 
     pub fn createTypedArray(self: *@This(), buffer: *ByteBuffer) !*Object {
         if (!self.isTypedArray()) return error.Unsupported;
-        const member = self.getMember(.instance, 0) catch return error.Unexpected;
-        return switch (member.type) {
-            inline .int, .uint, .float => |t| inline for (@field(typed_array_types, @tagName(t))) |T| {
-                if (member.bit_size == @bitSizeOf(T)) {
-                    break try TypedArrayOf(T, false).create(buffer);
-                }
-            } else error.Unsupported,
-            else => error.Unsupported,
-        };
+        if (self.getElementMember()) |element| {
+            switch (element.type) {
+                inline .int, .uint, .float => |t| inline for (@field(typed_array_types, @tagName(t))) |T| {
+                    if (element.bit_size == @bitSizeOf(T)) {
+                        return try TypedArrayOf(T, false).create(buffer);
+                    }
+                },
+                else => {},
+            }
+        }
+        return error.Unsupported;
     }
 
     pub fn createClampedArray(self: *@This(), buffer: *ByteBuffer) !*Object {
