@@ -671,7 +671,7 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
         fn createBufferFromArray(ht: *HashTable) !*ByteBuffer {
             const buf = try ByteBuffer.create(.@"1");
             errdefer buf.release();
-            try buf.allocate(null, @sizeOf(T) * ht.nNumOfElements);
+            try buf.allocate(null, @sizeOf(T) * php.getHashLength(ht));
             const ptr: [*]T = @ptrCast(@alignCast(buf.bytes.ptr));
             var ht_iter: HashTableIterator = .init(ht, .{});
             var index: usize = 0;

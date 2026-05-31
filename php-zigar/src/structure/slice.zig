@@ -86,7 +86,10 @@ pub const Slice = struct {
 
     pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value, read_only: bool) !void {
         const class = ZigClassEntry.fromStructure(self);
-        if (initializer) |value| {
+        if (initializer) |orig_value| {
+            // convert any iterable objects to arrays
+            const value = &php.convertIterator(orig_value);
+            defer php.release(value);
             // anyopaque is represented by a slice with no size
             const element_size = class.byte_size orelse 1;
             if (php.getValueString(value) catch null) |str| {
@@ -131,7 +134,7 @@ pub const Slice = struct {
                     break :get .{ @intCast(long), false };
                 } else if (php.getValueArray(value) catch null) |arr| {
                     // initialize with an array
-                    break :get .{ if (php.isNormalArray(arr)) arr.nNumOfElements else 1, true };
+                    break :get .{ if (php.isNormalArray(arr)) php.getHashLength(arr) else 1, true };
                 } else {
                     // let setValue() throw an error
                     break :get .{ 0, true };
@@ -180,8 +183,10 @@ pub const Slice = struct {
         try static.value_acc.setElement(self, index, value);
     }
 
-    pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) Error!void {
+    pub fn setValue(self: *@This(), orig_value: *const Value, transform: accessor.Transform) Error!void {
         if (transform == .none) {
+            const value = &php.convertIterator(orig_value);
+            defer php.release(value);
             if (php.getValueArray(value) catch null) |ht| {
                 if (!php.isNormalArray(ht)) {
                     const array = php.createArray();
@@ -192,7 +197,7 @@ pub const Slice = struct {
                 }
             }
         }
-        return Super.setValue(self, value, transform);
+        return Super.setValue(self, orig_value, transform);
     }
 
     fn initializeBuffer(self: *@This(), allocator: ?*const std.mem.Allocator, content_len: usize) !void {

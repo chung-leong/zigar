@@ -565,8 +565,10 @@ pub fn ArrayLike(comptime S: type) type {
             return Super.getValue(self, transform);
         }
 
-        pub fn setValue(self: *S, value: *const Value, transform: accessor.Transform) Error!void {
-            if (try copySelf(self, value)) return;
+        pub fn setValue(self: *S, orig_value: *const Value, transform: accessor.Transform) Error!void {
+            if (try copySelf(self, orig_value)) return;
+            const value = &php.convertIterator(orig_value);
+            defer php.release(value);
             if (transform == .string) {
                 if (!isString(self)) return error.Unsupported;
                 const len = self.getLength();

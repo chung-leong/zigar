@@ -171,7 +171,7 @@ pub const ArgumentIterator = struct {
                 // extra_named_params contains bogus values when it's not used
                 if (ed.extra_named_params) |arr| {
                     len += 1;
-                    total += arr.*.nNumOfElements;
+                    total += getHashLength(arr);
                     break :get createValueArray(arr);
                 }
             }
@@ -230,7 +230,7 @@ pub const ArgumentIterator = struct {
             }
         }
         // if all named arguments were taken out, shrink the argument list
-        if (ht.nNumOfElements == 0) {
+        if (getHashLength(ht) == 0) {
             self.named_params = null;
             self.len -= 1;
         }
@@ -844,6 +844,34 @@ pub fn createNonDestructiveArray() *Array {
 
 pub fn isNormalArray(ht: *Array) bool {
     return ht.nNumOfElements == ht.nNextFreeElement;
+}
+
+pub fn convertIterator(value: *const Value) Value {
+    if (getValueType(value) == .object) {
+        const obj: *Object = value.value.obj;
+        const ce: *ClassEntry = obj.ce;
+        if (ce.get_iterator) |get_iterator| {
+            if (get_iterator(ce, @constCast(value), 0)) |iter| {
+                defer php_h.zend_iterator_dtor(iter);
+                const new_array = createArray();
+                const handlers = iter.*.funcs.?;
+                const rewind = handlers.*.rewind.?;
+                const valid = handlers.*.valid.?;
+                const get_current_data = handlers.*.get_current_data.?;
+                const move_forward = handlers.*.move_forward.?;
+                rewind(iter);
+                while (valid(iter) == SUCCESS) {
+                    const element = get_current_data(iter).?;
+                    _ = appendHashEntryRef(new_array, element);
+                    move_forward(iter);
+                }
+                return createValueArray(new_array);
+            }
+        }
+    }
+    // cannot convert--just return the original value with ref count bumped
+    addRef(value);
+    return value.*;
 }
 
 pub const destructor = struct {

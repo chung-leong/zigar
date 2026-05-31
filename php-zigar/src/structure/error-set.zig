@@ -376,7 +376,7 @@ pub const ErrorSet = struct {
         const file = canonical.file orelse php.persistent("unknown");
         const trace = canonical.trace orelse php.empty_array;
         var text: []const u8 = undefined;
-        if (trace.nNumOfElements == 0) {
+        if (php.getHashLength(trace) == 0) {
             text = try std.fmt.allocPrint(php.allocator,
                 \\ZigError: {s} in {s}:{d}
             , .{
