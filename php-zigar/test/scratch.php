@@ -5,6 +5,8 @@ require __DIR__ . '/../vendor/autoload.php';
 
 $m = zigar_use(__DIR__ . "/scratch.zig");
 
-echo "$m->ptr\n";
-$m->ptr->{'*'}++;
-echo "$m->ptr\n";
+$hello = new $m->Hello(number1: 1000, number2: 2000);
+$base64 = $hello->__base64;
+$hello_copy = new $m->Hello(__base64: $base64);
+print_r($hello);
+print_r($hello_copy);

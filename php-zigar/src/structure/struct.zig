@@ -46,6 +46,7 @@ pub const Struct = struct {
             accessors: *accessor.Any,
         } = null,
         required_field_count: usize = 0,
+        total_field_count: usize = 0,
         callback: ?*Object = null,
         is_root: bool = false,
 
@@ -68,6 +69,7 @@ pub const Struct = struct {
             iter.reset();
             while (iter.next()) |member| {
                 if (member.flags.is_required) self.required_field_count += 1;
+                if (iter.currentName() != null) self.total_field_count += 1;
             }
             // create callback function for promise or generator
             switch (class.purpose) {
@@ -136,12 +138,32 @@ pub const Struct = struct {
     }
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
-        if (transform == .integer) {
-            const class = ZigClassEntry.fromStructure(self);
-            const static = class.getStaticData(@This());
-            if (static.backing_int) |int| {
-                return try int.accessors.get(self);
-            }
+        switch (transform) {
+            .string => return error.Unsupported,
+            .integer => {
+                const class = ZigClassEntry.fromStructure(self);
+                const static = class.getStaticData(@This());
+                if (static.backing_int) |int| {
+                    return try int.accessors.get(self);
+                } else {
+                    return error.Unsupported;
+                }
+            },
+            .plain => {
+                const obj = ZigObject(@This()).fromStructure(self).object();
+                const class = ZigClassEntry.fromStructure(self);
+                var plain = class.host.getPlainObject(obj, class.flags.@"struct".is_tuple);
+                if (plain.status == .existing) return plain.value;
+                defer class.host.removePlainObject(obj);
+                var iter: iterator.PropertyIterator(@This()) = .init(obj);
+                defer iter.deinit();
+                while (iter.next()) |prop_value| {
+                    try transform.apply(prop_value);
+                    plain.add(iter.current_name.?, prop_value);
+                }
+                return plain.value;
+            },
+            else => {},
         }
         return Super.getValue(self, transform);
     }
@@ -192,11 +214,90 @@ pub const Struct = struct {
             },
             else => {},
         }
-        const static = class.getStaticData(@This());
-        if (static.backing_int) |backing_int| {
-            if (backing_int.accessors.set(self, value)) {
-                return;
-            } else |_| {}
+        if (transform == .none) {
+            if (try Super.copySelf(self, value)) return;
+            const static = class.getStaticData(@This());
+            if (static.backing_int) |backing_int| {
+                // see if value is a number for the backing int
+                if (backing_int.accessors.set(self, value)) {
+                    return;
+                } else |_| {}
+            }
+            const ht = try php.getValueHashTable(value);
+            const value_count = php.getHashLength(ht);
+            var member_iter = class.getMemberIterator(.instance);
+            // copy default values from template unless the number of initializers matches the number of fields
+            if (value_count < static.total_field_count) {
+                if (class.instance.template.buffer) |def| {
+                    try self.buffer.copy(def);
+                }
+                // we need to track whether all required members are set
+                while (member_iter.next()) |member| member.set = false;
+            }
+            var special_used: usize = 0;
+            var unused: std.ArrayList([]const u8) = .empty;
+            defer {
+                for (unused.items) |item| php.allocator.free(item);
+                unused.deinit(php.allocator);
+            }
+            var value_iter: HashTableIterator = .init(ht, .{});
+            while (value_iter.next()) |member_value| {
+                if (value_iter.currentName()) |name| {
+                    if (Super.findMember(self, name, null)) |member| {
+                        try member.accessors.set(self, member_value);
+                        @constCast(member).set = true;
+                    } else {
+                        // maybe it's a special property
+                        if (Super.setProperty(self, name, member_value, null)) {
+                            special_used += 1;
+                        } else |err| {
+                            if (err != error.Missing) return err;
+                            const label = try std.fmt.allocPrint(php.allocator, "'{s}'", .{
+                                php.getStringContent(name),
+                            });
+                            try unused.append(php.allocator, label);
+                        }
+                    }
+                } else if (value_iter.currentIndex()) |index| {
+                    const label = try std.fmt.allocPrint(php.allocator, "{d}", .{index});
+                    try unused.append(php.allocator, label);
+                }
+            }
+            if (unused.items.len > 0) {
+                const list = try std.mem.join(php.allocator, ", ", unused.items);
+                defer php.allocator.free(list);
+                const suffix = if (unused.items.len > 1) "s" else "";
+                return failure.report("unused initializer{s}: {s}", .{ suffix, list });
+            }
+            if (special_used == 0 and value_count < static.total_field_count) {
+                // see if any required field was missed
+                var missing: std.ArrayList([]const u8) = .empty;
+                defer {
+                    for (missing.items) |item| php.allocator.free(item);
+                    missing.deinit(php.allocator);
+                }
+                member_iter.reset();
+                while (member_iter.next()) |member| {
+                    const name = member_iter.currentName() orelse continue;
+                    if (!member.set and member.flags.is_required) {
+                        const label = try std.fmt.allocPrint(php.allocator, "'{s}'", .{
+                            php.getStringContent(name),
+                        });
+                        try missing.append(php.allocator, label);
+                    }
+                }
+                if (missing.items.len > 0) {
+                    const list = try std.mem.join(php.allocator, ", ", missing.items);
+                    defer php.allocator.free(list);
+                    const suffix = if (missing.items.len > 1) "s" else "";
+                    return failure.report("missing initializer{s} for required field{s}: {s}", .{
+                        suffix,
+                        suffix,
+                        list,
+                    });
+                }
+            }
+            return;
         }
         return Super.setValue(self, value, transform);
     }

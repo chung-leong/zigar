@@ -861,6 +861,10 @@ pub fn destroyHashTable(ht: *HashTable) void {
     php_h.zend_hash_destroy(ht);
 }
 
+pub fn getHashLength(ht: *const HashTable) usize {
+    return ht.nNumOfElements;
+}
+
 pub fn getHashEntry(ht: *const HashTable, key: anytype) !*Value {
     const KT = @TypeOf(key);
     if (KT == *Value or KT == *const Value) {

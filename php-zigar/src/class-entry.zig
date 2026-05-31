@@ -63,6 +63,7 @@ pub const ZigClassEntry = struct {
         slot: ?usize,
         class: *ZigClassEntry,
         accessors: accessor.Any = undefined,
+        set: bool = undefined,
     };
     pub const MemberIterator = HashTableObjectIterator(*Member);
     pub const Template = struct {

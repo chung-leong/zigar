@@ -52,6 +52,31 @@ pub fn Class(comptime S: type) type {
             self.table = table.*;
         }
 
+        pub fn getValue(self: *@This(), transform: accessor.Transform) !Value {
+            switch (transform) {
+                .plain => {
+                    const obj = ZigObject(@This()).fromStructure(self).object();
+                    const class = ZigClassEntry.fromStructure(self);
+                    var plain = class.host.getPlainObject(obj, false);
+                    if (plain.status == .existing) return plain.value;
+                    defer class.host.removePlainObject(obj);
+                    var iter: iterator.PropertyIterator(@This()) = .init(obj);
+                    defer iter.deinit();
+                    while (iter.next()) |prop_value| {
+                        try transform.apply(prop_value);
+                        plain.add(iter.current_name.?, prop_value);
+                    }
+                    return plain.value;
+                },
+                else => {},
+            }
+            return Super.getValue(self, transform);
+        }
+
+        pub fn setValue(_: *@This(), _: *const Value, _: accessor.Transform) !void {
+            return error.WriteProtected;
+        }
+
         pub fn freeObject(obj: *Object) void {
             const class = ZigClassEntry.fromObject(obj);
             // const self = fromObject(obj);
@@ -241,7 +266,6 @@ pub fn Class(comptime S: type) type {
             return @ptrCast(@alignCast(src_struct.buffer.bytes.ptr));
         }
 
-        pub const getValue = Super.getValue;
         pub const readProperty = Super.readProperty;
         pub const writeProperty = Super.writeProperty;
         pub const hasProperty = Super.hasProperty;

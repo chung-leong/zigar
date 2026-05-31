@@ -401,80 +401,6 @@ pub fn StructLike(comptime S: type) type {
 
         const MemberCache = cache.MemberCache;
 
-        pub fn getValue(self: *S, transform: accessor.Transform) Error!Value {
-            switch (transform) {
-                .string, .integer => return error.Unsupported,
-                .plain => {
-                    const obj = ZigObject(S).fromStructure(self).object();
-                    const class = ZigClassEntry.fromStructure(self);
-                    var plain = class.host.getPlainObject(obj, isTuple(self));
-                    if (plain.status == .existing) return plain.value;
-                    defer class.host.removePlainObject(obj);
-                    var iter: iterator.PropertyIterator(S) = .init(obj);
-                    defer iter.deinit();
-                    while (iter.next()) |prop_value| {
-                        try transform.apply(prop_value);
-                        plain.add(iter.current_name.?, prop_value);
-                    }
-                    return plain.value;
-                },
-                else => {},
-            }
-            return Super.getValue(self, transform);
-        }
-
-        // error set cannot be inferred due to recursion
-        pub fn setValue(self: *S, value: *const Value, transform: accessor.Transform) Error!void {
-            if (transform == .none) {
-                if (try copySelf(self, value)) return;
-                const ht = try php.getValueHashTable(value);
-                const class = ZigClassEntry.fromStructure(self);
-                var iter = class.getMemberIterator(.instance);
-                var missing: std.ArrayList([]const u8) = .empty;
-                var remaining = ht.nNumOfElements;
-                // copy default values from template unless the number of initializers matches the number of fields
-                if (remaining < iter.len) {
-                    if (class.instance.template.buffer) |def| {
-                        try self.buffer.copy(def);
-                    }
-                }
-                while (iter.next()) |member| {
-                    const name = iter.currentName() orelse continue;
-                    const found = set: {
-                        if (remaining == 0) break :set false;
-                        const field_value = php.getHashEntry(ht, name) catch break :set false;
-                        member.accessors.set(self, field_value) catch |err| {
-                            return reportFieldError(self, name, .write, err);
-                        };
-                        remaining -= 1;
-                        break :set true;
-                    };
-                    if (!found and member.flags.is_required) {
-                        const label = try std.fmt.allocPrint(php.allocator, "'{s}'", .{
-                            php.getStringContent(name),
-                        });
-                        try missing.append(php.allocator, label);
-                    }
-                }
-                if (missing.items.len > 0) {
-                    defer {
-                        for (missing.items) |label| php.allocator.free(label);
-                        missing.deinit(php.allocator);
-                    }
-                    const list = try std.mem.join(php.allocator, ", ", missing.items);
-                    defer php.allocator.free(list);
-                    const suffix = if (missing.items.len > 1) "s" else "";
-                    return failure.report("missing initializer{s} for required field{s}: {s}", .{
-                        suffix,
-                        suffix,
-                        list,
-                    });
-                }
-                return;
-            }
-            return Super.setValue(self, value, transform);
-        }
-
         pub fn getProperty(self: *S, name: *String, cache_slot: ?[*]?*anyopaque) Error!Value {
             return if (findMember(self, name, cache_slot)) |member|
                 try member.accessors.get(self)
@@ -521,15 +447,9 @@ pub fn StructLike(comptime S: type) type {
         pub fn getProperties(obj: *Object) !*HashTable {
             var iter: iterator.PropertyIterator(S) = .init(obj);
             defer iter.deinit();
-            const self = fromObject(obj);
             const ht = php.createArray();
-            const is_tuple = isTuple(self);
             while (iter.next()) |value| {
-                if (is_tuple) {
-                    _ = php.appendHashEntryRef(ht, value);
-                } else {
-                    php.setHashEntryRef(ht, iter.current_name.?, value);
-                }
+                php.setHashEntryRef(ht, iter.current_name.?, value);
             }
             // caller seem to expect a hash table with zero refcount
             ht.gc.refcount = 0;
@@ -565,6 +485,8 @@ pub fn StructLike(comptime S: type) type {
         pub const initialize = Super.initialize;
         pub const finalize = Super.finalize;
         pub const externalize = Super.externalize;
+        pub const getValue = Super.getValue;
+        pub const setValue = Super.setValue;
         pub const findMethod = Super.findMethod;
         pub const checkArguments = Super.checkArguments;
         pub const copySelf = Super.copySelf;

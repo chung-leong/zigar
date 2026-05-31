@@ -175,10 +175,9 @@ pub const ModuleHost = struct {
         value: Value,
         hash_table: *HashTable,
         status: enum { new, existing },
-        is_tuple: bool,
 
         pub fn add(self: *@This(), name: *String, value: *const Value) void {
-            if (self.is_tuple) {
+            if (php.getValueType(&self.value) == .array) {
                 _ = php.appendHashEntryRef(self.hash_table, value);
             } else {
                 php.setHashEntryRef(self.hash_table, name, value);
@@ -194,21 +193,17 @@ pub const ModuleHost = struct {
                 .value = existing.*,
                 .hash_table = php.getValueHashTable(existing) catch unreachable,
                 .status = .existing,
-                .is_tuple = is_tuple,
             };
         } else {
             const value = switch (is_tuple) {
                 true => php.createValueArray(null),
                 false => php.createValueObject(null),
             };
-            // var value = php.createValueArray(null);
-            // if (!is_tuple) php.convertValue(&value, .object) catch unreachable;
             php.setHashEntry(&self.plain_object_table, key, &value);
             return .{
                 .value = value,
                 .hash_table = php.getValueHashTable(&value) catch unreachable,
                 .status = .new,
-                .is_tuple = is_tuple,
             };
         }
     }
