@@ -49,8 +49,16 @@ pub const WebImage = struct {
         return self.width;
     }
 
+    pub fn getWidthAsFloat(self: *const @This()) f32 {
+        return @floatFromInt(self.width);
+    }
+
     pub fn getHeight(self: *const @This()) usize {
         return self.height;
+    }
+
+    pub fn getHeightAsFloat(self: *const @This()) f32 {
+        return @floatFromInt(self.height);
     }
 
     pub fn getPixel(self: *const @This(), comptime T: type, x: usize, y: usize) T {
@@ -120,9 +128,19 @@ pub const GdImage = struct {
         return @intCast(im.sx);
     }
 
+    pub fn getWidthAsFloat(self: *const @This()) f32 {
+        const im = self.cast();
+        return @floatFromInt(im.sx);
+    }
+
     pub fn getHeight(self: *const @This()) usize {
         const im = self.cast();
         return @intCast(im.sy);
+    }
+
+    pub fn getHeightAsFloat(self: *const @This()) f32 {
+        const im = self.cast();
+        return @floatFromInt(im.sy);
     }
 
     pub fn getPixel(self: *const @This(), comptime T: type, x: usize, y: usize) T {
