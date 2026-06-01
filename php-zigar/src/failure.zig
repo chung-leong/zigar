@@ -146,3 +146,15 @@ pub fn getMessage(err: anytype) [:0]const u8 {
         },
     };
 }
+
+pub fn showErrorTrace(loc: std.builtin.SourceLocation, err: anytype) void {
+    std.debug.print("Error '{s}' reported in function {s}() ({s}:{d})", .{
+        @errorName(err),
+        loc.fn_name,
+        loc.file,
+        loc.line,
+    });
+    if (@errorReturnTrace()) |trace| {
+        std.debug.dumpStackTrace(trace.*);
+    }
+}
