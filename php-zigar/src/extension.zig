@@ -30,12 +30,15 @@ export fn php_zigar_mod_init(_: c_int, _: c_int) php.Result {
             }
         }
     }
-    ZigClassEntry.registerGlobalClasses() catch return php.FAILURE;
     js_compat.registerClasses() catch return php.FAILURE;
+    errdefer js_compat.registerClasses();
+    ZigClassEntry.registerGlobalClasses() catch return php.FAILURE;
     return php.SUCCESS;
 }
 
 export fn php_zigar_mod_shutdown(_: c_int, _: c_int) php.Result {
+    js_compat.unregisterClasses();
+    ZigClassEntry.unregisterGlobalClasses();
     CallDispatcher.uninstallHandlers();
     return php.SUCCESS;
 }

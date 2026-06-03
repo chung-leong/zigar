@@ -1307,19 +1307,21 @@ pub const ZigClassEntry = struct {
     pub fn registerGlobalClasses() !void {
         var ce: ClassEntry = .{ .name = N("ZigObject") };
         const parent_ce = php.getClassEntry(.standard);
-        global_class = php.registerInternalClass(&ce, parent_ce) orelse {
-            return error.ClassRegistrationFailure;
-        };
+        global_class = try php.registerInternalClass(&ce, parent_ce);
+        errdefer php.unregisterInternalClass(global_class);
         var error_ce: ClassEntry = .{ .name = N("ZigError") };
         const error_parent_ce = php.getClassEntry(.exception);
-        global_error_class = php.registerInternalClass(&error_ce, error_parent_ce) orelse {
-            return error.ClassRegistrationFailure;
-        };
+        global_error_class = try php.registerInternalClass(&error_ce, error_parent_ce);
+        errdefer php.unregisterInternalClass(global_error_class);
         var signal_ce: ClassEntry = .{ .name = N("ZigAbortSignal") };
-        abort_signal_class = php.registerInternalClass(&signal_ce, parent_ce) orelse {
-            return error.ClassRegistrationFailure;
-        };
+        abort_signal_class = try php.registerInternalClass(&signal_ce, parent_ce);
         abort_signal_class.unnamed_1.create_object = php.transform(AbortSignal.handleCreateObject);
+    }
+
+    pub fn unregisterGlobalClasses() void {
+        php.unregisterInternalClass(global_class);
+        php.unregisterInternalClass(global_error_class);
+        php.unregisterInternalClass(abort_signal_class);
     }
 
     pub fn isZig(ce: *ClassEntry) bool {

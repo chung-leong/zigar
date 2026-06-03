@@ -1291,9 +1291,26 @@ pub fn destroyFunction(func: *Function) void {
 pub const instanceOf = php_h.instanceof_function;
 pub const initializeStandardObject = php_h.zend_object_std_init;
 pub const initializeObjectProperties = php_h.object_properties_init;
-pub const registerInternalClass = php_h.zend_register_internal_class_ex;
-pub const registerInternalInterface = php_h.zend_register_internal_interface;
 pub const traceToString = php_h.zend_trace_to_string;
+
+pub fn registerInternalClass(ce: *ClassEntry, parent_ce: *ClassEntry) !*ClassEntry {
+    return php_h.zend_register_internal_class_ex(ce, parent_ce) orelse error.ClassRegistrationFailure;
+}
+
+pub fn registerInternalInterface(ce: *ClassEntry) !*ClassEntry {
+    return php_h.zend_register_internal_interface(ce) orelse error.ClassRegistrationFailure;
+}
+
+pub fn unregisterInternalClass(ce: *ClassEntry) void {
+    const cg = getGlobals("compiler_globals");
+    const list = cg.class_table;
+    const lc_name = php_h.zend_string_tolower_ex(ce.name, false);
+    defer release(lc_name);
+    // the destructor will free the memory
+    _ = removeHashEntry(list, lc_name);
+}
+
+pub const unregisterInternalInterface = unregisterInternalClass;
 
 pub fn getObjectProperty(obj: *Object, name: *String) ?Value {
     var retval: Value = undefined;
@@ -1401,11 +1418,6 @@ pub fn emalloc(size: usize) ?*anyopaque {
     }
 }
 
-pub fn malloc(size: usize) ?*anyopaque {
-    const ptr = php_h.__zend_malloc(size);
-    return ptr;
-}
-
 pub fn efree(ptr: ?*anyopaque) void {
     if (php_h.ZEND_DEBUG == 1) {
         php_h._efree(ptr, "zig", 0, null, 0);
@@ -1422,6 +1434,15 @@ pub fn estrdup(s: [*:0]const u8) [*:0]const u8 {
     }
 }
 
+pub fn malloc(size: usize) ?*anyopaque {
+    const ptr = php_h.__zend_malloc(size);
+    return ptr;
+}
+
+pub fn free(ptr: ?*anyopaque) void {
+    php_h.free(ptr);
+}
+
 pub const allocator: std.mem.Allocator = .{
     .ptr = undefined,
     .vtable = &allocator_impl.vtable,
@@ -1431,7 +1452,7 @@ const allocator_impl = struct {
         .alloc = alloc,
         .resize = resize,
         .remap = remap,
-        .free = free,
+        .free = @This().free,
     };
 
     fn alloc(

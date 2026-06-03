@@ -248,13 +248,15 @@ pub const ArrayBuffer = struct {
             .name = N(class_name),
         };
         const parent_ce = php.getClassEntry(.standard);
-        class_entry = php.registerInternalClass(&ce, parent_ce) orelse {
-            return error.ClassRegistrationFailure;
-        };
+        class_entry = try php.registerInternalClass(&ce, parent_ce);
         class_entry.unnamed_1.create_object = php.transform(handleCreateObject);
         class_entry.get_iterator = php.transform(handleGetIterator);
         constructor = php.createTransformedFunction(handleConstructor, "__construct", 0, true);
         handlers = php.createHandlerTable(@This(), @offsetOf(@This(), "php_portion"));
+    }
+
+    pub fn unregisterClass() void {
+        php.unregisterInternalClass(class_entry);
     }
 
     pub fn reportFieldError(name: *String, access: accessor.FieldAccess, err: anytype) error{FailureReported} {
@@ -621,13 +623,15 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
                 .unnamed_2 = .{ .interfaces = interfaces },
             };
             const parent_ce = php.getClassEntry(.standard);
-            class_entry = php.registerInternalClass(&ce, parent_ce) orelse {
-                return error.ClassRegistrationFailure;
-            };
+            class_entry = try php.registerInternalClass(&ce, parent_ce);
             class_entry.unnamed_1.create_object = php.transform(handleCreateObject);
             class_entry.get_iterator = php.transform(handleGetIterator);
             constructor = php.createTransformedFunction(handleConstructor, "__construct", 0, true);
             handlers = php.createHandlerTable(@This(), @offsetOf(@This(), "php_portion"));
+        }
+
+        pub fn unregisterClass() void {
+            php.unregisterInternalClass(class_entry);
         }
 
         fn createValue(item: T) Value {
@@ -811,17 +815,40 @@ pub const TypedArray = struct {
 
     pub fn registerClass() !void {
         var ce: ClassEntry = .{ .name = N(class_name) };
-        class_entry = php.registerInternalInterface(&ce) orelse {
-            return error.ClassRegistrationFailure;
-        };
+        class_entry = try php.registerInternalInterface(&ce);
+    }
+
+    pub fn unregisterClass() void {
+        php.unregisterInternalClass(class_entry);
     }
 };
 
+const type_list = [_]type{ i8, i16, i32, i64, u8, u16, u32, u64, f16, f32, f64 };
+
 pub fn registerClasses() !void {
     try ArrayBuffer.registerClass();
+    errdefer ArrayBuffer.unregisterClass();
     try TypedArray.registerClass();
-    inline for (.{ i8, i16, i32, i64, u8, u16, u32, u64, f16, f32, f64 }) |T| {
-        try TypedArrayOf(T, false).registerClass();
+    errdefer TypedArray.unregisterClass();
+    {
+        var failed_index: usize = undefined;
+        errdefer inline for (type_list, 0..) |T, index| {
+            if (failed_index == index) break;
+            TypedArrayOf(T, false).unregisterClass();
+        };
+        inline for (type_list, 0..) |T, index| {
+            errdefer failed_index = index;
+            try TypedArrayOf(T, false).registerClass();
+        }
     }
     try TypedArrayOf(u8, true).registerClass();
+}
+
+pub fn unregisterClasses() void {
+    ArrayBuffer.unregisterClass();
+    TypedArray.unregisterClass();
+    inline for (type_list) |T| {
+        TypedArrayOf(T, false).unregisterClass();
+    }
+    TypedArrayOf(u8, true).unregisterClass();
 }
