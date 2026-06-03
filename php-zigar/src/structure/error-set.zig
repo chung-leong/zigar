@@ -8,6 +8,7 @@ const failure = @import("../failure.zig");
 const Error = failure.Error;
 const ArrayBuffer = @import("../js-compat.zig").ArrayBuffer;
 const php = @import("../php.zig");
+const N = php.getStaticString;
 const Array = php.Array;
 const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
@@ -322,7 +323,7 @@ pub const ErrorSet = struct {
         if (PropCache.idFromString(name, cache_slot)) |id| {
             const value = switch (id) {
                 .string => php.createValueString(canonical.string orelse php.createString("")),
-                .file => php.createValueString(canonical.file orelse php.persistent("unknown")),
+                .file => php.createValueString(canonical.file orelse N("unknown")),
                 .line => php.createValueLong(@intCast(canonical.lineno)),
             };
             php.addRef(&value);
@@ -373,7 +374,7 @@ pub const ErrorSet = struct {
         const err_struct = fromObject(err_obj);
         const canonical = err_struct.canonical.?;
         const message = canonical.message;
-        const file = canonical.file orelse php.persistent("unknown");
+        const file = canonical.file orelse N("unknown");
         const trace = canonical.trace orelse php.empty_array;
         var text: []const u8 = undefined;
         if (php.getHashLength(trace) == 0) {
@@ -479,7 +480,7 @@ pub const ErrorSet = struct {
 
     pub fn handleGetFile(ed: *ExecuteData, return_value: *Value) !void {
         const canonical = try getCanonicalFromValue(&ed.This);
-        const file = canonical.file orelse php.persistent("unknown");
+        const file = canonical.file orelse N("unknown");
         return_value.* = php.createValueString(file);
     }
 

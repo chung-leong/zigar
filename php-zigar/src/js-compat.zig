@@ -5,6 +5,7 @@ const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const cache = @import("cache.zig");
 const failure = @import("failure.zig");
 const php = @import("php.zig");
+const N = php.getStaticString;
 const ArgumentIterator = php.ArgumentIterator;
 const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
@@ -244,7 +245,7 @@ pub const ArrayBuffer = struct {
 
     pub fn registerClass() !void {
         var ce: ClassEntry = .{
-            .name = php.persistent(class_name),
+            .name = N(class_name),
         };
         const parent_ce = php.getClassEntry(.standard);
         class_entry = php.registerInternalClass(&ce, parent_ce) orelse {
@@ -615,7 +616,7 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
             interfaces[0] = php.getInterface(.iterator);
             interfaces[1] = TypedArray.class_entry;
             var ce: ClassEntry = .{
-                .name = php.persistent(class_name),
+                .name = N(class_name),
                 .num_interfaces = 2,
                 .unnamed_2 = .{ .interfaces = interfaces },
             };
@@ -809,9 +810,7 @@ pub const TypedArray = struct {
     pub var class_entry: *ClassEntry = undefined;
 
     pub fn registerClass() !void {
-        var ce: ClassEntry = .{
-            .name = php.persistent(class_name),
-        };
+        var ce: ClassEntry = .{ .name = N(class_name) };
         class_entry = php.registerInternalInterface(&ce) orelse {
             return error.ClassRegistrationFailure;
         };

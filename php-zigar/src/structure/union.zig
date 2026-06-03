@@ -10,6 +10,7 @@ const Error = failure.Error;
 const iterator = @import("../iterator.zig");
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
+const N = php.getStaticString;
 const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
 const HashTableIterator = php.HashTableIterator;
@@ -152,9 +153,8 @@ pub const Union = struct {
             const static = class.getStaticData(@This());
             if (class.purpose == .any_image) {
                 const selector = static.selector orelse return error.Unexpected;
-                const name = php.persistent("gd");
-                try Super.setProperty(self, name, value, null);
-                const sel_value = try php.getHashEntry(&selector.possible_values, name);
+                try Super.setProperty(self, N("gd"), value, null);
+                const sel_value = try php.getHashEntry(&selector.possible_values, N("gd"));
                 try selector.accessors.set(self, sel_value);
                 return;
             }

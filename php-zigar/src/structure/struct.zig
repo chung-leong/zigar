@@ -14,6 +14,7 @@ const Generator = @import("../generator.zig").Generator;
 const iterator = @import("../iterator.zig");
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
+const N = php.getStaticString;
 const ArgumentIterator = php.ArgumentIterator;
 const ClassEntry = php.ClassEntry;
 const HashTable = php.HashTable;
@@ -176,7 +177,7 @@ pub const Struct = struct {
                     return failure.report("GD image object expected", .{});
                 };
                 const ptr_value = php.createValuePointer(ptr);
-                try self.setProperty(php.persistent("ptr"), &ptr_value, null);
+                try self.setProperty(N("ptr"), &ptr_value, null);
                 php.release(&self.table);
                 self.table = value.*;
                 php.addRef(&self.table);
@@ -184,7 +185,7 @@ pub const Struct = struct {
             },
             .file => {
                 if (try self.getStreamHandle(value, false)) |handle| {
-                    try self.setProperty(php.persistent("handle"), &handle, null);
+                    try self.setProperty(N("handle"), &handle, null);
                     return;
                 } else {
                     const arg_d = php.createValueDebug(value);
@@ -198,7 +199,7 @@ pub const Struct = struct {
             },
             .directory => {
                 if (try self.getStreamHandle(value, true)) |handle| {
-                    try self.setProperty(php.persistent("fd"), &handle, null);
+                    try self.setProperty(N("fd"), &handle, null);
                     return;
                 } else if (failure.hasMessage()) {
                     return error.Unexpected;
@@ -367,10 +368,10 @@ pub const Struct = struct {
             Promise, Generator => {
                 const ctx = try T.create(args.callback);
                 const ptr_value = php.createValuePointer(ctx.buffer.bytes.ptr);
-                try self.setProperty(php.persistent("ptr"), &ptr_value, null);
+                try self.setProperty(N("ptr"), &ptr_value, null);
                 const callback_value = php.createValueObject(static.callback.?);
-                try self.setProperty(php.persistent("callback"), &callback_value, null);
-                if (class.getMember(.instance, php.persistent("allocator")) catch null) |m| {
+                try self.setProperty(N("callback"), &callback_value, null);
+                if (class.getMember(.instance, N("allocator")) catch null) |m| {
                     const allocator_value = try m.accessors.get(self);
                     const allocator_obj = try php.getValueObject(&allocator_value);
                     defer php.release(allocator_obj);
@@ -386,14 +387,14 @@ pub const Struct = struct {
                     break :get AbortSignal.fromObject(signal_obj);
                 } else try AbortSignal.create(args.timeout);
                 const ptr_value = php.createValuePointer(&signal.value);
-                try self.setProperty(php.persistent("ptr"), &ptr_value, null);
+                try self.setProperty(N("ptr"), &ptr_value, null);
             },
             else => {},
         }
     }
 
     pub fn getSpecialContext(self: *@This(), comptime T: type) !*T {
-        const ptr_value = try self.getProperty(php.persistent("ptr"), null);
+        const ptr_value = try self.getProperty(N("ptr"), null);
         const ptr_obj = try php.getValueObject(&ptr_value);
         defer php.release(ptr_obj);
         const ptr_struct = ZigObject(structure.Pointer).fromObject(ptr_obj).structure();
@@ -410,14 +411,14 @@ pub const Struct = struct {
             .promise => if (self.getSpecialContext(Promise) catch null) |ctx| ctx.release(),
             .generator => if (self.getSpecialContext(Generator) catch null) |ctx| ctx.release(),
             .abort_signal => if (self.getSpecialContext(AbortSignal) catch null) |ctx| ctx.release(),
-            .file => if (self.getProperty(php.persistent("handle"), null) catch null) |handle| {
+            .file => if (self.getProperty(N("handle"), null) catch null) |handle| {
                 if (getDescriptor(&handle) catch null) |fd| {
                     if (class.host.dispatcher.isVirtualStream(fd)) {
                         class.host.dispatcher.removeStream(fd) catch {};
                     }
                 }
             },
-            .directory => if (self.getProperty(php.persistent("fd"), null) catch null) |handle| {
+            .directory => if (self.getProperty(N("fd"), null) catch null) |handle| {
                 if (getDescriptor(&handle) catch null) |fd| {
                     if (class.host.dispatcher.isVirtualStream(fd)) {
                         class.host.dispatcher.removeStream(fd) catch {};

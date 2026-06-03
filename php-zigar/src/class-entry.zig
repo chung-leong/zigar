@@ -15,6 +15,7 @@ const GarbageCollectionBuffer = @import("gc.zig").GarbageCollectionBuffer;
 const getObjectBuffer = @import("object.zig").getObjectBuffer;
 const Host = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
+const N = php.getStaticString;
 const ArgumentIterator = php.ArgumentIterator;
 const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
@@ -402,7 +403,7 @@ pub const ZigClassEntry = struct {
         self.host.addRef();
         self.status.activated = true;
         if (self.php_portion.name.*.len == 0) {
-            self.php_portion.name = self.inferName() catch php.persistent("Unknown");
+            self.php_portion.name = self.inferName() catch N("Unknown");
         }
         if (self.type == .error_set and self.flags.error_set.is_global) {
             const table = php.createArray();
@@ -462,7 +463,7 @@ pub const ZigClassEntry = struct {
 
     pub fn getName(self: *@This()) []const u8 {
         if (self.php_portion.name.*.len == 0) {
-            self.php_portion.name = self.inferName() catch php.persistent("Unknown");
+            self.php_portion.name = self.inferName() catch N("Unknown");
         }
         return php.getStringContent(self.php_portion.name);
     }
@@ -728,12 +729,12 @@ pub const ZigClassEntry = struct {
     fn createTemplate(template_info: ?*Value) !Template {
         var template: Template = .{};
         if (template_info) |info| {
-            if (php.getProperty(info, "buffer") catch null) |value| {
+            if (php.getProperty(info, N("buffer")) catch null) |value| {
                 const buf = try php.getValuePointer(*ByteBuffer, value);
                 buf.addRef();
                 template.buffer = buf;
             }
-            if (php.getProperty(info, "table") catch null) |value| {
+            if (php.getProperty(info, N("table")) catch null) |value| {
                 const src_ht = try php.getValueArray(value);
                 var iter: HashTableIterator = .init(src_ht, .{});
                 if (iter.len > 0) {
@@ -1304,23 +1305,17 @@ pub const ZigClassEntry = struct {
     pub var abort_signal_class: *ClassEntry = undefined;
 
     pub fn registerGlobalClasses() !void {
-        var ce: ClassEntry = .{
-            .name = php.persistent("ZigObject"),
-        };
+        var ce: ClassEntry = .{ .name = N("ZigObject") };
         const parent_ce = php.getClassEntry(.standard);
         global_class = php.registerInternalClass(&ce, parent_ce) orelse {
             return error.ClassRegistrationFailure;
         };
-        var error_ce: ClassEntry = .{
-            .name = php.persistent("ZigError"),
-        };
+        var error_ce: ClassEntry = .{ .name = N("ZigError") };
         const error_parent_ce = php.getClassEntry(.exception);
         global_error_class = php.registerInternalClass(&error_ce, error_parent_ce) orelse {
             return error.ClassRegistrationFailure;
         };
-        var signal_ce: ClassEntry = .{
-            .name = php.persistent("ZigAbortSignal"),
-        };
+        var signal_ce: ClassEntry = .{ .name = N("ZigAbortSignal") };
         abort_signal_class = php.registerInternalClass(&signal_ce, parent_ce) orelse {
             return error.ClassRegistrationFailure;
         };

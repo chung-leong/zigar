@@ -2,6 +2,7 @@ const std = @import("std");
 
 const AbortSignal = @import("abort-signal.zig").AbortSignal;
 const php = @import("php.zig");
+const N = php.getStaticString;
 const String = php.String;
 const ExecuteData = php.ExecuteData;
 const Value = php.Value;
@@ -27,7 +28,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             const closure = php.createValueClosure(&func, null, null, null);
             errdefer php.release(&closure);
             // create the fiber used for handling the command stream
-            const class_name = php.persistent("Fiber");
+            const class_name = N("Fiber");
             self.fiber = try php.createValueNewObject(class_name, &.{closure});
             errdefer php.release(&self.fiber);
             self.stream = stream;

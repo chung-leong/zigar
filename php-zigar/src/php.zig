@@ -330,7 +330,7 @@ pub fn removeError(retval: anytype) switch (@typeInfo(@TypeOf(retval))) {
 pub const initializeClassData = php_h.zend_initialize_class_data;
 
 pub fn findClassEntry(comptime name: []const u8) ?*ClassEntry {
-    return php_h.zend_lookup_class(persistent(name));
+    return php_h.zend_lookup_class(getStaticString(name));
 }
 
 pub const ValueType = enum(u8) {
@@ -457,7 +457,7 @@ pub fn createValueStringContent(sc: []const u8) Value {
 }
 
 pub inline fn createValuePersistentString(sc: []const u8) Value {
-    return createValueString(persistent(sc));
+    return createValueString(getStaticString(sc));
 }
 
 pub fn createValueObject(object: ?*Object) Value {
@@ -531,16 +531,35 @@ pub fn createValueDebug(value: *const Value) Value {
     }
 }
 
-pub fn persistent(comptime s: []const u8) *String {
-    const static = struct {
-        comptime text: []const u8 = s,
-        var string: ?*String = null;
+fn StringWithLength(comptime len: usize) type {
+    return extern struct {
+        gc: php_h.zend_refcounted_h = undefined,
+        h: php_h.zend_ulong = undefined,
+        len: usize = len,
+        val: [len + 1]u8 = undefined,
     };
-    return static.string orelse create: {
-        const string = createPersistentString(s);
-        static.string = string;
-        break :create string;
+}
+
+pub fn getStaticString(comptime s: []const u8) *String {
+    const ns = struct {
+        // need to use var since PHP will try to set additional flags
+        var str: StringWithLength(s.len) = .{
+            .gc = .{
+                .refcount = 0,
+                .u = .{
+                    .type_info = php_h.IS_STRING | php_h.IS_STR_PERMANENT | php_h.IS_STR_INTERNED | php_h.GC_NOT_COLLECTABLE,
+                },
+            },
+            .h = php_h.zend_inline_hash_func(s.ptr, s.len),
+            .val = init: {
+                var buf: [s.len + 1]u8 = undefined;
+                @memcpy(buf[0..s.len], s);
+                buf[s.len] = 0;
+                break :init buf;
+            },
+        };
     };
+    return @ptrCast(@constCast(&ns.str));
 }
 
 extern fn set_zval_stream(*Value, *Stream) void;
@@ -802,10 +821,6 @@ pub fn createStringWithLength(len: usize) *String {
 
 pub fn createInternedString(s: []const u8) *String {
     return php_h.zend_string_init_interned.?(s.ptr, s.len, false);
-}
-
-pub fn createPersistentString(s: []const u8) *String {
-    return php_h.zend_string_init_interned.?(s.ptr, s.len, true);
 }
 
 pub fn getStringContent(str: *const String) []const u8 {
@@ -1206,7 +1221,7 @@ pub fn invokeMethod(container: ?*const Value, fn_name: *const Value, arguments: 
 }
 
 pub fn invokeFunction(comptime name: []const u8, arguments: []const Value) !Value {
-    const callable = createValueString(persistent(name));
+    const callable = createValueString(getStaticString(name));
     return try invokeMethod(null, &callable, arguments);
 }
 
@@ -1235,7 +1250,7 @@ pub fn createFunction(
     comptime arg_count: usize,
     comptime is_variadic: bool,
 ) Function {
-    return createFunctionEx(func_ptr, persistent(name), arg_count, is_variadic);
+    return createFunctionEx(func_ptr, getStaticString(name), arg_count, is_variadic);
 }
 
 pub fn createFunctionEx(
