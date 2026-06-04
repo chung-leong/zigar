@@ -98,9 +98,7 @@ pub const Union = struct {
                         const class = ZigClassEntry.fromStatic(self);
                         if (class.flags.@"union".has_tag) {
                             const sel = self.selector orelse return error.Unexpected;
-                            const class_obj = sel.class.object;
-                            php.addRef(class_obj);
-                            return php.createValueObject(class_obj);
+                            return php.createValueObject(php.reuse(sel.class.object));
                         }
                     },
                 }

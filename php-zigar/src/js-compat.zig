@@ -567,8 +567,7 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
                             } else {
                                 buf = try ab.buffer.slice(offset, byte_len, .@"1", 0);
                             }
-                            self.array_buffer = arg_obj;
-                            php.addRef(arg_obj);
+                            self.array_buffer = php.reuse(arg_obj);
                         } else if (arg_obj.ce == class_entry) {
                             const other = fromObject(arg_obj);
                             buf = try .create(.@"1");
@@ -651,8 +650,7 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
                         self.array_buffer = ab;
                         break :create ab;
                     };
-                    php.addRef(obj);
-                    return php.createValueObject(obj);
+                    return php.createValueObject(php.reuse(obj));
                 },
                 .byteLength => {
                     return php.createValueAnyInt(self.buffer.bytes.len);
@@ -745,8 +743,7 @@ pub fn TypedArrayOf(comptime T: type, comptime clamped: bool) type {
                 const self = try php.allocator.create(@This());
                 const array = fromObject(obj);
                 php.initializeIterator(&self.iter);
-                php.addRef(obj);
-                self.object = obj;
+                self.object = php.reuse(obj);
                 self.len = array.getLength();
                 self.index = 0;
                 self.iter.funcs = &methods;

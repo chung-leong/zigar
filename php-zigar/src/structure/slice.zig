@@ -54,10 +54,7 @@ pub const Slice = struct {
         pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
             if (StaticPropCache.idFromString(name, cache_slot)) |id| {
                 return switch (id) {
-                    .child => get: {
-                        php.addRef(self.element_class.object);
-                        break :get php.createValueObject(self.element_class.object);
-                    },
+                    .child => php.createValueObject(php.reuse(self.element_class.object)),
                 };
             } else {
                 return error.Missing;

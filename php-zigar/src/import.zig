@@ -68,15 +68,14 @@ pub const StructureImporter = struct {
         // the last class to get finalized is the root namespace
         if (self.class_list.items.len == 0) return error.NoRoot;
         const root_obj = self.class_list.items[0];
-        php.addRef(root_obj);
         // initially, the host holds references to class objects through class_list
         // prior to destroying that list we need to flip the relationship so that
         // these objects own the host instead
         for (self.class_list.items) |class_obj| try ZigClassEntry.activate(class_obj);
         const root_class = ZigClassEntry.fromObject(root_obj);
         const root_static = root_class.getStaticData(structure.Struct);
-        root_static.is_root = true;
-        return root_obj;
+        try root_static.markAsRoot();
+        return php.reuse(root_obj);
     }
 
     fn allocateHandle(self: *@This(), value: Value) Handle {

@@ -1202,6 +1202,11 @@ pub fn release(value: anytype) void {
     }
 }
 
+pub fn reuse(value: anytype) @TypeOf(value) {
+    addRef(value);
+    return value;
+}
+
 pub fn isObjectFreed(obj: *Object) bool {
     return (obj.gc.u.type_info & php_h.IS_OBJ_FREE_CALLED) != 0;
 }
@@ -1286,6 +1291,65 @@ pub inline fn createTransformedFunction(
 
 pub fn destroyFunction(func: *Function) void {
     if (func.internal_function.function_name) |n| release(n);
+}
+
+pub fn registerConstant(name: *String, value: *const Value) !void {
+    var constant: php_h.zend_constant = .{
+        .name = reuse(name),
+        .value = reuse(value).*,
+    };
+    const result = php_h.zend_register_constant(&constant);
+    if (result != SUCCESS) return error.Failure;
+}
+
+pub fn unregisterConstant(name: *String) void {
+    const eg = getGlobals("executor_globals");
+    const ht = eg.zend_constants;
+    deleteHashEntry(ht, name);
+}
+
+pub fn registerFunction(name: *String, func: *Function) !void {
+    const lc_name = createLowercaseName(name);
+    defer release(lc_name);
+    const cg = getGlobals("compiler_globals");
+    const ht = cg.function_table;
+    if (hasHashEntry(ht, lc_name)) return error.NameConflict;
+    const func_ptr = createValuePointer(func);
+    setHashEntry(ht, lc_name, &func_ptr);
+}
+
+pub fn unregisterFunction(name: *String) void {
+    const lc_name = createLowercaseName(name);
+    defer release(lc_name);
+    const cg = getGlobals("compiler_globals");
+    const ht = cg.function_table;
+    deleteHashEntry(ht, lc_name);
+}
+
+pub fn registerClass(name: *String, ce: *ClassEntry) !void {
+    if (!php_h.zend_is_valid_class_name(name)) return error.InvalidName;
+    const lc_name = createLowercaseName(name);
+    defer release(lc_name);
+    const cg = getGlobals("compiler_globals");
+    const ht = cg.class_table;
+    if (hasHashEntry(ht, lc_name)) return error.NameConflict;
+    const ce_ptr = createValuePointer(ce);
+    setHashEntry(ht, lc_name, &ce_ptr);
+}
+
+pub fn unregisterClass(name: *String) void {
+    const lc_name = createLowercaseName(name);
+    defer release(lc_name);
+    const cg = getGlobals("compiler_globals");
+    const ht = cg.class_table;
+    deleteHashEntry(ht, lc_name);
+}
+
+pub fn createLowercaseName(name: *String) *String {
+    const str = createString(getStringContent(name));
+    const sc = @constCast(getStringContent(str));
+    php_h.zend_str_tolower(sc.ptr, sc.len);
+    return str;
 }
 
 pub const instanceOf = php_h.instanceof_function;

@@ -40,10 +40,7 @@ pub const Vector = struct {
             if (StaticPropCache.idFromString(name, cache_slot)) |id| {
                 const class = ZigClassEntry.fromStatic(self);
                 return switch (id) {
-                    .child => get: {
-                        php.addRef(self.element_class.object);
-                        break :get php.createValueObject(self.element_class.object);
-                    },
+                    .child => php.createValueObject(php.reuse(self.element_class.object)),
                     .length => php.createValueAnyInt(class.length.?),
                 };
             } else {

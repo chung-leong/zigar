@@ -125,8 +125,7 @@ pub const Pointer = struct {
                 const prop_obj = switch (id) {
                     .child => self.target_class.object,
                 };
-                php.addRef(prop_obj);
-                return php.createValueObject(prop_obj);
+                return php.createValueObject(php.reuse(prop_obj));
             } else {
                 return error.Missing;
             }
@@ -140,15 +139,10 @@ pub const Pointer = struct {
 
     pub fn getValue(self: *@This(), transform: accessor.Transform) Error!Value {
         const target_obj = try self.getTarget();
-        switch (transform) {
-            .none => {
-                php.addRef(target_obj);
-                return php.createValueObject(target_obj);
-            },
-            else => {
-                return try invokeMethod(target_obj, "getValue", .{transform});
-            },
-        }
+        return switch (transform) {
+            .none => php.createValueObject(php.reuse(target_obj)),
+            else => try invokeMethod(target_obj, "getValue", .{transform}),
+        };
     }
 
     pub fn setValue(self: *@This(), value: *const Value, transform: accessor.Transform) Error!void {
@@ -173,8 +167,7 @@ pub const Pointer = struct {
                         if (php.instanceOf(obj.ce, target_class.entry())) {
                             // point to existing object
                             // TODO: check read-only flag
-                            php.addRef(obj);
-                            break :init obj;
+                            break :init php.reuse(obj);
                         }
                         // only extract buffer from a TypedArray if it's compatible with the class
                         if (target_class.extractBuffer(obj, true)) |buf| {
@@ -252,12 +245,10 @@ pub const Pointer = struct {
             const static = class.getStaticData(@This());
             switch (id) {
                 .target => {
-                    if (static.target_class.flags.common.has_value) {
-                        return invokeMethod(target_obj, "getValue", .{.none});
-                    } else {
-                        php.addRef(target_obj);
-                        return php.createValueObject(target_obj);
-                    }
+                    return if (static.target_class.flags.common.has_value)
+                        invokeMethod(target_obj, "getValue", .{.none})
+                    else
+                        php.createValueObject(php.reuse(target_obj));
                 },
                 .length => {
                     if (!class.flags.pointer.is_multiple) return error.Missing;

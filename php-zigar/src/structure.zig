@@ -171,8 +171,7 @@ pub fn Parent(comptime S: type) type {
                 .plain, .clamped_array, .typed_array => return error.Unsupported,
                 .none => {
                     const obj = object(self);
-                    php.addRef(obj);
-                    return php.createValueObject(obj);
+                    return php.createValueObject(php.reuse(obj));
                 },
             }
         }
@@ -531,8 +530,7 @@ pub fn ArrayLike(comptime S: type) type {
                             .string => |str| {
                                 // return the original string if possible
                                 if (str.len == len) {
-                                    php.addRef(str);
-                                    return php.createValueString(str);
+                                    return php.createValueString(php.reuse(str));
                                 }
                             },
                             else => {},

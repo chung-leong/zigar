@@ -27,8 +27,7 @@ pub fn ArrayIterator(comptime S: type) type {
             const self = try php.allocator.create(@This());
             const array = ZigObject(S).fromObject(obj).structure();
             php.initializeIterator(&self.iter);
-            php.addRef(obj);
-            self.object = obj;
+            self.object = php.reuse(obj);
             self.len = array.getLength();
             self.index = 0;
             self.iter.funcs = &methods;
@@ -141,12 +140,10 @@ pub fn PropertyIterator(comptime S: type) type {
 
         pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {
             const self = fromIter(iter);
-            if (self.current_name) |name| {
-                php.addRef(name);
-                key_ptr.* = php.createValueString(name);
-            } else {
-                key_ptr.* = php.createValueNull();
-            }
+            key_ptr.* = if (self.current_name) |name|
+                php.createValueString(php.reuse(name))
+            else
+                php.createValueNull();
         }
 
         pub fn moveForward(iter: *ObjectIterator) void {
@@ -236,8 +233,7 @@ pub const GeneratorIterator = struct {
     pub fn getCurrentData(iter: *ObjectIterator) !*Value {
         const self = fromIter(iter);
         iter.data = self.generator.result;
-        php.addRef(&iter.data);
-        return &iter.data;
+        return php.reuse(&iter.data);
     }
 
     pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {
@@ -282,9 +278,8 @@ pub const IteratorIterator = struct {
 
     pub fn create(obj: *Object) !*ObjectIterator {
         const self = try php.allocator.create(@This());
-        php.addRef(obj);
         php.initializeIterator(&self.iter);
-        self.iter_object = obj;
+        self.iter_object = php.reuse(obj);
         self.iter.funcs = &methods;
         self.index = 0;
         self.flags = .{};

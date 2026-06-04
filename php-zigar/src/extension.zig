@@ -19,6 +19,26 @@ const Value = php.Value;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigCompiler = @import("compilation.zig").ZigCompiler;
 
+const ShutdownCallback = struct {
+    ptr: *anyopaque,
+    fn_ptr: *const fn (*anyopaque) void,
+};
+
+threadlocal var request_shutdown_callbacks: std.ArrayList(ShutdownCallback) = .empty;
+
+pub fn addRequestShutdownCallback(ptr: *anyopaque, fn_ptr: *const fn (*anyopaque) void) !void {
+    try request_shutdown_callbacks.append(php.allocator, .{ .ptr = ptr, .fn_ptr = fn_ptr });
+}
+
+pub fn removeRequestShutdownCallback(ptr: *anyopaque, fn_ptr: *const fn (*anyopaque) void) void {
+    for (request_shutdown_callbacks.items, 0..) |item, index| {
+        if (item.ptr == ptr and item.fn_ptr == fn_ptr) {
+            _ = request_shutdown_callbacks.swapRemove(index);
+            break;
+        }
+    }
+}
+
 export fn php_zigar_mod_init(_: c_int, _: c_int) php.Result {
     // fixed missing environ due to RTLD_DEEPBIND option to
     if (@intFromPtr(std.c.environ) == 0) {
@@ -50,6 +70,8 @@ export fn php_zigar_req_init(_: c_int, _: c_int) php.Result {
 
 export fn php_zigar_req_shutdown(_: c_int, _: c_int) php.Result {
     CallDispatcher.event_loop.reset();
+    for (request_shutdown_callbacks.items) |cb| cb.fn_ptr(cb.ptr);
+    request_shutdown_callbacks.clearAndFree(php.allocator);
     return php.SUCCESS;
 }
 

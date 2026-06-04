@@ -36,10 +36,7 @@ pub const ErrorSet = struct {
             self.constant_acc = &member.accessors.constant;
             // all error set types references the global set (to check whether an error object has
             // been created already for another set)
-            const global_set = if (class.host.global_error_set) |ht| use: {
-                php.addRef(ht);
-                break :use ht;
-            } else create: {
+            const global_set = if (class.host.global_error_set) |ht| php.reuse(ht) else create: {
                 const ht = php.createArray();
                 class.host.global_error_set = ht;
                 break :create ht;
@@ -137,10 +134,7 @@ pub const ErrorSet = struct {
                 .long => {
                     const err_code = php.getValueLong(key) catch unreachable;
                     if (err_code == 0) return php.createValueNull();
-                    if (php.getHashEntry(self.error_set, err_code)) |err| {
-                        php.addRef(err);
-                        return err.*;
-                    } else |_| {
+                    if (php.getHashEntry(self.error_set, err_code)) |err| return php.reuse(err).* else |_| {
                         // create new error
                         const err_obj = try class.createObject(null, null, false);
                         const err_struct = fromObject(err_obj);
@@ -166,8 +160,7 @@ pub const ErrorSet = struct {
                 .string => {
                     const name = php.getValueStringContent(key) catch unreachable;
                     const tag = try php.getHashEntry(self.error_set, name);
-                    php.addRef(tag);
-                    return tag.*;
+                    return php.reuse(tag).*;
                 },
                 .object => {
                     const err_obj = php.getValueObject(key) catch unreachable;
@@ -183,8 +176,7 @@ pub const ErrorSet = struct {
                             const method = php.createValuePersistentString("getMessage");
                             const message = try php.invokeMethod(key, &method, &.{});
                             if (php.getHashEntry(self.error_set, &message)) |err| {
-                                php.addRef(err);
-                                return err.*;
+                                return php.reuse(err).*;
                             } else |_| {
                                 const name = try self.createCanonicalName();
                                 defer php.allocator.free(name);
@@ -326,8 +318,7 @@ pub const ErrorSet = struct {
                 .file => php.createValueString(canonical.file orelse N("unknown")),
                 .line => php.createValueLong(@intCast(canonical.lineno)),
             };
-            php.addRef(&value);
-            return value;
+            return php.reuse(&value).*;
         } else {
             return Super.getProperty(self, name, cache_slot);
         }
@@ -340,8 +331,7 @@ pub const ErrorSet = struct {
                 .string => {
                     const new_str = try php.getValueString(value);
                     if (canonical.string) |s| php.release(s);
-                    canonical.string = new_str;
-                    php.addRef(new_str);
+                    canonical.string = php.reuse(new_str);
                     return;
                 },
                 .file, .line => return error.WriteProtected,

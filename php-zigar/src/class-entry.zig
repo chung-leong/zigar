@@ -32,6 +32,7 @@ const TypedArrayOf = @import("js-compat.zig").TypedArrayOf;
 const ZigObject = @import("object.zig").ZigObject;
 
 pub const ZigClassEntry = struct {
+    php_portion: ClassEntry = undefined,
     object: *Object,
     host: *Host,
     type: StructureType,
@@ -51,7 +52,6 @@ pub const ZigClassEntry = struct {
     slot_usage: SlotUsage = .none,
     static_data: StaticData = undefined,
     // gc_buffer: ?[]Value = null,
-    php_portion: ClassEntry = undefined,
 
     pub const ScopeType = enum { instance, static };
 
@@ -177,11 +177,10 @@ pub const ZigClassEntry = struct {
         };
         const len = try php.getPropertyWithType(?usize, info, "length");
         const byte_size = try php.getPropertyWithType(?usize, info, "byteSize");
-        const name = if (php.getProperty(info, "name")) |value| use: {
-            const str = try php.getValueString(value);
-            php.addRef(str);
-            break :use str;
-        } else |_| php.createString(""); // use an empty string for now
+        const name = if (php.getProperty(info, "name")) |value|
+            php.reuse(try php.getValueString(value))
+        else |_|
+            php.createString(""); // use an empty string for now
         const signature_value = try php.getProperty(info, "signature");
         const signature = try php.getValueLong(signature_value);
         var self: *@This() = try php.allocator.create(@This());
@@ -496,6 +495,14 @@ pub const ZigClassEntry = struct {
         };
     }
 
+    pub fn createExportableVersion(self: *@This(), name: *String) *ClassEntry {
+        const bytes = php.malloc(@sizeOf(@This()));
+        const copy: *ZigClassEntry = @ptrCast(@alignCast(bytes));
+        copy.* = self.*;
+        copy.php_portion.name = php.reuse(name);
+        return copy.entry();
+    }
+
     pub fn isTypedArray(self: *@This()) bool {
         return switch (self.type) {
             .array => self.flags.array.is_typed_array,
@@ -771,8 +778,7 @@ pub const ZigClassEntry = struct {
                 switch (slot_usage) {
                     .none => {},
                     .single => {
-                        new_table = value.*;
-                        php.addRef(value);
+                        new_table = php.reuse(value).*;
                         break;
                     },
                     .multiple => {
@@ -827,8 +833,7 @@ pub const ZigClassEntry = struct {
         const result = self.host.object_map.search(bytes, self, parent_buf.flags.read_only);
         if (result.match == .yes) {
             const obj = result.value();
-            php.addRef(obj);
-            return obj;
+            return php.reuse(obj);
         } else {
             // need to create the object
             const buf = try parent_buf.slice(offset, len, self.alignment, bit_offset);
@@ -846,8 +851,7 @@ pub const ZigClassEntry = struct {
         const result = self.host.object_map.search(bytes, self, is_const);
         if (result.match == .yes) {
             const obj = result.value();
-            php.addRef(obj);
-            return obj;
+            return php.reuse(obj);
         } else {
             const buf = get: {
                 if (try self.host.unclaimed_buffer_map.claim(bytes, self.alignment)) |buf| {
@@ -872,13 +876,10 @@ pub const ZigClassEntry = struct {
 
     pub fn obtainObjectFromBuffer(self: *@This(), buf: *ByteBuffer) !*Object {
         const result = self.host.object_map.search(buf.bytes, self, buf.flags.read_only);
-        if (result.match == .yes) {
-            const obj = result.value();
-            php.addRef(obj);
-            return obj;
-        } else {
-            return try self.createObjectFromBuffer(buf, null);
-        }
+        return if (result.match == .yes)
+            php.reuse(result.value())
+        else
+            try self.createObjectFromBuffer(buf, null);
     }
 
     pub fn createObjectFromBuffer(self: *@This(), buf: *ByteBuffer, prefilled: ?*const Value) !*Object {

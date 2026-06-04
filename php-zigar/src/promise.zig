@@ -29,10 +29,7 @@ pub const Promise = struct {
         self.* = .{
             .buffer = buf,
             .result = php.createValueNull(),
-            .callback = if (callback) |cb| init: {
-                php.addRef(&cb);
-                break :init cb;
-            } else null,
+            .callback = if (callback) |cb| php.reuse(&cb).* else null,
         };
         return self;
     }
@@ -70,8 +67,7 @@ pub const Promise = struct {
             .waiting => CallDispatcher.event_loop.resumeFiberAfterward(&self.fiber),
             else => {},
         }
-        self.result = value.*;
-        php.addRef(&self.result);
+        self.result = php.reuse(value).*;
         if (self.transform) |tm| try tm.apply(&self.result);
         self.status = .resolved;
     }

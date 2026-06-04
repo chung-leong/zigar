@@ -205,8 +205,7 @@ fn getValue(entry: *Value, transform: ?accessor.Transform) Error!Value {
         const obj = php.getValueObject(entry) catch return error.NullPointer;
         return try structure.invokeMethod(obj, "getValue", .{tm});
     } else {
-        php.addRef(entry);
-        return entry.*;
+        return php.reuse(entry).*;
     }
 }
 

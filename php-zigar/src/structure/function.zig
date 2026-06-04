@@ -11,6 +11,7 @@ const ArgumentIterator = php.ArgumentIterator;
 const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
 const Object = php.Object;
+const String = php.String;
 const Value = php.Value;
 const Promise = @import("../promise.zig").Promise;
 const structure = @import("../structure.zig");
@@ -107,8 +108,8 @@ pub const Function = struct {
         }
     };
     pub const Closure = struct {
-        self: *Function,
         php_portion: php.Function,
+        self: *Function,
     };
 
     pub fn finalize(self: *@This(), init_called: bool) !void {
@@ -140,6 +141,14 @@ pub const Function = struct {
         } else {
             return error.Unsupported;
         }
+    }
+
+    pub fn createExportableVersion(self: *@This(), name: *String) *php.Function {
+        const bytes = php.malloc(@sizeOf(Closure));
+        const closure_copy: *Closure = @ptrCast(@alignCast(bytes));
+        closure_copy.* = self.closure;
+        closure_copy.php_portion.common.function_name = php.reuse(name);
+        return &closure_copy.php_portion;
     }
 
     fn createThunk(self: *@This(), value: *const Value) !void {
@@ -209,8 +218,7 @@ pub const Function = struct {
                         generator.transform = self.info.transform;
                         // return generator
                         const generator_obj = ZigObject(structure.Struct).fromStructure(generator_struct).object();
-                        php.addRef(generator_obj);
-                        break :get php.createValueObject(generator_obj);
+                        break :get php.createValueObject(php.reuse(generator_obj));
                     } else {
                         if (self.info.transform) |tm| try tm.apply(&retval);
                         break :get retval;

@@ -14,11 +14,13 @@ const Object = php.Object;
 const ObjectHandlers = php.ObjectHandlers;
 const String = php.String;
 const Value = php.Value;
+const structure = @import("structure.zig");
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigObject = @import("object.zig").ZigObject;
 
 pub const SpecialExports = struct {
     host: *ModuleHost,
+    root: *Object,
     class_entry: ClassEntry,
     handlers: ObjectHandlers,
     methods: Methods,
@@ -29,8 +31,10 @@ pub const SpecialExports = struct {
         alignOf: Function,
         sizeOf: Function,
         typeOf: Function,
+        import: Function,
+        unimport: Function,
 
-        pub const Cache = cache.IdCache(.{ .alignOf, .redirect, .sizeOf, .typeOf }, "", .{});
+        pub const Cache = cache.IdCache(.{ .alignOf, .redirect, .sizeOf, .typeOf, .import, .unimport }, "", .{});
     };
     pub const StreamNameCache = cache.IdCache(.{ .root, .stderr, .stdin, .stdout }, "", .{});
 
@@ -42,7 +46,7 @@ pub const SpecialExports = struct {
         return @fieldParentPtr("php_portion", obj);
     }
 
-    pub fn create(host: *ModuleHost) !*Object {
+    pub fn create(class: *ZigClassEntry) !*Object {
         var class_entry: ClassEntry = .{
             .type = php.INTERNAL_CLASS,
             .refcount = 1,
@@ -61,7 +65,7 @@ pub const SpecialExports = struct {
                 .interfaces = null,
             },
             .info = .{
-                .user = .{ .filename = host.module_path },
+                .user = .{ .filename = class.host.module_path },
             },
         };
         const prop_size = php.getObjectPropertySize(&class_entry);
@@ -70,7 +74,8 @@ pub const SpecialExports = struct {
         errdefer php.efree(mem);
         const self: *@This() = @ptrCast(@alignCast(mem));
         self.* = .{
-            .host = host,
+            .host = class.host,
+            .root = class.object,
             .class_entry = class_entry,
             .handlers = php.createHandlerTable(@This(), @offsetOf(@This(), "php_portion")),
             .methods = .{
@@ -78,9 +83,12 @@ pub const SpecialExports = struct {
                 .redirect = php.createTransformedFunction(handleRedirect, "redirect", 2, false),
                 .sizeOf = php.createTransformedFunction(handleSizeOf, "sizeOf", 1, false),
                 .typeOf = php.createTransformedFunction(handleTypeOf, "typeOf", 1, false),
+                .import = php.createTransformedFunction(handleImport, "import", 1, false),
+                .unimport = php.createTransformedFunction(handleUnimport, "unimport", 0, false),
             },
         };
-        host.addRef();
+        class.host.addRef();
+        php.addRef(class.object);
         // initialize the PHP portion
         const obj = self.object();
         obj.handlers = &self.handlers;
@@ -98,6 +106,7 @@ pub const SpecialExports = struct {
     pub fn freeObject(obj: *Object) void {
         const self = fromObject(obj);
         self.host.release();
+        php.release(self.root);
     }
 
     pub fn readProperty(obj: *Object, name: *String, _: c_int, cache_slot: ?[*]?*anyopaque, retval: *Value) *Value {
@@ -216,6 +225,32 @@ pub const SpecialExports = struct {
         }
         const class = try getClassFromArgument(&arg_iter);
         retval.* = php.createValueStringContent(class.getStructureName());
+    }
+
+    pub fn handleImport(ed: *ExecuteData, retval: *Value) !void {
+        var arg_iter: ArgumentIterator = .init(ed);
+        if (arg_iter.len > 1) {
+            return failure.reportArgCountMismatch("import", 0, 1, arg_iter.len);
+        }
+        const callback = arg_iter.next();
+        const root_static = try getRootStaticData(&arg_iter);
+        retval.* = try root_static.exportSymbolsToGlobalNamespace(callback);
+    }
+
+    pub fn handleUnimport(ed: *ExecuteData, _: *Value) !void {
+        var arg_iter: ArgumentIterator = .init(ed);
+        if (arg_iter.len != 0) {
+            return failure.reportArgCountMismatch("unimport", 0, 0, arg_iter.len);
+        }
+        const root_static = try getRootStaticData(&arg_iter);
+        try root_static.removeSymbolsFromGlobalNamespace();
+    }
+
+    fn getRootStaticData(arg_iter: *ArgumentIterator) !*structure.Struct.Static {
+        const obj = try php.getValueObject(arg_iter.this);
+        const self = fromObject(obj);
+        const root_class = ZigClassEntry.fromObject(self.root);
+        return root_class.getStaticData(structure.Struct);
     }
 
     fn getClassFromArgument(arg_iter: *ArgumentIterator) !*ZigClassEntry {

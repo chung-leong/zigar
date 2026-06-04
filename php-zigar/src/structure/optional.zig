@@ -37,8 +37,7 @@ pub const Optional = struct {
                 const prop_obj = switch (id) {
                     .child => self.payload_class.object,
                 };
-                php.addRef(prop_obj);
-                return php.createValueObject(prop_obj);
+                return php.createValueObject(php.reuse(prop_obj));
             } else {
                 return error.Missing;
             }

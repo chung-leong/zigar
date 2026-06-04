@@ -83,8 +83,7 @@ pub const Generator = struct {
             .waiting => CallDispatcher.event_loop.resumeFiberAfterward(&self.fiber),
             else => {},
         }
-        self.result = value.*;
-        php.addRef(&self.result);
+        self.result = php.reuse(value).*;
         if (self.transform) |tm| try tm.apply(&self.result);
         if (!php.isValueNull(&self.result)) {
             self.status = .resolved;

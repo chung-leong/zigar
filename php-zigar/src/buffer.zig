@@ -87,9 +87,8 @@ pub const ByteBuffer = struct {
             }
         }
         self.bytes = @constCast(php.getStringContent(str));
-        self.source = .{ .string = str };
+        self.source = .{ .string = php.reuse(str) };
         if (read_only) self.flags.read_only = true;
-        php.addRef(str);
     }
 
     pub fn referencExternal(self: *@This(), bytes: []const u8) void {

@@ -102,8 +102,7 @@ pub const Enum = struct {
                 .long => {
                     const tag_code = php.getValueLong(key) catch unreachable;
                     if (php.getHashEntry(&self.available_tags, tag_code)) |tag| {
-                        php.addRef(tag);
-                        return tag.*;
+                        return php.reuse(tag).*;
                     } else |err| {
                         if (class.flags.@"enum".is_open_ended) {
                             // create new item
@@ -134,8 +133,7 @@ pub const Enum = struct {
                 .string => {
                     const name = php.getValueStringContent(key) catch unreachable;
                     const tag = try php.getHashEntry(&self.available_tags, name);
-                    php.addRef(tag);
-                    return tag.*;
+                    return php.reuse(tag).*;
                 },
                 .object => {
                     const obj = php.getValueObject(key) catch unreachable;
@@ -143,14 +141,12 @@ pub const Enum = struct {
                         php.addRef(obj);
                         return key.*;
                     } else if (php.isGmpClass(obj.ce)) {
-                        var key_copy = key.*;
-                        php.addRef(&key_copy);
+                        var key_copy = php.reuse(key).*;
                         try php.convertValue(&key_copy, .string);
                         defer php.release(&key_copy);
                         const tag_code_str = php.getValueString(&key_copy) catch unreachable;
                         if (php.getHashEntry(&self.available_tags, tag_code_str)) |tag| {
-                            php.addRef(tag);
-                            return tag.*;
+                            return php.reuse(tag).*;
                         } else |err| {
                             if (class.flags.@"enum".is_open_ended) {
                                 // create new item
@@ -231,8 +227,7 @@ pub const Enum = struct {
             php.setHashEntry(&self.available_tags, name, &tag);
             // attach canonical info to tag
             const props = try php.allocator.create(Canonical);
-            props.* = .{ .name = name };
-            php.addRef(name);
+            props.* = .{ .name = php.reuse(name) };
             tag_struct.canonical = props;
         }
     };
@@ -248,8 +243,7 @@ pub const Enum = struct {
                     defer php.release(obj);
                     const enum_struct = fromObject(obj);
                     const str = enum_struct.canonical.?.name;
-                    php.addRef(str);
-                    value = php.createValueString(str);
+                    value = php.createValueString(php.reuse(str));
                 }
                 break :get value;
             },

@@ -45,8 +45,7 @@ pub const ErrorUnion = struct {
                     .payload => self.payload_class.object,
                     .error_set => self.error_class.object,
                 };
-                php.addRef(prop_obj);
-                return php.createValueObject(prop_obj);
+                return php.createValueObject(php.reuse(prop_obj));
             } else {
                 return error.Missing;
             }

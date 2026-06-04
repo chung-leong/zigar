@@ -7,12 +7,16 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const StructurePurpose = @import("../enums.zig").StructurePurpose;
+const enums = @import("../enums.zig");
+const StructureType = enums.StructureType;
+const extension = @import("../extension.zig");
 const failure = @import("../failure.zig");
 const Error = failure.Error;
 const gd = @import("../gd.zig");
 const Generator = @import("../generator.zig").Generator;
 const iterator = @import("../iterator.zig");
 const ZigObject = @import("../object.zig").ZigObject;
+const getObjectBuffer = @import("../object.zig").getObjectBuffer;
 const php = @import("../php.zig");
 const N = php.getStaticString;
 const ArgumentIterator = php.ArgumentIterator;
@@ -49,9 +53,20 @@ pub const Struct = struct {
         required_field_count: usize = 0,
         total_field_count: usize = 0,
         callback: ?*Object = null,
-        is_root: bool = false,
+        root: ?*Root = null,
 
         pub const StaticPropCache = cache.IdCache(.{ .length, .zigar }, "__", .{});
+        pub const Root = struct {
+            symbol_names: ?*HashTable = null,
+            symbol_types: ?*HashTable = null,
+
+            fn deinit(self: *@This()) void {
+                if (self.symbol_names) |ht| php.release(ht);
+                if (self.symbol_types) |ht| php.release(ht);
+                php.allocator.destroy(self);
+            }
+        };
+        const SymbolType = enum { function, class, constant, variable };
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -92,6 +107,13 @@ pub const Struct = struct {
 
         pub fn deinit(self: *@This()) void {
             if (self.callback) |cb| php.release(cb);
+            if (self.root) |root| root.deinit();
+        }
+
+        pub fn markAsRoot(self: *@This()) !void {
+            const root = try php.allocator.create(Root);
+            root.* = .{};
+            self.root = root;
         }
 
         pub fn getStaticProperty(self: *@This(), name: *String, cache_slot: ?[*]?*anyopaque) !Value {
@@ -105,14 +127,138 @@ pub const Struct = struct {
                         }
                     },
                     .zigar => {
-                        if (self.is_root) {
-                            const obj = try SpecialExports.create(class.host);
+                        if (self.root != null) {
+                            const obj = try SpecialExports.create(class);
                             return php.createValueObject(obj);
                         }
                     },
                 }
             }
             return error.Missing;
+        }
+
+        pub fn exportSymbolsToGlobalNamespace(self: *@This(), callback: ?*Value) !Value {
+            const root = self.root.?;
+            if (root.symbol_names != null) return error.CalledAlready;
+            if (callback) |cb| {
+                if (!php.isCallable(cb)) return error.NotCallable;
+            }
+            // add a callback so we can remove the imports prior to request shutdown
+            try extension.addRequestShutdownCallback(self, onRequestShutdown);
+            // bump the refcount of the class object so exported items don't get gc'ed
+            const class = ZigClassEntry.fromStatic(self);
+            php.addRef(class.object);
+            const symbol_names = php.createArray();
+            errdefer php.release(symbol_names);
+            const symbol_types = php.createArray();
+            errdefer php.release(symbol_types);
+            root.symbol_names = symbol_names;
+            root.symbol_types = symbol_types;
+            errdefer self.removeSymbolsFromGlobalNamespace() catch {};
+            const class_struct = ZigObject(structure.Class(structure.Struct)).fromObject(class.object).structure();
+            var member_iter = class.getMemberIterator(.static);
+            while (member_iter.next()) |member| {
+                const member_name = member_iter.currentName() orelse continue;
+                const symbol_type: SymbolType = find: {
+                    const member_entry = try php.getProperty(&class_struct.table, member.slot.?);
+                    const member_obj = try php.getValueObject(member_entry);
+                    const member_class = ZigClassEntry.fromObject(member_obj);
+                    switch (member_class.type) {
+                        .function => break :find .function,
+                        .@"comptime" => {
+                            const member_struct = ZigObject(structure.Comptime).fromObject(member_obj).structure();
+                            const target_obj = try php.getValueObject(&member_struct.table);
+                            const target_class = ZigClassEntry.fromObject(target_obj);
+                            break :find if (target_class.object == target_obj) .class else .constant;
+                        },
+                        inline else => |t| {
+                            const S = @field(structure.by_enum, @tagName(t));
+                            const member_struct = ZigObject(S).fromObject(member_obj).structure();
+                            const buf = member_struct.buffer;
+                            break :find if (buf.flags.read_only) .constant else .variable;
+                        },
+                    }
+                };
+                if (symbol_type == .variable) continue;
+                const symbol_type_value = php.createValueLong(@intFromEnum(symbol_type));
+                const symbol_name_value = get: {
+                    if (callback) |cb| {
+                        const cb_args: [2]Value = .{
+                            php.createValueString(member_name),
+                            switch (symbol_type) {
+                                .variable => unreachable,
+                                inline else => |t| php.createValueString(N(@tagName(t))),
+                            },
+                        };
+                        break :get try php.invokeMethod(null, cb, &cb_args);
+                    } else {
+                        break :get php.createValueString(php.reuse(member_name));
+                    }
+                };
+                defer php.release(&symbol_name_value);
+                const symbol_name = php.getValueString(&symbol_name_value) catch {
+                    switch (php.getValueType(&symbol_name_value)) {
+                        .false, .null => continue,
+                        else => return failure.report("callback should return a string or null or false", .{}),
+                    }
+                };
+                const member_value = try member.accessors.get(class_struct);
+                defer php.release(&member_value);
+                switch (symbol_type) {
+                    .function => {
+                        const func_obj = try php.getValueObject(&member_value);
+                        const func_struct = ZigObject(structure.Function).fromObject(func_obj).structure();
+                        const exportable = func_struct.createExportableVersion(symbol_name);
+                        try php.registerFunction(symbol_name, exportable);
+                    },
+                    .class => {
+                        const symbol_class_obj = try php.getValueObject(&member_value);
+                        const symbol_class = ZigClassEntry.fromObject(symbol_class_obj);
+                        const exportable = symbol_class.createExportableVersion(symbol_name);
+                        try php.registerClass(symbol_name, exportable);
+                    },
+                    .constant => {
+                        try php.registerConstant(symbol_name, &member_value);
+                    },
+                    else => unreachable,
+                }
+                _ = php.appendHashEntryRef(symbol_names, &symbol_name_value);
+                _ = php.appendHashEntry(symbol_types, &symbol_type_value);
+            }
+            return php.createValueArray(php.reuse(symbol_names));
+        }
+
+        pub fn removeSymbolsFromGlobalNamespace(self: *@This()) !void {
+            const root = self.root.?;
+            const symbol_names = root.symbol_names orelse return;
+            const symbol_types = root.symbol_types orelse return;
+            var iter: HashTableIterator = .init(symbol_names, .{});
+            while (iter.next()) |symbol_name_value| {
+                const index = iter.currentIndex().?;
+                const symbol_type_value = try php.getHashEntry(symbol_types, index);
+                const symbol_type_long = try php.getValueLong(symbol_type_value);
+                const symbol_type: SymbolType = @enumFromInt(symbol_type_long);
+                const symbol_name = try php.getValueString(symbol_name_value);
+                switch (symbol_type) {
+                    .function => php.unregisterFunction(symbol_name),
+                    .class => php.unregisterClass(symbol_name),
+                    .constant => php.unregisterConstant(symbol_name),
+                    .variable => unreachable,
+                }
+            }
+            php.release(symbol_names);
+            php.release(symbol_types);
+            root.symbol_names = null;
+            root.symbol_types = null;
+            // remove reference on class object added by exportSymbolsToGlobalNamespace()
+            const class = ZigClassEntry.fromStatic(self);
+            php.release(class.object);
+            extension.removeRequestShutdownCallback(self, onRequestShutdown);
+        }
+
+        pub fn onRequestShutdown(ptr: *anyopaque) void {
+            const self: *@This() = @ptrCast(@alignCast(ptr));
+            self.removeSymbolsFromGlobalNamespace() catch {};
         }
     };
 
@@ -179,8 +325,7 @@ pub const Struct = struct {
                 const ptr_value = php.createValuePointer(ptr);
                 try self.setProperty(N("ptr"), &ptr_value, null);
                 php.release(&self.table);
-                self.table = value.*;
-                php.addRef(&self.table);
+                self.table = php.reuse(value).*;
                 return;
             },
             .file => {
@@ -383,8 +528,7 @@ pub const Struct = struct {
                 const signal = if (args.signal) |av| get: {
                     const signal_obj = php.getValueObject(&av) catch return error.NotAbortSignal;
                     if (signal_obj.ce != ZigClassEntry.abort_signal_class) return error.NotAbortSignal;
-                    php.addRef(signal_obj);
-                    break :get AbortSignal.fromObject(signal_obj);
+                    break :get AbortSignal.fromObject(php.reuse(signal_obj));
                 } else try AbortSignal.create(args.timeout);
                 const ptr_value = php.createValuePointer(&signal.value);
                 try self.setProperty(N("ptr"), &ptr_value, null);

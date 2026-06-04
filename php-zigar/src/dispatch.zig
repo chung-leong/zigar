@@ -465,10 +465,7 @@ pub const CallDispatcher = struct {
         if (php.getStreamPath(strm)) |path_sc| {
             return php.createString(path_sc);
         } else if (php.getStreamWrapperProperty(strm, "path") catch null) |path_v| {
-            if (php.getValueString(path_v) catch null) |path| {
-                php.addRef(path);
-                return path;
-            }
+            if (php.getValueString(path_v) catch null) |path| return php.reuse(path);
         }
         return failure.report("stream wrapper does not have the property 'path'", .{});
     }
@@ -510,12 +507,12 @@ pub const CallDispatcher = struct {
             if (self.redirection_cb) |*cb| {
                 php.release(cb);
                 self.redirection_cb = null;
+                self.redirecting_root = false;
             }
             if (php.isCallable(arg)) {
-                self.redirection_cb = arg.*;
-                php.addRef(arg);
-                self.removeStream(fd) catch {};
+                self.redirection_cb = php.reuse(arg).*;
                 self.redirecting_root = true;
+                self.removeStream(fd) catch {};
                 return;
             }
         }
