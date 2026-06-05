@@ -55,7 +55,7 @@ pub const CallDispatcher = struct {
     multithread_enabled: bool = false,
     pipe_ptr: [*]std.posix.fd_t,
 
-    pub threadlocal var trapping_syscalls: bool = true;
+    pub threadlocal var trapping_syscalls: bool = false;
     pub threadlocal var event_loop: EventLoop(runScheduledTask) = .{};
 
     threadlocal var thread_initialized: bool = false;

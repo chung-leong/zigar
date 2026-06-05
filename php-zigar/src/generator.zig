@@ -30,10 +30,7 @@ pub const Generator = struct {
         self.* = .{
             .buffer = buf,
             .result = php.createValueNull(),
-            .callback = if (callback) |cb| init: {
-                php.addRef(&cb);
-                break :init cb;
-            } else null,
+            .callback = if (callback) |*cb| php.reuse(cb).* else null,
         };
         return self;
     }
@@ -49,6 +46,7 @@ pub const Generator = struct {
             // preserve the generator until the content source has been informed
             self.status = .released;
         }
+        if (self.callback) |*cb| php.release(cb);
     }
 
     pub fn moveForward(self: *@This()) !void {
@@ -84,13 +82,16 @@ pub const Generator = struct {
             else => {},
         }
         self.result = php.reuse(value).*;
+        self.status = if (php.isValueNull(value)) .finished else .resolved;
         if (self.transform) |tm| try tm.apply(&self.result);
-        if (!php.isValueNull(&self.result)) {
-            self.status = .resolved;
-            return true;
+        if (self.callback) |*cb| {
+            defer php.release(&self.result);
+            const args: []Value = @ptrCast(&self.result);
+            const retval = try php.invokeMethod(null, cb, args);
+            defer php.release(&retval);
+            return php.getValueType(&retval) != .false;
         } else {
-            self.status = .finished;
-            return false;
+            return self.status != .finished;
         }
     }
 
@@ -98,7 +99,7 @@ pub const Generator = struct {
         var arg_iter: ArgumentIterator = .init(ed);
         const ptr = arg_iter.next() orelse return error.Unexpected;
         const ptr_obj = php.getValueObject(ptr) catch unreachable;
-        const ptr_struct = ZigObject(structure.Optional).fromObject(ptr_obj).structure();
+        const ptr_struct = ZigObject(structure.Pointer).fromObject(ptr_obj).structure();
         const target = try ptr_struct.getValue(.none);
         const self = try accessor.getOpaqueTarget(@This(), &target);
         const result = arg_iter.next() orelse return error.Unexpected;

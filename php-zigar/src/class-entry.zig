@@ -954,7 +954,7 @@ pub const ZigClassEntry = struct {
         fn_static.controller_address = @intFromPtr(controller_buf.bytes.ptr);
         // add flags to argument members
         const arg_member = try self.getMember(.instance, 0);
-        const slot_usage = self.slot_usage;
+        const slot_usage = arg_member.class.slot_usage;
         var iter = arg_member.class.getMemberIterator(.instance);
         var index: usize = 0;
         while (iter.next()) |member| : (index += 1) {

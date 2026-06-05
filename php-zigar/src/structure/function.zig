@@ -209,16 +209,24 @@ pub const Function = struct {
                             if (self.info.transform) |tm| try tm.apply(&retval);
                             break :get retval;
                         }
-                        // wait for promise to resolve
                         promise.transform = self.info.transform;
-                        break :get try promise.await();
+                        if (promise.callback == null) {
+                            // wait for promise to resolve when there's no callback function
+                            break :get try promise.await();
+                        } else {
+                            break :get php.createValueNull();
+                        }
                     } else if (arg_struct.flags.has_generator) {
                         const generator_struct = try arg_struct.getSpecialArgument(Generator);
                         const generator = try generator_struct.getSpecialContext(Generator);
                         generator.transform = self.info.transform;
-                        // return generator
-                        const generator_obj = ZigObject(structure.Struct).fromStructure(generator_struct).object();
-                        break :get php.createValueObject(php.reuse(generator_obj));
+                        if (generator.callback == null) {
+                            // return generator
+                            const generator_obj = ZigObject(structure.Struct).fromStructure(generator_struct).object();
+                            break :get php.createValueObject(php.reuse(generator_obj));
+                        } else {
+                            break :get php.createValueNull();
+                        }
                     } else {
                         if (self.info.transform) |tm| try tm.apply(&retval);
                         break :get retval;

@@ -41,6 +41,7 @@ pub const Promise = struct {
             // preserve the promise object until the callback is called
             self.status = .released;
         }
+        if (self.callback) |*cb| php.release(cb);
     }
 
     pub fn await(self: *@This()) !Value {
@@ -49,11 +50,6 @@ pub const Promise = struct {
             self.fiber = try CallDispatcher.event_loop.getFiber();
             self.status = .waiting;
             try CallDispatcher.event_loop.suspendFiber(&self.fiber);
-        }
-        // std.debug.print("Promise.await() resumed\n", .{});
-        if (php.getValueType(&self.result) == .object) {
-            const result_obj = php.getValueObject(&self.result) catch unreachable;
-            self.result = try structure.invokeMethod(result_obj, "getValue", .{.none});
         }
         return self.result;
     }
@@ -68,8 +64,14 @@ pub const Promise = struct {
             else => {},
         }
         self.result = php.reuse(value).*;
-        if (self.transform) |tm| try tm.apply(&self.result);
         self.status = .resolved;
+        if (self.transform) |tm| try tm.apply(&self.result);
+        if (self.callback) |*cb| {
+            defer php.release(&self.result);
+            const args: []Value = @ptrCast(&self.result);
+            const retval = try php.invokeMethod(null, cb, args);
+            php.release(&retval);
+        }
     }
 
     pub fn createHandler() Value {
