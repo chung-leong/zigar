@@ -84,25 +84,36 @@ export fn php_zigar_info(_: *ModuleEntry) void {
     php.infoTableEnd();
 }
 
-const ExtensionOptions = extern struct {
-    disable_compilation: bool = false,
-    module_relative_path: [*:0]const u8 = "../lib",
+const Options = extern struct {
+    compilation: bool = true,
+    module_rel_path: [*:0]const u8 = "../lib",
     event_loop: [*:0]const u8 = "temporary",
     zig_path: [*:0]const u8 = "zig",
     zig_args: [*:0]const u8 = "",
-    build_dir: [*:0]const u8 = "null",
+    build_dir: [*:0]const u8 = "",
     build_dir_size: c_long = 4294967296,
+    optimize: [*:0]const u8 = "Debug",
     clean: bool = false,
 
-    const modifiable = .{ .disable_compilation = php.INI_SYSTEM };
+    const modifiable = .{ .compilation = php.INI_SYSTEM };
     const on_modified = struct {
         fn event_loop(entry: *php.IniEntry, new_value: *String, arg1: ?*anyopaque, arg2: ?*anyopaque, arg3: ?*anyopaque, stage: c_int) c_int {
-            const type_name = php.getStringContent(new_value);
-            if (CallDispatcher.event_loop.use(type_name)) {
-                return php.onUpdateString(entry, new_value, arg1, arg2, arg3, stage);
-            } else |_| {
-                return php.FAILURE;
-            }
+            const text = php.getStringContent(new_value);
+            return if (CallDispatcher.event_loop.use(text))
+                php.onUpdateString(entry, new_value, arg1, arg2, arg3, stage)
+            else |_|
+                php.FAILURE;
+        }
+
+        fn optimize(entry: *php.IniEntry, new_value: *String, arg1: ?*anyopaque, arg2: ?*anyopaque, arg3: ?*anyopaque, stage: c_int) c_int {
+            const text = php.getStringContent(new_value);
+            const found = inline for (.{ "Debug", "ReleaseSafe", "ReleaseSmall", "ReleaseFast" }) |name| {
+                if (std.mem.eql(u8, name, text)) break true;
+            } else false;
+            return if (found)
+                php.onUpdateString(entry, new_value, arg1, arg2, arg3, stage)
+            else
+                php.FAILURE;
         }
     };
 };
@@ -173,7 +184,7 @@ const functions = struct {
             if (arg_iter.len < 2 or arg_iter.len > 3) {
                 return failure.reportArgCountMismatch("zigar_compile", 2, 3, arg_iter.len);
             }
-            if (options.disable_compilation) {
+            if (!options.compilation) {
                 retval.* = php.createValueBool(false);
                 return;
             }
@@ -233,11 +244,11 @@ const functions = struct {
             else
                 src_filename;
             const mod_filename = try std.fmt.allocPrint(al, "{s}.zigar", .{src_name});
-            const mod_rel_path = std.mem.sliceTo(options.module_relative_path, 0);
+            const mod_rel_path = std.mem.sliceTo(options.module_rel_path, 0);
             defer php.allocator.free(mod_filename);
             const mod_path_resolved = try std.fs.path.resolve(al, &.{ src_dir, mod_rel_path, mod_filename });
             defer php.allocator.free(mod_path_resolved);
-            if (!options.disable_compilation) {
+            if (options.compilation) {
                 try ZigCompiler.compile(src_path_resolved, mod_path_resolved, params);
             }
             const so_name = try getSharedLibraryName(al, .this, .this);
@@ -296,11 +307,11 @@ const functions = struct {
             else
                 src_filename;
             const mod_filename = try std.fmt.allocPrint(al, "{s}.zigar", .{src_name});
-            const mod_rel_path = std.mem.sliceTo(options.module_relative_path, 0);
+            const mod_rel_path = std.mem.sliceTo(options.module_rel_path, 0);
             defer php.allocator.free(mod_filename);
             const mod_path_resolved = try std.fs.path.resolve(al, &.{ src_dir, mod_rel_path, mod_filename });
             defer php.allocator.free(mod_path_resolved);
-            if (!options.disable_compilation) {
+            if (options.compilation) {
                 try ZigCompiler.compile(src_path_resolved, mod_path_resolved, params);
             }
             const so_name = try getSharedLibraryName(al, .this, .this);
@@ -347,12 +358,13 @@ comptime {
     @export(&const_entries, .{ .name = "php_zigar_functions" });
 }
 
-pub threadlocal var options: ExtensionOptions = .{};
-pub threadlocal var ini_entries: [std.meta.fields(ExtensionOptions).len]php.IniEntryDef = undefined;
+pub threadlocal var options: Options = .{};
+pub threadlocal var ini_entries: [std.meta.fields(Options).len]php.IniEntryDef = undefined;
 
 fn registerIniEntries(module_number: c_int) !void {
-    const fields = std.meta.fields(ExtensionOptions);
+    const fields = std.meta.fields(Options);
     inline for (fields, 0..) |field, index| {
+        const name = "zigar." ++ field.name;
         const default_value: [*:0]const u8 = init: {
             switch (field.type) {
                 bool => {
@@ -380,16 +392,16 @@ fn registerIniEntries(module_number: c_int) !void {
             }
         };
         ini_entries[index] = .{
-            .name = field.name.ptr,
-            .name_length = field.name.len,
+            .name = name.ptr,
+            .name_length = name.len,
             .value = default_value,
             .value_length = @intCast(std.mem.len(default_value)),
-            .modifiable = switch (@hasField(@TypeOf(ExtensionOptions.modifiable), field.name)) {
-                true => @field(ExtensionOptions.modifiable, field.name),
+            .modifiable = switch (@hasField(@TypeOf(Options.modifiable), field.name)) {
+                true => @field(Options.modifiable, field.name),
                 false => php.INI_ALL,
             },
-            .on_modify = switch (@hasDecl(ExtensionOptions.on_modified, field.name)) {
-                true => php.transform(@field(ExtensionOptions.on_modified, field.name)),
+            .on_modify = switch (@hasDecl(Options.on_modified, field.name)) {
+                true => php.transform(@field(Options.on_modified, field.name)),
                 false => switch (field.type) {
                     bool => php.onUpdateBool,
                     c_long => php.onUpdateLong,
@@ -398,7 +410,7 @@ fn registerIniEntries(module_number: c_int) !void {
                 },
             },
             .displayer = null,
-            .mh_arg1 = @ptrFromInt(@offsetOf(ExtensionOptions, field.name)),
+            .mh_arg1 = @ptrFromInt(@offsetOf(Options, field.name)),
             .mh_arg2 = &options,
             .mh_arg3 = null,
         };

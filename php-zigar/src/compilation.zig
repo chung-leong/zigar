@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+const extension = @import("extension.zig");
 const failure = @import("failure.zig");
 const php = @import("php.zig");
 const HashTable = php.HashTable;
@@ -209,10 +210,10 @@ pub const ZigCompiler = struct {
             if (self.module_name.len > 8) self.module_name[0..8] else self.module_name,
             mod_sig[0..8],
         });
-        const build_dir_parent = self.options.build_dir orelse try std.fs.path.resolve(al, &.{
-            try getTempDir(al),
-            "zigar-build",
-        });
+        const build_dir_parent = if (self.options.build_dir.len > 0)
+            self.options.build_dir
+        else
+            try std.fs.path.resolve(al, &.{ try getTempDir(al), "zigar-build" });
         self.module_build_dir = try std.fs.path.resolve(al, &.{ build_dir_parent, build_dir_name });
         self.zigar_src_path_wo_sep = try std.fs.path.resolve(al, &.{ self.module_build_dir, "zigar" });
         self.zigar_src_path = try std.fmt.allocPrint(al, "{s}{c}", .{
@@ -237,18 +238,16 @@ pub const ZigCompiler = struct {
         var need_optimize = true;
         var need_target = true;
         var arg_list: std.ArrayList([]const u8) = .empty;
-        if (self.options.zig_args) |args| {
-            var splitter = std.mem.splitScalar(u8, args, ' ');
-            while (splitter.next()) |arg| {
-                if (arg.len == 0) continue;
-                if (arg[0] == '-') {
-                    if (std.mem.startsWith(u8, arg, "-Doptimize="))
-                        need_optimize = false
-                    else if (std.mem.startsWith(u8, arg, "-Dtarget="))
-                        need_target = false;
-                } else {
-                    need_build_cmd = false;
-                }
+        var splitter = std.mem.splitScalar(u8, self.options.zig_args, ' ');
+        while (splitter.next()) |arg| {
+            if (arg.len == 0) continue;
+            if (arg[0] == '-') {
+                if (std.mem.startsWith(u8, arg, "-Doptimize="))
+                    need_optimize = false
+                else if (std.mem.startsWith(u8, arg, "-Dtarget="))
+                    need_target = false;
+            } else {
+                need_build_cmd = false;
             }
         }
         if (need_build_cmd) try arg_list.insert(al, 0, "build");
@@ -407,14 +406,14 @@ pub fn getSharedLibraryName(allocator: std.mem.Allocator, platform: Platform, ar
 }
 
 pub const Options = struct {
+    zig_path: []const u8,
+    zig_args: []const u8,
+    build_dir: []const u8,
+    build_dir_size: usize,
+    clean: bool,
     arch: Arch = .default,
     platform: Platform = .default,
     optimize: Optimize = .default,
-    zig_path: []const u8 = "zig",
-    zig_args: ?[]const u8 = null,
-    build_dir: ?[]const u8 = null,
-    build_dir_size: usize = 4294967296,
-    clean: bool = false,
     use_libc: bool = true,
     use_llvm: ?bool = null,
     use_redirection: bool = true,
@@ -429,7 +428,19 @@ pub const Options = struct {
     eval_branch_quota: usize = 2000000,
 
     pub fn init(options: ?*HashTable) !@This() {
-        var self: @This() = .{};
+        var self: @This() = .{
+            .zig_path = std.mem.sliceTo(extension.options.zig_path, 0),
+            .zig_args = std.mem.sliceTo(extension.options.zig_args, 0),
+            .build_dir = std.mem.sliceTo(extension.options.build_dir, 0),
+            .build_dir_size = @intCast(@max(1048576, extension.options.build_dir_size)),
+            .clean = extension.options.clean,
+            .optimize = init: {
+                const name = std.mem.sliceTo(extension.options.optimize, 0);
+                break :init inline for (std.meta.fields(Optimize)) |field| {
+                    if (std.mem.eql(u8, field.name, name)) break @field(Optimize, field.name);
+                } else .default;
+            },
+        };
         const ht = options orelse return self;
         inline for (comptime std.meta.fields(@This())) |field| {
             if (php.getHashEntry(ht, field.name) catch null) |value| {
