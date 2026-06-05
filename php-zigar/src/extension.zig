@@ -40,7 +40,7 @@ pub fn removeRequestShutdownCallback(ptr: *anyopaque, fn_ptr: *const fn (*anyopa
     }
 }
 
-export fn php_zigar_mod_init(_: c_int, _: c_int) php.Result {
+export fn php_zigar_mod_init(_: c_int, module_number: c_int) php.Result {
     // fixed missing environ due to RTLD_DEEPBIND option to
     if (@intFromPtr(std.c.environ) == 0) {
         if (std.c.dlopen(null, .{ .LAZY = true, .NOLOAD = true })) |handle| {
@@ -51,13 +51,15 @@ export fn php_zigar_mod_init(_: c_int, _: c_int) php.Result {
             }
         }
     }
+    registerIniEntries(module_number) catch return php.FAILURE;
     js_compat.registerClasses() catch return php.FAILURE;
     errdefer js_compat.registerClasses();
     ZigClassEntry.registerGlobalClasses() catch return php.FAILURE;
     return php.SUCCESS;
 }
 
-export fn php_zigar_mod_shutdown(_: c_int, _: c_int) php.Result {
+export fn php_zigar_mod_shutdown(_: c_int, module_number: c_int) php.Result {
+    unregisterIniEntries(module_number);
     js_compat.unregisterClasses();
     ZigClassEntry.unregisterGlobalClasses();
     CallDispatcher.uninstallHandlers();
@@ -83,15 +85,27 @@ export fn php_zigar_info(_: *ModuleEntry) void {
 }
 
 const ExtensionOptions = extern struct {
-    disable_compilation: bool,
-    module_relative_path: [*:0]u8,
+    disable_compilation: bool = false,
+    module_relative_path: [*:0]const u8 = "../lib",
+    event_loop: [*:0]const u8 = "temporary",
+    zig_path: [*:0]const u8 = "zig",
+    zig_args: [*:0]const u8 = "",
+    build_dir: [*:0]const u8 = "null",
+    build_dir_size: c_long = 4294967296,
+    clean: bool = false,
+
+    const modifiable = .{ .disable_compilation = php.INI_SYSTEM };
+    const on_modified = struct {
+        fn event_loop(entry: *php.IniEntry, new_value: *String, arg1: ?*anyopaque, arg2: ?*anyopaque, arg3: ?*anyopaque, stage: c_int) c_int {
+            const type_name = php.getStringContent(new_value);
+            if (CallDispatcher.event_loop.use(type_name)) {
+                return php.onUpdateString(entry, new_value, arg1, arg2, arg3, stage);
+            } else |_| {
+                return php.FAILURE;
+            }
+        }
+    };
 };
-
-extern fn get_options() *ExtensionOptions;
-
-pub fn getOptions() *ExtensionOptions {
-    return get_options();
-}
 
 const functions = struct {
     pub const zigar_load = struct {
@@ -159,8 +173,7 @@ const functions = struct {
             if (arg_iter.len < 2 or arg_iter.len > 3) {
                 return failure.reportArgCountMismatch("zigar_compile", 2, 3, arg_iter.len);
             }
-            const extension_options = getOptions();
-            if (extension_options.disable_compilation) {
+            if (options.disable_compilation) {
                 retval.* = php.createValueBool(false);
                 return;
             }
@@ -168,14 +181,14 @@ const functions = struct {
             const src_path = try php.getValueStringContent(arg0);
             const arg1 = arg_iter.next().?;
             const mod_path = try php.getValueStringContent(arg1);
-            const options = if (arg_iter.next()) |arg2| try php.getValueHashTable(arg2) else null;
+            const params = if (arg_iter.next()) |arg2| try php.getValueHashTable(arg2) else null;
             const cwd_path = try std.process.getCwdAlloc(al);
             defer php.allocator.free(cwd_path);
             const src_path_resolved = try std.fs.path.resolve(al, &.{ cwd_path, src_path });
             defer php.allocator.free(src_path_resolved);
             const mod_path_resolved = try std.fs.path.resolve(al, &.{ cwd_path, mod_path });
             defer php.allocator.free(mod_path_resolved);
-            try ZigCompiler.compile(src_path_resolved, mod_path_resolved, options);
+            try ZigCompiler.compile(src_path_resolved, mod_path_resolved, params);
             retval.* = php.createValueBool(true);
         }
     };
@@ -208,12 +221,11 @@ const functions = struct {
             }
             const arg0 = arg_iter.next().?;
             const src_path = try php.getValueStringContent(arg0);
-            const options = if (arg_iter.next()) |arg1| try php.getValueHashTable(arg1) else null;
+            const params = if (arg_iter.next()) |arg1| try php.getValueHashTable(arg1) else null;
             const cwd_path = try std.process.getCwdAlloc(al);
             defer php.allocator.free(cwd_path);
             const src_path_resolved = try std.fs.path.resolve(al, &.{ cwd_path, src_path });
             defer php.allocator.free(src_path_resolved);
-            const extension_options = getOptions();
             const src_dir = std.fs.path.dirname(src_path_resolved) orelse return error.Unexpected;
             const src_filename = std.fs.path.basename(src_path_resolved);
             const src_name = if (std.mem.lastIndexOfScalar(u8, src_filename, '.')) |index|
@@ -221,12 +233,12 @@ const functions = struct {
             else
                 src_filename;
             const mod_filename = try std.fmt.allocPrint(al, "{s}.zigar", .{src_name});
-            const mod_rel_path = std.mem.sliceTo(extension_options.module_relative_path, 0);
+            const mod_rel_path = std.mem.sliceTo(options.module_relative_path, 0);
             defer php.allocator.free(mod_filename);
             const mod_path_resolved = try std.fs.path.resolve(al, &.{ src_dir, mod_rel_path, mod_filename });
             defer php.allocator.free(mod_path_resolved);
-            if (!extension_options.disable_compilation) {
-                try ZigCompiler.compile(src_path_resolved, mod_path_resolved, options);
+            if (!options.disable_compilation) {
+                try ZigCompiler.compile(src_path_resolved, mod_path_resolved, params);
             }
             const so_name = try getSharedLibraryName(al, .this, .this);
             defer al.free(so_name);
@@ -272,12 +284,11 @@ const functions = struct {
             const arg0 = arg_iter.next().?;
             const src_path = try php.getValueStringContent(arg0);
             const callback = arg_iter.next();
-            const options = if (arg_iter.next()) |arg2| try php.getValueHashTable(arg2) else null;
+            const params = if (arg_iter.next()) |arg2| try php.getValueHashTable(arg2) else null;
             const cwd_path = try std.process.getCwdAlloc(al);
             defer php.allocator.free(cwd_path);
             const src_path_resolved = try std.fs.path.resolve(al, &.{ cwd_path, src_path });
             defer php.allocator.free(src_path_resolved);
-            const extension_options = getOptions();
             const src_dir = std.fs.path.dirname(src_path_resolved) orelse return error.Unexpected;
             const src_filename = std.fs.path.basename(src_path_resolved);
             const src_name = if (std.mem.lastIndexOfScalar(u8, src_filename, '.')) |index|
@@ -285,12 +296,12 @@ const functions = struct {
             else
                 src_filename;
             const mod_filename = try std.fmt.allocPrint(al, "{s}.zigar", .{src_name});
-            const mod_rel_path = std.mem.sliceTo(extension_options.module_relative_path, 0);
+            const mod_rel_path = std.mem.sliceTo(options.module_relative_path, 0);
             defer php.allocator.free(mod_filename);
             const mod_path_resolved = try std.fs.path.resolve(al, &.{ src_dir, mod_rel_path, mod_filename });
             defer php.allocator.free(mod_path_resolved);
-            if (!extension_options.disable_compilation) {
-                try ZigCompiler.compile(src_path_resolved, mod_path_resolved, options);
+            if (!options.disable_compilation) {
+                try ZigCompiler.compile(src_path_resolved, mod_path_resolved, params);
             }
             const so_name = try getSharedLibraryName(al, .this, .this);
             defer al.free(so_name);
@@ -305,30 +316,6 @@ const functions = struct {
             // the method return a list of names, which we don't keep here
             const list = try root_static.exportSymbolsToGlobalNamespace(callback);
             php.release(&list);
-        }
-    };
-    pub const zigar_loop = struct {
-        pub const arg_info = [_]ArgInfo{
-            .{
-                .name = "value",
-                .type = .{
-                    .type_mask = php.MAY_BE_STRING,
-                    .ptr = null,
-                },
-            },
-        };
-        pub const info = FunctionInfo{
-            .required_num_args = 1,
-        };
-
-        pub fn run(ed: *ExecuteData, _: *Value) !void {
-            var arg_iter = ArgumentIterator.init(ed);
-            if (arg_iter.len != 1) {
-                return failure.reportArgCountMismatch("zigar_loop", 1, 1, arg_iter.len);
-            }
-            const arg0 = arg_iter.next().?;
-            const loop_type = try php.getValueStringContent(arg0);
-            try CallDispatcher.event_loop.use(loop_type);
         }
     };
 };
@@ -358,4 +345,68 @@ comptime {
     entries[decls.len] = std.mem.zeroes(FunctionEntry);
     const const_entries = entries;
     @export(&const_entries, .{ .name = "php_zigar_functions" });
+}
+
+pub threadlocal var options: ExtensionOptions = .{};
+pub threadlocal var ini_entries: [std.meta.fields(ExtensionOptions).len]php.IniEntryDef = undefined;
+
+fn registerIniEntries(module_number: c_int) !void {
+    const fields = std.meta.fields(ExtensionOptions);
+    inline for (fields, 0..) |field, index| {
+        const default_value: [*:0]const u8 = init: {
+            switch (field.type) {
+                bool => {
+                    if (field.default_value_ptr) |ptr| {
+                        const bool_ptr: *const bool = @ptrCast(ptr);
+                        if (bool_ptr.*) break :init "1";
+                    }
+                    break :init "";
+                },
+                c_long => {
+                    if (field.default_value_ptr) |ptr| {
+                        const long_ptr: *const c_long = @ptrCast(@alignCast(ptr));
+                        break :init std.fmt.comptimePrint("{d}", .{long_ptr.*});
+                    }
+                    break :init "";
+                },
+                [*:0]const u8 => {
+                    if (field.default_value_ptr) |ptr| {
+                        const ptr_ptr: *const [*:0]const u8 = @ptrCast(@alignCast(ptr));
+                        break :init ptr_ptr.*;
+                    }
+                    break :init "";
+                },
+                else => unreachable,
+            }
+        };
+        ini_entries[index] = .{
+            .name = field.name.ptr,
+            .name_length = field.name.len,
+            .value = default_value,
+            .value_length = @intCast(std.mem.len(default_value)),
+            .modifiable = switch (@hasField(@TypeOf(ExtensionOptions.modifiable), field.name)) {
+                true => @field(ExtensionOptions.modifiable, field.name),
+                false => php.INI_ALL,
+            },
+            .on_modify = switch (@hasDecl(ExtensionOptions.on_modified, field.name)) {
+                true => php.transform(@field(ExtensionOptions.on_modified, field.name)),
+                false => switch (field.type) {
+                    bool => php.onUpdateBool,
+                    c_long => php.onUpdateLong,
+                    [*:0]const u8 => php.onUpdateString,
+                    else => unreachable,
+                },
+            },
+            .displayer = null,
+            .mh_arg1 = @ptrFromInt(@offsetOf(ExtensionOptions, field.name)),
+            .mh_arg2 = &options,
+            .mh_arg3 = null,
+        };
+    }
+    const result = php.registerIniEntries(&ini_entries, module_number);
+    if (result != php.SUCCESS) return error.Failure;
+}
+
+fn unregisterIniEntries(module_number: c_int) void {
+    php.unregisterIniEntries(module_number);
 }

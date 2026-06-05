@@ -36,7 +36,8 @@ pub const FunctionEntry = extern struct {
 pub const FunctionInfo = php_h.zend_internal_function_info;
 pub const HashPosition = php_h.HashPosition;
 pub const HashTable = php_h.HashTable;
-pub const Uchar = php_h.zend_uchar;
+pub const IniEntryDef = php_h.zend_ini_entry_def;
+pub const IniEntry = php_h.zend_ini_entry;
 pub const Long = php_h.zend_long;
 pub const ModuleEntry = extern struct {
     size: c_ushort,
@@ -75,6 +76,7 @@ pub const Result = php_h.zend_result;
 pub const Stream = php_h.php_stream;
 pub const StreamContext = php_h.php_stream_context;
 pub const String = php_h.zend_string;
+pub const Uchar = php_h.zend_uchar;
 pub const Ulong = php_h.zend_ulong;
 pub const Value = php_h.zval;
 
@@ -1934,9 +1936,26 @@ fn getStreamWrapper(path: []const u8, comptime name: []const u8) !std.meta.Tuple
 
 pub const reportWrongParamCount = php_h.zend_wrong_param_count;
 
+pub const INI_USER = php_h.ZEND_INI_USER;
+pub const INI_PERDIR = php_h.ZEND_INI_PERDIR;
+pub const INI_SYSTEM = php_h.ZEND_INI_SYSTEM;
+pub const INI_ALL = php_h.ZEND_INI_ALL;
+
+pub const registerIniEntries = php_h.zend_register_ini_entries;
+pub const unregisterIniEntries = php_h.zend_unregister_ini_entries;
+pub const displayIniEntries = php_h.display_ini_entries;
+pub const onUpdateBool = php_h.OnUpdateBool;
+pub const onUpdateLong = php_h.OnUpdateLong;
+pub const onUpdateLongGEZero = php_h.OnUpdateLongGEZero;
+pub const onUpdateString = php_h.OnUpdateString;
+pub const onUpdateStringUnempty = php_h.OnUpdateStringUnempty;
+pub const iniBooleanDisplayer = php_h.zend_ini_boolean_displayer_cb;
+
 pub const infoTableStart = php_h.php_info_print_table_start;
 pub const infoTableHeader = php_h.php_info_print_table_header;
 pub const infoTableEnd = php_h.php_info_print_table_end;
+
+pub const OnModified = fn (*IniEntry, *String, *anyopaque, *anyopaque, *anyopaque, c_int) c_int;
 
 pub fn createHandlerTable(comptime T: type, comptime offset: comptime_int) ObjectHandlers {
     var handlers: ObjectHandlers = undefined;

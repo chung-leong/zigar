@@ -3,18 +3,11 @@
     #include "config.h"
 #endif
 
-PHP_INI_BEGIN()
-	STD_PHP_INI_BOOLEAN("zigar.disable_compilation", "0", PHP_INI_SYSTEM, OnUpdateBool, disable_compilation, zend_zigar_globals, zigar_globals)
-	STD_PHP_INI_ENTRY("zigar.module_relative_path", "../lib", PHP_INI_ALL, OnUpdateString, module_relative_path, zend_zigar_globals, zigar_globals)
-PHP_INI_END()
-
 PHP_MINIT_FUNCTION(zigar) {
- 	REGISTER_INI_ENTRIES();
     return php_zigar_mod_init(type, module_number);
 }
 
 PHP_MSHUTDOWN_FUNCTION(zigar) {
-	UNREGISTER_INI_ENTRIES();
     return php_zigar_mod_shutdown(type, module_number);
 }
 
@@ -28,14 +21,6 @@ PHP_RSHUTDOWN_FUNCTION(zigar) {
 
 PHP_MINFO_FUNCTION(zigar) {
     php_zigar_info(zend_module);
-}
-
-static PHP_GINIT_FUNCTION(zigar)
-{
-}
-
-static PHP_GSHUTDOWN_FUNCTION(zigar)
-{
 }
 
 zend_module_entry zigar_module_entry = {
@@ -52,12 +37,6 @@ zend_module_entry zigar_module_entry = {
 };
 
 ZEND_GET_MODULE(zigar)
-
-ZEND_DECLARE_MODULE_GLOBALS(zigar)
-
-zend_zigar_globals* get_options() {
-    return ZEND_MODULE_GLOBALS_BULK(zigar);
-}
 
 /* php_stream_to_zval() cannot be imported into Zig due to the presence of bit fields in php_stream */
 void set_zval_stream(zval* zv, php_stream* strm) {
