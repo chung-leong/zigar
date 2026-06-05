@@ -372,6 +372,20 @@ pub const Struct = struct {
             const ht = try php.getValueHashTable(value);
             const value_count = php.getHashLength(ht);
             var member_iter = class.getMemberIterator(.instance);
+            if (class.flags.@"struct".is_tuple) {
+                if (!php.isNormalArray(ht)) {
+                    return failure.report("Tuple expects an index array", .{});
+                }
+                if (value_count != member_iter.len) {
+                    return failure.reportLengthMismatch(class, member_iter.len, value_count);
+                }
+                var value_iter: HashTableIterator = .init(ht, .{});
+                while (value_iter.next()) |element| {
+                    const member = member_iter.next() orelse return error.Unexpected;
+                    try member.accessors.set(self, element);
+                }
+                return;
+            }
             // copy default values from template unless the number of initializers matches the number of fields
             if (value_count < static.total_field_count) {
                 if (class.instance.template.buffer) |def| {

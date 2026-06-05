@@ -572,13 +572,14 @@ pub fn ArrayLike(comptime S: type) type {
                 const len = self.getLength();
                 const bytes = try self.buffer.data(0, true);
                 const str_bytes = try php.getValueStringContent(value);
+                const class = ZigClassEntry.fromStructure(self);
                 if (bytes.len == len) {
                     const str_len = str_bytes.len;
-                    if (len != str_len) return reportLengthMismatch(self, len, str_len);
+                    if (len != str_len) return failure.reportLengthMismatch(class, len, str_len);
                     @memcpy(bytes, str_bytes);
                 } else if (bytes.len == len * 2) {
                     const str_len = std.unicode.calcWtf16LeLen(str_bytes) catch return error.IncorrectEncoding;
-                    if (len != str_len) return reportLengthMismatch(self, len, str_len);
+                    if (len != str_len) return failure.reportLengthMismatch(class, len, str_len);
                     const wtf16_ptr: [*]u16 = @ptrCast(@alignCast(bytes.ptr));
                     const wtf16_slice = wtf16_ptr[0..len];
                     _ = std.unicode.wtf8ToWtf16Le(wtf16_slice, str_bytes) catch return error.IncorrectEncoding;
@@ -698,16 +699,6 @@ pub fn ArrayLike(comptime S: type) type {
             const class = ZigClassEntry.fromStructure(self);
             const flags = class.getFlags(S);
             return @hasField(@TypeOf(flags), "is_string") and flags.is_string;
-        }
-
-        pub fn reportLengthMismatch(self: *S, expected: usize, received: usize) error{FailureReported} {
-            const class = ZigClassEntry.fromStructure(self);
-            return failure.report("{s} '{s}' expects {d} bytes, received {d}", .{
-                class.getStructureName(),
-                class.getName(),
-                expected,
-                received,
-            });
         }
 
         pub const fromObject = Super.fromObject;

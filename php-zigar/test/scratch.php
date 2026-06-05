@@ -5,13 +5,5 @@ require __DIR__ . '/../vendor/autoload.php';
 
 $m = zigar_use(__DIR__ . "/scratch.zig");
 
-try {
-    $m->returnInt(callback: function($arg) {
-        echo "arg = $arg\n";
-    });
-    $m->returnInts(callback: function($arg) {
-        echo "arg = $arg\n";
-    });
-} catch (Exception $e) {
-    $m->shutdown();
-}
+$tuple = new $m->Tuple([ 123, 0.25, true ]);
+print_r($tuple);

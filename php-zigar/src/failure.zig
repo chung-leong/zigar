@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const php = @import("php.zig");
+const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 
 pub const Error = error{
     AccessingDeallocatedMemory,
@@ -79,6 +80,15 @@ pub fn reportArgCountMismatch(fn_name: []const u8, max_arg_count: usize, min_arg
             min_arg_count,
         if (min_arg_count != 1) "s" else "",
         arg_count,
+    });
+}
+
+pub fn reportLengthMismatch(class: *ZigClassEntry, expected: usize, received: usize) error{FailureReported} {
+    return report("{s} '{s}' expects {d} bytes, received {d}", .{
+        class.getStructureName(),
+        class.getName(),
+        expected,
+        received,
     });
 }
 
