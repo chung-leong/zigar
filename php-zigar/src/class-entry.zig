@@ -82,10 +82,10 @@ pub const ZigClassEntry = struct {
                     if (member.class != class) {
                         member.class.releaseClassObject();
                     }
-                    if (member.accessors == .constant) {
-                        // constant accessor use allocated memory
-                        member.accessors.constant.deinit();
-                    }
+                }
+                if (member.accessors == .constant) {
+                    // constant accessor use allocated memory
+                    member.accessors.constant.deinit();
                 }
                 php.allocator.destroy(member);
             }
@@ -961,6 +961,9 @@ pub const ZigClassEntry = struct {
             if (try php.getPropertyWithType(?MemberFlags, member_flags, index)) |flags| {
                 member.flags = flags;
                 // update accessors, since member flags can change due to @"meta(zigar)".toArgumentXXX()
+                if (member.accessors == .constant) {
+                    member.accessors.constant.deinit();
+                }
                 member.accessors = try self.getAccessors(member, .instance, slot_usage);
             }
         }
