@@ -42,10 +42,7 @@ pub const AllocatorStatic = struct {
         if (arg_iter.len < 1 or arg_iter.len > 2) return failure.reportArgCountMismatch("alloc", 1, 2, arg_iter.len);
         const arg0 = arg_iter.next().?;
         const len = try php.getValueUlong(arg0);
-        const alignment_bu = if (arg_iter.next()) |arg1|
-            try php.getValueUlong(arg1)
-        else
-            1;
+        const alignment_bu = if (arg_iter.next()) |arg1| try php.getValueUlong(arg1) else 1;
         if (!std.math.isPowerOfTwo(alignment_bu)) return error.InvalidAligment;
         const alignment = std.mem.Alignment.fromByteUnits(alignment_bu);
         const allocator = try getAllocatorFromThis(&arg_iter);
