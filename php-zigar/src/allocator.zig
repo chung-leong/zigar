@@ -121,7 +121,6 @@ pub const AllocatorStatic = struct {
     fn getAllocatorFromThis(arg_iter: *ArgumentIterator) !*std.mem.Allocator {
         const this_obj = try php.getValueObject(arg_iter.this);
         const this_struct = ZigObject(structure.Struct).fromObject(this_obj).structure();
-        const bytes = try this_struct.buffer.data(0, false);
-        return @ptrCast(@alignCast(@constCast(bytes.ptr)));
+        return try this_struct.getAllocator();
     }
 };

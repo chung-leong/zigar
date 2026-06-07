@@ -8,10 +8,10 @@ const js_compat = @import("js-compat.zig");
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
 const ArgumentIterator = php.ArgumentIterator;
-const ArgInfo = php.ArgInfo;
 const FunctionInfo = php.FunctionInfo;
 const ExecuteData = php.ExecuteData;
 const FunctionEntry = php.FunctionEntry;
+const InteralArgInfo = php.InternalArgInfo;
 const ModuleEntry = php.ModuleEntry;
 const Object = php.Object;
 const String = php.String;
@@ -120,7 +120,7 @@ const Options = extern struct {
 
 const functions = struct {
     pub const zigar_load = struct {
-        pub const arg_info = [_]ArgInfo{
+        pub const arg_info = [_]InteralArgInfo{
             .{
                 .name = "path",
                 .type = .{
@@ -151,7 +151,7 @@ const functions = struct {
         }
     };
     pub const zigar_compile = struct {
-        pub const arg_info = [_]ArgInfo{
+        pub const arg_info = [_]InteralArgInfo{
             .{
                 .name = "source_path",
                 .type = .{
@@ -204,7 +204,7 @@ const functions = struct {
         }
     };
     pub const zigar_use = struct {
-        pub const arg_info = [_]ArgInfo{
+        pub const arg_info = [_]InteralArgInfo{
             .{
                 .name = "source_path",
                 .type = .{
@@ -259,7 +259,7 @@ const functions = struct {
         }
     };
     pub const zigar_import = struct {
-        pub const arg_info = [_]ArgInfo{
+        pub const arg_info = [_]InteralArgInfo{
             .{
                 .name = "source_path",
                 .type = .{
@@ -339,7 +339,7 @@ comptime {
         const handler = php.transform(function.run);
         @export(&handler, .{ .name = decl.name });
         const arg_info = init: {
-            var buf: [function.arg_info.len + 1]ArgInfo = undefined;
+            var buf: [function.arg_info.len + 1]InteralArgInfo = undefined;
             const info_ptr: *FunctionInfo = @ptrCast(&buf[0]);
             info_ptr.* = function.info;
             for (function.arg_info, 0..) |a, j| buf[j + 1] = a;

@@ -10,6 +10,8 @@ const Generator = @import("../generator.zig").Generator;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const FiberTransfer = php.FiberTransfer;
+const HashTable = php.HashTable;
+const N = php.getStaticString;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
@@ -178,6 +180,37 @@ pub const ArgStruct = struct {
             errdefer for (0..i) |j| php.release(&args[j]);
             args[i] = try acc.get(self);
         }
+    }
+
+    pub fn extractNamedArguments(self: *@This(), arg_info: []php.ArgInfo, ht_ptr: *?*HashTable) !void {
+        const class = ZigClassEntry.fromStructure(self);
+        var accepts: struct {
+            allocator: bool = false,
+            callback: bool = false,
+            abort_signal: bool = false,
+        } = .{};
+        var has_named: bool = false;
+        for (arg_info) |info| {
+            inline for (std.meta.fields(@TypeOf(accepts))) |field| {
+                if (php.matchString(info.name, field.name)) {
+                    @field(accepts, field.name) = true;
+                    has_named = true;
+                }
+            }
+        }
+        const args: ?*HashTable = if (has_named) php.createArray() else null;
+        errdefer if (args) |ht| php.release(ht);
+        const static = class.getStaticData(@This());
+        if (static.allocator) |m| {
+            if (accepts.allocator) {
+                const value = try m.accessors.get(self);
+                php.setHashEntry(args.?, N("allocator"), &value);
+                self.flags.has_allocator = true;
+            } else {
+                return failure.report("callback does not accept 'allocator' as an argument", .{});
+            }
+        }
+        ht_ptr.* = args;
     }
 
     pub fn getReturnValue(self: *@This()) !Value {

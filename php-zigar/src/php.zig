@@ -14,7 +14,7 @@ pub const php_h = @cImport({
     @cInclude("ext/standard/info.h");
 });
 
-pub const ArgInfo = php_h.zend_internal_arg_info;
+pub const ArgInfo = php_h.zend_arg_info;
 pub const Array = php_h.zend_array;
 pub const ClassEntry = php_h.zend_class_entry;
 pub const CompilerGlobals = php_h.zend_compiler_globals;
@@ -38,6 +38,7 @@ pub const HashPosition = php_h.HashPosition;
 pub const HashTable = php_h.HashTable;
 pub const IniEntryDef = php_h.zend_ini_entry_def;
 pub const IniEntry = php_h.zend_ini_entry;
+pub const InternalArgInfo = php_h.zend_internal_arg_info;
 pub const Long = php_h.zend_long;
 pub const ModuleEntry = extern struct {
     size: c_ushort,
@@ -1218,10 +1219,14 @@ pub fn isCallable(callable: *const Value) bool {
 }
 
 pub fn invokeMethod(container: ?*const Value, fn_name: *const Value, arguments: []const Value) !Value {
+    return invokeMethodEx(container, fn_name, arguments, null);
+}
+
+pub fn invokeMethodEx(container: ?*const Value, fn_name: *const Value, arguments: []const Value, named_params: ?*HashTable) !Value {
     var retval: Value = undefined;
     const args = @constCast(arguments.ptr);
     const len: u32 = @intCast(arguments.len);
-    if (php_h._call_user_function_impl(@constCast(container), @constCast(fn_name), &retval, len, args, null) != php_h.SUCCESS) {
+    if (php_h._call_user_function_impl(@constCast(container), @constCast(fn_name), &retval, len, args, named_params) != php_h.SUCCESS) {
         return error.Failure;
     }
     return retval;
@@ -1232,7 +1237,23 @@ pub fn invokeFunction(comptime name: []const u8, arguments: []const Value) !Valu
     return try invokeMethod(null, &callable, arguments);
 }
 
-pub fn emptyArgInfo(comptime count: usize) []const ArgInfo {
+pub fn getArgumentInfo(fn_name: *const Value) ![]php_h.zend_arg_info {
+    var fcc: php_h.zend_fcall_info_cache = undefined;
+    var error_string: [*c]u8 = undefined;
+    if (!php_h.zend_is_callable_ex(@constCast(fn_name), null, php_h.IS_CALLABLE_CHECK_SILENT, null, &fcc, &error_string)) {
+        const callable_name: *String = php_h.zend_get_callable_name_ex(@constCast(fn_name), null);
+        defer release(callable_name);
+        defer efree(error_string);
+        return failure.report("Invalid callback {s}, {s}", .{
+            getStringContent(callable_name),
+            error_string,
+        });
+    }
+    const common = &fcc.function_handler.*.common;
+    return common.arg_info[0..common.num_args];
+}
+
+pub fn emptyArgInfo(comptime count: usize) []const InternalArgInfo {
     const rem = @rem(count, 8);
     if (rem > 0) {
         const larger = emptyArgInfo(count + (8 - rem));
@@ -1240,7 +1261,7 @@ pub fn emptyArgInfo(comptime count: usize) []const ArgInfo {
     } else {
         const ns = struct {
             const array = init: {
-                var buffer: [count]ArgInfo = undefined;
+                var buffer: [count]InternalArgInfo = undefined;
                 for (&buffer) |*ptr| ptr.* = .{
                     .name = "",
                 };

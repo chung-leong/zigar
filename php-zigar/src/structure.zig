@@ -115,7 +115,7 @@ pub fn Parent(comptime S: type) type {
             if (@hasField(S, "buffer")) {
                 const obj = ZigObject(S).fromStructure(self).object();
                 const class = ZigClassEntry.fromObject(obj);
-                if (!self.buffer.flags.uninitialized) {
+                if (!self.buffer.flags.uninitialized and !self.buffer.flags.temporary) {
                     try class.registerObject(obj);
                 }
             }
