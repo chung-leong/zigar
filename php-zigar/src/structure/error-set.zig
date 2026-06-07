@@ -27,7 +27,7 @@ pub const ErrorSet = struct {
     pub const Static = struct {
         constant_acc: *accessor.Constant = undefined,
         error_set: *HashTable = undefined,
-        methods: *Methods = undefined,
+        methods: Methods = undefined,
 
         pub fn init(self: *@This(), class_obj: *Object) !void {
             const class = ZigClassEntry.fromObject(class_obj);
@@ -61,8 +61,7 @@ pub const ErrorSet = struct {
                     }
                 }
             }
-            self.methods = try php.allocator.create(Methods);
-            self.methods.* = .{
+            self.methods = .{
                 .getMessage = php.createTransformedFunction(handleGetMessage, "getMessage", 0, false),
                 .getCode = php.createTransformedFunction(handleGetCode, "getCode", 0, false),
                 .getFile = php.createTransformedFunction(handleGetFile, "getFile", 0, false),
@@ -83,7 +82,6 @@ pub const ErrorSet = struct {
             if (!php.isGarbage(global_set)) {
                 php.release(global_set);
             }
-            php.allocator.destroy(self.methods);
         }
 
         pub fn castValue(self: *@This(), value: *Value) !?Value {

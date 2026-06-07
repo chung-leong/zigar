@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 
 const AbortSignal = @import("../abort-signal.zig").AbortSignal;
 const accessor = @import("../accessor.zig");
+const AllocatorStatic = @import("../allocator.zig").AllocatorStatic;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
@@ -21,6 +22,7 @@ const php = @import("../php.zig");
 const N = php.getStaticString;
 const ArgumentIterator = php.ArgumentIterator;
 const ClassEntry = php.ClassEntry;
+const Function = php.Function;
 const HashTable = php.HashTable;
 const HashTableIterator = php.HashTableIterator;
 const Object = php.Object;
@@ -53,6 +55,7 @@ pub const Struct = struct {
         required_field_count: usize = 0,
         total_field_count: usize = 0,
         callback: ?*Object = null,
+        allocator_static: ?*AllocatorStatic = null,
         root: ?*Root = null,
 
         pub const StaticPropCache = cache.IdCache(.{ .length, .zigar }, "__", .{});
@@ -101,6 +104,11 @@ pub const Struct = struct {
                     const cb_obj = try cb_member.class.createObject(null, &closure, false);
                     self.callback = cb_obj;
                 },
+                .allocator => {
+                    const as = try php.allocator.create(AllocatorStatic);
+                    as.init();
+                    self.allocator_static = as;
+                },
                 else => {},
             }
         }
@@ -108,6 +116,7 @@ pub const Struct = struct {
         pub fn deinit(self: *@This()) void {
             if (self.callback) |cb| php.release(cb);
             if (self.root) |root| root.deinit();
+            if (self.allocator_static) |as| php.allocator.destroy(as);
         }
 
         pub fn markAsRoot(self: *@This()) !void {
@@ -490,6 +499,15 @@ pub const Struct = struct {
         return iter.len;
     }
 
+    pub fn findMethod(self: *@This(), name: *String) !?*php.Function {
+        const class = ZigClassEntry.fromStructure(self);
+        if (class.purpose == .allocator) {
+            const static = class.getStaticData(@This());
+            return static.allocator_static.?.findMethod(name);
+        }
+        return Super.findMethod(self, name);
+    }
+
     pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) Error!void {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.common.has_pointer) {
@@ -672,7 +690,6 @@ pub const Struct = struct {
     pub const getProperty = Super.getProperty;
     pub const setProperty = Super.setProperty;
     pub const propertyExists = Super.propertyExists;
-    pub const findMethod = Super.findMethod;
     pub const getConstructor = Super.getConstructor;
     pub const castObject = Super.castObject;
     pub const getMethod = Super.getMethod;

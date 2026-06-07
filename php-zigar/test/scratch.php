@@ -5,10 +5,12 @@ require __DIR__ . '/../vendor/autoload.php';
 
 $m = zigar_use(__DIR__ . "/scratch.zig");
 
-$s = $m->dupe("Hello world!", allocator: $m->allocator);
-echo $s, "\n";
-$m->free($s);
+$a = $m->allocator->dupe("Hello world!");
+print_r($a);
+$m->allocator->free($a);
 
-$s = new $m->Slice("Hello world!", allocator: $m->allocator);
-echo $s, "\n";
-$m->free($s);
+$ab = $m->allocator->alloc(60, 4);
+$ta = new Uint8Array($ab);
+$ta[3] = 3;
+print_r($ab);
+$m->allocator->free($ab);
