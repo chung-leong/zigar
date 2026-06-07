@@ -24,6 +24,7 @@ pub const ByteBuffer = struct {
         buffer: *ByteBuffer,
         string: *String,
         allocator: *const std.mem.Allocator,
+        php: void,
         none: void,
     } = .{ .none = {} },
 
@@ -63,12 +64,20 @@ pub const ByteBuffer = struct {
         std.debug.assert(self.flags.uninitialized);
         defer self.flags.uninitialized = false;
         if (len > 0) {
-            const al = allocator orelse &php.allocator;
-            const byte_ptr = al.rawAlloc(len, self.alignment, 0) orelse return error.OutOfMemory;
-            self.bytes = byte_ptr[0..len];
-            self.source = .{ .allocator = al };
+            if (allocator) |al| {
+                const byte_ptr = al.rawAlloc(len, self.alignment, 0) orelse return error.OutOfMemory;
+                self.bytes = byte_ptr[0..len];
+                // the allocator will be used to deallocate memory unless the buffer gets externalized,
+                // which happens after an object is fully constructed when a custom allocator is provided
+                self.source = .{ .allocator = al };
+            } else {
+                const byte_ptr = php.allocator.rawAlloc(len, self.alignment, 0) orelse return error.OutOfMemory;
+                self.bytes = byte_ptr[0..len];
+                self.source = .{ .php = {} };
+            }
         } else {
             self.bytes = &.{};
+            self.source = .{ .none = {} };
         }
     }
 
@@ -107,7 +116,7 @@ pub const ByteBuffer = struct {
 
     pub fn externalize(self: *@This()) bool {
         switch (self.source) {
-            .allocator => |al| if (al != &php.allocator) {
+            .allocator => {
                 self.source = .{ .none = {} };
                 return true;
             },
@@ -192,6 +201,7 @@ pub const ByteBuffer = struct {
                 .buffer => |buf| buf.release(),
                 .string => |str| php.release(str),
                 .allocator => |al| al.rawFree(self.bytes, self.alignment, 0),
+                .php => php.allocator.rawFree(self.bytes, self.alignment, 0),
                 .none => {},
             }
             php.allocator.destroy(self);
@@ -266,7 +276,7 @@ pub const ByteBuffer = struct {
                 const sc = php.getStringContent(str);
                 return .{ .address = @intFromPtr(sc.ptr), .len = sc.len };
             },
-            .allocator => {
+            .php, .allocator => {
                 return .{ .address = @intFromPtr(self.bytes.ptr), .len = self.bytes.len };
             },
             .none => {
@@ -279,7 +289,7 @@ pub const ByteBuffer = struct {
 
     pub fn getSourceAllocator(self: *const @This()) ?*const std.mem.Allocator {
         return switch (self.source) {
-            .allocator => |a| if (a != &php.allocator) a else null,
+            .allocator => |a| a,
             .buffer => |b| b.getSourceAllocator(),
             else => null,
         };
@@ -288,7 +298,7 @@ pub const ByteBuffer = struct {
     pub fn inZigMemory(self: *const @This()) bool {
         const base = self.getBase();
         return switch (base.source) {
-            .allocator => |a| a != &php.allocator,
+            .allocator => true,
             .none => true,
             else => false,
         };

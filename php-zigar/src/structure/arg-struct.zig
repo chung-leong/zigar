@@ -125,8 +125,8 @@ pub const ArgStruct = struct {
                         const arg_class = ZigClassEntry.fromObject(arg_obj);
                         if (arg_class.type == .pointer) {
                             const arg_struct = ZigObject(structure.Pointer).fromObject(arg_obj).structure();
+                            // get the target without increasing its refcount
                             const target_obj = try arg_struct.getTarget();
-                            defer php.release(target_obj);
                             arg_target = php.createValueObject(target_obj);
                             break :init &arg_target;
                         }

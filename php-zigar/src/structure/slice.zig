@@ -94,7 +94,7 @@ pub const Slice = struct {
                     const str_bytes = php.getStringContent(str);
                     if (element_size == 1) {
                         const using_string = use: {
-                            if (!read_only) break :use false;
+                            if (!read_only or allocator != null) break :use false;
                             if (class.flags.slice.has_sentinel) {
                                 // make sure sentinel is present
                                 const static = class.getStaticData(@This());

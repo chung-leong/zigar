@@ -5,5 +5,10 @@ require __DIR__ . '/../vendor/autoload.php';
 
 $m = zigar_use(__DIR__ . "/scratch.zig");
 
-$tuple = new $m->Tuple([ 123, 0.25, true ]);
-print_r($tuple);
+$s = $m->dupe("Hello world!", allocator: $m->allocator);
+echo $s, "\n";
+$m->free($s);
+
+$s = new $m->Slice("Hello world!", allocator: $m->allocator);
+echo $s, "\n";
+$m->free($s);
