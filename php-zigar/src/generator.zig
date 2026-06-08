@@ -146,17 +146,30 @@ pub const GeneratorStatic = struct {
     pub fn handleYield(ed: *ExecuteData, return_value: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
         if (arg_iter.len != 1) return failure.reportArgCountMismatch("yield", 1, 1, arg_iter.len);
-        const arg = arg_iter.next().?;
-        const generator_obj = try php.getValueObject(arg_iter.this);
-        const generator_struct = ZigObject(structure.Struct).fromObject(generator_obj).structure();
-        const ptr_value = try generator_struct.getProperty(N("ptr"), null);
+        const value = arg_iter.next().?;
+        const fn_value, const ptr_value = try getCallbackParams(arg_iter.this);
+        defer php.release(&fn_value);
         defer php.release(&ptr_value);
+        return_value.* = try php.invokeMethod(null, &fn_value, &.{ ptr_value, value.* });
+    }
+
+    pub fn pipe(generator: *const Value, value: *const Value) !void {
+        const fn_value, const ptr_value = try getCallbackParams(generator);
+        _ = fn_value;
+        _ = ptr_value;
+        _ = value;
+    }
+
+    fn getCallbackParams(generator: *const Value) !std.meta.Tuple(&.{ Value, Value }) {
+        const generator_obj = try php.getValueObject(generator);
+        const generator_struct = ZigObject(structure.Struct).fromObject(generator_obj).structure();
         const callback_value = try generator_struct.getProperty(N("callback"), null);
         const callback_obj = try php.getValueObject(&callback_value);
         defer php.release(callback_obj);
         const callback_struct = ZigObject(structure.Pointer).fromObject(callback_obj).structure();
         const fn_value = try callback_struct.getValue(.none);
-        defer php.release(&fn_value);
-        return_value.* = try php.invokeMethod(null, &fn_value, &.{ ptr_value, arg.* });
+        errdefer php.release(&fn_value);
+        const ptr_value = try generator_struct.getProperty(N("ptr"), null);
+        return .{ fn_value, ptr_value };
     }
 };

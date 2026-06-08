@@ -4,6 +4,7 @@ const AbortSignal = @import("../abort-signal.zig").AbortSignal;
 const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const CallDispatcher = @import("../dispatch.zig").CallDispatcher;
 const Generator = @import("../generator.zig").Generator;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
@@ -80,7 +81,7 @@ pub const Function = struct {
             return this_obj.ce == arg_class.entry() and this_obj != arg_class.object;
         }
 
-        pub fn runCallback(self: *@This(), callable: *Value, arg_bytes: []u8) !void {
+        pub fn runCallback(self: *@This(), callable: *Value, arg_bytes: []u8, futex_handle: usize) !void {
             // need to make a copy of the arguments, since arg_bytes are on the stack
             const arg_buffer = try ByteBuffer.create(self.argument_class.alignment);
             try arg_buffer.allocate(null, arg_bytes.len);
@@ -103,13 +104,31 @@ pub const Function = struct {
             var named_args: ?*HashTable = null;
             try arg_struct.extractNamedArguments(arg_info, &named_args);
             defer if (named_args) |ht| php.release(ht);
-            const result = try php.invokeMethodEx(null, callable, args, named_args);
-            defer php.release(&result);
-            // replace buffer so the retval gets written into the stack;
-            var stack_buffer: ByteBuffer = .init(arg_bytes);
-            arg_struct.buffer = &stack_buffer;
-            defer arg_struct.buffer = arg_buffer;
-            try arg_struct.setReturnValue(&result);
+            const early_release = arg_struct.flags.has_promise or arg_struct.flags.has_generator;
+            if (early_release) {
+                CallDispatcher.releaseCallingThread(futex_handle, .SUCCESS);
+                const result = php.invokeMethodEx(null, callable, args, named_args) catch get: {
+                    // TODO: get exception
+                    break :get php.createValueNull();
+                };
+                defer php.release(&result);
+                if (!arg_struct.flags.has_callback) {
+                    if (arg_struct.flags.has_promise) {
+                        arg_struct.resolvePromise(&result) catch {};
+                    } else if (arg_struct.flags.has_generator) {
+                        arg_struct.pipeFromGenerator(&result) catch {};
+                    }
+                }
+                return error.EarlyRelease;
+            } else {
+                const result = try php.invokeMethodEx(null, callable, args, named_args);
+                defer php.release(&result);
+                // replace buffer so the retval gets written into the stack;
+                var stack_buffer: ByteBuffer = .init(arg_bytes);
+                arg_struct.buffer = &stack_buffer;
+                defer arg_struct.buffer = arg_buffer;
+                try arg_struct.setReturnValue(&result);
+            }
         }
     };
     pub const Closure = struct {

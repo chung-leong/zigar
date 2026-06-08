@@ -7,6 +7,7 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const failure = @import("../failure.zig");
 const Generator = @import("../generator.zig").Generator;
+const GeneratorStatic = @import("../generator.zig").GeneratorStatic;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
 const FiberTransfer = php.FiberTransfer;
@@ -16,6 +17,7 @@ const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
 const Promise = @import("../promise.zig").Promise;
+const PromiseStatic = @import("../promise.zig").PromiseStatic;
 const structure = @import("../structure.zig");
 
 pub const ArgStruct = struct {
@@ -169,6 +171,20 @@ pub const ArgStruct = struct {
         }
     }
 
+    pub fn resolvePromise(self: *@This(), value: *const Value) !void {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        const promise = try static.promise.?.accessors.get(self);
+        return PromiseStatic.resolve(&promise, value);
+    }
+
+    pub fn pipeFromGenerator(self: *@This(), value: *const Value) !void {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        const generator = try static.generator.?.accessors.get(self);
+        return GeneratorStatic.pipe(&generator, value);
+    }
+
     pub fn getArgumentCount(self: *@This()) usize {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
@@ -205,16 +221,17 @@ pub const ArgStruct = struct {
         const static = class.getStaticData(@This());
         // add allocator to named arg hash if function accepts one
         if (static.allocator) |m| {
+            self.flags.has_allocator = true;
             if (accepts.allocator) {
                 const allocator = try m.accessors.get(self);
                 php.setHashEntry(args.?, N("allocator"), &allocator);
-                self.flags.has_allocator = true;
             } else {
                 return failure.report("callback does not accept 'allocator' as an argument", .{});
             }
         }
         // add callback for promise and generator if function accepts one
         if (static.promise) |m| {
+            self.flags.has_promise = true;
             if (accepts.callback) {
                 const callback_ht = php.createArray();
                 const promise = try m.accessors.get(self);
@@ -224,10 +241,10 @@ pub const ArgStruct = struct {
                 const callback = php.createValueArray(callback_ht);
                 php.setHashEntry(args.?, N("callback"), &callback);
                 self.flags.has_callback = true;
-                self.flags.has_promise = true;
             }
         }
         if (static.generator) |m| {
+            self.flags.has_generator = true;
             if (accepts.callback) {
                 const callback_ht = php.createArray();
                 const generator = try m.accessors.get(self);
@@ -237,15 +254,14 @@ pub const ArgStruct = struct {
                 const callback = php.createValueArray(callback_ht);
                 php.setHashEntry(args.?, N("callback"), &callback);
                 self.flags.has_callback = true;
-                self.flags.has_generator = true;
             }
         }
         // add abort signal to named arguments if function accepts one
-        if (static.allocator) |m| {
+        if (static.abort_signal) |m| {
+            self.flags.has_abort_signal = true;
             if (accepts.signal) {
                 const signal = try m.accessors.get(self);
                 php.setHashEntry(args.?, N("signal"), &signal);
-                self.flags.has_abort_signal = true;
             }
         }
         ht_ptr.* = args;

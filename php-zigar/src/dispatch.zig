@@ -131,11 +131,14 @@ pub const CallDispatcher = struct {
             return std.meta.intToEnum(E, final_value) catch E.FAULT;
         }
 
-        pub fn wake(handle: usize, result: E) !void {
-            const ptr: *Futex = @ptrFromInt(handle);
-            if (ptr.handle != handle) return error.Unexpected;
-            ptr.value.store(@intFromEnum(result), .release);
-            std.Thread.Futex.wake(&ptr.value, 1);
+        pub fn wake(handle: usize, result: E) void {
+            if (handle > 0) {
+                const ptr: *Futex = @ptrFromInt(handle);
+                if (ptr.handle == handle) {
+                    ptr.value.store(@intFromEnum(result), .release);
+                    std.Thread.Futex.wake(&ptr.value, 1);
+                }
+            }
         }
     };
     const fd_min = 0x00f0_0000;
@@ -240,16 +243,18 @@ pub const CallDispatcher = struct {
         if (written < 0) return error.Unexpected;
     }
 
+    pub fn releaseCallingThread(handle: usize, err: E) void {
+        Futex.wake(handle, err);
+    }
+
     pub fn handleJscall(self: *@This(), call: *Jscall) !E {
         if (in_main_thread) {
-            // std.debug.print("handleJscall, fd_id = {d}\n", .{call.fn_id});
-            const cb = self.findCallback(call.fn_id) orelse return .FAULT;
-            const arg_ptr: [*]u8 = @ptrFromInt(call.arg_address);
-            const arg_bytes = arg_ptr[0..call.arg_size];
-            // use the function structure's static method to run the callback
-            const fn_static = cb.class.getStaticData(structure.Function);
-            try fn_static.runCallback(&cb.callable, arg_bytes);
-            return .SUCCESS;
+            const status = self.performJsCall(call) catch |err| switch (err) {
+                error.EarlyRelease => return .SUCCESS,
+                else => .FAULT,
+            };
+            Futex.wake(call.futex_handle, status);
+            return status;
         } else {
             var futex: Futex = undefined;
             call.futex_handle = futex.init();
@@ -258,54 +263,70 @@ pub const CallDispatcher = struct {
         }
     }
 
+    fn performJsCall(self: *@This(), call: *Jscall) !E {
+        const cb = self.findCallback(call.fn_id) orelse return .FAULT;
+        const arg_ptr: [*]u8 = @ptrFromInt(call.arg_address);
+        const arg_bytes = arg_ptr[0..call.arg_size];
+        // use the function structure's static method to run the callback
+        const fn_static = cb.class.getStaticData(structure.Function);
+        try fn_static.runCallback(&cb.callable, arg_bytes, call.futex_handle);
+        return .SUCCESS;
+    }
+
     pub fn handleSyscall(self: *@This(), call: *Syscall) !E {
         if (in_main_thread) {
-            return switch (call.cmd) {
-                .open => try self.handleOpen(&call.u.open),
-                .close => try self.handleClose(&call.u.close),
-                .read => try self.handleRead(&call.u.read),
-                .readv => try self.handleVectorRead(&call.u.readv),
-                .pread => try self.handlePositionalRead(&call.u.pread),
-                .preadv => try self.handlePositionalVectorRead(&call.u.preadv),
-                .write => try self.handleWrite(&call.u.write),
-                .writev => try self.handleVectorWrite(&call.u.writev),
-                .pwrite => try self.handlePositionalWrite(&call.u.pwrite),
-                .pwritev => try self.handlePositionalVectorWrite(&call.u.pwritev),
-                .seek => try self.handleSeek(&call.u.seek),
-                .tell => try self.handleTell(&call.u.tell),
-                .getfl => try self.handleGetDescriptorFlags(&call.u.getfl),
-                .setfl => try self.handleSetDescriptorFlags(&call.u.setfl),
-                .getlk => try self.handleGetLock(&call.u.getlk),
-                .setlk => try self.handleSetLock(&call.u.setlk),
-                .fstat => try self.handleStat(&call.u.fstat),
-                .stat => try self.handleStat(&call.u.stat),
-                .ftruncate => try self.handleTruncate(&call.u.ftruncate),
-                .truncate => try self.handleTruncate(&call.u.truncate),
-                .futimes => try self.handleSettimes(&call.u.futimes),
-                .utimes => try self.handleSettimes(&call.u.utimes),
-                .advise => try self.handleAdvise(&call.u.advise),
-                .allocate => try self.handleAllocate(&call.u.allocate),
-                .sync => try self.handleSync(&call.u.sync),
-                .datasync => try self.handleDatasync(&call.u.datasync),
-                .getdents => try self.handleGetdents(&call.u.getdents),
-                .mkdir => try self.handleMkdir(&call.u.mkdir),
-                .rmdir => try self.handleRmdir(&call.u.rmdir),
-                .unlink => try self.handleUnlink(&call.u.unlink),
-                .readlink => try self.handleReadlink(&call.u.readlink),
-                .symlink => try self.handleSymlink(&call.u.symlink),
-                .rename => try self.handleRename(&call.u.rename),
-                .poll => try self.handlePoll(&call.u.poll),
-                .sendfile => try self.handleSendFile(&call.u.sendfile),
-                .copyfilerange => try self.handleCopyFileRange(&call.u.copyfilerange),
-                .environ => try self.handleGetEnvironmentStrings(&call.u.environ),
-                .write_stderr => try self.handleWriteStderr(&call.u.write_stderr),
-            };
+            const status = self.performSyscall(call) catch .FAULT;
+            Futex.wake(call.futex_handle, status);
+            return status;
         } else {
             var futex: Futex = undefined;
             call.futex_handle = futex.init();
-            try self.scheduleTask(.{ .syscall = call });
+            self.scheduleTask(.{ .syscall = call }) catch return .FAULT;
             return futex.wait();
         }
+    }
+
+    fn performSyscall(self: *@This(), call: *Syscall) !E {
+        return switch (call.cmd) {
+            .open => try self.handleOpen(&call.u.open),
+            .close => try self.handleClose(&call.u.close),
+            .read => try self.handleRead(&call.u.read),
+            .readv => try self.handleVectorRead(&call.u.readv),
+            .pread => try self.handlePositionalRead(&call.u.pread),
+            .preadv => try self.handlePositionalVectorRead(&call.u.preadv),
+            .write => try self.handleWrite(&call.u.write),
+            .writev => try self.handleVectorWrite(&call.u.writev),
+            .pwrite => try self.handlePositionalWrite(&call.u.pwrite),
+            .pwritev => try self.handlePositionalVectorWrite(&call.u.pwritev),
+            .seek => try self.handleSeek(&call.u.seek),
+            .tell => try self.handleTell(&call.u.tell),
+            .getfl => try self.handleGetDescriptorFlags(&call.u.getfl),
+            .setfl => try self.handleSetDescriptorFlags(&call.u.setfl),
+            .getlk => try self.handleGetLock(&call.u.getlk),
+            .setlk => try self.handleSetLock(&call.u.setlk),
+            .fstat => try self.handleStat(&call.u.fstat),
+            .stat => try self.handleStat(&call.u.stat),
+            .ftruncate => try self.handleTruncate(&call.u.ftruncate),
+            .truncate => try self.handleTruncate(&call.u.truncate),
+            .futimes => try self.handleSettimes(&call.u.futimes),
+            .utimes => try self.handleSettimes(&call.u.utimes),
+            .advise => try self.handleAdvise(&call.u.advise),
+            .allocate => try self.handleAllocate(&call.u.allocate),
+            .sync => try self.handleSync(&call.u.sync),
+            .datasync => try self.handleDatasync(&call.u.datasync),
+            .getdents => try self.handleGetdents(&call.u.getdents),
+            .mkdir => try self.handleMkdir(&call.u.mkdir),
+            .rmdir => try self.handleRmdir(&call.u.rmdir),
+            .unlink => try self.handleUnlink(&call.u.unlink),
+            .readlink => try self.handleReadlink(&call.u.readlink),
+            .symlink => try self.handleSymlink(&call.u.symlink),
+            .rename => try self.handleRename(&call.u.rename),
+            .poll => try self.handlePoll(&call.u.poll),
+            .sendfile => try self.handleSendFile(&call.u.sendfile),
+            .copyfilerange => try self.handleCopyFileRange(&call.u.copyfilerange),
+            .environ => try self.handleGetEnvironmentStrings(&call.u.environ),
+            .write_stderr => try self.handleWriteStderr(&call.u.write_stderr),
+        };
     }
 
     pub fn installHooks(self: *@This(), lib: *DynLib, redirect_syscalls: bool) !void {
@@ -398,17 +419,9 @@ pub const CallDispatcher = struct {
             const self = task.self;
             // std.debug.print("runScheduledTask\n", .{});
             switch (task.operation) {
-                .jscall => |call| {
-                    const err = self.handleJscall(call) catch .FAULT;
-                    Futex.wake(call.futex_handle, err) catch {};
-                },
-                .syscall => |call| {
-                    const err = self.handleSyscall(call) catch .FAULT;
-                    Futex.wake(call.futex_handle, err) catch {};
-                },
-                .disable => {
-                    self.disableMultithread() catch {};
-                },
+                .jscall => |call| _ = self.handleJscall(call) catch unreachable,
+                .syscall => |call| _ = self.handleSyscall(call) catch unreachable,
+                .disable => self.disableMultithread() catch unreachable,
             }
             event_loop.resumePendingFiber();
         }

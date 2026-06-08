@@ -128,20 +128,29 @@ pub const PromiseStatic = struct {
         } else return null;
     }
 
-    pub fn handleResolve(ed: *ExecuteData, return_value: *Value) !void {
+    pub fn handleResolve(ed: *ExecuteData, _: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
         if (arg_iter.len != 1) return failure.reportArgCountMismatch("resolve", 1, 1, arg_iter.len);
-        const arg = arg_iter.next().?;
-        const promise_obj = try php.getValueObject(arg_iter.this);
-        const promise_struct = ZigObject(structure.Struct).fromObject(promise_obj).structure();
-        const ptr_value = try promise_struct.getProperty(N("ptr"), null);
+        try resolve(arg_iter.this, arg_iter.next().?);
+    }
+
+    pub fn resolve(promise: *const Value, value: *const Value) !void {
+        const fn_value, const ptr_value = try getCallbackParams(promise);
+        defer php.release(&fn_value);
         defer php.release(&ptr_value);
+        _ = try php.invokeMethod(null, &fn_value, &.{ ptr_value, value.* });
+    }
+
+    fn getCallbackParams(promise: *const Value) !std.meta.Tuple(&.{ Value, Value }) {
+        const promise_obj = try php.getValueObject(promise);
+        const promise_struct = ZigObject(structure.Struct).fromObject(promise_obj).structure();
         const callback_value = try promise_struct.getProperty(N("callback"), null);
         const callback_obj = try php.getValueObject(&callback_value);
         defer php.release(callback_obj);
         const callback_struct = ZigObject(structure.Pointer).fromObject(callback_obj).structure();
         const fn_value = try callback_struct.getValue(.none);
-        defer php.release(&fn_value);
-        return_value.* = try php.invokeMethod(null, &fn_value, &.{ ptr_value, arg.* });
+        errdefer php.release(&fn_value);
+        const ptr_value = try promise_struct.getProperty(N("ptr"), null);
+        return .{ fn_value, ptr_value };
     }
 };
