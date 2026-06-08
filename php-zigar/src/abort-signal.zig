@@ -3,6 +3,7 @@ const std = @import("std");
 const accessor = @import("accessor.zig");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
+const failure = @import("failure.zig");
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
 const ArgumentIterator = php.ArgumentIterator;
@@ -16,6 +17,7 @@ const String = php.String;
 const Value = php.Value;
 const structure = @import("structure.zig");
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
+const ZigObject = @import("object.zig").ZigObject;
 
 pub const AbortSignal = struct {
     value: std.atomic.Value(u32) align(@sizeOf(*anyopaque)) = .init(0),
@@ -130,5 +132,49 @@ pub const AbortSignal = struct {
         if (@offsetOf(@This(), "php_portion") + @sizeOf(Object) != @sizeOf(@This())) {
             @compileError("PHP object is in the wrong position");
         }
+    }
+};
+
+pub const AbortSignalStatic = struct {
+    methods: Methods = undefined,
+
+    pub fn init(self: *@This(), _: *ZigClassEntry) !void {
+        self.methods = .{
+            .on = php.createTransformedFunction(handleOn, "on", 0, false),
+            .off = php.createTransformedFunction(handleOff, "off", 0, false),
+        };
+    }
+
+    pub fn deinit(_: *@This()) void {}
+
+    pub const Methods = struct {
+        on: Function,
+        off: Function,
+    };
+
+    pub fn findMethod(self: *@This(), name: *String) ?*php.Function {
+        return inline for (std.meta.fields(Methods)) |field| {
+            if (php.matchString(name, field.name)) break &@field(self.methods, field.name);
+        } else return null;
+    }
+
+    pub fn handleOn(ed: *ExecuteData, return_value: *Value) !void {
+        const state = try getState(ed);
+        return_value.* = php.createValueBool(state);
+    }
+
+    pub fn handleOff(ed: *ExecuteData, return_value: *Value) !void {
+        const state = try getState(ed);
+        return_value.* = php.createValueBool(!state);
+    }
+
+    fn getState(ed: *ExecuteData) !bool {
+        const arg_iter: ArgumentIterator = .init(ed);
+        if (arg_iter.len != 0) return failure.reportArgCountMismatch("on", 0, 0, arg_iter.len);
+        const signal_obj = try php.getValueObject(arg_iter.this);
+        const signal_struct = ZigObject(structure.Struct).fromObject(signal_obj).structure();
+        const bytes = try signal_struct.buffer.data(0, false);
+        const ptr: *const volatile i32 = @ptrCast(@alignCast(bytes.ptr));
+        return ptr.* != 0;
     }
 };

@@ -4,13 +4,18 @@ const accessor = @import("accessor.zig");
 const Transform = accessor.Transform;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
+const failure = @import("failure.zig");
 const php = @import("php.zig");
 const ArgumentIterator = php.ArgumentIterator;
 const ExecuteData = php.ExecuteData;
 const Fiber = php.Fiber;
+const Function = php.Function;
+const N = php.getStaticString;
 const Object = php.Object;
+const String = php.String;
 const Value = php.Value;
 const structure = @import("structure.zig");
+const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigObject = @import("object.zig").ZigObject;
 
 pub const Promise = struct {
@@ -90,5 +95,53 @@ pub const Promise = struct {
         const result = arg_iter.next() orelse return error.Unexpected;
         try self.resolve(result);
         return_value.* = php.createValueNull();
+    }
+};
+
+pub const PromiseStatic = struct {
+    methods: Methods = undefined,
+    callback: *Object = undefined,
+
+    pub const Methods = struct {
+        resolve: Function,
+    };
+
+    pub fn init(self: *@This(), class: *ZigClassEntry) !void {
+        const closure = Promise.createHandler();
+        defer php.release(&closure);
+        const cb_member = try class.getMember(.instance, "callback");
+        if (cb_member.class.type != .pointer) return error.Unexpected;
+        const cb_obj = try cb_member.class.createObject(null, &closure, false);
+        self.callback = cb_obj;
+        self.methods = .{
+            .resolve = php.createTransformedFunction(handleResolve, "resolve", 1, false),
+        };
+    }
+
+    pub fn deinit(self: *@This()) void {
+        php.release(self.callback);
+    }
+
+    pub fn findMethod(self: *@This(), name: *String) ?*php.Function {
+        return inline for (std.meta.fields(Methods)) |field| {
+            if (php.matchString(name, field.name)) break &@field(self.methods, field.name);
+        } else return null;
+    }
+
+    pub fn handleResolve(ed: *ExecuteData, return_value: *Value) !void {
+        var arg_iter: ArgumentIterator = .init(ed);
+        if (arg_iter.len != 1) return failure.reportArgCountMismatch("resolve", 1, 1, arg_iter.len);
+        const arg = arg_iter.next().?;
+        const promise_obj = try php.getValueObject(arg_iter.this);
+        const promise_struct = ZigObject(structure.Struct).fromObject(promise_obj).structure();
+        const ptr_value = try promise_struct.getProperty(N("ptr"), null);
+        defer php.release(&ptr_value);
+        const callback_value = try promise_struct.getProperty(N("callback"), null);
+        const callback_obj = try php.getValueObject(&callback_value);
+        defer php.release(callback_obj);
+        const callback_struct = ZigObject(structure.Pointer).fromObject(callback_obj).structure();
+        const fn_value = try callback_struct.getValue(.none);
+        defer php.release(&fn_value);
+        return_value.* = try php.invokeMethod(null, &fn_value, &.{ ptr_value, arg.* });
     }
 };

@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const AbortSignal = @import("../abort-signal.zig").AbortSignal;
+const AbortSignalStatic = @import("../abort-signal.zig").AbortSignalStatic;
 const accessor = @import("../accessor.zig");
 const AllocatorStatic = @import("../allocator.zig").AllocatorStatic;
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
@@ -15,6 +16,7 @@ const failure = @import("../failure.zig");
 const Error = failure.Error;
 const gd = @import("../gd.zig");
 const Generator = @import("../generator.zig").Generator;
+const GeneratorStatic = @import("../generator.zig").GeneratorStatic;
 const iterator = @import("../iterator.zig");
 const ZigObject = @import("../object.zig").ZigObject;
 const getObjectBuffer = @import("../object.zig").getObjectBuffer;
@@ -31,6 +33,7 @@ const Stream = php.Stream;
 const String = php.String;
 const Value = php.Value;
 const Promise = @import("../promise.zig").Promise;
+const PromiseStatic = @import("../promise.zig").PromiseStatic;
 const SpecialExports = @import("../special-exports.zig").SpecialExports;
 const structure = @import("../structure.zig");
 
@@ -54,8 +57,12 @@ pub const Struct = struct {
         } = null,
         required_field_count: usize = 0,
         total_field_count: usize = 0,
-        callback: ?*Object = null,
-        allocator_static: ?*AllocatorStatic = null,
+        special_static: union {
+            allocator: *AllocatorStatic,
+            promise: *PromiseStatic,
+            generator: *GeneratorStatic,
+            abort_signal: *AbortSignalStatic,
+        } = undefined,
         root: ?*Root = null,
 
         pub const StaticPropCache = cache.IdCache(.{ .length, .zigar }, "__", .{});
@@ -90,33 +97,34 @@ pub const Struct = struct {
                 if (member.flags.is_required) self.required_field_count += 1;
                 if (iter.currentName() != null) self.total_field_count += 1;
             }
-            // create callback function for promise or generator
             switch (class.purpose) {
-                inline .promise, .generator => |p| {
-                    const closure = switch (p) {
-                        .promise => Promise.createHandler(),
-                        .generator => Generator.createHandler(),
+                inline .allocator, .promise, .generator, .abort_signal => |t| {
+                    const SpecialStatic = switch (t) {
+                        .allocator => AllocatorStatic,
+                        .promise => PromiseStatic,
+                        .generator => GeneratorStatic,
+                        .abort_signal => AbortSignalStatic,
                         else => unreachable,
                     };
-                    defer php.release(&closure);
-                    const cb_member = try class.getMember(.instance, "callback");
-                    if (cb_member.class.type != .pointer) return error.Unexpected;
-                    const cb_obj = try cb_member.class.createObject(null, &closure, false);
-                    self.callback = cb_obj;
-                },
-                .allocator => {
-                    const as = try php.allocator.create(AllocatorStatic);
-                    as.init();
-                    self.allocator_static = as;
+                    const ss = try php.allocator.create(SpecialStatic);
+                    try ss.init(class);
+                    self.special_static = @unionInit(@TypeOf(self.special_static), @tagName(t), ss);
                 },
                 else => {},
             }
         }
 
         pub fn deinit(self: *@This()) void {
-            if (self.callback) |cb| php.release(cb);
             if (self.root) |root| root.deinit();
-            if (self.allocator_static) |as| php.allocator.destroy(as);
+            const class = ZigClassEntry.fromStatic(self);
+            switch (class.purpose) {
+                inline .allocator, .promise, .generator, .abort_signal => |t| {
+                    const ss = @field(self.special_static, @tagName(t));
+                    ss.deinit();
+                    php.allocator.destroy(ss);
+                },
+                else => {},
+            }
         }
 
         pub fn markAsRoot(self: *@This()) !void {
@@ -501,11 +509,14 @@ pub const Struct = struct {
 
     pub fn findMethod(self: *@This(), name: *String) !?*php.Function {
         const class = ZigClassEntry.fromStructure(self);
-        if (class.purpose == .allocator) {
-            const static = class.getStaticData(@This());
-            return static.allocator_static.?.findMethod(name);
-        }
-        return Super.findMethod(self, name);
+        const static = class.getStaticData(@This());
+        return switch (class.purpose) {
+            .allocator => static.special_static.allocator.findMethod(name),
+            .promise => static.special_static.promise.findMethod(name),
+            .generator => static.special_static.generator.findMethod(name),
+            .abort_signal => static.special_static.abort_signal.findMethod(name),
+            else => try Super.findMethod(self, name),
+        };
     }
 
     pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) Error!void {
@@ -551,7 +562,12 @@ pub const Struct = struct {
                 const ctx = try T.create(args.callback);
                 const ptr_value = php.createValuePointer(ctx.buffer.bytes.ptr);
                 try self.setProperty(N("ptr"), &ptr_value, null);
-                const callback_value = php.createValueObject(static.callback.?);
+                const ss = switch (T) {
+                    Promise => static.special_static.promise,
+                    Generator => static.special_static.generator,
+                    else => unreachable,
+                };
+                const callback_value = php.createValueObject(ss.callback);
                 try self.setProperty(N("callback"), &callback_value, null);
                 if (class.getMember(.instance, N("allocator")) catch null) |m| {
                     const allocator_value = try m.accessors.get(self);
@@ -587,11 +603,7 @@ pub const Struct = struct {
     pub fn freeObject(obj: *Object) void {
         const class = ZigClassEntry.fromObject(obj);
         const self = fromObject(obj);
-        // release special context object
         switch (class.purpose) {
-            .promise => if (self.getSpecialContext(Promise) catch null) |ctx| ctx.release(),
-            .generator => if (self.getSpecialContext(Generator) catch null) |ctx| ctx.release(),
-            .abort_signal => if (self.getSpecialContext(AbortSignal) catch null) |ctx| ctx.release(),
             .file => if (self.getProperty(N("handle"), null) catch null) |handle| {
                 if (getDescriptor(&handle) catch null) |fd| {
                     if (class.host.dispatcher.isVirtualStream(fd)) {

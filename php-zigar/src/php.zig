@@ -573,9 +573,9 @@ pub fn createValueStream(strm: *Stream) Value {
     return result;
 }
 
-pub fn createValueClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*ClassEntry, this_ptr: ?*Value) Value {
+pub fn createValueClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*ClassEntry, this_ptr: ?*const Value) Value {
     var result: Value = undefined;
-    php_h.zend_create_closure(&result, func, scope, called_scope, this_ptr);
+    php_h.zend_create_closure(&result, func, scope, called_scope, @constCast(this_ptr));
     return result;
 }
 
@@ -1293,7 +1293,7 @@ pub fn createFunctionEx(
     return .{
         .internal_function = .{
             .type = php_h.ZEND_INTERNAL_FUNCTION,
-            .function_name = name,
+            .function_name = name orelse getStaticString("(anonymous)"),
             .handler = func_ptr,
             .num_args = arg_count,
             .required_num_args = arg_count,

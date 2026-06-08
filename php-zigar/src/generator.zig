@@ -4,13 +4,18 @@ const accessor = @import("accessor.zig");
 const Transform = accessor.Transform;
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
+const failure = @import("failure.zig");
 const php = @import("php.zig");
 const ArgumentIterator = php.ArgumentIterator;
 const ExecuteData = php.ExecuteData;
 const Fiber = php.Fiber;
+const Function = php.Function;
+const N = php.getStaticString;
 const Object = php.Object;
+const String = php.String;
 const Value = php.Value;
 const structure = @import("structure.zig");
+const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigObject = @import("object.zig").ZigObject;
 
 pub const Generator = struct {
@@ -105,5 +110,53 @@ pub const Generator = struct {
         const result = arg_iter.next() orelse return error.Unexpected;
         const more = try self.resolve(result);
         return_value.* = php.createValueBool(more);
+    }
+};
+
+pub const GeneratorStatic = struct {
+    methods: Methods = undefined,
+    callback: *Object = undefined,
+
+    pub fn init(self: *@This(), class: *ZigClassEntry) !void {
+        const closure = Generator.createHandler();
+        defer php.release(&closure);
+        const cb_member = try class.getMember(.instance, "callback");
+        if (cb_member.class.type != .pointer) return error.Unexpected;
+        const cb_obj = try cb_member.class.createObject(null, &closure, false);
+        self.callback = cb_obj;
+        self.methods = .{
+            .yield = php.createTransformedFunction(handleYield, "yield", 1, false),
+        };
+    }
+
+    pub fn deinit(self: *@This()) void {
+        php.release(self.callback);
+    }
+
+    pub const Methods = struct {
+        yield: Function,
+    };
+
+    pub fn findMethod(self: *@This(), name: *String) ?*php.Function {
+        return inline for (std.meta.fields(Methods)) |field| {
+            if (php.matchString(name, field.name)) break &@field(self.methods, field.name);
+        } else return null;
+    }
+
+    pub fn handleYield(ed: *ExecuteData, return_value: *Value) !void {
+        var arg_iter: ArgumentIterator = .init(ed);
+        if (arg_iter.len != 1) return failure.reportArgCountMismatch("yield", 1, 1, arg_iter.len);
+        const arg = arg_iter.next().?;
+        const generator_obj = try php.getValueObject(arg_iter.this);
+        const generator_struct = ZigObject(structure.Struct).fromObject(generator_obj).structure();
+        const ptr_value = try generator_struct.getProperty(N("ptr"), null);
+        defer php.release(&ptr_value);
+        const callback_value = try generator_struct.getProperty(N("callback"), null);
+        const callback_obj = try php.getValueObject(&callback_value);
+        defer php.release(callback_obj);
+        const callback_struct = ZigObject(structure.Pointer).fromObject(callback_obj).structure();
+        const fn_value = try callback_struct.getValue(.none);
+        defer php.release(&fn_value);
+        return_value.* = try php.invokeMethod(null, &fn_value, &.{ ptr_value, arg.* });
     }
 };

@@ -25,6 +25,7 @@ pub const ArgStruct = struct {
         has_callback: bool = false,
         has_generator: bool = false,
         has_abort_signal: bool = false,
+        outgoing: bool = false,
     } align(@alignOf(*anyopaque)) = .{},
     table: Value = undefined,
     buffer: *ByteBuffer = undefined,
@@ -147,13 +148,14 @@ pub const ArgStruct = struct {
                 }
             };
         }
+        self.flags.outgoing = true;
         // initialize special arguments
         inline for (.{ .allocator, .promise, .generator, .abort_signal }) |t| {
             if (@field(static, @tagName(t))) |m| {
-                const value = try m.accessors.get(self);
-                const obj = try php.getValueObject(&value);
-                defer php.release(obj);
-                const a_struct = ZigObject(structure.Struct).fromObject(obj).structure();
+                const field_value = try m.accessors.get(self);
+                const field_obj = try php.getValueObject(&field_value);
+                defer php.release(field_obj);
+                const field_struct = ZigObject(structure.Struct).fromObject(field_obj).structure();
                 const T = switch (t) {
                     .allocator => std.mem.Allocator,
                     .promise => Promise,
@@ -161,7 +163,7 @@ pub const ArgStruct = struct {
                     .abort_signal => AbortSignal,
                     else => unreachable,
                 };
-                try a_struct.initSpecial(T, special_args);
+                try field_struct.initSpecial(T, special_args);
                 @field(self.flags, "has_" ++ @tagName(t)) = true;
             }
         }
@@ -187,7 +189,7 @@ pub const ArgStruct = struct {
         var accepts: struct {
             allocator: bool = false,
             callback: bool = false,
-            abort_signal: bool = false,
+            signal: bool = false,
         } = .{};
         var has_named: bool = false;
         for (arg_info) |info| {
@@ -201,13 +203,49 @@ pub const ArgStruct = struct {
         const args: ?*HashTable = if (has_named) php.createArray() else null;
         errdefer if (args) |ht| php.release(ht);
         const static = class.getStaticData(@This());
+        // add allocator to named arg hash if function accepts one
         if (static.allocator) |m| {
             if (accepts.allocator) {
-                const value = try m.accessors.get(self);
-                php.setHashEntry(args.?, N("allocator"), &value);
+                const allocator = try m.accessors.get(self);
+                php.setHashEntry(args.?, N("allocator"), &allocator);
                 self.flags.has_allocator = true;
             } else {
                 return failure.report("callback does not accept 'allocator' as an argument", .{});
+            }
+        }
+        // add callback for promise and generator if function accepts one
+        if (static.promise) |m| {
+            if (accepts.callback) {
+                const callback_ht = php.createArray();
+                const promise = try m.accessors.get(self);
+                const method = php.createValueString(N("resolve"));
+                _ = php.appendHashEntry(callback_ht, &promise);
+                _ = php.appendHashEntry(callback_ht, &method);
+                const callback = php.createValueArray(callback_ht);
+                php.setHashEntry(args.?, N("callback"), &callback);
+                self.flags.has_callback = true;
+                self.flags.has_promise = true;
+            }
+        }
+        if (static.generator) |m| {
+            if (accepts.callback) {
+                const callback_ht = php.createArray();
+                const generator = try m.accessors.get(self);
+                const method = php.createValueString(N("yield"));
+                _ = php.appendHashEntry(callback_ht, &generator);
+                _ = php.appendHashEntry(callback_ht, &method);
+                const callback = php.createValueArray(callback_ht);
+                php.setHashEntry(args.?, N("callback"), &callback);
+                self.flags.has_callback = true;
+                self.flags.has_generator = true;
+            }
+        }
+        // add abort signal to named arguments if function accepts one
+        if (static.allocator) |m| {
+            if (accepts.signal) {
+                const signal = try m.accessors.get(self);
+                php.setHashEntry(args.?, N("signal"), &signal);
+                self.flags.has_abort_signal = true;
             }
         }
         ht_ptr.* = args;
@@ -244,11 +282,41 @@ pub const ArgStruct = struct {
         return ZigObject(structure.Struct).fromObject(obj).structure();
     }
 
+    pub fn freeObject(obj: *Object) void {
+        // free special arguments
+        const self = fromObject(obj);
+        self.freeSpecialArguments() catch {};
+        Super.freeObject(obj);
+    }
+
+    fn freeSpecialArguments(self: *@This()) !void {
+        if (self.flags.outgoing) {
+            const class = ZigClassEntry.fromStructure(self);
+            const static = class.getStaticData(@This());
+            inline for (.{ .promise, .generator, .abort_signal }) |t| {
+                if (@field(static, @tagName(t))) |m| {
+                    if (@field(self.flags, "has_" ++ @tagName(t))) {
+                        const field_value = try m.accessors.get(self);
+                        const field_obj = try php.getValueObject(&field_value);
+                        defer php.release(field_obj);
+                        const field_struct = ZigObject(structure.Struct).fromObject(field_obj).structure();
+                        const T = switch (t) {
+                            .promise => Promise,
+                            .generator => Generator,
+                            .abort_signal => AbortSignal,
+                            else => unreachable,
+                        };
+                        if (field_struct.getSpecialContext(T) catch null) |ctx| ctx.release();
+                    }
+                }
+            }
+        }
+    }
+
     pub const setStorage = Super.setStorage;
     pub const getValue = Super.getValue;
     pub const propertyExists = Super.propertyExists;
     pub const getConstructor = Super.getConstructor;
-    pub const freeObject = Super.freeObject;
     pub const getGarbageCollection = Super.getGarbageCollection;
     const fromObject = Super.fromObject;
 };

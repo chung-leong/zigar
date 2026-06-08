@@ -17,13 +17,15 @@ const ZigObject = @import("object.zig").ZigObject;
 pub const AllocatorStatic = struct {
     methods: Methods = undefined,
 
-    pub fn init(self: *@This()) void {
+    pub fn init(self: *@This(), _: *ZigClassEntry) !void {
         self.methods = .{
             .alloc = php.createTransformedFunction(handleAlloc, "alloc", 2, false),
             .free = php.createTransformedFunction(handleFree, "free", 1, false),
             .dupe = php.createTransformedFunction(handleDupe, "dupe", 1, false),
         };
     }
+
+    pub fn deinit(_: *@This()) void {}
 
     pub const Methods = struct {
         alloc: Function,
