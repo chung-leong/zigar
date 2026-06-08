@@ -148,6 +148,7 @@ pub const ByteBuffer = struct {
             .flags = self.flags,
             .source = .{ .buffer = src_buf },
         };
+        new.flags.temporary = false;
         return new;
     }
 
