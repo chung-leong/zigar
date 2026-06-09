@@ -191,10 +191,10 @@ pub const ZigCompiler = struct {
         return self.arena.allocator();
     }
 
-    fn acquireConfig(self: *@This(), src_path: []const u8, mod_path: ?[]const u8, options: ?*HashTable) !void {
+    fn acquireConfig(self: *@This(), src_path: []const u8, mod_path: []const u8, options: ?*HashTable) !void {
         const al = self.allocator();
         self.options = try .init(options);
-        const mod_name = std.mem.sliceTo(std.fs.path.basename(mod_path orelse src_path), '.');
+        const mod_name = std.fs.path.stem(mod_path);
         self.module_name = mod_name;
         self.module_path = src_path;
         self.module_dir_wo_sep = std.fs.path.dirname(src_path) orelse return error.InvalidPath;
@@ -220,15 +220,7 @@ pub const ZigCompiler = struct {
             self.zigar_src_path_wo_sep,
             std.fs.path.sep,
         });
-        self.output_path = if (mod_path) |dest_path| try std.fs.path.resolve(al, &.{
-            dest_path,
-            try getSharedLibraryName(al, self.options.platform, self.options.arch),
-        }) else try std.fs.path.resolve(al, &.{
-            // save output in build folder; it'll be moved or deleted by caller
-            self.module_build_dir,
-            self.options.optimize.name(),
-            try std.fmt.allocPrint(al, "{s}.wasm", .{mod_name}),
-        });
+        self.output_path = try getSharedLibraryPath(al, mod_path, self.options.platform, self.options.arch);
         self.pdb_path = if (self.options.platform == .win32) try std.fs.path.resolve(al, &.{
             self.output_path,
             try std.fmt.allocPrint(al, "{s}.{s}.pdb", .{ self.options.platform.name(), self.options.arch.name() }),
@@ -435,11 +427,12 @@ pub const ZigCompiler = struct {
 };
 
 pub fn getSharedLibraryName(allocator: std.mem.Allocator, platform: Platform, arch: Arch) ![]const u8 {
-    return std.fmt.allocPrint(allocator, "{s}.{s}.{s}", .{
-        platform.name(),
-        arch.name(),
-        platform.ext(),
-    });
+    return std.fmt.allocPrint(allocator, "{s}.{s}.{s}", .{ platform.name(), arch.name(), platform.ext() });
+}
+
+pub fn getSharedLibraryPath(allocator: std.mem.Allocator, mod_path: []const u8, platform: Platform, arch: Arch) ![]const u8 {
+    const so_filename = try getSharedLibraryName(allocator, platform, arch);
+    return try std.fs.path.resolve(allocator, &.{ mod_path, so_filename });
 }
 
 pub const Options = struct {

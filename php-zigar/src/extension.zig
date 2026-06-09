@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const failure = @import("failure.zig");
-const getSharedLibraryName = @import("compilation.zig").getSharedLibraryName;
+const getSharedLibraryPath = @import("compilation.zig").getSharedLibraryPath;
 const js_compat = @import("js-compat.zig");
 const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
@@ -129,24 +129,17 @@ const functions = struct {
                 },
             },
         };
-        pub const info = FunctionInfo{
-            .required_num_args = 1,
-        };
+        pub const info = FunctionInfo{ .required_num_args = 1 };
 
         pub fn run(ed: *ExecuteData, retval: *Value) !void {
-            const al = php.allocator;
             var arg_iter = ArgumentIterator.init(ed);
             if (arg_iter.len < 1 or arg_iter.len > 2) {
                 return failure.reportArgCountMismatch("zigar_load", 1, 2, arg_iter.len);
             }
-            const arg0 = arg_iter.next().?;
-            const mod_path = try php.getValueStringContent(arg0);
-            const so_name = try getSharedLibraryName(al, .this, .this);
-            defer al.free(so_name);
-            const cwd_path = try std.process.getCwdAlloc(al);
-            defer php.allocator.free(cwd_path);
-            const so_path = try std.fs.path.resolve(al, &.{ cwd_path, mod_path, so_name });
-            defer al.free(so_path);
+            const mod_path = try getResolvedPath(php.allocator, arg_iter.next().?);
+            defer php.allocator.free(mod_path);
+            const so_path = try getSharedLibraryPath(php.allocator, mod_path, .this, .this);
+            defer php.allocator.free(so_path);
             retval.* = try ModuleHost.load(so_path);
         }
     };
@@ -162,7 +155,7 @@ const functions = struct {
             .{
                 .name = "module_path",
                 .type = .{
-                    .type_mask = php.MAY_BE_STRING,
+                    .type_mask = php.MAY_BE_STRING | php.MAY_BE_ARRAY,
                     .ptr = null,
                 },
             },
@@ -174,32 +167,38 @@ const functions = struct {
                 },
             },
         };
-        pub const info = FunctionInfo{
-            .required_num_args = 2,
-        };
+        pub const info = FunctionInfo{ .required_num_args = 1 };
 
         pub fn run(ed: *ExecuteData, retval: *Value) !void {
-            const al = php.allocator;
             var arg_iter = ArgumentIterator.init(ed);
-            if (arg_iter.len < 2 or arg_iter.len > 3) {
-                return failure.reportArgCountMismatch("zigar_compile", 2, 3, arg_iter.len);
+            if (arg_iter.len < 1 or arg_iter.len > 3) {
+                return failure.reportArgCountMismatch("zigar_compile", 1, 3, arg_iter.len);
             }
             if (!options.compilation) {
                 retval.* = php.createValueBool(false);
                 return;
             }
-            const arg0 = arg_iter.next().?;
-            const src_path = try php.getValueStringContent(arg0);
-            const arg1 = arg_iter.next().?;
-            const mod_path = try php.getValueStringContent(arg1);
-            const params = if (arg_iter.next()) |arg2| try php.getValueHashTable(arg2) else null;
-            const cwd_path = try std.process.getCwdAlloc(al);
-            defer php.allocator.free(cwd_path);
-            const src_path_resolved = try std.fs.path.resolve(al, &.{ cwd_path, src_path });
-            defer php.allocator.free(src_path_resolved);
-            const mod_path_resolved = try std.fs.path.resolve(al, &.{ cwd_path, mod_path });
-            defer php.allocator.free(mod_path_resolved);
-            try ZigCompiler.compile(src_path_resolved, mod_path_resolved, params);
+            const src_path = try php.getValueStringContent(arg_iter.next().?);
+            const mod_path, const params = get: {
+                if (arg_iter.next()) |arg1| {
+                    const arg1_type = php.getValueType(arg1);
+                    if (arg_iter.len == 2 and (arg1_type == .array or arg1_type == .object)) {
+                        const mod_path = try deriveModulePath(php.allocator, src_path);
+                        const params = try php.getValueHashTable(arg1);
+                        break :get .{ mod_path, params };
+                    } else {
+                        const mod_path = try getResolvedPath(php.allocator, arg1);
+                        errdefer php.allocator.free(mod_path);
+                        const params = if (arg_iter.next()) |arg2| try php.getValueHashTable(arg2) else null;
+                        break :get .{ mod_path, params };
+                    }
+                } else {
+                    const mod_path = try deriveModulePath(php.allocator, src_path);
+                    break :get .{ mod_path, null };
+                }
+            };
+            defer php.allocator.free(mod_path);
+            try ZigCompiler.compile(src_path, mod_path, params);
             retval.* = php.createValueBool(true);
         }
     };
@@ -220,41 +219,23 @@ const functions = struct {
                 },
             },
         };
-        pub const info = FunctionInfo{
-            .required_num_args = 1,
-        };
+        pub const info = FunctionInfo{ .required_num_args = 1 };
 
         pub fn run(ed: *ExecuteData, retval: *Value) !void {
-            const al = php.allocator;
             var arg_iter = ArgumentIterator.init(ed);
             if (arg_iter.len < 1 or arg_iter.len > 2) {
                 return failure.reportArgCountMismatch("zigar_use", 1, 2, arg_iter.len);
             }
-            const arg0 = arg_iter.next().?;
-            const src_path = try php.getValueStringContent(arg0);
+            const src_path = try getResolvedPath(php.allocator, arg_iter.next().?);
+            defer php.allocator.free(src_path);
             const params = if (arg_iter.next()) |arg1| try php.getValueHashTable(arg1) else null;
-            const cwd_path = try std.process.getCwdAlloc(al);
-            defer php.allocator.free(cwd_path);
-            const src_path_resolved = try std.fs.path.resolve(al, &.{ cwd_path, src_path });
-            defer php.allocator.free(src_path_resolved);
-            const src_dir = std.fs.path.dirname(src_path_resolved) orelse return error.Unexpected;
-            const src_filename = std.fs.path.basename(src_path_resolved);
-            const src_name = if (std.mem.lastIndexOfScalar(u8, src_filename, '.')) |index|
-                src_filename[0..index]
-            else
-                src_filename;
-            const mod_filename = try std.fmt.allocPrint(al, "{s}.zigar", .{src_name});
-            const mod_rel_path = std.mem.sliceTo(options.module_rel_path, 0);
-            defer php.allocator.free(mod_filename);
-            const mod_path_resolved = try std.fs.path.resolve(al, &.{ src_dir, mod_rel_path, mod_filename });
-            defer php.allocator.free(mod_path_resolved);
+            const mod_path = try deriveModulePath(php.allocator, src_path);
+            defer php.allocator.free(mod_path);
             if (options.compilation) {
-                try ZigCompiler.compile(src_path_resolved, mod_path_resolved, params);
+                try ZigCompiler.compile(src_path, mod_path, params);
             }
-            const so_name = try getSharedLibraryName(al, .this, .this);
-            defer al.free(so_name);
-            const so_path = try std.fs.path.resolve(al, &.{ mod_path_resolved, so_name });
-            defer al.free(so_path);
+            const so_path = try getSharedLibraryPath(php.allocator, mod_path, .this, .this);
+            defer php.allocator.free(so_path);
             retval.* = try ModuleHost.load(so_path);
         }
     };
@@ -282,53 +263,50 @@ const functions = struct {
                 },
             },
         };
-        pub const info = FunctionInfo{
-            .required_num_args = 1,
-        };
+        pub const info = FunctionInfo{ .required_num_args = 1 };
 
         pub fn run(ed: *ExecuteData, retval: *Value) !void {
-            const al = php.allocator;
             var arg_iter = ArgumentIterator.init(ed);
-            if (arg_iter.len < 1 or arg_iter.len > 2) {
-                return failure.reportArgCountMismatch("zigar_use", 1, 2, arg_iter.len);
+            if (arg_iter.len < 1 or arg_iter.len > 3) {
+                return failure.reportArgCountMismatch("zigar_import", 1, 3, arg_iter.len);
             }
-            const arg0 = arg_iter.next().?;
-            const src_path = try php.getValueStringContent(arg0);
+            const src_path = try getResolvedPath(php.allocator, arg_iter.next().?);
+            defer php.allocator.free(src_path);
+            const params = if (arg_iter.next()) |arg1| try php.getValueHashTable(arg1) else null;
             const callback = arg_iter.next();
-            const params = if (arg_iter.next()) |arg2| try php.getValueHashTable(arg2) else null;
-            const cwd_path = try std.process.getCwdAlloc(al);
-            defer php.allocator.free(cwd_path);
-            const src_path_resolved = try std.fs.path.resolve(al, &.{ cwd_path, src_path });
-            defer php.allocator.free(src_path_resolved);
-            const src_dir = std.fs.path.dirname(src_path_resolved) orelse return error.Unexpected;
-            const src_filename = std.fs.path.basename(src_path_resolved);
-            const src_name = if (std.mem.lastIndexOfScalar(u8, src_filename, '.')) |index|
-                src_filename[0..index]
-            else
-                src_filename;
-            const mod_filename = try std.fmt.allocPrint(al, "{s}.zigar", .{src_name});
-            const mod_rel_path = std.mem.sliceTo(options.module_rel_path, 0);
-            defer php.allocator.free(mod_filename);
-            const mod_path_resolved = try std.fs.path.resolve(al, &.{ src_dir, mod_rel_path, mod_filename });
-            defer php.allocator.free(mod_path_resolved);
+            const mod_path = try deriveModulePath(php.allocator, src_path);
+            defer php.allocator.free(mod_path);
             if (options.compilation) {
-                try ZigCompiler.compile(src_path_resolved, mod_path_resolved, params);
+                try ZigCompiler.compile(src_path, mod_path, params);
             }
-            const so_name = try getSharedLibraryName(al, .this, .this);
-            defer al.free(so_name);
-            const so_path = try std.fs.path.resolve(al, &.{ mod_path_resolved, so_name });
-            defer al.free(so_path);
-            const root_value = try ModuleHost.load(so_path);
-            retval.* = root_value;
+            const so_path = try getSharedLibraryPath(php.allocator, mod_path, .this, .this);
+            defer php.allocator.free(so_path);
+            const root = try ModuleHost.load(so_path);
+            retval.* = root;
             // export symbols from root namespace
-            const root_obj = php.getValueObject(&root_value) catch unreachable;
-            const root_class = ZigClassEntry.fromObject(root_obj);
+            const root_class = try ZigClassEntry.fromValue(&root);
             const root_static = root_class.getStaticData(structure.Struct);
             // the method return a list of names, which we don't keep here
             const list = try root_static.exportSymbolsToGlobalNamespace(callback);
             php.release(&list);
         }
     };
+
+    fn deriveModulePath(allocator: std.mem.Allocator, src_path: []const u8) ![]const u8 {
+        const src_dir = std.fs.path.dirname(src_path) orelse "";
+        const src_name = std.fs.path.stem(src_path);
+        const mod_filename = try std.fmt.allocPrint(allocator, "{s}.zigar", .{src_name});
+        const mod_rel_path = std.mem.sliceTo(options.module_rel_path, 0);
+        defer php.allocator.free(mod_filename);
+        return try std.fs.path.resolve(php.allocator, &.{ src_dir, mod_rel_path, mod_filename });
+    }
+
+    fn getResolvedPath(allocator: std.mem.Allocator, value: *Value) ![]const u8 {
+        const path = try php.getValueStringContent(value);
+        const cwd_path = try std.process.getCwdAlloc(allocator);
+        defer php.allocator.free(cwd_path);
+        return try std.fs.path.resolve(allocator, &.{ cwd_path, path });
+    }
 };
 
 comptime {

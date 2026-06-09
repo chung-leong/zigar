@@ -129,6 +129,11 @@ pub const ZigClassEntry = struct {
         return fromEntry(obj.ce);
     }
 
+    pub fn fromValue(value: *const Value) !*@This() {
+        const obj = try php.getValueObject(value);
+        return fromObject(obj);
+    }
+
     pub inline fn fromStructure(s: anytype) *@This() {
         const S = @TypeOf(s.*);
         const zig_obj = ZigObject(S).fromStructure(s);

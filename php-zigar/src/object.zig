@@ -31,6 +31,11 @@ pub fn ZigObject(comptime S: type) type {
             return @fieldParentPtr("php_portion", obj);
         }
 
+        pub fn fromValue(value: *const Value) !*@This() {
+            const obj = try php.getValueObject(value);
+            return fromObject(obj);
+        }
+
         pub inline fn fromStructure(s: *S) *@This() {
             return @alignCast(@fieldParentPtr("zig_portion", s));
         }
