@@ -3,15 +3,16 @@
 require __DIR__ . '/../vendor/autoload.php';
 // use Revolt\EventLoop;
 
-$m = zigar_compile(__DIR__ . "/scratch.zig");
-$m = zigar_use(__DIR__ . "/scratch.zig");
+zigar_compile(__DIR__ . "/scratch.zig", __DIR__ . "/../lib2/scratch.zigar");
+// $m = zigar_use(__DIR__ . "/scratch.zig");
+zigar_import(__DIR__ . "/../lib2/scratch.zigar");
 
-$m->callp(function($n) {
+callp(function($n) {
     echo "n = $n\n";
     return 'Hello world?';
 });
 
-$m->callg(function($n) {
+callg(function($n) {
     echo "n = $n\n";
     yield 'Hello world!';
     yield 'This is a test!';

@@ -426,12 +426,9 @@ pub const ZigCompiler = struct {
     pub extern "c" var __environ: [*:null]?[*:0]u8;
 };
 
-pub fn getSharedLibraryName(allocator: std.mem.Allocator, platform: Platform, arch: Arch) ![]const u8 {
-    return std.fmt.allocPrint(allocator, "{s}.{s}.{s}", .{ platform.name(), arch.name(), platform.ext() });
-}
-
 pub fn getSharedLibraryPath(allocator: std.mem.Allocator, mod_path: []const u8, platform: Platform, arch: Arch) ![]const u8 {
-    const so_filename = try getSharedLibraryName(allocator, platform, arch);
+    var buffer: [1024]u8 = undefined;
+    const so_filename = try std.fmt.bufPrint(&buffer, "{s}.{s}.{s}", .{ platform.name(), arch.name(), platform.ext() });
     return try std.fs.path.resolve(allocator, &.{ mod_path, so_filename });
 }
 

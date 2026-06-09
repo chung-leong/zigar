@@ -119,30 +119,6 @@ const Options = extern struct {
 };
 
 const functions = struct {
-    pub const zigar_load = struct {
-        pub const arg_info = [_]InteralArgInfo{
-            .{
-                .name = "path",
-                .type = .{
-                    .type_mask = php.MAY_BE_STRING,
-                    .ptr = null,
-                },
-            },
-        };
-        pub const info = FunctionInfo{ .required_num_args = 1 };
-
-        pub fn run(ed: *ExecuteData, retval: *Value) !void {
-            var arg_iter = ArgumentIterator.init(ed);
-            if (arg_iter.len < 1 or arg_iter.len > 2) {
-                return failure.reportArgCountMismatch("zigar_load", 1, 2, arg_iter.len);
-            }
-            const mod_path = try getResolvedPath(php.allocator, arg_iter.next().?);
-            defer php.allocator.free(mod_path);
-            const so_path = try getSharedLibraryPath(php.allocator, mod_path, .this, .this);
-            defer php.allocator.free(so_path);
-            retval.* = try ModuleHost.load(so_path);
-        }
-    };
     pub const zigar_compile = struct {
         pub const arg_info = [_]InteralArgInfo{
             .{
@@ -226,13 +202,22 @@ const functions = struct {
             if (arg_iter.len < 1 or arg_iter.len > 2) {
                 return failure.reportArgCountMismatch("zigar_use", 1, 2, arg_iter.len);
             }
-            const src_path = try getResolvedPath(php.allocator, arg_iter.next().?);
-            defer php.allocator.free(src_path);
-            const params = if (arg_iter.next()) |arg1| try php.getValueHashTable(arg1) else null;
-            const mod_path = try deriveModulePath(php.allocator, src_path);
+            const src_path, const mod_path = get: {
+                const path = try getResolvedPath(php.allocator, arg_iter.next().?);
+                errdefer php.allocator.free(path);
+                var dir = std.fs.openDirAbsolute(path, .{}) catch |err| {
+                    if (err != error.NotDir) return err;
+                    const mod_path = try deriveModulePath(php.allocator, path);
+                    break :get .{ path, mod_path };
+                };
+                dir.close();
+                break :get .{ null, path };
+            };
+            defer if (src_path) |path| php.allocator.free(path);
             defer php.allocator.free(mod_path);
-            if (options.compilation) {
-                try ZigCompiler.compile(src_path, mod_path, params);
+            const params = if (arg_iter.next()) |arg1| try php.getValueHashTable(arg1) else null;
+            if (src_path) |path| {
+                if (options.compilation) try ZigCompiler.compile(path, mod_path, params);
             }
             const so_path = try getSharedLibraryPath(php.allocator, mod_path, .this, .this);
             defer php.allocator.free(so_path);
@@ -270,14 +255,23 @@ const functions = struct {
             if (arg_iter.len < 1 or arg_iter.len > 3) {
                 return failure.reportArgCountMismatch("zigar_import", 1, 3, arg_iter.len);
             }
-            const src_path = try getResolvedPath(php.allocator, arg_iter.next().?);
-            defer php.allocator.free(src_path);
-            const params = if (arg_iter.next()) |arg1| try php.getValueHashTable(arg1) else null;
-            const callback = arg_iter.next();
-            const mod_path = try deriveModulePath(php.allocator, src_path);
+            const src_path, const mod_path = get: {
+                const path = try getResolvedPath(php.allocator, arg_iter.next().?);
+                errdefer php.allocator.free(path);
+                var dir = std.fs.openDirAbsolute(path, .{}) catch |err| {
+                    if (err != error.NotDir) return err;
+                    const mod_path = try deriveModulePath(php.allocator, path);
+                    break :get .{ path, mod_path };
+                };
+                dir.close();
+                break :get .{ null, path };
+            };
+            defer if (src_path) |path| php.allocator.free(path);
             defer php.allocator.free(mod_path);
-            if (options.compilation) {
-                try ZigCompiler.compile(src_path, mod_path, params);
+            const callback = arg_iter.next();
+            const params = if (arg_iter.next()) |arg2| try php.getValueHashTable(arg2) else null;
+            if (src_path) |path| {
+                if (options.compilation) try ZigCompiler.compile(path, mod_path, params);
             }
             const so_path = try getSharedLibraryPath(php.allocator, mod_path, .this, .this);
             defer php.allocator.free(so_path);
