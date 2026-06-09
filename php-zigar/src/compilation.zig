@@ -222,8 +222,8 @@ pub const ZigCompiler = struct {
         });
         self.output_path = try getSharedLibraryPath(al, mod_path, self.options.platform, self.options.arch);
         self.pdb_path = if (self.options.platform == .win32) try std.fs.path.resolve(al, &.{
-            self.output_path,
-            try std.fmt.allocPrint(al, "{s}.{s}.pdb", .{ self.options.platform.name(), self.options.arch.name() }),
+            mod_path,
+            try std.fmt.allocPrint(al, "{s}.pdb", .{std.fs.path.stem(self.output_path)}),
         }) else null;
         // parse user-supplied argument list
         var need_build_cmd = true;
@@ -396,22 +396,15 @@ pub const ZigCompiler = struct {
     fn showProgress(self: *@This(), finished: *std.atomic.Value(u32)) !void {
         const config = std.Io.tty.Config.detect(std.fs.File.stderr());
         if (config != .escape_codes) return;
-        // wait a little first, in case there's no need to recompile
-        if (std.Thread.Futex.timedWait(finished, 0, 250_000_000) != error.Timeout) return;
         var message_buffer: [4096]u8 = undefined;
-        const message = try std.fmt.bufPrint(&message_buffer, "Building module \"{s}\"", .{self.module_name});
-        const status_characters = [_][]const u8{
-            "⠋",
-            "⠙",
-            "⠹",
-            "⠸",
-            "⠼",
-            "⠴",
-            "⠦",
-            "⠧",
-            "⠇",
-            "⠏",
-        };
+        const fmt = "Building module \"{s}\" at optimization level \"{s}\" ({s}/{s})";
+        const message = try std.fmt.bufPrint(&message_buffer, fmt, .{
+            self.module_name,
+            self.options.optimize.name(),
+            @tagName(self.options.platform),
+            @tagName(self.options.arch),
+        });
+        const status_characters = [_][]const u8{ "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" };
         var index: usize = 0;
         while (finished.load(.unordered) == 0) {
             std.debug.print("\r\x1b[33m{s}\x1b[0m {s}", .{ status_characters[index], message });
@@ -464,7 +457,7 @@ pub const Options = struct {
             .optimize = init: {
                 const name = std.mem.sliceTo(extension.options.optimize, 0);
                 break :init inline for (std.meta.fields(Optimize)) |field| {
-                    if (std.mem.eql(u8, field.name, name)) break @field(Optimize, field.name);
+                    if (std.mem.eql(u8, @field(Optimize, field.name).name(), name)) break @field(Optimize, field.name);
                 } else .default;
             },
         };

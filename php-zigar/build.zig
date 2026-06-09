@@ -35,22 +35,5 @@ pub fn build(b: *std.Build) !void {
         wf.addCopyFileToSource(lib.getEmittedPdb(), "modules/php_zigar.pdb");
     wf.step.dependOn(&lib.step);
     b.getInstallStep().dependOn(&wf.step);
-
     b.installArtifact(lib);
-
-    // create tarball of the zig directory
-    _ = try std.process.Child.run(.{
-        .allocator = b.allocator,
-        .argv = &.{
-            "tar",
-            "-h", // follow symlink
-            "--exclude=.zig-cache", // ignore cache folder
-            "-I zstd -19", // use zstd, max compression level
-            "-cf", // create archive, specifying filename
-            "./src/zig.tar.zstd",
-            "-C", // change to directory first
-            "./zig",
-            ".",
-        },
-    });
 }

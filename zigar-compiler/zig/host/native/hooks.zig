@@ -912,7 +912,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn ftruncate64(fd: c_int, offset: off64_t, result: *c_int) callconv(.c) bool {
-            return ftruncateT(off_t, fd, offset, result);
+            return ftruncateT(off64_t, fd, offset, result);
         }
 
         fn ftruncateT(comptime T: type, fd: c_int, offset: T, result: *c_int) bool {
@@ -1634,7 +1634,7 @@ pub fn SyscallRedirector(comptime ModuleHost: type) type {
         }
 
         pub fn truncate64(path: [*:0]const u8, offset: off64_t, result: *c_int) callconv(.c) bool {
-            return truncateT(off_t, path, offset, result);
+            return truncateT(off64_t, path, offset, result);
         }
 
         fn truncateT(comptime T: type, path: [*:0]const u8, offset: T, result: *c_int) bool {
@@ -2321,8 +2321,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             } else {
                 const now = std.time.nanoTimestamp();
                 const nps = 1_000_000_000;
-                const s: c_longlong = @intCast(@divTrunc(now, nps));
-                const ns: c_longlong = @intCast(now - s * nps);
+                const s: c_long = @intCast(@divTrunc(now, nps));
+                const ns: c_long = @intCast(now - s * nps);
                 ts = .{ .{ .sec = s, .nsec = ns }, .{ .sec = s, .nsec = ns } };
             }
             var result: c_int = undefined;
@@ -2339,8 +2339,8 @@ pub fn PosixSubstitute(comptime redirector: type) type {
             } else {
                 const now = std.time.nanoTimestamp();
                 const nps = 1_000_000_000;
-                const s: c_longlong = @intCast(@divTrunc(now, nps));
-                const ns: c_longlong = @intCast(now - s * nps);
+                const s: c_long = @intCast(@divTrunc(now, nps));
+                const ns: c_long = @intCast(now - s * nps);
                 ts = .{ .{ .sec = s, .nsec = ns }, .{ .sec = s, .nsec = ns } };
             }
             var result: c_int = undefined;
@@ -4041,8 +4041,10 @@ pub fn Win32Substitute(comptime redirector: type) type {
                     }
                 } else if (dir_op and create_disposition == std.os.windows.FILE_CREATE) {
                     // creating a directory
-                    if (redirector.mkdirat(dirfd, path_wtf8, 0, &result)) {
+                    var int_result: c_int = undefined;
+                    if (redirector.mkdirat(dirfd, path_wtf8, 0, &int_result)) {
                         if (result < 0) return .ACCESS_DENIED;
+                        result = int_result;
                         handle.* = createTemporaryHandle(path_wtf8, dirfd, dir_op) catch return .NO_MEMORY;
                         io_status_block.Information = windows_h.FILE_CREATED;
                         return .SUCCESS;

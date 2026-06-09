@@ -392,7 +392,7 @@ pub fn createModule(comptime module_ns: type) Module {
         },
         .module_path = switch (builtin.mode) {
             .Debug => exporter.options.module_path.ptr,
-            else => std.fs.path.basename(exporter.options.module_path).ptr,
+            else => @ptrCast(std.fs.path.basename(exporter.options.module_path).ptr),
         },
         .imports = &imports,
         .exports = &.{

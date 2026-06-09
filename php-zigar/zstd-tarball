@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+cd "$(dirname "$0")"
+tar -h                 `# follow symlink`\
+--exclude=.zig-cache   `# ignore cache folder`\
+-I "zstd -19"          `# use zstd, max compression level`\
+-cf ./src/zig.tar.zstd `# create archive, specifying filename`\
+-C ./zig               `# change to directory first`\
+.

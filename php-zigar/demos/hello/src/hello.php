@@ -1,5 +1,7 @@
 <?php
 
-$m = zigar_use(__DIR__ . '/../zig/hello.zig');
+$m = zigar_import(__DIR__ . '/../zig/hello.zig', function($name, $type) {
+    return "cow_{$name}_${type}";
+});
 
-$m->hello();
+cow_hello_function();
