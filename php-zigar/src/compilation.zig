@@ -376,9 +376,16 @@ pub const ZigCompiler = struct {
         child.stdout_behavior = .Pipe;
         try child.spawn();
         try child.waitForSpawn();
-        var stdout: std.ArrayList(u8) = try .initCapacity(al, 1024 * 1024);
-        var stderr: std.ArrayList(u8) = try .initCapacity(al, 1024 * 1024);
-        try child.collectOutput(al, &stdout, &stderr, 1024 * 1024);
+        const max_output = 8 * 1024 * 1024;
+        var finished: std.atomic.Value(u32) = .init(0);
+        const thread = try std.Thread.spawn(.{}, showProgress, .{ self, &finished });
+        defer {
+            finished.store(1, .unordered);
+            thread.join();
+        }
+        var stdout: std.ArrayList(u8) = try .initCapacity(al, max_output / 8);
+        var stderr: std.ArrayList(u8) = try .initCapacity(al, max_output / 8);
+        child.collectOutput(al, &stdout, &stderr, max_output) catch {};
         const term = try child.wait();
         return switch (term) {
             .Exited => |exit_code| switch (exit_code) {
@@ -392,6 +399,36 @@ pub const ZigCompiler = struct {
             .Signal => error.CompilerInterrupted,
             .Unknown => error.UnknownError,
         };
+    }
+
+    fn showProgress(self: *@This(), finished: *std.atomic.Value(u32)) !void {
+        const config = std.Io.tty.Config.detect(std.fs.File.stderr());
+        if (config != .escape_codes) return;
+        // wait a little first, in case there's no need to recompile
+        if (std.Thread.Futex.timedWait(finished, 0, 250_000_000) != error.Timeout) return;
+        var message_buffer: [4096]u8 = undefined;
+        const message = try std.fmt.bufPrint(&message_buffer, "Building module \"{s}\"", .{self.module_name});
+        const status_characters = [_][]const u8{
+            "⠋",
+            "⠙",
+            "⠹",
+            "⠸",
+            "⠼",
+            "⠴",
+            "⠦",
+            "⠧",
+            "⠇",
+            "⠏",
+        };
+        var index: usize = 0;
+        while (finished.load(.unordered) == 0) {
+            std.debug.print("\r\x1b[33m{s}\x1b[0m {s}", .{ status_characters[index], message });
+            if (std.Thread.Futex.timedWait(finished, 0, 150_000_000) == error.Timeout) {
+                index += 1;
+                if (index >= status_characters.len) index = 0;
+            }
+        }
+        std.debug.print("\r\x1b[K", .{});
     }
 
     pub extern "c" var __environ: [*:null]?[*:0]u8;
