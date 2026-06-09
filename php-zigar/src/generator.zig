@@ -153,11 +153,20 @@ pub const GeneratorStatic = struct {
         return_value.* = try php.invokeMethod(null, &fn_value, &.{ ptr_value, value.* });
     }
 
-    pub fn pipe(generator: *const Value, value: *const Value) !void {
+    pub fn pipe(generator: *const Value, source: *const Value) !void {
         const fn_value, const ptr_value = try getCallbackParams(generator);
-        _ = fn_value;
-        _ = ptr_value;
-        _ = value;
+        defer php.release(&fn_value);
+        defer php.release(&ptr_value);
+        if (!isIterator(source)) return error.NotIterator;
+        const current = php.createValueString(N("current"));
+        const next = php.createValueString(N("next"));
+        while (true) {
+            const value = try php.invokeMethod(source, &current, &.{});
+            const retval = try php.invokeMethod(null, &fn_value, &.{ ptr_value, value });
+            const cont = try php.getValueBool(&retval);
+            if (!cont or php.isValueNull(&value)) break;
+            _ = try php.invokeMethod(source, &next, &.{});
+        }
     }
 
     fn getCallbackParams(generator: *const Value) !std.meta.Tuple(&.{ Value, Value }) {
@@ -171,5 +180,11 @@ pub const GeneratorStatic = struct {
         errdefer php.release(&fn_value);
         const ptr_value = try generator_struct.getProperty(N("ptr"), null);
         return .{ fn_value, ptr_value };
+    }
+
+    fn isIterator(value: *const Value) bool {
+        const generator_obj = php.getValueObject(value) catch return false;
+        const iterator = php.getInterface(.iterator);
+        return php.instanceOf(generator_obj.ce, iterator);
     }
 };

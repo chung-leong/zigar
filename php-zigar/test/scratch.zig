@@ -6,7 +6,6 @@ var gpa: std.heap.DebugAllocator(.{}) = .init;
 
 pub const allocator = gpa.allocator();
 
-pub const AllocatorCallback = fn (i32, std.mem.Allocator) []u8;
 pub const PromiseCallback = fn (i32, zigar.function.Promise([]const u8)) void;
 pub const GeneratorCallback = fn (i32, zigar.function.Generator(?[]const u8, false)) void;
 
@@ -16,16 +15,10 @@ fn resolve(ptr: *anyopaque, text: []const u8) void {
 
 fn yield(ptr: *anyopaque, text: ?[]const u8) bool {
     std.debug.print("g: ptr = {x}, s = {?s}\n", .{ @intFromPtr(ptr), text });
-    return false;
+    return true;
 }
 
 const some_ptr: *const anyopaque = &allocator;
-
-pub fn calla(cb: *const AllocatorCallback) void {
-    const text = cb(777, allocator);
-    std.debug.print("text = {s}\n", .{text});
-    allocator.free(text);
-}
 
 pub fn callp(cb: *const PromiseCallback) void {
     std.debug.print("ptr = {x}\n", .{@intFromPtr(some_ptr)});

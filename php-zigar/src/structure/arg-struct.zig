@@ -175,6 +175,7 @@ pub const ArgStruct = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const promise = try static.promise.?.accessors.get(self);
+        defer php.release(&promise);
         return PromiseStatic.resolve(&promise, value);
     }
 
@@ -182,6 +183,7 @@ pub const ArgStruct = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const generator = try static.generator.?.accessors.get(self);
+        defer php.release(&generator);
         return GeneratorStatic.pipe(&generator, value);
     }
 
