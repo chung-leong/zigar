@@ -158,8 +158,10 @@ pub const Slice = struct {
         const len = self.buffer.bytes.len;
         return if (static.element_shift) |shift|
             len >> shift
+        else if (static.element_size > 0)
+            len / static.element_size
         else
-            len / static.element_size;
+            0;
     }
 
     pub fn getElement(self: *@This(), index: usize) !Value {

@@ -51,7 +51,6 @@ pub const ZigClassEntry = struct {
     } = .{},
     slot_usage: SlotUsage = .none,
     static_data: StaticData = undefined,
-    // gc_buffer: ?[]Value = null,
 
     pub const ScopeType = enum { instance, static };
 
@@ -262,13 +261,8 @@ pub const ZigClassEntry = struct {
                 },
             }
         }
-        // if (self.gc_buffer) |buf| php.allocator.free(buf);
         const ce = self.entry();
         if (ce.name) |n| php.release(n);
-        if (ce.unnamed_2.interfaces) |ptr| {
-            const list = ptr[0..@as(usize, ce.num_interfaces)];
-            php.allocator.free(list);
-        }
         php.allocator.destroy(self);
     }
 
@@ -665,7 +659,10 @@ pub const ZigClassEntry = struct {
             else => {},
         }
         if (count == 0) return &.{};
-        const interfaces = try php.allocator.alloc(*ClassEntry, count);
+        // PHP expects the list to be libc heap memory and will call free() on it
+        const bytes = php.malloc(@sizeOf(*ClassEntry) * count);
+        const interface_ptr: [*]*ClassEntry = @ptrCast(@alignCast(bytes));
+        const interfaces = interface_ptr[0..count];
         @memcpy(interfaces, buffer[0..count]);
         return interfaces;
     }

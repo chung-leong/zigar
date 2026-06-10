@@ -65,10 +65,26 @@ final class FunctionPointerTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/returning-slice.zig');
         $f1 = function($allocator) {
-            print_r($allocator);
+            echo "Callback 1 invoked!\n";
             return $allocator->dupe('Hello world!');
         };
+        $f2 = function($allocator) {
+            echo "Callback 2 invoked!\n";
+            $ab = $allocator->alloc(8 * 4, 8);
+            $ta = new Float64Array($ab);
+            for ($i = 0; $i < count($ta); $i++) $ta[$i] = $i * 100;
+            return $ta;
+        };
+
+        $this->expectOutputString(<<<OUTPUT
+        Callback 1 invoked!
+        Hello world!
+        Callback 2 invoked!
+        { 0, 100, 200, 300 }
+
+        OUTPUT);
         $m->printString($f1);
+        $m->printArray($f2);
     }
 
     public function testThrowWhenJavascriptFunctionIsUsedAsTargetOfPointerToVariadicFunction(): void
