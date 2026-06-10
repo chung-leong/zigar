@@ -5,6 +5,7 @@ const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const CallDispatcher = @import("../dispatch.zig").CallDispatcher;
+const failure = @import("../failure.zig");
 const Generator = @import("../generator.zig").Generator;
 const ZigObject = @import("../object.zig").ZigObject;
 const php = @import("../php.zig");
@@ -178,6 +179,10 @@ pub const Function = struct {
     fn createThunk(self: *@This(), value: *const Value) !void {
         if (!php.isCallable(value)) return error.NotCallable;
         const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        if (static.argument_class.type == .variadic_struct) {
+            return failure.report("variadic function pointer cannot point to a PHP function", .{});
+        }
         const thunk_address = try class.host.dispatcher.createJsThunk(class, @constCast(value));
         const ptr: [*]u8 = @ptrFromInt(thunk_address);
         self.buffer.bytes = ptr[0..0];

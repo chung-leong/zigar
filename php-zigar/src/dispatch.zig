@@ -186,24 +186,28 @@ pub const CallDispatcher = struct {
     }
 
     pub fn createJsThunk(self: *@This(), class: *ZigClassEntry, callable: *Value) !usize {
-        const fn_static = class.getStaticData(structure.Function);
-        const controller_address = fn_static.controller_address;
-        if (controller_address == 0) return error.Unexpected;
+        const controller_address = try getControllerAddress(class);
         var thunk_address: usize = 0;
-        const module = self.host.module;
         const fn_id = try self.saveCallback(class, callable);
-        _ = module.exports.create_js_thunk(controller_address, fn_id, &thunk_address);
+        const exports = self.host.module.exports;
+        const result = exports.create_js_thunk(controller_address, fn_id, &thunk_address);
+        if (result != .SUCCESS) return error.Failure;
         return thunk_address;
     }
 
     pub fn destroyJsThunk(self: *@This(), class: *ZigClassEntry, thunk_address: usize) !void {
-        const fn_static = class.getStaticData(structure.Function);
-        const controller_address = fn_static.controller_address;
+        const controller_address = try getControllerAddress(class);
         var fn_id: usize = 0;
-        const module = self.host.module;
-        if (module.exports.destroy_js_thunk(controller_address, thunk_address, &fn_id) == .SUCCESS) {
+        const exports = self.host.module.exports;
+        if (exports.destroy_js_thunk(controller_address, thunk_address, &fn_id) == .SUCCESS) {
             self.deleteCallback(fn_id);
         }
+    }
+
+    fn getControllerAddress(class: *ZigClassEntry) !usize {
+        const fn_static = class.getStaticData(structure.Function);
+        const controller_address = fn_static.controller_address;
+        return if (controller_address != 0) controller_address else error.Unexpected;
     }
 
     fn saveCallback(self: *@This(), class: *ZigClassEntry, callable: *Value) !usize {
@@ -287,7 +291,7 @@ pub const CallDispatcher = struct {
     }
 
     fn performSyscall(self: *@This(), call: *Syscall) !E {
-        return switch (call.cmd) {
+        const status = switch (call.cmd) {
             .open => try self.handleOpen(&call.u.open),
             .close => try self.handleClose(&call.u.close),
             .read => try self.handleRead(&call.u.read),
@@ -327,6 +331,7 @@ pub const CallDispatcher = struct {
             .environ => try self.handleGetEnvironmentStrings(&call.u.environ),
             .write_stderr => try self.handleWriteStderr(&call.u.write_stderr),
         };
+        return status;
     }
 
     pub fn installHooks(self: *@This(), lib: *DynLib, redirect_syscalls: bool) !void {

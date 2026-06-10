@@ -22,8 +22,13 @@ final class FunctionPointerTest extends ZigarTestCase
             return $b->a;
         };
         $result = $m->call($f);
-        print_r($saved->object);
-        print_r($result);
+        $this->assertEquals($saved->object, (object) [
+            'a' => (object) [ 'number1' => 123, 'number2' => 456 ],
+            'b' => 3.141592653589793,
+        ]);
+        $this->assertEquals($result->__plain, (object) [
+            'number1' => 123, 'number2' => 456
+        ]);
     }
 
     public function testCorrectlyPassArrayArguments(): void
@@ -87,7 +92,7 @@ final class FunctionPointerTest extends ZigarTestCase
         $m->printArray($f2);
     }
 
-    public function testThrowWhenJavascriptFunctionIsUsedAsTargetOfPointerToVariadicFunction(): void
+    public function testThrowWhenPhpFunctionIsUsedAsTargetOfPointerToVariadicFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/variadic-function.zig');
         $this->expectOutputString(<<<OUTPUT

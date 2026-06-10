@@ -914,6 +914,7 @@ pub const ZigClassEntry = struct {
                 };
                 defer if (!@hasField(Params, "buffer")) buf.release();
                 const zig_obj = try ZigObject(S).create(self);
+                errdefer php.release(zig_obj.object());
                 // add reference to class object
                 self.retainClassObject();
                 const obj_struct = zig_obj.structure();
