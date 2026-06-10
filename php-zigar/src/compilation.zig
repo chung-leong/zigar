@@ -375,10 +375,11 @@ pub const ZigCompiler = struct {
             finished.store(1, .unordered);
             thread.join();
         }
-        var stdout: std.ArrayList(u8) = try .initCapacity(al, max_output / 8);
-        var stderr: std.ArrayList(u8) = try .initCapacity(al, max_output / 8);
+        var stdout: std.ArrayList(u8) = .empty;
+        var stderr: std.ArrayList(u8) = .empty;
         child.collectOutput(al, &stdout, &stderr, max_output) catch {};
         const term = try child.wait();
+
         return switch (term) {
             .Exited => |exit_code| switch (exit_code) {
                 0 => {},
@@ -394,8 +395,12 @@ pub const ZigCompiler = struct {
     }
 
     fn showProgress(self: *@This(), finished: *std.atomic.Value(u32)) !void {
-        const config = std.Io.tty.Config.detect(std.fs.File.stderr());
-        if (config != .escape_codes) return;
+        // don't print anything if stderr isn't a tty or doesn't support ANSI sequences
+        if (!std.fs.File.stderr().getOrEnableAnsiEscapeSupport()) return;
+        if (builtin.target.os.tag != .windows) {
+            // don't print anything if env variable is missing
+            if (std.posix.getenvZ("TERM") == null) return;
+        }
         var message_buffer: [4096]u8 = undefined;
         const fmt = "Building module \"{s}\" at optimization level \"{s}\" ({s}/{s})";
         const message = try std.fmt.bufPrint(&message_buffer, fmt, .{

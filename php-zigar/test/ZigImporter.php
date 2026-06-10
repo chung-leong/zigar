@@ -20,7 +20,7 @@ final class ZigImporter
         $options['optimize'] = self::$optimize;
         $mod_path = "{$info['dirname']}/lib/{$info['filename']}.zigar";
         zigar_compile($src_path, $mod_path, $options);
-        return zigar_load($mod_path);
+        return zigar_use($mod_path);
     }
 
     public static function safetyCheck() {
