@@ -916,7 +916,7 @@ pub fn getHashEntry(ht: *const HashTable, key: anytype) !*Value {
     return if (comptime isStringContent(KT))
         php_h.zend_hash_str_find(ht, key.ptr, key.len) orelse error.Missing
     else if (comptime isString(KT))
-        php_h.zend_hash_find(ht, key) orelse error.Missing
+        php_h.zend_hash_find(ht, @constCast(key)) orelse error.Missing
     else if (comptime isInt(KT))
         php_h.zend_hash_index_find(ht, @intCast(key)) orelse error.Missing
     else
@@ -1292,7 +1292,7 @@ pub fn createFunctionEx(
     return .{
         .internal_function = .{
             .type = php_h.ZEND_INTERNAL_FUNCTION,
-            .function_name = name orelse getStaticString("(anonymous)"),
+            .function_name = name orelse getStaticString("fn"),
             .handler = func_ptr,
             .num_args = arg_count,
             .required_num_args = arg_count,

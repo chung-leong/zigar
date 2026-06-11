@@ -544,7 +544,10 @@ pub const Struct = struct {
         const static = class.getStaticData(@This());
         switch (T) {
             std.mem.Allocator => {
-                if (args.allocator) |av| {
+                if (args.allocator) |av| if (php.getValuePointer([*]u8, &av) catch null) |byte_ptr| {
+                    const bytes = byte_ptr[0..@sizeOf(std.mem.Allocator)];
+                    try self.buffer.copyBytes(bytes);
+                } else {
                     const src_obj = try php.getValueObject(&av);
                     const src_class = ZigClassEntry.fromObject(src_obj);
                     if (src_class.type != .@"struct" or src_class.purpose != .allocator) {

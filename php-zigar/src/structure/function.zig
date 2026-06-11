@@ -18,6 +18,7 @@ const String = php.String;
 const Value = php.Value;
 const Promise = @import("../promise.zig").Promise;
 const structure = @import("../structure.zig");
+const invokeMethod = structure.invokeMethod;
 
 pub const Function = struct {
     closure: Closure = undefined,
@@ -203,6 +204,20 @@ pub const Function = struct {
 
     pub fn detachThunk(self: *@This()) void {
         if (self.info.has_thunk) self.info.lost_thunk = true;
+    }
+
+    pub fn convertArgumentToInstance(allocator: *std.mem.Allocator, value: *const Value, fn_value: *const Value, name: *const String) !Value {
+        const func_obj = try php.getValueObject(fn_value);
+        const func_class = ZigClassEntry.fromObject(func_obj);
+        const arg_struct_member = try func_class.getMember(.instance, 0);
+        const arg_member = try arg_struct_member.class.getMember(.instance, name);
+        const arg_obj = try arg_member.class.createObject(allocator, value, false);
+        return php.createValueObject(arg_obj);
+    }
+
+    pub fn externalizeArgument(_: *std.mem.Allocator, value: *const Value) !void {
+        const arg_obj = php.getValueObject(value) catch return;
+        try invokeMethod(arg_obj, "externalize", .{});
     }
 
     pub fn freeObject(obj: *Object) void {

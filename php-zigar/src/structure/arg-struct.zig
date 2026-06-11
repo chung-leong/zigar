@@ -192,20 +192,20 @@ pub const ArgStruct = struct {
         }
     }
 
-    pub fn resolvePromise(self: *@This(), value: *const Value) !void {
+    pub fn resolvePromise(self: *@This(), value: *const Value, allocator: ?*std.mem.Allocator) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const promise = try static.promise.?.accessors.get(self);
         defer php.release(&promise);
-        return PromiseStatic.resolve(&promise, value);
+        return PromiseStatic.resolve(&promise, value, allocator);
     }
 
-    pub fn pipeFromGenerator(self: *@This(), value: *const Value) !void {
+    pub fn pipeFromGenerator(self: *@This(), value: *const Value, allocator: ?*std.mem.Allocator) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const generator = try static.generator.?.accessors.get(self);
         defer php.release(&generator);
-        return GeneratorStatic.pipe(&generator, value);
+        return GeneratorStatic.pipe(&generator, value, allocator);
     }
 
     pub fn getArgumentCount(self: *@This()) usize {
@@ -263,20 +263,19 @@ pub const ArgStruct = struct {
                 const callback = php.createValueArray(callback_ht);
                 php.setHashEntry(args.?, N("callback"), &callback);
                 self.flags.has_callback = true;
-                if (!self.flags.has_allocator) {
-                    // see if the generator has an attached allocator
-                    if (m.class.getMember(.instance, N("allocator")) catch null) |am| {
-                        self.flags.has_allocator = true;
-                        if (accepts.allocator) {
+                if (self.flags.has_allocator) {
+                    // attach allocator to the generator
+                    try self.attachAllocator(&generator);
+                } else {
+                    if (accepts.allocator) {
+                        // see if the generator has an attached allocator
+                        if (m.class.getMember(.instance, N("allocator")) catch null) |am| {
+                            // make it available as a callback argument
                             const generator_struct = try structure.Struct.fromValue(&generator);
                             const allocator = try am.accessors.get(generator_struct);
                             php.setHashEntry(args.?, N("allocator"), &allocator);
                         }
                     }
-                }
-                // attach the arg struct to the generator when there's an allocator
-                if (self.flags.has_allocator) {
-                    try self.attachToStructure(&generator);
                 }
             }
         }
@@ -293,7 +292,7 @@ pub const ArgStruct = struct {
                 php.setHashEntry(args.?, N("callback"), &callback);
                 self.flags.has_callback = true;
                 if (self.flags.has_allocator) {
-                    try self.attachToStructure(&promise);
+                    try self.attachAllocator(&promise);
                 }
             }
         }
@@ -308,11 +307,11 @@ pub const ArgStruct = struct {
         ht_ptr.* = args;
     }
 
-    fn attachToStructure(self: *@This(), dest_value: *const Value) !void {
+    fn attachAllocator(self: *@This(), dest_value: *const Value) !void {
         const dest_struct = try structure.Struct.fromValue(dest_value);
-        const obj = Super.object(self);
-        var value = php.createValueObject(php.reuse(obj));
-        try php.setProperty(&dest_struct.table, N("arg"), &value);
+        const allocator = try self.getAllocator();
+        var value = php.createValuePointer(allocator);
+        try php.setProperty(&dest_struct.table, N("allocator"), &value);
     }
 
     pub fn hasAsyncCallback(self: *@This()) bool {
@@ -332,31 +331,38 @@ pub const ArgStruct = struct {
     pub fn setReturnValue(self: *@This(), value: *const Value) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        const retval = try self.prepareReturnValue(value);
-        php.release(&retval);
-        try static.retval.accessors.set(self, &retval);
-        self.finalizeReturnValue(&retval);
+        // if an allocator is part of the struct, then use the allocator to create an instance
+        // of the retval to ensure autovivication uses that allocator
+        if (self.flags.has_allocator) {
+            const allocator = try self.getAllocator();
+            const retval_obj = try static.retval.class.createObject(allocator, value, false);
+            const retval = php.createValueObject(retval_obj);
+            php.release(&retval);
+            try static.retval.accessors.set(self, &retval);
+            // assume allocated memory have been taken by Zig code
+            invokeMethod(retval_obj, "externalize", .{}) catch unreachable;
+        } else {
+            try static.retval.accessors.set(self, value);
+        }
     }
 
     pub fn sendReturnValue(self: *@This(), value: *const Value) !void {
         // don't do anything when a callback function was retrieved
         if (self.flags.has_callback) return;
-        const retval = try self.prepareReturnValue(value);
-        defer php.release(&retval);
+        const allocator = if (self.flags.has_allocator) try self.getAllocator() else null;
         if (self.flags.has_promise) {
-            self.resolvePromise(&retval) catch |err| {
+            self.resolvePromise(value, allocator) catch |err| {
                 const msg = failure.getMessage(err);
                 const new_err = failure.report("unable to resolve promise: {s}", .{msg});
                 return php.triggerError(new_err);
             };
         } else if (self.flags.has_generator) {
-            self.pipeFromGenerator(&retval) catch |err| {
+            self.pipeFromGenerator(value, allocator) catch |err| {
                 const msg = failure.getMessage(err);
                 const new_err = failure.report("unable to yield generated value: {s}", .{msg});
                 return php.triggerError(new_err);
             };
         }
-        self.finalizeReturnValue(&retval);
     }
 
     pub fn getAllocator(self: *@This()) !*std.mem.Allocator {
@@ -376,31 +382,6 @@ pub const ArgStruct = struct {
         defer php.release(&allocator_value);
         const allocator_struct = try structure.Struct.fromValue(&allocator_value);
         return try allocator_struct.getAllocator();
-    }
-
-    pub fn prepareReturnValue(self: *@This(), value: *const Value) !Value {
-        // if an allocator is part of the struct, then use the allocator to create an instance
-        // of the retval to ensure autovivication uses that allocator
-        if (self.flags.has_allocator) {
-            const allocator = try self.getAllocator();
-            const class = ZigClassEntry.fromStructure(self);
-            const static = class.getStaticData(@This());
-            const retval_class = try static.getReturnValueClass();
-            const retval_obj = try retval_class.createObject(allocator, value, false);
-            return php.createValueObject(retval_obj);
-        } else {
-            return php.reuse(value).*;
-        }
-    }
-
-    pub fn finalizeReturnValue(self: *@This(), value: *const Value) void {
-        const class = ZigClassEntry.fromStructure(self);
-        if (class.flags.arg_struct.has_pointer) {
-            if (php.getValueObject(value) catch null) |obj| {
-                // assume allocated memory have been taken by Zig code
-                invokeMethod(obj, "externalize", .{}) catch unreachable;
-            }
-        }
     }
 
     pub fn getSpecialArgument(self: *@This(), comptime T: type) !*structure.Struct {

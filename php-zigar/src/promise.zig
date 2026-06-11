@@ -131,26 +131,33 @@ pub const PromiseStatic = struct {
     pub fn handleResolve(ed: *ExecuteData, _: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
         if (arg_iter.len != 1) return failure.reportArgCountMismatch("resolve", 1, 1, arg_iter.len);
-        const promise_struct = try structure.Struct.fromValue(arg_iter.this);
         const value = arg_iter.next().?;
-        if (php.getProperty(&promise_struct.table, N("arg")) catch null) |av| {
-            defer php.deleteProperty(&promise_struct.table, N("arg")) catch unreachable;
-            // use the argument struct to autovivicate the return value
-            const arg_struct = try structure.ArgStruct.fromValue(av);
-            const retval = try arg_struct.prepareReturnValue(value);
-            defer php.release(&retval);
-            try resolve(arg_iter.this, &retval);
-            arg_struct.finalizeReturnValue(&retval);
-        } else {
-            try resolve(arg_iter.this, value);
-        }
+        const allocator = try getAllocator(arg_iter.this);
+        try resolve(arg_iter.this, value, allocator);
     }
 
-    pub fn resolve(promise: *const Value, value: *const Value) !void {
+    pub fn resolve(promise: *const Value, value: *const Value, allocator: ?*std.mem.Allocator) !void {
         const fn_value, const ptr_value = try getCallbackParams(promise);
         defer php.release(&fn_value);
         defer php.release(&ptr_value);
-        _ = try php.invokeMethod(null, &fn_value, &.{ ptr_value, value.* });
+        try send(&fn_value, &ptr_value, value, allocator);
+    }
+
+    fn send(fn_value: *const Value, ptr_value: *const Value, value: *const Value, allocator: ?*std.mem.Allocator) !void {
+        if (allocator) |a| {
+            const converted_value = try structure.Function.convertArgumentToInstance(a, value, fn_value, N("1"));
+            defer php.release(&converted_value);
+            _ = try php.invokeMethod(null, fn_value, &.{ ptr_value.*, converted_value });
+            try structure.Function.externalizeArgument(a, &converted_value);
+        } else {
+            _ = try php.invokeMethod(null, fn_value, &.{ ptr_value.*, value.* });
+        }
+    }
+
+    fn getAllocator(this: *const Value) !?*std.mem.Allocator {
+        const generator_struct = try structure.Struct.fromValue(this);
+        const value = php.getProperty(&generator_struct.table, N("allocator")) catch return null;
+        return php.getValuePointer(*std.mem.Allocator, value);
     }
 
     fn getCallbackParams(promise: *const Value) !std.meta.Tuple(&.{ Value, Value }) {
