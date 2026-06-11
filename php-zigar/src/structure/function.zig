@@ -24,6 +24,7 @@ pub const Function = struct {
     info: struct {
         transform: ?accessor.Transform = null,
         has_thunk: bool = false,
+        lost_thunk: bool = false,
     } align(@alignOf(*ByteBuffer)) = .{}, // force buffer to be the last field using alignment
     buffer: *ByteBuffer = undefined,
 
@@ -105,25 +106,26 @@ pub const Function = struct {
             var named_args: ?*HashTable = null;
             try arg_struct.extractNamedArguments(arg_info, &named_args);
             defer if (named_args) |ht| php.release(ht);
-            const early_release = arg_struct.flags.has_promise or arg_struct.flags.has_generator;
-            if (early_release) {
+            if (arg_struct.hasAsyncCallback()) {
+                // wake the calling thread prior to invoking the callback (which could potentially
+                // switch to a different fiber) when we have a promise or generator interface
                 CallDispatcher.releaseCallingThread(futex_handle, .SUCCESS);
-                const result = php.invokeMethodEx(null, callable, args, named_args) catch get: {
-                    // TODO: get exception
-                    break :get php.createValueNull();
+            }
+            const result = php.invokeMethodEx(null, callable, args, named_args) catch |err| get: {
+                const ex = php.captureException() catch throw: {
+                    _ = &php.throwError(err);
+                    break :throw php.captureException() catch unreachable;
                 };
-                defer php.release(&result);
-                if (!arg_struct.flags.has_callback) {
-                    if (arg_struct.flags.has_promise) {
-                        arg_struct.resolvePromise(&result) catch {};
-                    } else if (arg_struct.flags.has_generator) {
-                        arg_struct.pipeFromGenerator(&result) catch {};
-                    }
-                }
+                break :get php.createValueObject(ex);
+            };
+            defer php.release(&result);
+            if (arg_struct.hasAsyncCallback()) {
+                // hand the value to the promise or generator
+                arg_struct.sendReturnValue(&result) catch |err| {
+                    php.triggerError(err);
+                };
                 return error.EarlyRelease;
             } else {
-                const result = try php.invokeMethodEx(null, callable, args, named_args);
-                defer php.release(&result);
                 // replace buffer so the retval gets written into the stack;
                 var stack_buffer: ByteBuffer = .init(arg_bytes);
                 arg_struct.buffer = &stack_buffer;
@@ -132,6 +134,7 @@ pub const Function = struct {
             }
         }
     };
+
     pub const Closure = struct {
         php_portion: php.Function,
         self: *Function,
@@ -190,12 +193,16 @@ pub const Function = struct {
     }
 
     fn freeThunk(self: *@This()) void {
-        if (self.info.has_thunk) {
+        if (self.info.has_thunk and !self.info.lost_thunk) {
             const class = ZigClassEntry.fromStructure(self);
             const thunk_address = @intFromPtr(self.buffer.bytes.ptr);
             class.host.dispatcher.destroyJsThunk(class, thunk_address) catch {};
             self.info.has_thunk = false;
         }
+    }
+
+    pub fn detachThunk(self: *@This()) void {
+        if (self.info.has_thunk) self.info.lost_thunk = true;
     }
 
     pub fn freeObject(obj: *Object) void {
@@ -228,6 +235,9 @@ pub const Function = struct {
                 try arg_struct.copyArguments(null, &arg_iter);
                 const arg_addr = @intFromPtr(arg_struct.buffer.bytes.ptr);
                 try class.host.runThunk(static.thunk_address, fn_addr, arg_addr);
+                // if the argument struct has a function pointer, assume that the Zig code is retaining a copy of it
+                // or has released it already; mark it as detached in the PHP object so it doesn't get freed
+                try arg_struct.detachFunctionThunks();
                 return_value.* = get: {
                     var retval = try arg_struct.getReturnValue();
                     if (arg_struct.flags.has_promise) {
@@ -313,5 +323,6 @@ pub const Function = struct {
     pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getGarbageCollection = Super.getGarbageCollection;
-    const fromObject = Super.fromObject;
+    pub const fromObject = Super.fromObject;
+    pub const fromValue = Super.fromValue;
 };

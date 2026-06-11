@@ -156,9 +156,19 @@ pub const ErrorSet = struct {
                     }
                 },
                 .string => {
-                    const name = php.getValueStringContent(key) catch unreachable;
-                    const tag = try php.getHashEntry(self.error_set, name);
-                    return php.reuse(tag).*;
+                    const name = php.getValueString(key) catch unreachable;
+                    if (php.getHashEntry(self.error_set, name) catch null) |err| {
+                        return php.reuse(err).*;
+                    } else if (php.getHashEntry(self.error_set, N("Unexpected")) catch null) |err| {
+                        return php.reuse(err).*;
+                    } else {
+                        const es_name = try self.createCanonicalName();
+                        defer php.allocator.free(es_name);
+                        return failure.report("'{s}' does not correspond to an entry in {s}", .{
+                            php.getStringContent(name),
+                            es_name,
+                        });
+                    }
                 },
                 .object => {
                     const err_obj = php.getValueObject(key) catch unreachable;
@@ -171,18 +181,10 @@ pub const ErrorSet = struct {
                             php.addRef(err_obj);
                             return key.*;
                         } else {
-                            const method = php.createValuePersistentString("getMessage");
+                            const method = php.createValueString(N("getMessage"));
                             const message = try php.invokeMethod(key, &method, &.{});
-                            if (php.getHashEntry(self.error_set, &message)) |err| {
-                                return php.reuse(err).*;
-                            } else |_| {
-                                const name = try self.createCanonicalName();
-                                defer php.allocator.free(name);
-                                return failure.report("'{s}' does not correspond to an entry in {s}", .{
-                                    try php.getValueStringContent(&message),
-                                    name,
-                                });
-                            }
+                            php.release(&message);
+                            return self.findCanonical(&message);
                         }
                     } else {
                         return failure.report("'{s}' does not implement throwable", .{
@@ -531,7 +533,8 @@ pub const ErrorSet = struct {
     pub const getProperties = Super.getProperties;
     pub const getPropertyPointer = Super.getPropertyPointer;
     pub const getGarbageCollection = Super.getGarbageCollection;
-    const fromObject = Super.fromObject;
+    pub const fromObject = Super.fromObject;
+    pub const fromValue = Super.fromValue;
     const copySelf = Super.copySelf;
 };
 

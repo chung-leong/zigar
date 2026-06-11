@@ -18,5 +18,6 @@ pub fn receive(ptr: ?*anyopaque, arg: JSError!i32) void {
 var number: u32 = 1234;
 
 pub fn call(f: Callback) void {
+    defer zigar.function.release(f);
     f(.{ .ptr = &number, .callback = receive });
 }

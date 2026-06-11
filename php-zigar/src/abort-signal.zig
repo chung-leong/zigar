@@ -11,6 +11,7 @@ const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
 const Fiber = php.Fiber;
 const Function = php.Function;
+const N = php.getStaticString;
 const Object = php.Object;
 const ObjectHandlers = php.ObjectHandlers;
 const String = php.String;
@@ -171,10 +172,14 @@ pub const AbortSignalStatic = struct {
     fn getState(ed: *ExecuteData) !bool {
         const arg_iter: ArgumentIterator = .init(ed);
         if (arg_iter.len != 0) return failure.reportArgCountMismatch("on", 0, 0, arg_iter.len);
-        const signal_obj = try php.getValueObject(arg_iter.this);
-        const signal_struct = ZigObject(structure.Struct).fromObject(signal_obj).structure();
-        const bytes = try signal_struct.buffer.data(0, false);
-        const ptr: *const volatile i32 = @ptrCast(@alignCast(bytes.ptr));
-        return ptr.* != 0;
+        const signal_struct = try structure.Struct.fromValue(arg_iter.this);
+        const ptr = try signal_struct.getProperty(N("ptr"), null);
+        defer php.release(&ptr);
+        const ptr_struct = try structure.Pointer.fromValue(&ptr);
+        const int_obj = try ptr_struct.getTarget();
+        const int_struct = structure.Primitive.fromObject(int_obj);
+        const long_value = try int_struct.getValue(.none);
+        const long = try php.getValueLong(&long_value);
+        return long != 0;
     }
 };

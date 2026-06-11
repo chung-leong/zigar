@@ -5,13 +5,12 @@ require __DIR__ . '/../vendor/autoload.php';
 
 $m = zigar_use(__DIR__ . "/scratch.zig");
 
-$m->callp(function($n) {
-    echo "n = $n\n";
-    return 'Hello world?';
+// $m->call(function() {
+//     return 'Hello world';
+// });
+$m->call(function($callback) {
+    $callback('Hello world');
 });
-
-$m->callg(function($n) {
-    echo "n = $n\n";
-    yield 'Hello world!';
-    yield 'This is a test!';
-});
+// $m->call(function($allocator, $callback) {
+//     $callback($allocator->dupe('Hello world'));
+// });

@@ -204,5 +204,6 @@ pub const VariadicStruct = struct {
     pub const getValue = Super.getValue;
     pub const propertyExists = Super.propertyExists;
     pub const getGarbageCollection = Super.getGarbageCollection;
-    const fromObject = Super.fromObject;
+    pub const fromObject = Super.fromObject;
+    pub const fromValue = Super.fromValue;
 };

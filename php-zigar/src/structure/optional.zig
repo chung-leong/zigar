@@ -129,6 +129,7 @@ pub const Optional = struct {
     pub const compare = Super.compare;
     pub const getGarbageCollection = Super.getGarbageCollection;
     pub const getIterator = Super.getIterator;
-    const fromObject = Super.fromObject;
+    pub const fromObject = Super.fromObject;
+    pub const fromValue = Super.fromValue;
     const copySelf = Super.copySelf;
 };

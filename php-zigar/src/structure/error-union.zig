@@ -65,7 +65,7 @@ pub const ErrorUnion = struct {
                 const err_obj = php.getValueObject(&err) catch unreachable;
                 const err_struct = ZigObject(ErrorSet).fromObject(err_obj).structure();
                 try err_struct.acquireDebugInfo();
-                _ = &php.throwExceptionObject(err_obj);
+                _ = &php.throwException(err_obj);
                 return php.createValueNull();
             }
             return try static.payload_acc.get(self);
@@ -182,6 +182,7 @@ pub const ErrorUnion = struct {
     pub const getMethod = Super.getMethod;
     pub const getGarbageCollection = Super.getGarbageCollection;
     pub const getIterator = Super.getIterator;
-    const fromObject = Super.fromObject;
+    pub const fromObject = Super.fromObject;
+    pub const fromValue = Super.fromValue;
     const copySelf = Super.copySelf;
 };

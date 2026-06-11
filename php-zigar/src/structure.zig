@@ -85,6 +85,11 @@ pub fn Parent(comptime S: type) type {
             return &ZigObject(S).fromObject(obj).zig_portion;
         }
 
+        pub fn fromValue(value: *const Value) !*S {
+            const obj = try php.getValueObject(value);
+            return fromObject(obj);
+        }
+
         pub fn getExtent(self: *S) ByteBuffer.Extent {
             return .{ .address = @intFromPtr(self.buffer.bytes.ptr) };
         }
@@ -479,6 +484,7 @@ pub fn StructLike(comptime S: type) type {
 
         pub const object = Super.object;
         pub const fromObject = Super.fromObject;
+        pub const fromValue = Super.fromValue;
         pub const getExtent = Super.getExtent;
         pub const setStorage = Super.setStorage;
         pub const initialize = Super.initialize;
@@ -702,6 +708,7 @@ pub fn ArrayLike(comptime S: type) type {
         }
 
         pub const fromObject = Super.fromObject;
+        pub const fromValue = Super.fromValue;
         pub const getExtent = Super.getExtent;
         pub const setStorage = Super.setStorage;
         pub const initialize = Super.initialize;
@@ -776,6 +783,7 @@ pub fn OptionalLike(comptime S: type) type {
         }
 
         pub const fromObject = Super.fromObject;
+        pub const fromValue = Super.fromValue;
         pub const getExtent = Super.getExtent;
         pub const setStorage = Super.setStorage;
         pub const initialize = Super.initialize;

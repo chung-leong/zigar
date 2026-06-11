@@ -720,5 +720,6 @@ pub const Struct = struct {
     pub const hasElement = Tuple.hasElement;
     pub const countElements = Tuple.countElements;
     pub const getGarbageCollection = Super.getGarbageCollection;
-    const fromObject = Super.fromObject;
+    pub const fromObject = Super.fromObject;
+    pub const fromValue = Super.fromValue;
 };

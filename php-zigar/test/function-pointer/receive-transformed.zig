@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const zigar = @import("zigar");
+
 const Struct = struct {
     string: []const u8 = "Hello world",
     plain: []const u8 = "Hello world",
@@ -16,6 +18,10 @@ pub fn setCallback(cb: *const Callback) void {
 
 pub fn triggerCallback() i32 {
     return callback("Hello world", "Hello world", "Hello world", .{});
+}
+
+pub fn freeCallback() void {
+    zigar.function.release(callback);
 }
 
 const module = @This();

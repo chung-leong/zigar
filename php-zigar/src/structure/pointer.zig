@@ -309,6 +309,15 @@ pub const Pointer = struct {
         try invokeMethod(obj, "externalize", .{});
     }
 
+    pub fn detachFunctionThunk(self: *@This()) Error!void {
+        const class = ZigClassEntry.fromStructure(self);
+        const static = class.getStaticData(@This());
+        if (static.target_class.type == .function) {
+            const func_struct = structure.Function.fromValue(&self.table) catch return;
+            func_struct.detachThunk();
+        }
+    }
+
     pub fn restrictAccess(self: *@This()) !void {
         self.buffer.flags.inaccessible = true;
     }
@@ -394,5 +403,6 @@ pub const Pointer = struct {
     pub const getMethod = Super.getMethod;
     pub const getGarbageCollection = Super.getGarbageCollection;
     pub const getIterator = Super.getIterator;
-    const fromObject = Super.fromObject;
+    pub const fromObject = Super.fromObject;
+    pub const fromValue = Super.fromValue;
 };

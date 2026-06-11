@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const zigar = @import("zigar");
 
 pub const JSError = error{Unexpected};
@@ -21,5 +22,6 @@ pub fn receive(_: ?*anyopaque, arg: JSError![]const u8) void {
 }
 
 pub fn call(f: Callback) void {
+    defer zigar.function.release(f);
     f(allocator, .{ .callback = receive });
 }

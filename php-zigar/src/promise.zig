@@ -131,7 +131,19 @@ pub const PromiseStatic = struct {
     pub fn handleResolve(ed: *ExecuteData, _: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
         if (arg_iter.len != 1) return failure.reportArgCountMismatch("resolve", 1, 1, arg_iter.len);
-        try resolve(arg_iter.this, arg_iter.next().?);
+        const promise_struct = try structure.Struct.fromValue(arg_iter.this);
+        const value = arg_iter.next().?;
+        if (php.getProperty(&promise_struct.table, N("arg")) catch null) |av| {
+            defer php.deleteProperty(&promise_struct.table, N("arg")) catch unreachable;
+            // use the argument struct to autovivicate the return value
+            const arg_struct = try structure.ArgStruct.fromValue(av);
+            const retval = try arg_struct.prepareReturnValue(value);
+            defer php.release(&retval);
+            try resolve(arg_iter.this, &retval);
+            arg_struct.finalizeReturnValue(&retval);
+        } else {
+            try resolve(arg_iter.this, value);
+        }
     }
 
     pub fn resolve(promise: *const Value, value: *const Value) !void {

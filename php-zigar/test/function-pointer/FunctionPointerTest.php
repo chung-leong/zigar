@@ -92,6 +92,95 @@ final class FunctionPointerTest extends ZigarTestCase
         $m->printArray($f2);
     }
 
+    public function testPassAbortSignalAsAsrugment(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/abort-signal.zig');
+        $saved = (object) [];
+        $f = function($signal) use ($saved) {
+            $saved->signal = $signal;
+        };
+        $m->call($f);
+        $this->assertTrue($saved->signal->off());
+        $this->assertFalse($saved->signal->on());
+        while ($saved->signal->off()) {
+            usleep(1000);
+        }
+        $this->assertFalse($saved->signal->off());
+    }
+
+    public function testPassPromiseAsAsArgument(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/promise.zig');
+        $saved = (object) [];
+        $this->expectOutputString(<<<OUTPUT
+        number = 1234, value = 55
+        number = 1234, error = Unexpected
+        number = 1234, value = 123
+        number = 1234, error = Unexpected
+        number = 1234, error = Unexpected
+        number = 1234, error = Unexpected
+
+        OUTPUT);
+
+        $m->call(function($callback) {
+            $callback(55);
+        });
+        $m->call(function($callback) use($m) {
+            $callback($m->JSError->Unexpected);
+        });
+        $m->call(function() {
+            return 123;
+        });
+        $m->call(function() use($m) {
+            throw $m->JSError->Unexpected;
+        });
+        $m->call(function() {
+            throw new Exception('Unexpected');
+        });
+        $m->call(function() {
+            throw new Exception('Doh!');
+        });
+        usleep(10 * 1000);
+    }
+
+    public function testPassAllocatorAndPromiseAsAsArgument(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/promise-with-allocator.zig');
+        $this->expectOutputString(<<<OUTPUT
+        value = Hello world
+        value = Hello world
+        value = Hello world
+
+        OUTPUT);
+
+        $m->call(function() {
+            return 'Hello world';
+        });
+        $m->call(function($callback) {
+            $callback('Hello world');
+        });
+        $m->call(function($allocator, $callback) {
+            $callback($allocator->dupe('Hello world'));
+        });
+    }
+
+    public function testPassGeneratorAsAsArgument(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/generator.zig');
+        $this->expectOutputString(<<<OUTPUT
+        number = 1234, value = 0
+        number = 1234, value = 1
+        number = 1234, value = 2
+        number = 1234, value = 3
+        number = 1234, value = 4
+        number = 1234, value = null
+
+        OUTPUT);
+        $m->call(function() {
+            for ($i = 0; $i < 5; $i++) yield $i;
+        });
+    }
+
     public function testThrowWhenPhpFunctionIsUsedAsTargetOfPointerToVariadicFunction(): void
     {
         $m = ZigImporter::load(__DIR__ . '/variadic-function.zig');
@@ -112,12 +201,19 @@ final class FunctionPointerTest extends ZigarTestCase
         $m = ZigImporter::load(__DIR__ . '/receive-transformed.zig');
         $saved = (object) [];
         $f = function(...$args) use($saved) {
-            $saved->received = $args;
+            $saved->received = $args;            
             return 123;
         };
         $m->setCallback($f);
         $result = $m->triggerCallback();
+        $m->freeCallback();
         $this->assertSame(123, $result);
+        $this->assertSame([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ], $saved->received[1]);
+        $this->assertEquals(new Uint8Array([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ]), $saved->received[2]);
+        $this->assertEquals((object) [
+            'string' => 'Hello world',
+            'plain' => [ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ],
+            'typed_array' => new Uint8Array([ 72, 101, 108, 108, 111,  32, 119, 111, 114, 108, 100 ]),
+        ], $saved->received[3]);
     }
-    
 }

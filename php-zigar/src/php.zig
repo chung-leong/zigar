@@ -515,13 +515,6 @@ pub fn createValueArray(arr: ?*Array) Value {
     return result;
 }
 
-pub fn createValueException() ?Value {
-    const eg = getExecutorGlobals();
-    const ex = eg.exception orelse return null;
-    eg.exception = null;
-    return createValueObject(ex);
-}
-
 pub fn createValueDebug(value: *const Value) Value {
     switch (getValueType(value)) {
         .object => {
@@ -1229,6 +1222,12 @@ pub fn invokeMethodEx(container: ?*const Value, fn_name: *const Value, arguments
     if (php_h._call_user_function_impl(@constCast(container), @constCast(fn_name), &retval, len, args, named_params) != php_h.SUCCESS) {
         return error.Failure;
     }
+    if (getValueType(&retval) == .undefined) {
+        const eg = getExecutorGlobals();
+        if (eg.exception != null) {
+            return error.ExceptionThrown;
+        }
+    }
     return retval;
 }
 
@@ -1250,7 +1249,7 @@ pub fn getArgumentInfo(fn_name: *const Value) ![]php_h.zend_arg_info {
         });
     }
     const common = &fcc.function_handler.*.common;
-    return common.arg_info[0..common.num_args];
+    return if (common.num_args > 0) common.arg_info[0..common.num_args] else &.{};
 }
 
 pub fn emptyArgInfo(comptime count: usize) []const InternalArgInfo {
@@ -1467,10 +1466,24 @@ pub fn throwError(err: anytype) void {
     _ = php_h.zend_throw_exception_ex(null, 0, "%s (zig)", msg.ptr);
 }
 
-pub fn throwExceptionObject(obj: *Object) error{ExceptionThrown} {
+pub fn throwException(obj: *Object) error{ExceptionThrown} {
     var value = createValueObject(obj);
     php_h.zend_throw_exception_object(&value);
     return error.ExceptionThrown;
+}
+
+pub fn captureException() !*Object {
+    const eg = getExecutorGlobals();
+    const ex = eg.exception orelse return error.Unexpected;
+    addRef(ex);
+    php_h.zend_clear_exception();
+    return ex;
+}
+
+pub fn triggerError(err: anytype) void {
+    const msg = failure.acquireMessage(err);
+    defer failure.freeMessage(msg);
+    php_h.zend_error(php_h.E_ERROR, "%s (zig)", msg.ptr);
 }
 
 pub fn getCurrentLine() u32 {
