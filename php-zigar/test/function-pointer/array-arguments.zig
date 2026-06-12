@@ -1,3 +1,6 @@
+const zigar = @import("zigar");
+
 pub fn call(f: *const fn (a: [3]i32, b: [8]f64) void) void {
+    defer zigar.function.release(f);
     f(.{ 123, 456, 789 }, .{ 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8 });
 }

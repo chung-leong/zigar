@@ -337,7 +337,7 @@ pub const ArgStruct = struct {
             const allocator = try self.getAllocator();
             const retval_obj = try static.retval.class.createObject(allocator, value, false);
             const retval = php.createValueObject(retval_obj);
-            php.release(&retval);
+            defer php.release(&retval);
             try static.retval.accessors.set(self, &retval);
             // assume allocated memory have been taken by Zig code
             invokeMethod(retval_obj, "externalize", .{}) catch unreachable;
