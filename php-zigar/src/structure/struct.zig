@@ -273,7 +273,7 @@ pub const Struct = struct {
             extension.removeRequestShutdownCallback(self, onRequestShutdown);
         }
 
-        pub fn onRequestShutdown(ptr: *anyopaque) void {
+        fn onRequestShutdown(ptr: *anyopaque) void {
             const self: *@This() = @ptrCast(@alignCast(ptr));
             self.removeSymbolsFromGlobalNamespace() catch {};
         }

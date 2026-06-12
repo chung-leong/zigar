@@ -2,6 +2,41 @@
 
 final class FunctionPointerTest extends ZigarTestCase
 {   
+    public function testReleaseFunctionPointer(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/release-function-pointer.zig');
+        $this->expectOutputString(<<<OUTPUT
+        Hello world!
+        Hello world!
+        foo
+        foo
+
+        OUTPUT);
+        $f = function() {
+            echo "Hello world!\n";
+        };
+        $m->set($f);
+        $m->call();
+        $m->release();
+        $f();
+        $m->set($m->foo);
+        $m->call();
+        $m->release();
+        $m->foo();
+    }
+
+    public function testReleaseFunctionPointerAutomatically(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/release-function-pointer-automatically.zig');
+        $this->expectOutputString(<<<OUTPUT
+        Hello world!
+
+        OUTPUT);
+        $m->call(function() {
+            echo "Hello world!\n";
+        });
+    }
+
     public function testPassFloatingPointArguments(): void
     {
         $m = ZigImporter::load(__DIR__ . '/floating-point-arguments.zig');

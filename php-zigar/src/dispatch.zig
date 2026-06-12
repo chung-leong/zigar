@@ -5,6 +5,7 @@ const builtin = @import("builtin");
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const DynLib = @import("dyn-lib.zig").DynLib;
 const EventLoop = @import("event-loop.zig").EventLoop;
+const extension = @import("extension.zig");
 const failure = @import("failure.zig");
 const interface = @import("module/native/interface.zig");
 const Jscall = interface.Jscall;
@@ -54,6 +55,7 @@ pub const CallDispatcher = struct {
     env_variable_original: *[*:null]?[*:0]const u8 = undefined,
     multithread_enabled: bool = false,
     pipe_ptr: [*]std.posix.fd_t,
+    release_resources_called: bool = false,
 
     pub threadlocal var trapping_syscalls: bool = false;
     pub threadlocal var event_loop: EventLoop(runScheduledTask) = .{};
@@ -75,7 +77,7 @@ pub const CallDispatcher = struct {
         class: *ZigClassEntry,
         callable: Value,
 
-        pub fn deinit(self: *@This()) void {
+        pub fn deinit(self: *const @This()) void {
             php.release(self.class.object);
             php.release(&self.callable);
         }
@@ -90,7 +92,7 @@ pub const CallDispatcher = struct {
             populated: bool = false,
         } = .{},
 
-        pub fn deinit(self: *@This()) void {
+        pub fn deinit(self: *const @This()) void {
             php.release(self.path);
             if (self.dir_entry) |de| php.allocator.destroy(de);
             const res = php.getStreamResource(self.stream);
@@ -148,6 +150,7 @@ pub const CallDispatcher = struct {
         const self = try php.allocator.create(@This());
         errdefer php.allocator.destroy(self);
         self.* = .{ .host = host, .pipe_ptr = &pipes };
+        try extension.addRequestShutdownCallback(self, onRequestShutdown);
         return self;
     }
 
@@ -160,11 +163,8 @@ pub const CallDispatcher = struct {
             }
             redirection_controller.uninstallSyscallTrap();
         }
-        for (self.function_list.items) |*ptr| ptr.deinit();
-        self.function_list.deinit(php.allocator);
-        for (self.stream_list.items) |*ptr| ptr.deinit();
-        self.stream_list.deinit(php.allocator);
-        if (self.redirection_cb) |*cb| php.release(cb);
+        extension.removeRequestShutdownCallback(self, onRequestShutdown);
+        self.releaseResources();
         php.allocator.destroy(self);
     }
 
@@ -200,7 +200,7 @@ pub const CallDispatcher = struct {
         var fn_id: usize = 0;
         const exports = self.host.module.exports;
         if (exports.destroy_js_thunk(controller_address, thunk_address, &fn_id) == .SUCCESS) {
-            self.deleteCallback(fn_id);
+            self.removeCallback(fn_id);
         }
     }
 
@@ -229,14 +229,22 @@ pub const CallDispatcher = struct {
         } else null;
     }
 
-    fn deleteCallback(self: *@This(), fn_id: usize) void {
-        for (self.function_list.items, 0..) |*ptr, i| {
-            if (ptr.id == fn_id) {
-                ptr.deinit();
+    fn removeCallback(self: *@This(), fn_id: usize) void {
+        for (self.function_list.items, 0..) |*item, i| {
+            if (item.id == fn_id) {
+                item.deinit();
                 _ = self.function_list.swapRemove(i);
                 break;
             }
         }
+    }
+
+    fn removeAllCallbacks(self: *@This()) void {
+        // removal of the callback can cause the list to get deallocated
+        // make a copy of it just in case
+        var list = self.function_list;
+        while (list.pop()) |*item| item.deinit();
+        list.deinit(php.allocator);
     }
 
     fn scheduleTask(self: *@This(), operation: ScheduledTask.Operation) !void {
@@ -371,7 +379,7 @@ pub const CallDispatcher = struct {
     }
 
     pub fn releaseFunction(self: *@This(), fn_id: usize) !void {
-        self.deleteCallback(fn_id);
+        self.removeCallback(fn_id);
     }
 
     pub fn redirectSyscalls(self: *@This(), ptr: *const anyopaque) !void {
@@ -472,11 +480,19 @@ pub const CallDispatcher = struct {
     }
 
     pub fn removeStream(self: *@This(), fd: c_long) !void {
-        const entry = try self.findStream(fd);
-        entry.deinit();
-        const index = (@intFromPtr(entry) - @intFromPtr(self.stream_list.items.ptr)) / @sizeOf(StreamEntry);
-        _ = self.stream_list.swapRemove(index);
         if (fd == -1) self.redirecting_root = false;
+        for (self.stream_list.items, 0..) |*item, i| {
+            if (item.fd == fd) {
+                item.deinit();
+                _ = self.stream_list.swapRemove(i);
+            }
+        } else return error.Unexpected;
+    }
+
+    fn removeAllStreams(self: *@This()) void {
+        var list = self.stream_list;
+        while (list.pop()) |*item| item.deinit();
+        list.deinit(php.allocator);
     }
 
     pub fn getStreamPath(strm: *Stream) !*String {
@@ -544,8 +560,8 @@ pub const CallDispatcher = struct {
     }
 
     fn findStream(self: *@This(), fd: c_long) !*StreamEntry {
-        for (self.stream_list.items) |*entry| {
-            if (entry.fd == fd) return entry;
+        for (self.stream_list.items) |*item| {
+            if (item.fd == fd) return item;
         } else {
             const path_sc: []const u8, const mode: [*:0]const u8 = switch (fd) {
                 0 => .{ "php://input", "r" },
@@ -1113,6 +1129,23 @@ pub const CallDispatcher = struct {
             return .SUCCESS;
         } else {
             return .OPNOTSUPP;
+        }
+    }
+
+    fn onRequestShutdown(ptr: *anyopaque) void {
+        const self: *@This() = @ptrCast(@alignCast(ptr));
+        self.releaseResources();
+    }
+
+    fn releaseResources(self: *@This()) void {
+        if (!self.release_resources_called) {
+            self.release_resources_called = true;
+            if (self.redirection_cb) |*cb| {
+                php.release(cb);
+                self.redirection_cb = null;
+            }
+            self.removeAllStreams();
+            self.removeAllCallbacks();
         }
     }
 };
