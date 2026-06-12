@@ -1236,6 +1236,109 @@ pub fn invokeFunction(comptime name: []const u8, arguments: []const Value) !Valu
     return try invokeMethod(null, &callable, arguments);
 }
 
+pub const FunctionCallCache = struct {
+    fci: php_h.zend_fcall_info,
+    fcc: php_h.zend_fcall_info_cache,
+
+    pub fn init(callable: *const Value) !@This() {
+        var fci: php_h.zend_fcall_info = undefined;
+        var fcc: php_h.zend_fcall_info_cache = undefined;
+        fci.retval = null;
+        fci.param_count = 0;
+        fci.params = null;
+        var err_msg: [*c]u8 = undefined;
+        const result = php_h.zend_fcall_info_init(@constCast(callable), 0, &fci, &fcc, null, &err_msg);
+        if (result != SUCCESS) {
+            if (err_msg != null) {
+                defer efree(err_msg);
+                return failure.report("{s}", .{err_msg});
+            } else {
+                return error.Failure;
+            }
+        }
+        return .{ .fci = fci, .fcc = fcc };
+    }
+
+    pub fn deinit(self: *@This()) void {
+        php_h.zend_fcall_info_args_clear(&self.fci, true);
+    }
+
+    pub fn use(self: *@This(), named_params: ?*HashTable) void {
+        self.fci.named_params = named_params;
+    }
+
+    pub fn invoke(self: *@This(), args: []const Value) !Value {
+        php_h.zend_fcall_info_argp(&self.fci, @truncate(args.len), @constCast(args.ptr));
+        defer php_h.zend_fcall_info_args_clear(&self.fci, false);
+        defer self.fci.named_params = null;
+        var retval: Value = undefined;
+        self.fci.retval = &retval;
+        const result = php_h.zend_call_function(&self.fci, &self.fcc);
+        if (result != SUCCESS) return error.Failure;
+        if (getValueType(&retval) == .undefined) {
+            const eg = getExecutorGlobals();
+            if (eg.exception != null) {
+                return error.ExceptionThrown;
+            }
+        }
+        return retval;
+    }
+};
+
+pub fn MethodCallCaches(comptime names: anytype) type {
+    const Entries = init: {
+        var fields: [names.len]std.builtin.Type.StructField = undefined;
+        inline for (names, 0..) |name, i| {
+            fields[i] = .{
+                .name = @tagName(name),
+                .type = FunctionCallCache,
+                .default_value_ptr = null,
+                .is_comptime = false,
+                .alignment = @alignOf(FunctionCallCache),
+            };
+        }
+        break :init @Type(.{
+            .@"struct" = .{
+                .layout = .auto,
+                .decls = &.{},
+                .fields = &fields,
+                .is_tuple = false,
+            },
+        });
+    };
+    return struct {
+        method: Entries,
+
+        pub fn init(context: *const Value) !@This() {
+            var entries: Entries = undefined;
+            const fields = std.meta.fields(Entries);
+            var init_count: usize = 0;
+            errdefer {
+                inline for (0..fields.len) |i| {
+                    if (i == init_count) break;
+                    @field(entries, fields[i].name).deinit();
+                }
+            }
+            var ht = createHashTable(null);
+            defer destroyHashTable(&ht);
+            setHashEntry(&ht, 0, context);
+            const callable = createValueArray(&ht);
+            inline for (fields) |field| {
+                const name = createValueString(getStaticString(field.name));
+                setHashEntry(&ht, 1, &name);
+                @field(entries, field.name) = try .init(&callable);
+                init_count += 1;
+            }
+            return .{ .method = entries };
+        }
+
+        pub fn deinit(self: *@This()) void {
+            const fields = std.meta.fields(Entries);
+            inline for (fields) |field| @field(self.method, field.name).deinit();
+        }
+    };
+}
+
 pub fn getArgumentInfo(fn_name: *const Value) ![]php_h.zend_arg_info {
     var fcc: php_h.zend_fcall_info_cache = undefined;
     var error_string: [*c]u8 = undefined;
