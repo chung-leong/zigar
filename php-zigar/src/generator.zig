@@ -10,7 +10,10 @@ const ArgumentIterator = php.ArgumentIterator;
 const ExecuteData = php.ExecuteData;
 const Fiber = php.Fiber;
 const Function = php.Function;
+const FunctionCallCache = php.FunctionCallCache;
+const HashTable = php.HashTable;
 const N = php.getStaticString;
+const MethodCallCaches = php.MethodCallCaches;
 const Object = php.Object;
 const String = php.String;
 const Value = php.Value;
@@ -117,6 +120,85 @@ pub const GeneratorStatic = struct {
     methods: Methods = undefined,
     callback: *Object = undefined,
 
+    pub const Methods = struct {
+        yield: Function,
+    };
+    const CallbackContext = struct {
+        allocator: ?*std.mem.Allocator,
+        argument_class: *ZigClassEntry,
+        pointer: Value,
+        call_cache: FunctionCallCache,
+        named_params: ?*HashTable,
+
+        pub fn init(generator: *const Value, extern_allocator: ?*std.mem.Allocator) !@This() {
+            const generator_struct = try structure.Struct.fromValue(generator);
+            const attached_allocator = get: {
+                if (generator_struct.getProperty(N("allocator"), null)) |av| {
+                    defer php.release(&av);
+                    const allocator_struct = try structure.Struct.fromValue(&av);
+                    break :get try allocator_struct.getAllocator();
+                } else |_| break :get null;
+            };
+            const callback_value = try generator_struct.getProperty(N("callback"), null);
+            defer php.release(&callback_value);
+            const callback_struct = try structure.Pointer.fromValue(&callback_value);
+            const fn_value = try callback_struct.getValue(.none);
+            defer php.release(&fn_value);
+            // when a generator has an attached allocator, it appears as the first callback
+            // argument; the value argument is therefore "2" instead of "1"
+            const arg_name = if (attached_allocator != null) N("2") else N("1");
+            const arg_class = try structure.Function.getArgumentClass(&fn_value, arg_name);
+            // allocator has to be passed by name
+            const named_params = if (attached_allocator) |a| create: {
+                const ht = php.createArray();
+                const allocator_value = php.createValuePointer(a);
+                php.setHashEntry(ht, N("allocator"), &allocator_value);
+                break :create ht;
+            } else null;
+            const ptr_value = try generator_struct.getProperty(N("ptr"), null);
+            errdefer php.release(&ptr_value);
+            return .{
+                .call_cache = try .init(&fn_value),
+                .allocator = attached_allocator orelse extern_allocator,
+                .argument_class = arg_class,
+                .pointer = ptr_value,
+                .named_params = named_params,
+            };
+        }
+
+        pub fn deinit(self: *@This()) void {
+            self.call_cache.deinit();
+            php.release(&self.pointer);
+            if (self.named_params) |ht| php.release(ht);
+        }
+
+        pub fn send(self: *@This(), value: *const Value) !Value {
+            if (self.allocator) |a| {
+                const converted_value = try structure.Function.allocateArgument(a, value, self.argument_class);
+                defer php.release(&converted_value);
+                self.call_cache.use(self.named_params);
+                const result = try self.call_cache.invoke(&.{ self.pointer, converted_value });
+                try structure.Function.externalizeArgument(a, &converted_value);
+                return result;
+            } else {
+                return try self.call_cache.invoke(&.{ self.pointer, value.* });
+            }
+        }
+
+        pub fn sendAll(self: *@This(), source: *const Value) !void {
+            var src_cache: MethodCallCaches(.{ .current, .next }) = try .init(source);
+            defer src_cache.deinit();
+            while (true) {
+                const value = try src_cache.method.current.invoke(&.{});
+                defer php.release(&value);
+                const result = try self.send(&value);
+                const cont = try php.getValueBool(&result);
+                if (!cont or php.isValueNull(&value)) break;
+                _ = try src_cache.method.next.invoke(&.{});
+            }
+        }
+    };
+
     pub fn init(self: *@This(), class: *ZigClassEntry) !void {
         const closure = Generator.createHandler();
         defer php.release(&closure);
@@ -133,10 +215,6 @@ pub const GeneratorStatic = struct {
         php.release(self.callback);
     }
 
-    pub const Methods = struct {
-        yield: Function,
-    };
-
     pub fn findMethod(self: *@This(), name: *String) ?*php.Function {
         return inline for (std.meta.fields(Methods)) |field| {
             if (php.matchString(name, field.name)) break &@field(self.methods, field.name);
@@ -152,28 +230,21 @@ pub const GeneratorStatic = struct {
     }
 
     pub fn yield(generator: *const Value, value: *const Value, extern_allocator: ?*std.mem.Allocator) !Value {
-        const fn_value, const ptr_value, const attached_allocator = try getCallbackParams(generator);
-        defer php.release(&fn_value);
-        defer php.release(&ptr_value);
-        // use the external allocator only if there isn't one attached to the generator itself
-        const allocator = attached_allocator orelse extern_allocator;
-        const send_allocator = attached_allocator != null;
-        return send(&fn_value, &ptr_value, value, allocator, send_allocator);
+        var cb_context: CallbackContext = try .init(generator, extern_allocator);
+        defer cb_context.deinit();
+        return try cb_context.send(value);
     }
 
     pub fn pipe(generator: *const Value, source: *const Value, extern_allocator: ?*std.mem.Allocator) !void {
-        const fn_value, const ptr_value, const attached_allocator = try getCallbackParams(generator);
-        defer php.release(&fn_value);
-        defer php.release(&ptr_value);
-        const allocator = attached_allocator orelse extern_allocator;
-        const send_allocator = attached_allocator != null;
         if (!isIterator(source)) return error.NotIterator;
-        sendAll(&fn_value, &ptr_value, source, allocator, send_allocator) catch |err| {
+        var cb_context: CallbackContext = try .init(generator, extern_allocator);
+        defer cb_context.deinit();
+        cb_context.sendAll(source) catch |err| {
             // send exception to Zig if possible
             const ex = php.captureException() catch return err;
             defer php.release(ex);
             const ex_value = php.createValueObject(ex);
-            _ = send(&fn_value, &ptr_value, &ex_value, allocator, send_allocator) catch {
+            _ = cb_context.send(&ex_value) catch {
                 // discard any exception triggered by the attempt
                 if (php.captureException() catch null) |send_ex| {
                     php.release(send_ex);
@@ -184,68 +255,11 @@ pub const GeneratorStatic = struct {
         };
     }
 
-    fn sendAll(fn_value: *const Value, ptr_value: *const Value, source: *const Value, allocator: ?*std.mem.Allocator, send_allocator: bool) !void {
-        const current = php.createValueString(N("current"));
-        const next = php.createValueString(N("next"));
-        while (true) {
-            const value = try php.invokeMethod(source, &current, &.{});
-            defer php.release(&value);
-            const result = try send(fn_value, ptr_value, &value, allocator, send_allocator);
-            const cont = try php.getValueBool(&result);
-            if (!cont or php.isValueNull(&value)) break;
-            _ = try php.invokeMethod(source, &next, &.{});
-        }
-    }
-
-    fn send(fn_value: *const Value, ptr_value: *const Value, value: *const Value, allocator: ?*std.mem.Allocator, send_allocator: bool) !Value {
-        if (allocator) |a| {
-            // when a generator has an attached allocator, it appears as the first callback
-            // argument; the value argument is therefore "2" instead of "1"
-            const arg_name = if (send_allocator) N("2") else N("1");
-            const converted_value = try structure.Function.allocateArgument(a, value, fn_value, arg_name);
-            defer php.release(&converted_value);
-            const named_args = if (send_allocator) create: {
-                // the allocator has to be passed by name
-                const ht = php.createArray();
-                const allocator_value = php.createValuePointer(a);
-                php.setHashEntry(ht, N("allocator"), &allocator_value);
-                break :create ht;
-            } else null;
-            defer if (named_args) |ht| php.release(ht);
-            const result = try php.invokeMethodEx(null, fn_value, &.{ ptr_value.*, converted_value }, named_args);
-            try structure.Function.externalizeArgument(a, &converted_value);
-            return result;
-        } else {
-            return try php.invokeMethod(null, fn_value, &.{ ptr_value.*, value.* });
-        }
-    }
-
     fn getAllocator(this: *const Value) !?*std.mem.Allocator {
         const generator_struct = try structure.Struct.fromValue(this);
         const value = php.getProperty(&generator_struct.table, N("allocator")) catch return null;
         defer php.release(value);
         return php.getValuePointer(*std.mem.Allocator, value);
-    }
-
-    fn getCallbackParams(generator: *const Value) !std.meta.Tuple(&.{ Value, Value, ?*std.mem.Allocator }) {
-        const generator_obj = try php.getValueObject(generator);
-        const generator_struct = ZigObject(structure.Struct).fromObject(generator_obj).structure();
-        const callback_value = try generator_struct.getProperty(N("callback"), null);
-        const callback_obj = try php.getValueObject(&callback_value);
-        defer php.release(callback_obj);
-        const callback_struct = ZigObject(structure.Pointer).fromObject(callback_obj).structure();
-        const fn_value = try callback_struct.getValue(.none);
-        errdefer php.release(&fn_value);
-        const ptr_value = try generator_struct.getProperty(N("ptr"), null);
-        const allocator = get: {
-            if (generator_struct.getProperty(N("allocator"), null) catch null) |av| {
-                defer php.release(&av);
-                const allocator_struct = try structure.Struct.fromValue(&av);
-                break :get try allocator_struct.getAllocator();
-            }
-            break :get null;
-        };
-        return .{ fn_value, ptr_value, allocator };
     }
 
     fn isIterator(value: *const Value) bool {

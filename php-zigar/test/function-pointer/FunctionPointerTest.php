@@ -127,7 +127,7 @@ final class FunctionPointerTest extends ZigarTestCase
         $m->printArray($f2);
     }
 
-    public function testPassAbortSignalAsrugment(): void
+    public function testPassAbortSignalAsArgument(): void
     {
         $m = ZigImporter::load(__DIR__ . '/abort-signal.zig');
         $saved = (object) [];
@@ -143,7 +143,7 @@ final class FunctionPointerTest extends ZigarTestCase
         $this->assertFalse($saved->signal->off());
     }
 
-    public function testPassPromiseAsrgument(): void
+    public function testPassPromiseAsArgument(): void
     {
         $m = ZigImporter::load(__DIR__ . '/promise.zig');
         $saved = (object) [];

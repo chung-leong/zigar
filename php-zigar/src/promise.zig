@@ -10,6 +10,7 @@ const ArgumentIterator = php.ArgumentIterator;
 const ExecuteData = php.ExecuteData;
 const Fiber = php.Fiber;
 const Function = php.Function;
+const FunctionCallCache = php.FunctionCallCache;
 const N = php.getStaticString;
 const Object = php.Object;
 const String = php.String;
@@ -105,6 +106,46 @@ pub const PromiseStatic = struct {
     pub const Methods = struct {
         resolve: Function,
     };
+    const CallbackContext = struct {
+        allocator: ?*std.mem.Allocator,
+        argument_class: *ZigClassEntry,
+        pointer: Value,
+        call_cache: FunctionCallCache,
+
+        pub fn init(generator: *const Value, extern_allocator: ?*std.mem.Allocator) !@This() {
+            const generator_struct = try structure.Struct.fromValue(generator);
+            const callback_value = try generator_struct.getProperty(N("callback"), null);
+            defer php.release(&callback_value);
+            const callback_struct = try structure.Pointer.fromValue(&callback_value);
+            const fn_value = try callback_struct.getValue(.none);
+            defer php.release(&fn_value);
+            const arg_class = try structure.Function.getArgumentClass(&fn_value, N("1"));
+            const ptr_value = try generator_struct.getProperty(N("ptr"), null);
+            errdefer php.release(&ptr_value);
+            return .{
+                .call_cache = try .init(&fn_value),
+                .allocator = extern_allocator,
+                .argument_class = arg_class,
+                .pointer = ptr_value,
+            };
+        }
+
+        pub fn deinit(self: *@This()) void {
+            self.call_cache.deinit();
+            php.release(&self.pointer);
+        }
+
+        pub fn send(self: *@This(), value: *const Value) !void {
+            if (self.allocator) |a| {
+                const converted_value = try structure.Function.allocateArgument(a, value, self.argument_class);
+                defer php.release(&converted_value);
+                _ = try self.call_cache.invoke(&.{ self.pointer, converted_value });
+                try structure.Function.externalizeArgument(a, &converted_value);
+            } else {
+                _ = try self.call_cache.invoke(&.{ self.pointer, value.* });
+            }
+        }
+    };
 
     pub fn init(self: *@This(), class: *ZigClassEntry) !void {
         const closure = Promise.createHandler();
@@ -136,40 +177,15 @@ pub const PromiseStatic = struct {
         try resolve(arg_iter.this, value, allocator);
     }
 
-    pub fn resolve(promise: *const Value, value: *const Value, allocator: ?*std.mem.Allocator) !void {
-        const fn_value, const ptr_value = try getCallbackParams(promise);
-        defer php.release(&fn_value);
-        defer php.release(&ptr_value);
-        try send(&fn_value, &ptr_value, value, allocator);
-    }
-
-    fn send(fn_value: *const Value, ptr_value: *const Value, value: *const Value, allocator: ?*std.mem.Allocator) !void {
-        if (allocator) |a| {
-            const converted_value = try structure.Function.allocateArgument(a, value, fn_value, N("1"));
-            defer php.release(&converted_value);
-            _ = try php.invokeMethod(null, fn_value, &.{ ptr_value.*, converted_value });
-            try structure.Function.externalizeArgument(a, &converted_value);
-        } else {
-            _ = try php.invokeMethod(null, fn_value, &.{ ptr_value.*, value.* });
-        }
+    pub fn resolve(promise: *const Value, value: *const Value, extern_allocator: ?*std.mem.Allocator) !void {
+        var cb_context: CallbackContext = try .init(promise, extern_allocator);
+        defer cb_context.deinit();
+        try cb_context.send(value);
     }
 
     fn getAllocator(this: *const Value) !?*std.mem.Allocator {
         const generator_struct = try structure.Struct.fromValue(this);
         const value = php.getProperty(&generator_struct.table, N("allocator")) catch return null;
         return php.getValuePointer(*std.mem.Allocator, value);
-    }
-
-    fn getCallbackParams(promise: *const Value) !std.meta.Tuple(&.{ Value, Value }) {
-        const promise_obj = try php.getValueObject(promise);
-        const promise_struct = ZigObject(structure.Struct).fromObject(promise_obj).structure();
-        const callback_value = try promise_struct.getProperty(N("callback"), null);
-        const callback_obj = try php.getValueObject(&callback_value);
-        defer php.release(callback_obj);
-        const callback_struct = ZigObject(structure.Pointer).fromObject(callback_obj).structure();
-        const fn_value = try callback_struct.getValue(.none);
-        errdefer php.release(&fn_value);
-        const ptr_value = try promise_struct.getProperty(N("ptr"), null);
-        return .{ fn_value, ptr_value };
     }
 };

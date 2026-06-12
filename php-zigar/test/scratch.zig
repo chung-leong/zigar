@@ -2,26 +2,22 @@ const std = @import("std");
 
 const zigar = @import("zigar");
 
-pub const JSError = error{Unexpected};
-
-pub const Callback = *const fn (
-    allocator: std.mem.Allocator,
-    promise: zigar.function.Promise(JSError![]const u8),
-) void;
-
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-const allocator = gpa.allocator();
-
-pub fn receive(_: ?*anyopaque, arg: JSError![]const u8) void {
-    if (arg) |string| {
-        std.debug.print("value = {s}\n", .{string});
-        allocator.free(string);
-    } else |err| {
-        std.debug.print("error = {s}\n", .{@errorName(err)});
-    }
+pub fn spawn(cb: *const fn () error{Unexpected}!void) !void {
+    const ns = struct {
+        fn run(f: *const fn () error{Unexpected}!void) void {
+            f() catch |err| {
+                std.debug.print("Error: {s}\n", .{@errorName(err)});
+            };
+        }
+    };
+    const thread = try std.Thread.spawn(.{}, ns.run, .{cb});
+    thread.detach();
 }
 
-pub fn call(f: Callback) void {
-    defer zigar.function.release(f);
-    f(allocator, .{ .callback = receive });
+pub fn startup() !void {
+    try zigar.thread.use();
+}
+
+pub fn shutdown() void {
+    zigar.thread.end();
 }
