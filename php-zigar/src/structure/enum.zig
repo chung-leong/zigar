@@ -80,9 +80,9 @@ pub const Enum = struct {
                                 return try value_static.getEnum(obj);
                             }
                         }
-                    } else if (php.isGmpClass(obj.ce)) {
+                    } else if (php.isGmpObject(obj)) {
                         return self.findCanonical(value) catch php.createValueNull();
-                    } else if (php.instanceOf(obj.ce, ArrayBuffer.entry())) {
+                    } else if (php.instanceOf(obj, ArrayBuffer.entry())) {
                         // allow default handling
                         return null;
                     }
@@ -140,7 +140,7 @@ pub const Enum = struct {
                     if (obj.ce == class.entry()) {
                         php.addRef(obj);
                         return key.*;
-                    } else if (php.isGmpClass(obj.ce)) {
+                    } else if (php.isGmpObject(obj)) {
                         var key_copy = php.reuse(key).*;
                         try php.convertValue(&key_copy, .string);
                         defer php.release(&key_copy);

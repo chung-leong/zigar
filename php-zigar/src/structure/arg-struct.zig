@@ -322,8 +322,8 @@ pub const ArgStruct = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const value = try static.retval.accessors.get(self);
+        // see if an error union has yielded an error
         const eg = php.getExecutorGlobals();
-        // an error union has yielded an error
         if (eg.exception != null) return error.ExceptionThrown;
         return value;
     }
@@ -352,14 +352,18 @@ pub const ArgStruct = struct {
         const allocator = if (self.flags.has_allocator) try self.getAllocator() else null;
         if (self.flags.has_promise) {
             self.resolvePromise(value, allocator) catch |err| {
-                const msg = failure.getMessage(err);
-                const new_err = failure.report("unable to resolve promise: {s}", .{msg});
+                const new_err = switch (err) {
+                    error.ExceptionThrown => failure.report("unable to find matching entry for PHP exception in error set of promise", .{}),
+                    else => failure.report("unable to resolve promise: {s}", .{failure.getMessage(err)}),
+                };
                 return php.triggerError(new_err);
             };
         } else if (self.flags.has_generator) {
             self.pipeFromGenerator(value, allocator) catch |err| {
-                const msg = failure.getMessage(err);
-                const new_err = failure.report("unable to yield generated value: {s}", .{msg});
+                const new_err = switch (err) {
+                    error.ExceptionThrown => failure.report("unable to find matching entry for PHP exception in error set of generator", .{}),
+                    else => failure.report("unable to yield generated value: {s}", .{failure.getMessage(err)}),
+                };
                 return php.triggerError(new_err);
             };
         }
@@ -368,17 +372,8 @@ pub const ArgStruct = struct {
     pub fn getAllocator(self: *@This()) !*std.mem.Allocator {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
-        const allocator_value = init: {
-            if (static.allocator) |m| break :init try m.accessors.get(self);
-            if (static.generator) |m| {
-                if (m.class.getMember(.instance, N("allocator")) catch null) |am| {
-                    const generator = try m.accessors.get(self);
-                    const generator_struct = try structure.Struct.fromValue(&generator);
-                    break :init try am.accessors.get(generator_struct);
-                }
-            }
-            return error.Unexpected;
-        };
+        const allocator_member = static.allocator orelse return error.Unexpected;
+        const allocator_value = try allocator_member.accessors.get(self);
         defer php.release(&allocator_value);
         const allocator_struct = try structure.Struct.fromValue(&allocator_value);
         return try allocator_struct.getAllocator();
@@ -400,19 +395,21 @@ pub const ArgStruct = struct {
     }
 
     pub fn detachFunctionThunks(self: *@This()) !void {
-        try self.visitPointers(Pointer.detachFunctionThunk, .{}, .{});
+        try self.visitPointers(Pointer.detachFunctionThunk, .{}, .{ .ignore_arguments = false });
     }
 
     pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) Error!void {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.common.has_pointer) {
             var iter = class.getMemberIterator(.instance);
-            while (iter.next()) |member| {
+            var index: usize = 0;
+            while (iter.next()) |member| : (index += 1) {
+                if (options.ignore_return_value and index == 0) continue;
+                if (options.ignore_arguments and index != 0) continue;
                 if (member.class.flags.common.has_pointer) {
-                    const value = try member.accessors.getEx(self, null);
-                    defer php.release(&value);
-                    const obj = php.getValueObject(&value) catch continue;
-                    try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
+                    if (try member.accessors.getObject(self, !options.ignore_uncreated)) |obj| {
+                        try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
+                    }
                 }
             }
         }

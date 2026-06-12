@@ -90,12 +90,14 @@ pub const Optional = struct {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.common.has_pointer) {
             const static = class.getStaticData(@This());
-            const present = try static.present_acc.get(self);
-            if (try php.getValueLong(&present) != 0) {
-                const value = try static.payload_acc.get(self);
-                defer php.release(&value);
-                const obj = php.getValueObject(&value) catch return;
-                try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
+            const run = !options.ignore_inactive or check: {
+                const present = try static.present_acc.get(self);
+                break :check try php.getValueLong(&present) != 0;
+            };
+            if (run) {
+                if (try static.payload_acc.getObject(self, options.ignore_uncreated)) |obj| {
+                    try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
+                }
             }
         }
     }

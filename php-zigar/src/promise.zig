@@ -145,7 +145,7 @@ pub const PromiseStatic = struct {
 
     fn send(fn_value: *const Value, ptr_value: *const Value, value: *const Value, allocator: ?*std.mem.Allocator) !void {
         if (allocator) |a| {
-            const converted_value = try structure.Function.convertArgumentToInstance(a, value, fn_value, N("1"));
+            const converted_value = try structure.Function.allocateArgument(a, value, fn_value, N("1"));
             defer php.release(&converted_value);
             _ = try php.invokeMethod(null, fn_value, &.{ ptr_value.*, converted_value });
             try structure.Function.externalizeArgument(a, &converted_value);

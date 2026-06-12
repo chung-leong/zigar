@@ -80,6 +80,10 @@ pub const Vector = struct {
         return try static.value_acc.getElementEx(self, index, transform);
     }
 
+    pub fn getElementObject(_: *@This(), _: usize, _: bool) !?*Object {
+        return null;
+    }
+
     pub fn setElement(self: *@This(), index: usize, value: *const Value) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());

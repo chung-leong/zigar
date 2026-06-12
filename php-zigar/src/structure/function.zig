@@ -206,7 +206,9 @@ pub const Function = struct {
         if (self.info.has_thunk) self.info.lost_thunk = true;
     }
 
-    pub fn convertArgumentToInstance(allocator: *std.mem.Allocator, value: *const Value, fn_value: *const Value, name: *const String) !Value {
+    pub fn allocateArgument(allocator: *std.mem.Allocator, value: *const Value, fn_value: *const Value, name: *const String) !Value {
+        // don't bother when it's null, since no memory would be allocated
+        if (php.isValueNull(value)) return value.*;
         const func_obj = try php.getValueObject(fn_value);
         const func_class = ZigClassEntry.fromObject(func_obj);
         const arg_struct_member = try func_class.getMember(.instance, 0);

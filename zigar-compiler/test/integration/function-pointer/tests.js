@@ -163,7 +163,6 @@ export function addTests(importModule, options) {
         'number = 1234, value = 8',
         'number = 1234, value = 9',
         'number = 1234, value = 10',
-        'number = 1234, value = null',
       ]);
       const f3 = function({ callback }) {
         for (let i = 6; i < 20; i++) {
@@ -183,7 +182,6 @@ export function addTests(importModule, options) {
         'number = 1234, value = 8',
         'number = 1234, value = 9',
         'number = 1234, value = 10',
-        'number = 1234, value = null',
       ]);
     })
     it('should correctly pass allocator and generator as arguments', async function() {

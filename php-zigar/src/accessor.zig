@@ -55,7 +55,7 @@ pub const Transform = enum {
                 value.* = try invokeMethod(obj, "getValue", .{self});
                 php.release(obj);
                 return;
-            } else if (php.isGmpClass(obj.ce)) {
+            } else if (php.isGmpObject(obj)) {
                 // leave GMP object as is
                 if (self == .integer) return;
             }
@@ -166,7 +166,7 @@ pub const Any = union(enum) {
                 const A = @TypeOf(acc);
                 if (S == ByteBuffer) @compileError("Calling accessor with buffer");
                 const args = try comptime validate(S, A, "get");
-                if (@hasField(A, "getEx")) {
+                if (@hasDecl(A, "getEx")) {
                     return switch (args) {
                         .both => try acc.getEx(source.buffer, &source.table, transform),
                         .buffer => try acc.getEx(source.buffer, transform),
@@ -184,6 +184,28 @@ pub const Any = union(enum) {
                     };
                     if (transform) |tm| try tm.apply(&value);
                     return value;
+                }
+            },
+        }
+    }
+
+    pub fn getObject(self: @This(), source: anytype, vivicate: bool) !?*Object {
+        @setEvalBranchQuota(2000000);
+        const S = @TypeOf(source.*);
+        switch (self) {
+            inline else => |acc| {
+                const A = @TypeOf(acc);
+                if (S == ByteBuffer) @compileError("Calling accessor with buffer");
+                const args = try comptime validate(S, A, "getEntry");
+                if (@hasDecl(A, "getEntry")) {
+                    const value_ptr = switch (args) {
+                        .both => try acc.getEntry(source.buffer, &source.table, vivicate),
+                        .table => try acc.getEntry(&source.table, vivicate),
+                        .buffer, .none, .object => @compileError("Impossible operation"),
+                    } orelse return null;
+                    return php.getValueObject(value_ptr) catch null;
+                } else {
+                    return null;
                 }
             },
         }
@@ -261,7 +283,7 @@ pub const Any = union(enum) {
                 const A = @TypeOf(acc);
                 if (S == ByteBuffer) @compileError("Calling accessor with buffer");
                 const args = try comptime validate(S, A, "getElement");
-                if (@hasField(A, "getElementEx")) {
+                if (@hasDecl(A, "getElementEx")) {
                     return switch (args) {
                         .both => try acc.getElementEx(source.buffer, &source.table, index, transform),
                         .buffer => try acc.getElementEx(source.buffer, index, transform),
@@ -279,6 +301,28 @@ pub const Any = union(enum) {
                     };
                     if (transform) |tm| try tm.apply(&value);
                     return value;
+                }
+            },
+        }
+    }
+
+    pub fn getElementObject(self: @This(), source: anytype, index: usize, vivicate: bool) !?*Object {
+        @setEvalBranchQuota(2000000);
+        const S = @TypeOf(source.*);
+        switch (self) {
+            inline else => |acc| {
+                const A = @TypeOf(acc);
+                if (S == ByteBuffer) @compileError("Calling accessor with buffer");
+                const args = try comptime validate(S, A, "getElementEntry");
+                if (@hasDecl(A, "getElementEntry")) {
+                    const value_ptr = switch (args) {
+                        .both => try acc.getElementEntry(source.buffer, &source.table, index, vivicate),
+                        .table => try acc.getElementEntry(&source.table, index, vivicate),
+                        .buffer, .none, .object => @compileError("Impossible operation"),
+                    } orelse return null;
+                    return php.getValueObject(value_ptr) catch null;
+                } else {
+                    return null;
                 }
             },
         }
@@ -314,12 +358,6 @@ pub const Any = union(enum) {
                 };
             },
         }
-    }
-
-    pub fn getObject(self: @This(), comptime T: type, source: anytype) !*T {
-        const value = try self.get(source);
-        const obj = php.getValueObject(&value) catch unreachable;
-        return ZigObject(T).fromObject(obj).structure();
     }
 
     pub fn isType(self: @This(), comptime accessor_type: Type) bool {
@@ -367,12 +405,12 @@ pub const Any = union(enum) {
     }
 
     // object
-    multi_slot: Slot(.{}),
-    single_slot: Slot(.{ .slots = .single }),
-    array_slot: Slot(.{ .index = .use }),
-    multi_slot_prebaked: Slot(.{ .prebaked = true }),
-    single_slot_prebaked: Slot(.{ .slots = .single, .prebaked = true }),
-    array_slot_prebaked: Slot(.{ .index = .use, .prebaked = true }),
+    multi_slot: Slot(.{ .slots = .multiple, .index = .none }),
+    single_slot: Slot(.{ .slots = .single, .index = .none }),
+    array_slot: Slot(.{ .slots = .multiple, .index = .use }),
+    multi_slot_prebaked: Slot(.{ .slots = .multiple, .index = .none, .prebaked = true }),
+    single_slot_prebaked: Slot(.{ .slots = .single, .index = .none, .prebaked = true }),
+    array_slot_prebaked: Slot(.{ .slots = .multiple, .index = .use, .prebaked = true }),
     constant: Constant,
     property: Property,
     // null and void

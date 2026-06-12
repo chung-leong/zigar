@@ -7,6 +7,7 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const MemberType = @import("../enums.zig").MemberType;
 const failure = @import("../failure.zig");
+const Error = failure.Error;
 const Generator = @import("../generator.zig").Generator;
 const ZigObject = @import("../object.zig").ZigObject;
 const getObjectBuffer = @import("../object.zig").getObjectBuffer;
@@ -189,6 +190,24 @@ pub const VariadicStruct = struct {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         return try static.retval_accessors.get(self);
+    }
+
+    pub fn visitPointers(self: *@This(), cb: anytype, args: anytype, comptime options: structure.VisitOptions) Error!void {
+        const class = ZigClassEntry.fromStructure(self);
+        if (class.flags.common.has_pointer) {
+            var iter = class.getMemberIterator(.instance);
+            var index: usize = 0;
+            while (iter.next()) |member| : (index += 1) {
+                if (options.ignore_return_value and index == 0) continue;
+                if (options.ignore_arguments and index != 0) continue;
+                if (member.class.flags.common.has_pointer) {
+                    if (try member.accessors.getObject(self, !options.ignore_uncreated)) |obj| {
+                        try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
+                    }
+                }
+            }
+        }
+        // TODO: scan table for variadic arguments
     }
 
     pub fn freeObject(obj: *Object) void {

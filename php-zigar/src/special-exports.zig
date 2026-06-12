@@ -256,7 +256,7 @@ pub const SpecialExports = struct {
     fn getClassFromArgument(arg_iter: *ArgumentIterator) !*ZigClassEntry {
         const arg0 = arg_iter.next() orelse return error.NotString;
         const obj = try php.getValueObject(arg0);
-        if (!ZigClassEntry.isZig(obj.ce) and !ZigClassEntry.isZigError(obj.ce)) {
+        if (!ZigClassEntry.isZig(obj.ce) and !ZigClassEntry.isZigError(obj)) {
             return error.NotZigClass;
         }
         return ZigClassEntry.fromObject(obj);

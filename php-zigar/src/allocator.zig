@@ -63,7 +63,7 @@ pub const AllocatorStatic = struct {
         const arg0 = arg_iter.next().?;
         var obj = try php.getValueObject(arg0);
         const buf = get: {
-            if (php.instanceOf(obj.ce, ArrayBuffer.entry())) {
+            if (php.instanceOf(obj, ArrayBuffer.entry())) {
                 const ar = ArrayBuffer.fromObject(obj);
                 break :get ar.buffer;
             } else if (ZigClassEntry.isZig(obj.ce)) {
@@ -103,7 +103,7 @@ pub const AllocatorStatic = struct {
                 break :get php.getStringContent(str);
             } else |_| {
                 const obj = try php.getValueObject(arg0);
-                if (php.instanceOf(obj.ce, ArrayBuffer.entry())) {
+                if (php.instanceOf(obj, ArrayBuffer.entry())) {
                     const ar = ArrayBuffer.fromObject(obj);
                     break :get try ar.buffer.data(0, false);
                 }

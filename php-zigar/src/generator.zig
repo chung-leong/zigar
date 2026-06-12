@@ -168,14 +168,30 @@ pub const GeneratorStatic = struct {
         const allocator = attached_allocator orelse extern_allocator;
         const send_allocator = attached_allocator != null;
         if (!isIterator(source)) return error.NotIterator;
+        sendAll(&fn_value, &ptr_value, source, allocator, send_allocator) catch |err| {
+            // send exception to Zig if possible
+            const ex = php.captureException() catch return err;
+            defer php.release(ex);
+            const ex_value = php.createValueObject(ex);
+            _ = send(&fn_value, &ptr_value, &ex_value, allocator, send_allocator) catch {
+                // discard any exception triggered by the attempt
+                if (php.captureException() catch null) |send_ex| {
+                    php.release(send_ex);
+                }
+                // rethrow it the original exception
+                return php.throwException(php.reuse(ex));
+            };
+        };
+    }
+
+    fn sendAll(fn_value: *const Value, ptr_value: *const Value, source: *const Value, allocator: ?*std.mem.Allocator, send_allocator: bool) !void {
         const current = php.createValueString(N("current"));
         const next = php.createValueString(N("next"));
         while (true) {
-            var value = try php.invokeMethod(source, &current, &.{});
+            const value = try php.invokeMethod(source, &current, &.{});
             defer php.release(&value);
-            const retval = try send(&fn_value, &ptr_value, &value, allocator, send_allocator);
-            if (allocator) |a| try structure.Function.externalizeArgument(a, &value);
-            const cont = try php.getValueBool(&retval);
+            const result = try send(fn_value, ptr_value, &value, allocator, send_allocator);
+            const cont = try php.getValueBool(&result);
             if (!cont or php.isValueNull(&value)) break;
             _ = try php.invokeMethod(source, &next, &.{});
         }
@@ -186,7 +202,7 @@ pub const GeneratorStatic = struct {
             // when a generator has an attached allocator, it appears as the first callback
             // argument; the value argument is therefore "2" instead of "1"
             const arg_name = if (send_allocator) N("2") else N("1");
-            const converted_value = try structure.Function.convertArgumentToInstance(a, value, fn_value, arg_name);
+            const converted_value = try structure.Function.allocateArgument(a, value, fn_value, arg_name);
             defer php.release(&converted_value);
             const named_args = if (send_allocator) create: {
                 // the allocator has to be passed by name
@@ -235,6 +251,6 @@ pub const GeneratorStatic = struct {
     fn isIterator(value: *const Value) bool {
         const generator_obj = php.getValueObject(value) catch return false;
         const iterator = php.getInterface(.iterator);
-        return php.instanceOf(generator_obj.ce, iterator);
+        return php.instanceOf(generator_obj, iterator);
     }
 };

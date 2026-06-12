@@ -92,7 +92,7 @@ final class FunctionPointerTest extends ZigarTestCase
         $m->printArray($f2);
     }
 
-    public function testPassAbortSignalAsAsrugment(): void
+    public function testPassAbortSignalAsrugment(): void
     {
         $m = ZigImporter::load(__DIR__ . '/abort-signal.zig');
         $saved = (object) [];
@@ -108,7 +108,7 @@ final class FunctionPointerTest extends ZigarTestCase
         $this->assertFalse($saved->signal->off());
     }
 
-    public function testPassPromiseAsAsArgument(): void
+    public function testPassPromiseAsrgument(): void
     {
         $m = ZigImporter::load(__DIR__ . '/promise.zig');
         $saved = (object) [];
@@ -143,7 +143,7 @@ final class FunctionPointerTest extends ZigarTestCase
         usleep(10 * 1000);
     }
 
-    public function testPassAllocatorAndPromiseAsAsArgument(): void
+    public function testPassAllocatorAndPromiseAsArgument(): void
     {
         $m = ZigImporter::load(__DIR__ . '/promise-with-allocator.zig');
         $this->expectOutputString(<<<OUTPUT
@@ -164,7 +164,7 @@ final class FunctionPointerTest extends ZigarTestCase
         });
     }
 
-    public function testPassGeneratorAsAsArgument(): void
+    public function testPassGeneratorAsArgument(): void
     {
         $m = ZigImporter::load(__DIR__ . '/generator.zig');
         $this->expectOutputString(<<<OUTPUT
@@ -174,10 +174,55 @@ final class FunctionPointerTest extends ZigarTestCase
         number = 1234, value = 3
         number = 1234, value = 4
         number = 1234, value = null
+        number = 1234, value = 6
+        number = 1234, value = 7
+        number = 1234, value = 8
+        number = 1234, value = 9
+        number = 1234, value = 10
+        number = 1234, value = 6
+        number = 1234, value = 7
+        number = 1234, value = 8
+        number = 1234, value = 9
+        number = 1234, value = 10
 
         OUTPUT);
         $m->call(function() {
             for ($i = 0; $i < 5; $i++) yield $i;
+        });
+        $m->call(function() {
+            for ($i = 6; $i < 20; $i++) yield $i;
+        });
+        $m->call(function($callback) {
+            for ($i = 6; $i < 20; $i++) {
+                if (!$callback($i)) {
+                    break;
+                }
+            }
+        });
+    }
+
+    public function testPassGeneratorWithAllocatorAsArgument(): void
+    {
+        $m = ZigImporter::load(__DIR__ . '/generator-with-allocator.zig');
+        $this->expectOutputString(<<<OUTPUT
+        real_name = Tony Stark, superhero_name = Ironman, age = 53
+        real_name = Peter Parker, superhero_name = Spiderman, age = 17
+        real_name = Natasha Romanoff, superhero_name = Black Widow, age = 39
+        real_name = Tony Stark, superhero_name = Ironman, age = 53
+        error = Unexpected
+
+        OUTPUT);
+        $m->call(function() {
+            $avengers = [
+                [ 'real_name' => 'Tony Stark', 'superhero_name' => 'Ironman', 'age' => 53 ],
+                [ 'real_name' => 'Peter Parker', 'superhero_name' => 'Spiderman', 'age' => 17 ],
+                [ 'real_name' => 'Natasha Romanoff', 'superhero_name' => 'Black Widow', 'age' => 39 ],
+            ];
+            foreach ($avengers as $avenger) yield $avenger;
+        });
+        $m->call(function() {
+            yield [ 'real_name' => 'Tony Stark', 'superhero_name' => 'Ironman', 'age' => 53 ];
+            throw new Exception('Unexpected');
         });
     }
 

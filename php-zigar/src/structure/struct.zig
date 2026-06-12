@@ -525,10 +525,9 @@ pub const Struct = struct {
             var iter = class.getMemberIterator(.instance);
             while (iter.next()) |member| {
                 if (member.class.flags.common.has_pointer) {
-                    const value = try member.accessors.getEx(self, null);
-                    defer php.release(&value);
-                    const obj = php.getValueObject(&value) catch continue;
-                    try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
+                    if (try member.accessors.getObject(self, options.ignore_uncreated)) |obj| {
+                        try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
+                    }
                 }
             }
         }
@@ -632,7 +631,7 @@ pub const Struct = struct {
                 .long, .double, .string => break :check true,
                 .object => {
                     const obj_b = php.getValueObject(b) catch unreachable;
-                    if (php.isGmpClass(obj_b.ce)) break :check true;
+                    if (php.isGmpObject(obj_b)) break :check true;
                 },
                 else => {},
             }

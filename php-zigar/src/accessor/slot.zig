@@ -9,7 +9,7 @@ const Value = php.Value;
 const structure = @import("../structure.zig");
 
 pub const Attributes = struct {
-    slots: enum { multiple, single } = .multiple,
+    slots: enum { multiple, single },
     index: enum { none, use } = .none,
     prebaked: bool = false,
 };
@@ -39,21 +39,26 @@ pub fn Slot(comptime attrs: Attributes) type {
                         return try getValueEx(entry, self.transform, transform);
                     }
 
+                    pub fn getEntry(self: @This(), buffer: *ByteBuffer, table: *Value, vivicate: bool) Error!?*Value {
+                        const ht = try php.getValueHashTable(table);
+                        return php.getHashEntry(ht, self.slot) catch if (vivicate) create: {
+                            const offset = self.byte_offset;
+                            const len = self.byte_size;
+                            const bit_offset = self.bit_offset;
+                            const new_obj = try self.class.obtainObjectAtOffset(buffer, offset, len, bit_offset);
+                            var new_value = php.createValueObject(new_obj);
+                            break :create php.insertHashEntry(ht, self.slot, &new_value);
+                        } else null;
+                    }
+
                     pub fn set(self: @This(), buffer: *ByteBuffer, table: *Value, value: *const Value) Error!void {
                         const entry = try self.vivicateSlot(buffer, table);
                         try setValue(entry, value, self.transform, attrs.prebaked);
                     }
 
                     fn vivicateSlot(self: @This(), buffer: *ByteBuffer, table: *Value) Error!*Value {
-                        const ht = try php.getValueHashTable(table);
-                        return php.getHashEntry(ht, self.slot) catch vivicate: {
-                            const offset = self.byte_offset;
-                            const len = self.byte_size;
-                            const bit_offset = self.bit_offset;
-                            const new_obj = try self.class.obtainObjectAtOffset(buffer, offset, len, bit_offset);
-                            var new_value = php.createValueObject(new_obj);
-                            break :vivicate php.insertHashEntry(ht, self.slot, &new_value);
-                        };
+                        const result = try self.getEntry(buffer, table, true);
+                        return result.?;
                     }
                 },
                 .use => struct {
@@ -78,16 +83,21 @@ pub fn Slot(comptime attrs: Attributes) type {
                         try setValue(entry, value, self.transform, attrs.prebaked);
                     }
 
-                    fn vivicateSlot(self: @This(), buffer: *ByteBuffer, table: *Value, index: usize) Error!*Value {
+                    pub fn getElementEntry(self: @This(), buffer: *ByteBuffer, table: *Value, index: usize, vivicate: bool) Error!?*Value {
                         const ht = try php.getValueHashTable(table);
                         const key: c_long = @intCast(index);
-                        return php.getHashEntry(ht, key) catch vivicate: {
+                        return php.getHashEntry(ht, key) catch if (vivicate) create: {
                             const offset = self.byte_size * index;
                             const len = self.byte_size;
                             const new_obj = try self.class.obtainObjectAtOffset(buffer, offset, len, 0);
                             var new_value = php.createValueObject(new_obj);
-                            break :vivicate php.insertHashEntry(ht, key, &new_value);
-                        };
+                            break :create php.insertHashEntry(ht, key, &new_value);
+                        } else null;
+                    }
+
+                    fn vivicateSlot(self: @This(), buffer: *ByteBuffer, table: *Value, index: usize) Error!*Value {
+                        const result = try self.getElementEntry(buffer, table, index, true);
+                        return result.?;
                     }
                 },
             },
@@ -110,13 +120,8 @@ pub fn Slot(comptime attrs: Attributes) type {
                     return getValue(entry, self.transform, transform);
                 }
 
-                pub fn set(self: @This(), buffer: *ByteBuffer, table: *Value, value: *const Value) Error!void {
-                    const entry = try self.vivicateSlot(buffer, table);
-                    try setValue(entry, value, self.transform, attrs.prebaked);
-                }
-
-                fn vivicateSlot(self: @This(), buffer: *ByteBuffer, table: *Value) Error!*Value {
-                    if (php.getValueType(table) == .null) {
+                pub fn getEntry(self: @This(), buffer: *ByteBuffer, table: *Value, vivicate: bool) Error!?*Value {
+                    if (php.getValueType(table) == .null and vivicate) {
                         const offset = self.byte_offset;
                         const len = self.byte_size;
                         const bit_offset = self.bit_offset;
@@ -124,6 +129,16 @@ pub fn Slot(comptime attrs: Attributes) type {
                         table.* = php.createValueObject(new_obj);
                     }
                     return table;
+                }
+
+                pub fn set(self: @This(), buffer: *ByteBuffer, table: *Value, value: *const Value) Error!void {
+                    const entry = try self.vivicateSlot(buffer, table);
+                    try setValue(entry, value, self.transform, attrs.prebaked);
+                }
+
+                fn vivicateSlot(self: @This(), buffer: *ByteBuffer, table: *Value) Error!*Value {
+                    const result = try self.getEntry(buffer, table, true);
+                    return result.?;
                 }
             },
         },
@@ -146,6 +161,11 @@ pub fn Slot(comptime attrs: Attributes) type {
                         const ht = try php.getValueHashTable(table);
                         const entry = try php.getHashEntry(ht, self.slot);
                         return try getValueEx(entry, self.transform, transform);
+                    }
+
+                    pub fn getEntry(self: @This(), table: *Value, _: bool) Error!?*Value {
+                        const ht = try php.getValueHashTable(table);
+                        return try php.getHashEntry(ht, self.slot);
                     }
 
                     pub fn set(self: @This(), table: *Value, value: *const Value) Error!void {
@@ -172,6 +192,11 @@ pub fn Slot(comptime attrs: Attributes) type {
                         return try getValueEx(entry, self.transform, transform);
                     }
 
+                    pub fn getElementEntry(_: @This(), table: *Value, index: usize, _: bool) Error!?*Value {
+                        const ht = try php.getValueHashTable(table);
+                        return try php.getHashEntry(ht, index);
+                    }
+
                     pub fn setElement(self: @This(), table: *Value, index: usize, value: *const Value) Error!void {
                         const ht = try php.getValueHashTable(table);
                         const entry = try php.getHashEntry(ht, index);
@@ -190,6 +215,10 @@ pub fn Slot(comptime attrs: Attributes) type {
 
                 pub fn getEx(self: @This(), table: *Value, transform: ?accessor.Transform) Error!Value {
                     return try getValueEx(table, self.transform, transform);
+                }
+
+                pub fn getEntry(_: @This(), table: *Value, _: bool) Error!?*Value {
+                    return table;
                 }
 
                 pub fn set(self: @This(), table: *Value, value: *const Value) Error!void {

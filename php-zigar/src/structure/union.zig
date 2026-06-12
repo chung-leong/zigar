@@ -119,7 +119,10 @@ pub const Union = struct {
             // allocate structure without copying initializer
             try Super.initialize(self, allocator, null, read_only);
             // mark pointers as inaccessible
-            try self.visitPointers(structure.Pointer.restrictAccess, .{}, .{ .include_inactive = true });
+            try self.visitPointers(structure.Pointer.restrictAccess, .{}, .{
+                .ignore_inactive = false,
+                .ignore_uncreated = false,
+            });
             // now we can copy
             if (initializer) |value| try self.setValue(value, .none);
         } else {
@@ -131,7 +134,10 @@ pub const Union = struct {
         if (!init_called) {
             const class = ZigClassEntry.fromStructure(self);
             if (class.flags.@"union".has_inaccessible) {
-                try self.visitPointers(structure.Pointer.restrictAccess, .{}, .{ .include_inactive = true });
+                try self.visitPointers(structure.Pointer.restrictAccess, .{}, .{
+                    .ignore_inactive = false,
+                    .ignore_uncreated = false,
+                });
             }
         }
         try Super.finalize(self, init_called);
@@ -216,25 +222,24 @@ pub const Union = struct {
         if (class.flags.common.has_pointer) {
             const static = class.getStaticData(@This());
             const selector = static.selector orelse return error.Unexpected;
-            const active_sel_value = switch (options.include_inactive) {
-                false => try selector.accessors.get(self),
-                true => php.createValueNull(),
+            const active_sel_value = switch (options.ignore_inactive) {
+                true => try selector.accessors.get(self),
+                false => php.createValueNull(),
             };
             defer php.release(&active_sel_value);
             var iter = class.getMemberIterator(.instance);
             while (iter.next()) |member| {
                 if (iter.currentName()) |name| {
                     if (member.class.flags.common.has_pointer) {
-                        const run = options.include_inactive or match: {
+                        const run = !options.ignore_inactive or match: {
                             const sel_value = try php.getHashEntry(&selector.possible_values, name);
                             break :match compareSelectors(sel_value, &active_sel_value);
                         };
                         if (run) {
-                            const value = try member.accessors.getEx(self, null);
-                            defer php.release(&value);
-                            const obj = php.getValueObject(&value) catch continue;
-                            try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
-                            if (!options.include_inactive) break;
+                            if (try member.accessors.getObject(self, !options.ignore_return_value)) |obj| {
+                                try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
+                            }
+                            if (options.ignore_inactive) break;
                         }
                     }
                 }

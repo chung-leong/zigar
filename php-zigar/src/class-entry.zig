@@ -149,7 +149,7 @@ pub const ZigClassEntry = struct {
     }
 
     pub fn hasInterface(self: *@This(), interface_ce: *const php.ClassEntry) bool {
-        return php.instanceOf(self.entry(), interface_ce);
+        return php.subclassOf(self.entry(), interface_ce);
     }
 
     pub fn hasMethods(self: *@This()) bool {
@@ -164,7 +164,7 @@ pub const ZigClassEntry = struct {
             true => global_error_class,
             false => global_class,
         };
-        return if (php.instanceOf(obj.ce, parent_ce)) fromObject(obj) else null;
+        return if (php.instanceOf(obj, parent_ce)) fromObject(obj) else null;
     }
 
     pub fn create(host: *Host, info: *Value) !*Object {
@@ -541,12 +541,12 @@ pub const ZigClassEntry = struct {
     }
 
     pub fn extractBuffer(self: *@This(), obj: *Object, strict: bool) ?*ByteBuffer {
-        if (php.instanceOf(obj.ce, ArrayBuffer.entry())) {
+        if (php.instanceOf(obj, ArrayBuffer.entry())) {
             return ArrayBuffer.fromObject(obj).buffer;
         }
         if (!strict) {
             const Uint8Array = TypedArrayOf(u8, false);
-            if (php.instanceOf(obj.ce, Uint8Array.entry())) {
+            if (php.instanceOf(obj, Uint8Array.entry())) {
                 return Uint8Array.fromObject(obj).buffer;
             }
         }
@@ -563,7 +563,7 @@ pub const ZigClassEntry = struct {
             switch (member.type) {
                 inline .int, .uint, .float => |t| inline for (@field(typed_array_types, @tagName(t))) |T| {
                     const TypedArray = TypedArrayOf(T, false);
-                    if (php.instanceOf(obj.ce, TypedArray.entry())) {
+                    if (php.instanceOf(obj, TypedArray.entry())) {
                         // opaque can accept typed array of any size
                         if (member.bit_size == @bitSizeOf(T) or is_opaque_slice) {
                             return TypedArray.fromObject(obj).buffer;
@@ -575,7 +575,7 @@ pub const ZigClassEntry = struct {
         }
         if (self.isClampedArray() or self.type == .@"opaque") {
             const ClampedArray = TypedArrayOf(u8, true);
-            if (php.instanceOf(obj.ce, ClampedArray.entry())) {
+            if (php.instanceOf(obj, ClampedArray.entry())) {
                 return ClampedArray.fromObject(obj).buffer;
             }
         }
@@ -1343,8 +1343,8 @@ pub const ZigClassEntry = struct {
         return false;
     }
 
-    pub fn isZigError(ce: *ClassEntry) bool {
-        return ce.*.unnamed_0.parent == global_error_class;
+    pub fn isZigError(obj: *Object) bool {
+        return obj.ce.*.unnamed_0.parent == global_error_class;
     }
 
     pub fn getParentClass(self: *@This()) *ClassEntry {

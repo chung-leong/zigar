@@ -83,7 +83,7 @@ pub const ErrorUnion = struct {
                 .object => check: {
                     // see if value is an Throwable
                     const obj = php.getValueObject(value) catch unreachable;
-                    const is_throwable = php.instanceOf(obj.ce, php.getInterface(.throwable));
+                    const is_throwable = php.instanceOf(obj, php.getInterface(.throwable));
                     break :check if (is_throwable) value else null;
                 },
                 else => null,
@@ -110,15 +110,14 @@ pub const ErrorUnion = struct {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.common.has_slot) {
             const static = class.getStaticData(@This());
-            const run = options.include_inactive or check: {
+            const run = !options.ignore_inactive or check: {
                 const err = try static.error_acc.get(self.buffer);
                 break :check php.getValueType(&err) != .object;
             };
             if (run) {
-                const value = try static.payload_acc.get(self);
-                defer php.release(&value);
-                const obj = php.getValueObject(&value) catch return;
-                try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
+                if (try static.payload_acc.getObject(self, !options.ignore_uncreated)) |obj| {
+                    try structure.invokeMethod(obj, "visitPointers", .{ cb, args, options });
+                }
             }
         }
     }

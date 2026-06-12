@@ -164,7 +164,7 @@ pub const Pointer = struct {
                             const ptr_struct = ZigObject(structure.Pointer).fromObject(obj).structure();
                             obj = try ptr_struct.getTarget();
                         }
-                        if (php.instanceOf(obj.ce, target_class.entry())) {
+                        if (php.instanceOf(obj, target_class.entry())) {
                             // point to existing object
                             // TODO: check read-only flag
                             break :init php.reuse(obj);

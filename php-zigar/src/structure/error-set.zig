@@ -94,7 +94,7 @@ pub const ErrorSet = struct {
                         if (php.getHashEntry(ht, "error") catch null) |msg| {
                             return try self.castValue(msg);
                         }
-                    } else if (php.instanceOf(obj.ce, ArrayBuffer.entry())) {
+                    } else if (php.instanceOf(obj, ArrayBuffer.entry())) {
                         return null; // allow default handling
                     }
                 },
@@ -176,14 +176,14 @@ pub const ErrorSet = struct {
                         php.addRef(err_obj);
                         return key.*;
                     }
-                    if (php.instanceOf(err_obj.ce, php.getInterface(.throwable))) {
-                        if (ZigClassEntry.isZigError(err_obj.ce)) {
+                    if (php.instanceOf(err_obj, php.getInterface(.throwable))) {
+                        if (ZigClassEntry.isZigError(err_obj)) {
                             php.addRef(err_obj);
                             return key.*;
                         } else {
                             const method = php.createValueString(N("getMessage"));
                             const message = try php.invokeMethod(key, &method, &.{});
-                            php.release(&message);
+                            defer php.release(&message);
                             return self.findCanonical(&message);
                         }
                     } else {

@@ -62,7 +62,10 @@ pub const RefStatus = packed struct {
     broken: bool = false,
 };
 pub const VisitOptions = packed struct {
-    include_inactive: bool = false,
+    ignore_inactive: bool = true,
+    ignore_uncreated: bool = true,
+    ignore_arguments: bool = true,
+    ignore_return_value: bool = true,
 };
 
 pub fn enumName(comptime S: type) []const u8 {
@@ -206,7 +209,7 @@ pub fn Parent(comptime S: type) type {
         pub fn copySelf(self: *S, value: *const Value) !bool {
             const obj = php.getValueObject(value) catch return false;
             const class = ZigClassEntry.fromStructure(self);
-            if (!php.instanceOf(obj.ce, class.entry())) return false;
+            if (!php.instanceOf(obj, class.entry())) return false;
             const obj_struct = ZigObject(S).fromObject(obj).structure();
             try self.buffer.copy(obj_struct.buffer);
             return true;
@@ -615,10 +618,9 @@ pub fn ArrayLike(comptime S: type) type {
             if (class.flags.common.has_pointer) {
                 const len = self.getLength();
                 for (0..len) |index| {
-                    const value = try self.getElementEx(index, null);
-                    defer php.release(&value);
-                    const obj = php.getValueObject(&value) catch return;
-                    try invokeMethod(obj, "visitPointers", .{ cb, args, options });
+                    if (try self.getElementObject(index, !options.ignore_uncreated)) |obj| {
+                        try invokeMethod(obj, "visitPointers", .{ cb, args, options });
+                    }
                 }
             }
         }

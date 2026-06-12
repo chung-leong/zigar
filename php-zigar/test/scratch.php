@@ -14,3 +14,7 @@ $m->call(function() {
     ];
     foreach ($avengers as $avenger) yield $avenger;
 });
+$m->call(function() {
+    throw new Exception('Unexpected');
+    yield [ 'real_name' => 'Tony Stark', 'superhero_name' => 'Ironman', 'age' => 53 ];
+});
