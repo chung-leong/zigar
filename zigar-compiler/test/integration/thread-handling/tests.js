@@ -352,7 +352,7 @@ export function addTests(importModule, options) {
         await shutdown();
       }
     })
-    it('should call invoke thread start function', async function() {
+    it('should invoke thread start function', async function() {
       const {
         startup,
         shutdown,

@@ -1320,7 +1320,7 @@ pub const ZigClassEntry = struct {
         const error_parent_ce = php.getClassEntry(.exception);
         global_error_class = try php.registerInternalClass(&error_ce, error_parent_ce);
         errdefer php.unregisterInternalClass(global_error_class);
-        var signal_ce: ClassEntry = .{ .name = N("ZigAbortSignal") };
+        var signal_ce: ClassEntry = .{ .name = N("AbortSignal") };
         abort_signal_class = try php.registerInternalClass(&signal_ce, parent_ce);
         abort_signal_class.unnamed_1.create_object = php.transform(AbortSignal.handleCreateObject);
     }

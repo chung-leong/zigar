@@ -4,27 +4,17 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use Revolt\EventLoop;
 
-$m = zigar_use(__DIR__ . '/scratch.zig');
+$m = zigar_use(__DIR__ . '/thread-handling/create-thread-with-allocating-generator.zig');
 
-ini_set('zigar.event_loop', 'revolt');
-
-EventLoop::defer(function() use($m) {
-    $m->startup();
-    $m->spawn(function() {
-        echo "Hello world!\n";
-    });
-    print_r($file);
-});
-
-EventLoop::repeat(0.1, function($callbackId) use($m) {
-    static $i = 0;
-
-    if ($i++ < 10) {
-        echo "tick\n";
-    } else {
-        $m->shutdown();
-        EventLoop::cancel($callbackId);
+$m->startup();
+try {
+    $generator = $m->spawn();
+    $list = [];
+    foreach ($generator as $s) {
+        $list[] = $s;
     }
-});
+    print_r($list);
+} finally {
+    $m->shutdown();
+}
 
-EventLoop::run();
