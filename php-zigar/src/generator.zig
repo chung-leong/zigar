@@ -23,7 +23,7 @@ const ZigObject = @import("object.zig").ZigObject;
 
 pub const Generator = struct {
     status: enum { unresolved, waiting, resolved, finished, released } = .unresolved,
-    fiber: Value = undefined,
+    fiber: Value,
     result: Value,
     callback: ?Value,
     index: isize = 0,
@@ -38,6 +38,7 @@ pub const Generator = struct {
         self.* = .{
             .buffer = buf,
             .result = php.createValueNull(),
+            .fiber = php.createValueNull(),
             .callback = if (callback) |*cb| php.reuse(cb).* else null,
         };
         return self;
@@ -48,13 +49,14 @@ pub const Generator = struct {
     }
 
     pub fn release(self: *@This()) void {
-        if (self.status == .finished) {
-            self.buffer.release();
-        } else {
+        if (self.status == .waiting) {
             // preserve the generator until the content source has been informed
             self.status = .released;
+        } else {
+            if (self.callback) |*cb| php.release(cb);
+            php.release(&self.fiber);
+            self.buffer.release();
         }
-        if (self.callback) |*cb| php.release(cb);
     }
 
     pub fn moveForward(self: *@This()) !void {
@@ -66,6 +68,7 @@ pub const Generator = struct {
 
     pub fn rewind(self: *@This()) !void {
         if (self.status == .unresolved) {
+            php.release(&self.fiber);
             self.fiber = try CallDispatcher.event_loop.getFiber();
             return try self.moveForward();
         }

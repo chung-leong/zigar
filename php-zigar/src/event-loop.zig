@@ -157,7 +157,6 @@ pub fn EventLoop(comptime cb: fn () void) type {
             .getSuspension,
             .onReadable,
         }),
-
         handler_id: Value,
 
         pub fn init(self: *@This(), stream: *const Value) !void {

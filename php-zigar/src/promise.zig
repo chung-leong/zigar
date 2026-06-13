@@ -21,7 +21,7 @@ const ZigObject = @import("object.zig").ZigObject;
 
 pub const Promise = struct {
     status: enum { unresolved, waiting, resolved, released } = .unresolved,
-    fiber: Value = undefined,
+    fiber: Value,
     result: Value,
     callback: ?Value,
     transform: ?Transform = null,
@@ -35,24 +35,28 @@ pub const Promise = struct {
         self.* = .{
             .buffer = buf,
             .result = php.createValueNull(),
+            .fiber = php.createValueNull(),
             .callback = if (callback) |cb| php.reuse(&cb).* else null,
         };
         return self;
     }
 
     pub fn release(self: *@This()) void {
-        if (self.status == .resolved) {
-            self.buffer.release();
-        } else {
+        if (self.status == .waiting) {
             // preserve the promise object until the callback is called
             self.status = .released;
+            return;
         }
         if (self.callback) |*cb| php.release(cb);
+        php.release(&self.fiber);
+        // this needs to happen last, since self points to the memory in the buffer
+        self.buffer.release();
     }
 
     pub fn await(self: *@This()) !Value {
         // std.debug.print("Promise.await() called\n", .{});
         if (self.status == .unresolved) {
+            php.release(&self.fiber);
             self.fiber = try CallDispatcher.event_loop.getFiber();
             self.status = .waiting;
             try CallDispatcher.event_loop.suspendFiber(&self.fiber);
