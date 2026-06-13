@@ -176,7 +176,7 @@ pub const GeneratorStatic = struct {
             if (self.allocator) |a| {
                 const converted_value = try structure.Function.allocateArgument(a, value, self.argument_class);
                 defer php.release(&converted_value);
-                self.call_cache.use(self.named_params);
+                self.call_cache.useNamedArguments(self.named_params);
                 const result = try self.call_cache.invoke(&.{ self.pointer, converted_value });
                 try structure.Function.externalizeArgument(a, &converted_value);
                 return result;

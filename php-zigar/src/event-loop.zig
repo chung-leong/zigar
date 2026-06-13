@@ -152,60 +152,53 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
     };
     const Revolt = struct {
-        class_path: Value,
+        revolt_class_cache: MethodCallCaches(.{
+            .cancel,
+            .getSuspension,
+            .onReadable,
+        }),
+
         handler_id: Value,
 
         pub fn init(self: *@This(), stream: *const Value) !void {
             var func = php.createTransformedFunction(onReadable, "onReadable", 0, false);
             const closure = php.createValueClosure(&func, null, null, null);
             errdefer php.release(&closure);
-            const method = php.createValuePersistentString("onReadable");
-            self.class_path = php.createValuePersistentString("Revolt\\EventLoop");
-            self.handler_id = try php.invokeMethod(&self.class_path, &method, &.{ stream.*, closure });
+            const class = php.createValueString(N("Revolt\\EventLoop"));
+            self.revolt_class_cache = try .init(&class);
+            errdefer self.revolt_class_cache.deinit();
+            self.handler_id = try self.revolt_class_cache.method.onReadable.invoke(&.{ stream.*, closure });
         }
 
         pub fn deinit(self: *@This()) void {
-            const method = php.createValuePersistentString("cancel");
-            _ = php.invokeMethod(&self.class_path, &method, &.{self.handler_id}) catch {};
+            _ = self.revolt_class_cache.method.cancel.invoke(&.{self.handler_id}) catch {};
             php.release(&self.handler_id);
+            self.revolt_class_cache.deinit();
         }
 
         pub fn getFiber(self: *@This()) !Value {
-            std.debug.print("EventLoop.getFiber() called\n", .{});
-            errdefer std.debug.print("EventLoop.getFiber() failed\n", .{});
-            const method = php.createValuePersistentString("getSuspension");
-            return php.invokeMethod(&self.class_path, &method, &.{});
+            return try self.revolt_class_cache.method.getSuspension.invoke(&.{});
         }
 
         pub fn suspendFiber(_: *@This(), fiber: *const Value) !void {
-            std.debug.print("EventLoop.suspendFiber() called\n", .{});
-            errdefer std.debug.print("EventLoop.suspendFiber() failed\n", .{});
-            defer std.debug.print("EventLoop.suspendFiber() resumed\n", .{});
-            const method = php.createValuePersistentString("suspend");
-            _ = try php.invokeMethod(fiber, &method, &.{});
+            var fiber_cache: MethodCallCaches(.{.@"suspend"}) = try .init(fiber);
+            _ = try fiber_cache.method.@"suspend".invoke(&.{});
         }
 
         pub fn resumeFiber(_: *@This(), fiber: *const Value) !void {
-            std.debug.print("EventLoop.resumeFiber() called\n", .{});
-            errdefer std.debug.print("EventLoop.resumeFiber() failed\n", .{});
-            defer std.debug.print("EventLoop.resumeFiber() resumed\n", .{});
-            const method = php.createValuePersistentString("resume");
-            _ = try php.invokeMethod(fiber, &method, &.{});
+            var fiber_cache: MethodCallCaches(.{.@"resume"}) = try .init(fiber);
+            _ = try fiber_cache.method.@"resume".invoke(&.{});
         }
 
         pub fn addTimeout(self: *@This(), seconds: f64, signal: *AbortSignal) !void {
             var func = php.createTransformedFunction(onDelayFinished, "onDelayFinished", 0, false);
             var signal_value = php.createValueObject(signal.object());
             const closure = php.createValueClosure(&func, null, null, &signal_value);
-            const method = php.createValuePersistentString("onReadable");
             const timeout = php.createValueDouble(seconds);
-            self.class_path = php.createValuePersistentString("Revolt\\EventLoop");
-            self.handler_id = try php.invokeMethod(&self.class_path, &method, &.{ timeout, closure });
+            self.handler_id = try self.revolt_class_cache.method.onReadable.invoke(&.{ timeout, closure });
         }
 
         pub fn onReadable(_: *ExecuteData, _: *Value) void {
-            std.debug.print("EventLoop.onReadable() called\n", .{});
-            defer std.debug.print("EventLoop.onReadable() resumed\n", .{});
             cb();
         }
 

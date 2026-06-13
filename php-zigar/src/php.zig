@@ -1263,7 +1263,7 @@ pub const FunctionCallCache = struct {
         php_h.zend_fcall_info_args_clear(&self.fci, true);
     }
 
-    pub fn use(self: *@This(), named_params: ?*HashTable) void {
+    pub fn useNamedArguments(self: *@This(), named_params: ?*HashTable) void {
         self.fci.named_params = named_params;
     }
 
