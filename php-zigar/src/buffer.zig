@@ -304,9 +304,15 @@ pub const ByteBuffer = struct {
     }
 
     pub fn attachAllcator(self: *@This(), allocator: *std.mem.Allocator) void {
-        std.debug.assert(self.source_type != .allocator);
-        self.source = .{ .allocator = allocator };
-        self.flags.has_allocator = true;
+        // associate a custom allocator with a buffer (that isn't itself allocated from a custom allocator)
+        switch (self.source_type) {
+            .allocator => @panic("Illegal operation"),
+            .buffer => self.source.buffer.attachAllcator(allocator),
+            else => {
+                self.source = .{ .allocator = allocator };
+                self.flags.has_allocator = true;
+            },
+        }
     }
 
     pub fn getAllocator(self: *const @This()) ?*std.mem.Allocator {

@@ -225,7 +225,8 @@ pub const GeneratorStatic = struct {
         var arg_iter: ArgumentIterator = .init(ed);
         if (arg_iter.len != 1) return failure.reportArgCountMismatch("yield", 1, 1, arg_iter.len);
         const value = arg_iter.next().?;
-        const allocator = try getAllocator(arg_iter.this);
+        const generator_struct = try structure.Struct.fromValue(arg_iter.this);
+        const allocator = try generator_struct.getAllocator();
         return_value.* = try yield(arg_iter.this, value, allocator);
     }
 
@@ -236,7 +237,10 @@ pub const GeneratorStatic = struct {
     }
 
     pub fn pipe(generator: *const Value, source: *const Value, extern_allocator: ?*std.mem.Allocator) !void {
-        if (!isIterator(source)) return error.NotIterator;
+        const iterator_obj = php.getValueObject(source) catch return error.NotIterator;
+        const iterator = php.getInterface(.iterator);
+        if (!php.instanceOf(iterator_obj, iterator)) return error.NotIterator;
+
         var cb_context: CallbackContext = try .init(generator, extern_allocator);
         defer cb_context.deinit();
         cb_context.sendAll(source) catch |err| {
@@ -253,18 +257,5 @@ pub const GeneratorStatic = struct {
                 return php.throwException(php.reuse(ex));
             };
         };
-    }
-
-    fn getAllocator(this: *const Value) !?*std.mem.Allocator {
-        const generator_struct = try structure.Struct.fromValue(this);
-        const value = php.getProperty(&generator_struct.table, N("allocator")) catch return null;
-        defer php.release(value);
-        return php.getValuePointer(*std.mem.Allocator, value);
-    }
-
-    fn isIterator(value: *const Value) bool {
-        const generator_obj = php.getValueObject(value) catch return false;
-        const iterator = php.getInterface(.iterator);
-        return php.instanceOf(generator_obj, iterator);
     }
 };

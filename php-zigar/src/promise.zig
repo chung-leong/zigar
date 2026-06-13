@@ -173,7 +173,9 @@ pub const PromiseStatic = struct {
         var arg_iter: ArgumentIterator = .init(ed);
         if (arg_iter.len != 1) return failure.reportArgCountMismatch("resolve", 1, 1, arg_iter.len);
         const value = arg_iter.next().?;
-        const allocator = try getAllocator(arg_iter.this);
+        // see if there's an allocator stashed in the buffer
+        const promise_struct = try structure.Struct.fromValue(arg_iter.this);
+        const allocator = promise_struct.buffer.getAllocator();
         try resolve(arg_iter.this, value, allocator);
     }
 
@@ -181,11 +183,5 @@ pub const PromiseStatic = struct {
         var cb_context: CallbackContext = try .init(promise, extern_allocator);
         defer cb_context.deinit();
         try cb_context.send(value);
-    }
-
-    fn getAllocator(this: *const Value) !?*std.mem.Allocator {
-        const generator_struct = try structure.Struct.fromValue(this);
-        const value = php.getProperty(&generator_struct.table, N("allocator")) catch return null;
-        return php.getValuePointer(*std.mem.Allocator, value);
     }
 };

@@ -310,8 +310,7 @@ pub const ArgStruct = struct {
     fn attachAllocator(self: *@This(), dest_value: *const Value) !void {
         const dest_struct = try structure.Struct.fromValue(dest_value);
         const allocator = try self.getAllocator();
-        var value = php.createValuePointer(allocator);
-        try php.setProperty(&dest_struct.table, N("allocator"), &value);
+        dest_struct.buffer.attachAllcator(allocator);
     }
 
     pub fn hasAsyncCallback(self: *@This()) bool {
