@@ -30,7 +30,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             var func = php.createTransformedFunction(handleLoop, "loop", 0, false);
             func.internal_function.reserved[0] = self;
             const closure = php.createValueClosure(&func, null, null, null);
-            errdefer php.release(&closure);
+            defer php.release(&closure);
             // create the fiber used for handling the command stream
             self.fiber = try php.createValueNewObject(class_name, &.{closure});
             errdefer php.release(&self.fiber);
@@ -163,7 +163,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
         pub fn init(self: *@This(), stream: *const Value) !void {
             var func = php.createTransformedFunction(onReadable, "onReadable", 0, false);
             const closure = php.createValueClosure(&func, null, null, null);
-            errdefer php.release(&closure);
+            defer php.release(&closure);
             const class = php.createValueString(N("Revolt\\EventLoop"));
             self.revolt_class_cache = try .init(&class);
             errdefer self.revolt_class_cache.deinit();
@@ -194,6 +194,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             var func = php.createTransformedFunction(onDelayFinished, "onDelayFinished", 0, false);
             var signal_value = php.createValueObject(signal.object());
             const closure = php.createValueClosure(&func, null, null, &signal_value);
+            defer php.release(&closure);
             const timeout = php.createValueDouble(seconds);
             self.handler_id = try self.revolt_class_cache.method.onReadable.invoke(&.{ timeout, closure });
         }
@@ -255,7 +256,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
                 var func = php.createTransformedFunction(handleShutdown, "shutdown", 0, false);
                 func.internal_function.reserved[0] = self;
                 const closure = php.createValueClosure(&func, null, null, null);
-                errdefer php.release(&closure);
+                defer php.release(&closure);
                 _ = try php.invokeFunction("register_shutdown_function", &.{closure});
                 self.registered = true;
             }
