@@ -590,6 +590,10 @@ pub const Struct = struct {
             },
             else => {},
         }
+        switch (T) {
+            Promise, Generator, AbortSignal => self.buffer.flags.contains_special_contents = true,
+            else => {},
+        }
     }
 
     pub fn getSpecialContext(self: *@This(), comptime T: type) !*T {
@@ -618,6 +622,17 @@ pub const Struct = struct {
                     if (class.host.dispatcher.isVirtualStream(fd)) {
                         class.host.dispatcher.removeStream(fd) catch {};
                     }
+                }
+            },
+            inline .promise, .generator, .abort_signal => |t| {
+                if (self.buffer.flags.contains_special_contents) {
+                    const T = switch (t) {
+                        .promise => Promise,
+                        .generator => Generator,
+                        .abort_signal => AbortSignal,
+                        else => unreachable,
+                    };
+                    if (self.getSpecialContext(T) catch null) |ctx| ctx.release();
                 }
             },
             else => {},

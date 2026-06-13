@@ -30,7 +30,6 @@ pub const ArgStruct = struct {
         has_callback: bool = false,
         has_generator: bool = false,
         has_abort_signal: bool = false,
-        outgoing: bool = false,
     } align(@alignOf(*anyopaque)) = .{},
     table: Value = undefined,
     buffer: *ByteBuffer = undefined,
@@ -171,7 +170,6 @@ pub const ArgStruct = struct {
                 }
             };
         }
-        self.flags.outgoing = true;
         // initialize special arguments
         inline for (.{ .allocator, .promise, .generator, .abort_signal }) |t| {
             if (@field(static, @tagName(t))) |m| {
@@ -414,40 +412,10 @@ pub const ArgStruct = struct {
         }
     }
 
-    pub fn freeObject(obj: *Object) void {
-        // free special arguments
-        const self = fromObject(obj);
-        self.freeSpecialArguments() catch {};
-        Super.freeObject(obj);
-    }
-
-    fn freeSpecialArguments(self: *@This()) !void {
-        if (self.flags.outgoing) {
-            const class = ZigClassEntry.fromStructure(self);
-            const static = class.getStaticData(@This());
-            inline for (.{ .promise, .generator, .abort_signal }) |t| {
-                if (@field(static, @tagName(t))) |m| {
-                    if (@field(self.flags, "has_" ++ @tagName(t))) {
-                        const field_value = try m.accessors.get(self);
-                        const field_obj = try php.getValueObject(&field_value);
-                        defer php.release(field_obj);
-                        const field_struct = ZigObject(structure.Struct).fromObject(field_obj).structure();
-                        const T = switch (t) {
-                            .promise => Promise,
-                            .generator => Generator,
-                            .abort_signal => AbortSignal,
-                            else => unreachable,
-                        };
-                        if (field_struct.getSpecialContext(T) catch null) |ctx| ctx.release();
-                    }
-                }
-            }
-        }
-    }
-
     pub const setStorage = Super.setStorage;
     pub const getValue = Super.getValue;
     pub const propertyExists = Super.propertyExists;
+    pub const freeObject = Super.freeObject;
     pub const getConstructor = Super.getConstructor;
     pub const getGarbageCollection = Super.getGarbageCollection;
     pub const fromObject = Super.fromObject;
