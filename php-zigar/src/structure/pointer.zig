@@ -210,7 +210,7 @@ pub const Pointer = struct {
                     else => {},
                 }
                 // autovivificate new target, using the allocator associated with the pointer
-                const allocator = self.buffer.getSourceAllocator();
+                const allocator = self.buffer.getAllocator();
                 const new_obj = try target_class.createObject(allocator, value, read_only);
                 break :init new_obj;
             };

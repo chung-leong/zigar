@@ -284,7 +284,7 @@ pub const Struct = struct {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.@"struct".is_packed) {
             // mark buffer as packed so that child fields that are vectors are correctly handled
-            buffer.markPackedData();
+            buffer.flags.contains_packed_data = true;
         }
     }
 

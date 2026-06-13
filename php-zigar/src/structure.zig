@@ -108,7 +108,7 @@ pub fn Parent(comptime S: type) type {
             }
         }
 
-        pub fn initialize(self: *S, allocator: ?*const std.mem.Allocator, initializer: ?*const Value, read_only: bool) !void {
+        pub fn initialize(self: *S, allocator: ?*std.mem.Allocator, initializer: ?*const Value, read_only: bool) !void {
             if (!@hasField(S, "buffer")) return;
             const class = ZigClassEntry.fromStructure(self);
             const len = class.byte_size.?;
@@ -535,12 +535,11 @@ pub fn ArrayLike(comptime S: type) type {
                     const len = self.getLength();
                     const bytes = try self.buffer.data(0, false);
                     if (bytes.len == len) {
-                        switch (self.buffer.source) {
-                            .string => |str| {
+                        switch (self.buffer.source_type) {
+                            .string => {
                                 // return the original string if possible
-                                if (str.len == len) {
-                                    return php.createValueString(php.reuse(str));
-                                }
+                                const str = self.buffer.source.string;
+                                if (str.len == len) return php.createValueString(php.reuse(str));
                             },
                             else => {},
                         }

@@ -866,7 +866,7 @@ pub const ZigClassEntry = struct {
                 } else {
                     // assume addresss is valid, pointing to memory somewhere inside the app's address space
                     const buf = try ByteBuffer.create(self.alignment);
-                    buf.referencExternal(bytes);
+                    buf.referenceExternal(bytes);
                     if (is_const) buf.protect();
                     break :get buf;
                 }
@@ -889,7 +889,7 @@ pub const ZigClassEntry = struct {
         return self.createObjectFromParameters(.{ .buffer = buf, .prefilled = prefilled });
     }
 
-    pub fn createObject(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value, read_only: bool) !*Object {
+    pub fn createObject(self: *@This(), allocator: ?*std.mem.Allocator, initializer: ?*const Value, read_only: bool) !*Object {
         return self.createObjectFromParameters(.{ .allocator = allocator, .initializer = initializer, .read_only = read_only });
     }
 

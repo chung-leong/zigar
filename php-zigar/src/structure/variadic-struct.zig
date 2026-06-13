@@ -85,7 +85,7 @@ pub const VariadicStruct = struct {
         }
     };
 
-    pub fn copyArguments(self: *@This(), allocator: ?*const std.mem.Allocator, arg_iter: *php.ArgumentIterator) !void {
+    pub fn copyArguments(self: *@This(), allocator: ?*std.mem.Allocator, arg_iter: *php.ArgumentIterator) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         const max_arg_count = static.arg_members.len;
@@ -213,8 +213,8 @@ pub const VariadicStruct = struct {
     pub fn freeObject(obj: *Object) void {
         const self = fromObject(obj);
         if (self.attributes.len != 0) {
-            const allocator = self.buffer.source.allocator;
-            allocator.free(self.attributes);
+            const al = self.buffer.getAllocator() orelse &php.allocator;
+            al.free(self.attributes);
         }
         return Super.freeObject(obj);
     }

@@ -80,9 +80,9 @@ pub const AllocatorStatic = struct {
         };
         if (!buf.inZigMemory()) return error.InvalidOperation;
         const allocator = try getAllocatorFromThis(&arg_iter);
-        switch (buf.source) {
-            .allocator => |al| {
-                if (al != allocator) return error.InvalidOperation;
+        switch (buf.source_type) {
+            .allocator => {
+                if (buf.source.allocator != allocator) return error.InvalidOperation;
                 buf.free();
             },
             .none => {

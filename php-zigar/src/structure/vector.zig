@@ -59,7 +59,7 @@ pub const Vector = struct {
         const static = class.getStaticData(@This());
         if (static.is_bool_element) {
             // boolean vectors are always packed
-            buffer.markPackedData();
+            buffer.flags.contains_packed_data = true;
         }
     }
 

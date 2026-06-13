@@ -113,7 +113,7 @@ pub const Union = struct {
     pub const MemberCache = cache.MemberCache;
     pub const TransformCache = cache.TransformCache;
 
-    pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value, read_only: bool) !void {
+    pub fn initialize(self: *@This(), allocator: ?*std.mem.Allocator, initializer: ?*const Value, read_only: bool) !void {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.@"union".has_inaccessible) {
             // allocate structure without copying initializer

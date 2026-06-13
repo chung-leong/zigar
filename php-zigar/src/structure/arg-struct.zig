@@ -112,7 +112,7 @@ pub const ArgStruct = struct {
         }
     };
 
-    pub fn copyArguments(self: *@This(), allocator: ?*const std.mem.Allocator, arg_iter: *php.ArgumentIterator) !void {
+    pub fn copyArguments(self: *@This(), allocator: ?*std.mem.Allocator, arg_iter: *php.ArgumentIterator) !void {
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         // take out initializers for special arguments

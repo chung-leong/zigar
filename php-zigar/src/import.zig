@@ -130,10 +130,10 @@ pub const StructureImporter = struct {
                 try buffer.allocate(null, len);
                 try buffer.copyBytes(slice);
             } else {
-                buffer.referencExternal(slice);
+                buffer.referenceExternal(slice);
             }
         } else {
-            buffer.referencExternal(&.{});
+            buffer.referenceExternal(&.{});
         }
         if (read_only) buffer.protect();
         const value = php.createValuePointer(buffer);

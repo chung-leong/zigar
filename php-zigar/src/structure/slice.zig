@@ -81,7 +81,7 @@ pub const Slice = struct {
         }
     };
 
-    pub fn initialize(self: *@This(), allocator: ?*const std.mem.Allocator, initializer: ?*const Value, read_only: bool) !void {
+    pub fn initialize(self: *@This(), allocator: ?*std.mem.Allocator, initializer: ?*const Value, read_only: bool) !void {
         const class = ZigClassEntry.fromStructure(self);
         if (initializer) |orig_value| {
             // convert any iterable objects to arrays
@@ -205,7 +205,7 @@ pub const Slice = struct {
         return Super.setValue(self, orig_value, transform);
     }
 
-    fn initializeBuffer(self: *@This(), allocator: ?*const std.mem.Allocator, content_len: usize) !void {
+    fn initializeBuffer(self: *@This(), allocator: ?*std.mem.Allocator, content_len: usize) !void {
         const class = ZigClassEntry.fromStructure(self);
         if (class.flags.slice.has_sentinel) {
             // allocate extra space for the sentinel

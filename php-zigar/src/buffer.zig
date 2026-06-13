@@ -10,23 +10,38 @@ const RelativePosition = @import("memory-map.zig").RelativePosition;
 
 pub const ByteBuffer = struct {
     bytes: []u8 = undefined,
+    ref_count: u32 = 1,
     alignment: std.mem.Alignment = .@"1",
     bit_offset: u3 = 0,
-    ref_count: u32 = 1,
     flags: packed struct {
         uninitialized: bool = true,
         read_only: bool = false,
         temporary: bool = false,
         inaccessible: bool = false,
+        has_allocator: bool = false,
         contains_packed_data: bool = false,
+        contains_special_contents: bool = false,
+
+        fn assign(self: @This(), flags: anytype) @This() {
+            var new = self;
+            inline for (std.meta.fields(@TypeOf(flags))) |field| {
+                @field(new, field.name) = @field(flags, field.name);
+            }
+            return new;
+        }
     } = .{},
-    source: union(enum) {
+    source_type: enum {
+        none,
+        php,
+        buffer,
+        string,
+        allocator,
+    } = .none,
+    source: extern union {
         buffer: *ByteBuffer,
         string: *String,
-        allocator: *const std.mem.Allocator,
-        php: void,
-        none: void,
-    } = .{ .none = {} },
+        allocator: *std.mem.Allocator,
+    } = undefined,
 
     pub const Encoding = enum { base64 };
     pub const Extent = struct {
@@ -46,7 +61,7 @@ pub const ByteBuffer = struct {
 
     pub fn create(alignment: std.mem.Alignment) !*@This() {
         const self = try php.allocator.create(@This());
-        self.* = .{ .alignment = alignment, .flags = .{} };
+        self.* = .{ .alignment = alignment };
         return self;
     }
 
@@ -60,7 +75,7 @@ pub const ByteBuffer = struct {
         };
     }
 
-    pub fn allocate(self: *@This(), allocator: ?*const std.mem.Allocator, len: usize) !void {
+    pub fn allocate(self: *@This(), allocator: ?*std.mem.Allocator, len: usize) !void {
         std.debug.assert(self.flags.uninitialized);
         defer self.flags.uninitialized = false;
         if (len > 0) {
@@ -69,15 +84,17 @@ pub const ByteBuffer = struct {
                 self.bytes = byte_ptr[0..len];
                 // the allocator will be used to deallocate memory unless the buffer gets externalized,
                 // which happens after an object is fully constructed when a custom allocator is provided
+                self.source_type = .allocator;
                 self.source = .{ .allocator = al };
+                self.flags.has_allocator = true;
             } else {
                 const byte_ptr = php.allocator.rawAlloc(len, self.alignment, 0) orelse return error.OutOfMemory;
                 self.bytes = byte_ptr[0..len];
-                self.source = .{ .php = {} };
+                self.source_type = .php;
             }
         } else {
             self.bytes = &.{};
-            self.source = .{ .none = {} };
+            self.source_type = .none;
         }
     }
 
@@ -91,16 +108,18 @@ pub const ByteBuffer = struct {
                 const sc = php.getStringContent(str);
                 const new_str = php.createString(sc);
                 self.bytes = @constCast(php.getStringContent(new_str));
+                self.source_type = .string;
                 self.source = .{ .string = new_str };
                 return;
             }
         }
         self.bytes = @constCast(php.getStringContent(str));
+        self.source_type = .string;
         self.source = .{ .string = php.reuse(str) };
         if (read_only) self.flags.read_only = true;
     }
 
-    pub fn referencExternal(self: *@This(), bytes: []const u8) void {
+    pub fn referenceExternal(self: *@This(), bytes: []const u8) void {
         std.debug.assert(self.flags.uninitialized);
         defer self.flags.uninitialized = false;
         self.bytes = @constCast(bytes);
@@ -110,17 +129,15 @@ pub const ByteBuffer = struct {
         std.debug.assert(self.flags.uninitialized);
         defer self.flags.uninitialized = false;
         self.bytes = parent.bytes[offset .. offset + len];
+        self.source_type = .buffer;
         self.source = .{ .buffer = parent };
         parent.addRef();
     }
 
     pub fn externalize(self: *@This()) bool {
-        switch (self.source) {
-            .allocator => {
-                self.source = .{ .none = {} };
-                return true;
-            },
-            else => {},
+        if (self.source_type == .allocator) {
+            self.source_type = .none;
+            return true;
         }
         return false;
     }
@@ -137,7 +154,7 @@ pub const ByteBuffer = struct {
             std.debug.assert(alignment.check(@intFromPtr(slice_bytes.ptr)));
         }
         var src_buf = self;
-        while (src_buf.source == .buffer) {
+        while (src_buf.source_type == .buffer) {
             src_buf = src_buf.source.buffer;
         }
         src_buf.addRef();
@@ -145,7 +162,8 @@ pub const ByteBuffer = struct {
             .bytes = @constCast(slice_bytes),
             .alignment = slice_alignment,
             .bit_offset = slice_bit_offset,
-            .flags = self.flags,
+            .flags = self.flags.assign(.{ .has_allocator = false }),
+            .source_type = .buffer,
             .source = .{ .buffer = src_buf },
         };
         new.flags.temporary = false;
@@ -159,7 +177,8 @@ pub const ByteBuffer = struct {
             .bytes = bytes,
             .alignment = self.alignment,
             .bit_offset = self.bit_offset,
-            .flags = self.flags,
+            .flags = self.flags.assign(.{ .has_allocator = false }),
+            .source_type = .buffer,
             .source = .{ .buffer = self },
         };
         self.addRef();
@@ -168,10 +187,6 @@ pub const ByteBuffer = struct {
 
     pub fn protect(self: *@This()) void {
         self.flags.read_only = true;
-    }
-
-    pub fn markPackedData(self: *@This()) void {
-        self.flags.contains_packed_data = true;
     }
 
     pub fn copy(self: *@This(), other: *const @This()) !void {
@@ -198,10 +213,10 @@ pub const ByteBuffer = struct {
         if (self.flags.temporary) return;
         self.ref_count -= 1;
         if (self.ref_count == 0) {
-            switch (self.source) {
-                .buffer => |buf| buf.release(),
-                .string => |str| php.release(str),
-                .allocator => |al| al.rawFree(self.bytes, self.alignment, 0),
+            switch (self.source_type) {
+                .buffer => self.source.buffer.release(),
+                .string => php.release(self.source.string),
+                .allocator => self.source.allocator.rawFree(self.bytes, self.alignment, 0),
                 .php => php.allocator.rawFree(self.bytes, self.alignment, 0),
                 .none => {},
             }
@@ -211,18 +226,18 @@ pub const ByteBuffer = struct {
 
     pub fn free(self: *@This()) void {
         self.flags.uninitialized = true;
-        switch (self.source) {
-            .allocator => |al| {
-                al.rawFree(self.bytes, self.alignment, 0);
-                self.source = .{ .none = {} };
+        switch (self.source_type) {
+            .allocator => {
+                self.source.allocator.rawFree(self.bytes, self.alignment, 0);
+                self.source_type = .none;
             },
             else => {},
         }
     }
 
     pub fn getBase(self: *const @This()) *@This() {
-        return switch (self.source) {
-            .buffer => |buf| buf,
+        return switch (self.source_type) {
+            .buffer => self.source.buffer,
             else => @constCast(self),
         };
     }
@@ -264,17 +279,17 @@ pub const ByteBuffer = struct {
     }
 
     pub fn getParent(self: *const @This()) ?*@This() {
-        return switch (self.source) {
-            .buffer => |buf| buf,
+        return switch (self.source_type) {
+            .buffer => self.source.buffer,
             else => null,
         };
     }
 
     pub fn getMaximumExtent(self: *@This()) Extent {
-        switch (self.source) {
-            .buffer => |buf| return buf.getMaximumExtent(),
-            .string => |str| {
-                const sc = php.getStringContent(str);
+        switch (self.source_type) {
+            .buffer => return self.source.buffer.getMaximumExtent(),
+            .string => {
+                const sc = php.getStringContent(self.source.string);
                 return .{ .address = @intFromPtr(sc.ptr), .len = sc.len };
             },
             .php, .allocator => {
@@ -288,19 +303,25 @@ pub const ByteBuffer = struct {
         }
     }
 
-    pub fn getSourceAllocator(self: *const @This()) ?*const std.mem.Allocator {
-        return switch (self.source) {
-            .allocator => |a| a,
-            .buffer => |b| b.getSourceAllocator(),
-            else => null,
-        };
+    pub fn attachAllcator(self: *@This(), allocator: *std.mem.Allocator) void {
+        std.debug.assert(self.source_type != .allocator);
+        self.source = .{ .allocator = allocator };
+        self.flags.has_allocator = true;
+    }
+
+    pub fn getAllocator(self: *const @This()) ?*std.mem.Allocator {
+        return if (self.flags.has_allocator)
+            self.source.allocator
+        else if (self.source_type == .buffer)
+            self.source.buffer.getAllocator()
+        else
+            null;
     }
 
     pub fn inZigMemory(self: *const @This()) bool {
         const base = self.getBase();
-        return switch (base.source) {
-            .allocator => true,
-            .none => true,
+        return switch (base.source_type) {
+            .none, .allocator => true,
             else => false,
         };
     }
