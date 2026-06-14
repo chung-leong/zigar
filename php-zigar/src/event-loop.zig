@@ -229,23 +229,25 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         pub fn use(self: *@This(), type_name: []const u8) !void {
-            const reinit = self.ready;
-            if (self.ready) {
-                self.deinit();
-                self.ready = false;
-            }
-            inline for (@typeInfo(Type).@"enum".fields) |field| {
+            const loop_type = inline for (comptime std.meta.fields(Type)) |field| {
                 if (std.mem.eql(u8, field.name, type_name)) {
-                    const tag = @field(Type, field.name);
-                    self.type = tag;
-                    self.loop = @unionInit(Loop, @tagName(tag), undefined);
-                    if (reinit) {
-                        try @field(self.loop, field.name).init(&self.stream);
-                        self.ready = true;
-                    }
-                    break;
+                    break @field(Type, field.name);
                 }
             } else return error.InvalidLoopType;
+            if (self.type == loop_type) return;
+            const was_ready = self.ready;
+            self.ready = false;
+            if (was_ready) {
+                self.deinitImpl();
+            }
+            self.type = loop_type;
+            switch (loop_type) {
+                inline else => |t| self.loop = @unionInit(Loop, @tagName(t), undefined),
+            }
+            if (was_ready) {
+                try self.initImpl();
+                self.ready = true;
+            }
         }
 
         pub fn init(self: *@This(), stream: *const Value) !void {
@@ -260,26 +262,34 @@ pub fn EventLoop(comptime cb: fn () void) type {
                 self.registered = true;
             }
             self.stream = stream.*;
+            try self.initImpl();
+            self.ready = true;
+            php.addRef(&self.stream);
+        }
+
+        fn initImpl(self: *@This()) !void {
             switch (self.type) {
                 inline else => |t| {
                     const loop = &@field(self.loop, @tagName(t));
                     try loop.init(&self.stream);
                 },
             }
-            self.ready = true;
-            php.addRef(&self.stream);
         }
 
         pub fn deinit(self: *@This()) void {
             if (!self.ready) return;
             self.ready = false;
+            self.deinitImpl();
+            php.release(&self.stream);
+        }
+
+        fn deinitImpl(self: *@This()) void {
             switch (self.type) {
                 inline else => |t| {
                     const loop = &@field(self.loop, @tagName(t));
                     loop.deinit();
                 },
             }
-            php.release(&self.stream);
         }
 
         pub fn getFiber(self: *@This()) !Value {
