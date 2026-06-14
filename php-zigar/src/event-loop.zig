@@ -209,19 +209,17 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
     };
     return struct {
-        type: Type = .temporary,
         loop: Loop = .{ .temporary = undefined },
         stream: Value = undefined,
         ready: bool = false,
         registered: bool = false,
         pendingFiber: ?*const Value = null,
 
-        pub const Type = enum { temporary, revolt };
-
-        const Loop = union {
+        const Loop = union(enum) {
             temporary: Temporary,
             revolt: Revolt,
         };
+        const LoopType = @typeInfo(Loop).@"union".tag_type.?;
 
         pub fn reset(self: *@This()) void {
             self.deinit();
@@ -229,18 +227,19 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         pub fn use(self: *@This(), type_name: []const u8) !void {
-            const loop_type = inline for (comptime std.meta.fields(Type)) |field| {
+            const loop_type = inline for (comptime std.meta.fields(LoopType)) |field| {
                 if (std.mem.eql(u8, field.name, type_name)) {
-                    break @field(Type, field.name);
+                    break @field(LoopType, field.name);
                 }
             } else return error.InvalidLoopType;
-            if (self.type == loop_type) return;
+            if (self.loop == loop_type) return;
             const was_ready = self.ready;
-            self.ready = false;
             if (was_ready) {
+                // set ready to false since we're in the progress of disabling the current loop
+                self.ready = false;
                 self.deinitImpl();
             }
-            self.type = loop_type;
+            // set the tagged union
             switch (loop_type) {
                 inline else => |t| self.loop = @unionInit(Loop, @tagName(t), undefined),
             }
@@ -268,11 +267,8 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         fn initImpl(self: *@This()) !void {
-            switch (self.type) {
-                inline else => |t| {
-                    const loop = &@field(self.loop, @tagName(t));
-                    try loop.init(&self.stream);
-                },
+            switch (self.loop) {
+                inline else => |*impl| try impl.init(&self.stream),
             }
         }
 
@@ -284,41 +280,29 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         fn deinitImpl(self: *@This()) void {
-            switch (self.type) {
-                inline else => |t| {
-                    const loop = &@field(self.loop, @tagName(t));
-                    loop.deinit();
-                },
+            switch (self.loop) {
+                inline else => |*impl| impl.deinit(),
             }
         }
 
         pub fn getFiber(self: *@This()) !Value {
             if (!self.ready) return error.NoEventLoop;
-            return switch (self.type) {
-                inline else => |t| get: {
-                    const loop = &@field(self.loop, @tagName(t));
-                    break :get loop.getFiber();
-                },
+            return switch (self.loop) {
+                inline else => |*impl| impl.getFiber(),
             };
         }
 
         pub fn suspendFiber(self: *@This(), fiber: *const Value) !void {
             if (!self.ready) return error.NoEventLoop;
-            switch (self.type) {
-                inline else => |t| {
-                    const loop = &@field(self.loop, @tagName(t));
-                    try loop.suspendFiber(fiber);
-                },
+            switch (self.loop) {
+                inline else => |*impl| try impl.suspendFiber(fiber),
             }
         }
 
         pub fn resumeFiber(self: *@This(), fiber: *const Value) void {
             if (!self.ready) @panic("No event loop");
-            switch (self.type) {
-                inline else => |t| {
-                    const loop = &@field(self.loop, @tagName(t));
-                    loop.resumeFiber(fiber) catch {};
-                },
+            switch (self.loop) {
+                inline else => |*impl| impl.resumeFiber(fiber) catch {},
             }
         }
 
@@ -334,11 +318,8 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         pub fn addTimeout(self: *@This(), seconds: f64, signal: *AbortSignal) !void {
-            switch (self.type) {
-                inline else => |t| {
-                    const loop = &@field(self.loop, @tagName(t));
-                    try loop.addTimeout(seconds, signal);
-                },
+            switch (self.loop) {
+                inline else => |*impl| try impl.addTimeout(seconds, signal),
             }
         }
 
