@@ -115,6 +115,8 @@ pub fn Parent(comptime S: type) type {
             try self.buffer.allocate(allocator, len);
             if (initializer) |value| {
                 try self.setValue(value, .none);
+            } else if (class.instance.template.buffer) |def| {
+                try self.buffer.copy(def);
             }
             if (read_only) self.buffer.protect();
         }
@@ -288,7 +290,7 @@ pub fn Parent(comptime S: type) type {
         pub fn freeObject(obj: *Object) void {
             const self = fromObject(obj);
             const class = ZigClassEntry.fromObject(obj);
-            // std.debug.print("freeObject: {}, object {d}, {x}\n", .{ S, obj.handle, @intFromPtr(self) });
+            // std.debug.print("freeObject: {s} => {} , object {d}, {x}, refcount = {d}\n", .{ class.getName(), S, obj.handle, @intFromPtr(self), obj.gc.refcount });
             // only structure that a pointer can points to implement getExtent()
             if (@hasField(S, "buffer")) {
                 if (@hasDecl(S, "getExtent")) {
