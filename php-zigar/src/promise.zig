@@ -47,8 +47,11 @@ pub const Promise = struct {
             self.status = .released;
             return;
         }
-        if (self.callback) |*cb| php.release(cb);
-        php.release(&self.fiber);
+        if (self.buffer.ref_count == 1) {
+            if (self.callback) |*cb| php.release(cb);
+            php.release(&self.result);
+            php.release(&self.fiber);
+        }
         // this needs to happen last, since self points to the memory in the buffer
         self.buffer.release();
     }

@@ -52,11 +52,15 @@ pub const Generator = struct {
         if (self.status == .waiting) {
             // preserve the generator until the content source has been informed
             self.status = .released;
-        } else {
-            if (self.callback) |*cb| php.release(cb);
-            php.release(&self.fiber);
-            self.buffer.release();
+            return;
         }
+        if (self.buffer.ref_count == 1) {
+            if (self.callback) |*cb| php.release(cb);
+            php.release(&self.result);
+            php.release(&self.fiber);
+        }
+        // this needs to happen last, since self points to the memory in the buffer
+        self.buffer.release();
     }
 
     pub fn moveForward(self: *@This()) !void {
