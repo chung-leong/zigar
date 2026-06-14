@@ -20,7 +20,7 @@ const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigObject = @import("object.zig").ZigObject;
 
 pub const Promise = struct {
-    status: enum { unresolved, waiting, resolved, released } = .unresolved,
+    status: enum { unused, waiting, resolved, released } = .unused,
     fiber: Value,
     result: Value,
     callback: ?Value,
@@ -42,7 +42,7 @@ pub const Promise = struct {
     }
 
     pub fn release(self: *@This()) void {
-        if (self.status == .waiting) {
+        if (self.status != .resolved and self.status != .unused) {
             // preserve the promise object until the callback is called
             self.status = .released;
             return;
@@ -58,7 +58,7 @@ pub const Promise = struct {
 
     pub fn await(self: *@This()) !Value {
         // std.debug.print("Promise.await() called\n", .{});
-        if (self.status == .unresolved) {
+        if (self.status == .unused) {
             php.release(&self.fiber);
             self.fiber = try CallDispatcher.event_loop.getFiber();
             self.status = .waiting;

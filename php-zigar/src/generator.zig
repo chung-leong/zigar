@@ -22,7 +22,7 @@ const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigObject = @import("object.zig").ZigObject;
 
 pub const Generator = struct {
-    status: enum { unresolved, waiting, resolved, finished, released } = .unresolved,
+    status: enum { unused, waiting, resolved, finished, released } = .unused,
     fiber: Value,
     result: Value,
     callback: ?Value,
@@ -49,7 +49,7 @@ pub const Generator = struct {
     }
 
     pub fn release(self: *@This()) void {
-        if (self.status == .waiting) {
+        if (self.status != .finished and self.status != .unused) {
             // preserve the generator until the content source has been informed
             self.status = .released;
             return;
@@ -71,7 +71,7 @@ pub const Generator = struct {
     }
 
     pub fn rewind(self: *@This()) !void {
-        if (self.status == .unresolved) {
+        if (self.status == .unused) {
             php.release(&self.fiber);
             self.fiber = try CallDispatcher.event_loop.getFiber();
             return try self.moveForward();
