@@ -198,11 +198,12 @@ final class ThreadHandlingTest extends ZigarTestCase
                 }, 100);
                 $exception = null;
                 try {
-                    $m->spawn(true, signal: $signal); 
+                    $result = $m->spawn(true, signal: $signal); 
                 } catch (Exception $e) {
                     $exception = $e;
                 }
                 $this->assertTrue($exception instanceof Exception);
+                $this->assertSame('aborted', $exception->getMessage());
             } finally {
                 $m->shutdown();
             }
@@ -226,6 +227,7 @@ final class ThreadHandlingTest extends ZigarTestCase
                     $exception = $e;
                 }
                 $this->assertTrue($exception instanceof Exception);
+                $this->assertSame('aborted', $exception->getMessage());
             } finally {
                 $m->shutdown();
             }
@@ -369,6 +371,382 @@ final class ThreadHandlingTest extends ZigarTestCase
                 OUTPUT);
                 $m->spawn();
                 delay(250);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testExitThreadCreatedUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/exit-thread-created-with-pthread.zig');
+            $m->startup();
+            try {
+                $this->expectOutputString(<<<OUTPUT
+                Hello world! 0
+                Hello world! 1
+                Hello world! 2
+                Hello world! 3
+
+                OUTPUT);
+                $m->spawn();
+                delay(250);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testExitThreadCreatedInAThreadUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/exit-thread-created-in-thread-with-pthread.zig');
+            $m->startup();
+            try {
+                $this->expectOutputString(<<<OUTPUT
+                Hello world! 0
+                Hello world! 1
+                Hello world! 2
+                Hello world! 3
+                retval = 1234
+
+                OUTPUT);
+                $m->spawn();
+                delay(250);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testPrintIdsOfThreadsCreatedUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/print-ids-of-threads-created-with-pthread.zig');
+            $m->startup();
+            try {
+                $this->expectOutputRegex("/(thread_id = \\d+\\n){5}/s");
+                $m->spawn(5);
+                delay(250);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testCreateMutexUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/create-mutex-with-pthread.zig');
+            $m->startup();
+            try {
+                $this->expectOutputString(<<<OUTPUT
+                Thread 1 acquired mutex
+                Thread 2 acquired mutex
+
+                OUTPUT);
+                $m->spawn();
+                delay(250);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testCreateErrorCheckingMutexUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/create-error-checking-mutex-with-pthread.zig');
+            $m->startup();
+            try {
+                $this->expectOutputString(<<<OUTPUT
+                retval == EDEADLK: true
+
+                OUTPUT);
+                $m->spawn();
+                delay(250);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testCreateRecursiveMutexUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/create-recursive-mutex-with-pthread.zig');
+            $m->startup();
+            try {
+                $this->expectOutputString(<<<OUTPUT
+                Thread 1 acquired mutex
+                Thread 2 acquired mutex
+
+                OUTPUT);
+                $m->spawn();
+                delay(250);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testWaitMomentarilyForMutexCreatedUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-mutex-created-with-pthread.zig');
+            $m->startup();
+            try {
+                $this->expectOutputString(<<<OUTPUT
+                Thread 1 acquired mutex
+                Thread 3 timed out: true
+                Thread 2 acquired mutex
+
+                OUTPUT);
+                $m->spawn();
+                delay(250);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testCreateSpinlockUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/create-spinlock-with-pthread.zig');
+            $this->expectOutputString(<<<OUTPUT
+            Main thread acquired spinlock
+            Thread 2 found busy lock: true
+            Main thread released spinlock
+            Thread 1 acquired spinlock
+
+            OUTPUT);
+            $m->startup();
+            try {
+                $m->spawn();
+                delay(250);
+                $m->unlock();
+                delay(500);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testCreateReadWriteLockUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/create-rwlock-with-pthread.zig');
+            try {
+                $this->expectOutputRegex("/Main thread acquired write lock");
+                $this->expectOutputRegex("/Main thread released write lock/");
+                $this->expectOutputRegex("/Thread 1 timed out: true/");
+                $this->expectOutputRegex("/Thread 1 acquired read lock/");
+                $this->expectOutputRegex("/Thread 2 acquired write lock/");
+                $m->spawn(false);
+                delay(250);
+                $m->unlock();
+                delay(500);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testWaitMomentarilyForReadLockUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-read-lock-created-with-pthread.zig');
+            $m->startup();
+            try {
+                $this->expectOutputRegex("/Thread 1 timed out: true/");
+                $this->expectOutputRegex("/Main thread releasing write lock/");
+                $this->expectOutputRegex("/Thread 2 acquired read lock/");
+                $m->spawn();
+                delay(250);
+                $m->unlock();
+                delay(500);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testWaitMomentarilyForWriteLockUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-write-lock-created-with-pthread.zig');
+            $m->startup();
+            try {
+                $this->expectOutputRegex("/Thread 1 timed out: true/");
+                $this->expectOutputRegex("/Main thread releasing write lock/");
+                $this->expectOutputRegex("/Thread 2 acquired write lock/");
+                $m->spawn();
+                delay(250);
+                $m->unlock();
+                delay(500);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testCreateSemaphoreUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/create-semaphore-with-pthread.zig');
+            $m->startup();
+            try {
+                $this->expectOutputRegex("/acquired semaphore: 0/");
+                $this->expectOutputRegex("/acquired semaphore: 1/");
+                $m->spawn();
+                delay(500);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testCreateNamedSemaphoreUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/create-semaphore-with-pthread.zig');
+            $m->startup();
+            try {
+                $this->expectOutputRegex("/(acquired semaphore: 0)/");
+                $this->expectOutputRegex("/(acquired semaphore: 1)/");
+                $m->spawn();
+                delay(500);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testWaitMomentarilyForSemaphoreCreatedUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-semaphore-created-with-pthread.zig');
+            $m->startup();
+            try {
+                $this->expectOutputRegex("/(acquired semaphore: 0)/");
+                $this->expectOutputRegex("/(acquired semaphore: 1)/");
+                $m->spawn();
+                delay(500);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testGetSemaphoreCreatedWithPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/get-semaphore-created-with-pthread.zig');
+            $m->startup();
+            try {
+                $this->expectOutputRegex("/(acquired semaphore: 0)/");
+                $this->expectOutputRegex("/(acquired semaphore: 1)/");
+                $this->expectOutputRegex("/failed/");
+                $m->spawn();
+                delay(500);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testCreateKeyForThreadSpecificValuesUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/create-key-with-pthread.zig');
+            $this->expectOutputRegex("/Destructor 1 called: anyopaque@12345/");
+            $this->expectOutputRegex("/Destructor 2 called: anyopaque@67/");
+            $this->expectOutputRegex("/Destructor 1 called: anyopaque@22222/");
+            $m->startup();
+            try {
+                $m->spawn();
+                delay(500);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testExitThreadNotCreatedUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/exit-thread-not-created-with-pthread.zig');
+            $m->startup();
+            try {
+                $m->spawn();
+                delay(500);
+            } finally {
+                $m->shutdown();
+            }
+            $count = $m->getDestruction();
+            $this->assertSame(1, $count);
+        });
+    }
+
+    public function testCallFunctionOnceUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/call-function-once-with-pthread.zig');
+            $m->startup();
+            $this->expectOutputString(<<<OUTPUT
+            Once upon a time...
+
+            OUTPUT);
+            try {
+                $m->spawn();
+                delay(500);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testCreateConditionUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/create-condition-with-pthread.zig');
+            $m->startup();
+            $this->expectOutputString(<<<OUTPUT
+            Thread waiting for condition
+            Thread waiting for condition
+            Thread waiting for condition
+            Thread saw condition
+            Thread saw condition
+            Thread saw condition
+
+            OUTPUT);
+            try {
+                $m->spawn();
+                delay(300);
+                $m->signal();
+                delay(200);
+                $m->broadcast();
+                delay(200);
+            } finally {
+                $m->shutdown();
+            }
+        });
+    }
+
+    public function testWaitMomentarilyForConditionCreatedUsingPthread(): void
+    {
+        $this->inEventLoops([ 'revolt' ], function() {
+            $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-condition-created-with-pthread.zig');
+            $m->startup();
+            $this->expectOutputRegex("/saw/");
+            $this->expectOutputRegex("/timed out/");
+            try {
+                $m->spawn();
+                delay(250);
+                $m->signal();
+                delay(400);
             } finally {
                 $m->shutdown();
             }
