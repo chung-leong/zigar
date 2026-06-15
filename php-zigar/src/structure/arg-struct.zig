@@ -219,7 +219,14 @@ pub const ArgStruct = struct {
         const static = class.getStaticData(@This());
         for (static.arg_accessors, 0..) |acc, i| {
             errdefer for (0..i) |j| php.release(&args[j]);
-            args[i] = try acc.get(self);
+            var arg = try acc.get(self);
+            if (php.isValueNull(&arg)) {
+                // an exception might have been thrown by an error union
+                if (php.captureException() catch null) |err_obj| {
+                    arg = php.createValueObject(php.reuse(err_obj));
+                }
+            }
+            args[i] = arg;
         }
     }
 

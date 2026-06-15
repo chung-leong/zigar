@@ -64,6 +64,12 @@ pub const Promise = struct {
             self.status = .waiting;
             try CallDispatcher.event_loop.suspendFiber(&self.fiber);
         }
+        // throw if the callback received an exception
+        if (php.getValueObject(&self.result) catch null) |obj| {
+            if (php.instanceOf(obj, php.getInterface(.throwable))) {
+                return php.throwException(obj);
+            }
+        }
         return self.result;
     }
 
