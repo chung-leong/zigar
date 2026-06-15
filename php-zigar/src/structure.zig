@@ -93,6 +93,11 @@ pub fn Parent(comptime S: type) type {
             return fromObject(obj);
         }
 
+        pub fn toValue(self: *S) Value {
+            const obj = object(self);
+            return php.createValueObject(php.reuse(obj));
+        }
+
         pub fn getExtent(self: *S) ByteBuffer.Extent {
             return .{ .address = @intFromPtr(self.buffer.bytes.ptr) };
         }
@@ -125,7 +130,7 @@ pub fn Parent(comptime S: type) type {
             if (@hasField(S, "buffer")) {
                 const obj = ZigObject(S).fromStructure(self).object();
                 const class = ZigClassEntry.fromObject(obj);
-                if (!self.buffer.flags.uninitialized and !self.buffer.flags.temporary) {
+                if (!self.buffer.flags.uninitialized and !self.buffer.flags.transient) {
                     try class.registerObject(obj);
                 }
             }
@@ -212,7 +217,7 @@ pub fn Parent(comptime S: type) type {
             const obj = php.getValueObject(value) catch return false;
             const class = ZigClassEntry.fromStructure(self);
             if (!php.instanceOf(obj, class.entry())) return false;
-            const obj_struct = ZigObject(S).fromObject(obj).structure();
+            const obj_struct = S.fromObject(obj);
             try self.buffer.copy(obj_struct.buffer);
             return true;
         }
@@ -236,13 +241,13 @@ pub fn Parent(comptime S: type) type {
             const class = ZigClassEntry.fromStructure(self);
             const member = try class.getMember(.static, name);
             if (!member.flags.is_method) return null;
-            const class_struct = ZigObject(Class(S)).fromObject(class.object).structure();
+            const class_struct = Class(S).fromObject(class.object);
             var field_value = try member.accessors.get(class_struct);
             defer php.release(&field_value);
             const field_obj = php.getValueObject(&field_value) catch return null;
             const field_class = ZigClassEntry.fromObject(field_obj);
             if (field_class.type != .function) return null;
-            const func_struct = ZigObject(Function).fromObject(field_obj).structure();
+            const func_struct = Function.fromObject(field_obj);
             const func = &func_struct.closure.php_portion;
             func.internal_function.function_name = name;
             return func;
@@ -283,24 +288,49 @@ pub fn Parent(comptime S: type) type {
         pub fn getConstructor(obj: *Object) *php.Function {
             const class = ZigClassEntry.fromObject(obj);
             const class_obj = class.object;
-            const class_struct = ZigObject(Class(S)).fromObject(class_obj).structure();
+            const class_struct = Class(S).fromObject(class_obj);
             return &class_struct.constructor;
         }
 
         pub fn freeObject(obj: *Object) void {
             const self = fromObject(obj);
             const class = ZigClassEntry.fromObject(obj);
-            // std.debug.print("freeObject: {s} => {} , object {d}, {x}, refcount = {d}\n", .{ class.getName(), S, obj.handle, @intFromPtr(self), obj.gc.refcount });
+            // std.debug.print("freeObject: {s} => {}, object {d}, {x}, refcount = {d}\n", .{ class.getName(), S, obj.handle, @intFromPtr(self), obj.gc.refcount });
             // only structure that a pointer can points to implement getExtent()
             if (@hasField(S, "buffer")) {
                 if (@hasDecl(S, "getExtent")) {
-                    if (!self.buffer.flags.uninitialized and !self.buffer.flags.temporary) {
+                    if (!self.buffer.flags.uninitialized and !self.buffer.flags.transient) {
                         class.unregisterObject(obj);
                     }
                 }
                 self.buffer.release();
             }
-            if (@hasField(S, "table")) php.release(&self.table);
+            if (@hasField(S, "table")) {
+                // switch (S) {
+                //     ArgStruct, Optional, Pointer => {
+                //         std.debug.print("freeObject: {s} => {}, object {d}, {x}, refcount = {d}\n", .{ class.getName(), S, obj.handle, @intFromPtr(self), obj.gc.refcount });
+                //         if (php.getValueType(&self.table) == .array) {
+                //             const ht = php.getValueHashTable(&self.table) catch unreachable;
+                //             var iter: php.HashTableIterator = .init(ht, .{});
+                //             while (iter.next()) |child| {
+                //                 if (php.getValueObject(child) catch null) |child_obj| {
+                //                     // if (child_obj.gc.refcount > 1) {
+                //                     std.debug.print("slot {d}: object {d}, refcount = {d}\n", .{ iter.currentIndex().?, child_obj.handle, child_obj.gc.refcount });
+                //                     // }
+                //                 }
+                //             }
+                //         } else if (php.getValueType(&self.table) == .object) {
+                //             if (php.getValueObject(&self.table) catch null) |child_obj| {
+                //                 // if (child_obj.gc.refcount > 1) {
+                //                 std.debug.print("slot X: object {d}, refcount = {d}\n", .{ child_obj.handle, child_obj.gc.refcount });
+                //                 // }
+                //             }
+                //         }
+                //     },
+                //     else => {},
+                // }
+                php.release(&self.table);
+            }
             class.destroyObject(obj);
         }
 
@@ -490,6 +520,7 @@ pub fn StructLike(comptime S: type) type {
         pub const object = Super.object;
         pub const fromObject = Super.fromObject;
         pub const fromValue = Super.fromValue;
+        pub const toValue = Super.toValue;
         pub const getExtent = Super.getExtent;
         pub const setStorage = Super.setStorage;
         pub const initialize = Super.initialize;
@@ -685,8 +716,8 @@ pub fn ArrayLike(comptime S: type) type {
             if (obj_a.ce != obj_b.ce) {
                 return if (@intFromPtr(obj_a.ce) < @intFromPtr(obj_b.ce)) -1 else 1;
             }
-            const struct_a = ZigObject(S).fromObject(obj_a).structure();
-            const struct_b = ZigObject(S).fromObject(obj_b).structure();
+            const struct_a = S.fromObject(obj_a);
+            const struct_b = S.fromObject(obj_b);
             const len_a = struct_a.getLength();
             const len_b = struct_b.getLength();
             const len = @min(len_a, len_b);
@@ -712,6 +743,7 @@ pub fn ArrayLike(comptime S: type) type {
 
         pub const fromObject = Super.fromObject;
         pub const fromValue = Super.fromValue;
+        pub const toValue = Super.toValue;
         pub const getExtent = Super.getExtent;
         pub const setStorage = Super.setStorage;
         pub const initialize = Super.initialize;
@@ -787,6 +819,7 @@ pub fn OptionalLike(comptime S: type) type {
 
         pub const fromObject = Super.fromObject;
         pub const fromValue = Super.fromValue;
+        pub const toValue = Super.toValue;
         pub const getExtent = Super.getExtent;
         pub const setStorage = Super.setStorage;
         pub const initialize = Super.initialize;
@@ -857,7 +890,7 @@ pub fn invokeMethod(obj: *Object, comptime name: []const u8, args: anytype) RT: 
                     const T = if (is_instance) S else C;
                     if (comptime @hasDecl(T, name)) {
                         const func = @field(T, name);
-                        const self = ZigObject(T).fromObject(obj).structure();
+                        const self = T.fromObject(obj);
                         const RT = ReturnType(T, name);
                         const result = @call(.auto, func, .{self} ++ args);
                         return if (ErrorType(RT) != null) try result else result;

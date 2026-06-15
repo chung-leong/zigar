@@ -239,7 +239,7 @@ final class ThreadHandlingTest extends ZigarTestCase
             $m->startup();
             try {
                 $result = $m->spawn();
-                $this->assertSame('Hello world', $result->string);
+                $this->assertSame('Hello world', $result->__string);
             } finally {
                 $m->shutdown();
             }

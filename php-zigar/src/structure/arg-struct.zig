@@ -112,6 +112,8 @@ pub const ArgStruct = struct {
     };
 
     pub fn copyArguments(self: *@This(), allocator: ?*std.mem.Allocator, arg_iter: *php.ArgumentIterator) !void {
+        // mark buffer as transient so argument objects don't get registered
+        self.buffer.flags.transient = true;
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         // take out initializers for special arguments
@@ -149,7 +151,7 @@ pub const ArgStruct = struct {
                     if (ZigClassEntry.isZigInstance(arg_obj)) {
                         const arg_class = ZigClassEntry.fromObject(arg_obj);
                         if (arg_class.type == .pointer) {
-                            const arg_struct = ZigObject(structure.Pointer).fromObject(arg_obj).structure();
+                            const arg_struct = structure.Pointer.fromObject(arg_obj);
                             // get the target without increasing its refcount
                             const target_obj = try arg_struct.getTarget();
                             arg_target = php.createValueObject(target_obj);
@@ -174,9 +176,8 @@ pub const ArgStruct = struct {
         inline for (.{ .allocator, .promise, .generator, .abort_signal }) |t| {
             if (@field(static, @tagName(t))) |m| {
                 const field_value = try m.accessors.get(self);
-                const field_obj = try php.getValueObject(&field_value);
-                defer php.release(field_obj);
-                const field_struct = ZigObject(structure.Struct).fromObject(field_obj).structure();
+                defer php.release(&field_value);
+                const field_struct = try structure.Struct.fromValue(&field_value);
                 const T = switch (t) {
                     .allocator => std.mem.Allocator,
                     .promise => Promise,
@@ -213,6 +214,7 @@ pub const ArgStruct = struct {
     }
 
     pub fn extractArguments(self: *@This(), args: []Value) !void {
+        self.buffer.flags.transient = true;
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         for (static.arg_accessors, 0..) |acc, i| {
@@ -383,12 +385,12 @@ pub const ArgStruct = struct {
             std.mem.Allocator => static.allocator,
             Promise => static.promise,
             Generator => static.generator,
+            AbortSignal => static.abort_signal,
             else => @compileError("Unexpected type: " ++ @typeName(T)),
         } orelse return error.Missing;
         const value = try member.accessors.get(self);
-        const obj = php.getValueObject(&value) catch unreachable;
-        defer php.release(obj);
-        return ZigObject(structure.Struct).fromObject(obj).structure();
+        defer php.release(&value);
+        return try structure.Struct.fromValue(&value);
     }
 
     pub fn detachFunctionThunks(self: *@This()) !void {

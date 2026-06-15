@@ -25,7 +25,7 @@ pub fn ArrayIterator(comptime S: type) type {
 
         pub fn create(obj: *Object) !*ObjectIterator {
             const self = try php.allocator.create(@This());
-            const array = ZigObject(S).fromObject(obj).structure();
+            const array = S.fromObject(obj);
             php.initializeIterator(&self.iter);
             self.object = php.reuse(obj);
             self.len = array.getLength();
@@ -48,7 +48,7 @@ pub fn ArrayIterator(comptime S: type) type {
 
         pub fn getCurrentData(iter: *ObjectIterator) *Value {
             const self = fromIter(iter);
-            const container = ZigObject(S).fromObject(self.object).structure();
+            const container = S.fromObject(self.object);
             php.release(&iter.data);
             iter.data = container.getElement(self.index) catch |err| init: {
                 _ = &err;
@@ -101,7 +101,7 @@ pub fn PropertyIterator(comptime S: type) type {
             var self: @This() = undefined;
             const class = ZigClassEntry.fromObject(obj);
             self.member_iter = class.getMemberIterator(scope);
-            self.container = ZigObject(S).fromObject(obj).structure();
+            self.container = S.fromObject(obj);
             self.current_name = null;
             self.current_index = std.math.maxInt(usize);
             self.iter.funcs = &methods;
@@ -209,7 +209,7 @@ pub const GeneratorIterator = struct {
     }
 
     pub fn create(obj: *Object) !*ObjectIterator {
-        const generator_struct = ZigObject(structure.Struct).fromObject(obj).structure();
+        const generator_struct = structure.Struct.fromObject(obj);
         const generator = try generator_struct.getSpecialContext(Generator);
         const self = try php.allocator.create(@This());
         generator.addRef();
@@ -217,6 +217,7 @@ pub const GeneratorIterator = struct {
         self.generator = generator;
         self.index = 0;
         self.iter.funcs = &methods;
+        self.iter.data = php.createValueNull();
         return &self.iter;
     }
 
@@ -231,9 +232,7 @@ pub const GeneratorIterator = struct {
     }
 
     pub fn getCurrentData(iter: *ObjectIterator) !*Value {
-        const self = fromIter(iter);
-        iter.data = self.generator.result;
-        return php.reuse(&iter.data);
+        return &iter.data;
     }
 
     pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {
@@ -244,12 +243,16 @@ pub const GeneratorIterator = struct {
     pub fn moveForward(iter: *ObjectIterator) !void {
         const self = fromIter(iter);
         try self.generator.moveForward();
+        php.release(&iter.data);
+        iter.data = php.reuse(&self.generator.result).*;
         self.index += 1;
     }
 
     pub fn rewind(iter: *ObjectIterator) !void {
         const self = fromIter(iter);
         try self.generator.rewind();
+        php.release(&iter.data);
+        iter.data = php.reuse(&self.generator.result).*;
         self.index = 0;
     }
 
@@ -309,12 +312,12 @@ pub const IteratorIterator = struct {
         const self = fromIter(iter);
         defer self.flags.moved = true;
         if (self.flags.valid) {
-            php.release(&self.iter.data);
+            php.release(&iter.data);
             self.flags.valid = false;
         }
         if (self.call("next")) |result| {
             if (!php.isValueNull(&result)) {
-                self.iter.data = result;
+                iter.data = result;
                 self.index += 1;
                 self.flags.valid = true;
             }
@@ -366,7 +369,7 @@ pub const TupleIterator = struct {
         var self: @This() = undefined;
         const class = ZigClassEntry.fromObject(obj);
         self.member_iter = class.getMemberIterator(.instance);
-        self.container = ZigObject(structure.Struct).fromObject(obj).structure();
+        self.container = structure.Struct.fromObject(obj);
         self.current_index = std.math.maxInt(usize);
         self.has_value = false;
         self.iter.funcs = &methods;

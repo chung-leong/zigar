@@ -76,7 +76,7 @@ pub const Function = struct {
                 }
             }
             if (ZigObject(structure.Pointer).isInstance(this_obj)) {
-                const pointer = ZigObject(structure.Pointer).fromObject(this_obj).structure();
+                const pointer = structure.Pointer.fromObject(this_obj);
                 const target = pointer.getValue(.none) catch return false;
                 this_obj = php.getValueObject(&target) catch return false;
             }
@@ -92,7 +92,7 @@ pub const Function = struct {
             defer arg_buffer.release();
             const arg_obj = try self.argument_class.createObjectFromBuffer(arg_buffer, null);
             defer php.release(arg_obj);
-            const arg_struct = ZigObject(structure.ArgStruct).fromObject(arg_obj).structure();
+            const arg_struct = structure.ArgStruct.fromObject(arg_obj);
             var args_on_stack: [16]Value = undefined;
             var args_allocated = false;
             const arg_count = arg_struct.getArgumentCount();
@@ -251,7 +251,7 @@ pub const Function = struct {
         defer php.release(arg);
         switch (static.argument_class.type) {
             .arg_struct => {
-                const arg_struct = ZigObject(structure.ArgStruct).fromObject(arg).structure();
+                const arg_struct = structure.ArgStruct.fromObject(arg);
                 try arg_struct.copyArguments(null, &arg_iter);
                 const arg_addr = @intFromPtr(arg_struct.buffer.bytes.ptr);
                 try class.host.runThunk(static.thunk_address, fn_addr, arg_addr);
@@ -281,8 +281,7 @@ pub const Function = struct {
                         generator.transform = self.info.transform;
                         if (generator.callback == null) {
                             // return generator
-                            const generator_obj = ZigObject(structure.Struct).fromStructure(generator_struct).object();
-                            break :get php.createValueObject(php.reuse(generator_obj));
+                            break :get generator_struct.toValue();
                         } else {
                             break :get php.createValueNull();
                         }
@@ -293,7 +292,7 @@ pub const Function = struct {
                 };
             },
             .variadic_struct => {
-                const arg_struct = ZigObject(structure.VariadicStruct).fromObject(arg).structure();
+                const arg_struct = structure.VariadicStruct.fromObject(arg);
                 try arg_struct.copyArguments(null, &arg_iter);
                 const arg_addr = @intFromPtr(arg_struct.buffer.bytes.ptr);
                 const attr_addr = @intFromPtr(arg_struct.attributes.ptr);

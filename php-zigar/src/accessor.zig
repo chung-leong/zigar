@@ -111,7 +111,7 @@ pub fn getOpaqueTarget(comptime T: type, value: *const Value) !*T {
     if (class.type != .slice) {
         return error.NotOpaque;
     }
-    const slice_struct = ZigObject(structure.Slice).fromObject(obj).structure();
+    const slice_struct = structure.Slice.fromObject(obj);
     if (@intFromPtr(slice_struct.buffer.bytes.ptr) == 0) return error.NullPointer;
     return @ptrCast(@alignCast(slice_struct.buffer.bytes.ptr));
 }

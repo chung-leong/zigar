@@ -70,7 +70,8 @@ pub const Promise = struct {
     pub fn resolve(self: *@This(), value: *Value) !void {
         switch (self.status) {
             .released => {
-                self.buffer.release();
+                self.status = .resolved;
+                self.release();
                 return;
             },
             .waiting => CallDispatcher.event_loop.resumeFiberAfterward(&self.fiber),
@@ -95,8 +96,7 @@ pub const Promise = struct {
     pub fn handleResolve(ed: *ExecuteData, return_value: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
         const ptr = arg_iter.next() orelse return error.Unexpected;
-        const ptr_obj = php.getValueObject(ptr) catch unreachable;
-        const ptr_struct = ZigObject(structure.Pointer).fromObject(ptr_obj).structure();
+        const ptr_struct = try structure.Pointer.fromValue(ptr);
         const target = try ptr_struct.getValue(.none);
         defer php.release(&target);
         const self = try accessor.getOpaqueTarget(@This(), &target);

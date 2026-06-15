@@ -80,7 +80,7 @@ pub fn Class(comptime S: type) type {
         pub fn freeObject(obj: *Object) void {
             const class = ZigClassEntry.fromObject(obj);
             // const self = fromObject(obj);
-            // std.debug.print("freeObject: Class({}), object {d}, {x}\n", .{ S, obj.handle, @intFromPtr(self) });
+            // std.debug.print("freeObject: {s} => Class({}), object {d}, {x}, refcount = {d}\n", .{ class.getName(), S, obj.handle, @intFromPtr(self), obj.gc.refcount });
             // destroy the class entry
             class.destroy();
         }
@@ -130,7 +130,7 @@ pub fn Class(comptime S: type) type {
             const field_obj = php.getValueObject(&field) catch return null;
             const field_class = ZigClassEntry.fromObject(field_obj);
             if (field_class.type == .function) {
-                const func_struct = ZigObject(structure.Function).fromObject(field_obj).structure();
+                const func_struct = structure.Function.fromObject(field_obj);
                 const func = &func_struct.closure.php_portion;
                 func.internal_function.function_name = name;
                 return func;
@@ -224,8 +224,7 @@ pub fn Class(comptime S: type) type {
 
         pub fn handleConstruct(ed: *ExecuteData, _: *Value) !void {
             if (!@hasDecl(S, "checkArguments")) unreachable;
-            const this_obj = try php.getValueObject(&ed.This);
-            const this_struct = ZigObject(S).fromObject(this_obj).structure();
+            const this_struct = try S.fromValue(&ed.This);
             // see if an allocator is specified
             var arg_iter: ArgumentIterator = .init(ed);
             const custom_allocator = try extractAllocator(&arg_iter);
@@ -240,8 +239,7 @@ pub fn Class(comptime S: type) type {
         }
 
         pub fn handleStringify(ed: *ExecuteData, retval: *Value) !void {
-            const this_obj = try php.getValueObject(&ed.This);
-            const this_struct = ZigObject(S).fromObject(this_obj).structure();
+            const this_struct = try S.fromValue(&ed.This);
             // only error set implements stringify(), which adds information about where the error
             // occurred to the error message
             retval.* = switch (@hasDecl(S, "stringify")) {
@@ -262,7 +260,7 @@ pub fn Class(comptime S: type) type {
             if (src_class.type != .@"struct" or src_class.purpose != .allocator) {
                 return error.NotAllocator;
             }
-            const src_struct = ZigObject(structure.Struct).fromObject(src_obj).structure();
+            const src_struct = structure.Struct.fromObject(src_obj);
             return @ptrCast(@alignCast(src_struct.buffer.bytes.ptr));
         }
 
@@ -271,7 +269,7 @@ pub fn Class(comptime S: type) type {
         pub const hasProperty = Super.hasProperty;
         pub const getProperties = Super.getProperties;
         pub const getPropertyPointer = Super.getPropertyPointer;
-        const fromObject = Super.fromObject;
+        pub const fromObject = Super.fromObject;
         const object = Super.object;
     };
 }

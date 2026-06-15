@@ -63,7 +63,7 @@ pub const ErrorUnion = struct {
             const err = try static.error_acc.get(self.buffer);
             if (php.getValueType(&err) == .object) {
                 const err_obj = php.getValueObject(&err) catch unreachable;
-                const err_struct = ZigObject(ErrorSet).fromObject(err_obj).structure();
+                const err_struct = ErrorSet.fromObject(err_obj);
                 try err_struct.acquireDebugInfo();
                 _ = &php.throwException(err_obj);
                 return php.createValueNull();

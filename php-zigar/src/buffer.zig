@@ -16,11 +16,12 @@ pub const ByteBuffer = struct {
     flags: packed struct {
         uninitialized: bool = true,
         read_only: bool = false,
-        temporary: bool = false,
         inaccessible: bool = false,
-        has_allocator: bool = false,
+        temporary: bool = false,
+        transient: bool = false,
         contains_packed_data: bool = false,
         contains_special_contents: bool = false,
+        has_allocator: bool = false,
 
         fn assign(self: @This(), flags: anytype) @This() {
             var new = self;
@@ -70,6 +71,7 @@ pub const ByteBuffer = struct {
             .bytes = bytes,
             .flags = .{
                 .temporary = true,
+                .transient = true,
                 .uninitialized = false,
             },
         };
@@ -166,7 +168,6 @@ pub const ByteBuffer = struct {
             .source_type = .buffer,
             .source = .{ .buffer = src_buf },
         };
-        new.flags.temporary = false;
         return new;
     }
 

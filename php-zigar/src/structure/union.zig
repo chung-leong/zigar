@@ -87,7 +87,7 @@ pub const Union = struct {
 
         pub fn getEnum(self: *@This(), obj: *Object) !Value {
             const sel = self.selector orelse return error.Unexpected;
-            const union_struct = ZigObject(Union).fromObject(obj).structure();
+            const union_struct = Union.fromObject(obj);
             return try sel.accessors.get(union_struct);
         }
 
@@ -317,9 +317,8 @@ pub const Union = struct {
         if (!class.flags.@"union".has_tag) return null;
         const static = class.getStaticData(@This());
         const sel = static.selector orelse return error.Unexpected;
-        const tag_value = try sel.accessors.get(self);
-        const tag_obj = try php.getValueObject(&tag_value);
-        const tag_struct = ZigObject(structure.Enum).fromObject(tag_obj).structure();
+        const tag = try sel.accessors.get(self);
+        const tag_struct = try structure.Enum.fromValue(&tag);
         return try tag_struct.getValue(.string);
     }
 

@@ -23,7 +23,6 @@ pub fn EventLoop(comptime cb: fn () void) type {
             end: u64,
             signal: *AbortSignal,
         };
-        const class_name = N("Fiber");
 
         pub fn init(self: *@This(), stream: *const Value) !void {
             // create closure for loop fiber
@@ -32,10 +31,10 @@ pub fn EventLoop(comptime cb: fn () void) type {
             const closure = php.createValueClosure(&func, null, null, null);
             defer php.release(&closure);
             // create the fiber used for handling the command stream
-            self.fiber = try php.createValueNewObject(class_name, &.{closure});
+            self.fiber = try php.createValueNewObject(N("Fiber"), &.{closure});
             errdefer php.release(&self.fiber);
             self.fiber_cache = try .init(&self.fiber);
-            const class_name_value = php.createValueString(class_name);
+            const class_name_value = php.createValueString(N("Fiber"));
             self.fiber_class_cache = try .init(&class_name_value);
             errdefer self.fiber_class_cache.deinit();
             self.stream = stream;

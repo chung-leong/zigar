@@ -31,10 +31,10 @@ pub fn ZigObject(comptime S: type) type {
             return @fieldParentPtr("php_portion", obj);
         }
 
-        pub fn fromValue(value: *const Value) !*@This() {
-            const obj = try php.getValueObject(value);
-            return fromObject(obj);
-        }
+        // pub fn fromValue(value: *const Value) !*@This() {
+        //     const obj = try php.getValueObject(value);
+        //     return fromObject(obj);
+        // }
 
         pub inline fn fromStructure(s: *S) *@This() {
             return @alignCast(@fieldParentPtr("zig_portion", s));
@@ -88,7 +88,7 @@ pub const ObjectMap = struct {
 
     pub fn add(self: *@This(), obj: *Object) !void {
         const buf = getObjectBuffer(obj);
-        std.debug.assert(!buf.flags.uninitialized and !buf.flags.temporary);
+        std.debug.assert(!buf.flags.uninitialized and !buf.flags.transient);
         try self.map.add(obj);
     }
 
@@ -98,7 +98,7 @@ pub const ObjectMap = struct {
 
     pub fn remove(self: *@This(), obj: *Object) bool {
         const buf = getObjectBuffer(obj);
-        std.debug.assert(!buf.flags.uninitialized and !buf.flags.temporary);
+        std.debug.assert(!buf.flags.uninitialized and !buf.flags.transient);
         return self.map.remove(obj);
     }
 

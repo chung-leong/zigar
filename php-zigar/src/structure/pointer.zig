@@ -161,7 +161,7 @@ pub const Pointer = struct {
                         var obj = php.getValueObject(value) catch unreachable;
                         const obj_class = ZigClassEntry.fromObject(obj);
                         if (obj_class.type == .pointer) {
-                            const ptr_struct = ZigObject(structure.Pointer).fromObject(obj).structure();
+                            const ptr_struct = structure.Pointer.fromObject(obj);
                             obj = try ptr_struct.getTarget();
                         }
                         if (php.instanceOf(obj, target_class.entry())) {
@@ -279,7 +279,7 @@ pub const Pointer = struct {
                         try static.setLength(self, len);
                     } else {
                         const max_length = get: {
-                            const slice_struct = ZigObject(structure.Slice).fromObject(target_obj).structure();
+                            const slice_struct = structure.Slice.fromObject(target_obj);
                             const max = slice_struct.buffer.getMaximumExtent();
                             const available = (max.address + max.len) - self.last_address;
                             const element_size = static.target_class.byte_size orelse 1;

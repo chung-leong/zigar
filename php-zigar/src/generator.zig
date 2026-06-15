@@ -90,17 +90,18 @@ pub const Generator = struct {
     pub fn resolve(self: *@This(), value: *Value) !bool {
         switch (self.status) {
             .released => {
-                self.buffer.release();
+                self.status = .finished;
+                self.release();
                 return false;
             },
             .waiting => CallDispatcher.event_loop.resumeFiberAfterward(&self.fiber),
             else => {},
         }
+        php.release(&self.result);
         self.result = php.reuse(value).*;
         self.status = if (php.isValueNull(value)) .finished else .resolved;
         if (self.transform) |tm| try tm.apply(&self.result);
         if (self.callback) |*cb| {
-            defer php.release(&self.result);
             const args: []Value = @ptrCast(&self.result);
             const retval = try php.invokeMethod(null, cb, args);
             defer php.release(&retval);
@@ -113,8 +114,7 @@ pub const Generator = struct {
     pub fn handleResolve(ed: *ExecuteData, return_value: *Value) !void {
         var arg_iter: ArgumentIterator = .init(ed);
         const ptr = arg_iter.next() orelse return error.Unexpected;
-        const ptr_obj = php.getValueObject(ptr) catch unreachable;
-        const ptr_struct = ZigObject(structure.Pointer).fromObject(ptr_obj).structure();
+        const ptr_struct = try structure.Pointer.fromValue(ptr);
         const target = try ptr_struct.getValue(.none);
         const self = try accessor.getOpaqueTarget(@This(), &target);
         const result = arg_iter.next() orelse return error.Unexpected;

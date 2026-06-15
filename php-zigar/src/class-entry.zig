@@ -368,7 +368,7 @@ pub const ZigClassEntry = struct {
             inline else => |t| {
                 const S = @field(structure.by_enum, @tagName(t));
                 const C = structure.Class(S);
-                const class_struct = ZigObject(C).fromObject(class_obj).structure();
+                const class_struct = C.fromObject(class_obj);
                 try class_struct.setStorage(&table);
                 try class_struct.finalize(false);
             },
@@ -405,7 +405,7 @@ pub const ZigClassEntry = struct {
         }
         if (self.type == .error_set and self.flags.error_set.is_global) {
             const table = php.createArray();
-            const class_struct = ZigObject(structure.Class(structure.ErrorSet)).fromObject(self.object).structure();
+            const class_struct = structure.Class(structure.ErrorSet).fromObject(self.object);
             class_struct.table = php.createValueArray(table);
             self.static.template.table = php.createValueArray(table);
             const ht = self.host.global_error_set.?;

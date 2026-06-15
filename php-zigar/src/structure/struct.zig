@@ -172,7 +172,7 @@ pub const Struct = struct {
             root.symbol_names = symbol_names;
             root.symbol_types = symbol_types;
             errdefer self.removeSymbolsFromGlobalNamespace() catch {};
-            const class_struct = ZigObject(structure.Class(structure.Struct)).fromObject(class.object).structure();
+            const class_struct = structure.Class(structure.Struct).fromObject(class.object);
             var member_iter = class.getMemberIterator(.static);
             while (member_iter.next()) |member| {
                 const member_name = member_iter.currentName() orelse continue;
@@ -183,14 +183,14 @@ pub const Struct = struct {
                     switch (member_class.type) {
                         .function => break :find .function,
                         .@"comptime" => {
-                            const member_struct = ZigObject(structure.Comptime).fromObject(member_obj).structure();
+                            const member_struct = structure.Comptime.fromObject(member_obj);
                             const target_obj = try php.getValueObject(&member_struct.table);
                             const target_class = ZigClassEntry.fromObject(target_obj);
                             break :find if (target_class.object == target_obj) .class else .constant;
                         },
                         inline else => |t| {
                             const S = @field(structure.by_enum, @tagName(t));
-                            const member_struct = ZigObject(S).fromObject(member_obj).structure();
+                            const member_struct = S.fromObject(member_obj);
                             const buf = member_struct.buffer;
                             break :find if (buf.flags.read_only) .constant else .variable;
                         },
@@ -224,7 +224,7 @@ pub const Struct = struct {
                 switch (symbol_type) {
                     .function => {
                         const func_obj = try php.getValueObject(&member_value);
-                        const func_struct = ZigObject(structure.Function).fromObject(func_obj).structure();
+                        const func_struct = structure.Function.fromObject(func_obj);
                         const exportable = func_struct.createExportableVersion(symbol_name);
                         try php.registerFunction(symbol_name, exportable);
                     },
@@ -572,10 +572,9 @@ pub const Struct = struct {
                 const callback_value = php.createValueObject(ss.callback);
                 try self.setProperty(N("callback"), &callback_value, null);
                 if (class.getMember(.instance, N("allocator")) catch null) |m| {
-                    const allocator_value = try m.accessors.get(self);
-                    const allocator_obj = try php.getValueObject(&allocator_value);
-                    defer php.release(allocator_obj);
-                    const allocator_struct = ZigObject(structure.Struct).fromObject(allocator_obj).structure();
+                    const allocator = try m.accessors.get(self);
+                    defer php.release(&allocator);
+                    const allocator_struct = try structure.Struct.fromValue(&allocator);
                     try allocator_struct.initSpecial(std.mem.Allocator, args);
                 }
             },
@@ -597,13 +596,13 @@ pub const Struct = struct {
     }
 
     pub fn getSpecialContext(self: *@This(), comptime T: type) !*T {
-        const ptr_value = try self.getProperty(N("ptr"), null);
-        const ptr_obj = try php.getValueObject(&ptr_value);
-        defer php.release(ptr_obj);
-        const ptr_struct = ZigObject(structure.Pointer).fromObject(ptr_obj).structure();
+        const ptr = try self.getProperty(N("ptr"), null);
+        defer php.release(&ptr);
+        const ptr_struct = try structure.Pointer.fromValue(&ptr);
         const target = try ptr_struct.getValue(.none);
         defer php.release(&target);
-        return accessor.getOpaqueTarget(T, &target);
+        const context = accessor.getOpaqueTarget(T, &target);
+        return context;
     }
 
     pub fn freeObject(obj: *Object) void {
@@ -708,8 +707,7 @@ pub const Struct = struct {
 
     fn getDescriptor(value: *const Value) !c_long {
         if (builtin.target.os.tag == .windows) {
-            const ptr_obj = try php.getValueObject(value);
-            const ptr_struct = ZigObject(structure.Pointer).fromObject(ptr_obj).structure();
+            const ptr_struct = try structure.Pointer.fromValue(value);
             const address = try ptr_struct.getAddress();
             return @intCast(address >> 1);
         } else {
@@ -739,4 +737,5 @@ pub const Struct = struct {
     pub const getGarbageCollection = Super.getGarbageCollection;
     pub const fromObject = Super.fromObject;
     pub const fromValue = Super.fromValue;
+    pub const toValue = Super.toValue;
 };
