@@ -426,18 +426,16 @@ pub const CallDispatcher = struct {
     fn runScheduledTask() void {
         const fd = pipes[0];
         var task: ScheduledTask = undefined;
-        while (true) {
-            const read = std.c.read(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
-            if (read != @sizeOf(ScheduledTask)) break;
-            const self = task.self;
-            // std.debug.print("runScheduledTask\n", .{});
-            switch (task.operation) {
-                .jscall => |call| _ = self.handleJscall(call) catch unreachable,
-                .syscall => |call| _ = self.handleSyscall(call) catch unreachable,
-                .disable => self.disableMultithread() catch unreachable,
-            }
-            event_loop.resumePendingFiber();
+        const read = std.c.read(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
+        if (read != @sizeOf(ScheduledTask)) return;
+        const self = task.self;
+        // std.debug.print("runScheduledTask\n", .{});
+        switch (task.operation) {
+            .jscall => |call| _ = self.handleJscall(call) catch unreachable,
+            .syscall => |call| _ = self.handleSyscall(call) catch unreachable,
+            .disable => self.disableMultithread() catch unreachable,
         }
+        event_loop.resumePendingFiber();
     }
 
     pub fn initializeThread(self: *@This()) !void {

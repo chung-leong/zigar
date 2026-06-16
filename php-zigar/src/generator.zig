@@ -74,7 +74,7 @@ pub const Generator = struct {
         if (self.status == .unused) {
             php.release(&self.fiber);
             self.fiber = try CallDispatcher.event_loop.getFiber();
-            return try self.moveForward();
+            try self.moveForward();
         }
     }
 
@@ -99,8 +99,12 @@ pub const Generator = struct {
         }
         php.release(&self.result);
         self.result = php.reuse(value).*;
-        self.status = if (php.isValueNull(value)) .finished else .resolved;
-        if (self.transform) |tm| try tm.apply(&self.result);
+        if (php.isValueNull(value)) {
+            self.status = .finished;
+        } else {
+            self.status = .resolved;
+            if (self.transform) |tm| try tm.apply(&self.result);
+        }
         if (self.callback) |*cb| {
             const args: []Value = @ptrCast(&self.result);
             const retval = try php.invokeMethod(null, cb, args);

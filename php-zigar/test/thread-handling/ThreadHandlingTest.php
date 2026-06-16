@@ -4,8 +4,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 {   
     public function testSpawnThreadsAndInvokeCallback(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-thread-call-function.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-thread-call-function.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $count = 0;
@@ -32,8 +32,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testSpawnThreadPoolAndInvokeCallback(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-thread-pool.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-thread-pool.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup(4);
             try {
                 $count = 0;
@@ -55,8 +55,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateThreadThatResolvesAPromise(): void
     {
-        $this->inEventLoops([ 'temporary', 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-thread-with-promise.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-thread-with-promise.zig');
+        $this->inEventLoops([ 'temporary', 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $result1 = $m->spawn();
@@ -71,8 +71,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testReceiveStringFromPromise(): void
     {
-        $this->inEventLoops([ 'temporary', 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-thread-with-string-promise.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-thread-with-string-promise.zig');
+        $this->inEventLoops([ 'temporary', 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $result = $m->spawn();
@@ -85,8 +85,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testReceivePlainObjectFromPromise(): void
     {
-        $this->inEventLoops([ 'temporary', 'revolt' ], function() {            
-            $m = ZigImporter::load(__DIR__ . '/create-thread-with-plain-object-promise.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-thread-with-plain-object-promise.zig');
+        $this->inEventLoops([ 'temporary', 'revolt' ], function() use($m) {            
             $m->startup();
             try {                
                 $result = $m->spawn();
@@ -99,8 +99,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testReceiveStringsFromGenerator(): void
     {
-        $this->inEventLoops([ 'temporary', 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-thread-with-string-generator.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-thread-with-string-generator.zig');
+        $this->inEventLoops([ 'temporary', 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $generator = $m->spawn();
@@ -118,8 +118,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testReceiveStringsFromAllocatingGenerator(): void
     {
-        $this->inEventLoops([ 'temporary', 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-thread-with-allocating-generator.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-thread-with-allocating-generator.zig');
+        $this->inEventLoops([ 'temporary', 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $generator = $m->spawn();
@@ -137,14 +137,14 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testReceivePlainObjectsFromGenerator(): void
     {
-        $this->inEventLoops([ 'temporary', 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-thread-with-plain-object-generator.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-thread-with-plain-object-generator.zig');
+        $this->inEventLoops([ 'temporary', 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $generator = $m->spawn();
                 $list = [];
-                foreach ($generator as $s) {
-                    $list[] = $s;
+                foreach ($generator as $obj) {
+                    $list[] = $obj;
                 }
                 $this->assertSame(5, count($list));
                 $this->assertEquals([
@@ -162,8 +162,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateThreadOrImmediatelyProvideValue(): void
     {
-        $this->inEventLoops([ 'temporary', 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-thread-optionally.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-thread-optionally.zig');
+        $this->inEventLoops([ 'temporary', 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $result1 = $m->spawn(true);
@@ -178,8 +178,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testRejectPromiseSynchronously(): void
     {
-        $this->inEventLoops([ 'temporary', 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-thread-promise-failure.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-thread-promise-failure.zig');
+        $this->inEventLoops([ 'temporary', 'revolt' ], function() use($m) {
             $this->assertExceptionMessage('thread creation failure', function() use($m) {
                 $x = $m->spawn();
             });
@@ -188,8 +188,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateThreadThatAcceptsAnAbortSignal(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-thread-with-abort-signal.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-thread-with-abort-signal.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $signal = new AbortSignal();
@@ -212,8 +212,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateThreadThatAcceptsAnAbortSignalThatWorksAtomically(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-thread-with-abort-signal-atomic.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-thread-with-abort-signal-atomic.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $signal = new AbortSignal();
@@ -236,8 +236,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateThreadThatAllocateMemory(): void
     {
-        $this->inEventLoops([ 'temporary', 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-thread-allocate-memory.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-thread-allocate-memory.zig');
+        $this->inEventLoops([ 'temporary', 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $result = $m->spawn();
@@ -250,8 +250,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateThreadPoolForFunctionReturningPromise(): void
     {
-        $this->inEventLoops([ 'temporary', 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-thread-pool-return-promise.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-thread-pool-return-promise.zig');
+        $this->inEventLoops([ 'temporary', 'revolt' ], function() use($m) {
             $m->startup(4);
             try {
                 $result = $m->spawn();
@@ -264,8 +264,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCallFunctionsThroughWorkQueue(): void
     {
-        $this->inEventLoops([ 'temporary', 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/use-work-queue.zig');
+        $m = ZigImporter::load(__DIR__ . '/use-work-queue.zig');
+        $this->inEventLoops([ 'temporary', 'revolt' ], function() use($m) {
             $m->startup(2);
             try {
                 $str = $m->returnString();
@@ -282,8 +282,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCallFunctionsThroughSingleThreadWorkQueue(): void
     {
-        $this->inEventLoops([ 'temporary', 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/use-work-queue-single-thread.zig');
+        $m = ZigImporter::load(__DIR__ . '/use-work-queue-single-thread.zig');
+        $this->inEventLoops([ 'temporary', 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $str = $m->returnString();
@@ -300,8 +300,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testInvokeThreadStartFunction(): void
     {
-        $this->inEventLoops([ 'temporary', 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/use-work-queue-with-thread-start-fn.zig');
+        $m = ZigImporter::load(__DIR__ . '/use-work-queue-with-thread-start-fn.zig');
+        $this->inEventLoops([ 'temporary', 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $str = $m->returnString();
@@ -318,8 +318,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testInitializeWorkQueueAutomatically(): void
     {
-        $this->inEventLoops([ 'temporary', 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/use-work-queue-auto-init.zig');
+        $m = ZigImporter::load(__DIR__ . '/use-work-queue-auto-init.zig');
+        $this->inEventLoops([ 'temporary', 'revolt' ], function() use($m) {
             try {
                 $str = $m->returnString();
                 $this->assertSame('Hello world!', $str);
@@ -342,8 +342,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateADetachedThreadUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-detached-thread-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-detached-thread-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $this->expectOutputString(<<<OUTPUT
@@ -360,8 +360,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateAThreadInAThreadUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-thread-in-thread-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-thread-in-thread-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $this->expectOutputString(<<<OUTPUT
@@ -379,8 +379,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testExitThreadCreatedUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/exit-thread-created-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/exit-thread-created-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $this->expectOutputString(<<<OUTPUT
@@ -400,8 +400,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testExitThreadCreatedInAThreadUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/exit-thread-created-in-thread-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/exit-thread-created-in-thread-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $this->expectOutputString(<<<OUTPUT
@@ -422,8 +422,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testPrintIdsOfThreadsCreatedUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/print-ids-of-threads-created-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/print-ids-of-threads-created-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $this->expectOutputRegex("/(thread_id = \\d+\\n){5}/s");
@@ -437,8 +437,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateMutexUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-mutex-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-mutex-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $this->expectOutputString(<<<OUTPUT
@@ -456,8 +456,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateErrorCheckingMutexUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-error-checking-mutex-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-error-checking-mutex-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $this->expectOutputString(<<<OUTPUT
@@ -474,8 +474,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateRecursiveMutexUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-recursive-mutex-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-recursive-mutex-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $this->expectOutputString(<<<OUTPUT
@@ -493,8 +493,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testWaitMomentarilyForMutexCreatedUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-mutex-created-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-mutex-created-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $this->expectOutputString(<<<OUTPUT
@@ -513,8 +513,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateSpinlockUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-spinlock-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-spinlock-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $this->expectOutputString(<<<OUTPUT
             Main thread acquired spinlock
             Thread 2 found busy lock: true
@@ -536,8 +536,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateReadWriteLockUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-rwlock-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-rwlock-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             try {
                 $this->expectOutputRegex("/Main thread acquired write lock");
                 $this->expectOutputRegex("/Main thread released write lock/");
@@ -556,8 +556,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testWaitMomentarilyForReadLockUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-read-lock-created-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-read-lock-created-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $this->expectOutputRegex("/Thread 1 timed out: true/");
@@ -575,8 +575,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testWaitMomentarilyForWriteLockUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-write-lock-created-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-write-lock-created-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $this->expectOutputRegex("/Thread 1 timed out: true/");
@@ -594,8 +594,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateSemaphoreUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-semaphore-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-semaphore-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $this->expectOutputRegex("/acquired semaphore: 0/");
@@ -610,8 +610,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateNamedSemaphoreUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-semaphore-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-semaphore-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $this->expectOutputRegex("/(acquired semaphore: 0)/");
@@ -626,8 +626,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testWaitMomentarilyForSemaphoreCreatedUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-semaphore-created-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-semaphore-created-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $this->expectOutputRegex("/(acquired semaphore: 0)/");
@@ -642,8 +642,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testGetSemaphoreCreatedWithPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/get-semaphore-created-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/get-semaphore-created-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $this->expectOutputRegex("/(acquired semaphore: 0)/");
@@ -659,8 +659,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateKeyForThreadSpecificValuesUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-key-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-key-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $this->expectOutputRegex("/Destructor 1 called: anyopaque@12345/");
             $this->expectOutputRegex("/Destructor 2 called: anyopaque@67/");
             $this->expectOutputRegex("/Destructor 1 called: anyopaque@22222/");
@@ -676,8 +676,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testExitThreadNotCreatedUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/exit-thread-not-created-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/exit-thread-not-created-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             try {
                 $m->spawn();
@@ -692,8 +692,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCallFunctionOnceUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/call-function-once-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/call-function-once-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             $this->expectOutputString(<<<OUTPUT
             Once upon a time...
@@ -710,8 +710,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testCreateConditionUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/create-condition-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/create-condition-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             $this->expectOutputString(<<<OUTPUT
             Thread waiting for condition
@@ -737,8 +737,8 @@ final class ThreadHandlingTest extends ZigarTestCase
 
     public function testWaitMomentarilyForConditionCreatedUsingPthread(): void
     {
-        $this->inEventLoops([ 'revolt' ], function() {
-            $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-condition-created-with-pthread.zig');
+        $m = ZigImporter::load(__DIR__ . '/wait-momentarily-for-condition-created-with-pthread.zig');
+        $this->inEventLoops([ 'revolt' ], function() use($m) {
             $m->startup();
             $this->expectOutputRegex("/saw/");
             $this->expectOutputRegex("/timed out/");

@@ -232,7 +232,8 @@ pub const GeneratorIterator = struct {
     }
 
     pub fn getCurrentData(iter: *ObjectIterator) !*Value {
-        return &iter.data;
+        const self = fromIter(iter);
+        return &self.generator.result;
     }
 
     pub fn getCurrentKey(iter: *ObjectIterator, key_ptr: *Value) void {
@@ -243,16 +244,12 @@ pub const GeneratorIterator = struct {
     pub fn moveForward(iter: *ObjectIterator) !void {
         const self = fromIter(iter);
         try self.generator.moveForward();
-        php.release(&iter.data);
-        iter.data = php.reuse(&self.generator.result).*;
         self.index += 1;
     }
 
     pub fn rewind(iter: *ObjectIterator) !void {
         const self = fromIter(iter);
         try self.generator.rewind();
-        php.release(&iter.data);
-        iter.data = php.reuse(&self.generator.result).*;
         self.index = 0;
     }
 

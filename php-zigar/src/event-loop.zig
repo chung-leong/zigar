@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const AbortSignal = @import("abort-signal.zig").AbortSignal;
+const extension = @import("extension.zig");
 const php = @import("php.zig");
 const MethodCallCaches = php.MethodCallCaches;
 const N = php.getStaticString;
@@ -211,7 +212,6 @@ pub fn EventLoop(comptime cb: fn () void) type {
         loop: Loop = .{ .temporary = undefined },
         stream: Value = undefined,
         ready: bool = false,
-        registered: bool = false,
         pendingFiber: ?*const Value = null,
 
         const Loop = union(enum) {
@@ -250,19 +250,12 @@ pub fn EventLoop(comptime cb: fn () void) type {
 
         pub fn init(self: *@This(), stream: *const Value) !void {
             if (self.ready) return;
-            if (!self.registered) {
-                // register a shutdown function for the purpose of shutting down the loop
-                var func = php.createTransformedFunction(handleShutdown, "shutdown", 0, false);
-                func.internal_function.reserved[0] = self;
-                const closure = php.createValueClosure(&func, null, null, null);
-                defer php.release(&closure);
-                _ = try php.invokeFunction("register_shutdown_function", &.{closure});
-                self.registered = true;
-            }
             self.stream = stream.*;
             try self.initImpl();
             self.ready = true;
             php.addRef(&self.stream);
+            // register a shutdown function for the purpose of shutting down the loop
+            try extension.addRequestShutdownCallback(self, handleShutdown);
         }
 
         fn initImpl(self: *@This()) !void {
@@ -274,6 +267,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
         pub fn deinit(self: *@This()) void {
             if (!self.ready) return;
             self.ready = false;
+            extension.removeRequestShutdownCallback(self, handleShutdown);
             self.deinitImpl();
             php.release(&self.stream);
         }
@@ -322,8 +316,8 @@ pub fn EventLoop(comptime cb: fn () void) type {
             }
         }
 
-        pub fn handleShutdown(ed: *ExecuteData, _: *Value) void {
-            const self: *@This() = @ptrCast(@alignCast(ed.func.*.internal_function.reserved[0]));
+        pub fn handleShutdown(ptr: *anyopaque) void {
+            const self: *@This() = @ptrCast(@alignCast(ptr));
             self.deinit();
         }
     };
