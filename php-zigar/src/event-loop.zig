@@ -3,6 +3,7 @@ const std = @import("std");
 const AbortSignal = @import("abort-signal.zig").AbortSignal;
 const extension = @import("extension.zig");
 const php = @import("php.zig");
+const FunctionCallCache = php.FunctionCallCache;
 const MethodCallCaches = php.MethodCallCaches;
 const N = php.getStaticString;
 const String = php.String;
@@ -129,6 +130,11 @@ pub fn EventLoop(comptime cb: fn () void) type {
             defer php.release(&except_fds);
             // wait for activation by main fiber
             self.suspendLoop() catch unreachable;
+            const stream_select_name = php.createValueString(N("stream_select"));
+            var stream_select_cache = FunctionCallCache.init(&stream_select_name) catch {
+                @panic("stream_select() is not available");
+            };
+            defer stream_select_cache.deinit();
             while (!self.terminated) {
                 // update or update timeouts and get the duration to the closest one
                 const timeout_s, const timeout_us = self.updateTimouts();
@@ -136,7 +142,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
                 const fd_array_ref = php.getValueReference(&read_fds) catch unreachable;
                 const fd_array = php.getValueArray(&fd_array_ref.val) catch unreachable;
                 php.setHashEntryRef(fd_array, 0, self.stream);
-                const result = php.invokeFunction("stream_select", &.{
+                const result = stream_select_cache.invoke(&.{
                     read_fds,
                     write_fds,
                     except_fds,

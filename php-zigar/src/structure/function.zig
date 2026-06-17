@@ -12,6 +12,7 @@ const php = @import("../php.zig");
 const ArgumentIterator = php.ArgumentIterator;
 const ClassEntry = php.ClassEntry;
 const ExecuteData = php.ExecuteData;
+const FunctionCallCache = php.FunctionCallCache;
 const HashTable = php.HashTable;
 const Object = php.Object;
 const String = php.String;
@@ -84,12 +85,12 @@ pub const Function = struct {
             return this_obj.ce == arg_class.entry() and this_obj != arg_class.object;
         }
 
-        pub fn runCallback(self: *@This(), callable: *Value, arg_bytes: []u8, futex_handle: usize) !void {
+        pub fn runCallback(self: *@This(), cache: *FunctionCallCache, arg_bytes: []u8, futex_handle: usize) !void {
             // need to make a copy of the arguments, since arg_bytes are on the stack
             const arg_buffer = try ByteBuffer.create(self.argument_class.alignment);
+            defer arg_buffer.release();
             try arg_buffer.allocate(null, arg_bytes.len);
             try arg_buffer.copyBytes(arg_bytes);
-            defer arg_buffer.release();
             const arg_obj = try self.argument_class.createObjectFromBuffer(arg_buffer, null);
             defer php.release(arg_obj);
             const arg_struct = structure.ArgStruct.fromObject(arg_obj);
@@ -103,16 +104,17 @@ pub const Function = struct {
             defer if (args_allocated) php.allocator.free(args);
             try arg_struct.extractArguments(args);
             defer for (args) |*arg| php.release(arg);
-            const arg_info = try php.getArgumentInfo(callable);
+            const arg_info = cache.argumentInfo();
             var named_args: ?*HashTable = null;
             try arg_struct.extractNamedArguments(arg_info, &named_args);
             defer if (named_args) |ht| php.release(ht);
+            cache.useNamedArguments(named_args);
             if (arg_struct.hasAsyncCallback()) {
                 // wake the calling thread prior to invoking the callback (which could potentially
                 // switch to a different fiber) when we have a promise or generator interface
                 CallDispatcher.releaseCallingThread(futex_handle, .SUCCESS);
             }
-            const result = php.invokeMethodEx(null, callable, args, named_args) catch |err| get: {
+            const result = cache.invoke(args) catch |err| get: {
                 const ex = php.captureException() catch throw: {
                     _ = &php.throwError(err);
                     break :throw php.captureException() catch unreachable;

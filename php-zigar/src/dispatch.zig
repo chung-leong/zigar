@@ -14,6 +14,7 @@ const ModuleHost = @import("host.zig").ModuleHost;
 const php = @import("php.zig");
 const ArgumentIterator = php.ArgumentIterator;
 const ExecuteData = php.ExecuteData;
+const FunctionCallCache = php.FunctionCallCache;
 const HashTable = php.HashTable;
 const Object = php.Object;
 const Stream = php.Stream;
@@ -37,6 +38,7 @@ pub const CallDispatcher = struct {
         .utimes = true,
     },
     redirection_cb: ?Value = null,
+    redirection_cache: FunctionCallCache = undefined,
     redirecting_root: bool = false,
     redirecting_other_libraries: bool = false,
     function_list: std.ArrayList(CallbackEntry) = .empty,
@@ -76,10 +78,12 @@ pub const CallDispatcher = struct {
         id: usize,
         class: *ZigClassEntry,
         callable: Value,
+        cache: FunctionCallCache,
 
-        pub fn deinit(self: *const @This()) void {
+        pub fn deinit(self: *@This()) void {
             php.release(self.class.object);
             php.release(&self.callable);
+            self.cache.deinit();
         }
     };
     const StreamEntry = struct {
@@ -186,10 +190,11 @@ pub const CallDispatcher = struct {
     }
 
     pub fn createJsThunk(self: *@This(), class: *ZigClassEntry, callable: *Value) !usize {
-        const controller_address = try getControllerAddress(class);
-        var thunk_address: usize = 0;
         const fn_id = try self.saveCallback(class, callable);
+        errdefer self.removeCallback(fn_id);
+        const controller_address = try getControllerAddress(class);
         const exports = self.host.module.exports;
+        var thunk_address: usize = 0;
         const result = exports.create_js_thunk(controller_address, fn_id, &thunk_address);
         if (result != .SUCCESS) return error.Failure;
         return thunk_address;
@@ -211,12 +216,14 @@ pub const CallDispatcher = struct {
     }
 
     fn saveCallback(self: *@This(), class: *ZigClassEntry, callable: *Value) !usize {
+        const cache = FunctionCallCache.init(callable) catch return error.NotCallable;
         const fn_id = self.next_function_id;
         self.next_function_id +%= 1;
         try self.function_list.append(php.allocator, .{
             .id = fn_id,
             .class = class,
             .callable = callable.*,
+            .cache = cache,
         });
         php.addRef(callable);
         php.addRef(class.object);
@@ -243,7 +250,7 @@ pub const CallDispatcher = struct {
         // removal of the callback can cause the list to get deallocated
         // make a copy of it just in case
         var list = self.function_list;
-        while (list.pop()) |*item| item.deinit();
+        for (list.items) |*item| item.deinit();
         list.deinit(php.allocator);
     }
 
@@ -289,7 +296,7 @@ pub const CallDispatcher = struct {
         const arg_bytes = arg_ptr[0..call.arg_size];
         // use the function structure's static method to run the callback
         const fn_static = cb.class.getStaticData(structure.Function);
-        try fn_static.runCallback(&cb.callable, arg_bytes, call.futex_handle);
+        try fn_static.runCallback(&cb.cache, arg_bytes, call.futex_handle);
         return .SUCCESS;
     }
 
@@ -1148,6 +1155,7 @@ pub const CallDispatcher = struct {
             self.release_resources_called = true;
             if (self.redirection_cb) |*cb| {
                 php.release(cb);
+                self.redirection_cache.deinit();
                 self.redirection_cb = null;
             }
             self.removeAllStreams();

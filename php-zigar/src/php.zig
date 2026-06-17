@@ -1278,6 +1278,11 @@ pub const FunctionCallCache = struct {
         php_h.zend_fcall_info_args_clear(&self.fci, true);
     }
 
+    pub fn argumentInfo(self: *@This()) []php_h.zend_arg_info {
+        const common = &self.fcc.function_handler.*.common;
+        return if (common.num_args > 0) common.arg_info[0..common.num_args] else &.{};
+    }
+
     pub fn useNamedArguments(self: *@This(), named_params: ?*HashTable) void {
         self.fci.named_params = named_params;
     }
@@ -1352,22 +1357,6 @@ pub fn MethodCallCaches(comptime names: anytype) type {
             inline for (fields) |field| @field(self.method, field.name).deinit();
         }
     };
-}
-
-pub fn getArgumentInfo(fn_name: *const Value) ![]php_h.zend_arg_info {
-    var fcc: php_h.zend_fcall_info_cache = undefined;
-    var error_string: [*c]u8 = undefined;
-    if (!php_h.zend_is_callable_ex(@constCast(fn_name), null, php_h.IS_CALLABLE_CHECK_SILENT, null, &fcc, &error_string)) {
-        const callable_name: *String = php_h.zend_get_callable_name_ex(@constCast(fn_name), null);
-        defer release(callable_name);
-        defer efree(error_string);
-        return failure.report("Invalid callback {s}, {s}", .{
-            getStringContent(callable_name),
-            error_string,
-        });
-    }
-    const common = &fcc.function_handler.*.common;
-    return if (common.num_args > 0) common.arg_info[0..common.num_args] else &.{};
 }
 
 pub fn emptyArgInfo(comptime count: usize) []const InternalArgInfo {
