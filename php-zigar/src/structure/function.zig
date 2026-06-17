@@ -123,7 +123,7 @@ pub const Function = struct {
             if (arg_struct.hasAsyncCallback()) {
                 // hand the value to the promise or generator
                 arg_struct.sendReturnValue(&result) catch |err| {
-                    php.triggerError(err);
+                    php.triggerWarning(err);
                 };
                 return error.EarlyRelease;
             } else {

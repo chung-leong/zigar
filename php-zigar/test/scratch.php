@@ -16,8 +16,5 @@
 
 $m = zigar_use(__DIR__ . '/scratch.zig');
 
-$list = $m->get(100);
-
-foreach($list as $item) {
-    debug_zval_dump($item);
-}
+$m->call(function() {
+});

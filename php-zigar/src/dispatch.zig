@@ -263,7 +263,7 @@ pub const CallDispatcher = struct {
         if (in_main_thread) {
             const status = self.performJsCall(call) catch |err| switch (err) {
                 error.EarlyRelease => return .SUCCESS,
-                else => .FAULT,
+                else => handleJsError(err),
             };
             Futex.wake(call.futex_handle, status);
             return status;
@@ -273,6 +273,14 @@ pub const CallDispatcher = struct {
             try self.scheduleTask(.{ .jscall = call });
             return futex.wait();
         }
+    }
+
+    pub fn handleJsError(err: anytype) E {
+        const new_err = failure.report("unable to execute callback: {s}", .{
+            failure.getMessage(err),
+        });
+        php.triggerWarning(new_err);
+        return .FAULT;
     }
 
     fn performJsCall(self: *@This(), call: *Jscall) !E {

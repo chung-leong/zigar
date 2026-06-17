@@ -68,6 +68,7 @@ pub fn Module(comptime Value: type) type {
             create_js_thunk: *const fn (usize, usize, *usize) callconv(.c) E,
             destroy_js_thunk: *const fn (usize, usize, *usize) callconv(.c) E,
             get_syscall_hook: *const fn ([*:0]const u8, *HookEntry) callconv(.c) E,
+            set_language_name: *const fn ([*:0]const u8) callconv(.c) E,
         };
         pub const Host = opaque {};
     };

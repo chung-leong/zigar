@@ -245,6 +245,10 @@ pub fn getExportAddress(handle: usize, dest: *usize) callconv(.c) E {
     return .SUCCESS;
 }
 
+pub fn getLanguageName() []const u8 {
+    return language_name;
+}
+
 const empty_ptr: *anyopaque = @ptrCast(@constCast(&.{}));
 
 fn runThunk(
@@ -291,6 +295,13 @@ fn destroyJsThunk(
     const controller: js_fn.ThunkController = @ptrFromInt(controller_address);
     const fn_id = controller(.destroy, fn_address) catch return .FAULT;
     dest.* = fn_id;
+    return .SUCCESS;
+}
+
+var language_name: []const u8 = "JavaScript";
+
+fn setLanguageName(name: [*:0]const u8) callconv(.c) E {
+    language_name = std.mem.sliceTo(name, 0);
     return .SUCCESS;
 }
 
@@ -404,6 +415,7 @@ pub fn createModule(comptime module_ns: type) Module {
             .create_js_thunk = createJsThunk,
             .destroy_js_thunk = destroyJsThunk,
             .get_syscall_hook = getSyscallHook,
+            .set_language_name = setLanguageName,
         },
     };
 }

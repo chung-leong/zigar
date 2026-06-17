@@ -1605,10 +1605,10 @@ pub fn captureException() !*Object {
     return ex;
 }
 
-pub fn triggerError(err: anytype) void {
+pub fn triggerWarning(err: anytype) void {
     const msg = failure.acquireMessage(err);
     defer failure.freeMessage(msg);
-    php_h.zend_error(php_h.E_ERROR, "%s (zig)", msg.ptr);
+    php_h.zend_error(php_h.E_WARNING, "%s (zig)", msg.ptr);
 }
 
 pub fn getCurrentLine() u32 {

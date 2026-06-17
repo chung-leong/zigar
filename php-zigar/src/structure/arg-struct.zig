@@ -362,7 +362,7 @@ pub const ArgStruct = struct {
                     error.ExceptionThrown => failure.report("unable to find matching entry for PHP exception in error set of promise", .{}),
                     else => failure.report("unable to resolve promise: {s}", .{failure.getMessage(err)}),
                 };
-                return php.triggerError(new_err);
+                return php.triggerWarning(new_err);
             };
         } else if (self.flags.has_generator) {
             self.pipeFromGenerator(value, allocator) catch |err| {
@@ -370,7 +370,7 @@ pub const ArgStruct = struct {
                     error.ExceptionThrown => failure.report("unable to find matching entry for PHP exception in error set of generator", .{}),
                     else => failure.report("unable to yield generated value: {s}", .{failure.getMessage(err)}),
                 };
-                return php.triggerError(new_err);
+                return php.triggerWarning(new_err);
             };
         }
     }

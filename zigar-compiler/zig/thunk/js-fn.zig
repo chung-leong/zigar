@@ -203,7 +203,11 @@ fn getJscallHandler(comptime host: type, comptime BFT: type) CallHandler(BFT) {
                 else => {
                     if (comptime findError(RT, .{error.Unexpected})) |err| {
                         return err;
-                    } else @panic("JavaScript function failed");
+                    } else {
+                        var buffer: [128]u8 = undefined;
+                        const msg = std.fmt.bufPrint(&buffer, "{s} function failed", .{host.getLanguageName()}) catch unreachable;
+                        @panic(msg);
+                    }
                 },
             }
             return arg_s.retval;
