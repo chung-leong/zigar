@@ -14,6 +14,19 @@
 // $h = new Hello;
 // echo debug_zval_dump($h->string);
 
-$m = zigar_use(__DIR__ . '/type-handling/error-set/as-static-variables.zig');
+$m = zigar_use(__DIR__ . '/thread-handling/create-thread-with-string-generator.zig');
 
-$m->error_var = $m->NormalError->OutOfMemory;
+$m->startup();
+try {
+    $generator = $m->spawn();
+    $list = [];
+    foreach ($generator as $s) {
+        $list[] = $s;
+    }
+    $generator = null;
+} finally {
+    $m->shutdown();
+}
+$m = null;
+gc_collect_cycles();
+echo "[GC COMPLETED]\n";

@@ -120,6 +120,7 @@ pub const Generator = struct {
         const ptr = arg_iter.next() orelse return error.Unexpected;
         const ptr_struct = try structure.Pointer.fromValue(ptr);
         const target = try ptr_struct.getValue(.none);
+        php.release(&target);
         const self = try accessor.getOpaqueTarget(@This(), &target);
         const result = arg_iter.next() orelse return error.Unexpected;
         const more = try self.resolve(result);
