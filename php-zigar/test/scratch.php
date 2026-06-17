@@ -14,19 +14,10 @@
 // $h = new Hello;
 // echo debug_zval_dump($h->string);
 
-$m = zigar_use(__DIR__ . '/thread-handling/create-thread-with-string-generator.zig');
+$m = zigar_use(__DIR__ . '/scratch.zig');
 
-$m->startup();
-try {
-    $generator = $m->spawn();
-    $list = [];
-    foreach ($generator as $s) {
-        $list[] = $s;
-    }
-    $generator = null;
-} finally {
-    $m->shutdown();
+$list = $m->get(100);
+
+foreach($list as $item) {
+    debug_zval_dump($item);
 }
-$m = null;
-gc_collect_cycles();
-echo "[GC COMPLETED]\n";

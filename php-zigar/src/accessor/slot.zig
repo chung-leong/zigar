@@ -5,6 +5,7 @@ const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
 const Error = @import("../failure.zig").Error;
 const php = @import("../php.zig");
+const HashTableIterator = php.HashTableIterator;
 const Value = php.Value;
 const structure = @import("../structure.zig");
 
@@ -87,6 +88,23 @@ pub fn Slot(comptime attrs: Attributes) type {
                         const ht = try php.getValueHashTable(table);
                         const key: c_long = @intCast(index);
                         return php.getHashEntry(ht, key) catch if (vivicate) create: {
+                            if (ht.nNumOfElements > 64) {
+                                // start removing unreferenced children when the hash table
+                                // reaches a certain size
+                                var iter: HashTableIterator = .init(ht, .{});
+                                var failed: usize = 0;
+                                while (iter.next()) |child| {
+                                    if (php.getValueObject(child) catch null) |child_obj| {
+                                        if (child_obj.gc.refcount == 1) {
+                                            const child_key = iter.currentIndex().?;
+                                            php.deleteHashEntry(ht, child_key);
+                                        } else {
+                                            failed += 1;
+                                            if (failed > 8) break;
+                                        }
+                                    }
+                                }
+                            }
                             const offset = self.byte_size * index;
                             const len = self.byte_size;
                             const new_obj = try self.class.obtainObjectAtOffset(buffer, offset, len, 0);
