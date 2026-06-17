@@ -579,11 +579,10 @@ pub const Struct = struct {
                 }
             },
             AbortSignal => {
-                const signal = if (args.signal) |av| get: {
-                    const signal_obj = php.getValueObject(&av) catch return error.NotAbortSignal;
-                    if (signal_obj.ce != ZigClassEntry.abort_signal_class) return error.NotAbortSignal;
-                    break :get AbortSignal.fromObject(php.reuse(signal_obj));
-                } else try AbortSignal.create(args.timeout);
+                const signal = if (args.signal) |av|
+                    try AbortSignal.fromValue(php.reuse(&av))
+                else
+                    try AbortSignal.create(args.timeout);
                 const ptr_value = php.createValuePointer(&signal.value);
                 try self.setProperty(N("ptr"), &ptr_value, null);
             },

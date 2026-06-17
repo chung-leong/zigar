@@ -171,9 +171,6 @@ pub fn Class(comptime S: type) type {
             }
             if (class.instance.template.table) |*tbl| try gc_buffer.add(tbl);
             if (class.static.template.table) |*tbl| try gc_buffer.add(tbl);
-            if (class.type == .error_set) {
-                try gc_buffer.addArray(class.host.global_error_set.?);
-            }
             gc_buffer.use(table, n);
             return null;
         }
@@ -242,10 +239,7 @@ pub fn Class(comptime S: type) type {
             const this_struct = try S.fromValue(&ed.This);
             // only error set implements stringify(), which adds information about where the error
             // occurred to the error message
-            retval.* = switch (@hasDecl(S, "stringify")) {
-                true => try this_struct.stringify(),
-                false => try this_struct.getValue(.string),
-            };
+            retval.* = try this_struct.getValue(.string);
         }
 
         fn extractAllocator(arg_iter: *ArgumentIterator) !?*std.mem.Allocator {

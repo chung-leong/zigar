@@ -6,12 +6,13 @@ final class ErrorSetHandlingTest extends ZigarTestCase
     {
         $m = ZigImporter::load(__DIR__ . '/as-static-variables.zig');
         $this->assertInstanceOf('Exception', $m->NormalError->OutOfMemory);
-        $this->assertInstanceOf('ZigError', $m->NormalError->OutOfMemory);
+        $this->assertInstanceOf('ZigException', $m->NormalError->OutOfMemory);
         $this->assertSame($m->NormalError->OutOfMemory, $m->PossibleError->OutOfMemory);
 
         $this->expectOutputString(<<<OUTPUT
         error.FileNotFound
         error.OutOfMemory
+        {"error":"file not found"}
 
         OUTPUT);
         $m->print();
@@ -19,7 +20,7 @@ final class ErrorSetHandlingTest extends ZigarTestCase
         $m->print();
         $m->error_var = new Exception('file not found');
         $this->assertSame($m->NormalError->FileNotFound, $m->error_var);
-        // TODO: JSON stringify
+        echo json_encode($m->NormalError->FileNotFound), "\n";
     }
 
     public function testPrintErrorSetArguments(): void
@@ -195,8 +196,8 @@ final class ErrorSetHandlingTest extends ZigarTestCase
         $b = new $m->ErrorSet($m->ErrorSet->DogAteAllMemory);
         $this->assertSame($m->ErrorSet->DogAteAllMemory, $b->__value);
         $c = $m->ErrorSet((int) $m->ErrorSet->DogAteAllMemory);
-        $this->assertSame($m->ErrorSet->DogAteAllMemory, $c->__value);
-        $this->assertSame(0, $b <=> $m->ErrorSet->DogAteAllMemory);
+        $this->assertSame($m->ErrorSet->DogAteAllMemory, $c);
+        $this->assertSame(0, $b->__value <=> $m->ErrorSet->DogAteAllMemory);
     }    
 }
 

@@ -114,6 +114,9 @@ final class ThreadHandlingTest extends ZigarTestCase
                 $m->shutdown();
             }
         });
+        $m = null;
+        gc_collect_cycles();
+        echo "[GC COMPLETED]";
     }
 
     public function testReceiveStringsFromAllocatingGenerator(): void

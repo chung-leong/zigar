@@ -259,7 +259,7 @@ pub const ArrayBuffer = struct {
         php.unregisterInternalClass(class_entry);
     }
 
-    pub fn reportFieldError(name: *String, access: accessor.FieldAccess, err: anytype) error{FailureReported} {
+    fn reportFieldError(name: *String, access: accessor.FieldAccess, err: anytype) error{FailureReported} {
         if (failure.match(err, error.FailureReported)) {
             return error.FailureReported;
         } else if (failure.match(err, error.Missing)) {

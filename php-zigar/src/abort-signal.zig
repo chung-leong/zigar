@@ -29,8 +29,9 @@ pub const AbortSignal = struct {
         timeout: Function,
     };
 
-    var object_handlers: ?ObjectHandlers = null;
-    var object_methods: ?Methods = null;
+    var class_entry: *ClassEntry = undefined;
+    var handlers: ObjectHandlers = undefined;
+    var methods: Methods = undefined;
 
     pub inline fn object(self: *@This()) *Object {
         return &self.php_portion;
@@ -38,6 +39,16 @@ pub const AbortSignal = struct {
 
     pub inline fn fromObject(obj: *Object) *@This() {
         return @fieldParentPtr("php_portion", obj);
+    }
+
+    pub fn fromValue(value: *const Value) !*@This() {
+        const obj = php.getValueObject(value) catch return error.NotAbortSignal;
+        if (!php.instanceOf(obj, class_entry)) return error.NotAbortSignal;
+        return fromObject(obj);
+    }
+
+    pub fn isInstance(obj: *Object) bool {
+        php.instanceOf(obj, class_entry);
     }
 
     pub fn addRef(self: *@This()) void {
@@ -49,7 +60,7 @@ pub const AbortSignal = struct {
     }
 
     pub fn create(timeout: ?Value) !*@This() {
-        const ce = ZigClassEntry.abort_signal_class;
+        const ce = class_entry;
         const prop_size = php.getObjectPropertySize(ce);
         const size: usize = @intCast(@sizeOf(@This()) + prop_size);
         // we can't use the allocator here, since freeing is done by PHP itself
@@ -58,7 +69,7 @@ pub const AbortSignal = struct {
         const self: *@This() = @ptrCast(@alignCast(mem));
         self.* = .{};
         const obj = self.object();
-        obj.handlers = getHandlers();
+        obj.handlers = &handlers;
         php.initializeStandardObject(obj, ce);
         php.initializeObjectProperties(obj, ce);
         if (timeout) |v| try self.setTimeout(&v);
@@ -81,7 +92,6 @@ pub const AbortSignal = struct {
     }
 
     pub fn handleGetMethod(_: *[*c]Object, name: *String, _: ?*const Value) !?*Function {
-        const methods = getMethods();
         inline for (std.meta.fields(Methods)) |field| {
             if (std.mem.eql(u8, php.getStringContent(name), field.name)) {
                 return &@field(methods, field.name);
@@ -102,28 +112,25 @@ pub const AbortSignal = struct {
         try self.setTimeout(arg);
     }
 
+    pub fn registerClass() !void {
+        var ce: ClassEntry = .{ .name = N("AbortSignal") };
+        const parent_ce = php.getClassEntry(.standard);
+        class_entry = try php.registerInternalClass(&ce, parent_ce);
+        class_entry.unnamed_1.create_object = php.transform(handleCreateObject);
+        methods = .{
+            .abort = php.createTransformedFunction(handleAbort, "abort", 0, false),
+            .timeout = php.createTransformedFunction(handleTimeout, "timeout", 1, false),
+        };
+        handlers = php.createHandlerTable(@This(), @offsetOf(@This(), "php_portion"));
+    }
+
+    pub fn unregisterClass() void {
+        php.unregisterInternalClass(class_entry);
+    }
+
     fn getSelf(value: *const Value) !*@This() {
         const obj = try php.getValueObject(value);
         return fromObject(obj);
-    }
-
-    fn getHandlers() *ObjectHandlers {
-        if (object_handlers == null) {
-            object_handlers = php.std_object_handlers.*;
-            const handlers = &object_handlers.?;
-            handlers.get_method = php.transform(handleGetMethod);
-        }
-        return &object_handlers.?;
-    }
-
-    fn getMethods() *Methods {
-        if (object_methods == null) {
-            object_methods = .{
-                .abort = php.createTransformedFunction(handleAbort, "abort", 0, false),
-                .timeout = php.createTransformedFunction(handleTimeout, "timeout", 1, false),
-            };
-        }
-        return &object_methods.?;
     }
 
     comptime {

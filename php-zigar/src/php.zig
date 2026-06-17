@@ -536,6 +536,10 @@ fn StringWithLength(comptime len: usize) type {
     };
 }
 
+pub fn calculateStringHash(s: []const u8) c_ulong {
+    return php_h.zend_inline_hash_func(s.ptr, s.len);
+}
+
 pub fn getStaticString(comptime s: []const u8) *String {
     const ns = struct {
         // need to use var since PHP will try to set additional flags
@@ -546,7 +550,7 @@ pub fn getStaticString(comptime s: []const u8) *String {
                     .type_info = php_h.IS_STRING | php_h.IS_STR_PERMANENT | php_h.IS_STR_INTERNED | php_h.GC_NOT_COLLECTABLE,
                 },
             },
-            .h = php_h.zend_inline_hash_func(s.ptr, s.len),
+            .h = calculateStringHash(s),
             .val = init: {
                 var buf: [s.len + 1]u8 = undefined;
                 @memcpy(buf[0..s.len], s);
@@ -570,6 +574,14 @@ pub fn createValueClosure(func: *Function, scope: ?*ClassEntry, called_scope: ?*
     var result: Value = undefined;
     php_h.zend_create_closure(&result, func, scope, called_scope, @constCast(this_ptr));
     return result;
+}
+
+pub fn empty(comptime T: type) *T {
+    return switch (T) {
+        String => php_h.zend_empty_string,
+        Array => @constCast(&php_h.zend_empty_array),
+        else => @compileError("No empty version: " ++ @typeName(T)),
+    };
 }
 
 pub fn convertValue(value: *Value, desired_type: ValueType) !void {
@@ -1199,6 +1211,9 @@ pub fn release(value: anytype) void {
 }
 
 pub fn reuse(value: anytype) @TypeOf(value) {
+    if (@typeInfo(@TypeOf(value)) == .optional) {
+        return if (value) |v| reuse(v) else null;
+    }
     addRef(value);
     return value;
 }

@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+const AbortSignal = @import("abort-signal.zig").AbortSignal;
 const CallDispatcher = @import("dispatch.zig").CallDispatcher;
 const failure = @import("failure.zig");
 const getSharedLibraryPath = @import("compilation.zig").getSharedLibraryPath;
@@ -19,6 +20,7 @@ const Value = php.Value;
 const structure = @import("structure.zig");
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
 const ZigCompiler = @import("compilation.zig").ZigCompiler;
+const ZigException = @import("exception.zig").ZigException;
 
 const ShutdownCallback = struct {
     ptr: *anyopaque,
@@ -52,17 +54,13 @@ export fn php_zigar_mod_init(_: c_int, module_number: c_int) php.Result {
         }
     }
     registerIniEntries(module_number) catch return php.FAILURE;
-    js_compat.registerClasses() catch return php.FAILURE;
-    errdefer js_compat.registerClasses();
-    ZigClassEntry.registerGlobalClasses() catch return php.FAILURE;
+    registerClasses() catch return php.FAILURE;
     return php.SUCCESS;
 }
 
 export fn php_zigar_mod_shutdown(_: c_int, module_number: c_int) php.Result {
     unregisterIniEntries(module_number);
-    js_compat.unregisterClasses();
-    ZigClassEntry.unregisterGlobalClasses();
-    CallDispatcher.uninstallHandlers();
+    unregisterClasses();
     return php.SUCCESS;
 }
 
@@ -82,6 +80,25 @@ export fn php_zigar_info(_: *ModuleEntry) void {
     php.infoTableStart();
     php.infoTableHeader(2, "PHP Zigar", "enabled");
     php.infoTableEnd();
+}
+
+fn registerClasses() !void {
+    try ZigClassEntry.registerRootClass();
+    errdefer ZigClassEntry.unregisterRootClass();
+    try ZigException.registerClass();
+    errdefer ZigException.unregisterClass();
+    try AbortSignal.registerClass();
+    errdefer AbortSignal.unregisterClass();
+    try js_compat.registerClasses();
+    errdefer js_compat.registerClasses();
+}
+
+fn unregisterClasses() void {
+    ZigClassEntry.unregisterRootClass();
+    ZigException.unregisterClass();
+    AbortSignal.unregisterClass();
+    js_compat.unregisterClasses();
+    CallDispatcher.uninstallHandlers();
 }
 
 const Options = extern struct {

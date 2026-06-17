@@ -17,6 +17,7 @@ const String = php.String;
 const Value = php.Value;
 const StructureImporter = @import("import.zig").StructureImporter;
 const ZigClassEntry = @import("class-entry.zig").ZigClassEntry;
+const ZigException = @import("exception.zig").ZigException;
 const fn_transform = @import("zigft/fn-transform.zig");
 
 pub const ModuleHost = struct {
@@ -24,7 +25,6 @@ pub const ModuleHost = struct {
     module: *Module,
     module_path: *String,
     library: ?DynLib = null,
-    global_error_set: ?*Array = null,
     importer: *StructureImporter = undefined,
     dispatcher: *CallDispatcher = undefined,
     allocator: std.mem.Allocator = undefined,
@@ -32,6 +32,7 @@ pub const ModuleHost = struct {
     object_map: ObjectMap = .{},
     gc_buffer: GarbageCollectionBuffer = .empty,
     plain_object_table: HashTable,
+    exception_table: HashTable,
 
     const Module = ModuleGeneric(StructureImporter.Handle);
 
@@ -46,6 +47,7 @@ pub const ModuleHost = struct {
             .module = module,
             .module_path = php.createString(std.mem.sliceTo(module.module_path, 0)),
             .plain_object_table = php.createHashTable(null),
+            .exception_table = php.createHashTable(php.destructor.value),
         };
         self.allocator = .{ .ptr = self, .vtable = &BufferAllocator.vtable };
         // install hooks
@@ -74,6 +76,7 @@ pub const ModuleHost = struct {
         if (self.ref_count == 0) {
             // std.debug.print("freeing host\n", .{});
             php.destroyHashTable(&self.plain_object_table);
+            php.destroyHashTable(&self.exception_table);
             php.release(self.module_path);
             self.unclaimed_buffer_map.deinit();
             self.object_map.deinit();
@@ -219,6 +222,23 @@ pub const ModuleHost = struct {
 
     pub fn useRuntimeSafety(self: *@This()) bool {
         return self.module.attributes.runtime_safety;
+    }
+
+    pub fn findException(self: *@This(), key: anytype) ?*ZigException {
+        const entry = php.getHashEntry(&self.exception_table, key) catch return null;
+        return ZigException.fromValue(entry) catch unreachable;
+    }
+
+    pub fn addException(self: *@This(), name: *String, code: c_long) !*ZigException {
+        const ex_obj: *Object = try ZigException.create(name, code);
+        defer php.release(ex_obj);
+        const ex_struct = ZigException.fromObject(ex_obj);
+        const ex_value = php.createValueObject(ex_obj);
+        const message = php.getValueString(&ex_struct.message) catch unreachable;
+        php.setHashEntryRef(&self.exception_table, name, &ex_value);
+        php.setHashEntryRef(&self.exception_table, message, &ex_value);
+        php.setHashEntryRef(&self.exception_table, code, &ex_value);
+        return ex_struct;
     }
 };
 

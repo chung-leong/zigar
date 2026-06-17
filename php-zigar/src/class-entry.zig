@@ -159,13 +159,9 @@ pub const ZigClassEntry = struct {
         };
     }
 
-    pub fn get(obj: *Object, comptime is_error: bool) ?*@This() {
-        const parent_ce = switch (is_error) {
-            true => global_error_class,
-            false => global_class,
-        };
-        return if (php.instanceOf(obj, parent_ce)) fromObject(obj) else null;
-    }
+    // pub fn get(obj: *Object) ?*@This() {
+    //     return if (php.instanceOf(obj, root_class)) fromObject(obj) else null;
+    // }
 
     pub fn create(host: *Host, info: *Value) !*Object {
         errdefer |err| std.debug.print("create => {}\n", .{err});
@@ -212,7 +208,7 @@ pub const ZigClassEntry = struct {
             .function_table = php.createHashTable(php.destructor.function),
             .num_interfaces = @intCast(interfaces.len),
             .unnamed_0 = .{
-                .parent = self.getParentClass(),
+                .parent = root_class,
             },
             .unnamed_1 = .{
                 .create_object = php.transform(handleCreateObject),
@@ -403,37 +399,7 @@ pub const ZigClassEntry = struct {
         if (self.php_portion.name.*.len == 0) {
             self.php_portion.name = self.inferName() catch N("Unknown");
         }
-        if (self.type == .error_set and self.flags.error_set.is_global) {
-            const table = php.createArray();
-            const class_struct = structure.Class(structure.ErrorSet).fromObject(self.object);
-            class_struct.table = php.createValueArray(table);
-            self.static.template.table = php.createValueArray(table);
-            const ht = self.host.global_error_set.?;
-            var iter: HashTableIterator = .init(ht, .{});
-            var slot: usize = 0;
-            while (iter.next()) |err_obj| {
-                const name = iter.currentName() orelse return error.Unexpected;
-                const member = try php.allocator.create(Member);
-                errdefer php.allocator.destroy(member);
-                member.* = .{
-                    .type = .object,
-                    .flags = .{},
-                    .bit_offset = null,
-                    .bit_size = 0,
-                    .byte_size = null,
-                    .slot = slot,
-                    .class = self,
-                };
-                member.accessors = try self.getAccessors(member, .static, .multiple);
-                const member_ptr = php.createValuePointer(member);
-                php.setHashEntry(&self.static.members, name, &member_ptr);
-                php.setHashEntryRef(table, slot, err_obj);
-                slot += 1;
-                // skip entries indexed by number and message
-                _ = iter.next() orelse break;
-                _ = iter.next() orelse break;
-            }
-        } else if (self.type == .pointer) {
+        if (self.type == .pointer) {
             // update the interface list with the list from the target class
             const target = try self.getMember(.instance, 0);
             if (target.class.type != .pointer) {
@@ -641,10 +607,6 @@ pub const ZigClassEntry = struct {
                 buffer[count] = php.getInterface(.array_access);
                 count += 1;
                 buffer[count] = php.getInterface(.traversable);
-                count += 1;
-            },
-            .error_set => {
-                buffer[count] = php.getInterface(.throwable);
                 count += 1;
             },
             .@"struct" => if (self.purpose == .generator or self.purpose == .iterator) {
@@ -1307,32 +1269,20 @@ pub const ZigClassEntry = struct {
         return php.createString(type_name);
     }
 
-    pub var global_class: *ClassEntry = undefined;
-    pub var global_error_class: *ClassEntry = undefined;
-    pub var abort_signal_class: *ClassEntry = undefined;
+    pub var root_class: *ClassEntry = undefined;
 
-    pub fn registerGlobalClasses() !void {
+    pub fn registerRootClass() !void {
         var ce: ClassEntry = .{ .name = N("ZigObject") };
         const parent_ce = php.getClassEntry(.standard);
-        global_class = try php.registerInternalClass(&ce, parent_ce);
-        errdefer php.unregisterInternalClass(global_class);
-        var error_ce: ClassEntry = .{ .name = N("ZigError") };
-        const error_parent_ce = php.getClassEntry(.exception);
-        global_error_class = try php.registerInternalClass(&error_ce, error_parent_ce);
-        errdefer php.unregisterInternalClass(global_error_class);
-        var signal_ce: ClassEntry = .{ .name = N("AbortSignal") };
-        abort_signal_class = try php.registerInternalClass(&signal_ce, parent_ce);
-        abort_signal_class.unnamed_1.create_object = php.transform(AbortSignal.handleCreateObject);
+        root_class = try php.registerInternalClass(&ce, parent_ce);
     }
 
-    pub fn unregisterGlobalClasses() void {
-        php.unregisterInternalClass(global_class);
-        php.unregisterInternalClass(global_error_class);
-        php.unregisterInternalClass(abort_signal_class);
+    pub fn unregisterRootClass() void {
+        php.unregisterInternalClass(root_class);
     }
 
     pub fn isZig(ce: *ClassEntry) bool {
-        return ce.*.unnamed_0.parent == global_class;
+        return ce.*.unnamed_0.parent == root_class;
     }
 
     pub fn isZigInstance(obj: *Object) bool {
@@ -1341,16 +1291,5 @@ pub const ZigClassEntry = struct {
             return self.object != obj;
         }
         return false;
-    }
-
-    pub fn isZigError(obj: *Object) bool {
-        return obj.ce.*.unnamed_0.parent == global_error_class;
-    }
-
-    pub fn getParentClass(self: *@This()) *ClassEntry {
-        return switch (self.type) {
-            .error_set => global_error_class,
-            else => global_class,
-        };
     }
 };

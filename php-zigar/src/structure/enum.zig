@@ -72,7 +72,8 @@ pub const Enum = struct {
                         if (php.getHashEntry(ht, "error") catch null) |msg| {
                             return try self.castValue(msg);
                         }
-                    } else if (ZigClassEntry.get(obj, false)) |value_class| {
+                    } else if (ZigClassEntry.isZigInstance(obj)) {
+                        const value_class = ZigClassEntry.fromObject(obj);
                         if (value_class.type == .@"union") {
                             // see if the union uses this enum as its tag
                             const value_static = value_class.getStaticData(structure.Union);

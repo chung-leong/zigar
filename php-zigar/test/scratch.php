@@ -4,22 +4,16 @@
 
 // use Revolt\EventLoop;
 
-$m = zigar_use(__DIR__ . '/scratch.zig');
+// class Hello {
+//     function __get($name) {
+//         return "Hello $num";
+//     }
+// }
 
-$m->startup();
-try {
-    $generator = $m->spawn();
-    $list = [];
-    foreach ($generator as $s) {
-        echo $s, "\n";
-        // $list[] = $s;
-        // break;
-    }
-    $generator = null;
-} finally {
-    $m->shutdown();
-}
 
-$m = null;
-gc_collect_cycles();
-echo "[GC COMPLETE]\n";
+// $h = new Hello;
+// echo debug_zval_dump($h->string);
+
+$m = zigar_use(__DIR__ . '/type-handling/error-set/as-static-variables.zig');
+
+$m->error_var = $m->NormalError->OutOfMemory;

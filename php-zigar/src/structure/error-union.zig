@@ -4,6 +4,7 @@ const accessor = @import("../accessor.zig");
 const ByteBuffer = @import("../buffer.zig").ByteBuffer;
 const cache = @import("../cache.zig");
 const ZigClassEntry = @import("../class-entry.zig").ZigClassEntry;
+const ZigException = @import("../exception.zig").ZigException;
 const failure = @import("../failure.zig");
 const Error = failure.Error;
 const ZigObject = @import("../object.zig").ZigObject;
@@ -62,10 +63,9 @@ pub const ErrorUnion = struct {
             const static = class.getStaticData(@This());
             const err = try static.error_acc.get(self.buffer);
             if (php.getValueType(&err) == .object) {
-                const err_obj = php.getValueObject(&err) catch unreachable;
-                const err_struct = ErrorSet.fromObject(err_obj);
-                try err_struct.acquireDebugInfo();
-                _ = &php.throwException(err_obj);
+                const ex_struct = try ZigException.fromValue(&err);
+                ex_struct.acquireDebugInfo();
+                _ = &php.throwException(ex_struct.object());
                 return php.createValueNull();
             }
             return try static.payload_acc.get(self);
