@@ -1586,6 +1586,23 @@ pub fn throwException(obj: *Object) error{ExceptionThrown} {
     return error.ExceptionThrown;
 }
 
+pub fn isException(obj: *Object) bool {
+    return instanceOf(obj, getInterface(.throwable));
+}
+
+pub fn getValueException(value: *const Value) !*Object {
+    const obj = try getValueObject(value);
+    if (!isException(obj)) return error.NotException;
+    return obj;
+}
+
+pub fn getExceptionMessage(obj: *Object) !Value {
+    const context = createValueObject(obj);
+    var call_cache: MethodCallCaches(.{.getMessage}) = try .init(&context);
+    defer call_cache.deinit();
+    return try call_cache.method.getMessage.invoke(&.{});
+}
+
 pub fn captureException() !*Object {
     const eg = getExecutorGlobals();
     const ex = eg.exception orelse return error.Unexpected;

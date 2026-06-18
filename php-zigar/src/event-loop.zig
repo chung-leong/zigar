@@ -2,6 +2,7 @@ const std = @import("std");
 
 const AbortSignal = @import("abort-signal.zig").AbortSignal;
 const extension = @import("extension.zig");
+const failure = @import("failure.zig");
 const php = @import("php.zig");
 const FunctionCallCache = php.FunctionCallCache;
 const MethodCallCaches = php.MethodCallCaches;
@@ -17,6 +18,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
         fiber_cache: MethodCallCaches(.{ .start, .@"resume" }),
         fiber_class_cache: MethodCallCaches(.{.@"suspend"}),
         stream: *const Value,
+        in_loop: bool,
         terminated: bool,
         timer: std.time.Timer,
         timeouts: std.ArrayList(Timeout),
@@ -41,6 +43,7 @@ pub fn EventLoop(comptime cb: fn () void) type {
             errdefer self.fiber_class_cache.deinit();
             self.stream = stream;
             self.terminated = false;
+            self.in_loop = false;
             self.timer = try .start();
             self.timeouts = .empty;
             // star the loop fiber
@@ -77,7 +80,12 @@ pub fn EventLoop(comptime cb: fn () void) type {
         }
 
         pub fn resumeLoop(self: *@This()) !void {
+            if (self.in_loop) {
+                return failure.report("cannot call async functions when the event loop 'temporary' is used", .{});
+            }
+            self.in_loop = true;
             _ = try self.fiber_cache.method.@"resume".invoke(&.{});
+            self.in_loop = false;
         }
 
         pub fn addTimeout(self: *@This(), seconds: f64, signal: *AbortSignal) !void {

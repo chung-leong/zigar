@@ -339,16 +339,30 @@ pub const ArgStruct = struct {
         const static = class.getStaticData(@This());
         // if an allocator is part of the struct, then use the allocator to create an instance
         // of the retval to ensure autovivication uses that allocator
+        var allocated_obj: *Object = undefined;
+        var allocated: Value = undefined;
         if (self.flags.has_allocator) {
             const allocator = try self.getAllocator();
-            const retval_obj = try static.retval.class.createObject(allocator, value, false);
-            const retval = php.createValueObject(retval_obj);
-            defer php.release(&retval);
-            try static.retval.accessors.set(self, &retval);
+            allocated_obj = try static.retval.class.createObject(allocator, value, false);
+            allocated = php.createValueObject(allocated_obj);
+        }
+        defer if (self.flags.has_allocator) php.release(&allocated);
+        const retval = if (self.flags.has_allocator) &allocated else value;
+        static.retval.accessors.set(self, retval) catch |err| {
+            // see if the value given is an exception
+            if (php.getValueException(value) catch null) |ex_obj| {
+                // report the exception
+                const message = try php.getExceptionMessage(ex_obj);
+                defer php.release(&message);
+                var text = try php.getValueStringContent(&message);
+                if (std.mem.endsWith(u8, text, " (zig)")) text.len -= 6;
+                return failure.report("{s}", .{text});
+            }
+            return err;
+        };
+        if (self.flags.has_allocator) {
             // assume allocated memory have been taken by Zig code
-            invokeMethod(retval_obj, "externalize", .{}) catch unreachable;
-        } else {
-            try static.retval.accessors.set(self, value);
+            invokeMethod(allocated_obj, "externalize", .{}) catch unreachable;
         }
     }
 

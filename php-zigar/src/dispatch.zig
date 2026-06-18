@@ -284,7 +284,7 @@ pub const CallDispatcher = struct {
 
     pub fn handleJsError(err: anytype) E {
         const new_err = failure.report("unable to execute callback: {s}", .{
-            failure.getMessage(err),
+            failure.acquireMessage(err),
         });
         php.triggerWarning(new_err);
         return .FAULT;

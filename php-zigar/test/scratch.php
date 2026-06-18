@@ -1,20 +1,25 @@
 <?php
 
-// require __DIR__ . '/../vendor/autoload.php';
-
-// use Revolt\EventLoop;
-
-// class Hello {
-//     function __get($name) {
-//         return "Hello $num";
-//     }
-// }
-
-
-// $h = new Hello;
-// echo debug_zval_dump($h->string);
+require __DIR__ . '/../vendor/autoload.php';
+use Revolt\EventLoop;
 
 $m = zigar_use(__DIR__ . '/scratch.zig');
 
-$m->call(function() {
-});
+$test = function() use($m) {
+    $m->startup();
+
+    $result1 = $m->spawn1(function() use($m) {
+        $result2 = $m->spawn2();
+        echo "result2 = $result2\n";
+    });
+    echo "result1 = $result1\n";
+
+    $m->shutdown();
+};
+
+ini_set('zigar.event_loop', 'revolt');
+EventLoop::defer($test);
+EventLoop::run();
+
+ini_set('zigar.event_loop', 'temporary');
+$test();
