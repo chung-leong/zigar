@@ -24,6 +24,7 @@ pub const Promise = struct {
     fiber: Value,
     result: Value,
     callback: ?Value,
+    callback_cache: FunctionCallCache,
     transform: ?Transform = null,
     buffer: *ByteBuffer,
 
@@ -36,7 +37,8 @@ pub const Promise = struct {
             .buffer = buf,
             .result = php.createValueNull(),
             .fiber = php.createValueNull(),
-            .callback = if (callback) |cb| php.reuse(&cb).* else null,
+            .callback_cache = if (callback) |*cb| try .init(cb) else undefined,
+            .callback = if (callback) |*cb| php.reuse(cb).* else null,
         };
         return self;
     }
@@ -48,7 +50,10 @@ pub const Promise = struct {
             return;
         }
         if (self.buffer.ref_count == 1) {
-            if (self.callback) |*cb| php.release(cb);
+            if (self.callback) |*cb| {
+                php.release(cb);
+                self.callback_cache.deinit();
+            }
             php.release(&self.result);
             php.release(&self.fiber);
         }
@@ -86,10 +91,10 @@ pub const Promise = struct {
         self.result = php.reuse(value).*;
         self.status = .resolved;
         if (self.transform) |tm| try tm.apply(&self.result);
-        if (self.callback) |*cb| {
+        if (self.callback != null) {
             defer php.release(&self.result);
             const args: []Value = @ptrCast(&self.result);
-            const retval = try php.invokeMethod(null, cb, args);
+            const retval = try self.callback_cache.invoke(args);
             php.release(&retval);
         }
     }

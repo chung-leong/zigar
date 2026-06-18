@@ -9,6 +9,7 @@ const failure = @import("../failure.zig");
 const Error = failure.Error;
 const ArrayBuffer = @import("../js-compat.zig").ArrayBuffer;
 const php = @import("../php.zig");
+const MethodCaches = php.MethodCallCaches;
 const N = php.getStaticString;
 const Array = php.Array;
 const ClassEntry = php.ClassEntry;
@@ -117,8 +118,9 @@ pub const ErrorSet = struct {
                         }
                     }
                     if (php.instanceOf(err_obj, php.getInterface(.throwable))) {
-                        const method = php.createValueString(N("getMessage"));
-                        const message = try php.invokeMethod(value, &method, &.{});
+                        var call_cache: MethodCaches(.{.getMessage}) = try .init(value);
+                        defer call_cache.deinit();
+                        const message = try call_cache.method.getMessage.invoke(&.{});
                         defer php.release(&message);
                         return self.findException(&message);
                     }

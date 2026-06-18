@@ -1268,7 +1268,7 @@ pub const FunctionCallCache = struct {
                 defer efree(err_msg);
                 return failure.report("{s}", .{err_msg});
             } else {
-                return error.Failure;
+                return error.NotCallable;
             }
         }
         return .{ .fci = fci, .fcc = fcc };

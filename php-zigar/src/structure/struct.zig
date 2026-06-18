@@ -31,6 +31,7 @@ const Object = php.Object;
 const ObjectIterator = php.ObjectIterator;
 const Stream = php.Stream;
 const String = php.String;
+const FunctionCallCache = php.FunctionCallCache;
 const Value = php.Value;
 const Promise = @import("../promise.zig").Promise;
 const PromiseStatic = @import("../promise.zig").PromiseStatic;
@@ -157,9 +158,7 @@ pub const Struct = struct {
         pub fn exportSymbolsToGlobalNamespace(self: *@This(), callback: ?*Value) !Value {
             const root = self.root.?;
             if (root.symbol_names != null) return error.CalledAlready;
-            if (callback) |cb| {
-                if (!php.isCallable(cb)) return error.NotCallable;
-            }
+            var call_cache: FunctionCallCache = if (callback) |cb| try .init(cb) else undefined;
             // add a callback so we can remove the imports prior to request shutdown
             try extension.addRequestShutdownCallback(self, onRequestShutdown);
             // bump the refcount of the class object so exported items don't get gc'ed
@@ -199,7 +198,7 @@ pub const Struct = struct {
                 if (symbol_type == .variable) continue;
                 const symbol_type_value = php.createValueLong(@intFromEnum(symbol_type));
                 const symbol_name_value = get: {
-                    if (callback) |cb| {
+                    if (callback != null) {
                         const cb_args: [2]Value = .{
                             php.createValueString(member_name),
                             switch (symbol_type) {
@@ -207,7 +206,7 @@ pub const Struct = struct {
                                 inline else => |t| php.createValueString(N(@tagName(t))),
                             },
                         };
-                        break :get try php.invokeMethod(null, cb, &cb_args);
+                        break :get try call_cache.invoke(&cb_args);
                     } else {
                         break :get php.createValueString(php.reuse(member_name));
                     }

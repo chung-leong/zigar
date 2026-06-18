@@ -216,7 +216,7 @@ pub const CallDispatcher = struct {
     }
 
     fn saveCallback(self: *@This(), class: *ZigClassEntry, callable: *Value) !usize {
-        const cache = FunctionCallCache.init(callable) catch return error.NotCallable;
+        const cache = try FunctionCallCache.init(callable);
         const fn_id = self.next_function_id;
         self.next_function_id +%= 1;
         try self.function_list.append(php.allocator, .{
@@ -682,10 +682,10 @@ pub const CallDispatcher = struct {
         const url: *String = getWrapperUrl(path) orelse find: {
             if (dirfd == -1) {
                 // if a callback was given, call it to see if this path should be redirected somewhere else
-                if (self.redirection_cb) |*cb| {
+                if (self.redirection_cb != null) {
                     const args: [1]Value = .{php.createValueStringContent(path)};
                     defer php.release(&args[0]);
-                    const retval = try php.invokeMethod(null, cb, &args);
+                    const retval = try self.redirection_cache.invoke(&args);
                     defer php.release(&retval);
                     switch (php.getValueType(&retval)) {
                         .null, .false => return null,

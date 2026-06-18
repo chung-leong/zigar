@@ -183,7 +183,6 @@ pub const Function = struct {
     }
 
     fn createThunk(self: *@This(), value: *const Value) !void {
-        if (!php.isCallable(value)) return error.NotCallable;
         const class = ZigClassEntry.fromStructure(self);
         const static = class.getStaticData(@This());
         if (static.argument_class.type == .variadic_struct) {
