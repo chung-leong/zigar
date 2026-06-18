@@ -258,6 +258,7 @@ pub fn Class(comptime S: type) type {
             return @ptrCast(@alignCast(src_struct.buffer.bytes.ptr));
         }
 
+        pub const visitPointers = Super.Super.visitPointers;
         pub const readProperty = Super.readProperty;
         pub const writeProperty = Super.writeProperty;
         pub const hasProperty = Super.hasProperty;
