@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+
 const c = @import("c");
 
 pub const DynLib = struct {
@@ -36,7 +37,7 @@ pub const DynLib = struct {
                 const len = c.GetModuleFileNameA(handle, null, 0);
                 const path_copy = try std.heap.c_allocator.alloc(u8, len + 1);
                 _ = c.GetModuleFileNameA(handle, null, 0);
-                return .{ .handle = handle, .path = path_copy };
+                return .{ .handle = handle, .path = @ptrCast(path_copy) };
             },
             else => {
                 var info: c.Dl_info = undefined;

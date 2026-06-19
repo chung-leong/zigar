@@ -2,6 +2,8 @@ const std = @import("std");
 const E = std.os.wasi.errno_t;
 const builtin = @import("builtin");
 
+const c = @import("c");
+
 const ByteBuffer = @import("buffer.zig").ByteBuffer;
 const DynLib = @import("dyn-lib.zig").DynLib;
 const EventLoop = @import("event-loop.zig").EventLoop;
@@ -57,7 +59,7 @@ pub const CallDispatcher = struct {
     env_variable_ptr: *[*:null]?[*:0]const u8 = undefined,
     env_variable_original: *[*:null]?[*:0]const u8 = undefined,
     multithread_enabled: bool = false,
-    pipe_ptr: [*]std.posix.fd_t,
+    pipe_ptr: [*]c_int,
     release_resources_called: bool = false,
 
     pub threadlocal var trapping_syscalls: bool = false;
@@ -65,11 +67,11 @@ pub const CallDispatcher = struct {
 
     threadlocal var thread_initialized: bool = false;
     threadlocal var in_main_thread: bool = false;
-    threadlocal var pipes: [2]std.posix.fd_t = undefined;
+    threadlocal var pipes: [2]c_int = undefined;
     threadlocal var multithread_count: usize = 0;
 
     var pipe_list_mutex: std.Thread.Mutex = .{};
-    var pipe_list: std.ArrayList(std.posix.fd_t) = .empty;
+    var pipe_list: std.ArrayList(c_int) = .empty;
 
     pub const HookEntry = interface.HookEntry;
     pub const HandlerVTable = interface.HandlerVTable;
@@ -186,7 +188,7 @@ pub const CallDispatcher = struct {
 
     pub fn uninstallHandlers() void {
         trapping_syscalls = false;
-        for (pipes) |fd| _ = std.c.close(fd);
+        for (pipes) |fd| _ = c.close(fd);
         redirection_controller.uninstallSignalHandler();
     }
 
@@ -258,7 +260,7 @@ pub const CallDispatcher = struct {
     fn scheduleTask(self: *@This(), operation: ScheduledTask.Operation) !void {
         const fd = self.pipe_ptr[1];
         const task: ScheduledTask = .{ .self = self, .operation = operation };
-        const written = std.c.write(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
+        const written = c.write(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
         // std.debug.print("CallDispatcher.scheduleTask() called\n", .{});
         if (written < 0) return error.Unexpected;
     }
@@ -442,7 +444,7 @@ pub const CallDispatcher = struct {
     fn runScheduledTask() void {
         const fd = pipes[0];
         var task: ScheduledTask = undefined;
-        const read = std.c.read(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
+        const read = c.read(fd, @ptrCast(&task), @sizeOf(ScheduledTask));
         if (read != @sizeOf(ScheduledTask)) return;
         const self = task.self;
         // std.debug.print("runScheduledTask\n", .{});
@@ -532,8 +534,8 @@ pub const CallDispatcher = struct {
             .fs_rights_inheriting = .{},
         };
         const mode = php.getStreamMode(strm);
-        for (mode) |c| {
-            switch (c) {
+        for (mode) |code| {
+            switch (code) {
                 'r' => fdstat.fs_rights_base.FD_READ = true,
                 'w', 'x', 'c' => fdstat.fs_rights_base.FD_WRITE = true,
                 '+' => {
@@ -641,8 +643,8 @@ pub const CallDispatcher = struct {
 
     fn getWrapperUrl(path: []const u8) ?*String {
         var start: usize = 0;
-        for (path, 0..) |c, i| {
-            if (c == ':') {
+        for (path, 0..) |char, i| {
+            if (char == ':') {
                 if (path[i + 1] == '/') {
                     if (path[i + 2] == '/') {
                         return php.createString(path[start..]);
@@ -659,9 +661,9 @@ pub const CallDispatcher = struct {
                         return str;
                     }
                 }
-            } else if (i == 0 and (c == '/' or c == '\\')) {
+            } else if (i == 0 and (char == '/' or char == '\\')) {
                 start += 1;
-            } else if (!std.ascii.isAlphanumeric(c)) {
+            } else if (!std.ascii.isAlphanumeric(char)) {
                 break;
             }
         }

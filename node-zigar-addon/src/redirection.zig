@@ -1,6 +1,7 @@
 const std = @import("std");
 const c_allocator = std.heap.c_allocator;
 const builtin = @import("builtin");
+
 const c = @import("c");
 
 const DynLib = @import("dyn-lib.zig").DynLib;
@@ -267,7 +268,7 @@ pub fn Controller(comptime Host: type) type {
                 const directory_entry_import = c.IMAGE_DIRECTORY_ENTRY_IMPORT;
                 const TRUE = c.TRUE;
 
-                const hmodule = lib.inner.dll;
+                const hmodule = lib.handle;
                 const bytes: [*]u8 = @ptrCast(hmodule);
                 var size: c_ulong = undefined;
                 const data = directoryEntryToDataEx(hmodule, TRUE, directory_entry_import, &size, null);

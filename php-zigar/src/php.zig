@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub const c = @import("c");
 pub const ArgInfo = c.zend_arg_info;
@@ -65,7 +66,6 @@ pub const freeIterator = c.zend_iterator_dtor;
 pub const initializeStandardObject = c.zend_object_std_init;
 pub const initializeObjectProperties = c.object_properties_init;
 pub const traceToString = c.zend_trace_to_string;
-pub const pipe = c.pipe;
 pub const utimbuf = c.utimbuf;
 pub const reportWrongParamCount = c.zend_wrong_param_count;
 pub const INI_USER = c.ZEND_INI_USER;
@@ -1832,6 +1832,24 @@ pub fn getDescriptor(strm: *Stream) ?c_int {
     } else null;
 }
 
+pub fn pipe(fds: *[2]c_int) c_int {
+    if (builtin.target.os.tag == .windows) {
+        var read_pipe: c.HANDLE = undefined;
+        var write_pipe: c.HANDLE = undefined;
+        var security: c.SECURITY_ATTRIBUTES = .{
+            .nLength = @sizeOf(c.SECURITY_ATTRIBUTES),
+            .lpSecurityDescriptor = null,
+            .bInheritHandle = c.TRUE,
+        };
+        if (c.CreatePipe(&read_pipe, &write_pipe, &security, 0) != c.TRUE) return -1;
+        fds[0] = c._open_osfhandle(@bitCast(@intFromPtr(read_pipe)), c._O_RDONLY);
+        fds[1] = c._open_osfhandle(@bitCast(@intFromPtr(write_pipe)), 0);
+        return 0;
+    } else {
+        return c.pipe(fds);
+    }
+}
+
 pub fn close(strm: *Stream) void {
     _ = c.php_stream_close(strm);
 }
@@ -1890,11 +1908,11 @@ pub fn performOperation(opcode: c_int, op1: *const Value, op2: *const Value) !Va
 }
 
 fn copyStat(in: *c.zend_stat_t, out: *std.os.wasi.filestat_t) void {
-    if (@hasField(c.zend_stat_t, "atim")) {
+    if (@hasField(c.zend_stat_t, "st_atim")) {
         out.size = convertSize(in.st_size);
-        out.atim = convertTimespec(&in.st_atim);
-        out.ctim = convertTimespec(&in.st_ctim);
-        out.mtim = convertTimespec(&in.st_mtim);
+        out.atim = convertTimespec(in.st_atim);
+        out.ctim = convertTimespec(in.st_ctim);
+        out.mtim = convertTimespec(in.st_mtim);
         out.ino = @intCast(in.st_ino);
         out.dev = @intCast(in.st_dev);
         out.filetype = switch (in.st_mode & c.S_IFMT) {
@@ -1906,22 +1924,35 @@ fn copyStat(in: *c.zend_stat_t, out: *std.os.wasi.filestat_t) void {
             c.S_IFCHR => .CHARACTER_DEVICE,
             else => .UNKNOWN,
         };
-    } else if (@hasField(c.zend_stat_t, "atime")) {
+    } else if (@hasField(c.zend_stat_t, "st_atime")) {
         out.size = convertSize(in.st_size);
-        out.atime = convertTimespec(&in.st_atime);
-        out.ctime = convertTimespec(&in.st_ctime);
-        out.mtime = convertTimespec(&in.st_mtime);
+        out.atim = convertTimespec(in.st_atime);
+        out.ctim = convertTimespec(in.st_ctime);
+        out.mtim = convertTimespec(in.st_mtime);
         out.ino = @intCast(in.st_ino);
         out.dev = @intCast(in.st_dev);
-        out.filetype = switch (in.st_mode & c.S_IFMT) {
-            c.S_IFSOCK => .SOCKET_STREAM,
-            c.S_IFLNK => .SYMBOLIC_LINK,
-            c.S_IFREG => .REGULAR_FILE,
-            c.S_IFBLK => .BLOCK_DEVICE,
-            c.S_IFDIR => .DIRECTORY,
-            c.S_IFCHR => .CHARACTER_DEVICE,
-            else => .UNKNOWN,
-        };
+        if (@hasDecl(c, "S_IFSOCK")) {
+            out.filetype = switch (in.st_mode & c.S_IFMT) {
+                c.S_IFSOCK => .SOCKET_STREAM,
+                c.S_IFLNK => .SYMBOLIC_LINK,
+                c.S_IFREG => .REGULAR_FILE,
+                c.S_IFBLK => .BLOCK_DEVICE,
+                c.S_IFDIR => .DIRECTORY,
+                c.S_IFCHR => .CHARACTER_DEVICE,
+                else => .UNKNOWN,
+            };
+        } else {
+            out.filetype = switch (in.st_mode & c.S_IFMT) {
+                c.S_IFLNK => .SYMBOLIC_LINK,
+                c.S_IFREG => .REGULAR_FILE,
+                c.S_IFBLK => .BLOCK_DEVICE,
+                c.S_IFDIR => .DIRECTORY,
+                c.S_IFCHR => .CHARACTER_DEVICE,
+                else => .UNKNOWN,
+            };
+        }
+    } else {
+        @compileError("Unsupported stat struct");
     }
 }
 
@@ -1930,11 +1961,18 @@ fn convertSize(value: anytype) usize {
     return @intCast(value);
 }
 
-fn convertTimespec(t: *c.timespec) u64 {
-    const s: i64 = t.tv_sec;
-    if (s < 0) return 0;
-    const ns: i64 = t.tv_nsec;
-    return @bitCast(s * 1_000_000_000 + ns);
+fn convertTimespec(value: anytype) u64 {
+    const T = @TypeOf(value);
+    return switch (@typeInfo(T)) {
+        .int => @intCast(value),
+        .@"struct" => calc: {
+            const s: i64 = value.tv_sec;
+            if (s < 0) return 0;
+            const ns: i64 = value.tv_nsec;
+            break :calc @bitCast(s * 1_000_000_000 + ns);
+        },
+        else => @compileError("Unknown time format"),
+    };
 }
 
 pub fn unlink(path: *const String, context: ?*StreamContext) !void {
